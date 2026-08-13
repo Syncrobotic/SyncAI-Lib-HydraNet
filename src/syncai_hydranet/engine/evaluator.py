@@ -107,11 +107,9 @@ def evaluate(model, val_sets, cfg, device, logger, samples: dict | None = None) 
     trav_names = ("blocked", "caution", "go")
     terrain_names = tuple(cfg["data"].get("terrain_classes", []))
 
-    scores = []
     for head, cm in seg_cms.items():
         miou, per_class = cm.miou()
         metrics[f"{head}_mIoU"] = miou
-        scores.append(miou)
         # Log every class separately: the safety-critical indoor classes (glass,
         # stairs) are tiny, so mIoU alone hides the fact that they never converged.
         names = trav_names if head == "traversability" else terrain_names
@@ -134,9 +132,23 @@ def evaluate(model, val_sets, cfg, device, logger, samples: dict | None = None) 
         ev.summarize()
         metrics["detection_mAP"] = float(ev.stats[0])
         metrics["detection_mAP50"] = float(ev.stats[1])
-        scores.append(float(ev.stats[0]))
         logger.info(f"[val] detection mAP = {ev.stats[0]:.4f}, mAP@50 = {ev.stats[1]:.4f}")
 
-    metrics["mean_score"] = float(np.mean(scores)) if scores else 0.0
     model.train()
     return metrics
+
+
+def select_metric(metrics: dict, name: str) -> float:
+    """Pull the one number that decides which checkpoint wins.
+
+    Averaging mIoU with mAP, as this used to, is not a quantity: the scales differ by
+    a factor of two, so segmentation quietly outvoted detection, and the average
+    changed meaning whenever a dataset was added or removed. One named metric is
+    comparable across runs; everything else stays in metrics.jsonl for analysis.
+    """
+    if name in metrics:
+        return float(metrics[name])
+    raise KeyError(
+        f"train.primary_metric={name!r} was not produced by validation. "
+        f"Available: {', '.join(sorted(metrics))}"
+    )

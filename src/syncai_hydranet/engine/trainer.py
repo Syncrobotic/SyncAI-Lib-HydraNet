@@ -18,7 +18,9 @@ from ..utils.device import pick_device, supports_amp, supports_pinned_memory
 from ..utils.logger import get_logger
 from ..utils.runmeta import append_metrics, resolve_out_dir, write_run_meta
 from ..utils.visualize import TERRAIN_COLORS, TRAV_COLORS, prediction_grid
-from .evaluator import evaluate
+from .evaluator import evaluate, select_metric
+
+DEFAULT_PRIMARY_METRIC = "traversability_mIoU"
 
 
 class ModelEMA:
@@ -188,6 +190,11 @@ class Trainer:
 
         self.log_interval = int(tcfg.get("log_interval", 50))
         self.val_interval = int(tcfg.get("val_interval", 1))
+        # One named metric decides best.pt. For a robot the honest choice is a
+        # traversability number, not an average across heads: mistaking a wall for
+        # floor is not compensated by a good mAP on chairs.
+        self.primary_metric = str(tcfg.get("primary_metric", DEFAULT_PRIMARY_METRIC))
+        self.logger.info(f"model selection: primary_metric={self.primary_metric}")
         try:
             from torch.utils.tensorboard import SummaryWriter
 
@@ -238,12 +245,12 @@ class Trainer:
             self.train_one_epoch(epoch)
             if epoch % self.val_interval == 0:
                 metrics = self.validate(epoch)
-                score = metrics.get("mean_score", 0.0)
+                score = select_metric(metrics, self.primary_metric)
                 self.save("last.pt", epoch)
                 if score > self.best_metric:
                     self.best_metric = score
                     self.save("best.pt", epoch)
-                    self.logger.info(f"new best model (score={score:.4f})")
+                    self.logger.info(f"new best model ({self.primary_metric}={score:.4f})")
         self.logger.info("training complete")
 
     def train_one_epoch(self, epoch: int):
@@ -297,6 +304,7 @@ class Trainer:
                 "epoch": epoch,
                 "global_step": self.global_step,
                 "weights": "ema" if self.ema else "model",
+                "primary_metric": self.primary_metric,
                 **metrics,
             },
         )

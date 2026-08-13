@@ -92,7 +92,11 @@ train:
   ema_decay: 0.9998
   log_interval: 50
   val_interval: 1
-  save_interval: 1
+
+  # The single number that decides best.pt; any key validation emits works, e.g.
+  # IoU/traversability/00_blocked or IoU/terrain/06_water. Averaging mIoU with mAP
+  # is not a quantity: the two do not share a scale.
+  primary_metric: traversability_mIoU
 
 export:
   opset: 17
