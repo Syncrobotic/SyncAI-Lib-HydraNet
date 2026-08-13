@@ -34,5 +34,6 @@ jobs:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
       - run: uv sync --group dev --extra export
-      # Smoke tests run the full model on random tensors: no dataset needed.
-      - run: uv run pytest --cov --cov-report=term-missing
+      # No dataset needed: the model runs on random tensors, the dataset tests build a
+      # fixture in tmp_path, and test_overfit.py memorises one synthetic batch on CPU.
+      - run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=55
