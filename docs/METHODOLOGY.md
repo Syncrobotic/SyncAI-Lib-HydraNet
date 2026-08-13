@@ -342,10 +342,12 @@ Two habits make this pay off:
 - **Never delete a run directory that produced a shipped model.** The dataset fingerprint in
   it is the only record of which data that model saw.
 - **Do not rewrite git history that run metadata points at.** Runs record the commit they
-  came from; if that hash stops existing, provenance breaks. This has already happened once:
-  the baseline run's `meta.json` names `ba30fa88`, which the Conventional Commits rewrite
-  left unreachable. The object survives only until garbage collection. Before rewriting
-  history again, tag every commit that a run directory references.
+  came from; if that hash stops existing, provenance breaks. This nearly happened once: the
+  baseline run's `meta.json` names `ba30fa88`, which the Conventional Commits rewrite left
+  on an orphaned line of history. The `pre-conventional-commits` tag is what keeps it
+  reachable — **do not delete that tag**, and before any future rewrite, tag every commit
+  a run directory references. A branch is not enough, because branches get cleaned up;
+  a tag is the thing that survives tidying.
 
 We do not run an experiment tracking server. For one machine, files plus TensorBoard cover it,
 and the provenance above is better than a tracker's defaults. That calculation changes once
