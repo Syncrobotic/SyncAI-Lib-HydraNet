@@ -88,17 +88,27 @@ labels are silently wrong and no metric will reveal it.
 
 ### What to prioritise
 
-These three classes have **zero** examples in ADE20K and are the reason `caution` cannot
-exceed about 0.23 no matter how long training runs:
+The robot carries LiDAR, so annotate first for the things **LiDAR cannot see**. Geometry is
+already covered by the other sensor; material is not.
 
-1. `wet_slippery` — standing water, freshly mopped floor, spills
-2. `floor_metal` — grating, steel plate, drain covers
-3. `threshold_ramp` — door sills, ramps, level changes
-
-Then `glass`, which has data but the highest cost when wrong: it reads as an open corridor.
+1. **`glass`** — LiDAR passes straight through it or returns noise, so the camera is the
+   only sensor that can detect it, and getting it wrong reads as an open corridor. It has
+   ADE20K data but only reaches 0.50 IoU. **Highest priority.**
+2. **`wet_slippery`** — also invisible to LiDAR, whose specular returns are actively
+   misleading on a wet floor. Standing water, freshly mopped floors, spills. Zero examples.
+3. `floor_metal` — grating, steel plate, drain covers. Zero examples. LiDAR sees the holes
+   but cannot judge whether the surface is safe to step on.
+4. `threshold_ramp` — door sills, ramps, level changes. Zero examples, but a level change is
+   pure geometry, so LiDAR measures it directly. Still needed for the semantic map; no
+   longer the camera's problem alone.
+5. `stairs` — same reasoning as 4.
 
 Everything else — floor, wall, door, furniture, person — is adequately covered already.
 Annotating more of those is close to wasted effort.
+
+For 4 and 5, ask whether the point cloud can **pre-label** them: detect the edges
+geometrically, project into the image, and correct a mask rather than draw one. The
+material classes above have no such shortcut, which is the second reason they come first.
 
 ### Capture and split rules
 

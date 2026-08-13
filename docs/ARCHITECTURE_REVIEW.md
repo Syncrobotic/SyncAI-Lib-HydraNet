@@ -139,6 +139,37 @@ failure.
 
 ---
 
+## 5. Which heads should exist
+
+The platform carries LiDAR, which settles the question that would otherwise dominate this
+section.
+
+| Head | Verdict | Reasoning |
+|---|---|---|
+| Terrain segmentation, 12 classes | **Keep, and make authoritative** | Material semantics are what LiDAR cannot provide. This is the model's irreplaceable output. |
+| Detection | **Keep; narrow the class set at deployment** | Dynamic obstacles are a separate decision. See below. |
+| Traversability | **Remove, derive instead** | Measured redundant in section 2. |
+| Depth | **Do not build** | LiDAR already measures it, more accurately than a monocular head ever would. |
+| Surface normal / slope | **Do not build** | Derived from the point cloud. |
+| Confidence / uncertainty | **Do not build a head** | Temperature-calibrate the existing softmax instead. A new head is the wrong tool for a calibration problem. |
+| Instance or panoptic segmentation | **Do not build** | Detection plus semantics already answers the decisions, at far lower cost. |
+| Tracking / re-identification | **Do not build** | Cross-frame post-processing. Putting it in the graph would break the no-dynamic-control-flow property that makes TensorRT conversion work first time. |
+
+**Fuse outside the network.** Project the point cloud into the image, take the semantic
+label at each point, and return to robot frame. That is a deterministic operation and does
+not need to be learned. Mid-level fusion (LiDAR as an input channel) and a BEV output head
+are both plausible in principle and both wrong here: each demands calibration-aware
+training data, and annotation throughput is already the binding constraint. Do not solve a
+data shortage with an architecture that needs more data.
+
+**On narrowing detection.** COCO's 80 classes cost more than parameters at inference: at
+512×640 the class logits are 80 × 6,825 ≈ 546,000 values per frame to move and decode, and
+roughly five of those classes change robot behaviour. Narrowing to ~8 is a 10× reduction in
+post-processing traffic on a Jetson. Train on the full 80 — free auxiliary supervision for
+the trunk — and narrow at export, rather than choosing one or the other.
+
+---
+
 ## Open questions, in the order worth answering
 
 1. **Remove the traversability head?** Needs the deployment owner. Measured above.
@@ -148,3 +179,7 @@ failure.
 3. **Do the rare classes need loss reweighting rather than more data?** Currently
    unanswerable: three of them have zero examples, so there is nothing to reweight. Ask
    again after the first in-house annotation batch.
+4. **Can LiDAR resolve a 2–5 cm door sill on this platform?** It decides whether
+   `threshold_ramp` and `stairs` stay low on the annotation priority list or move back up.
+   One measurement on the real robot settles it; until then the ordering in
+   [METHODOLOGY.md](METHODOLOGY.md) carries an assumption rather than a result.

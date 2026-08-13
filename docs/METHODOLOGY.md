@@ -109,21 +109,53 @@ moment.
 
 ## 2. What data to collect
 
-### Priority order
+### The robot has LiDAR, and that decides the priority order
 
-Ranked by safety impact against the size of the gap. This ordering is not negotiable — the
-top three classes have *no* examples at all, so they are unlearnable today.
+The platform carries LiDAR alongside the camera, so **this model's job is the half of the
+problem LiDAR cannot do**. Ranking annotation effort by "which class is most dangerous"
+alone gets the order wrong; rank by *danger × how blind LiDAR is*.
+
+| | LiDAR | Camera (this model) |
+|---|---|---|
+| Range and geometry | Accurate | Unreliable from one camera |
+| Stair edges, level changes | Directly measurable | Inferred |
+| Floor material (hard / soft / metal) | Invisible | The only source |
+| **Glass** | **Invisible — passes through or returns noise** | **The only source** |
+| **Wet floor** | **Invisible, and specularity adds false returns** | **The only source** |
+
+### Priority order
 
 | Priority | Class | Why | Current examples |
 |---|---|---|---|
-| **1** | `wet_slippery` | The most direct fall risk. Standing water, freshly mopped floor, spills. | **0** |
-| **2** | `floor_metal` | Grating aperture versus foot size is a hard constraint. Steel plate, drain covers. | **0** |
-| **3** | `threshold_ramp` | Door sills and level changes are the commonest indoor snag. | **0** |
-| 4 | `glass` | Has data (~0.50 IoU) but the highest cost when wrong — it reads as an open corridor. | ADE20K only |
-| 5 | `stairs` | Has data, but thin at 0.3% of pixels. | ADE20K only |
+| **1** | `glass` | **LiDAR cannot see it at all**, and it reads as an open corridor. Currently 0.50 IoU against a 0.97 ceiling — the single largest safety gap in the system. | ADE20K only |
+| **2** | `wet_slippery` | Also invisible to LiDAR, and specular returns actively mislead it. The most direct fall risk. | **0** |
+| 3 | `floor_metal` | Grating aperture versus foot size is a material judgement; LiDAR sees the holes but not whether the surface is safe. | **0** |
+| 4 | `threshold_ramp` | A level change is pure geometry, so LiDAR measures it directly. Still needed for the semantic map, but it is no longer the camera's problem alone. | **0** |
+| 5 | `stairs` | Same reasoning: step edges are geometric. | ADE20K only |
+
+**One thing to verify on the robot before treating 4 and 5 as settled.** Door sills are
+often only 2–5 cm high, and whether LiDAR resolves that depends on its angular resolution
+and mounting height. Measure it once on the real platform; if LiDAR is unreliable on low
+structures at close range, `threshold_ramp` moves back up the list.
 
 Everything else — floor, wall, door, furniture, person — is adequately covered by ADE20K.
 Do not spend annotation budget there.
+
+### LiDAR as an annotation lever
+
+Geometric classes can be **pre-labelled automatically**: detect step edges and level changes
+in the point cloud, project them into the image, and let annotators correct a mask rather
+than draw one. That directly reduces the bottleneck for `stairs` and `threshold_ramp`.
+
+The material classes — `glass`, `wet_slippery`, `floor_metal` — have no such shortcut. They
+are hand-drawn, which is a second reason they belong at the top of the list.
+
+### LiDAR as free validation
+
+Where the model predicts *go* and the point cloud shows a 20 cm drop, that is a failure case
+found without anyone annotating anything. This is the cheapest possible implementation of
+the level-4 field evaluation below, and it should be running continuously rather than as a
+one-off study.
 
 ### How much
 
