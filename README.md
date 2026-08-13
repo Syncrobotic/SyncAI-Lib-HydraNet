@@ -36,7 +36,7 @@ Apple Silicon Mac（MPS）另見 [docs/TRAIN_MACOS.md](docs/TRAIN_MACOS.md)。
 
 ## 指令
 
-安裝後提供六個 console script：
+安裝後提供七個 console script：
 
 | 指令 | 用途 |
 |---|---|
@@ -46,6 +46,7 @@ Apple Silicon Mac（MPS）另見 [docs/TRAIN_MACOS.md](docs/TRAIN_MACOS.md)。
 | `hydranet-infer-video` | 影片推論（走系統 ffmpeg，不需 opencv） |
 | `hydranet-export-onnx` | 匯出 ONNX 供 TensorRT |
 | `hydranet-prepare-ade20k` | 把 ADE20K 濾成室內子集並整理成 `seg_folder` 結構 |
+| `hydranet-report` | 摘要單一 run，或跨 run 比較與 diff 設定 |
 
 全部以 `uv run <指令>` 執行，或先 `source .venv/bin/activate`。
 
@@ -184,7 +185,27 @@ runs/<experiment>/
 ```
 
 同名目錄已經有訓練結果時，新的一次會寫到帶時間戳的旁邊目錄，不會蓋掉既有的
-`best.pt`，也不會把兩次的 TensorBoard 事件混在一起。要接續請用 `--resume`。
+`best.pt`，也不會把兩次的 TensorBoard 事件混在一起。要接續請用 `--resume`
+（續訓時若設定與 checkpoint 內存的不同，會逐項列出差異）。
+
+這些檔案就是給 `hydranet-report` 讀的：
+
+```bash
+uv run hydranet-report runs/hydranet_indoor        # 單一 run 的細節與曲線
+uv run hydranet-report runs/* --diff               # 跨 run 排名 + 設定差異
+```
+
+```text
+run                          commit    epochs  best      @epoch  metric
+-----------------------------------------------------------------------
+indoor-b                     eaba6b8e  40      0.6412    37      traversability_mIoU
+indoor-a                     3c12224f* 40      0.5980    31      traversability_mIoU
+
+indoor-a -> indoor-b
+  train.lr: 0.0002 -> 0.0004
+```
+
+commit 後面的 `*` 代表那次訓練的工作區是 dirty 的。
 
 ### 監看訓練
 
@@ -255,7 +276,7 @@ CI 在 GitHub Actions 上跑 lint 與 Python 3.10／3.12 的測試矩陣，覆�
 src/syncai_hydranet/
 ├── config.py                 # YAML 設定 + dot-path 覆寫
 ├── config_schema.py          # 設定驗證：未知鍵、型別、跨欄位一致性
-├── cli/                      # console script 進入點
+├── cli/                      # console script 進入點（train/eval/infer/export/report）
 ├── models/
 │   ├── backbone.py           # RegNet / ResNet 多尺度特徵
 │   ├── neck.py               # BiFPN / FPN

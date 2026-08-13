@@ -42,6 +42,7 @@ hydranet-infer-image = "syncai_hydranet.cli.infer_image:main"
 hydranet-infer-video = "syncai_hydranet.cli.infer_video:main"
 hydranet-export-onnx = "syncai_hydranet.cli.export_onnx:main"
 hydranet-prepare-ade20k = "syncai_hydranet.cli.prepare_ade20k:main"
+hydranet-report = "syncai_hydranet.cli.report:main"
 
 [project.urls]
 Repository = "https://github.com/syncrobotic/SyncAI-Lib-HydraNet"

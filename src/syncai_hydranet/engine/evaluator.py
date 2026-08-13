@@ -38,6 +38,10 @@ def evaluate(model, val_sets, cfg, device, logger, samples: dict | None = None) 
     segmentation head as ``{head: (images, preds, targets)}``, which the trainer turns
     into TensorBoard comparison grids.
     """
+    # Restore whatever mode the caller had it in. Training passes the EMA copy, which
+    # lives in eval mode; leaving it in train mode would let a stray forward pass move
+    # its BatchNorm statistics, and hydranet-eval would return a model set to train.
+    was_training = model.training
     model.eval()
     metrics: dict[str, float] = {}
     seg_cms: dict[str, ConfusionMatrix] = {}
@@ -134,7 +138,7 @@ def evaluate(model, val_sets, cfg, device, logger, samples: dict | None = None) 
         metrics["detection_mAP50"] = float(ev.stats[1])
         logger.info(f"[val] detection mAP = {ev.stats[0]:.4f}, mAP@50 = {ev.stats[1]:.4f}")
 
-    model.train()
+    model.train(was_training)
     return metrics
 
 

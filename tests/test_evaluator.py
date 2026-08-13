@@ -3,6 +3,8 @@
 pytest tests/test_evaluator.py -v
 """
 
+from typing import ClassVar
+
 import numpy as np
 import pytest
 import torch
@@ -89,3 +91,34 @@ def test_selection_is_not_an_average_across_heads():
     assert select_metric(better_trav, "traversability_mIoU") > select_metric(
         METRICS, "traversability_mIoU"
     )
+
+
+# ---------------------------------------------------------------- model mode
+
+
+class _Recorder(torch.nn.Module):
+    """Minimal stand-in: evaluate() only needs seg_heads, det_head and a forward."""
+
+    seg_heads: ClassVar[dict] = {}
+    det_head = None
+    det_head_name = "detection"
+
+    def forward(self, _x):
+        return {}
+
+
+def test_evaluate_restores_the_callers_model_mode():
+    """Training hands in the EMA copy, which lives in eval mode. Forcing train mode on
+    the way out lets a later forward pass move its BatchNorm statistics."""
+    from syncai_hydranet.engine.evaluator import evaluate
+
+    cfg = {"train": {"batch_size": 2}, "data": {"workers": 0}}
+    logger = __import__("logging").getLogger("test")
+
+    model = _Recorder().eval()
+    evaluate(model, [], cfg, "cpu", logger)
+    assert model.training is False
+
+    model.train()
+    evaluate(model, [], cfg, "cpu", logger)
+    assert model.training is True
