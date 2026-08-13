@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # dev is where the work happens; gating only main means a broken commit is
+    # discovered at merge time, long after it was cheap to fix.
+    branches: [main, stage, dev]
   pull_request:
 
 concurrency:
