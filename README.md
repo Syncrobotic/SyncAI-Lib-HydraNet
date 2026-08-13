@@ -45,6 +45,7 @@ Apple Silicon Mac（MPS）另見 [docs/TRAIN_MACOS.md](docs/TRAIN_MACOS.md)。
 | `hydranet-infer-image` | 單張／資料夾推論疊圖 |
 | `hydranet-infer-video` | 影片推論（走系統 ffmpeg，不需 opencv） |
 | `hydranet-export-onnx` | 匯出 ONNX 供 TensorRT |
+| `hydranet-prepare-ade20k` | 把 ADE20K 濾成室內子集並整理成 `seg_folder` 結構 |
 
 全部以 `uv run <指令>` 執行，或先 `source .venv/bin/activate`。
 
@@ -76,7 +77,7 @@ Apple Silicon Mac（MPS）另見 [docs/TRAIN_MACOS.md](docs/TRAIN_MACOS.md)。
 
 ```text
 datasets/
-├── ADE20K/
+├── ADE20K/                                # 由 hydranet-prepare-ade20k 產生
 │   ├── images/{train,val}/**.jpg
 │   └── annotations/{train,val}/**.png     # 單通道整數 0..150
 ├── RUGD/
@@ -91,6 +92,19 @@ RUGD／RELLIS 官方未提供 train/val 切分，請按 sequence 切以避免同
 自錄影片同理：務必按**錄影 session** 切，相鄰楨極度相似，隨機切分會嚴重高估效能。
 
 只想先跑通？把 config 的 `data.datasets` 刪到剩你有的那些即可 —— 頭會照常建立，只是沒被監督。
+
+### ADE20K 室內子集
+
+ADE20K 的 2 萬張橫跨 1055 種場景，大半是戶外。以下指令依**標註內容**過濾
+（地板佔比夠高、天空與植被夠低），選出地面機器人視角的室內楨：
+
+```bash
+uv run hydranet-prepare-ade20k \
+    --src datasets/ADEChallengeData2016 --dst datasets/ADE20K
+# training -> train: kept 5998/20210 (29.7%)
+```
+
+輸出是 symlink，不佔額外磁碟、可重複執行。
 
 ## 訓練
 

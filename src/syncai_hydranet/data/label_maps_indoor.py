@@ -55,10 +55,14 @@ INDOOR_NATIVE_ID = {v: v for v in INDOOR_TERRAIN.values()}
 #
 # Annotations are single-channel PNGs: 0 is ignore, 1..150 are classes.
 #
-# TODO: indices below follow the standard objectInfo150.csv ordering but were written
-# from memory; verify once against the dataset before the first real training run.
-# Unlisted ids fall through to void -> ignore, so a mistake degrades coverage rather
-# than corrupting labels.
+# All 76 indices below were verified against objectInfo150.txt shipped with
+# ADEChallengeData2016. Unlisted ids fall through to void -> ignore, so gaps degrade
+# coverage rather than corrupting labels.
+#
+# Two entries are easy to get wrong because the short name is misleading:
+#   148 is "glass, drinking glass" (a vessel), NOT architectural glazing.
+#    59 is "screen door, screen", an actual door rather than a pane.
+# Architectural glass comes from 9 (windowpane) and 28 (mirror) only.
 #
 # NOTE: ADE20K contains many purely outdoor images. Filter to indoor scenes using the
 # official sceneCategories.txt first, otherwise sky and vegetation dominate the frame
@@ -88,12 +92,12 @@ ADE20K_ID_TO_INDOOR = {
     145: _T["wall"],  # bulletin board
     19: _T["wall"],  # curtain
     64: _T["wall"],  # blind
-    # Glass and mirrors: the highest-consequence indoor failure mode
-    9: _T["glass"],  # windowpane
+    # Glass and mirrors: the highest-consequence indoor failure mode.
+    # Only genuine architectural glazing belongs here.
+    9: _T["glass"],  # windowpane, window
     28: _T["glass"],  # mirror
-    59: _T["glass"],  # screen door
-    148: _T["glass"],  # glass
     15: _T["door"],  # door
+    59: _T["door"],  # screen door, screen
     13: _T["person"],
     # Furniture, equipment, railings
     8: _T["obstacle_furniture"],  # bed
@@ -148,6 +152,7 @@ ADE20K_ID_TO_INDOOR = {
     140: _T["obstacle_furniture"],  # fan
     144: _T["obstacle_furniture"],  # monitor
     147: _T["obstacle_furniture"],  # radiator
+    148: _T["obstacle_furniture"],  # glass, drinking glass (a vessel, not glazing)
 }
 
 # Classes ADE20K does not cover; these only come from in-house annotation:
