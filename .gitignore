@@ -32,3 +32,11 @@ assets/*.mov
 .vscode/
 .idea/
 .DS_Store
+
+# Credentials. Keys live in ~/.gcp/, outside the repo; these patterns are a second
+# line of defence so a stray copy cannot be committed by accident.
+*-sa.json
+*service-account*.json
+*credentials*.json
+gcp-key*.json
+.gcp/
