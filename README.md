@@ -32,6 +32,7 @@ uv run pytest                        # 冒煙測試，不需要任何資料集
 ```
 
 Apple Silicon Mac（MPS）另見 [docs/TRAIN_MACOS.md](docs/TRAIN_MACOS.md)。
+搬到 CUDA 工作站見 [docs/HANDOVER.md](docs/HANDOVER.md)。
 訓練／評估／推論會自動選擇 CUDA → MPS → CPU。
 
 ## 指令
