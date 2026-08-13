@@ -23,19 +23,29 @@ missing is training data at the robot's viewpoint and for three safety classes. 
 staffs tuning over annotation gets a better-tuned model with the same ceiling.
 
 Concrete evidence gathered this session:
-- `caution` never learned in the multi-task run — it sat at 0.00–0.02 the whole time; the
-  0.09 that `best.pt` caught is a noise spike. Root cause: 3 of its 4 constituent classes
-  have zero data, and COCO starves the segmentation heads of optimiser steps.
 - The live camera view showed a **ceiling coming back 25% "go"** within a minute — ADE20K is
   human-height photography, so the robot's viewpoint is absent from training.
+- Three of the four terrain classes that map to `caution` have **zero** training pixels, so
+  `caution` is effectively `stairs` wearing another name.
+- **`caution` and `stairs` are not measurable yet, at any number.** The peer session showed
+  the same `best.pt` scoring `caution` 0.1241 on val and 0.3252 on test, and `stairs` 0.1361
+  against 0.3249 — a 2.5x swing from changing which images are scored. Only 24 val images
+  contain stairs. Any claim about those two classes, in either direction, is reading noise;
+  an earlier draft of this file made exactly that mistake. The trustworthy numbers are the
+  common classes (blocked / go / wall / floor) and `detection_mAP`, which is computed over
+  5,000 COCO val images. RUN D (a seed-7 rerun of the baseline, due ~07:10) will give the
+  first honest scale for how much two identical runs differ.
 
 ## Open threads, most time-sensitive first
 
-1. **60-epoch control run (peer session, ~55/60 when last seen).** This is the clean test of
-   whether multi-task *interferes* or just *dilutes*: it aligns the segmentation step count
-   that the earlier 30-epoch run confounded. When it finishes, update HANDOVER.md section 4 —
-   it will be the first baseline row with a real `detection_mAP`. Last seen: best E11, trav
-   0.6300, mAP 0.117.
+1. **60-epoch control run (peer session, finished overnight), plus two more behind it.**
+   The 60-epoch run is the clean test of whether multi-task *interferes* or just *dilutes*:
+   it aligns the segmentation step count (124 × 60 = 7,440, matching the pure-segmentation
+   baseline) that the earlier 30-epoch run confounded. RUN C (COCO ratio 1.0, 60 epochs,
+   `primary_metric=detection_mAP`) and RUN D (baseline settings, seed 7 — the training-noise
+   floor) were queued behind it under `setsid`, due ~06:30 and ~07:10. **The peer session
+   owns this thread and the write-up.** Read RUN D before comparing anything about rare
+   classes: without it there is no scale to compare against.
 2. **ADE20K enrichment: dead end, confirmed by peer.** The full-vocabulary ADE20K does not
    rescue the missing classes — 98% of its `step`/`ramp` pixels are already `stairs`, real
    `ramp` is 5 images, `floor_metal` is 1, `wet_slippery` is 0. All three remain
@@ -80,17 +90,34 @@ this workstation.
 - Service account `syncai-hydranet@…`, key at `~/.gcp/syncai-hydranet-sa.json` (mode 600,
   gitignored). Bucket-scoped only; verified it cannot touch other buckets.
 - CVAT annotation host `hydranet-annotation` (asia-east1-b, no public IP, IAP tunnel).
-  **Admin account not yet created** — see [ANNOTATION_SETUP.md](ANNOTATION_SETUP.md). Stop it
-  when idle: `gcloud compute instances stop hydranet-annotation --zone=asia-east1-b`.
+  **Currently RUNNING and idle** (~$59/month against ~$10 stopped). It still runs the
+  hand-made bring-up — CVAT `develop@7064c1b` on the floating `:dev` tag — and holds no
+  annotations, so moving it onto the pinned stack in [`deploy/annotation/`](../deploy/annotation/)
+  is free right now and needs a backup later. The admin account still does not exist;
+  `./cvat.sh admin <user>` creates it. Stop it when idle:
+  `gcloud compute instances stop hydranet-annotation --zone=asia-east1-b`.
 
 ## What I'd do next
 
-1. When the 60-epoch run lands, do the multi-task interference write-up (thread 1).
-2. Start annotation — it is the critical path and everything else is ahead of it. Priority
-   order is in [METHODOLOGY.md](METHODOLOGY.md): glass, wet_slippery, floor_metal first
-   (LiDAR-blind, hand-label only), threshold_ramp/stairs later.
-3. The measurement tooling added this session (`head_disagreement`, `mIoU_classes`, the
-   export parity gate, the release bundler) is in place — use it, don't rebuild it.
+1. **Start annotating.** It is the critical path, everything else is ahead of it, and the
+   environment is now ready rather than nearly ready:
+   ```bash
+   cd deploy/annotation && ./cvat.sh up && ./cvat.sh admin <you>   # the account that never existed
+   hydranet-annotation labels --out cvat_labels.json               # paste into CVAT
+   hydranet-annotation check datasets/<site>                       # before the first run on it
+   ```
+   Priority order is in [METHODOLOGY.md](METHODOLOGY.md): glass, wet_slippery, floor_metal
+   first (LiDAR-blind, hand-label only), threshold_ramp/stairs later. All three
+   zero-example classes are confirmed annotate-only — the full-vocabulary ADE20K was
+   checked and does not supply them.
+2. Read the overnight runs (thread 1), starting with RUN D's noise floor.
+3. The tooling is in place — use it, don't rebuild it: `head_disagreement`, `mIoU_classes`,
+   the export parity gate, the release bundler, `hydranet-annotation check`, `cvat.sh`.
+4. **`void` is a trained class.** `INDOOR_NATIVE_ID` maps 0 → 0 while the losses ignore only
+   255, so an annotation export that leaves the background at 0 teaches the model to predict
+   `void` over every unlabelled pixel. `hydranet-annotation check` fails on it; the durable
+   fix is a one-line change to `label_maps_indoor.py` (0 → 255), which is the peer session's
+   file and their call.
 
 ## Docs map
 
