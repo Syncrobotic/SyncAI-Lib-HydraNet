@@ -87,6 +87,8 @@ across datasets works, and the measurement traps that cost the most time.
 Picking the project up as a team? [docs/METHODOLOGY.md](docs/METHODOLOGY.md) covers how to
 split the work, what data to collect and to what spec, and the four levels of evaluation
 that stand between a checkpoint and a robot.
+Annotating? [docs/ANNOTATION_SETUP.md](docs/ANNOTATION_SETUP.md) has the CVAT connection
+steps and the labelling contract.
 
 ## Commands
 
