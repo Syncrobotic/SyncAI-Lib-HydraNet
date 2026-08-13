@@ -36,7 +36,7 @@ Apple Silicon Mac（MPS）另見 [docs/TRAIN_MACOS.md](docs/TRAIN_MACOS.md)。
 
 ## 指令
 
-安裝後提供五個 console script：
+安裝後提供六個 console script：
 
 | 指令 | 用途 |
 |---|---|
@@ -91,7 +91,33 @@ datasets/
 RUGD／RELLIS 官方未提供 train/val 切分，請按 sequence 切以避免同序列洩漏。
 自錄影片同理：務必按**錄影 session** 切，相鄰楨極度相似，隨機切分會嚴重高估效能。
 
-只想先跑通？把 config 的 `data.datasets` 刪到剩你有的那些即可 —— 頭會照常建立，只是沒被監督。
+只想先跑通？把 config 的 `data.datasets` 刪到剩你有的那些即可 —— 頭會照常建立，只是沒被監督
+（啟動時會警告哪個頭沒人監督）。
+
+### 三個 split
+
+`best.pt` 是用 **val** 挑出來的，所以 val 上的分數對它本身而言偏樂觀。要報告可信數字，
+請另外準備一份訓練流程完全不會讀到的 **test**：
+
+```yaml
+- name: ade20k
+  split_train: train
+  split_val: val
+  split_test: test        # 選填，且刻意不預設為 val
+```
+
+```bash
+uv run hydranet-eval --config ... --checkpoint ... --split test
+```
+
+沒設定 `split_test` 就指定 `--split test` 會直接報錯並告訴你要建什麼，不會默默退回 val。
+
+### 資料版本
+
+資料集不進 git，也沒有用 DVC。取而代之：每次訓練會把各 split 的**指紋**
+（檔案數、總位元組、路徑與大小清單的 digest）寫進 `runs/<experiment>/meta.json`，
+所以任何一個 checkpoint 都能回答「我是吃哪一份資料訓出來的」。
+重新匯出標註、加了幾百張現場照片、換了過濾門檻，兩次訓練的指紋就會不同。
 
 ### ADE20K 室內子集
 
@@ -115,11 +141,50 @@ uv run hydranet-train --config configs/hydranet_indoor.yaml
 uv run hydranet-train --config configs/hydranet_indoor.yaml \
     --set train.batch_size=8 model.neck.name=fpn 'data.input_size=[384,512]'
 
-# 續訓
+# 續訓：接著排程往下跑，不是重播
 uv run hydranet-train --config ... --resume runs/hydranet_indoor/last.pt
 ```
 
-訓練特性：AMP 混合精度、cosine + warmup、EMA、backbone 低學習率、best/last checkpoint。
+訓練特性：AMP 混合精度（`train.amp_dtype` 可選 `bfloat16`）、cosine + warmup、
+EMA（decay 會爬升，短跑也安全）、backbone 低學習率、梯度累積、best/last checkpoint。
+
+`--set` 的錯字不會被吞掉：設定會在覆寫套用後整份驗證，未知的鍵、對不上的型別、
+`supervises` 指到不存在的頭、`terrain_classes` 數量與頭對不起來，都會一次列出並中止。
+
+### 顯存不夠就累積梯度
+
+```bash
+--set train.batch_size=4 train.grad_accum_steps=4     # 等效 batch 16
+```
+
+排程、EMA 與 `global_step` 都按 optimizer step 前進，所以換機器時只要維持
+`batch_size × grad_accum_steps` 不變，學習率就不用重調。
+
+### 模型是用哪個指標挑的
+
+`train.primary_metric` 明確指定唯一決定 `best.pt` 的數字，預設 `traversability_mIoU`。
+驗證輸出的任何 key 都能用，包含逐類別的：
+
+```yaml
+primary_metric: IoU/traversability/00_blocked   # 室內真正會讓機器人卡住的類別
+```
+
+指標名稱打錯會中止並列出所有可用的 key —— 而不是整趟訓練用了別的標準挑模型。
+
+### 每次訓練留下什麼
+
+```text
+runs/<experiment>/
+├── meta.json          git commit、是否 dirty、環境、資料集指紋、完整設定
+├── config.yaml        套用 --set 之後的設定快照，可直接重跑
+├── uncommitted.patch  工作區有未提交修改時才有（commit hash 不足以還原程式碼）
+├── metrics.jsonl      每次驗證一行，可直接程式化比較
+├── train.log
+└── tb/
+```
+
+同名目錄已經有訓練結果時，新的一次會寫到帶時間戳的旁邊目錄，不會蓋掉既有的
+`best.pt`，也不會把兩次的 TensorBoard 事件混在一起。要接續請用 `--resume`。
 
 ### 監看訓練
 
@@ -141,6 +206,10 @@ TensorBoard 除了損失曲線，還會寫入：
 
 ```bash
 uv run hydranet-eval --config ... --checkpoint runs/.../best.pt
+
+# 在保留的 test split 上報告最終數字，並輸出成 JSON 方便跨 run 比較
+uv run hydranet-eval --config ... --checkpoint runs/.../best.pt \
+    --split test --json reports/best_test.json
 
 uv run hydranet-infer-image --config ... --checkpoint runs/.../best.pt \
     --input photo.jpg --output out/
@@ -176,13 +245,16 @@ uv run pytest --cov          # 測試 + 覆蓋率
 uv run pre-commit install    # 啟用 commit 前檢查
 ```
 
-CI 在 GitHub Actions 上跑 lint 與 Python 3.10／3.12 的測試矩陣。
+CI 在 GitHub Actions 上跑 lint 與 Python 3.10／3.12 的測試矩陣，覆蓋率低於 55% 會失敗。
+測試不需要任何資料集：模型測試跑隨機張量，資料集測試在 `tmp_path` 現搭一份，
+`test_overfit.py` 用合成的一個 batch 驗證訓練迴路真的會收斂（未訓練 34% → 訓練後 >95%）。
 
 ## 專案結構
 
 ```text
 src/syncai_hydranet/
 ├── config.py                 # YAML 設定 + dot-path 覆寫
+├── config_schema.py          # 設定驗證：未知鍵、型別、跨欄位一致性
 ├── cli/                      # console script 進入點
 ├── models/
 │   ├── backbone.py           # RegNet / ResNet 多尺度特徵
@@ -194,14 +266,18 @@ src/syncai_hydranet/
 ├── data/
 │   ├── label_maps.py         # 越野映射 + 方案登錄表 SCHEMES
 │   ├── label_maps_indoor.py  # 室內 12 類 + ADE20K 映射
-│   ├── datasets.py           # SegFolderDataset / CocoDetDataset
-│   ├── transforms.py         # 影像+mask+框 聯合增強、letterbox
+│   ├── datasets.py           # SegFolderDataset / CocoDetDataset / split 解析
+│   ├── transforms.py         # 影像+mask+框 聯合增強、letterbox、幾何反算
+│   ├── fingerprint.py        # 資料集指紋，寫進 meta.json
 │   └── multitask.py          # 多資料集 round-robin loader
 ├── engine/
-│   ├── trainer.py            # AMP / EMA / cosine / checkpoint / TensorBoard
-│   └── evaluator.py          # mIoU + COCO mAP
+│   ├── trainer.py            # AMP / EMA / cosine / 梯度累積 / checkpoint / TB
+│   └── evaluator.py          # mIoU + COCO mAP + primary metric 選擇
 └── utils/
     ├── device.py             # CUDA → MPS → CPU
+    ├── checkpoint.py         # 安全載入（weights_only）+ 格式版本
+    ├── runmeta.py            # git / 環境 / 設定快照 / metrics.jsonl
+    ├── seeding.py            # 全域種子、worker 種子、後端旗標
     └── visualize.py          # 調色盤、疊圖、letterbox、對照圖
 ```
 
