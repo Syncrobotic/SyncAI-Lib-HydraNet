@@ -1,57 +1,61 @@
-# 交接：從 Apple Silicon 移到 CUDA 機器
+# Handover: moving from Apple Silicon to a CUDA machine
 
-本機（M4 Pro / MPS）只適合開發與冒煙驗證。這份文件是把訓練搬到 CUDA 工作站
-（如 RTX PRO 6000 Blackwell）時的 runbook，以及交接當下的已知狀態。
+The development machine (M4 Pro / MPS) is only good for development and smoke testing.
+This is the runbook for moving training onto a CUDA workstation (e.g. an RTX PRO 6000
+Blackwell), plus the known state of things at handover time.
 
-macOS 端的設定見 [TRAIN_MACOS.md](TRAIN_MACOS.md)；Jetson 部署見 [DEPLOY_JETSON.md](DEPLOY_JETSON.md)。
+For the macOS setup see [TRAIN_MACOS.md](TRAIN_MACOS.md); for Jetson deployment see
+[DEPLOY_JETSON.md](DEPLOY_JETSON.md).
 
-## 一、程式碼不需要為了換卡而改
+## 1. The code needs no changes for a different GPU
 
-`utils/device.py` 的 `pick_device()` 依序挑 **CUDA → MPS → CPU**，
-AMP 與 DataLoader 的 `pin_memory` 也都由同一處判斷後自動啟用。
-在 CUDA 機器上就是同一套指令，不必加任何 flag。
+`pick_device()` in `utils/device.py` picks **CUDA → MPS → CPU** in that order, and AMP and
+the DataLoader's `pin_memory` are enabled off the same decision. On a CUDA machine it is
+the same commands with no extra flags.
 
-## 二、四樣東西不會跟著 git 走
+## 2. Four things git does not bring with it
 
-`.gitignore` 把資料、產出與大型媒體全部排除，所以 clone 之後這些都不存在：
+`.gitignore` excludes data, outputs and large media, so none of this exists after a clone:
 
-| 路徑 | 大小（交接當下） | 對策 |
+| Path | Size (at handover) | What to do |
 |---|---|---|
-| `datasets/` | 1.0 GB | 在 box 上重抓，不要從筆電上傳 |
-| `runs/<experiment>/*.pt` | 122 MB / checkpoint | 見下方說明，多半不值得傳 |
-| `assets/*.mp4` | 19 MB | **必須傳**，無法重新產生 |
-| COCO | 未下載 | 需要偵測頭時在 box 上抓 |
+| `datasets/` | 1.0 GB | Re-download on the box; do not upload from the laptop |
+| `runs/<experiment>/*.pt` | 122 MB / checkpoint | See below, usually not worth transferring |
+| `assets/*.mp4` | 19 MB | **Must be transferred**, cannot be regenerated |
+| COCO | Not downloaded | Fetch on the box when the detection head is needed |
 
-`assets/VID_20260813_145154.mp4` 是自錄的室內場域影片，是唯一無法用指令重建的資產。
-要做推論對照就得先把它複製過去。
+`assets/VID_20260813_145154.mp4` is self-recorded indoor site footage and the one asset no
+command can rebuild. Copy it across if you want inference comparisons.
 
-**checkpoint 通常不必傳。** 在 M4 Pro 上 20 epochs 要 55 分鐘，同樣的訓練在
-Pro 6000 配 bf16 與較大 batch 大約 5–10 分鐘。為了省這點時間去搬 122 MB、
-還要處理舊格式相容，不划算 —— 從 ImageNet 初始重訓更乾淨，而且新產出的 run
-才會帶 `meta.json`，`hydranet-report` 才看得到它。
+**Checkpoints usually do not need to travel.** 20 epochs takes 55 minutes on the M4 Pro;
+the same training is roughly 5–10 minutes on a Pro 6000 with bf16 and a larger batch.
+Moving 122 MB and dealing with old-format compatibility to save that is a bad trade —
+retraining from the ImageNet initialisation is cleaner, and only a fresh run carries a
+`meta.json`, which is what makes it visible to `hydranet-report`.
 
-## 三、在 CUDA 機器上啟動
+## 3. Starting up on the CUDA machine
 
 ```bash
 git clone -b dev https://github.com/Syncrobotic/SyncAI-Lib-HydraNet.git
 cd SyncAI-Lib-HydraNet
 uv sync --group dev --extra export
 
-# 第一道關卡
+# the first gate
 uv run python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ```
 
-`uv.lock` 鎖的是 **CUDA 13** 版 torch（相依裡有 `nvidia-cudnn-cu13`、`nvidia-nccl-cu13`）。
-驅動太舊的話 **`uv sync` 會成功，要到上面那行 import 才失敗** —— 先跑這行，
-不要等訓練啟動才發現。Blackwell（sm_120）本身在 CUDA 12.8 之後就支援，版本沒有問題。
+`uv.lock` pins the **CUDA 13** build of torch (`nvidia-cudnn-cu13` and `nvidia-nccl-cu13`
+are in the dependency tree). On too old a driver **`uv sync` succeeds and the import line
+above is what fails** — run it first rather than discovering this when training starts.
+Blackwell (sm_120) itself has been supported since CUDA 12.8, so the version is not a problem.
 
-接著跑測試確認環境完整：
+Then run the tests to confirm the environment is complete:
 
 ```bash
 uv run pytest -q
 ```
 
-資料（repo 裡沒有）：
+The data (not in the repo):
 
 ```bash
 curl -LO https://data.csail.mit.edu/places/ADEchallenge/ADEChallengeData2016.zip
@@ -59,14 +63,19 @@ unzip -q ADEChallengeData2016.zip -d datasets/
 uv run hydranet-prepare-ade20k --src datasets/ADEChallengeData2016 --dst datasets/ADE20K
 ```
 
-`hydranet-prepare-ade20k` 依**標註內容**過濾（地板佔比夠、天空與植被夠低），
-而不是靠場景類別白名單，選出地面機器人視角的室內楨：20,210 → 5,998 張。
+Note the casing in that URL: the path segment is `ADEchallenge` with a lowercase c while
+the filename is `ADEChallengeData2016.zip` with an uppercase C. That inconsistency is
+upstream's, and the uppercase-path variant returns 404.
 
-## 四、交接當下的基準
+`hydranet-prepare-ade20k` filters on **annotation content** (enough floor, little sky and
+vegetation) rather than a scene-category whitelist, selecting the ground-level indoor
+viewpoint a robot sees: 20,210 → 5,998 images.
 
-Apple M4 Pro / MPS、384×512、batch 8、20 epochs、約 55 分鐘，僅 ADE20K 室內子集：
+## 4. The baseline at handover
 
-| 指標 | 值 |
+Apple M4 Pro / MPS, 384×512, batch 8, 20 epochs, about 55 minutes, ADE20K indoor subset only:
+
+| Metric | Value |
 |---|---|
 | traversability mIoU | 0.665 |
 | ├ blocked | 0.954 |
@@ -75,42 +84,46 @@ Apple M4 Pro / MPS、384×512、batch 8、20 epochs、約 55 分鐘，僅 ADE20K
 | terrain mIoU | 0.569 |
 | └ glass | 0.505 |
 
-CUDA 上重訓後應該要**至少**打平這組數字。明顯低於它就代表搬遷過程有東西壞掉，
-先回頭查而不是繼續調參。
+A CUDA re-run should **at least** match these. Coming in clearly below them means something
+broke in the move — go back and find it rather than start tuning.
 
-## 五、已知問題，依優先序
+## 5. Known issues, in priority order
 
-### 1. `caution` 卡在 0.200，加 epoch 沒用
+### 1. `caution` is stuck at 0.200, and more epochs will not help
 
-這是資料缺口不是訓練不足。可走性的「謹慎」在室內對應四個地形類別
-（見 `data/label_maps_indoor.py`），但 ADE20K 只涵蓋其中的 `stairs`，
-佔全體像素 **0.3%**；`floor_metal`（金屬格柵）、`wet_slippery`（濕滑／積水）、
-`threshold_ramp`（門檻高低差）它**一張都沒有**。
+This is a data gap, not undertraining. Indoors, traversability "caution" corresponds to four
+terrain classes (see `data/label_maps_indoor.py`), but ADE20K covers only `stairs` among
+them, at **0.3%** of all pixels. Of `floor_metal` (grating), `wet_slippery` (standing water
+or a freshly mopped floor) and `threshold_ramp` (door sills and level changes) it contains
+**not a single example**.
 
-這三類直接決定機器人會不會滑倒或卡住，只能靠自有標註補。
-標註格式用 `label_map: indoor_native`（標註 id 直接就是室內 12 類）。
+Those three decide whether the robot slips or gets stuck, and only in-house annotation can
+fill them in. Annotate with `label_map: indoor_native`, where the annotation ids already are
+the indoor 12 classes.
 
-### 2. 偵測頭完全沒被監督
+### 2. The detection head is entirely unsupervised
 
-目前只餵了分割資料集，所以偵測頭停在初始權重、推論不會有任何框。
-訓練啟動時 config 檢查會明確警告：
+Only segmentation datasets are wired up right now, so the detection head sits at its initial
+weights and inference produces no boxes at all. The config check warns about this explicitly
+at startup:
 
 ```
 config: head 'detection' is not supervised by any dataset:
         it will be built, exported and left at its initial weights
 ```
 
-要有框就得下載 COCO 並把 `sample_ratio` 開回 `1.0`
-（indoor config 目前是 `0.2`，那是為了讓筆電跑得動）。
+Getting boxes means downloading COCO and putting `sample_ratio` back to `1.0` (the indoor
+config currently has `0.2`, which is there to keep a laptop usable).
 
-### 3. `channels_last` 尚未實作
+### 3. `channels_last` is not implemented
 
-`train.tf32` 與 `train.amp_dtype=bfloat16` 都已經有了，但卷積網路在 tensor core 上
-改用 NHWC 記憶體格式通常還有一截增益。這是 `src/` 裡剩下唯一的 CUDA 專屬優化。
+`train.tf32` and `train.amp_dtype=bfloat16` both exist already, but convnets on tensor cores
+generally have some headroom left in the NHWC memory format. This is the only CUDA-specific
+optimisation still missing from `src/`.
 
-## 六、建議的起手設定
+## 6. Suggested starting settings
 
-96 GB VRAM：
+For 96 GB of VRAM:
 
 ```bash
 uv run hydranet-train --config configs/hydranet_indoor.yaml --set \
@@ -125,27 +138,37 @@ uv run hydranet-train --config configs/hydranet_indoor.yaml --set \
     'data.input_size=[512,640]'
 ```
 
-各項理由：
+The reasoning for each:
 
-- **batch 48** —— M4 Pro 上 fp32、512×640、batch 8 的峰值是 5.6 GB。
-  CUDA 上 AMP 會把活化記憶體大致砍半，48 約落在 20 GB，96 GB 很寬裕。
-  再往上吞吐收益遞減，而大 batch 對分割任務不一定更好。
-- **lr 6e-4** —— batch 8→48 若用線性縮放會到 1.2e-3，對 AdamW 太衝。
-  這裡用 sqrt 縮放（`2e-4 × √6 ≈ 4.9e-4`）再抓寬一點，warmup 同步拉長到 2000 步。
-- **bfloat16 而非 float16** —— bf16 保有 fp32 的指數範圍，不需要 loss scaler，
-  Blackwell 原生支援。fp16 在多任務損失（Dice 與 Focal 量級差很多）下較容易溢位。
-- **workers 16** —— M4 Pro 上 38 img/s 有相當比例卡在 JPEG 解碼。
-  server 端核多，這個瓶頸會消失；仍請對照 log 印出的 img/s 確認。
-- **512×640** —— 筆電為了速度降到 384×512，CUDA 上沒有理由不用 config 預設值。
+- **batch 48** — fp32 at 512×640 with batch 8 peaks at 5.6 GB on the M4 Pro. On CUDA, AMP
+  roughly halves activation memory, putting 48 at about 20 GB, comfortable within 96 GB.
+  Going higher gives diminishing throughput, and a large batch is not necessarily better for
+  segmentation.
+- **lr 6e-4** — linear scaling from batch 8 to 48 would give 1.2e-3, which is too aggressive
+  for AdamW. This uses sqrt scaling (`2e-4 × √6 ≈ 4.9e-4`) rounded up a little, with warmup
+  extended to 2000 steps to match.
+- **bfloat16 rather than float16** — bf16 keeps fp32's exponent range, needs no loss scaler,
+  and is native on Blackwell. fp16 overflows more easily under a multi-task loss where Dice
+  and Focal differ substantially in magnitude.
+- **workers 16** — a fair share of the 38 img/s on the M4 Pro is JPEG decoding. With many
+  server cores that bottleneck disappears; still check the img/s the log prints. Note that
+  `data.workers` is **per dataset**, not a global total: `MultiTaskLoader` builds one
+  DataLoader per entry in `data.datasets`, so 16 with both ADE20K and COCO present means 32
+  worker processes. With COCO absent it is 16. Set it against the img/s in the log rather
+  than against the core count.
+- **512×640** — the laptop drops to 384×512 for speed; on CUDA there is no reason not to use
+  the config default.
 
-## 七、換卡後第一件該做的事
+## 7. The first thing to do after switching cards
 
-**先用相同設定重現第四節的基準，再開始改東西。** 一次跑通之後：
+**Reproduce the section 4 baseline with the same settings before changing anything.** Once
+that is through once:
 
 ```bash
-uv run hydranet-report runs/*          # 跨 run 比較，讀 meta.json 與 metrics.jsonl
+uv run hydranet-report runs/*          # compare runs, reading meta.json and metrics.jsonl
 uv run tensorboard --logdir runs/
 ```
 
-TensorBoard 裡優先看 `val_pred/*` 三欄對照圖與 `IoU/<head>/<class>` 逐類別曲線 ——
-`glass` 和 `stairs` 佔比極低，只看 mIoU 會被 floor 與 wall 完全蓋掉。
+In TensorBoard, look first at the `val_pred/*` three-column comparisons and the
+`IoU/<head>/<class>` per-class curves — `glass` and `stairs` occupy so few pixels that mIoU
+alone lets floor and wall bury them completely.
