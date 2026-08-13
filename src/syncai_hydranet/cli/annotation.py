@@ -279,14 +279,31 @@ def check_sessions(per_split: dict[str, dict], rep: Report) -> None:
             )
 
 
+def _ignored_ids() -> set[int]:
+    """The ids the loss never sees, whatever the label map calls them.
+
+    255 always, plus anything ``indoor_native`` sends to 255 -- id 0 does, now that
+    unlabelled background is mapped to ignore rather than to a `void` class. Counting
+    those pixels in a coverage percentage would quietly shrink every class in the table
+    in proportion to how much of the frame nobody labelled.
+    """
+    return {IGNORE} | {src for src, dst in INDOOR_NATIVE_ID.items() if dst == IGNORE}
+
+
 def _print_coverage(per_split: dict[str, dict]) -> None:
     splits = list(per_split)
-    total_px = {s: max(sum(per_split[s]["pixels"].values()), 1) for s in splits}
+    ignored = _ignored_ids()
+    total_px = {
+        s: max(sum(px for tid, px in per_split[s]["pixels"].items() if tid not in ignored), 1)
+        for s in splits
+    }
 
     print("\nterrain coverage (% of labelled pixels / images containing the class)")
     header = "".join(f"{s:>22}" for s in splits)
     print(f"{'id':>3}  {'class':<20}{header}")
     for tid, name in sorted(ID_TO_NAME.items()):
+        if tid in ignored:
+            continue
         cells = ""
         for s in splits:
             px = per_split[s]["pixels"][tid]
@@ -312,6 +329,17 @@ def _print_coverage(per_split: dict[str, dict]) -> None:
             )
             cells += f"{100 * px / total_px[s]:>21.2f}%"
         print(f"     {TRAV_NAMES[trav_id]:<20}{cells}")
+
+    # How much of the frame nobody labelled. An annotation batch that comes back 95%
+    # ignore is a batch that mostly did not happen, and the class percentages above --
+    # which are shares of what *is* labelled -- will not show it.
+    print("\nunlabelled (ignored by the loss, % of all pixels)")
+    cells = ""
+    for s in splits:
+        all_px = max(sum(per_split[s]["pixels"].values()), 1)
+        ignored_px = sum(per_split[s]["pixels"][tid] for tid in ignored)
+        cells += f"{100 * ignored_px / all_px:>21.2f}%"
+    print(f"     {'ignore':<20}{cells}")
 
 
 def cmd_check(args) -> int:

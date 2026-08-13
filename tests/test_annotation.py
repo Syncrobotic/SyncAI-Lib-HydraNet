@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from syncai_hydranet.cli import annotation
 from syncai_hydranet.cli.annotation import label_spec, main
 from syncai_hydranet.data.label_maps_indoor import INDOOR_TERRAIN
 
@@ -116,9 +117,17 @@ def test_coverage_reports_the_classes_that_are_absent(dataset, capsys):
 # -------------------------------------------------------------- the silent errors
 
 
-def test_background_left_as_zero_fails(dataset, capsys):
-    """id 0 is a trained class under indoor_native, so an unremapped background teaches
-    the model to predict `void` over every unlabelled pixel."""
+def test_background_left_as_zero_fails_when_zero_is_a_trained_class(
+    dataset, capsys, monkeypatch
+):
+    """The check tracks the label map rather than restating it.
+
+    `indoor_native` sends 0 to ignore, so a background of zeros is harmless today. Point
+    it back at an identity map -- what any new scheme would be written as, and what this
+    one was -- and the same dataset has to be rejected, because then every unlabelled
+    pixel teaches the model to predict `void` there.
+    """
+    monkeypatch.setattr(annotation, "INDOOR_NATIVE_ID", {v: v for v in INDOOR_TERRAIN.values()})
     mask = good_mask()
     mask[mask == 255] = 0
     write_frame(dataset, "train", "lobby-a", "000003", mask)
@@ -126,11 +135,23 @@ def test_background_left_as_zero_fails(dataset, capsys):
     assert "void" in capsys.readouterr().out
 
 
-def test_background_as_zero_can_be_accepted_explicitly(dataset):
+def test_background_as_zero_can_be_accepted_explicitly(dataset, monkeypatch):
+    monkeypatch.setattr(annotation, "INDOOR_NATIVE_ID", {v: v for v in INDOOR_TERRAIN.values()})
     mask = good_mask()
     mask[mask == 255] = 0
     write_frame(dataset, "train", "lobby-a", "000003", mask)
     assert check(dataset, "--allow-void") == 0
+
+
+def test_zero_and_255_are_both_counted_as_unlabelled(dataset, capsys):
+    """Under the shipped map both mean "nobody labelled this", and the coverage table
+    reports them together -- a batch that comes back mostly ignore is a batch that
+    mostly did not happen, and the per-class shares alone will not show it."""
+    mask = good_mask()
+    mask[mask == 255] = 0
+    write_frame(dataset, "train", "lobby-a", "000003", mask)
+    assert check(dataset) == 0
+    assert "unlabelled (ignored by the loss" in capsys.readouterr().out
 
 
 def test_rgb_mask_fails(dataset, capsys):
