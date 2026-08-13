@@ -108,7 +108,11 @@ class FCOSLoss(nn.Module):
         pos = cls_t < self.num_classes
         num_pos = pos.sum().clamp(min=1).float()
         onehot = torch.zeros_like(flat_cls)
-        onehot[pos] = F.one_hot(cls_t[pos], self.num_classes).float()
+        # Match flat_cls's dtype rather than forcing float32: under autocast the
+        # logits are bf16/fp16, and index_put_ refuses a mismatched source. This
+        # only fires when the detection head is actually supervised on CUDA, which
+        # is why it survived every seg-only run.
+        onehot[pos] = F.one_hot(cls_t[pos], self.num_classes).to(onehot.dtype)
         cls_loss = sigmoid_focal_loss(flat_cls, onehot) / num_pos
         if pos.any():
             reg_loss = giou_loss(flat_reg[pos], reg_t[pos]) / num_pos
