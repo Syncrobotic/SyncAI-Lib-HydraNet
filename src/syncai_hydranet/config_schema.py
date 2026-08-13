@@ -109,6 +109,9 @@ DATASET = {
     "root": Spec((str,), required=True),
     "split_train": Spec((str,), required=True),
     "split_val": Spec((str,), required=True),
+    # Optional and unset by default: a held-out split only means anything if
+    # nothing in training reads it, so it must be created deliberately.
+    "split_test": Spec((str,)),
     "supervises": Spec((list,), required=True),
     "label_map": Spec((str,)),
     "label_format": Spec((str,), choices=("auto", "color", "id", "rugd_color")),

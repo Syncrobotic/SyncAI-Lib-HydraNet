@@ -74,6 +74,11 @@ data:
       supervises: [traversability, terrain]
       sample_ratio: 1.0
 
+    # best.pt is chosen on the val split, so val is an optimistic estimate of it.
+    # Add a split_test folder that nothing in training ever reads, and report final
+    # numbers with:  hydranet-eval --split test
+    #     split_test: test
+
     # Your own site annotations. This is what actually decides field performance:
     # ADE20K covers none of metal grating, wet floor, door sills, or the specular
     # reflections on polished floors that make a ceiling look like an open corridor.

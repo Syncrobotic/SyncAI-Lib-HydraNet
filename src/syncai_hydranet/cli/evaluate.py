@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 from ..config import load_config
-from ..data.datasets import build_dataset
+from ..data.datasets import SPLITS, build_dataset
 from ..engine.evaluator import evaluate
 from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint
@@ -30,6 +30,15 @@ def build_parser() -> argparse.ArgumentParser:
         default="ema",
         help="EMA weights need enough training steps to be meaningful; see docs/TRAIN_MACOS.md",
     )
+    ap.add_argument(
+        "--split",
+        choices=SPLITS,
+        default="val",
+        help=(
+            "val is what training selected best.pt on, so it is optimistic; report "
+            "final numbers on test, which no part of training ever reads"
+        ),
+    )
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
     ap.add_argument(
         "--json",
@@ -45,7 +54,7 @@ def main(argv: list[str] | None = None) -> None:
     cfg = load_config(args.config, args.set)
     device = pick_device(cfg.get("device"))
     logger = get_logger("eval")
-    logger.info(f"device={device}")
+    logger.info(f"device={device}, split={args.split}")
 
     model = build_model(cfg).to(device).eval()
     ckpt = load_checkpoint(args.checkpoint)
@@ -54,11 +63,11 @@ def main(argv: list[str] | None = None) -> None:
 
     input_size = cfg["data"]["input_size"]
     lb = bool(cfg["data"].get("letterbox", False))
-    val_sets = [
-        (d["name"], build_dataset(d, input_size, False, letterbox=lb))
+    eval_sets = [
+        (d["name"], build_dataset(d, input_size, args.split, letterbox=lb))
         for d in cfg["data"]["datasets"]
     ]
-    metrics = evaluate(model, val_sets, cfg, device, logger)
+    metrics = evaluate(model, eval_sets, cfg, device, logger)
     for k, v in metrics.items():
         logger.info(f"{k}: {v:.4f}")
 
@@ -67,6 +76,7 @@ def main(argv: list[str] | None = None) -> None:
             "checkpoint": args.checkpoint,
             "epoch": ckpt.get("epoch"),
             "weights": args.weights,
+            "split": args.split,
             "git": git_state(),
             **metrics,
         }

@@ -153,8 +153,8 @@ class Trainer:
         lb = bool(dcfg.get("letterbox", False))
         train_sets, val_sets, names, ratios = [], [], [], []
         for ds in dcfg["datasets"]:
-            train_sets.append(build_dataset(ds, input_size, True, letterbox=lb))
-            val_sets.append(build_dataset(ds, input_size, False, letterbox=lb))
+            train_sets.append(build_dataset(ds, input_size, "train", letterbox=lb))
+            val_sets.append(build_dataset(ds, input_size, "val", letterbox=lb))
             names.append(ds["name"])
             ratios.append(float(ds.get("sample_ratio", 1.0)))
         self.train_loader = MultiTaskLoader(
