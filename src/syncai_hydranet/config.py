@@ -79,7 +79,7 @@ def load_config(
     as expensive as one in the file: the setting silently falls back to its default and
     the run looks legitimate. Pass ``validate=False`` only to inspect a broken config.
     """
-    with open(path, encoding="utf-8") as f:
+    with Path(path).open(encoding="utf-8") as f:
         cfg = Config(yaml.safe_load(f))
     for ov in overrides or []:
         key, sep, val = ov.partition("=")

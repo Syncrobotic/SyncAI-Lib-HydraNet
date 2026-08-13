@@ -130,7 +130,7 @@ class FPN(nn.Module):
         in_channels: list[int],
         out_channels: int = 96,
         num_levels: int = 5,
-        num_repeats: int = 1,
+        num_repeats: int = 1,  # noqa: ARG002 - accepted for parity with BiFPN
     ):
         super().__init__()
         self.lateral = nn.ModuleList(nn.Conv2d(c, out_channels, 1) for c in in_channels[1:])

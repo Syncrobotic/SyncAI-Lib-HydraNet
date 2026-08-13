@@ -120,5 +120,5 @@ def write_run_meta(out_dir: Path, cfg: dict, device: Any = None, **extra: Any) -
 def append_metrics(out_dir: Path, record: dict) -> None:
     """Append one validation result to ``metrics.jsonl``."""
     line = json.dumps(record, ensure_ascii=False, default=float)
-    with open(Path(out_dir) / "metrics.jsonl", "a", encoding="utf-8") as f:
+    with (Path(out_dir) / "metrics.jsonl").open("a", encoding="utf-8") as f:
         f.write(line + "\n")

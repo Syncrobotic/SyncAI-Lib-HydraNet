@@ -57,7 +57,7 @@ def load_scene_categories(src: Path) -> dict[str, str]:
     if not f.is_file():
         return {}
     out = {}
-    with open(f) as fh:
+    with f.open(encoding="utf-8") as fh:
         for row in csv.reader(fh, delimiter=" "):
             if len(row) >= 2:
                 out[row[0]] = row[1]

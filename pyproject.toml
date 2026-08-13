@@ -4,7 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "syncai-hydranet"
-version = "0.1.0"
+# Single source of truth: src/syncai_hydranet/__init__.py
+dynamic = ["version"]
 description = "Multi-head perception network for quadruped robots: traversability segmentation, terrain classification and object detection in a single forward pass."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -55,6 +56,9 @@ dev = [
     "pre-commit>=3.7",
 ]
 
+[tool.hatch.version]
+path = "src/syncai_hydranet/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/syncai_hydranet"]
 
@@ -76,10 +80,16 @@ select = [
     "C4",       # flake8-comprehensions
     "SIM",      # flake8-simplify
     "RUF",      # ruff-specific
+    "N",        # pep8-naming
+    "PIE",      # flake8-pie
+    "RET",      # flake8-return
+    "PTH",      # prefer pathlib over os.path/open
+    "ARG",      # unused arguments, which usually mean a stale signature
 ]
 ignore = [
     "E741",     # ambiguous names: l/t/r/b are the standard FCOS distance symbols
     "B008",     # function call in default argument
+    "N812",     # `import torch.nn.functional as F` is universal PyTorch convention
 ]
 
 [tool.ruff.lint.per-file-ignores]
