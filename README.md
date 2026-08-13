@@ -84,6 +84,9 @@ Training, evaluation and inference all pick CUDA → MPS → CPU automatically.
 New to multi-head training, or to this project? [docs/TRAINING_GUIDE.md](docs/TRAINING_GUIDE.md)
 is a ten-minute walkthrough of why the network is shaped this way, how partial supervision
 across datasets works, and the measurement traps that cost the most time.
+Picking the project up as a team? [docs/METHODOLOGY.md](docs/METHODOLOGY.md) covers how to
+split the work, what data to collect and to what spec, and the four levels of evaluation
+that stand between a checkpoint and a robot.
 
 ## Commands
 
