@@ -12,6 +12,7 @@ import torch.nn as nn
 
 from ..config_schema import check_config
 from ..data.datasets import build_dataset
+from ..data.fingerprint import fingerprint_dataset
 from ..data.multitask import MultiTaskLoader
 from ..models.hydranet import build_model
 from ..utils.checkpoint import CKPT_FORMAT, load_checkpoint
@@ -217,8 +218,17 @@ class Trainer:
             total_iters=total_iters,
             parameters=n_params,
             datasets=[
-                {"name": n, "train_size": len(t), "val_size": len(v)}
-                for n, t, v in zip(names, train_sets, val_sets, strict=True)
+                {
+                    "name": n,
+                    "train_size": len(t),
+                    "val_size": len(v),
+                    # Datasets live outside git; without this, "which data produced
+                    # this checkpoint" has no answer six months later.
+                    **fingerprint_dataset(ds),
+                }
+                for n, t, v, ds in zip(
+                    names, train_sets, val_sets, dcfg["datasets"], strict=True
+                )
             ],
         )
         git = meta["git"]
