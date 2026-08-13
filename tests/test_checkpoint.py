@@ -158,6 +158,27 @@ def test_legacy_checkpoint_estimates_schedule_position(tmp_path):
     assert fresh.optimizer.param_groups[0]["lr"] < 0.1  # past warmup, already decaying
 
 
+def test_last_pt_carries_the_current_best_not_the_previous_one(tmp_path):
+    """last.pt used to be written before best_metric was updated, so resuming from it
+    restored a stale best and the next, worse epoch was accepted as the new best."""
+    t = _stub_trainer()
+    t.out_dir = tmp_path
+    t.primary_metric = "traversability_mIoU"
+
+    assert t.record_epoch(1, {"traversability_mIoU": 0.40}) is True
+    assert load_checkpoint(tmp_path / "last.pt")["best_metric"] == 0.40
+
+    assert t.record_epoch(2, {"traversability_mIoU": 0.30}) is False
+    assert load_checkpoint(tmp_path / "last.pt")["epoch"] == 2
+    assert load_checkpoint(tmp_path / "best.pt")["epoch"] == 1  # still the better one
+
+    fresh = _stub_trainer()
+    fresh.out_dir = tmp_path
+    fresh.primary_metric = "traversability_mIoU"
+    fresh.load_train_state(load_checkpoint(tmp_path / "last.pt"))
+    assert fresh.record_epoch(3, {"traversability_mIoU": 0.35}) is False
+
+
 def test_best_metric_survives_so_best_pt_is_not_overwritten(tmp_path):
     """Without this, the first validation after a resume beats -1.0 and clobbers the
     best checkpoint with a worse model."""

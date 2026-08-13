@@ -58,7 +58,12 @@ def main(argv: list[str] | None = None) -> None:
         )
         model.load_state_dict(state)
 
-    h, w = cfg["export"]["input_size"]
+    # The export section is optional: without it, exporting at the training resolution
+    # is the sane default, and a TensorRT engine built for the wrong input size is a
+    # much later and much more confusing failure than a missing config key.
+    ecfg = cfg.get("export") or {}
+    h, w = ecfg.get("input_size") or cfg["data"]["input_size"]
+    print(f"exporting at {h}x{w}")
     dummy = torch.randn(args.batch, 3, h, w)
     wrapper = ExportWrapper(model)
 
@@ -75,7 +80,7 @@ def main(argv: list[str] | None = None) -> None:
         args.output,
         input_names=["images"],
         output_names=out_names,
-        opset_version=int(cfg["export"].get("opset", 17)),
+        opset_version=int(ecfg.get("opset", 17)),
         do_constant_folding=True,
         dynamo=False,
     )

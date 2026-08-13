@@ -257,14 +257,25 @@ class Trainer:
         for epoch in range(self.start_epoch + 1, self.epochs + 1):
             self.train_one_epoch(epoch)
             if epoch % self.val_interval == 0:
-                metrics = self.validate(epoch)
-                score = select_metric(metrics, self.primary_metric)
-                self.save("last.pt", epoch)
-                if score > self.best_metric:
-                    self.best_metric = score
-                    self.save("best.pt", epoch)
-                    self.logger.info(f"new best model ({self.primary_metric}={score:.4f})")
+                self.record_epoch(epoch, self.validate(epoch))
         self.logger.info("training complete")
+
+    def record_epoch(self, epoch: int, metrics: dict) -> bool:
+        """Update the best score, then write the checkpoints. Returns True on a new best.
+
+        The order matters: best_metric has to be updated *before* last.pt is written,
+        or last.pt carries the previous epoch's best and a resume from it re-accepts a
+        worse model as the new best.
+        """
+        score = select_metric(metrics, self.primary_metric)
+        is_best = score > self.best_metric
+        if is_best:
+            self.best_metric = score
+        self.save("last.pt", epoch)
+        if is_best:
+            self.save("best.pt", epoch)
+            self.logger.info(f"new best model ({self.primary_metric}={score:.4f})")
+        return is_best
 
     def train_one_epoch(self, epoch: int):
         self.model.train()
