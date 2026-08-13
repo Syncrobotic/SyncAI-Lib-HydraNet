@@ -140,6 +140,7 @@ TRAIN = {
     "grad_clip": Spec(NUMBER),
     "ema": Spec((bool,)),
     "ema_decay": Spec(NUMBER),
+    "ema_warmup_steps": Spec((int,)),
     "log_interval": Spec((int,)),
     "val_interval": Spec((int,)),
     "primary_metric": Spec((str,)),

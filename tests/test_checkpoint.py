@@ -8,6 +8,7 @@ pytest tests/test_checkpoint.py -v
 
 import logging
 
+import pytest
 import torch
 import torch.nn as nn
 
@@ -179,6 +180,31 @@ def test_last_pt_carries_the_current_best_not_the_previous_one(tmp_path):
     fresh.primary_metric = "traversability_mIoU"
     fresh.load_train_state(load_checkpoint(tmp_path / "last.pt"))
     assert fresh.record_epoch(3, {"traversability_mIoU": 0.35}) is False
+
+
+def test_ema_progress_survives_a_resume(tmp_path):
+    """The decay ramp is a function of the update count. Losing it restarts the ramp,
+    dragging a mature average back towards whatever the model is at the resume point."""
+    from syncai_hydranet.engine.trainer import ModelEMA
+
+    t = _stub_trainer()
+    t.ema = ModelEMA(t.model, decay=0.99, warmup_steps=100)
+    for _ in range(250):
+        t.ema.update(t.model)
+
+    path = tmp_path / "last.pt"
+    torch.save(t.state_dict(epoch=1), path)
+    ckpt = load_checkpoint(path)
+    assert ckpt["ema_updates"] == 250
+
+    fresh = _stub_trainer()
+    fresh.ema = ModelEMA(fresh.model, decay=0.99, warmup_steps=100)
+    fresh.ema.ema.load_state_dict(ckpt["ema"])
+    fresh.load_train_state(ckpt)
+    assert fresh.ema.updates == 250
+    assert fresh.ema.decay_at(fresh.ema.updates + 1) == pytest.approx(
+        t.ema.decay_at(t.ema.updates + 1)
+    )
 
 
 def test_best_metric_survives_so_best_pt_is_not_overwritten(tmp_path):

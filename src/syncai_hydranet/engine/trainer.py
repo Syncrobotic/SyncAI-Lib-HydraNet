@@ -7,6 +7,7 @@ import math
 import time
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -21,6 +22,7 @@ from ..utils.logger import get_logger
 from ..utils.runmeta import append_metrics, resolve_out_dir, write_run_meta
 from ..utils.seeding import (
     configure_backends,
+    needs_grad_scaler,
     resolve_amp_dtype,
     seed_everything,
 )
@@ -31,25 +33,50 @@ DEFAULT_PRIMARY_METRIC = "traversability_mIoU"
 
 
 class ModelEMA:
-    """Exponential moving average of the weights.
+    """Exponential moving average of the weights, with a warmed-up decay.
 
-    Note the average starts from the model's *initial* weights, so after n steps a
-    fraction ``decay**n`` of the random initialisation is still mixed in. Short runs
-    must lower the decay or disable EMA; the Trainer warns when this bites.
+    The average starts from the model's *initial* random weights. At a fixed decay of
+    0.9998 that initialisation is still 45% of the EMA after 160 steps, and validation
+    -- which runs on the EMA -- reported 0.16 mIoU for a model whose raw weights scored
+    0.95. The failure is silent and looks exactly like a model that did not learn.
+
+    The decay is therefore ramped: ``decay * (1 - exp(-updates / warmup_steps))``, so
+    the first updates copy the model almost outright and the smoothing strengthens as
+    the average acquires real history. This is the standard fix (YOLOv5, timm) and it
+    makes EMA safe on short runs instead of merely warned about.
     """
 
-    def __init__(self, model: nn.Module, decay: float = 0.9998):
+    def __init__(self, model: nn.Module, decay: float = 0.9998, warmup_steps: int = 2000):
         self.ema = copy.deepcopy(model).eval()
         for p in self.ema.parameters():
             p.requires_grad_(False)
         self.decay = decay
+        self.warmup_steps = max(int(warmup_steps), 0)
+        self.updates = 0
+
+    def decay_at(self, updates: int) -> float:
+        if self.warmup_steps <= 0:
+            return self.decay
+        return self.decay * (1 - math.exp(-updates / self.warmup_steps))
+
+    def residual_init_fraction(self, steps: int) -> float:
+        """How much of the random initialisation survives after ``steps`` updates."""
+        if steps <= 0:
+            return 1.0
+        if self.warmup_steps <= 0:
+            return float(self.decay**steps)
+        n = np.arange(1, steps + 1)
+        decays = self.decay * (1 - np.exp(-n / self.warmup_steps))
+        return float(np.exp(np.log(decays).sum()))
 
     @torch.no_grad()
     def update(self, model: nn.Module):
+        self.updates += 1
+        d = self.decay_at(self.updates)
         msd = model.state_dict()
         for k, v in self.ema.state_dict().items():
             if v.dtype.is_floating_point:
-                v.mul_(self.decay).add_(msd[k].detach(), alpha=1 - self.decay)
+                v.mul_(d).add_(msd[k].detach(), alpha=1 - d)
             else:
                 v.copy_(msd[k])
 
@@ -204,9 +231,7 @@ class Trainer:
 
         self.amp = bool(tcfg.get("amp", True)) and supports_amp(self.device)
         self.amp_dtype = resolve_amp_dtype(str(tcfg.get("amp_dtype", "float16")))
-        # bfloat16 has fp32's exponent range, so gradients cannot underflow the way
-        # fp16's can; scaling would only add overhead and a failure mode.
-        self.scaler = torch.amp.GradScaler(enabled=self.amp and self.amp_dtype is torch.float16)
+        self.scaler = torch.amp.GradScaler(enabled=needs_grad_scaler(self.amp, self.amp_dtype))
         self.grad_clip = float(tcfg.get("grad_clip", 0.0))
         if self.accum_steps > 1:
             self.logger.info(
@@ -219,16 +244,22 @@ class Trainer:
             self.logger.info(f"mixed precision: {self.amp_dtype}")
 
         ema_decay = float(tcfg.get("ema_decay", 0.9998))
-        self.ema = ModelEMA(self.model, ema_decay) if tcfg.get("ema", True) else None
+        ema_warmup = int(tcfg.get("ema_warmup_steps", 2000))
+        self.ema = (
+            ModelEMA(self.model, ema_decay, ema_warmup) if tcfg.get("ema", True) else None
+        )
         if self.ema:
-            residual = ema_decay ** max(total_iters, 1)
+            # The ramp makes this rare rather than routine, but a run shorter than the
+            # ramp itself can still validate on weights that are mostly noise, and that
+            # failure looks exactly like a model that did not learn.
+            residual = self.ema.residual_init_fraction(total_iters)
             if residual > 0.05:
                 self.logger.warning(
-                    f"EMA warning: ema_decay={ema_decay} over {total_iters} steps leaves "
-                    f"{residual:.0%} of the random initialisation in the EMA weights used "
-                    f"for validation. Scores will be badly understated. For short runs set "
-                    f"train.ema=false, or lower ema_decay below "
-                    f"{1 - 3 / max(total_iters, 1):.4f}."
+                    f"EMA warning: {total_iters} optimizer steps at decay={ema_decay} "
+                    f"(warmup {ema_warmup}) leave {residual:.0%} of the random "
+                    f"initialisation in the EMA weights used for validation. Scores "
+                    f"will be understated. Lower train.ema_warmup_steps or set "
+                    f"train.ema=false for runs this short."
                 )
 
         self.log_interval = int(tcfg.get("log_interval", 50))
@@ -425,6 +456,7 @@ class Trainer:
             "format": CKPT_FORMAT,
             "model": self.model.state_dict(),
             "ema": self.ema.ema.state_dict() if self.ema else None,
+            "ema_updates": self.ema.updates if self.ema else 0,
             "optimizer": self.optimizer.state_dict(),
             "scheduler": self.scheduler.state_dict(),
             "scaler": self.scaler.state_dict(),
@@ -456,6 +488,10 @@ class Trainer:
         # one raises, which is exactly the CPU-run -> CUDA-run case.
         if ckpt.get("scaler"):
             self.scaler.load_state_dict(ckpt["scaler"])
+        if self.ema:
+            # Without this the decay ramp restarts and a mature average is dragged
+            # back towards whatever the model happens to be at the resume point.
+            self.ema.updates = int(ckpt.get("ema_updates", 0))
         self.start_epoch = int(ckpt.get("epoch", 0))
         self.global_step = int(ckpt.get("global_step", 0))
         self.best_metric = float(ckpt.get("best_metric", -1.0))
