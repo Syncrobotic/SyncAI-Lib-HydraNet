@@ -31,6 +31,8 @@ def collate(batch: list[dict]) -> dict:
     out = {"image": images, "targets": targets, "supervises": supervises}
     if "image_id" in batch[0]:
         out["image_ids"] = [b["image_id"] for b in batch]
+    if "geom" in batch[0]:
+        out["geoms"] = [b["geom"] for b in batch]
     return out
 
 

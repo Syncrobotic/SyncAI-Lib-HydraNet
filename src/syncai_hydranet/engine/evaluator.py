@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from ..data.multitask import collate
+from ..data.transforms import invert_geom
 
 
 class ConfusionMatrix:
@@ -75,14 +76,14 @@ def evaluate(model, val_sets, cfg, device, logger, samples: dict | None = None) 
                     nms_thr=0.6,
                     img_size=images.shape[-2:],
                 )
-                # Scale boxes back to original image coordinates for COCOeval.
-                for img_id, det in zip(batch["image_ids"], dets, strict=True):
-                    info = ds.coco.loadImgs(img_id)[0]
-                    sx = info["width"] / images.shape[-1]
-                    sy = info["height"] / images.shape[-2]
-                    boxes = det["boxes"].cpu().numpy()
-                    boxes[:, [0, 2]] *= sx
-                    boxes[:, [1, 3]] *= sy
+                # Map boxes back to original image coordinates for COCOeval. The dataset
+                # records the exact scale and padding it applied; deriving it here from
+                # the frame size would be wrong for every letterboxed image, because the
+                # padding is not part of the original frame.
+                for img_id, det, geom in zip(
+                    batch["image_ids"], dets, batch["geoms"], strict=True
+                ):
+                    boxes = invert_geom(det["boxes"].cpu().numpy(), geom)
                     for box, score, label in zip(
                         boxes,
                         det["scores"].cpu().numpy(),

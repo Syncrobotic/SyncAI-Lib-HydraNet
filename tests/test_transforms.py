@@ -12,9 +12,12 @@ from syncai_hydranet.data.transforms import (
     PAD_LABEL,
     LetterboxResize,
     LetterboxScaleCrop,
+    RandomHorizontalFlip,
+    RandomScaleCrop,
     Resize,
     Sample,
     build_transforms,
+    invert_geom,
 )
 from syncai_hydranet.utils.visualize import crop_box, letterbox
 
@@ -99,6 +102,66 @@ def test_build_transforms_flag_selects_pipeline():
     assert isinstance(build_transforms(SIZE, False, letterbox=True).ts[0], LetterboxResize)
     assert isinstance(build_transforms(SIZE, False, letterbox=False).ts[0], Resize)
     assert isinstance(build_transforms(SIZE, True, letterbox=True).ts[0], LetterboxScaleCrop)
+
+
+# -------------------------------------------------------------------- geom
+# Predictions are made in network coordinates; COCOeval wants original image
+# coordinates. These tests pin the round trip.
+
+
+@pytest.mark.parametrize(("w", "h"), [(1920, 1080), (1080, 1920), (640, 512), (800, 800)])
+@pytest.mark.parametrize("lb", [True, False])
+def test_geom_inverts_the_val_pipeline(w, h, lb):
+    original = np.array([[0.25 * w, 0.25 * h, 0.75 * w, 0.75 * h]], np.float32)
+    s = _sample(w, h, with_boxes=True)
+    s = build_transforms(SIZE, False, letterbox=lb)(s)
+    recovered = invert_geom(s["boxes"].numpy(), s["geom"])
+    assert np.allclose(recovered, original, atol=1.0)
+
+
+def test_frame_size_ratio_is_wrong_under_letterbox():
+    """The bug this replaced: scaling by the width ratio ignores the padding offset,
+    so every box on a letterboxed portrait frame lands in the wrong place."""
+    w, h = 1080, 1920
+    s = build_transforms(SIZE, False, letterbox=True)(_sample(w, h, with_boxes=True))
+    boxes = s["boxes"].numpy()
+
+    naive = boxes.copy()
+    naive[:, [0, 2]] *= w / SIZE[1]
+    naive[:, [1, 3]] *= h / SIZE[0]
+    correct = invert_geom(boxes, s["geom"])
+    assert abs(naive[0, 0] - correct[0, 0]) > 100  # hundreds of pixels off
+
+
+def test_geom_survives_a_letterboxed_landscape_frame():
+    """Landscape into a taller canvas pads top and bottom: py must be non-zero."""
+    s = build_transforms((512, 512), False, letterbox=True)(_sample(1920, 1080, True))
+    sx, sy, px, py = s["geom"]
+    assert sx == pytest.approx(sy)  # aspect preserved
+    assert px == pytest.approx(0.0)
+    assert py > 0
+
+
+def test_flip_invalidates_geom():
+    """Mirroring is not an (sx, sy, px, py) mapping. Better to refuse than to return
+    silently mirrored boxes, which is why the train pipeline is never used for eval."""
+    s = RandomHorizontalFlip(p=1.0)(_sample(640, 480, with_boxes=True))
+    assert s["geom"] is None
+    with pytest.raises(ValueError, match="not invertible"):
+        invert_geom(s["boxes"], s["geom"])
+
+
+def test_random_scale_crop_zoom_out_is_a_real_augmentation():
+    """scale < 1 used to resize down and straight back up, losing resolution and
+    augmenting nothing. It must now shrink the content and pad the rest."""
+    padded = 0
+    for _ in range(30):
+        s = RandomScaleCrop(SIZE, scale_range=(0.5, 0.9))(_sample(SIZE[1], SIZE[0]))
+        assert s["image"].size == (SIZE[1], SIZE[0])
+        m = s["masks"]["terrain"]
+        assert set(np.unique(m)).issubset({5, PAD_LABEL})
+        padded += bool((m == PAD_LABEL).any())
+    assert padded == 30, "every zoom-out sample should carry ignore padding"
 
 
 # ------------------------------------------------------------ label schemes

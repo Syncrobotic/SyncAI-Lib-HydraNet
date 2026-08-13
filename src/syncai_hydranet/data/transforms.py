@@ -20,13 +20,49 @@ PAD_LABEL = 255  # padded pixels are always ignore, never contribute to the loss
 
 
 class Sample(dict):
-    """Keys: image (PIL), masks: dict[str, HxW array], boxes: [N,4], labels: [N]."""
+    """Keys: image (PIL), masks: dict[str, HxW array], boxes: [N,4], labels: [N],
+    geom: the accumulated original-image -> network-input mapping (see below)."""
+
+
+# geom = (sx, sy, px, py) with  x_net = x_orig * sx + px.  Every geometric step keeps it
+# up to date, so evaluation can map predictions back to original image coordinates
+# without re-deriving the transform from image sizes -- a derivation that is simply
+# wrong once letterbox padding is involved.
+GEOM_IDENTITY = (1.0, 1.0, 0.0, 0.0)
+
+
+def _geom_scale(sample: Sample, fx: float, fy: float) -> None:
+    g = sample.get("geom", GEOM_IDENTITY)
+    if g is not None:
+        sample["geom"] = (g[0] * fx, g[1] * fy, g[2] * fx, g[3] * fy)
+
+
+def _geom_shift(sample: Sample, dx: float, dy: float) -> None:
+    g = sample.get("geom", GEOM_IDENTITY)
+    if g is not None:
+        sample["geom"] = (g[0], g[1], g[2] + dx, g[3] + dy)
+
+
+def invert_geom(boxes: np.ndarray, geom) -> np.ndarray:
+    """Map ``[N,4]`` xyxy boxes from network coordinates back to the original image."""
+    if geom is None:
+        raise ValueError(
+            "this sample's geometry is not invertible (a flip or other non-affine "
+            "augmentation was applied); predictions cannot be mapped back to the "
+            "original image. Evaluation must use the val transform pipeline."
+        )
+    sx, sy, px, py = geom
+    out = np.asarray(boxes, dtype=np.float64).copy()
+    out[:, [0, 2]] = (out[:, [0, 2]] - px) / sx
+    out[:, [1, 3]] = (out[:, [1, 3]] - py) / sy
+    return out
 
 
 def _resize(sample: Sample, size: tuple[int, int]) -> Sample:
     h, w = size
     img = sample["image"]
     ow, oh = img.size
+    _geom_scale(sample, w / ow, h / oh)
     sample["image"] = img.resize((w, h), Image.BILINEAR)
     if "masks" in sample:
         sample["masks"] = {
@@ -50,6 +86,7 @@ def _paste(sample: Sample, size: tuple[int, int], x0: int, y0: int) -> Sample:
     """
     h, w = size
     img = sample["image"]
+    _geom_shift(sample, x0, y0)
     canvas = Image.new("RGB", (w, h), PAD_COLOR)
     canvas.paste(img, (x0, y0))
     sample["image"] = canvas
@@ -104,6 +141,7 @@ class RandomHorizontalFlip:
         if random.random() > self.p:
             return s
         w = s["image"].size[0]
+        s["geom"] = None  # a mirror is not an (sx, sy, px, py) mapping; train-only anyway
         s["image"] = s["image"].transpose(Image.FLIP_LEFT_RIGHT)
         if "masks" in s:
             s["masks"] = {k: np.ascontiguousarray(m[:, ::-1]) for k, m in s["masks"].items()}
@@ -115,7 +153,12 @@ class RandomHorizontalFlip:
 
 
 class RandomScaleCrop:
-    """Random scale (0.75-1.5x) then crop back to the target size, stretching to fit."""
+    """Random scale (0.75-1.5x) then crop back to the target size, stretching to fit.
+
+    Scales below 1 shrink the frame and pad the remainder at a random position, so the
+    zoom-out half of the range is a real augmentation rather than a round trip through a
+    lower resolution.
+    """
 
     def __init__(self, size, scale_range=(0.75, 1.5)):
         self.size = tuple(size)  # (H, W)
@@ -124,12 +167,15 @@ class RandomScaleCrop:
     def __call__(self, s: Sample) -> Sample:
         h, w = self.size
         scale = random.uniform(*self.scale_range)
-        sh, sw = int(h * scale), int(w * scale)
+        sh, sw = max(int(h * scale), 1), max(int(w * scale), 1)
         s = _resize(s, (sh, sw))
-        if sh <= h or sw <= w:  # scaled below target: just resize back
-            return _resize(s, self.size)
+        if sh <= h or sw <= w:
+            x0 = random.randint(min(0, w - sw), max(0, w - sw))
+            y0 = random.randint(min(0, h - sh), max(0, h - sh))
+            return _paste(s, self.size, x0, y0)
         y0 = random.randint(0, sh - h)
         x0 = random.randint(0, sw - w)
+        _geom_shift(s, -x0, -y0)
         s["image"] = s["image"].crop((x0, y0, x0 + w, y0 + h))
         if "masks" in s:
             s["masks"] = {k: m[y0 : y0 + h, x0 : x0 + w] for k, m in s["masks"].items()}

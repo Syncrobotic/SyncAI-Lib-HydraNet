@@ -17,7 +17,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 
 from . import label_maps
-from .transforms import Sample, build_transforms
+from .transforms import GEOM_IDENTITY, Sample, build_transforms
 
 IMG_EXTS = {".png", ".jpg", ".jpeg", ".bmp"}
 
@@ -193,6 +193,9 @@ class CocoDetDataset(Dataset):
             "targets": {"boxes": s["boxes"], "labels": s["labels"]},
             "supervises": self.supervises,
             "image_id": img_id,
+            # How this image was scaled and padded, so COCOeval gets boxes in original
+            # image coordinates instead of an after-the-fact guess from the frame size.
+            "geom": s.get("geom", GEOM_IDENTITY),
         }
 
 
