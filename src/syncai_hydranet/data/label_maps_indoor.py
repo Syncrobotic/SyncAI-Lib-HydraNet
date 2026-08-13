@@ -47,7 +47,14 @@ INDOOR_TERRAIN_TO_TRAV = {
 # In-house annotations: the labelling tool emits indoor class ids directly, so no
 # translation is needed. Pin this table in the annotation spec so annotators and
 # training cannot drift apart.
-INDOOR_NATIVE_ID = {v: v for v in INDOOR_TERRAIN.values()}
+#
+# 0 maps to ignore, not to itself. Annotation tools export unlabelled background as 0,
+# so an identity table would make "nobody labelled this" a trainable class and teach the
+# model to predict void over every unannotated pixel. ADE20K never yields a 0 -- its LUT
+# defaults to 255 -- so no run on public data can surface the difference, and the first
+# in-house dataset would have been the one to find it. INDOOR_TERRAIN_TO_TRAV[0] is
+# already 255, so this makes the terrain head agree with the traversability head.
+INDOOR_NATIVE_ID = {0: 255, **{v: v for v in INDOOR_TERRAIN.values() if v}}
 
 
 # ---------------------------------------------------------------------------

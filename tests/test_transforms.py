@@ -168,11 +168,19 @@ def test_random_scale_crop_zoom_out_is_a_real_augmentation():
 
 
 def test_schemes_are_self_consistent():
-    """Every mapped terrain id must be in range and have a traversability entry;
-    otherwise training silently produces all-ignore labels."""
+    """Every mapped terrain id is either a real class or the ignore sentinel, and every
+    real class has a traversability entry; otherwise training silently produces
+    all-ignore labels.
+
+    255 is allowed as a mapping target: indoor_native sends unlabelled background there
+    on purpose. It needs no entry in ``trav`` because terrain_to_traversability starts
+    from an all-255 array and only overwrites the ids it knows.
+    """
     for name, sc in label_maps.SCHEMES.items():
         assert sc.num_classes == 12, name
         for t in set(sc.mapping.values()):
+            if t == 255:
+                continue
             assert 0 <= t < sc.num_classes, f"{name}: terrain id {t} out of range"
             assert t in sc.trav, f"{name}: terrain id {t} has no traversability mapping"
 
