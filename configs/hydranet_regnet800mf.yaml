@@ -88,7 +88,8 @@ train:
   scheduler: cosine
   amp: true                       # automatically disabled off CUDA
   grad_clip: 10.0
-  ema: true                       # set false for short runs, see docs/TRAIN_MACOS.md
+  ema: true                       # decay ramps up over train.ema_warmup_steps, so
+                                  # short runs are safe too; see docs/TRAIN_MACOS.md
   ema_decay: 0.9998
   log_interval: 50
   val_interval: 1
