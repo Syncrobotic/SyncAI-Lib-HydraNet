@@ -91,6 +91,9 @@ Annotating? [docs/ANNOTATION_SETUP.md](docs/ANNOTATION_SETUP.md) has the CVAT co
 steps and the labelling contract.
 Considering an architecture change? [docs/ARCHITECTURE_REVIEW.md](docs/ARCHITECTURE_REVIEW.md)
 has measured answers to the questions that keep coming up — including two that say *no*.
+Shipping something? [docs/RELEASE.md](docs/RELEASE.md) covers the `dev → stage → main` flow
+and, separately, how a model gets a version — because `runs/` is gitignored, so branches
+version the code and nothing versions the weights.
 
 ## Commands
 
