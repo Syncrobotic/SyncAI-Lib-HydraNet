@@ -1,0 +1,217 @@
+"""Dataset wrappers.
+
+SegFolderDataset: a generic "images folder + annotations folder" segmentation dataset,
+    covering RUGD (RGB palette), RELLIS-3D and ADE20K (integer ids).
+CocoDetDataset: COCO-format object detection.
+
+Each dataset declares ``supervises``, naming the heads it provides labels for. The
+multi-task loader uses that to compute only the relevant losses per step.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import numpy as np
+from PIL import Image
+from torch.utils.data import Dataset
+
+from . import label_maps
+from .transforms import Sample, build_transforms
+
+IMG_EXTS = {".png", ".jpg", ".jpeg", ".bmp"}
+
+
+def _index_pairs(img_dir: Path, ann_dir: Path) -> list[tuple[Path, Path]]:
+    """Pair images with annotations by filename stem, recursively, ignoring extensions."""
+    anns = {}
+    for p in ann_dir.rglob("*"):
+        if p.suffix.lower() in IMG_EXTS:
+            anns[p.stem] = p
+    pairs = []
+    for p in sorted(img_dir.rglob("*")):
+        if p.suffix.lower() in IMG_EXTS and p.stem in anns:
+            pairs.append((p, anns[p.stem]))
+    return pairs
+
+
+class SegFolderDataset(Dataset):
+    """Layout::
+
+        root/images/<split>/**/*.png
+        root/annotations/<split>/**/*.png
+
+    Produces masks for both the terrain and traversability heads from one annotation.
+    """
+
+    def __init__(
+        self,
+        root: str,
+        split: str,
+        input_size,
+        train: bool,
+        label_format: str = "auto",
+        supervises=("traversability", "terrain"),
+        label_map: str | None = None,
+        letterbox: bool = False,
+    ):
+        self.root = Path(root)
+        img_dir = self.root / "images" / split
+        ann_dir = self.root / "annotations" / split
+        if not img_dir.is_dir():
+            raise FileNotFoundError(
+                f"{img_dir} does not exist; see README for the expected layout."
+            )
+        self.pairs = _index_pairs(img_dir, ann_dir)
+        if not self.pairs:
+            raise RuntimeError(
+                f"no image/annotation pairs found under {self.root} split={split}"
+            )
+        # label_map names a complete scheme (preferred). Without it we fall back to the
+        # legacy auto-detection between RGB palette and integer ids.
+        self.scheme = label_maps.get_scheme(label_map) if label_map else None
+        self.label_format = label_format
+        self.transform = build_transforms(input_size, train, letterbox=letterbox)
+        self.supervises = list(supervises)
+        self._color_lut = None
+        self._id_lut = None
+
+    def __len__(self):
+        return len(self.pairs)
+
+    def _decode_ann(self, ann_path: Path) -> np.ndarray:
+        ann = Image.open(ann_path)
+        if self.scheme is not None:
+            fmt = "color" if self.scheme.fmt == "color" else "id"
+            mapping = self.scheme.mapping
+        else:
+            fmt = self.label_format
+            if fmt == "auto":
+                is_rgb = ann.mode in ("RGB", "P") and np.asarray(ann.convert("RGB")).ndim == 3
+                fmt = "color" if is_rgb else "id"
+            elif fmt == "rugd_color":
+                fmt = "color"
+            mapping = (
+                label_maps.RUGD_COLOR_TO_TERRAIN
+                if fmt == "color"
+                else label_maps.RELLIS_ID_TO_TERRAIN
+            )
+
+        if fmt == "color":
+            rgb = np.asarray(ann.convert("RGB"))
+            if self._color_lut is None:  # 24-bit RGB -> terrain id lookup table
+                lut = np.full(1 << 24, 255, dtype=np.uint8)
+                for (r, g, b), t in mapping.items():
+                    lut[(r << 16) | (g << 8) | b] = t
+                self._color_lut = lut
+            key = (
+                (rgb[..., 0].astype(np.int32) << 16)
+                | (rgb[..., 1].astype(np.int32) << 8)
+                | rgb[..., 2].astype(np.int32)
+            )
+            return self._color_lut[key]
+
+        # Single-channel integer ids (RELLIS-3D, ADE20K). A lookup table beats one
+        # boolean mask per class: ADE20K has 150 of them.
+        raw = np.asarray(ann)
+        if raw.ndim == 3:
+            raw = raw[..., 0]
+        if self._id_lut is None:
+            n = max(int(max(mapping)) + 1, 256)
+            lut = np.full(n, 255, dtype=np.uint8)
+            for src_id, t in mapping.items():
+                lut[int(src_id)] = t
+            self._id_lut = lut
+        return self._id_lut[np.clip(raw, 0, len(self._id_lut) - 1)]
+
+    def __getitem__(self, idx: int):
+        img_path, ann_path = self.pairs[idx]
+        terrain = self._decode_ann(ann_path)
+        trav_map = self.scheme.trav if self.scheme else None
+        trav = label_maps.terrain_to_traversability(terrain, trav_map)
+        s = Sample(
+            image=Image.open(img_path).convert("RGB"),
+            masks={"terrain": terrain, "traversability": trav},
+        )
+        s = self.transform(s)
+        return {"image": s["image"], "targets": dict(s["masks"]), "supervises": self.supervises}
+
+
+class CocoDetDataset(Dataset):
+    """COCO detection: ``root/{split}/`` images, ``root/annotations/instances_{split}.json``."""
+
+    def __init__(
+        self,
+        root: str,
+        split: str,
+        input_size,
+        train: bool,
+        supervises=("detection",),
+        letterbox: bool = False,
+    ):
+        from pycocotools.coco import COCO
+
+        self.root = Path(root)
+        ann_file = self.root / "annotations" / f"instances_{split}.json"
+        if not ann_file.is_file():
+            raise FileNotFoundError(f"{ann_file} does not exist.")
+        self.coco = COCO(str(ann_file))
+        self.img_dir = self.root / split
+        self.ids = [
+            i
+            for i in sorted(self.coco.imgs.keys())
+            if len(self.coco.getAnnIds(imgIds=i, iscrowd=False)) > 0
+        ]
+        cat_ids = sorted(self.coco.getCatIds())
+        self.cat_to_label = {c: i for i, c in enumerate(cat_ids)}  # contiguous, 0-based
+        self.label_to_cat = {i: c for c, i in self.cat_to_label.items()}
+        self.transform = build_transforms(input_size, train, letterbox=letterbox)
+        self.supervises = list(supervises)
+
+    def __len__(self):
+        return len(self.ids)
+
+    def __getitem__(self, idx: int):
+        img_id = self.ids[idx]
+        info = self.coco.loadImgs(img_id)[0]
+        img = Image.open(self.img_dir / info["file_name"]).convert("RGB")
+        anns = self.coco.loadAnns(self.coco.getAnnIds(imgIds=img_id, iscrowd=False))
+        boxes, labels = [], []
+        for a in anns:
+            x, y, w, h = a["bbox"]
+            if w > 1 and h > 1:
+                boxes.append([x, y, x + w, y + h])
+                labels.append(self.cat_to_label[a["category_id"]])
+        s = Sample(
+            image=img,
+            boxes=np.asarray(boxes, dtype=np.float32).reshape(-1, 4),
+            labels=np.asarray(labels, dtype=np.int64),
+        )
+        s = self.transform(s)
+        return {
+            "image": s["image"],
+            "targets": {"boxes": s["boxes"], "labels": s["labels"]},
+            "supervises": self.supervises,
+            "image_id": img_id,
+        }
+
+
+def build_dataset(dcfg, input_size, train: bool, letterbox: bool = False):
+    split = dcfg["split_train"] if train else dcfg["split_val"]
+    sup = dcfg["supervises"]
+    if dcfg["type"] == "seg_folder":
+        return SegFolderDataset(
+            dcfg["root"],
+            split,
+            input_size,
+            train,
+            label_format=dcfg.get("label_format", "auto"),
+            supervises=sup,
+            label_map=dcfg.get("label_map"),
+            letterbox=letterbox,
+        )
+    if dcfg["type"] == "coco":
+        return CocoDetDataset(
+            dcfg["root"], split, input_size, train, supervises=sup, letterbox=letterbox
+        )
+    raise ValueError(f"unknown dataset type: {dcfg['type']}")

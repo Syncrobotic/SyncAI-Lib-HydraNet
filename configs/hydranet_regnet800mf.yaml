@@ -1,0 +1,100 @@
+# =============================================================================
+# SyncAI-Lib-HydraNet: off-road defaults (RUGD / RELLIS-3D).
+# Target platform: Jetson Orin via TensorRT. Every operator here is TRT-native.
+# For indoor deployments see hydranet_indoor.yaml.
+# =============================================================================
+
+experiment: hydranet_regnet800mf
+output_dir: runs/hydranet_regnet800mf
+seed: 42
+
+model:
+  backbone:
+    name: regnet_x_800mf          # alternatives: regnet_x_1_6gf / resnet18 / resnet34
+    pretrained: true              # ImageNet weights; essential at this dataset size
+    frozen_stages: 0              # >0 freezes early stages for small-data transfer
+  neck:
+    name: bifpn                   # bifpn | fpn
+    out_channels: 96
+    num_repeats: 2
+    num_levels: 5                 # P3..P7 for detection; segmentation uses P3..P5
+  heads:
+    traversability:               # head 1: per-pixel "can the robot step here"
+      type: semantic_fpn
+      num_classes: 3              # 0=blocked 1=caution 2=go
+      in_levels: [0, 1, 2]        # P3, P4, P5
+      channels: 64
+      dropout: 0.1
+      loss: { ce_weight: 1.0, dice_weight: 1.0, ignore_index: 255 }
+    terrain:                      # head 2: per-pixel surface material
+      type: semantic_fpn
+      num_classes: 12             # see data.terrain_classes
+      in_levels: [0, 1, 2]
+      channels: 64
+      dropout: 0.1
+      loss: { ce_weight: 1.0, dice_weight: 0.5, ignore_index: 255 }
+    detection:                    # head 3: FCOS, anchor-free
+      type: fcos
+      num_classes: 80             # COCO
+      in_levels: [0, 1, 2, 3, 4]  # P3..P7
+      channels: 96
+      num_convs: 4
+      strides: [8, 16, 32, 64, 128]
+      loss: { cls_weight: 1.0, reg_weight: 1.0, centerness_weight: 1.0 }
+  # Kendall et al. 2018 learned uncertainty weighting balances the three losses.
+  loss_balancing: uncertainty     # uncertainty | fixed
+  fixed_weights: { traversability: 1.0, terrain: 1.0, detection: 1.0 }
+
+data:
+  input_size: [512, 640]          # H, W. Start at 384x512 on Jetson.
+  letterbox: false                # RUGD is ~1.25:1, same as 512x640, so stretching is lossless
+  # RUGD's 24 classes collapse to these 12; see data/label_maps.py
+  terrain_classes: [void, dirt, grass, tree_bush, pavement_concrete, gravel_mulch,
+                    building_wall, sky, water, vehicle_object, rock, stairs_log]
+  datasets:
+    - name: rugd
+      type: seg_folder
+      root: datasets/RUGD
+      split_train: train
+      split_val: val
+      label_map: rugd
+      supervises: [traversability, terrain]   # one annotation drives both seg heads
+      sample_ratio: 1.0
+    - name: rellis3d
+      type: seg_folder
+      root: datasets/RELLIS-3D
+      split_train: train
+      split_val: val
+      label_map: rellis
+      supervises: [traversability, terrain]
+      sample_ratio: 1.0
+    - name: coco
+      type: coco
+      root: datasets/coco
+      split_train: train2017
+      split_val: val2017
+      supervises: [detection]
+      sample_ratio: 1.0
+  workers: 8                      # one loader per dataset; lower this on a laptop
+
+train:
+  epochs: 60
+  batch_size: 16                  # each step draws one batch from a single dataset
+  optimizer: adamw
+  lr: 2.0e-4
+  backbone_lr_mult: 0.1
+  weight_decay: 0.05
+  warmup_iters: 1000
+  scheduler: cosine
+  amp: true                       # automatically disabled off CUDA
+  grad_clip: 10.0
+  ema: true                       # set false for short runs, see docs/TRAIN_MACOS.md
+  ema_decay: 0.9998
+  log_interval: 50
+  val_interval: 1
+  save_interval: 1
+
+export:
+  opset: 17
+  input_size: [512, 640]
+  half: true                      # FP16 is the recommended TensorRT mode on Orin

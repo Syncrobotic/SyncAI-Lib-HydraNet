@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environments
+.venv/
+.env
+
+# Datasets and experiment outputs are versioned with DVC, never with git.
+datasets/
+runs/
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Large media
+assets/*.mp4
+assets/*.mov
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store

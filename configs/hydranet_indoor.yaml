@@ -1,0 +1,119 @@
+# =============================================================================
+# SyncAI-Lib-HydraNet: indoor deployments (lobbies, corridors, factory floors).
+#
+# Only three things differ from the off-road config:
+#   1. data.terrain_classes  the indoor 12 classes, see data/label_maps_indoor.py
+#   2. data.datasets         ADE20K replaces RUGD/RELLIS; COCO is unchanged
+#   3. data.letterbox: true  site cameras rarely match the input aspect ratio
+# The model, losses and training mechanics are identical: the shared-trunk design is
+# independent of the environment.
+# =============================================================================
+
+experiment: hydranet_indoor
+output_dir: runs/hydranet_indoor
+seed: 42
+
+model:
+  backbone:
+    name: regnet_x_800mf
+    pretrained: true
+    frozen_stages: 0
+  neck:
+    name: bifpn
+    out_channels: 96
+    num_repeats: 2
+    num_levels: 5
+  heads:
+    traversability:
+      type: semantic_fpn
+      num_classes: 3              # 0=blocked 1=caution 2=go
+      in_levels: [0, 1, 2]
+      channels: 64
+      dropout: 0.1
+      # Indoor safety-critical classes (glass, stairs, wet floor) cover a tiny pixel
+      # fraction, so Dice gets more weight here than in the off-road config.
+      loss: { ce_weight: 1.0, dice_weight: 1.5, ignore_index: 255 }
+    terrain:
+      type: semantic_fpn
+      num_classes: 12
+      in_levels: [0, 1, 2]
+      channels: 64
+      dropout: 0.1
+      loss: { ce_weight: 1.0, dice_weight: 1.0, ignore_index: 255 }
+    detection:
+      type: fcos
+      num_classes: 80             # COCO fits indoor scenes better than off-road ones
+      in_levels: [0, 1, 2, 3, 4]
+      channels: 96
+      num_convs: 4
+      strides: [8, 16, 32, 64, 128]
+      loss: { cls_weight: 1.0, reg_weight: 1.0, centerness_weight: 1.0 }
+  loss_balancing: uncertainty
+  fixed_weights: { traversability: 1.0, terrain: 1.0, detection: 1.0 }
+
+data:
+  input_size: [512, 640]          # H, W
+  letterbox: true                 # preserve aspect ratio; padding is labelled ignore
+
+  # Order defines the class id; matches label_maps_indoor.INDOOR_TERRAIN
+  terrain_classes: [void, floor_hard, floor_soft, floor_metal, wet_slippery,
+                    stairs, threshold_ramp, wall, glass, door,
+                    obstacle_furniture, person]
+
+  datasets:
+    # ADE20K SceneParsing: ~1 GB, 20k images, indoor-heavy. Expected layout:
+    #   datasets/ADE20K/images/{train,val}/**.jpg
+    #   datasets/ADE20K/annotations/{train,val}/**.png    (single channel, 0..150)
+    # Filter to indoor scenes with the official sceneCategories.txt before importing.
+    - name: ade20k
+      type: seg_folder
+      root: datasets/ADE20K
+      split_train: train
+      split_val: val
+      label_map: ade20k_indoor
+      supervises: [traversability, terrain]
+      sample_ratio: 1.0
+
+    # Your own site annotations. This is what actually decides field performance:
+    # ADE20K covers none of metal grating, wet floor, door sills, or the specular
+    # reflections on polished floors that make a ceiling look like an open corridor.
+    # - name: syncrobotic_site
+    #   type: seg_folder
+    #   root: datasets/site
+    #   split_train: train
+    #   split_val: val
+    #   label_map: indoor_native   # annotation ids are already the indoor 12 classes
+    #   supervises: [traversability, terrain]
+    #   sample_ratio: 3.0          # oversample: fewer images but far more relevant
+
+    - name: coco
+      type: coco
+      root: datasets/coco
+      split_train: train2017
+      split_val: val2017
+      supervises: [detection]
+      sample_ratio: 0.2           # for laptop runs; raise to 1.0 on CUDA
+
+  workers: 4                      # one loader per dataset, so keep this modest
+
+train:
+  epochs: 60
+  batch_size: 8
+  optimizer: adamw
+  lr: 2.0e-4
+  backbone_lr_mult: 0.1
+  weight_decay: 0.05
+  warmup_iters: 1000
+  scheduler: cosine
+  amp: true
+  grad_clip: 10.0
+  ema: true                       # set false for short runs, see docs/TRAIN_MACOS.md
+  ema_decay: 0.9998
+  log_interval: 50
+  val_interval: 1
+  save_interval: 1
+
+export:
+  opset: 17
+  input_size: [512, 640]
+  half: true

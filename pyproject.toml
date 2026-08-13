@@ -1,0 +1,108 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "syncai-hydranet"
+version = "0.1.0"
+description = "Multi-head perception network for quadruped robots: traversability segmentation, terrain classification and object detection in a single forward pass."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "SYNCROBOTIC" }]
+keywords = ["robotics", "perception", "multi-task", "segmentation", "detection"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "torch>=2.1",
+    "torchvision>=0.16",
+    "numpy>=1.24",
+    "pyyaml>=6.0",
+    "pillow>=10.0",
+    "pycocotools>=2.0.7",
+    "tqdm>=4.66",
+    "tensorboard>=2.15",
+]
+
+[project.optional-dependencies]
+export = ["onnx>=1.15", "onnxsim>=0.4"]
+
+[project.scripts]
+hydranet-train = "syncai_hydranet.cli.train:main"
+hydranet-eval = "syncai_hydranet.cli.evaluate:main"
+hydranet-infer-image = "syncai_hydranet.cli.infer_image:main"
+hydranet-infer-video = "syncai_hydranet.cli.infer_video:main"
+hydranet-export-onnx = "syncai_hydranet.cli.export_onnx:main"
+
+[project.urls]
+Repository = "https://github.com/syncrobotic/SyncAI-Lib-HydraNet"
+
+# Dev tooling lives in a PEP 735 dependency group: installed by `uv sync`,
+# excluded from the published wheel and from `pip install syncai-hydranet`.
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "pre-commit>=3.7",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/syncai_hydranet"]
+
+# ---------------------------------------------------------------------------
+# Ruff replaces black + isort + flake8 in a single pass.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 96
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "B",        # flake8-bugbear
+    "UP",       # pyupgrade
+    "C4",       # flake8-comprehensions
+    "SIM",      # flake8-simplify
+    "RUF",      # ruff-specific
+]
+ignore = [
+    "E741",     # ambiguous names: l/t/r/b are the standard FCOS distance symbols
+    "B008",     # function call in default argument
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["syncai_hydranet"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+filterwarnings = [
+    "ignore::DeprecationWarning:torch.onnx",
+    "ignore::UserWarning:torch",
+]
+markers = [
+    "slow: tests that train or download data (deselect with '-m \"not slow\"')",
+]
+
+[tool.coverage.run]
+source = ["src/syncai_hydranet"]
+branch = true
