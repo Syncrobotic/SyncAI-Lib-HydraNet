@@ -242,6 +242,19 @@ def check_split(root: Path, split: str, rep: Report, allow_void: bool) -> dict:
             "Most tools export unlabelled background as 0: remap it to 255 on export, or "
             "pass --allow-void if this dataset really does mean void"
         )
+
+    # A forgotten background and a deliberately blank one are the same pixels, so this
+    # cannot be an error. It can be said out loud, which is enough: nobody sets out to
+    # ship a batch that is four-fifths ignore, and the per-class shares below are shares
+    # of what *was* labelled, so they stay reassuring while it happens.
+    ignored_px = sum(stats["pixels"][tid] for tid in _ignored_ids())
+    if total_px and ignored_px / total_px > 0.6:
+        rep.warn(
+            f"{split}: {100 * ignored_px / total_px:.0f}% of pixels are ignore. If that is "
+            "deliberate -- only the rare classes drawn, everything else left blank -- it is "
+            "fine and the loss simply skips them. If it is not, most of this batch will "
+            "train on nothing"
+        )
     return stats
 
 

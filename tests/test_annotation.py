@@ -154,6 +154,19 @@ def test_zero_and_255_are_both_counted_as_unlabelled(dataset, capsys):
     assert "unlabelled (ignored by the loss" in capsys.readouterr().out
 
 
+def test_a_mostly_unlabelled_batch_warns(tmp_path: Path, capsys):
+    """Forgetting the background and leaving it blank on purpose are the same pixels, so
+    this cannot be an error -- but it is worth saying, because the per-class shares are
+    shares of what was labelled and stay healthy-looking either way."""
+    root = tmp_path / "sparse"
+    mask = np.full((8, 8), 255, dtype=np.uint8)
+    mask[0] = INDOOR_TERRAIN["glass"]
+    for split, session in (("train", "lobby-a"), ("val", "lobby-b")):
+        write_frame(root, split, session, "0001", mask)
+    assert check(root) == 0
+    assert "% of pixels are ignore" in capsys.readouterr().out
+
+
 def test_rgb_mask_fails(dataset, capsys):
     write_frame(dataset, "train", "lobby-a", "000003", good_mask(), mask_mode="RGB")
     assert check(dataset) == 1
