@@ -22,8 +22,8 @@ limits the system today is not the network:
 |---|---|
 | `caution` cannot exceed ~0.20 | 3 of the 4 terrain classes that map to it have **zero** training examples |
 | Terrain metrics are not stable across dataset changes | `terrain_mIoU` averages over the classes *present*, currently 8 of 12 |
-| No defensible headline number exists | No `split_test` is configured; every score so far is val, which selected the checkpoint |
-| Detection produces garbage if deployed | The head is unsupervised and still gets exported |
+| No *field* number exists | A `test` split now exists, but it is ADE20K — same-distribution web photography, not our sites |
+| Detection produces garbage if deployed | Export now refuses an unsupervised head, but the head is still untrained until COCO is present |
 | Real-world accuracy is unknown | Training data is ADE20K only — web photos, not robot-height footage of our sites |
 
 **The work that moves this project is data work.** Plan accordingly: a team that assigns four
@@ -341,9 +341,11 @@ Two habits make this pay off:
 
 - **Never delete a run directory that produced a shipped model.** The dataset fingerprint in
   it is the only record of which data that model saw.
-- **Do not rewrite git history that run metadata points at.** Runs record the commit they came
-  from; if that hash stops existing, provenance breaks. This is why
-  `backup/pre-conventional-commits` is retained.
+- **Do not rewrite git history that run metadata points at.** Runs record the commit they
+  came from; if that hash stops existing, provenance breaks. This has already happened once:
+  the baseline run's `meta.json` names `ba30fa88`, which the Conventional Commits rewrite
+  left unreachable. The object survives only until garbage collection. Before rewriting
+  history again, tag every commit that a run directory references.
 
 We do not run an experiment tracking server. For one machine, files plus TensorBoard cover it,
 and the provenance above is better than a tracker's defaults. That calculation changes once

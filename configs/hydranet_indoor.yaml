@@ -70,14 +70,16 @@ data:
       root: datasets/ADE20K
       split_train: train
       split_val: val
+      # best.pt is selected on val, which makes val an optimistic estimate of itself.
+      # test is written by `hydranet-prepare-ade20k --test-fraction 0.5` and nothing in
+      # training ever reads it. Report final numbers with:
+      #   hydranet-eval --config ... --checkpoint ... --split test
+      # Note this is same-distribution held-out data, not a field test: ADE20K is web
+      # photography, so it bounds generalisation to ADE20K, not to our sites.
+      split_test: test
       label_map: ade20k_indoor
       supervises: [traversability, terrain]
       sample_ratio: 1.0
-
-    # best.pt is chosen on the val split, so val is an optimistic estimate of it.
-    # Add a split_test folder that nothing in training ever reads, and report final
-    # numbers with:  hydranet-eval --split test
-    #     split_test: test
 
     # Your own site annotations. This is what actually decides field performance:
     # ADE20K covers none of metal grating, wet floor, door sills, or the specular

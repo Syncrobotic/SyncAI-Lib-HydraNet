@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import os
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
@@ -76,7 +77,29 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-vegetation", type=float, default=0.05, help="maximum vegetation pixel fraction"
     )
     ap.add_argument("--workers", type=int, default=0, help="0 means os.cpu_count() - 2")
+    ap.add_argument(
+        "--test-fraction",
+        type=float,
+        default=0.0,
+        help="carve this fraction of the validation split into a held-out test split "
+        "(e.g. 0.5). Assignment is by filename hash, so it is stable across re-runs and "
+        "filter changes. 0 disables it and no test split is written",
+    )
     return ap
+
+
+def _is_test(stem: str, fraction: float) -> bool:
+    """Deterministic, order-independent assignment of one image to the test split.
+
+    Hashing the filename rather than slicing a sorted list means an image's assignment
+    never changes when other images are added or the filter thresholds move. Without
+    that, an image could migrate from test into val between runs and quietly contaminate
+    the one number that is supposed to be uncontaminated.
+    """
+    if fraction <= 0:
+        return False
+    digest = hashlib.sha1(stem.encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) / 0xFFFFFFFF < fraction
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -96,14 +119,20 @@ def main(argv: list[str] | None = None) -> None:
         with ProcessPoolExecutor(max_workers=workers) as ex:
             scored = list(ex.map(_score_one, [str(p) for p in anns], chunksize=64))
 
-        img_dir = dst / "images" / out_split
-        ann_dir = dst / "annotations" / out_split
-        for d in (img_dir, ann_dir):
-            d.mkdir(parents=True, exist_ok=True)
-            for old in d.iterdir():
-                old.unlink()
+        # Only the validation split is ever divided: train must stay whole, and ADE20K
+        # ships no test annotations of its own.
+        splitting = out_split == "val" and args.test_fraction > 0
+        targets = [out_split, "test"] if splitting else [out_split]
+        dirs = {}
+        for t in targets:
+            img_dir, ann_dir = dst / "images" / t, dst / "annotations" / t
+            for d in (img_dir, ann_dir):
+                d.mkdir(parents=True, exist_ok=True)
+                for old in d.iterdir():
+                    old.unlink()
+            dirs[t] = (img_dir, ann_dir)
 
-        kept, kept_scenes = 0, Counter()
+        kept, kept_scenes = Counter(), Counter()
         for path_str, floor, sky, veg in scored:
             if floor < args.min_floor or sky > args.max_sky or veg > args.max_vegetation:
                 continue
@@ -111,13 +140,19 @@ def main(argv: list[str] | None = None) -> None:
             img = src / "images" / ade_split / f"{ann.stem}.jpg"
             if not img.is_file():
                 continue
+            t = "test" if (splitting and _is_test(ann.stem, args.test_fraction)) else out_split
+            img_dir, ann_dir = dirs[t]
             (img_dir / img.name).symlink_to(img)
             (ann_dir / ann.name).symlink_to(ann)
-            kept += 1
+            kept[t] += 1
             kept_scenes[scenes.get(ann.stem, "unknown")] += 1
 
-        pct = 100 * kept / len(scored)
-        print(f"{ade_split} -> {out_split}: kept {kept}/{len(scored)} ({pct:.1f}%)")
+        total = sum(kept.values())
+        for t in targets:
+            pct = 100 * kept[t] / len(scored)
+            print(f"{ade_split} -> {t}: kept {kept[t]}/{len(scored)} ({pct:.1f}%)")
+        if splitting:
+            print(f"  ({total} kept in total, split by filename hash)")
         top = ", ".join(f"{k}={v}" for k, v in kept_scenes.most_common(8))
         print(f"  top scenes: {top}")
 

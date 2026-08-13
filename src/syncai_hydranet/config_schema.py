@@ -214,6 +214,24 @@ def _check_heads(rep: _Report, heads: Any) -> None:
             _check_section(rep, hcfg["loss"], LOSS_BY_TYPE[htype], f"{path}.loss")
 
 
+def unsupervised_heads(cfg: dict) -> set[str]:
+    """Heads that no dataset supervises, so training never gives them a loss.
+
+    Such a head is still built, still exported and still emits numbers at inference --
+    they are just its initial random weights. Training only warns, because an
+    unsupervised head is legitimate while a dataset is still being assembled. Export is
+    where it stops being legitimate, so ``hydranet-export-onnx`` refuses on it.
+    """
+    heads = (cfg.get("model") or {}).get("heads")
+    if not isinstance(heads, dict):
+        return set()
+    supervised: set[str] = set()
+    for ds in (cfg.get("data") or {}).get("datasets") or []:
+        if isinstance(ds, dict):
+            supervised.update(ds.get("supervises") or [])
+    return set(heads) - supervised
+
+
 def _check_datasets(rep: _Report, dcfg: dict, head_names: set[str]) -> None:
     datasets = dcfg.get("datasets")
     if not isinstance(datasets, list) or not datasets:
