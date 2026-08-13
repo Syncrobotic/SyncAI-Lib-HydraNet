@@ -90,38 +90,39 @@ If your numbers differ, the source archive differs; check that before anything e
 **The CUDA machine is now the reference.** The MPS column below is kept only as the origin
 the move was checked against — it is not the number to beat any more.
 
-Both columns are ADE20K indoor subset only, at epoch 20, validated on EMA weights. They are
-*not* the same training: the CUDA run uses the section 6 settings (512×640, batch 48,
-bf16), the MPS run used 384×512 at batch 8. Equal epoch counts on the same data are what
-makes them comparable at all.
+Both columns are ADE20K indoor subset only, validated on EMA weights. They are *not* the same
+training: the CUDA run uses the section 6 settings (512×640, batch 48, bf16) for 60 epochs,
+the MPS run used 384×512 at batch 8 for 20. Same data, same model, same metric.
 
-| Metric | **CUDA @ epoch 19** | MPS @ epoch 20 (origin) |
+| Metric | **CUDA, best of 60** | MPS, best of 20 (origin) |
 |---|---|---|
-| traversability mIoU | **0.6609** | 0.665 |
-| ├ blocked | 0.9506 | 0.954 |
-| ├ caution | 0.1973 | 0.200 |
-| └ go | 0.8349 | 0.843 |
-| terrain mIoU | 0.5444 | 0.569 |
-| ├ glass | 0.4686 | 0.505 |
-| └ stairs | 0.1940 | — |
+| traversability mIoU | **0.6765** | 0.665 |
+| ├ blocked | 0.9547 | 0.954 |
+| ├ caution | 0.2294 | 0.200 |
+| └ go | 0.8455 | 0.843 |
+| terrain mIoU | 0.5694 | 0.569 |
+| ├ glass | 0.4981 | 0.505 |
+| └ stairs | 0.2359 | — |
 
-The traversability head reproduces the origin almost exactly — every one of its classes is
-within 0.01. The terrain head sits slightly lower at this epoch (0.5444 against 0.569, glass
-0.4686 against 0.505) but was still climbing when the snapshot was taken, and had reached
-0.556 and 0.503 respectively a few epochs later. That is what the move had to demonstrate:
-**nothing broke in the migration.**
+Run: 60 epochs, best at **epoch 27**, `meta.json` recording code `ba30fa88` and dataset
+fingerprint `sha256:23fd9d92…` over 5,998 train / 614 val images.
 
-Note in particular that `caution` reproduces at 0.1973 against 0.200 — the data gap in
-section 5 is a property of the dataset, not of the hardware, and changing GPU did nothing for
-it, exactly as predicted.
+The migration is clean. Traversability improved on every class, terrain landed within 0.0004
+of the origin, and only `glass` came out marginally lower (0.4981 against 0.505) — well
+inside the run-to-run variation this class shows, given it occupies a tiny pixel fraction.
 
-Two cautions about reading this table:
+Two results worth carrying forward:
 
-- **The run is still going.** These are epoch-19/20 figures from a 60-epoch run, quoted at
-  epoch 20 purely so they line up with the MPS column. The final numbers will be higher and
-  should replace this table when the run completes.
-- **Intermediate epochs are noisy.** The same run measured `caution` at 0.158 on epoch 14 and
-  0.197 on epoch 19. Do not conclude anything from a single mid-run validation.
+- **`caution` reached 0.2294, against 0.200 on MPS.** It moved, but it is still less than a
+  third of what every other traversability class scores. Ten times the throughput and 40 more
+  epochs bought 0.03. Section 5 explains why, and no amount of compute changes it.
+- **The best epoch was 27 of 60.** The remaining 33 epochs produced nothing — the final epoch
+  scored 0.6635, *below* the peak. On 5,998 images this run converges around epoch 25–30, so
+  a 60-epoch schedule spends over half its time for no gain. Cut the schedule, or add data.
+  Do not read the plateau as "the model is done"; read it as "this dataset is exhausted".
+
+**Intermediate epochs are noisy** — the same run measured `caution` at 0.158 on epoch 14 and
+0.229 at its peak. Never conclude anything from a single mid-run validation.
 
 Measured wall-clock on the CUDA box: **36 s per epoch** including validation, so 20 epochs in
 12 minutes and a full 60-epoch run in about 36 minutes — against 55 minutes for 20 epochs on

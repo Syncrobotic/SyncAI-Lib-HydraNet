@@ -257,9 +257,10 @@ more:
    compute-bound, you are waiting on data loading. That is a different fix (more workers,
    smaller images offline) and no amount of model tuning will help.
 
-And know when to stop tuning. If `caution` sits at 0.200 and will not move — as ours does,
-reproducing at 0.197 when we moved to a GPU ten times faster — the question to ask is not
-"which learning rate" — it is "how many examples of `caution` are actually in the
+And know when to stop tuning. If `caution` will not move — ours went from 0.200 to 0.229
+after a move to a GPU ten times faster and three times the epochs, while every other
+traversability class scores above 0.84 — the question to ask is not "which learning rate" —
+it is "how many examples of `caution` are actually in the
 training data?" In our case: of the four terrain classes that map to caution, ADE20K contains
 exactly one, at 0.3% of pixels. **That is a data acquisition problem wearing a training
 problem's clothes,** and no hyperparameter fixes it.
