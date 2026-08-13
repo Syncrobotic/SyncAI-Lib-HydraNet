@@ -347,9 +347,13 @@ whether the robot keeps up. For that, `scripts/bench_camera_orin.py` measures en
 camera-to-output frame rate, including capture, letterboxing, and the host-side argmax and
 NMS that the graph deliberately leaves out.
 
-Two things a fresh board needs before any of this runs — TensorRT is not in the base L4T
-image, and the user must be in the `video` group to open the camera at all. Those, the
-output node definitions, the post-processing maths, INT8 quantisation and the measured
+Bringing up a board from scratch is its own runbook:
+[docs/ORIN_BRINGUP.md](docs/ORIN_BRINGUP.md) walks a freshly flashed Orin to a live
+prediction stream, with each failure written symptom-first — TensorRT is not in the base L4T
+image, the user is not in the `video` group, and on our board CUDA still needs root for
+reasons we did not resolve.
+
+Output node definitions, the post-processing maths, INT8 quantisation and the measured
 latencies are in [docs/DEPLOY_JETSON.md](docs/DEPLOY_JETSON.md).
 
 ## Adding a task head (example: monocular depth)
