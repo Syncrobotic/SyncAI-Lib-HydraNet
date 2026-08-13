@@ -16,6 +16,7 @@ from ..models.hydranet import build_model
 from ..utils.checkpoint import CKPT_FORMAT, load_checkpoint
 from ..utils.device import pick_device, supports_amp, supports_pinned_memory
 from ..utils.logger import get_logger
+from ..utils.runmeta import append_metrics, resolve_out_dir, write_run_meta
 from ..utils.visualize import TERRAIN_COLORS, TRAV_COLORS, prediction_grid
 from .evaluator import evaluate
 
@@ -126,12 +127,17 @@ def _targets_to_device(targets: dict, device) -> dict:
 
 
 class Trainer:
-    def __init__(self, cfg):
+    def __init__(self, cfg, resuming: bool = False):
         self.cfg = cfg
         self.device = pick_device(cfg.get("device"))
-        self.out_dir = Path(cfg["output_dir"])
+        self.out_dir = resolve_out_dir(Path(cfg["output_dir"]), resuming=resuming)
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.logger = get_logger("hydranet", self.out_dir / "train.log")
+        if str(self.out_dir) != str(cfg["output_dir"]):
+            self.logger.warning(
+                f"{cfg['output_dir']} already holds a run; writing to {self.out_dir} "
+                f"instead. Use --resume to continue the existing one."
+            )
         torch.manual_seed(cfg.get("seed", 42))
 
         self.model = build_model(cfg).to(self.device)
@@ -191,6 +197,30 @@ class Trainer:
         self.global_step = 0
         self.best_metric = -1.0
         self.start_epoch = 0  # last completed epoch; --resume advances it
+
+        n_params = sum(p.numel() for p in self.model.parameters())
+        meta = write_run_meta(
+            self.out_dir,
+            cfg,
+            device=self.device,
+            steps_per_epoch=len(self.train_loader),
+            total_iters=total_iters,
+            parameters=n_params,
+            datasets=[
+                {"name": n, "train_size": len(t), "val_size": len(v)}
+                for n, t, v in zip(names, train_sets, val_sets, strict=True)
+            ],
+        )
+        git = meta["git"]
+        if not git.get("available"):
+            self.logger.warning("not a git checkout: this run's code version is unrecorded")
+        elif git["dirty"]:
+            self.logger.warning(
+                f"working tree is dirty at {git['commit'][:8]}; the exact code is only "
+                f"recoverable via {self.out_dir / 'uncommitted.patch'}"
+            )
+        else:
+            self.logger.info(f"code version: {git['commit'][:8]} ({git['branch']})")
 
     # ------------------------------------------------------------------
     def train(self):
@@ -260,6 +290,15 @@ class Trainer:
         samples: dict | None = {} if self.tb else None
         metrics = evaluate(
             model, self.val_sets, self.cfg, self.device, self.logger, samples=samples
+        )
+        append_metrics(
+            self.out_dir,
+            {
+                "epoch": epoch,
+                "global_step": self.global_step,
+                "weights": "ema" if self.ema else "model",
+                **metrics,
+            },
         )
         if self.tb:
             for k, v in metrics.items():

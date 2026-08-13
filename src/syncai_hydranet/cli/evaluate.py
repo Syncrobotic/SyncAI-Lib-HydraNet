@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+from pathlib import Path
 
 from ..config import load_config
 from ..data.datasets import build_dataset
@@ -15,6 +17,7 @@ from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint
 from ..utils.device import pick_device
 from ..utils.logger import get_logger
+from ..utils.runmeta import git_state
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,6 +31,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="EMA weights need enough training steps to be meaningful; see docs/TRAIN_MACOS.md",
     )
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
+    ap.add_argument(
+        "--json",
+        default=None,
+        metavar="PATH",
+        help="also write the metrics as JSON, for comparing runs without parsing logs",
+    )
     return ap
 
 
@@ -52,6 +61,19 @@ def main(argv: list[str] | None = None) -> None:
     metrics = evaluate(model, val_sets, cfg, device, logger)
     for k, v in metrics.items():
         logger.info(f"{k}: {v:.4f}")
+
+    if args.json:
+        record = {
+            "checkpoint": args.checkpoint,
+            "epoch": ckpt.get("epoch"),
+            "weights": args.weights,
+            "git": git_state(),
+            **metrics,
+        }
+        out = Path(args.json)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(record, indent=2, default=float) + "\n")
+        logger.info(f"wrote {out}")
 
 
 if __name__ == "__main__":

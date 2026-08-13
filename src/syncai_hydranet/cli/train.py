@@ -32,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     cfg = load_config(args.config, args.set)
-    trainer = Trainer(cfg)
+    trainer = Trainer(cfg, resuming=bool(args.resume))
     if args.resume:
         trainer.load(args.resume, resume=True)
     elif args.load:
