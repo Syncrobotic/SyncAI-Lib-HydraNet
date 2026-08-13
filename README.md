@@ -319,14 +319,38 @@ uv run hydranet-infer-video --config ... --checkpoint runs/.../best.pt \
 
 ## Deploying to Jetson Orin
 
+A run directory is not something you deploy. `scripts/release_bundle.sh` freezes one into
+an immutable bundle — weights, ONNX graph, config, lineage and metrics, checksummed
+together — because git versions the code and nothing in git versions the model.
+
 ```bash
-uv run hydranet-export-onnx --config ... --checkpoint runs/.../best.pt --output hydranet.onnx
-# on the Jetson:
-trtexec --onnx=hydranet.onnx --saveEngine=hydranet_fp16.engine --fp16
+# on the workstation
+scripts/release_bundle.sh create runs/hydranet_indoor v1   # -> releases/v1
+scripts/release_bundle.sh verify releases/v1               # re-check every sha256
+scripts/release_bundle.sh publish releases/v1 gs://syncai-hydranet
+
+scp releases/v1/model.onnx orin:~/
 ```
 
-Output node definitions, C++ post-processing, INT8 quantisation and latency estimates:
-see [docs/DEPLOY_JETSON.md](docs/DEPLOY_JETSON.md).
+```bash
+# on the Orin
+./bench_orin.sh model.onnx        # builds the FP16 engine and reports GPU latency
+```
+
+The engine is deliberately **not** part of the bundle. It is tied to a GPU architecture, a
+TensorRT version and a JetPack version, so it is a per-target build artefact: build it on
+the board and keep it beside the bundle as
+`engines/<board>_<jetpack>_<trt>_<precision>.engine`.
+
+`bench_orin.sh` reports pure GPU inference latency, which is not the number that decides
+whether the robot keeps up. For that, `scripts/bench_camera_orin.py` measures end-to-end
+camera-to-output frame rate, including capture, letterboxing, and the host-side argmax and
+NMS that the graph deliberately leaves out.
+
+Two things a fresh board needs before any of this runs — TensorRT is not in the base L4T
+image, and the user must be in the `video` group to open the camera at all. Those, the
+output node definitions, the post-processing maths, INT8 quantisation and the measured
+latencies are in [docs/DEPLOY_JETSON.md](docs/DEPLOY_JETSON.md).
 
 ## Adding a task head (example: monocular depth)
 
