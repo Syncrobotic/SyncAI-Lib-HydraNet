@@ -5,7 +5,7 @@ pytest tests/test_config.py -v
 
 import pytest
 
-from syncai_hydranet.config import Config, load_config
+from syncai_hydranet.config import Config, diff_config, load_config
 from syncai_hydranet.config_schema import ConfigError
 
 CONFIG = "configs/hydranet_indoor.yaml"
@@ -76,3 +76,32 @@ def test_clone_is_a_deep_copy():
     twin = cfg.clone()
     twin["train"]["lr"] = 999
     assert cfg["train"]["lr"] != 999
+
+
+# ------------------------------------------------------------ config drift
+
+
+def test_diff_reports_changed_leaves_by_dotted_path():
+    old = {"train": {"lr": 1e-4, "epochs": 60}, "seed": 42}
+    new = {"train": {"lr": 2e-4, "epochs": 60}, "seed": 42}
+    assert diff_config(old, new) == [("train.lr", 1e-4, 2e-4)]
+
+
+def test_diff_is_empty_for_identical_configs():
+    cfg = load_config(CONFIG)
+    assert diff_config(dict(cfg), dict(cfg)) == []
+
+
+def test_diff_reports_added_and_removed_keys():
+    diff = diff_config({"train": {"lr": 1}}, {"train": {"lr": 1, "amp": True}})
+    assert diff == [("train.amp", None, True)]
+    diff = diff_config({"train": {"lr": 1, "ema": False}}, {"train": {"lr": 1}})
+    assert diff == [("train.ema", False, None)]
+
+
+def test_diff_descends_into_lists_as_values():
+    """A dataset list is compared whole: a changed root or split shows up as one entry
+    rather than being silently ignored."""
+    old = {"data": {"datasets": [{"root": "a"}]}}
+    new = {"data": {"datasets": [{"root": "b"}]}}
+    assert len(diff_config(old, new)) == 1

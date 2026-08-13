@@ -47,6 +47,29 @@ class Config(dict):
         return Config(copy.deepcopy(dict(self)))
 
 
+def diff_config(old: Any, new: Any, path: str = "") -> list[tuple[str, Any, Any]]:
+    """Every leaf that differs between two configs, as ``(dotted.path, old, new)``.
+
+    Used when resuming: the checkpoint carries the config it was trained under, and a
+    resume applies whatever the config file says now. Changing epochs is a normal thing
+    to do; changing the learning rate or the class count by accident is not, and
+    without this the run's meta.json would describe settings the weights never saw.
+    """
+    out: list[tuple[str, Any, Any]] = []
+    if isinstance(old, dict) and isinstance(new, dict):
+        for key in sorted(set(old) | set(new)):
+            here = f"{path}.{key}" if path else str(key)
+            if key not in old:
+                out.append((here, None, new[key]))
+            elif key not in new:
+                out.append((here, old[key], None))
+            else:
+                out.extend(diff_config(old[key], new[key], here))
+    elif old != new:
+        out.append((path, old, new))
+    return out
+
+
 def _parse_value(v: Any) -> Any:
     """Turn a command-line string into the value it obviously means."""
     if not isinstance(v, str):

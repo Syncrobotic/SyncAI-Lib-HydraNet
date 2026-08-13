@@ -11,6 +11,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from ..config import diff_config
 from ..config_schema import check_config
 from ..data.datasets import build_dataset
 from ..data.fingerprint import fingerprint_dataset
@@ -475,10 +476,34 @@ class Trainer:
         if self.ema and ckpt.get("ema"):
             self.ema.ema.load_state_dict(ckpt["ema"])
         if resume:
+            self.report_config_drift(ckpt)
             self.load_train_state(ckpt)
         self.logger.info(
             f"loaded checkpoint: {path} (epoch {ckpt.get('epoch')}, resume={resume})"
         )
+
+    def report_config_drift(self, ckpt: dict) -> list[tuple[str, object, object]]:
+        """Log how this run's config differs from the one the checkpoint was trained on.
+
+        Changing ``train.epochs`` to extend a run is routine. Changing the learning rate,
+        the class count or the datasets is usually a mistake, and the resulting run would
+        otherwise record settings its weights never saw.
+        """
+        old = ckpt.get("cfg")
+        if not isinstance(old, dict):
+            return []
+        drift = diff_config(old, dict(self.cfg))
+        if not drift:
+            return []
+        structural = [d for d in drift if d[0].startswith(("model.", "data."))]
+        for where, was, now in drift:
+            self.logger.warning(f"config changed since the checkpoint: {where}: {was} -> {now}")
+        if structural:
+            self.logger.warning(
+                f"{len(structural)} of those touch the model or the data. The weights "
+                f"being loaded were not trained under them."
+            )
+        return drift
 
     def load_train_state(self, ckpt: dict) -> None:
         """Restore optimizer, schedule position and bookkeeping from a checkpoint."""
