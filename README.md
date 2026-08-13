@@ -89,6 +89,8 @@ split the work, what data to collect and to what spec, and the four levels of ev
 that stand between a checkpoint and a robot.
 Annotating? [docs/ANNOTATION_SETUP.md](docs/ANNOTATION_SETUP.md) has the CVAT connection
 steps and the labelling contract.
+Considering an architecture change? [docs/ARCHITECTURE_REVIEW.md](docs/ARCHITECTURE_REVIEW.md)
+has measured answers to the questions that keep coming up — including two that say *no*.
 
 ## Commands
 
