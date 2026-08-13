@@ -16,6 +16,7 @@ show how much host work the 80-class output costs, not to be the production deco
 from __future__ import annotations
 
 import argparse
+import ctypes
 import time
 from pathlib import Path
 
@@ -23,6 +24,56 @@ import numpy as np
 
 MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+
+
+class Cudart:
+    """The four CUDA calls this benchmark needs, via ctypes.
+
+    pycuda is not packaged for this board and building it on ARM is slow and fragile, so
+    rather than add a dependency to a machine that will run the deployed model, bind
+    libcudart directly. TensorRT's own Python module is already installed and does the
+    rest.
+    """
+
+    def __init__(self):
+        self.lib = ctypes.CDLL("libcudart.so.12")
+        self.lib.cudaGetErrorString.restype = ctypes.c_char_p
+
+    def _check(self, code, what):
+        if code != 0:
+            msg = self.lib.cudaGetErrorString(code).decode()
+            raise RuntimeError(f"{what} failed: {msg} (cuda error {code})")
+
+    def malloc(self, nbytes):
+        ptr = ctypes.c_void_p()
+        self._check(
+            self.lib.cudaMalloc(ctypes.byref(ptr), ctypes.c_size_t(nbytes)), "cudaMalloc"
+        )
+        return ptr
+
+    def stream_create(self):
+        s = ctypes.c_void_p()
+        self._check(self.lib.cudaStreamCreate(ctypes.byref(s)), "cudaStreamCreate")
+        return s
+
+    def memcpy_htod(self, dst, src: np.ndarray, stream):
+        self._check(
+            self.lib.cudaMemcpyAsync(
+                dst, src.ctypes.data_as(ctypes.c_void_p), ctypes.c_size_t(src.nbytes), 1, stream
+            ),
+            "cudaMemcpyAsync H2D",
+        )
+
+    def memcpy_dtoh(self, dst: np.ndarray, src, stream):
+        self._check(
+            self.lib.cudaMemcpyAsync(
+                dst.ctypes.data_as(ctypes.c_void_p), src, ctypes.c_size_t(dst.nbytes), 2, stream
+            ),
+            "cudaMemcpyAsync D2H",
+        )
+
+    def sync(self, stream):
+        self._check(self.lib.cudaStreamSynchronize(stream), "cudaStreamSynchronize")
 
 
 class Stage:
@@ -68,9 +119,9 @@ def main():
     args = ap.parse_args()
 
     import cv2
-    import pycuda.autoinit  # noqa: F401 - creates the CUDA context as a side effect
-    import pycuda.driver as cuda
     import tensorrt as trt
+
+    cuda = Cudart()
 
     logger = trt.Logger(trt.Logger.WARNING)
     with Path(args.engine).open("rb") as f, trt.Runtime(logger) as rt:
@@ -86,9 +137,9 @@ def main():
         shape = tuple(ctx.get_tensor_shape(n))
         arr = np.empty(shape, dtype=trt.nptype(engine.get_tensor_dtype(n)))
         host[n] = np.ascontiguousarray(arr)
-        dev[n] = cuda.mem_alloc(host[n].nbytes)
-        ctx.set_tensor_address(n, int(dev[n]))
-    stream = cuda.Stream()
+        dev[n] = cuda.malloc(host[n].nbytes)
+        ctx.set_tensor_address(n, dev[n].value)
+    stream = cuda.stream_create()
     in_name = inputs[0]
 
     cap = cv2.VideoCapture(args.device, cv2.CAP_V4L2)
@@ -122,15 +173,15 @@ def main():
                 np.copyto(host[in_name], chw.astype(host[in_name].dtype))
 
             with h2d_s:
-                cuda.memcpy_htod_async(dev[in_name], host[in_name], stream)
-                stream.synchronize()
+                cuda.memcpy_htod(dev[in_name], host[in_name], stream)
+                cuda.sync(stream)
             with inf_s:
-                ctx.execute_async_v3(stream.handle)
-                stream.synchronize()
+                ctx.execute_async_v3(stream.value)
+                cuda.sync(stream)
             with d2h_s:
                 for n in outputs:
-                    cuda.memcpy_dtoh_async(host[n], dev[n], stream)
-                stream.synchronize()
+                    cuda.memcpy_dtoh(host[n], dev[n], stream)
+                cuda.sync(stream)
 
             with post_s:
                 for n in outputs:
