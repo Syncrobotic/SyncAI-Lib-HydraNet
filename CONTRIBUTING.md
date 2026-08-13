@@ -54,10 +54,16 @@ type prefix) and were rewritten in place to conform. Only the subject lines
 changed: every tree hash and every `Co-Authored-By` trailer is byte-identical to
 the original.
 
-The pre-rewrite history is kept at the branch and tag
-`backup/pre-conventional-commits`. It is not dead weight — `runs/*/meta.json`
-records the commit each run was trained from, and runs made before the rewrite
-point at hashes that only exist there. Do not delete it while those runs matter.
+The pre-rewrite commits are gone; nothing is kept on the side, and nothing needs
+to be. Because only subject lines changed, each old commit has a counterpart on
+`dev` with an identical tree — the code is all still here under a different hash.
+
+That matters because `runs/*/meta.json` records the commit each run was trained
+from, so a run made before the rewrite points at a hash that no longer resolves.
+To identify one, match on the subject rather than the hash: the rewritten
+counterpart is the same sentence, lower-cased, behind a type prefix. The baseline
+run `runs/hydranet_indoor` (traversability mIoU 0.6765) records `ba30fa88`, which
+is `aa07bbe docs: translate the three docs to English, and fix a 404 download URL`.
 
 ## Code
 
