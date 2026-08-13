@@ -19,6 +19,7 @@ from PIL import Image, ImageDraw
 from ..config import load_config
 from ..data.transforms import IMAGENET_MEAN, IMAGENET_STD
 from ..models.hydranet import build_model
+from ..utils.checkpoint import load_checkpoint
 from ..utils.device import pick_device
 from ..utils.visualize import TERRAIN_COLORS, TRAV_COLORS, crop_box, letterbox, overlay
 
@@ -58,7 +59,7 @@ def main(argv: list[str] | None = None) -> None:
     cfg = load_config(args.config, args.set)
     device = pick_device(cfg.get("device"))
     model = build_model(cfg).to(device).eval()
-    ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
+    ckpt = load_checkpoint(args.checkpoint)
     model.load_state_dict(ckpt.get("ema") or ckpt["model"])
 
     in_path = Path(args.input)

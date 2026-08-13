@@ -13,6 +13,7 @@ import torch.nn as nn
 from ..data.datasets import build_dataset
 from ..data.multitask import MultiTaskLoader
 from ..models.hydranet import build_model
+from ..utils.checkpoint import CKPT_FORMAT, load_checkpoint
 from ..utils.device import pick_device, supports_amp, supports_pinned_memory
 from ..utils.logger import get_logger
 from ..utils.visualize import TERRAIN_COLORS, TRAV_COLORS, prediction_grid
@@ -84,15 +85,32 @@ class WarmupCosine:
         self.base_lrs = [g["lr"] for g in optimizer.param_groups]
         self.it = 0
 
-    def step(self):
-        self.it += 1
-        if self.it <= self.warmup:
-            f = self.it / self.warmup
-        else:
-            t = (self.it - self.warmup) / max(self.total - self.warmup, 1)
-            f = 0.5 * (1 + math.cos(math.pi * min(t, 1.0)))
+    def _factor(self, it: int) -> float:
+        if it <= self.warmup:
+            return it / self.warmup
+        t = (it - self.warmup) / max(self.total - self.warmup, 1)
+        return 0.5 * (1 + math.cos(math.pi * min(t, 1.0)))
+
+    def _apply(self):
+        f = self._factor(self.it)
         for g, base in zip(self.opt.param_groups, self.base_lrs, strict=True):
             g["lr"] = base * f
+
+    def step(self):
+        self.it += 1
+        self._apply()
+
+    def state_dict(self) -> dict:
+        return {"it": self.it}
+
+    def load_state_dict(self, state: dict) -> None:
+        """Restore the schedule position and immediately re-apply it.
+
+        Without the re-apply the first resumed step would run at the base LR, which for
+        a run resumed near the end of cosine decay is orders of magnitude too high.
+        """
+        self.it = int(state["it"])
+        self._apply()
 
 
 def _targets_to_device(targets: dict, device) -> dict:
@@ -172,14 +190,21 @@ class Trainer:
             self.tb = None
         self.global_step = 0
         self.best_metric = -1.0
+        self.start_epoch = 0  # last completed epoch; --resume advances it
 
     # ------------------------------------------------------------------
     def train(self):
+        if self.start_epoch >= self.epochs:
+            self.logger.warning(
+                f"checkpoint is already at epoch {self.start_epoch} of {self.epochs}: "
+                f"nothing to train. Raise train.epochs to continue."
+            )
+            return
         self.logger.info(
-            f"training: {self.epochs} epochs, {len(self.train_loader)} steps/epoch, "
-            f"device={self.device}"
+            f"training: epochs {self.start_epoch + 1}..{self.epochs}, "
+            f"{len(self.train_loader)} steps/epoch, device={self.device}"
         )
-        for epoch in range(1, self.epochs + 1):
+        for epoch in range(self.start_epoch + 1, self.epochs + 1):
             self.train_one_epoch(epoch)
             if epoch % self.val_interval == 0:
                 metrics = self.validate(epoch)
@@ -268,23 +293,66 @@ class Trainer:
                 f"task_weight/{name}", float(torch.exp(-s.detach())), self.global_step
             )
 
+    def state_dict(self, epoch: int) -> dict:
+        """Everything needed to continue training as if it had never stopped.
+
+        Weights alone are not enough: without the scheduler position a resumed run
+        replays warmup and a whole cosine cycle at full LR, and without ``best_metric``
+        the first validation overwrites ``best.pt`` with a worse model.
+        """
+        return {
+            "format": CKPT_FORMAT,
+            "model": self.model.state_dict(),
+            "ema": self.ema.ema.state_dict() if self.ema else None,
+            "optimizer": self.optimizer.state_dict(),
+            "scheduler": self.scheduler.state_dict(),
+            "scaler": self.scaler.state_dict(),
+            "epoch": epoch,
+            "global_step": self.global_step,
+            "best_metric": self.best_metric,
+            "cfg": dict(self.cfg),
+        }
+
     def save(self, name: str, epoch: int):
-        torch.save(
-            {
-                "model": self.model.state_dict(),
-                "ema": self.ema.ema.state_dict() if self.ema else None,
-                "optimizer": self.optimizer.state_dict(),
-                "epoch": epoch,
-                "cfg": dict(self.cfg),
-            },
-            self.out_dir / name,
-        )
+        torch.save(self.state_dict(epoch), self.out_dir / name)
 
     def load(self, path: str, resume: bool = False):
-        ckpt = torch.load(path, map_location="cpu", weights_only=False)
+        ckpt = load_checkpoint(path)
         self.model.load_state_dict(ckpt["model"])
         if self.ema and ckpt.get("ema"):
             self.ema.ema.load_state_dict(ckpt["ema"])
-        if resume and "optimizer" in ckpt:
+        if resume:
+            self.load_train_state(ckpt)
+        self.logger.info(
+            f"loaded checkpoint: {path} (epoch {ckpt.get('epoch')}, resume={resume})"
+        )
+
+    def load_train_state(self, ckpt: dict) -> None:
+        """Restore optimizer, schedule position and bookkeeping from a checkpoint."""
+        if "optimizer" in ckpt:
             self.optimizer.load_state_dict(ckpt["optimizer"])
-        self.logger.info(f"loaded checkpoint: {path} (epoch {ckpt.get('epoch')})")
+        # An empty dict is what a disabled GradScaler saves; feeding it to an enabled
+        # one raises, which is exactly the CPU-run -> CUDA-run case.
+        if ckpt.get("scaler"):
+            self.scaler.load_state_dict(ckpt["scaler"])
+        self.start_epoch = int(ckpt.get("epoch", 0))
+        self.global_step = int(ckpt.get("global_step", 0))
+        self.best_metric = float(ckpt.get("best_metric", -1.0))
+
+        if ckpt.get("scheduler") is not None:
+            self.scheduler.load_state_dict(ckpt["scheduler"])
+        else:
+            # Pre-CKPT_FORMAT-2 checkpoints predate scheduler state. Reconstructing the
+            # position from the epoch count is approximate but far better than the
+            # alternative, which is replaying warmup at full LR.
+            it = self.start_epoch * len(self.train_loader)
+            self.scheduler.load_state_dict({"it": it})
+            self.logger.warning(
+                f"checkpoint has no scheduler state; schedule position estimated as "
+                f"{it} iters from epoch {self.start_epoch}."
+            )
+        lr = self.optimizer.param_groups[0]["lr"]
+        self.logger.info(
+            f"resuming after epoch {self.start_epoch}: step={self.global_step}, "
+            f"lr={lr:.2e}, best_metric={self.best_metric:.4f}"
+        )

@@ -17,6 +17,7 @@ import torch.nn as nn
 
 from ..config import load_config
 from ..models.hydranet import build_model
+from ..utils.checkpoint import load_checkpoint
 
 
 class ExportWrapper(nn.Module):
@@ -51,7 +52,7 @@ def main(argv: list[str] | None = None) -> None:
     cfg = load_config(args.config, args.set)
     model = build_model(cfg).eval()
     if args.checkpoint:
-        ckpt = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
+        ckpt = load_checkpoint(args.checkpoint)
         state = (
             ckpt.get("ema") if (args.weights == "ema" and ckpt.get("ema")) else ckpt["model"]
         )

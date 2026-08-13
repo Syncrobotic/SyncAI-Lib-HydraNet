@@ -68,7 +68,9 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="hydranet-prepare-ade20k", description=__doc__)
     ap.add_argument("--src", required=True, help="extracted ADEChallengeData2016 directory")
     ap.add_argument("--dst", required=True, help="output root, e.g. datasets/ADE20K")
-    ap.add_argument("--min-floor", type=float, default=0.08, help="minimum floor pixel fraction")
+    ap.add_argument(
+        "--min-floor", type=float, default=0.08, help="minimum floor pixel fraction"
+    )
     ap.add_argument("--max-sky", type=float, default=0.02, help="maximum sky pixel fraction")
     ap.add_argument(
         "--max-vegetation", type=float, default=0.05, help="maximum vegetation pixel fraction"
