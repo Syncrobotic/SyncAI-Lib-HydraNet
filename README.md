@@ -5,15 +5,56 @@ outputs — traversable surface, terrain class, object detection.**
 The architecture follows the Tesla HydraNet idea: a shared backbone and neck carry almost
 all of the compute, while the task heads stay tiny and mutually independent.
 
-```text
-                                ┌─ Traversability Head ─ [B, 3, H, W]   go / caution / blocked
- image ─ RegNetX ─ BiFPN(P3–P7) ┼─ Terrain Head ──────── [B, 12, H, W]  surface class
- [B,3,H,W]  (backbone)  (neck)  └─ FCOS Det Head ─────── boxes + labels people / vehicles / obstacles
+```mermaid
+flowchart TB
+    IMG(["image · 3 × 512 × 640"])
+
+    subgraph TRUNK ["SHARED TRUNK — 7,022,342 params · 84.4%"]
+        direction TB
+        BB["<b>RegNetX-800MF backbone</b> · 6.59M · 79.2%<br/>stem → stage1 → stage2 → stage3 → stage4"]
+        CFEAT["C2 · 64ch · 1/4 &nbsp;&nbsp; C3 · 128ch · 1/8<br/>C4 · 288ch · 1/16 &nbsp;&nbsp; C5 · 672ch · 1/32"]
+        LAT["1×1 lateral → 96 ch · C2 dropped<br/>P6, P7 added by stride-2 conv from P5"]
+        NECK["<b>BiFPN × 2</b> · 435K · 5.2%<br/>weighted top-down, then weighted bottom-up"]
+        PYR["P3 1/8 &nbsp; P4 1/16 &nbsp; P5 1/32 &nbsp; P6 1/64 &nbsp; P7 1/128<br/>all 96 ch"]
+        BB --> CFEAT --> LAT --> NECK --> PYR
+    end
+
+    subgraph HEADS ["TASK HEADS — 1,294,089 params · 15.6% · mutually independent"]
+        direction LR
+        TRAV["<b>Traversability</b><br/>Semantic-FPN<br/>277K · 3.3%"]
+        TERR["<b>Terrain</b><br/>Semantic-FPN<br/>278K · 3.3%"]
+        DET["<b>Detection</b><br/>FCOS, anchor-free<br/>739K · 8.9%"]
+    end
+
+    OUTT["<b>3 × 512 × 640</b><br/>blocked / caution / go"]
+    OUTE["<b>12 × 512 × 640</b><br/>surface class"]
+    OUTD["<b>per level P3–P7</b><br/>cls 80 · reg 4 (l,t,r,b) · ctr 1<br/>NMS runs outside the graph"]
+
+    IMG --> BB
+    PYR -->|"P3–P5"| TRAV
+    PYR -->|"P3–P5"| TERR
+    PYR -->|"P3–P7"| DET
+    TRAV --> OUTT
+    TERR --> OUTE
+    DET --> OUTD
+
+    classDef trunk fill:#2d6a9f,stroke:#1b4a72,color:#fff
+    classDef head fill:#b4531f,stroke:#7d3915,color:#fff
+    classDef out fill:#3d7a4a,stroke:#255030,color:#fff
+    classDef io fill:#555,stroke:#333,color:#fff
+    class BB,CFEAT,LAT,NECK,PYR trunk
+    class TRAV,TERR,DET head
+    class OUTT,OUTE,OUTD out
+    class IMG io
 ```
 
+Shapes above are for the default `input_size: [512, 640]`; the segmentation heads always
+resize their logits back to the input resolution, so the two mask outputs match the image
+whatever it is set to.
+
 The parameter split bears the design out: **84.4% shared trunk, 15.6% for all three heads
-combined** (8.32M total). A fourth head costs roughly 3–9% more parameters and reuses the
-84% already paid for.
+combined** (8,316,434 total). A fourth head costs roughly 3–9% more parameters and reuses
+the 84% already paid for.
 
 - **Backbone**: torchvision RegNetX, swappable to ResNet18/34/50 with one config key
 - **Neck**: BiFPN (fast-normalized fusion), with plain FPN as the alternative
