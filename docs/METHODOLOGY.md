@@ -23,7 +23,8 @@ limits the system today is not the network:
 | `caution` cannot exceed ~0.20 | 3 of the 4 terrain classes that map to it have **zero** training examples |
 | Terrain metrics are not stable across dataset changes | `terrain_mIoU` averages over the classes *present*, currently 8 of 12 |
 | No *field* number exists | A `test` split now exists, but it is ADE20K — same-distribution web photography, not our sites |
-| Detection produces garbage if deployed | Export now refuses an unsupervised head, but the head is still untrained until COCO is present |
+| Detection is trained but weak | COCO landed; mAP 0.173 after 30 epochs and still climbing. Export refuses any head no dataset supervises. |
+| Adding COCO starved the rare classes | The segmentation heads get ~25% of the optimiser steps in the mixed run, and `caution` fell from 0.229 to noise. See level 2 below — this is the current blocker on the mixed configuration. |
 | Real-world accuracy is unknown | Training data is ADE20K only — web photos, not robot-height footage of our sites |
 
 **The work that moves this project is data work.** Plan accordingly: a team that assigns four
@@ -219,7 +220,7 @@ to val produces an official-looking number that is quietly circular.
 
 ### Before the first run
 
-1. `uv sync --group dev --extra export`, then `uv run pytest -q` — 166 tests, no dataset
+1. `uv sync --group dev --extra export`, then `uv run pytest -q` — 206 tests, no dataset
    needed. If these fail, stop; nothing downstream will be interpretable.
 2. `uv run pre-commit install --hook-type pre-commit --hook-type commit-msg` — both types, see
    [CONTRIBUTING.md](../CONTRIBUTING.md).
@@ -294,7 +295,7 @@ another.
 ### Level 1 — Does the code work? (every commit)
 
 ```bash
-uv run pytest -q          # 166 tests, no dataset required
+uv run pytest -q          # 206 tests, no dataset required
 ```
 
 Includes `test_overfit.py`, which memorises one synthetic batch to >95% pixel accuracy. Shape
@@ -313,6 +314,35 @@ validation set* — currently 8 of 12. Two consequences:
 - It will likely **drop** when you add the missing classes, because harder classes enter the
   average. That is not a regression. Record the class count alongside the number, and compare
   per-class IoU when the dataset changes.
+
+**A mean can hide a class that stopped learning entirely.** This is the sharper failure, and
+it happened here. Adding COCO to supervise the detection head moved `traversability_mIoU`
+from 0.6765 to 0.6303 — a 7% drop, easy to accept as the cost of a second task. Underneath:
+
+| Class | Seg-only (ships) | With COCO (ships) |
+|---|---|---|
+| `blocked` | 0.9547 | 0.9536 |
+| `go` | 0.8455 | 0.8463 |
+| **`caution`** | **0.2294** | **0.0908** |
+
+And `caution` did not merely fall — it never learned at all. Across the whole run it sat
+between 0.000 and 0.017, and the 0.0908 that `best.pt` captured is a single noisy spike that
+happened to land on the epoch with the best mean. By the final epoch it was 0.0039 and
+`stairs` was exactly 0.0000.
+
+The denominator never changed — all three classes were present throughout — so the class
+count would not have caught this. **Two of three classes were healthy, and the mean stayed
+respectable while one class went to noise.** Averages hide their worst member; the fewer
+classes in the mean, the better they hide it.
+
+The mechanism is worth understanding, because it will recur: COCO has 118,287 images against
+ADE20K's 5,998, so even at `sample_ratio: 0.1` the segmentation heads received roughly a
+quarter of the optimiser steps. Common classes had signal to spare. `stairs` occupies 0.3% of
+pixels and starved, and since three of `caution`'s four constituent classes have no data at
+all, `caution` is effectively `stairs` and starved with it.
+
+**So: never read a mIoU without the per-class numbers next to it**, and when a dataset mix
+changes, check that the rare classes still have a pulse before accepting the mean.
 
 ### Level 3 — How good is it, honestly? (release candidates)
 
@@ -373,13 +403,15 @@ Two habits make this pay off:
 
 - **Never delete a run directory that produced a shipped model.** The dataset fingerprint in
   it is the only record of which data that model saw.
-- **Do not rewrite git history that run metadata points at.** Runs record the commit they
-  came from; if that hash stops existing, provenance breaks. This nearly happened once: the
-  baseline run's `meta.json` names `ba30fa88`, which the Conventional Commits rewrite left
-  on an orphaned line of history. The `pre-conventional-commits` tag is what keeps it
-  reachable — **do not delete that tag**, and before any future rewrite, tag every commit
-  a run directory references. A branch is not enough, because branches get cleaned up;
-  a tag is the thing that survives tidying.
+- **Know what a history rewrite does to run metadata.** Runs record the commit they came
+  from, and the Conventional Commits rewrite changed every hash — so the baseline run's
+  `meta.json` names `ba30fa88`, which `git` can no longer reach. **No code was lost:** the
+  rewrite only edited commit messages, so the old and new commits have byte-identical
+  trees (`git diff ba30fa88 aa07bbe` is empty). Recover the mapping by matching the commit
+  *message* rather than the hash — the rewrite lower-cased the subject and added a type
+  prefix, so `ba30fa88` is `aa07bbe`. [CONTRIBUTING.md](../CONTRIBUTING.md) carries the
+  current mapping. If a future rewrite ever changes trees rather than messages, tag the
+  commits a run directory references *before* doing it.
 
 We do not run an experiment tracking server. For one machine, files plus TensorBoard cover it,
 and the provenance above is better than a tracker's defaults. That calculation changes once
