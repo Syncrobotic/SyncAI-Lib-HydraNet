@@ -28,6 +28,12 @@ class ExportWrapper(nn.Module):
         super().__init__()
         self.model = model
         self.seg_names = list(model.seg_heads.keys())
+        # nn.Module defaults to training=True, and torch.onnx.export propagates the
+        # wrapper's mode down the tree -- so without this the inner model comes back from
+        # export in train mode, with BatchNorm switched to batch statistics. The exported
+        # graph is traced in eval regardless, but anything that uses the model afterwards
+        # in the same process silently gets different numbers.
+        self.eval()
 
     def forward(self, images):
         out = self.model(images)
@@ -71,6 +77,45 @@ def check_heads_are_trained(cfg: dict, allow: bool) -> None:
     )
 
 
+def check_parity(wrapper, dummy, path: str, out_names: list[str], tol: float = 1e-4) -> bool:
+    """Compare the exported graph against PyTorch on the same input.
+
+    Compares **relative** error per output, not absolute. The outputs span three orders of
+    magnitude -- centerness peaks near 2, while ``det_reg`` at P6 carries pixel distances
+    up to ~480 -- so one absolute threshold either fires spuriously on the regression maps
+    or is loosened until it can no longer see a real error in the logits.
+
+    This catches a graph that exported wrongly. It does not catch a pre-processing
+    mismatch on the robot, which is the other classic deployment failure; for that, feed a
+    real frame through both paths.
+    """
+    try:
+        import onnxruntime as ort
+    except ImportError:
+        print("(onnxruntime not installed: pip install 'syncai-hydranet[export]')")
+        return True
+
+    with torch.no_grad():
+        ref = [t.numpy() for t in wrapper(dummy)]
+    sess = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
+    got = sess.run(None, {"images": dummy.numpy()})
+
+    print(f"\nparity vs PyTorch ({len(out_names)} outputs, relative tolerance {tol:g})")
+    worst, worst_name, failures = 0.0, "", []
+    for name, a, b in zip(out_names, ref, got, strict=True):
+        scale = max(float(abs(a).max()), 1e-9)
+        rel = float(abs(a - b).max()) / scale
+        if rel > worst:
+            worst, worst_name = rel, name
+        if rel > tol:
+            failures.append((name, rel))
+    for name, rel in failures:
+        print(f"  FAIL {name:16s} relative {rel:.2e}")
+    verdict = "PASS" if not failures else "FAIL"
+    print(f"  worst: {worst_name} {worst:.2e}  -> {verdict}")
+    return not failures
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="hydranet-export-onnx", description=__doc__)
     ap.add_argument("--config", required=True)
@@ -83,6 +128,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="export heads no dataset supervised; their outputs are random, so this is "
         "for shape-only exports and latency benchmarking, never for deployment",
+    )
+    ap.add_argument(
+        "--check-parity",
+        action="store_true",
+        help="run the exported graph against PyTorch on the same input and fail if they "
+        "disagree; the deployment acceptance gate, needs onnxruntime",
     )
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
     return ap
@@ -146,6 +197,9 @@ def main(argv: list[str] | None = None) -> None:
             pass
     except ImportError:
         print("(onnx not installed, skipping check)")
+
+    if args.check_parity and not check_parity(wrapper, dummy, args.output, out_names):
+        raise SystemExit("export parity check FAILED: see the per-output table above")
 
     print("\nOn Jetson Orin, build the TensorRT engine with:")
     print(f"  trtexec --onnx={args.output} --saveEngine=hydranet.engine --fp16")

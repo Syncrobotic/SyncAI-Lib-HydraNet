@@ -33,7 +33,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-export = ["onnx>=1.15", "onnxsim>=0.4"]
+export = ["onnx>=1.15", "onnxsim>=0.4", "onnxruntime>=1.17"]
 
 [project.scripts]
 hydranet-train = "syncai_hydranet.cli.train:main"
