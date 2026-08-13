@@ -130,6 +130,13 @@ TRAIN = {
     # config asking for anything else used to be accepted and silently ignored.
     "scheduler": Spec((str,), choices=("cosine",)),
     "amp": Spec((bool,)),
+    "amp_dtype": Spec((str,), choices=("float16", "bfloat16")),
+    "grad_accum_steps": Spec((int,)),
+    # Backend knobs. deterministic trades a real speed penalty for bit-reproducibility
+    # and so is off unless asked for.
+    "deterministic": Spec((bool,)),
+    "cudnn_benchmark": Spec((bool,)),
+    "tf32": Spec((bool,)),
     "grad_clip": Spec(NUMBER),
     "ema": Spec((bool,)),
     "ema_decay": Spec(NUMBER),

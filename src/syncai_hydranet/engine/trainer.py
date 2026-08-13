@@ -19,6 +19,11 @@ from ..utils.checkpoint import CKPT_FORMAT, load_checkpoint
 from ..utils.device import pick_device, supports_amp, supports_pinned_memory
 from ..utils.logger import get_logger
 from ..utils.runmeta import append_metrics, resolve_out_dir, write_run_meta
+from ..utils.seeding import (
+    configure_backends,
+    resolve_amp_dtype,
+    seed_everything,
+)
 from ..utils.visualize import TERRAIN_COLORS, TRAV_COLORS, prediction_grid
 from .evaluator import evaluate, select_metric
 
@@ -144,7 +149,16 @@ class Trainer:
             )
         for w in check_config(cfg):
             self.logger.warning(f"config: {w}")
-        torch.manual_seed(cfg.get("seed", 42))
+
+        seed = int(cfg.get("seed", 42))
+        seed_everything(seed)
+        configure_backends(
+            self.device,
+            deterministic=bool(cfg["train"].get("deterministic", False)),
+            cudnn_benchmark=bool(cfg["train"].get("cudnn_benchmark", True)),
+            tf32=bool(cfg["train"].get("tf32", True)),
+            logger=self.logger,
+        )
 
         self.model = build_model(cfg).to(self.device)
         tcfg = cfg["train"]
@@ -164,20 +178,45 @@ class Trainer:
             ratios,
             batch_size=int(tcfg["batch_size"]),
             workers=int(dcfg.get("workers", 4)),
-            seed=cfg.get("seed", 42),
+            seed=seed,
             pin_memory=supports_pinned_memory(self.device),
         )
         self.val_sets = list(zip(names, val_sets, strict=True))
 
         self.epochs = int(tcfg["epochs"])
-        total_iters = self.epochs * len(self.train_loader)
+        # Accumulation decouples the batch the optimiser sees from the batch that has to
+        # fit in memory, so a laptop and an A100 can train the same effective batch
+        # without retuning the LR.
+        self.accum_steps = max(int(tcfg.get("grad_accum_steps", 1)), 1)
+        self.steps_per_epoch = len(self.train_loader) // self.accum_steps
+        if self.steps_per_epoch == 0:
+            raise ValueError(
+                f"grad_accum_steps={self.accum_steps} exceeds the "
+                f"{len(self.train_loader)} batches in an epoch: no optimizer step "
+                f"would ever run."
+            )
+        # The schedule advances once per optimizer step, not once per micro-batch.
+        total_iters = self.epochs * self.steps_per_epoch
         self.optimizer = build_optimizer(self.model, tcfg)
         self.scheduler = WarmupCosine(
             self.optimizer, int(tcfg.get("warmup_iters", 500)), total_iters
         )
+
         self.amp = bool(tcfg.get("amp", True)) and supports_amp(self.device)
-        self.scaler = torch.amp.GradScaler(enabled=self.amp)
+        self.amp_dtype = resolve_amp_dtype(str(tcfg.get("amp_dtype", "float16")))
+        # bfloat16 has fp32's exponent range, so gradients cannot underflow the way
+        # fp16's can; scaling would only add overhead and a failure mode.
+        self.scaler = torch.amp.GradScaler(enabled=self.amp and self.amp_dtype is torch.float16)
         self.grad_clip = float(tcfg.get("grad_clip", 0.0))
+        if self.accum_steps > 1:
+            self.logger.info(
+                f"gradient accumulation: {self.accum_steps} x batch "
+                f"{tcfg['batch_size']} = effective batch "
+                f"{self.accum_steps * int(tcfg['batch_size'])}, "
+                f"{self.steps_per_epoch} optimizer steps/epoch"
+            )
+        if self.amp:
+            self.logger.info(f"mixed precision: {self.amp_dtype}")
 
         ema_decay = float(tcfg.get("ema_decay", 0.9998))
         self.ema = ModelEMA(self.model, ema_decay) if tcfg.get("ema", True) else None
@@ -214,7 +253,7 @@ class Trainer:
             self.out_dir,
             cfg,
             device=self.device,
-            steps_per_epoch=len(self.train_loader),
+            steps_per_epoch=self.steps_per_epoch,
             total_iters=total_iters,
             parameters=n_params,
             datasets=[
@@ -252,7 +291,7 @@ class Trainer:
             return
         self.logger.info(
             f"training: epochs {self.start_epoch + 1}..{self.epochs}, "
-            f"{len(self.train_loader)} steps/epoch, device={self.device}"
+            f"{self.steps_per_epoch} optimizer steps/epoch, device={self.device}"
         )
         for epoch in range(self.start_epoch + 1, self.epochs + 1):
             self.train_one_epoch(epoch)
@@ -280,23 +319,34 @@ class Trainer:
     def train_one_epoch(self, epoch: int):
         self.model.train()
         t0 = time.time()
+        self.optimizer.zero_grad(set_to_none=True)
+        micro_batches = self.steps_per_epoch * self.accum_steps  # drop the remainder
         for i, batch in enumerate(self.train_loader):
+            if i >= micro_batches:
+                # A partial accumulation group would take an optimizer step on fewer
+                # samples than every other step, at a schedule position that assumed
+                # otherwise. Cheaper to drop it than to explain it later.
+                break
             images = batch["image"].to(self.device, non_blocking=True)
             targets = _targets_to_device(batch["targets"], self.device)
-            with torch.amp.autocast(self.device.type, enabled=self.amp):
+            with torch.amp.autocast(self.device.type, enabled=self.amp, dtype=self.amp_dtype):
                 outputs = self.model(images)
                 loss, logs = self.model.compute_losses(outputs, targets, batch["supervises"])
-            self.optimizer.zero_grad(set_to_none=True)
-            self.scaler.scale(loss).backward()
-            if self.grad_clip > 0:
-                self.scaler.unscale_(self.optimizer)
-                nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
-            self.scheduler.step()
-            if self.ema:
-                self.ema.update(self.model)
-            self.global_step += 1
+            # Gradients sum across the group, so each micro-batch contributes its share
+            # rather than a full step's worth.
+            self.scaler.scale(loss / self.accum_steps).backward()
+
+            if (i + 1) % self.accum_steps == 0:
+                if self.grad_clip > 0:
+                    self.scaler.unscale_(self.optimizer)
+                    nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+                self.optimizer.zero_grad(set_to_none=True)
+                self.scheduler.step()
+                if self.ema:
+                    self.ema.update(self.model)
+                self.global_step += 1
 
             if (i + 1) % self.log_interval == 0:
                 lr = self.optimizer.param_groups[0]["lr"]
@@ -304,7 +354,7 @@ class Trainer:
                 ips = self.log_interval * images.shape[0] / (time.time() - t0)
                 t0 = time.time()
                 self.logger.info(
-                    f"E{epoch} [{i + 1}/{len(self.train_loader)}] "
+                    f"E{epoch} [{i + 1}/{micro_batches}] "
                     f"ds={batch['dataset']} lr={lr:.2e} {msg} ({ips:.1f} img/s)"
                 )
                 if self.tb:
@@ -416,7 +466,7 @@ class Trainer:
             # Pre-CKPT_FORMAT-2 checkpoints predate scheduler state. Reconstructing the
             # position from the epoch count is approximate but far better than the
             # alternative, which is replaying warmup at full LR.
-            it = self.start_epoch * len(self.train_loader)
+            it = self.start_epoch * self.steps_per_epoch
             self.scheduler.load_state_dict({"it": it})
             self.logger.warning(
                 f"checkpoint has no scheduler state; schedule position estimated as "

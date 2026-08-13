@@ -44,6 +44,8 @@ def _stub_trainer(steps_per_epoch=10):
     t.start_epoch = 0
     t.cfg = {"train": {"epochs": 10}, "data": {"input_size": [128, 160]}}
     t.train_loader = _FakeLoader(steps_per_epoch)
+    t.accum_steps = 1
+    t.steps_per_epoch = steps_per_epoch  # optimizer steps, so accum is already divided out
     t.logger = logging.getLogger("test")
     return t
 
