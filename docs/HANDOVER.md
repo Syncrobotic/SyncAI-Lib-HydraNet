@@ -69,7 +69,15 @@ upstream's, and the uppercase-path variant returns 404.
 
 `hydranet-prepare-ade20k` filters on **annotation content** (enough floor, little sky and
 vegetation) rather than a scene-category whitelist, selecting the ground-level indoor
-viewpoint a robot sees: 20,210 → 5,998 images.
+viewpoint a robot sees. Both splits are filtered, and the counts are deterministic — a
+re-run on the same source reproduces them exactly:
+
+```
+training   -> train:  kept 5998/20210 (29.7%)
+validation -> val:    kept  614/2000  (30.7%)
+```
+
+If your numbers differ, the source archive differs; check that before anything else.
 
 ## 4. The baseline at handover
 

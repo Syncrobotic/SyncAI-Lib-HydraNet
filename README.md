@@ -187,7 +187,8 @@ ground-level indoor viewpoint a robot actually sees:
 ```bash
 uv run hydranet-prepare-ade20k \
     --src datasets/ADEChallengeData2016 --dst datasets/ADE20K
-# training -> train: kept 5998/20210 (29.7%)
+# training   -> train: kept 5998/20210 (29.7%)
+# validation -> val:   kept  614/2000  (30.7%)
 ```
 
 The output is symlinks, so it costs no extra disk and re-running is cheap.
