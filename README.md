@@ -81,6 +81,10 @@ For Apple Silicon Macs (MPS) see [docs/TRAIN_MACOS.md](docs/TRAIN_MACOS.md).
 For moving to a CUDA workstation see [docs/HANDOVER.md](docs/HANDOVER.md).
 Training, evaluation and inference all pick CUDA → MPS → CPU automatically.
 
+New to multi-head training, or to this project? [docs/TRAINING_GUIDE.md](docs/TRAINING_GUIDE.md)
+is a ten-minute walkthrough of why the network is shaped this way, how partial supervision
+across datasets works, and the measurement traps that cost the most time.
+
 ## Commands
 
 Installation provides seven console scripts:
