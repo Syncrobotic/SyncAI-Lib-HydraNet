@@ -123,4 +123,3 @@ train:
 export:
   opset: 17
   input_size: [512, 640]
-  half: true

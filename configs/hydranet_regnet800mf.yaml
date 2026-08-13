@@ -101,4 +101,3 @@ train:
 export:
   opset: 17
   input_size: [512, 640]
-  half: true                      # FP16 is the recommended TensorRT mode on Orin

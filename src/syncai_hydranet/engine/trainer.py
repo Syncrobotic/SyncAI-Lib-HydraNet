@@ -10,6 +10,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
+from ..config_schema import check_config
 from ..data.datasets import build_dataset
 from ..data.multitask import MultiTaskLoader
 from ..models.hydranet import build_model
@@ -140,6 +141,8 @@ class Trainer:
                 f"{cfg['output_dir']} already holds a run; writing to {self.out_dir} "
                 f"instead. Use --resume to continue the existing one."
             )
+        for w in check_config(cfg):
+            self.logger.warning(f"config: {w}")
         torch.manual_seed(cfg.get("seed", 42))
 
         self.model = build_model(cfg).to(self.device)
