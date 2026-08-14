@@ -80,20 +80,25 @@ class HydraNet(nn.Module):
 
     def compute_losses(
         self, outputs: dict, targets: dict, supervised: list[str]
-    ) -> tuple[torch.Tensor, dict]:
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """``supervised`` names the heads this batch has labels for.
 
         Partial supervision across datasets: a RUGD batch only contributes segmentation
         losses, a COCO batch only detection. Unsupervised heads get zero gradient while
         the shared trunk learns from both.
+
+        The returned logs are **detached tensors, not floats**. Converting them here cost
+        a CUDA synchronisation per head per step -- three or four every step, on every
+        step, whether or not that step was going to be logged. The caller converts them
+        at its logging interval instead; see ``Trainer.train_one_epoch``.
         """
         losses: dict[str, torch.Tensor] = {}
-        logs: dict[str, float] = {}
+        logs: dict[str, torch.Tensor] = {}
         for name in self.seg_heads:
             if name in supervised and name in targets:
                 seg_loss = self.seg_losses[name](outputs[name], targets[name])
                 losses[name] = seg_loss
-                logs[name] = float(seg_loss.detach())
+                logs[name] = seg_loss.detach()
         if self.det_head is not None and self.det_head_name in supervised:
             det_loss, sub = self.det_loss(
                 self.det_head,
@@ -104,10 +109,10 @@ class HydraNet(nn.Module):
                 targets["labels"],
             )
             losses[self.det_head_name] = det_loss
-            logs[self.det_head_name] = float(det_loss.detach())
-            logs.update({k: float(v) for k, v in sub.items()})
+            logs[self.det_head_name] = det_loss.detach()
+            logs.update({k: v.detach() if torch.is_tensor(v) else v for k, v in sub.items()})
         total = self.balancer(losses)
-        logs["total"] = float(total.detach())
+        logs["total"] = total.detach()
         return total, logs
 
     @torch.no_grad()

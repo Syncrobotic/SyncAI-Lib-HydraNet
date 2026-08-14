@@ -28,7 +28,7 @@ from ..utils.seeding import (
     seed_everything,
 )
 from ..utils.visualize import TERRAIN_COLORS, TRAV_COLORS, prediction_grid
-from .evaluator import evaluate, select_metric
+from .evaluator import build_val_loaders, evaluate, select_metric
 
 DEFAULT_PRIMARY_METRIC = "traversability_mIoU"
 
@@ -212,6 +212,9 @@ class Trainer:
             pin_memory=supports_pinned_memory(self.device),
         )
         self.val_sets = list(zip(names, val_sets, strict=True))
+        # Built once: validation runs every epoch, and a DataLoader's worker pool is
+        # expensive to create and pointless to throw away.
+        self.val_loaders = build_val_loaders(self.val_sets, cfg, self.device)
 
         self.epochs = int(tcfg["epochs"])
         # Accumulation decouples the batch the optimiser sees from the batch that has to
@@ -384,7 +387,11 @@ class Trainer:
 
             if (i + 1) % self.log_interval == 0:
                 lr = self.optimizer.param_groups[0]["lr"]
-                msg = " ".join(f"{k}={v:.3f}" for k, v in logs.items())
+                # The one place the loss tensors are read back. compute_losses returns
+                # them detached but on-device precisely so this synchronisation happens
+                # once per log_interval rather than three or four times per step.
+                scalars = {k: float(v) for k, v in logs.items()}
+                msg = " ".join(f"{k}={v:.3f}" for k, v in scalars.items())
                 ips = self.log_interval * images.shape[0] / (time.time() - t0)
                 t0 = time.time()
                 self.logger.info(
@@ -392,7 +399,7 @@ class Trainer:
                     f"ds={batch['dataset']} lr={lr:.2e} {msg} ({ips:.1f} img/s)"
                 )
                 if self.tb:
-                    for k, v in logs.items():
+                    for k, v in scalars.items():
                         self.tb.add_scalar(f"train/{k}", v, self.global_step)
                     self.tb.add_scalar("train/lr", lr, self.global_step)
                     self.tb.add_scalar("train/img_per_sec", ips, self.global_step)
@@ -404,7 +411,13 @@ class Trainer:
         model = self.ema.ema if self.ema else self.model
         samples: dict | None = {} if self.tb else None
         metrics = evaluate(
-            model, self.val_sets, self.cfg, self.device, self.logger, samples=samples
+            model,
+            self.val_sets,
+            self.cfg,
+            self.device,
+            self.logger,
+            samples=samples,
+            loaders=self.val_loaders,
         )
         append_metrics(
             self.out_dir,

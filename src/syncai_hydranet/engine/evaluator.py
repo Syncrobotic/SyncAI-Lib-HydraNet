@@ -11,17 +11,30 @@ from ..data.transforms import invert_geom
 
 
 class ConfusionMatrix:
+    """Accumulates on whichever device the predictions are already on.
+
+    ``update`` used to copy both maps to the host and count with ``np.bincount``. At
+    512x640 that is a few million pixels per batch crossing the bus, per head, per epoch,
+    to compute something the GPU counts for free. Counting stays on-device and only the
+    matrix -- ``n x n`` integers -- comes back, in ``miou``.
+
+    The arithmetic is unchanged: same indices, same integer counts, so a mIoU computed
+    either way is bit-identical. ``tests/test_evaluator.py`` asserts that rather than
+    assuming it.
+    """
+
     def __init__(self, num_classes: int):
         self.n = num_classes
-        self.mat = np.zeros((num_classes, num_classes), dtype=np.int64)
+        self.mat: torch.Tensor | None = None  # created on the first update's device
 
     def update(self, pred: torch.Tensor, target: torch.Tensor):
-        p = pred.flatten().cpu().numpy()
-        t = target.flatten().cpu().numpy()
+        if self.mat is None:
+            self.mat = torch.zeros(self.n * self.n, dtype=torch.int64, device=pred.device)
+        p = pred.reshape(-1)
+        t = target.reshape(-1).to(p.device)
         valid = t != 255
-        p, t = p[valid], t[valid]
-        idx = t * self.n + p
-        self.mat += np.bincount(idx, minlength=self.n**2).reshape(self.n, self.n)
+        idx = t[valid] * self.n + p[valid]
+        self.mat += torch.bincount(idx, minlength=self.n * self.n)
 
     def miou(self) -> tuple[float, np.ndarray]:
         """Mean IoU, and the per-class IoUs it averaged.
@@ -34,8 +47,11 @@ class ConfusionMatrix:
         model improves. ``mIoU_classes`` is emitted alongside so the two are never
         compared without noticing.
         """
-        inter = np.diag(self.mat).astype(np.float64)
-        union = self.mat.sum(1) + self.mat.sum(0) - inter
+        if self.mat is None:
+            return float("nan"), np.full(self.n, np.nan)
+        mat = self.mat.reshape(self.n, self.n).cpu().numpy()
+        inter = np.diag(mat).astype(np.float64)
+        union = mat.sum(1) + mat.sum(0) - inter
         iou = np.where(union > 0, inter / np.maximum(union, 1), np.nan)
         return float(np.nanmean(iou)), iou
 
@@ -57,13 +73,50 @@ def head_disagreement(trav_pred, terrain_pred, trav_map: dict, valid) -> tuple[i
     return int((both & (derived != trav_pred)).sum()), int(both.sum())
 
 
+def build_val_loaders(val_sets, cfg, device=None) -> list[tuple[str, DataLoader]]:
+    """One DataLoader per validation set, built to be reused across epochs.
+
+    Validation used to construct these inside ``evaluate``, so a 60-epoch run over two
+    datasets spun up 120 worker pools and tore them down again. ``persistent_workers``
+    only helps something that outlives a single pass, which is why the trainer builds
+    these once in ``__init__`` and hands them back every epoch.
+    """
+    # Validation activations are smaller than training's -- no autograd graph is kept --
+    # so this could be larger than the training batch. It is deliberately not: a smaller
+    # batch keeps peak memory below the training peak, which means validation can never
+    # be the thing that OOMs a run that was otherwise fitting.
+    bs = max(int(cfg["train"]["batch_size"]) // 2, 1)
+    workers = int(cfg["data"].get("workers", 4))
+    pin = bool(device is not None and getattr(device, "type", None) == "cuda")
+    return [
+        (
+            name,
+            DataLoader(
+                ds,
+                batch_size=bs,
+                shuffle=False,
+                num_workers=workers,
+                collate_fn=collate,
+                pin_memory=pin,
+                persistent_workers=workers > 0,
+            ),
+        )
+        for name, ds in val_sets
+    ]
+
+
 @torch.no_grad()
-def evaluate(model, val_sets, cfg, device, logger, samples: dict | None = None) -> dict:
+def evaluate(
+    model, val_sets, cfg, device, logger, samples: dict | None = None, loaders=None
+) -> dict:
     """Return a metrics dict.
 
     If ``samples`` is a dict it is filled with the first validation batch per
     segmentation head as ``{head: (images, preds, targets)}``, which the trainer turns
     into TensorBoard comparison grids.
+
+    ``loaders`` lets a caller that validates repeatedly build them once; without it they
+    are built here, which is right for a one-shot ``hydranet-eval``.
     """
     # Restore whatever mode the caller had it in. Training passes the EMA copy, which
     # lives in eval mode; leaving it in train mode would let a stray forward pass move
@@ -75,13 +128,10 @@ def evaluate(model, val_sets, cfg, device, logger, samples: dict | None = None) 
     det_results = []
     coco_gt = None
     disagree = disagree_total = 0
-    bs = max(int(cfg["train"]["batch_size"]) // 2, 1)
-    workers = int(cfg["data"].get("workers", 4))
+    if loaders is None:
+        loaders = build_val_loaders(val_sets, cfg, device)
 
-    for _name, ds in val_sets:
-        loader = DataLoader(
-            ds, batch_size=bs, shuffle=False, num_workers=workers, collate_fn=collate
-        )
+    for (_name, loader), (_, ds) in zip(loaders, val_sets, strict=True):
         sup = ds.supervises
         trav_map = getattr(getattr(ds, "scheme", None), "trav", None)
         for batch in loader:
