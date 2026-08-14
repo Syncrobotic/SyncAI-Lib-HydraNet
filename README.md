@@ -5,6 +5,21 @@ outputs — traversable surface, terrain class, object detection.**
 The architecture follows the Tesla HydraNet idea: a shared backbone and neck carry almost
 all of the compute, while the task heads stay tiny and mutually independent.
 
+![traversability and terrain from one forward pass](assets/hydranet_demo.gif)
+
+Left, traversability: green is walkable, red is blocked. Right, the terrain head from the
+same forward pass. Handheld footage of an office corridor, run through
+`hydranet-infer-video` on the 60-epoch multi-task checkpoint.
+
+**Read it for what it is.** The floor, the walls and the partitions are solid, and the two
+heads agree with each other — the trunk is doing its job. What this clip cannot show is the
+part that is not finished: `caution` scores 0.33 on the held-out test split and `stairs`
+0.32, because three of the four terrain classes that map to `caution` have **zero** training
+examples, and because the training data is ADE20K — human-height web photography, not
+footage from a robot's camera. Point the same model at a ceiling and a quarter of it comes
+back "go". The gap is data, not architecture; [docs/METHODOLOGY.md](docs/METHODOLOGY.md)
+says what to collect and in what order.
+
 ```mermaid
 flowchart TB
     IMG(["image · 3 × 512 × 640"])
