@@ -9,6 +9,11 @@ selection arithmetic -- `_scan` is small and obvious -- but the two behaviours w
 failure is silent: names resolved against the dataset's own labels.txt rather than
 transcribed, and the refusal to merge into a split someone else already wrote.
 
+The synthetic tree is built out of the module's own class tuples, which leaves it blind to
+a typo in them -- a misspelling would be written into the fixture's labels.txt and resolve
+against its own reflection. `test_every_declared_name_is_a_real_cocostuff_class` is the
+one test here that steps outside that circle.
+
 pytest tests/test_prepare_cocostuff.py -v
 """
 
@@ -26,6 +31,8 @@ from syncai_hydranet.cli.prepare_cocostuff import (
     INDOOR_EVIDENCE,
     OUTDOOR_VETO,
     VEHICLE_VETO,
+    _load_png_values,
+    _resolve,
     build_parser,
     main,
 )
@@ -34,6 +41,53 @@ ALL_NAMES = sorted(
     set(DEFAULT_CLASSES) | set(INDOOR_EVIDENCE) | set(OUTDOOR_VETO) | set(VEHICLE_VETO)
 )
 VALUE = {n: i for i, n in enumerate(ALL_NAMES)}
+
+# The real COCO-Stuff labels.txt ids for every name the four tuples above declare,
+# transcribed from the dataset rather than generated from the tuples. `source` builds its
+# labels.txt out of `ALL_NAMES`, so it cannot catch a typo in the tuples -- the typo would
+# be written into the synthetic file and resolve against itself. This is the one place the
+# names are checked against something that did not come from them.
+REAL_IDS = {
+    "airplane": 5,
+    "boat": 9,
+    "building-other": 96,
+    "bus": 6,
+    "bush": 97,
+    "car": 3,
+    "carpet": 101,
+    "ceiling-other": 102,
+    "ceiling-tile": 103,
+    "clouds": 106,
+    "door-stuff": 112,
+    "floor-marble": 114,
+    "floor-other": 115,
+    "floor-stone": 116,
+    "floor-tile": 117,
+    "floor-wood": 118,
+    "grass": 124,
+    "mat": 131,
+    "mirror-stuff": 133,
+    "motorcycle": 4,
+    "mountain": 135,
+    "pavement": 140,
+    "river": 148,
+    "road": 149,
+    "roof": 151,
+    "rug": 152,
+    "sand": 154,
+    "sea": 155,
+    "sky-other": 157,
+    "snow": 159,
+    "stairs": 161,
+    "train": 7,
+    "tree": 169,
+    "truck": 8,
+    "wall-other": 173,
+    "wall-panel": 174,
+    "wall-tile": 176,
+    "wall-wood": 177,
+    "window-other": 181,
+}
 
 
 def _ann(path: Path, rows: dict[str, int]) -> None:
@@ -191,3 +245,19 @@ def test_the_manifest_records_what_the_filter_was(source, tmp_path):
     assert m["min_fraction"] == 0.25
     assert m["indoor_filter"] is True
     assert m["classes"] == list(DEFAULT_CLASSES)
+
+
+def test_every_declared_name_is_a_real_cocostuff_class(tmp_path):
+    """The four tuples are the whole selection policy, and a typo in one of them does not
+    raise: `stairs-other` matches nothing and quietly narrows the split, while a name that
+    happens to exist filters on the wrong class. Every other test here builds its
+    labels.txt from these same tuples, so only a transcribed one can disagree."""
+    assert set(REAL_IDS) == set(ALL_NAMES), "REAL_IDS has drifted from the declared names"
+    stuff = tmp_path / "real"
+    stuff.mkdir()
+    (stuff / "labels.txt").write_text(
+        "\n".join(f"{i}: {n}" for n, i in sorted(REAL_IDS.items(), key=lambda kv: kv[1]))
+    )
+    png = _load_png_values(stuff)
+    for names in (DEFAULT_CLASSES, INDOOR_EVIDENCE, OUTDOOR_VETO, VEHICLE_VETO):
+        assert len(_resolve(png, names)) == len(set(names))
