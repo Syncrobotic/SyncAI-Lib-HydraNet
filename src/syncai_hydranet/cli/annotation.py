@@ -38,22 +38,63 @@ from ..data.label_maps_indoor import (
     INDOOR_TERRAIN,
     INDOOR_TERRAIN_TO_TRAV,
 )
+from ..data.label_maps_retail import (
+    RETAIL_NATIVE_ID,
+    RETAIL_TERRAIN,
+    RETAIL_TERRAIN_TO_TRAV,
+)
 from ..utils.visualize import TERRAIN_COLORS
 
 IGNORE = 255
 TRAV_NAMES = {0: "blocked", 1: "caution", 2: "go", IGNORE: "ignore"}
-ID_TO_NAME = {v: k for k, v in INDOOR_TERRAIN.items()}
 
 # Annotation priority, from ANNOTATION_SETUP.md: rank by danger x how blind LiDAR is.
 # Confirmed annotate-only -- the full-vocabulary ADE20K does not supply these three.
-PRIORITY = ("glass", "wet_slippery", "floor_metal", "threshold_ramp", "stairs")
+# `display_fixture` is retail-only and joins the list for the same reason: no public
+# dataset has shop fixtures, and ADE20K's tables are domestic.
+PRIORITY = (
+    "glass",
+    "wet_slippery",
+    "floor_metal",
+    "threshold_ramp",
+    "stairs",
+    "display_fixture",
+)
+
+
+class Scheme:
+    """One annotation taxonomy: its classes, its policy table and its native id map.
+
+    Retail annotation needs the 13-class list -- a store's annotators drawing the indoor
+    12 would produce data with no `display_fixture` in it at all, and nothing downstream
+    would say so: the masks would validate, train, and silently teach the model that
+    shelving is furniture.
+    """
+
+    def __init__(self, name, terrain, trav, native):
+        self.name = name
+        self.terrain = terrain
+        self.trav = trav
+        self.native = native
+        self.id_to_name = {v: k for k, v in terrain.items()}
+
+
+SCHEMES = {
+    "indoor": Scheme("indoor", INDOOR_TERRAIN, INDOOR_TERRAIN_TO_TRAV, INDOOR_NATIVE_ID),
+    "retail": Scheme("retail", RETAIL_TERRAIN, RETAIL_TERRAIN_TO_TRAV, RETAIL_NATIVE_ID),
+}
+DEFAULT_SCHEME = "indoor"
+
+# Colours for classes beyond the shared 12-entry palette. Retail's display_fixture is
+# the first; anything added later needs its own entry here rather than a wrap-around.
+EXTRA_COLORS = ((0, 200, 200),)
 
 
 # --------------------------------------------------------------------- labels
 
 
-def label_spec() -> list[dict]:
-    """The CVAT label list for the 12-class indoor scheme.
+def label_spec(scheme: Scheme | None = None) -> list[dict]:
+    """The CVAT label list for one scheme.
 
     Colours come from the palette the inference overlays use, so a mask drawn in CVAT
     and a prediction rendered by ``hydranet-infer-video`` are the same colour for the
@@ -63,12 +104,19 @@ def label_spec() -> list[dict]:
     ``void`` is omitted on purpose: it is what unlabelled pixels become, not something
     an annotator draws. See ``check`` for why that distinction has teeth.
     """
+    scheme = scheme or SCHEMES[DEFAULT_SCHEME]
     spec = []
-    for name, tid in INDOOR_TERRAIN.items():
+    for name, tid in scheme.terrain.items():
         if name == "void":
             continue
-        r, g, b = (int(c) for c in TERRAIN_COLORS[tid])
-        trav = TRAV_NAMES.get(INDOOR_TERRAIN_TO_TRAV[tid], "?")
+        # The palette has an entry per indoor class; classes appended past it (retail's
+        # display_fixture) get a distinct colour rather than wrapping onto another
+        # class's, which would make two classes indistinguishable in an exported mask.
+        if tid < len(TERRAIN_COLORS):
+            r, g, b = (int(c) for c in TERRAIN_COLORS[tid])
+        else:
+            r, g, b = EXTRA_COLORS[(tid - len(TERRAIN_COLORS)) % len(EXTRA_COLORS)]
+        trav = TRAV_NAMES.get(scheme.trav[tid], "?")
         spec.append(
             {
                 "name": name,
@@ -85,11 +133,12 @@ def label_spec() -> list[dict]:
 
 
 def cmd_labels(args) -> int:
-    spec = label_spec()
+    scheme = SCHEMES[args.scheme]
+    spec = label_spec(scheme)
     text = json.dumps(spec, indent=2, ensure_ascii=False)
     if args.out:
         Path(args.out).write_text(text + "\n", encoding="utf-8")
-        print(f"wrote {args.out} ({len(spec)} labels)")
+        print(f"wrote {args.out} ({len(spec)} labels, {scheme.name} scheme)")
         print("Import it in CVAT: project -> Raw labels -> paste -> Done.\n")
     else:
         print(text)
@@ -149,7 +198,7 @@ def _read_mask(path: Path) -> np.ndarray | None:
     return np.asarray(ann)
 
 
-def check_split(root: Path, split: str, rep: Report, allow_void: bool) -> dict:
+def check_split(root: Path, split: str, rep: Report, allow_void: bool, scheme: Scheme) -> dict:
     """Validate one split and return its per-class pixel and image counts."""
     img_dir, ann_dir = root / "images" / split, root / "annotations" / split
     stats = {
@@ -192,8 +241,8 @@ def check_split(root: Path, split: str, rep: Report, allow_void: bool) -> dict:
                 f"dropped by the loader (e.g. {shown})"
             )
 
-    allowed = set(INDOOR_NATIVE_ID) | {IGNORE}
-    void_is_trained = INDOOR_NATIVE_ID.get(0) == 0
+    allowed = set(scheme.native) | {IGNORE}
+    void_is_trained = scheme.native.get(0) == 0
     void_pixels = 0
 
     for img_path, ann_path in pairs:
@@ -221,7 +270,7 @@ def check_split(root: Path, split: str, rep: Report, allow_void: bool) -> dict:
         unknown = sorted(int(v) for v in present if int(v) not in allowed)
         if unknown:
             rep.error(
-                f"{ann_path.name}: ids {unknown} are not in the 12-class scheme; the "
+                f"{ann_path.name}: ids {unknown} are not in the {scheme.name} scheme; the "
                 "loader maps them to ignore, so those pixels train on nothing"
             )
         counts = np.bincount(mask.ravel(), minlength=256)
@@ -247,7 +296,7 @@ def check_split(root: Path, split: str, rep: Report, allow_void: bool) -> dict:
     # cannot be an error. It can be said out loud, which is enough: nobody sets out to
     # ship a batch that is four-fifths ignore, and the per-class shares below are shares
     # of what *was* labelled, so they stay reassuring while it happens.
-    ignored_px = sum(stats["pixels"][tid] for tid in _ignored_ids())
+    ignored_px = sum(stats["pixels"][tid] for tid in _ignored_ids(scheme))
     if total_px and ignored_px / total_px > 0.6:
         rep.warn(
             f"{split}: {100 * ignored_px / total_px:.0f}% of pixels are ignore. If that is "
@@ -292,7 +341,7 @@ def check_sessions(per_split: dict[str, dict], rep: Report) -> None:
             )
 
 
-def _ignored_ids() -> set[int]:
+def _ignored_ids(scheme: Scheme) -> set[int]:
     """The ids the loss never sees, whatever the label map calls them.
 
     255 always, plus anything ``indoor_native`` sends to 255 -- id 0 does, now that
@@ -300,12 +349,12 @@ def _ignored_ids() -> set[int]:
     those pixels in a coverage percentage would quietly shrink every class in the table
     in proportion to how much of the frame nobody labelled.
     """
-    return {IGNORE} | {src for src, dst in INDOOR_NATIVE_ID.items() if dst == IGNORE}
+    return {IGNORE} | {src for src, dst in scheme.native.items() if dst == IGNORE}
 
 
-def _print_coverage(per_split: dict[str, dict]) -> None:
+def _print_coverage(per_split: dict[str, dict], scheme: Scheme) -> None:
     splits = list(per_split)
-    ignored = _ignored_ids()
+    ignored = _ignored_ids(scheme)
     total_px = {
         s: max(sum(px for tid, px in per_split[s]["pixels"].items() if tid not in ignored), 1)
         for s in splits
@@ -314,7 +363,7 @@ def _print_coverage(per_split: dict[str, dict]) -> None:
     print("\nterrain coverage (% of labelled pixels / images containing the class)")
     header = "".join(f"{s:>22}" for s in splits)
     print(f"{'id':>3}  {'class':<20}{header}")
-    for tid, name in sorted(ID_TO_NAME.items()):
+    for tid, name in sorted(scheme.id_to_name.items()):
         if tid in ignored:
             continue
         cells = ""
@@ -336,9 +385,7 @@ def _print_coverage(per_split: dict[str, dict]) -> None:
         cells = ""
         for s in splits:
             px = sum(
-                per_split[s]["pixels"][tid]
-                for tid, t in INDOOR_TERRAIN_TO_TRAV.items()
-                if t == trav_id
+                per_split[s]["pixels"][tid] for tid, t in scheme.trav.items() if t == trav_id
             )
             cells += f"{100 * px / total_px[s]:>21.2f}%"
         print(f"     {TRAV_NAMES[trav_id]:<20}{cells}")
@@ -360,16 +407,17 @@ def cmd_check(args) -> int:
     if not (root / "images").is_dir():
         raise SystemExit(f"{root}/images not found; see README for the expected layout")
 
+    scheme = SCHEMES[args.scheme]
     splits = args.split or sorted(p.name for p in (root / "images").iterdir() if p.is_dir())
     rep = Report()
-    per_split = {s: check_split(root, s, rep, args.allow_void) for s in splits}
+    per_split = {s: check_split(root, s, rep, args.allow_void, scheme) for s in splits}
     check_sessions(per_split, rep)
 
-    print(f"{root}  splits: {', '.join(splits)}")
+    print(f"{root}  scheme: {scheme.name}  splits: {', '.join(splits)}")
     for s in splits:
         n_sessions = len([x for x in per_split[s]["sessions"] if x != "(flat)"])
         print(f"  {s:<8} {per_split[s]['n_pairs']:>6} frames  {n_sessions:>3} sessions")
-    _print_coverage(per_split)
+    _print_coverage(per_split, scheme)
 
     for msg in rep.warnings:
         print(f"\nWARN  {msg}")
@@ -386,17 +434,30 @@ def cmd_check(args) -> int:
 # ----------------------------------------------------------------------- main
 
 
+def _add_scheme(parser) -> None:
+    parser.add_argument(
+        "--scheme",
+        choices=sorted(SCHEMES),
+        default=DEFAULT_SCHEME,
+        help="which taxonomy to use. retail is the indoor 12 plus display_fixture; "
+        "annotating a shop under the indoor scheme yields data with no fixtures in it "
+        "at all, and nothing downstream would report that",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="hydranet-annotation", description=__doc__)
     sub = ap.add_subparsers(dest="command", required=True)
 
     p_labels = sub.add_parser("labels", help="emit the CVAT label schema for the 12 classes")
     p_labels.add_argument("--out", help="write JSON here instead of stdout")
+    _add_scheme(p_labels)
     p_labels.set_defaults(func=cmd_labels)
 
     p_check = sub.add_parser("check", help="verify an annotated dataset against the contract")
     p_check.add_argument("root", help="dataset root, containing images/ and annotations/")
     p_check.add_argument("--split", action="append", help="check only this split (repeatable)")
+    _add_scheme(p_check)
     p_check.add_argument(
         "--allow-void",
         action="store_true",

@@ -138,7 +138,16 @@ that contract a machine can check:
 ```bash
 hydranet-annotation labels --out cvat_labels.json   # paste into CVAT: project → Raw labels
 hydranet-annotation check  datasets/site_a          # exit 1 on any violation below
+
+# annotating a shop: the indoor 12 plus display_fixture
+hydranet-annotation labels --scheme retail --out cvat_labels_retail.json
+hydranet-annotation check  datasets/store_a --scheme retail
 ```
+
+**Pick the scheme before the first mask is drawn.** A store annotated under the indoor
+taxonomy comes back with no `display_fixture` in it at all — the masks validate, they
+train, and the model learns that shelving is furniture. Nothing downstream reports that,
+because a class that is absent from the data looks exactly like a class that is rare.
 
 `labels` generates the class list from the same `label_maps_indoor.py` that training reads,
 with the same colours the inference overlays use — so nobody types an id twice, and a mask
