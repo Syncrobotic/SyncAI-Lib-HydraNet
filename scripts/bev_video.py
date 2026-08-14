@@ -41,7 +41,8 @@ from live_view_orin import COCO_NAMES  # noqa: E402
 
 from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402  # isort: skip
 from syncai_hydranet.config import load_config  # noqa: E402
-from syncai_hydranet.geometry.bev import IGNORE, BevGrid, scene  # noqa: E402
+from syncai_hydranet.geometry import bev3d  # noqa: E402
+from syncai_hydranet.geometry.bev import IGNORE, BevGrid, project_mask, scene  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera, GroundPlane  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
@@ -50,6 +51,7 @@ from syncai_hydranet.utils.visualize import (  # noqa: E402
     crop_box,
     overlay,
     preprocess,
+    terrain_palette,
 )
 
 CELL_RGB = {0: (224, 72, 60), 1: (250, 200, 40), 2: (40, 220, 90)}
@@ -145,6 +147,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ap.add_argument("--vfov", type=float, default=55.0, metavar="DEG")
     ap.add_argument("--range", type=float, default=9.0, metavar="M")
+    ap.add_argument(
+        "--flat-bev",
+        action="store_true",
+        help="the original top-down panel instead of the perspective one",
+    )
+    ap.add_argument(
+        "--pose-note",
+        default=None,
+        help="replace the on-frame assumption line, e.g. when the pose came from a fit",
+    )
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
     return ap
 
@@ -157,6 +169,9 @@ def main(argv: list[str] | None = None) -> int:
     ckpt = load_checkpoint(args.checkpoint)
     model.load_state_dict(select_weights(ckpt, args.weights))
     size = cfg["data"]["input_size"]
+    terrain_classes = cfg["data"].get("terrain_classes")
+    n_terrain = cfg["model"]["heads"].get("terrain", {}).get("num_classes")
+    palette = terrain_palette(terrain_classes, n_terrain)
 
     src_w, src_h, src_fps = probe(args.input)
     grid = BevGrid(z_max=args.range)
@@ -174,8 +189,15 @@ def main(argv: list[str] | None = None) -> int:
         with torch.no_grad():
             out = model.predict(x.to(device), score_thr=args.score_thr)
         x0, y0, cw, ch = region
+        base = canvas.crop((x0, y0, x0 + cw, y0 + ch))
         trav = crop_box(out["traversability"][0].cpu().numpy(), region)
-        view = overlay(canvas.crop((x0, y0, x0 + cw, y0 + ch)), trav, TRAV_COLORS)
+        view = overlay(base, trav, TRAV_COLORS)
+        terrain = None
+        if "terrain" in out:
+            terrain = crop_box(out["terrain"][0].cpu().numpy(), region)
+            terrain_view = overlay(base, terrain, palette)
+        else:
+            terrain_view = base.copy()
 
         # The mask is in letterboxed coordinates; the camera model must match it.
         cam = Camera.from_vfov(trav.shape[0], trav.shape[1], args.vfov)
@@ -194,21 +216,75 @@ def main(argv: list[str] | None = None) -> int:
             names=dict(enumerate(COCO_NAMES)),
         )
         bev = free_space_map(np.asarray(bev), grid)
-        panel = render_bev(bev, grid, payload["objects"], view.height)
 
-        out_w = (view.width + panel.width + 8) // 2 * 2
-        out_h = view.height // 2 * 2
-        out_img = Image.new("RGB", (out_w, out_h), PANEL_BG)
-        out_img.paste(view, (0, 0))
-        out_img.paste(panel, (view.width + 8, 0))
+        # Detections belong on the camera view too: three heads, three things to see.
+        dv = ImageDraw.Draw(view)
+        if boxes is not None:
+            for bx, lab, sc in zip(
+                boxes, det["labels"].cpu().numpy(), det["scores"].cpu().numpy(), strict=True
+            ):
+                dv.rectangle(
+                    [float(bx[0]), float(bx[1]), float(bx[2]), float(bx[3])],
+                    outline=(90, 200, 255),
+                    width=2,
+                )
+                dv.text(
+                    (float(bx[0]) + 3, float(bx[1]) + 2),
+                    f"{COCO_NAMES[int(lab)]} {float(sc):.2f}",
+                    fill=(210, 240, 255),
+                )
+
+        if args.flat_bev:
+            panel = render_bev(bev, grid, payload["objects"], view.height)
+            out_w = (view.width + panel.width + 8) // 2 * 2
+            out_h = view.height // 2 * 2
+            out_img = Image.new("RGB", (out_w, out_h), PANEL_BG)
+            out_img.paste(view, (0, 0))
+            out_img.paste(panel, (view.width + 8, 0))
+        else:
+            terrain_bev = (
+                project_mask(terrain, cam, plane, grid) if terrain is not None else None
+            )
+            col_h = view.height * 2 + 8
+            pw = max(int(col_h * 0.78) // 2 * 2, 2)
+            panel = bev3d.render(
+                bev,
+                terrain_bev,
+                grid,
+                payload["objects"],
+                (pw, col_h),
+                trav_colors=TRAV_COLORS,
+                terrain_colors=palette,
+                bg=PANEL_BG,
+                class_names=terrain_classes,
+            )
+            out_w = (view.width + pw + 8) // 2 * 2
+            out_h = col_h // 2 * 2
+            out_img = Image.new("RGB", (out_w, out_h), PANEL_BG)
+            out_img.paste(view, (0, 0))
+            out_img.paste(terrain_view, (0, view.height + 8))
+            out_img.paste(panel, (view.width + 8, 0))
         d = ImageDraw.Draw(out_img)
+        if not args.flat_bev:
+            # A strip behind the caption: the source clips have their own burnt-in
+            # camera name in the same corner, and two texts on top of each other are
+            # unreadable in exactly the frames someone screenshots.
+            for label, top in (
+                ("traversability + detections", 0),
+                ("terrain", view.height + 8),
+            ):
+                d.rectangle([0, top, 250, top + 18], fill=(0, 0, 0))
+                d.text((6, top + 3), label, fill=(205, 220, 240))
         known = float((bev != IGNORE).mean())
-        d.text(
-            (8, view.height - 18),
+        note = args.pose_note or (
             f"assumed {args.camera_height:.1f} m / {args.pitch:.0f}deg down / "
-            f"{args.vfov:.0f}deg vfov - scale is an assumption, not a measurement",
-            fill=(150, 165, 185),
+            f"{args.vfov:.0f}deg vfov - scale is an assumption, not a measurement"
         )
+        d.rectangle(
+            [0, view.height - 20, min(len(note) * 6 + 10, view.width), view.height],
+            fill=(0, 0, 0),
+        )
+        d.text((6, view.height - 17), note, fill=(165, 180, 200))
         d.text(
             (view.width + 14, 8),
             f"known: {100 * known:.0f}% of the window (the rest is behind something)",

@@ -82,6 +82,39 @@ def place_boxes(boxes: np.ndarray, cam: Camera, plane: GroundPlane) -> np.ndarra
     return np.stack([x, z], axis=-1)
 
 
+def box_extents(boxes: np.ndarray, cam: Camera, plane: GroundPlane) -> np.ndarray:
+    """Detections -> (width_m, height_m) on the floor, NaN where the box cannot be placed.
+
+    Width comes from the two bottom corners, which are both on the plane, so it is as
+    real as the plane is. Height is the top edge's ray evaluated at the base's forward
+    distance -- exact for something standing upright and directly seen, wrong for a
+    leaning object or one whose top is occluded, in the same way and for the same reason
+    as `place_boxes`.
+
+    Sizes are what turns a dot on a map into something a person can recognise, so they
+    belong in the payload rather than in a renderer's guesswork.
+    """
+    boxes = np.asarray(boxes, dtype=float).reshape(-1, 4)
+    if len(boxes) == 0:
+        return np.zeros((0, 2))
+    xl, yt, xr, yb = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
+    x_left, z_left = pixel_to_ground(xl, yb, cam, plane)
+    x_right, z_right = pixel_to_ground(xr, yb, cam, plane)
+    width = np.abs(x_right - x_left)
+
+    u_mid = (xl + xr) / 2
+    rays = np.stack(
+        [(u_mid - cam.cx) / cam.fx, (yt - cam.cy) / cam.fy, np.ones_like(u_mid)], axis=-1
+    )
+    level = rays @ plane.rotation
+    z_base = (z_left + z_right) / 2
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t = z_base / level[..., 2]
+    height = plane.height - t * level[..., 1]
+    height = np.where(np.isfinite(height) & (height > 0), height, np.nan)
+    return np.stack([width, height], axis=-1)
+
+
 def scene(
     mask: np.ndarray,
     cam: Camera,
@@ -102,9 +135,10 @@ def scene(
     objects = []
     if boxes is not None and len(boxes):
         pos = place_boxes(boxes, cam, plane)
+        ext = box_extents(boxes, cam, plane)
         labels = np.asarray(labels).reshape(-1)
         scores = np.asarray(scores).reshape(-1) if scores is not None else np.ones(len(pos))
-        for (x, z), lab, sc in zip(pos, labels, scores, strict=True):
+        for (x, z), (bw, bh), lab, sc in zip(pos, ext, labels, scores, strict=True):
             if not (np.isfinite(x) and np.isfinite(z)):
                 continue
             objects.append(
@@ -112,6 +146,11 @@ def scene(
                     "x_m": round(float(x), 3),
                     "z_m": round(float(z), 3),
                     "range_m": round(float(np.hypot(x, z)), 3),
+                    # None rather than a filler: a renderer that substitutes its own
+                    # default should have to say so, not inherit a number that looks
+                    # measured.
+                    "width_m": round(float(bw), 3) if np.isfinite(bw) else None,
+                    "height_m": round(float(bh), 3) if np.isfinite(bh) else None,
                     "label": int(lab),
                     "name": (names or {}).get(int(lab), str(int(lab))),
                     "score": round(float(sc), 4),
