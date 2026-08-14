@@ -108,7 +108,10 @@ data:
   workers: 4
 
 train:
+  # Same inherited-lr bug as hydranet_indoor.yaml: the base's 2.0e-4 is set for its
+  # batch of 16, so a batch of 8 has to bring its own lr down with it.
   batch_size: 8
+  lr: 1.0e-4
 
   # A shop robot's expensive mistakes are: walking into a glass storefront, walking
   # into a display, and slipping on a mopped floor. Two of those are `blocked`, so the

@@ -211,6 +211,29 @@ primary_metric: IoU/traversability/00_blocked
 A typo here aborts the run and lists the valid keys — deliberately, because the alternative
 is discovering after 14 hours that you selected on the wrong quantity.
 
+### A default that is always overridden is not a default
+
+Every run this project has produced was launched with `--set train.batch_size=48
+train.lr=6.0e-4 train.amp_dtype=bfloat16 ...`. The values sitting in the YAML files were
+therefore never the values that trained anything, and two of them had drifted into being
+wrong without a single symptom.
+
+**The learning rate does not travel alone.** Our runs all sit on `lr = batch_size ×
+1.25e-5` — 48 → 6.0e-4, 32 → 4.0e-4, 16 → 2.0e-4. `hydranet_indoor.yaml` lowered
+`batch_size` to 8 for laptops and inherited the base's `2.0e-4`, which had been chosen
+for a batch of 16. The config asked for double the rate of every run we have ever done.
+Nobody could see it, because nobody ever ran it.
+
+**The precision nothing was trained in.** No config set `amp_dtype`; the code fell back
+to `float16`; all nine runs used bfloat16 from the command line. So the one path a
+newcomer takes — `hydranet-train --config` — used a precision we have never trained in,
+on a detection loss whose one AMP bug is reachable only under autocast.
+
+Both are fixed, and `tests/test_config_defaults.py` now checks the shipped configs
+rather than trusting them. The transferable part: if you find yourself overriding the
+same key on every launch, the file is no longer describing your experiment, and the
+gap is only ever discovered by whoever runs it without your command line.
+
 ### Random train/val splits will lie to you
 
 RUGD and RELLIS ship no official split, and your own footage certainly does not. If you split

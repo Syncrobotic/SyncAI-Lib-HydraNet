@@ -76,4 +76,8 @@ data:
   workers: 4                      # one loader per dataset, so keep this modest
 
 train:
+  # Halving the base's batch without halving its lr left this config asking for twice
+  # the effective rate of every run in runs/ -- invisible because each of those runs
+  # passed batch_size=48 lr=6.0e-4 on the command line and never read these two.
   batch_size: 8
+  lr: 1.0e-4

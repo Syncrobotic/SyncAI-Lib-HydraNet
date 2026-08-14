@@ -18,7 +18,12 @@ from ..data.fingerprint import fingerprint_dataset
 from ..data.multitask import MultiTaskLoader
 from ..models.hydranet import build_model
 from ..utils.checkpoint import CKPT_FORMAT, load_checkpoint
-from ..utils.device import pick_device, supports_amp, supports_pinned_memory
+from ..utils.device import (
+    pick_device,
+    supports_amp,
+    supports_bfloat16,
+    supports_pinned_memory,
+)
 from ..utils.logger import get_logger
 from ..utils.runmeta import append_metrics, resolve_out_dir, write_run_meta
 from ..utils.seeding import (
@@ -246,7 +251,17 @@ class Trainer:
         )
 
         self.amp = bool(tcfg.get("amp", True)) and supports_amp(self.device)
-        self.amp_dtype = resolve_amp_dtype(str(tcfg.get("amp_dtype", "float16")))
+        # bfloat16, not float16, because that is what every run this project has
+        # produced was actually trained in -- all of them passing it on the command
+        # line while the default here said otherwise.
+        self.amp_dtype = resolve_amp_dtype(str(tcfg.get("amp_dtype", "bfloat16")))
+        if self.amp and self.amp_dtype is torch.bfloat16 and not supports_bfloat16(self.device):
+            raise ValueError(
+                "train.amp_dtype=bfloat16 needs an Ampere-or-newer CUDA device; this "
+                f"one ({torch.cuda.get_device_name(self.device)}) does not support it. "
+                "Set train.amp_dtype=float16 explicitly -- no run in this project has "
+                "used fp16, so treat its first results as unvalidated."
+            )
         self.scaler = torch.amp.GradScaler(enabled=needs_grad_scaler(self.amp, self.amp_dtype))
         self.grad_clip = float(tcfg.get("grad_clip", 0.0))
         if self.accum_steps > 1:
