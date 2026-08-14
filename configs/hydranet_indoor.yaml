@@ -70,6 +70,13 @@ data:
       root: datasets/ADE20K
       split_train: train
       split_val: val
+      # best.pt is selected on val, which makes val an optimistic estimate of itself.
+      # test is written by `hydranet-prepare-ade20k --test-fraction 0.5` and nothing in
+      # training ever reads it. Report final numbers with:
+      #   hydranet-eval --config ... --checkpoint ... --split test
+      # Note this is same-distribution held-out data, not a field test: ADE20K is web
+      # photography, so it bounds generalisation to ADE20K, not to our sites.
+      split_test: test
       label_map: ade20k_indoor
       supervises: [traversability, terrain]
       sample_ratio: 1.0
@@ -107,13 +114,20 @@ train:
   scheduler: cosine
   amp: true
   grad_clip: 10.0
-  ema: true                       # set false for short runs, see docs/TRAIN_MACOS.md
+  ema: true                       # decay ramps up over train.ema_warmup_steps, so
+                                  # short runs are safe too; see docs/TRAIN_MACOS.md
   ema_decay: 0.9998
   log_interval: 50
   val_interval: 1
-  save_interval: 1
+
+  # The single number that decides best.pt. Any key validation emits works, so to
+  # select on the class that actually strands a robot indoors, use for example
+  #   primary_metric: IoU/traversability/00_blocked
+  #   primary_metric: IoU/terrain/08_glass
+  # mIoU across the traversability head is the balanced default; an average across
+  # heads is not, because mIoU and mAP do not live on the same scale.
+  primary_metric: traversability_mIoU
 
 export:
   opset: 17
   input_size: [512, 640]
-  half: true

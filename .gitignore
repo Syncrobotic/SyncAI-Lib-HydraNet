@@ -13,7 +13,10 @@ htmlcov/
 .venv/
 .env
 
-# Datasets and experiment outputs are versioned with DVC, never with git.
+# Datasets and experiment outputs never go in git. Datasets are not versioned at all;
+# instead each run fingerprints the splits it read (file count, total size, digest of
+# the path/size listing) into runs/<experiment>/meta.json, so a checkpoint can always
+# be traced to the data behind it. See data/fingerprint.py.
 datasets/
 runs/
 *.pt
@@ -29,3 +32,11 @@ assets/*.mov
 .vscode/
 .idea/
 .DS_Store
+
+# Credentials. Keys live in ~/.gcp/, outside the repo; these patterns are a second
+# line of defence so a stray copy cannot be committed by accident.
+*-sa.json
+*service-account*.json
+*credentials*.json
+gcp-key*.json
+.gcp/

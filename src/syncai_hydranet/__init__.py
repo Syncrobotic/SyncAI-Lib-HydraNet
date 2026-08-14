@@ -12,8 +12,17 @@ few percent more compute while reusing everything already paid for.
 """
 
 from .config import Config, load_config
+from .config_schema import ConfigError, check_config
 from .models.hydranet import HydraNet, build_model
 
 __version__ = "0.1.0"
 
-__all__ = ["Config", "HydraNet", "__version__", "build_model", "load_config"]
+__all__ = [
+    "Config",
+    "ConfigError",
+    "HydraNet",
+    "__version__",
+    "build_model",
+    "check_config",
+    "load_config",
+]

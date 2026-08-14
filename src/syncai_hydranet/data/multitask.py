@@ -16,6 +16,8 @@ from collections.abc import Iterator
 import torch
 from torch.utils.data import DataLoader
 
+from ..utils.seeding import loader_generator, worker_init_fn
+
 
 def collate(batch: list[dict]) -> dict:
     images = torch.stack([b["image"] for b in batch])
@@ -31,6 +33,8 @@ def collate(batch: list[dict]) -> dict:
     out = {"image": images, "targets": targets, "supervises": supervises}
     if "image_id" in batch[0]:
         out["image_ids"] = [b["image_id"] for b in batch]
+    if "geom" in batch[0]:
+        out["geoms"] = [b["geom"] for b in batch]
     return out
 
 
@@ -62,8 +66,14 @@ class MultiTaskLoader:
                 collate_fn=collate,
                 pin_memory=pin_memory,
                 persistent_workers=workers > 0,
+                # Shuffling and augmentation are seeded per loader rather than left to
+                # the global RNG, so the sample order does not depend on how much other
+                # code happened to draw from torch beforehand. Offsetting by index keeps
+                # two datasets from marching in lockstep.
+                generator=loader_generator(seed + i),
+                worker_init_fn=worker_init_fn,
             )
-            for ds in datasets
+            for i, ds in enumerate(datasets)
         ]
         self.ratios = ratios
         self.rng = random.Random(seed)

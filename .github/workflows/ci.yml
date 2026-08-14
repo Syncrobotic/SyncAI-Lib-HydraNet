@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # dev is where the work happens; gating only main means a broken commit is
+    # discovered at merge time, long after it was cheap to fix.
+    branches: [main, stage, dev]
   pull_request:
 
 concurrency:
@@ -34,5 +36,6 @@ jobs:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
       - run: uv sync --group dev --extra export
-      # Smoke tests run the full model on random tensors: no dataset needed.
-      - run: uv run pytest --cov --cov-report=term-missing
+      # No dataset needed: the model runs on random tensors, the dataset tests build a
+      # fixture in tmp_path, and test_overfit.py memorises one synthetic batch on CPU.
+      - run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=68

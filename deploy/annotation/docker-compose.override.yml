@@ -1,0 +1,23 @@
+# Local policy for the CVAT stack, layered over upstream's docker-compose.yml.
+#
+# Upstream's file is vendor-maintained and is never edited: `git -C <src> status` staying
+# empty is then a fact anyone can check, and upgrading is a tag change rather than a
+# merge. Everything this deployment does differently lives here.
+#
+# Used via:  docker compose -f <src>/docker-compose.yml -f docker-compose.override.yml ...
+# which cvat.sh does for you.
+
+name: cvat
+
+services:
+  traefik:
+    # Upstream publishes 8080 on every interface. This VM has no public IP and reaching
+    # it means an IAP tunnel to loopback, so binding to 0.0.0.0 buys nothing and would
+    # expose CVAT to anything else on the VPC the day a route or a peering appears.
+    # Site footage is customer premises; that day should find the port already closed.
+    ports: !override
+      - "127.0.0.1:8080:8080"
+
+  cvat_server:
+    # A job that dies with the annotator's tunnel is work done twice.
+    restart: always
