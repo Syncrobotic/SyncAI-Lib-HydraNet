@@ -13,6 +13,10 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
         args: [--maxkb=1024]   # datasets and checkpoints stay out of git entirely
+        # README figures are animations and do not fit in 1 MB at a size worth looking
+        # at; assets/retail_cctv_3heads.gif is 3.9 MB. Narrow on purpose -- the guard
+        # is here for datasets and checkpoints, and this does not loosen it for those.
+        exclude: ^assets/.*\.gif$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.13.0

@@ -23,6 +23,32 @@ footage from a robot's camera. Point the same model at a ceiling and a quarter o
 back "go". The gap is data, not architecture; [docs/METHODOLOGY.md](docs/METHODOLOGY.md)
 says what to collect and in what order.
 
+### The deployment that actually exists: fixed ceiling CCTV in a shop
+
+![all three heads and the floor raised into a scene](assets/retail_cctv_3heads.gif)
+
+All three heads on one frame, on a site clip **held out of training**: traversability with
+detections top left, the 13-class terrain map bottom left, and the floor rebuilt as a scene
+on the right. The panel raises the edge of the free space into a wall and colours it by what
+the terrain head says is standing there — purple display fixtures, grey wall, pink people —
+which is the part a flat occupancy map cannot express: it marks the cell blocked and stops.
+Object boxes get their footprint from the two bottom corners projected onto the floor and
+their height from the top edge's ray, so those are derived rather than nominal.
+
+**Three things in this picture are weaker than they look.**
+The camera pose was recovered by fitting 287 detected people against a 1.70 m adult, and the
+fit is a *family*, not a point — the residual falls monotonically as the assumed field of
+view widens, because a pinhole model absorbs this lens's barrel distortion. Shape, direction
+and the ordering of ranges hold; absolute distance does not, and one tape measure on site
+would settle it.
+The **wall heights are drawn, not measured** — a wall is 2.4 m tall here because walls are
+about that. Only the position of the boundary comes from the mask.
+And the floor itself is not solved: over 610 frames of this fixed camera the model returns
+`go` consistently for only **12.7%** of the frame, while **16.7%** flickers between walkable
+and blocked — concentrated on the brighter, more specular near-field tiles, which is the
+polished-floor failure [docs/RETAIL_SCOPE.md](docs/RETAIL_SCOPE.md) predicts. No public
+dataset fixes that one; a fixed camera makes it one annotated polygon per view.
+
 ```mermaid
 flowchart TB
     IMG(["image · 3 × 512 × 640"])
