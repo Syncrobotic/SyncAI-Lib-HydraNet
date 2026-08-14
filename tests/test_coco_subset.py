@@ -147,3 +147,51 @@ def test_duplicate_class_names_are_rejected():
 
 def test_no_subset_still_means_all_eighty():
     check_config(base_cfg(80, None))
+
+
+# ------------------------------------------------- scoring, separately from training
+
+
+def test_score_classes_narrows_scoring_without_touching_the_labels(tmp_path):
+    """The whole point: an 80-class checkpoint keeps its output space and its label
+    numbering, and is scored over the same categories as a narrower model."""
+    ds = CocoDetDataset(
+        str(write_coco(tmp_path)),
+        "val2017",
+        (64, 64),
+        train=False,
+        score_classes=["person", "chair"],
+    )
+    assert ds.cat_ids == [1, 24, 62], "the head still covers every category"
+    assert ds.label_to_cat == {0: 1, 1: 24, 2: 62}, "numbering must not shift"
+    assert ds.score_cat_ids == [1, 62], "but mAP is taken over the subset"
+    assert len(ds) == 3, "no images are dropped: scoring does not change the data"
+
+
+def test_score_classes_defaults_to_everything_trained(tmp_path):
+    ds = CocoDetDataset(str(write_coco(tmp_path)), "val2017", (64, 64), train=False)
+    assert ds.score_cat_ids == ds.cat_ids
+
+
+def test_scoring_a_class_the_head_never_learned_is_an_error(tmp_path):
+    with pytest.raises(ValueError, match="not trained by this dataset"):
+        CocoDetDataset(
+            str(write_coco(tmp_path)),
+            "val2017",
+            (64, 64),
+            train=False,
+            classes=["person", "chair"],
+            score_classes=["person", "zebra"],
+        )
+
+
+def test_score_classes_may_be_a_subset_of_a_trained_subset(tmp_path):
+    ds = CocoDetDataset(
+        str(write_coco(tmp_path)),
+        "val2017",
+        (64, 64),
+        train=False,
+        classes=["person", "chair"],
+        score_classes=["chair"],
+    )
+    assert ds.cat_ids == [1, 62] and ds.score_cat_ids == [62]

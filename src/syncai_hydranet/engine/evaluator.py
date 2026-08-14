@@ -169,7 +169,7 @@ def evaluate(
 
             if model.det_head is not None and model.det_head_name in sup:
                 coco_gts[name] = ds.coco
-                det_cat_ids[name] = list(getattr(ds, "cat_ids", []) or [])
+                det_cat_ids[name] = list(getattr(ds, "score_cat_ids", None) or [])
                 results_for_ds = det_results.setdefault(name, [])
                 dets = model.det_head.decode(
                     out["det_cls"],

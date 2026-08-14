@@ -133,6 +133,12 @@ DATASET = {
     # The head's num_classes must match the length, and the check below enforces it --
     # a mismatch trains every box against the wrong channel and still converges.
     "classes": Spec((list,)),
+    # COCO only, evaluation: score mAP over these categories while leaving the head and
+    # the label mapping alone. Separate from `classes` because they are different jobs:
+    # narrowing what a head learns changes its output space, narrowing what is scored
+    # does not. Using `classes` for scoring would renumber the labels under a checkpoint
+    # that was trained with the old numbering, and report a confident wrong number.
+    "score_classes": Spec((list,)),
 }
 
 TRAIN = {

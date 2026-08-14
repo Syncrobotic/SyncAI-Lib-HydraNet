@@ -172,6 +172,7 @@ class CocoDetDataset(Dataset):
         letterbox: bool = False,
         augment: dict | None = None,
         classes: list[str] | None = None,
+        score_classes: list[str] | None = None,
     ):
         from pycocotools.coco import COCO
 
@@ -197,6 +198,23 @@ class CocoDetDataset(Dataset):
         self.cat_ids = cat_ids
         self.cat_to_label = {c: i for i, c in enumerate(cat_ids)}  # contiguous, 0-based
         self.label_to_cat = {i: c for c, i in self.cat_to_label.items()}
+
+        # Scoring can be narrowed without touching the head. This is how an 80-class
+        # checkpoint is compared against a narrower one: both are scored over the same
+        # categories, so the comparison is not just a smaller denominator.
+        if score_classes:
+            score_ids = sorted(self.coco.getCatIds(catNms=list(score_classes)))
+            found = {c["name"] for c in self.coco.loadCats(score_ids)}
+            missing = [n for n in score_classes if n not in found]
+            if missing:
+                raise ValueError(f"not COCO category names: {', '.join(sorted(missing))}")
+            outside = sorted(set(score_ids) - set(cat_ids))
+            if outside:
+                names = ", ".join(c["name"] for c in self.coco.loadCats(outside))
+                raise ValueError(f"score_classes not trained by this dataset: {names}")
+            self.score_cat_ids = score_ids
+        else:
+            self.score_cat_ids = cat_ids
 
         # Images whose only annotations were dropped carry no signal for this subset, and
         # would train the head that everything in them is background.
@@ -299,5 +317,6 @@ def build_dataset(
             letterbox=letterbox,
             augment=augment,
             classes=dcfg.get("classes"),
+            score_classes=dcfg.get("score_classes"),
         )
     raise ValueError(f"unknown dataset type: {dcfg['type']}")
