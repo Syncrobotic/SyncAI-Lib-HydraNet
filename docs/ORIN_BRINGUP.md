@@ -234,6 +234,53 @@ have shown it.
 That is what this stream is for. Curves tell you the loss is falling; only the picture tells
 you the model is calling a ceiling a floor.
 
+## 9. On a robot that is already running: subscribe, do not take the camera
+
+`10.8.140.130` is not a bench rig. It runs nav2, motion, a RealSense node and a speech
+stack, and its D435I is held by `realsense2_camera_node`. Opening `/dev/video*` there fails
+with `Device or resource busy`, and the fix is not to free the device — taking the camera
+stops the robot.
+
+The node already publishes what is needed, including depth registered to the colour frame:
+
+```
+/camera/camera/color/image_raw                    bgr8,  1280x720 @ 15 Hz
+/camera/camera/aligned_depth_to_color/image_raw   16UC1, millimetres
+```
+
+```bash
+source /opt/ros/humble/setup.bash
+python3 scripts/probe_ros_realsense.py --weights <state_dict>.pt \
+    --config configs/hydranet_indoor.yaml --frames 40 --save 6 --range 5.0
+```
+
+It subscribes with `qos_profile_sensor_data` (the node publishes best-effort; a default
+reliable subscription receives nothing and looks like a dead topic), runs the checkpoint in
+PyTorch, and gates walkable on metric depth.
+
+### What it measured, and why the engine still matters
+
+| stage | ms | share |
+|---|---|---|
+| wait for the next frame | 6.02 | 4% |
+| preprocess (1280×720 letterbox, PIL/CPU) | 31.31 | 19% |
+| **inference (PyTorch eager, CUDA)** | **122.05** | **74%** |
+| postprocess | 6.14 | 4% |
+| **total** | **165.51** | **6.0 FPS** |
+
+The same network through TensorRT on `.124` runs in **5.12 ms**. PyTorch eager is ~24×
+slower here, and it also logs `cudnnException: CUDNN_STATUS_NOT_SUPPORTED` and falls back to
+a slower path. Use this script to *see* what the model does on a real camera; build an engine
+before quoting any number to anyone.
+
+### One number worth keeping
+
+The script reports `go where depth is invalid` — pixels the model calls walkable and the
+depth sensor returns nothing for. On a first run that was **12.7% of all `go` pixels**.
+Glass, mirrors and specular floor reflections are exactly what produces both halves of that
+condition at once, so it is a cheap standing check for the failure this deployment fears
+most: a surface the camera reads as an open path and the depth sensor cannot see either.
+
 ---
 
 ## Checklist
