@@ -98,9 +98,22 @@ LOSS_BY_TYPE = {
 DATA = {
     "input_size": Spec((list,), required=True),
     "letterbox": Spec((bool,)),
+    # Augmentation strength is part of what produced a checkpoint, so it is declared
+    # here and therefore recorded in meta.json. Omitted keys fall back to
+    # transforms.AUGMENT_DEFAULTS, which are the values this project trained on before
+    # they were configurable.
+    "augment": Spec((dict,)),
     "terrain_classes": Spec((list,)),
     "datasets": Spec((list,), required=True),
     "workers": Spec((int,)),
+}
+
+AUGMENT = {
+    "scale_range": Spec((list, tuple)),
+    "flip_p": Spec(NUMBER),
+    "brightness": Spec(NUMBER),
+    "contrast": Spec(NUMBER),
+    "saturation": Spec(NUMBER),
 }
 
 DATASET = {
@@ -116,6 +129,16 @@ DATASET = {
     "label_map": Spec((str,)),
     "label_format": Spec((str,), choices=("auto", "color", "id", "rugd_color")),
     "sample_ratio": Spec(NUMBER),
+    # COCO only: train the head on this subset of category names instead of all 80.
+    # The head's num_classes must match the length, and the check below enforces it --
+    # a mismatch trains every box against the wrong channel and still converges.
+    "classes": Spec((list,)),
+    # COCO only, evaluation: score mAP over these categories while leaving the head and
+    # the label mapping alone. Separate from `classes` because they are different jobs:
+    # narrowing what a head learns changes its output space, narrowing what is scored
+    # does not. Using `classes` for scoring would renumber the labels under a checkpoint
+    # that was trained with the old numbering, and report a confident wrong number.
+    "score_classes": Spec((list,)),
 }
 
 TRAIN = {
@@ -137,6 +160,9 @@ TRAIN = {
     "deterministic": Spec((bool,)),
     "cudnn_benchmark": Spec((bool,)),
     "tf32": Spec((bool,)),
+    # NHWC weights and activations. Off by default so that resuming an in-flight run
+    # after a code change does not silently move it to a different kernel set.
+    "channels_last": Spec((bool,)),
     "grad_clip": Spec(NUMBER),
     "ema": Spec((bool,)),
     "ema_decay": Spec(NUMBER),
@@ -288,6 +314,49 @@ def _check_class_counts(rep: _Report, cfg: dict) -> None:
         )
 
 
+def _check_detection_subset(rep: _Report, cfg: dict) -> None:
+    """A COCO subset has to match the detection head's width.
+
+    Nothing downstream would complain: the head keeps 80 channels, every box trains
+    against the channel its contiguous index happens to land on, and the loss falls.
+    The run only looks wrong at the point someone reads a class name off a prediction.
+    """
+    head = cfg.get("model", {}).get("heads", {}).get("detection")
+    if not isinstance(head, dict) or not isinstance(head.get("num_classes"), int):
+        return
+    for ds in cfg.get("data", {}).get("datasets") or []:
+        if not isinstance(ds, dict) or ds.get("type") != "coco":
+            continue
+        subset = ds.get("classes")
+        if isinstance(subset, list) and len(subset) != head["num_classes"]:
+            rep.errors.append(
+                f"dataset {ds.get('name')!r} lists {len(subset)} classes but "
+                f"model.heads.detection.num_classes is {head['num_classes']}"
+            )
+        if isinstance(subset, list) and len(subset) != len(set(subset)):
+            rep.errors.append(f"dataset {ds.get('name')!r}: duplicate entries in classes")
+
+
+def _check_channels_last(rep: _Report, cfg: dict) -> None:
+    """NHWC pays only under autocast.
+
+    Measured on an RTX PRO 6000, batch 48 at 512x640: bf16 153.2 -> 121.1 ms (-21%),
+    fp32 219.6 -> 220.9 ms (+0.6%). NHWC is the layout tensor cores want; fp32
+    convolutions run on CUDA cores and are indifferent. Asking
+    for it without AMP is not an error, it just buys nothing, and someone reading a
+    benchmark later deserves to know which of the two knobs did the work.
+    """
+    train = cfg.get("train")
+    if not isinstance(train, dict) or not train.get("channels_last"):
+        return
+    if not train.get("amp", True):
+        rep.warnings.append(
+            "train.channels_last is set but train.amp is false: NHWC was measured at "
+            "+0.6% (i.e. nothing) without autocast, because fp32 convolutions do not "
+            "use tensor cores"
+        )
+
+
 def check_config(cfg: dict) -> list[str]:
     """Validate a config. Returns non-fatal warnings; raises ConfigError otherwise."""
     rep = _Report()
@@ -305,6 +374,8 @@ def check_config(cfg: dict) -> list[str]:
     data = cfg.get("data")
     if isinstance(data, dict):
         _check_section(rep, data, DATA, "data")
+        if isinstance(data.get("augment"), dict):
+            _check_section(rep, data["augment"], AUGMENT, "data.augment")
         _check_size(rep, data.get("input_size"), "data.input_size")
         heads = model.get("heads", {}) if isinstance(model, dict) else {}
         _check_datasets(rep, data, set(heads) if isinstance(heads, dict) else set())
@@ -317,6 +388,8 @@ def check_config(cfg: dict) -> list[str]:
             _check_size(rep, cfg["export"]["input_size"], "export.input_size")
 
     _check_class_counts(rep, cfg)
+    _check_detection_subset(rep, cfg)
+    _check_channels_last(rep, cfg)
 
     if rep.errors:
         listing = "\n".join(f"  - {e}" for e in rep.errors)

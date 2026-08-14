@@ -53,6 +53,20 @@ def _tower(ch: int, n: int) -> nn.Sequential:
     return nn.Sequential(*layers)
 
 
+# Two score thresholds, because they answer different questions and a single default
+# would be wrong for one of them.
+#
+# COCOeval integrates precision over the whole recall curve, so discarding low-scoring
+# boxes before it runs truncates that curve and *lowers* mAP. 0.05 is the convention
+# every COCO codebase uses; it is a metric setting and never a deployment one.
+#
+# Anything a human or a planner looks at wants the opposite: few boxes, mostly right.
+# 0.30 on this model is already generous -- its best detections score around 0.15 -- but
+# a number chosen per call site is how four call sites ended up with four values.
+SCORE_THR_EVAL = 0.05
+SCORE_THR_VIEW = 0.30
+
+
 class FCOSHead(nn.Module):
     def __init__(
         self,
@@ -156,7 +170,14 @@ class FCOSHead(nn.Module):
 
     @torch.no_grad()
     def decode(
-        self, cls_out, reg_out, ctr_out, score_thr=0.3, nms_thr=0.6, max_det=100, img_size=None
+        self,
+        cls_out,
+        reg_out,
+        ctr_out,
+        score_thr=SCORE_THR_VIEW,
+        nms_thr=0.6,
+        max_det=100,
+        img_size=None,
     ):
         device = cls_out[0].device
         shapes = [c.shape[-2:] for c in cls_out]

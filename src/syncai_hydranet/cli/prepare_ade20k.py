@@ -123,13 +123,32 @@ def main(argv: list[str] | None = None) -> None:
         # ships no test annotations of its own.
         splitting = out_split == "val" and args.test_fraction > 0
         targets = [out_split, "test"] if splitting else [out_split]
+
+        # A test split left by an earlier run has to be cleared even when this run is
+        # not writing one. Otherwise re-running without --test-fraction (whose default
+        # is 0, so simply omitting it is enough) rebuilds val over every kept image
+        # while the old test directory survives untouched -- putting the entire
+        # held-out split back inside validation, silently. Measured on a 20-image
+        # fixture: 9 of 9 test images reappeared in val. That is the contamination
+        # `_is_test` exists to prevent, arriving through the directory instead.
+        to_clear = list(targets)
+        if out_split == "val" and not splitting:
+            to_clear.append("test")
+
         dirs = {}
-        for t in targets:
+        for t in to_clear:
             img_dir, ann_dir = dst / "images" / t, dst / "annotations" / t
+            emptied = 0
             for d in (img_dir, ann_dir):
                 d.mkdir(parents=True, exist_ok=True)
                 for old in d.iterdir():
                     old.unlink()
+                    emptied += 1
+            if t not in targets and emptied:
+                print(
+                    f"  removed a stale test split ({emptied // 2} images) left by an "
+                    f"earlier --test-fraction run; pass --test-fraction to rebuild it"
+                )
             dirs[t] = (img_dir, ann_dir)
 
         kept, kept_scenes = Counter(), Counter()

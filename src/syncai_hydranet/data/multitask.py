@@ -77,9 +77,27 @@ class MultiTaskLoader:
         ]
         self.ratios = ratios
         self.rng = random.Random(seed)
-        self.steps_per_epoch = sum(
+        self.steps = [
             int(len(loader) * r) for loader, r in zip(self.loaders, ratios, strict=True)
-        )
+        ]
+        # A dataset whose share rounds to zero is never sampled, so the heads it
+        # supervises are trained on nothing -- while the config still lists it, and the
+        # export guard (which reads the config, not the schedule) still lets the model
+        # ship. The head then emits confident output from initial weights. Refusing here
+        # is the only place that can tell the difference.
+        starved = [
+            f"{name} (ratio {r} x {len(loader)} batches -> 0)"
+            for name, loader, r, n in zip(names, self.loaders, ratios, self.steps, strict=True)
+            if n == 0
+        ]
+        if starved:
+            raise ValueError(
+                "these datasets would contribute no batches at all: "
+                + "; ".join(starved)
+                + ". Raise sample_ratio, or remove the dataset -- but then the heads it "
+                "supervises are unsupervised, and export will refuse the model."
+            )
+        self.steps_per_epoch = sum(self.steps)
 
     def __len__(self) -> int:
         return self.steps_per_epoch
@@ -87,8 +105,8 @@ class MultiTaskLoader:
     def __iter__(self) -> Iterator[dict]:
         iters = [iter(loader) for loader in self.loaders]
         schedule = []
-        for i, (loader, r) in enumerate(zip(self.loaders, self.ratios, strict=True)):
-            schedule += [i] * int(len(loader) * r)
+        for i, n in enumerate(self.steps):
+            schedule += [i] * n
         self.rng.shuffle(schedule)
         for i in schedule:
             try:

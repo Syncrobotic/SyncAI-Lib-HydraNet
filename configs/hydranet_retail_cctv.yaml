@@ -1,0 +1,91 @@
+# =============================================================================
+# SyncAI-Lib-HydraNet: retail, ceiling CCTV.
+#
+# The retail deployment turned out to be fixed ceiling cameras looking down, not a
+# robot's own camera. That changes two things and nothing else, so this inherits
+# hydranet_retail.yaml and states only the difference.
+#
+#   1. input_size 512x896   the source is 16:9
+#   2. a target-domain dataset of the site's own frames, pseudo-labelled
+#
+# Everything about the taxonomy, the losses and the COCO ratio is unchanged.
+# =============================================================================
+_base_: hydranet_retail.yaml
+
+experiment: hydranet_retail_cctv
+output_dir: runs/hydranet_retail_cctv
+
+data:
+  # 1920x1080 letterboxed into 512x640 leaves 30% of the canvas as grey padding: the
+  # model spends a third of its input, and a third of its compute, on nothing. At
+  # 512x896 the same frame fills 98%. Both are divisible by 128, so P7 stays exact.
+  #
+  # This costs 1.4x the pixels per image. It is worth it here because the wasted 30%
+  # was pure loss -- the alternative is not "cheaper", it is "the same compute spent on
+  # padding".
+  input_size: [512, 896]
+
+  datasets:
+    - name: ade20k
+      type: seg_folder
+      root: datasets/ADE20K
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: ade20k_retail
+      supervises: [traversability, terrain]
+      sample_ratio: 1.0
+
+    # The site's own frames, labelled by the model that came before this one, with
+    # everything it was unsure about left as ignore.
+    #
+    # What this can do: adapt the trunk to what these cameras actually look like --
+    # their lighting, their compression, their downward viewpoint, their motion blur.
+    # ADE20K is human-height web photography and none of that is in it.
+    #
+    # What it cannot do, and must not be claimed to: teach a class the model does not
+    # already see. The free-standing display podiums come back unlabelled, so they stay
+    # unlabelled, and self-training reinforces that. Only annotation fixes it.
+    #
+    # And the honest catch: **there is no held-out label on this domain**, so no number
+    # here can say whether it worked. The test split still measures ADE20K. Judge this
+    # change on the clips by eye, and treat any ADE20K movement as the cost side of the
+    # trade rather than the benefit.
+    - name: site_cctv_pseudo
+      type: seg_folder
+      root: datasets/retail_cctv_pseudo
+      split_train: train
+      split_val: val
+      label_map: retail_native
+      supervises: [traversability, terrain]
+      # Oversampled: a few hundred target-domain frames against ADE20K's thousands would
+      # otherwise contribute almost nothing per epoch.
+      sample_ratio: 3.0
+      # Its val split is 8 frames from a third clip this run never trains on -- kept
+      # deliberately tiny, because the evaluator accumulates one confusion matrix per
+      # head across every val set. Those 8 frames therefore *pollute* this run's
+      # terrain and traversability mIoU with agreement-against-the-previous-model, which
+      # is a number that always looks good and means nothing.
+      #
+      # So do not compare this run's training-time mIoU with the baseline's. The
+      # comparable number comes afterwards, from the clean source-domain split:
+      #   hydranet-eval --config configs/hydranet_retail.yaml \
+      #       --checkpoint runs/hydranet_retail_cctv/best.pt --split test
+
+    - name: coco
+      type: coco
+      root: datasets/coco
+      split_train: train2017
+      split_val: val2017
+      supervises: [detection]
+      sample_ratio: 0.1
+
+train:
+  # A fine-tune from the retail baseline, not a run from scratch: the point is to move
+  # the trunk onto this domain, not to relearn the taxonomy. Low LR and few epochs,
+  # because self-training amplifies its own mistakes the longer it runs.
+  epochs: 12
+  batch_size: 16
+  lr: 5.0e-5
+  warmup_iters: 200
+  primary_metric: traversability_mIoU

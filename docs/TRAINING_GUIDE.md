@@ -211,6 +211,29 @@ primary_metric: IoU/traversability/00_blocked
 A typo here aborts the run and lists the valid keys — deliberately, because the alternative
 is discovering after 14 hours that you selected on the wrong quantity.
 
+### A default that is always overridden is not a default
+
+Every run this project has produced was launched with `--set train.batch_size=48
+train.lr=6.0e-4 train.amp_dtype=bfloat16 ...`. The values sitting in the YAML files were
+therefore never the values that trained anything, and two of them had drifted into being
+wrong without a single symptom.
+
+**The learning rate does not travel alone.** Our runs all sit on `lr = batch_size ×
+1.25e-5` — 48 → 6.0e-4, 32 → 4.0e-4, 16 → 2.0e-4. `hydranet_indoor.yaml` lowered
+`batch_size` to 8 for laptops and inherited the base's `2.0e-4`, which had been chosen
+for a batch of 16. The config asked for double the rate of every run we have ever done.
+Nobody could see it, because nobody ever ran it.
+
+**The precision nothing was trained in.** No config set `amp_dtype`; the code fell back
+to `float16`; all nine runs used bfloat16 from the command line. So the one path a
+newcomer takes — `hydranet-train --config` — used a precision we have never trained in,
+on a detection loss whose one AMP bug is reachable only under autocast.
+
+Both are fixed, and `tests/test_config_defaults.py` now checks the shipped configs
+rather than trusting them. The transferable part: if you find yourself overriding the
+same key on every launch, the file is no longer describing your experiment, and the
+gap is only ever discovered by whoever runs it without your command line.
+
 ### Random train/val splits will lie to you
 
 RUGD and RELLIS ship no official split, and your own footage certainly does not. If you split
@@ -233,6 +256,18 @@ hydranet-eval --config ... --checkpoint ... --split test
 We deliberately do not default `split_test` to val. If it is not configured, asking for it
 fails loudly, because a silent fallback here produces an official-looking number that is
 quietly wrong.
+
+And a split stays held out only for as long as the directory it lives in does.
+`hydranet-prepare-ade20k --test-fraction` used to leave an existing `test/` in place when
+re-run without the flag — which defaults to 0, so simply omitting it was enough — while
+rebuilding `val/` over every kept frame. The held-out images ended up in both, silently.
+Fixed, but the general point survives the fix: **rebuilding a dataset can undo a split
+without touching any code**, and nothing downstream can tell. After regenerating, check
+that the splits are still disjoint:
+
+```bash
+comm -12 <(ls datasets/ADE20K/images/val | sort) <(ls datasets/ADE20K/images/test | sort) | wc -l
+```
 
 ### Aspect ratio
 
@@ -325,7 +360,7 @@ difficulty.
 
 ---
 
-*Related: [TRAIN_MACOS.md](TRAIN_MACOS.md) for local development, [HANDOVER.md](HANDOVER.md)
+*Related: [TRAIN_MACOS.md](TRAIN_MACOS.md) for local development, [the CUDA move](journal/2026-08-12-mps-to-cuda.md)
 for moving to a CUDA machine, [DEPLOY_JETSON.md](DEPLOY_JETSON.md) for deployment. The
 architecture diagram and per-component parameter counts are in the
 [README](../README.md).*

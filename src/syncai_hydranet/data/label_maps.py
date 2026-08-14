@@ -78,8 +78,11 @@ RUGD_COLOR_TO_TERRAIN = {
 }
 
 # RELLIS-3D uses integer ids.
-# TODO: entries marked below were inferred and should be checked against the official
-# mapping before training on real RELLIS data.
+#
+# Three of these were inferred rather than read off the official table, and they are
+# listed in RELLIS_UNVERIFIED below. A wrong entry here is not a crash: it relabels a
+# whole class silently, and the run looks normal. Rather than leave that as a comment
+# nobody reads at the point of use, `get_scheme("rellis")` warns and names them.
 RELLIS_ID_TO_TERRAIN = {
     0: TERRAIN["void"],
     1: TERRAIN["dirt"],
@@ -96,11 +99,22 @@ RELLIS_ID_TO_TERRAIN = {
     17: TERRAIN["vehicle_object"],  # person
     18: TERRAIN["building_wall"],  # fence
     19: TERRAIN["tree_bush"],  # bush
-    23: TERRAIN["gravel_mulch"],  # TODO: verify, may be concrete
+    23: TERRAIN["gravel_mulch"],  # unverified, may be concrete
     27: TERRAIN["building_wall"],  # barrier
-    31: TERRAIN["gravel_mulch"],  # TODO: puddle, consider mapping to water
-    33: TERRAIN["gravel_mulch"],  # mud
+    31: TERRAIN["gravel_mulch"],  # unverified: puddle -- water is arguably right
+    33: TERRAIN["gravel_mulch"],  # unverified: mud
     34: TERRAIN["gravel_mulch"],  # rubble
+}
+
+
+# Source ids whose meaning was inferred from the class name rather than confirmed
+# against RELLIS-3D's published table. 31 (puddle) is the one that matters: mapping it
+# to gravel_mulch makes standing water `caution`, while `water` would make it `blocked`
+# -- a safety-relevant difference on a real platform.
+RELLIS_UNVERIFIED = {
+    23: "may be concrete rather than gravel",
+    31: "puddle -> gravel_mulch (caution); water (blocked) may be correct",
+    33: "mud",
 }
 
 
@@ -180,6 +194,22 @@ SCHEMES: dict[str, LabelScheme] = {
 
 
 def get_scheme(name: str) -> LabelScheme:
+    """Look up a scheme, warning about any mapping in it that was never verified.
+
+    The warning fires where the scheme is used rather than where it is defined, because
+    a comment in a table nobody opens does not reach the person about to train on it.
+    """
     if name not in SCHEMES:
         raise ValueError(f"unknown label_map: {name}, available: {list(SCHEMES)}")
+    if name == "rellis":
+        import warnings
+
+        detail = "; ".join(f"{k}: {v}" for k, v in sorted(RELLIS_UNVERIFIED.items()))
+        warnings.warn(
+            f"label_map 'rellis' contains {len(RELLIS_UNVERIFIED)} mappings inferred from "
+            f"class names rather than confirmed against the official table ({detail}). "
+            "A wrong entry relabels a whole class without any error. Confirm them before "
+            "reporting numbers from RELLIS-3D.",
+            stacklevel=2,
+        )
     return SCHEMES[name]

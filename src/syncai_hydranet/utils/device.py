@@ -32,3 +32,15 @@ def supports_amp(device: torch.device) -> bool:
 def supports_pinned_memory(device: torch.device) -> bool:
     """MPS does not support pinned memory; setting it only emits a warning."""
     return device.type == "cuda"
+
+
+def supports_bfloat16(device: torch.device) -> bool:
+    """bf16 needs Ampere or newer; pre-Ampere CUDA cards emulate it, slowly.
+
+    Asked separately from `supports_amp` because the answer decides whether the
+    configured `amp_dtype` is honoured or refused, and a silent downgrade to fp16 is
+    exactly the kind of thing that would explain a run's numbers months later.
+    """
+    if device.type != "cuda" or not torch.cuda.is_available():
+        return False
+    return torch.cuda.is_bf16_supported()

@@ -225,7 +225,7 @@ to val produces an official-looking number that is quietly circular.
 2. `uv run pre-commit install --hook-type pre-commit --hook-type commit-msg` — both types, see
    [CONTRIBUTING.md](../CONTRIBUTING.md).
 3. Confirm the device: the log's first lines print `device=`, the AMP dtype and the backend
-   flags. On CUDA see [HANDOVER.md](HANDOVER.md); on Apple Silicon see
+   flags. On CUDA see [the CUDA move](journal/2026-08-12-mps-to-cuda.md); on Apple Silicon see
    [TRAIN_MACOS.md](TRAIN_MACOS.md).
 
 ### Config discipline
@@ -260,7 +260,7 @@ primary_metric: IoU/traversability/00_blocked
 ### The run itself
 
 - **Start from the settings that are already known to work** for the hardware — section 6 of
-  [HANDOVER.md](HANDOVER.md) for CUDA — rather than inventing a configuration.
+  [the CUDA move](journal/2026-08-12-mps-to-cuda.md) for CUDA — rather than inventing a configuration.
 - **Change one thing at a time.** With two variables moving, a difference tells you nothing.
 - **Let it run.** Intermediate epochs are noisy: this project's own baseline run measured
   `caution` at 0.158 on epoch 14 and 0.229 by epoch 27. Judging a run mid-flight is how teams

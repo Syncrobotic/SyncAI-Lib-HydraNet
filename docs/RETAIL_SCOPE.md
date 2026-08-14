@@ -179,7 +179,26 @@ staffed wrongly: **the model is not the constraint.**
 |---|---|
 | objects | Yes — COCO, already integrated, nothing to do |
 | walkable area | Partly — ADE20K floors work, but it is human-height web photography. The indoor runs measured a ceiling coming back **25% "go"** from the robot's viewpoint. |
-| display fixtures | Barely — ADE20K's shelves, counters and cases give the shape of a waist-height surface holding objects, in homes and restaurants. Not a shop. |
+| display fixtures | **Partly, and the split is sharp — see below.** |
+
+### What the bootstrap transfers, and what it cannot
+
+The retail baseline was run and its pre-labels put over real store CCTV:
+
+![what the ADE20K bootstrap does and does not mark](../assets/retail_prelabel_gap.jpg)
+
+Cyan is `display_fixture`. **Wall-mounted shelving is marked; the free-standing display
+podiums in the middle of the floor are not** — they come back as unlabelled, which is the
+model saying it does not know rather than guessing.
+
+That split is not arbitrary. A wall of shelves looks like ADE20K's `bookcase` and `shelf`,
+so the bootstrap reaches it. A waist-height island podium with three phones on it has no
+analogue in any public dataset — it is a retail fixture and nothing else is shaped like
+one. **No amount of public data will supply it**, which is what makes it the first thing
+worth annotating rather than a nice-to-have.
+
+It also sets the annotation priority within the class: the wall runs are already close
+enough for a correction pass, the islands have to be drawn from scratch.
 
 Note what `ade20k_retail` deliberately does *not* map: ADE20K's `table` (id 16) stays
 `obstacle_furniture`, even though a display table is precisely what was asked for. Its

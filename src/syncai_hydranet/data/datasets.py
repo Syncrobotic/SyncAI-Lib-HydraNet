@@ -23,16 +23,35 @@ IMG_EXTS = {".png", ".jpg", ".jpeg", ".bmp"}
 
 
 def _index_pairs(img_dir: Path, ann_dir: Path) -> list[tuple[Path, Path]]:
-    """Pair images with annotations by filename stem, recursively, ignoring extensions."""
-    anns = {}
+    """Pair images with annotations by their path under the split, ignoring extensions.
+
+    By *path*, not by bare filename. Session directories are what carry an honest
+    train/val split, and every per-session numbering scheme produces ``0000.png`` more
+    than once. Keyed on the stem alone, the second session's frames overwrite the first's
+    in the lookup and the loader silently trains on a third of what was annotated --
+    caught by `hydranet-annotation check`, which reported 60 masks with no counterpart on
+    a three-session batch that had one for every frame.
+
+    Flat datasets are unaffected: with no subdirectories the relative path *is* the stem.
+    Layouts that nest images and annotations differently fall back to stem matching, so
+    ADE20K and RUGD keep working.
+    """
+    anns_by_rel, anns_by_stem = {}, {}
     for p in ann_dir.rglob("*"):
         if p.suffix.lower() in IMG_EXTS:
-            anns[p.stem] = p
-    pairs = []
-    for p in sorted(img_dir.rglob("*")):
-        if p.suffix.lower() in IMG_EXTS and p.stem in anns:
-            pairs.append((p, anns[p.stem]))
-    return pairs
+            anns_by_rel[p.relative_to(ann_dir).with_suffix("")] = p
+            anns_by_stem.setdefault(p.stem, p)
+
+    images = [p for p in sorted(img_dir.rglob("*")) if p.suffix.lower() in IMG_EXTS]
+    pairs = [
+        (p, anns_by_rel[rel])
+        for p in images
+        if (rel := p.relative_to(img_dir).with_suffix("")) in anns_by_rel
+    ]
+    if pairs:
+        return pairs
+    # Nothing matched by path: the two trees are shaped differently, so fall back.
+    return [(p, anns_by_stem[p.stem]) for p in images if p.stem in anns_by_stem]
 
 
 class SegFolderDataset(Dataset):
@@ -54,6 +73,7 @@ class SegFolderDataset(Dataset):
         supervises=("traversability", "terrain"),
         label_map: str | None = None,
         letterbox: bool = False,
+        augment: dict | None = None,
     ):
         self.root = Path(root)
         img_dir = self.root / "images" / split
@@ -71,7 +91,9 @@ class SegFolderDataset(Dataset):
         # legacy auto-detection between RGB palette and integer ids.
         self.scheme = label_maps.get_scheme(label_map) if label_map else None
         self.label_format = label_format
-        self.transform = build_transforms(input_size, train, letterbox=letterbox)
+        self.transform = build_transforms(
+            input_size, train, letterbox=letterbox, augment=augment
+        )
         self.supervises = list(supervises)
         self._color_lut = None
         self._id_lut = None
@@ -148,6 +170,9 @@ class CocoDetDataset(Dataset):
         train: bool,
         supervises=("detection",),
         letterbox: bool = False,
+        augment: dict | None = None,
+        classes: list[str] | None = None,
+        score_classes: list[str] | None = None,
     ):
         from pycocotools.coco import COCO
 
@@ -157,15 +182,54 @@ class CocoDetDataset(Dataset):
             raise FileNotFoundError(f"{ann_file} does not exist.")
         self.coco = COCO(str(ann_file))
         self.img_dir = self.root / split
+
+        # A subset spends the head's capacity on the classes the robot meets. COCO's 80
+        # include zebra and snowboard; indoors, nine tenths of the output channels are
+        # learning to say "no". Names are checked against the annotation file rather
+        # than trusted, because a typo would otherwise silently drop a whole class.
+        if classes:
+            cat_ids = sorted(self.coco.getCatIds(catNms=list(classes)))
+            found = {c["name"] for c in self.coco.loadCats(cat_ids)}
+            missing = [n for n in classes if n not in found]
+            if missing:
+                raise ValueError(f"not COCO category names: {', '.join(sorted(missing))}")
+        else:
+            cat_ids = sorted(self.coco.getCatIds())
+        self.cat_ids = cat_ids
+        self.cat_to_label = {c: i for i, c in enumerate(cat_ids)}  # contiguous, 0-based
+        self.label_to_cat = {i: c for c, i in self.cat_to_label.items()}
+
+        # Scoring can be narrowed without touching the head. This is how an 80-class
+        # checkpoint is compared against a narrower one: both are scored over the same
+        # categories, so the comparison is not just a smaller denominator.
+        if score_classes:
+            score_ids = sorted(self.coco.getCatIds(catNms=list(score_classes)))
+            found = {c["name"] for c in self.coco.loadCats(score_ids)}
+            missing = [n for n in score_classes if n not in found]
+            if missing:
+                raise ValueError(f"not COCO category names: {', '.join(sorted(missing))}")
+            outside = sorted(set(score_ids) - set(cat_ids))
+            if outside:
+                names = ", ".join(c["name"] for c in self.coco.loadCats(outside))
+                raise ValueError(f"score_classes not trained by this dataset: {names}")
+            self.score_cat_ids = score_ids
+        else:
+            self.score_cat_ids = cat_ids
+
+        # Images whose only annotations were dropped carry no signal for this subset, and
+        # would train the head that everything in them is background.
+        keep = set(cat_ids)
         self.ids = [
             i
             for i in sorted(self.coco.imgs.keys())
-            if len(self.coco.getAnnIds(imgIds=i, iscrowd=False)) > 0
+            if any(
+                a["category_id"] in keep
+                for a in self.coco.loadAnns(self.coco.getAnnIds(imgIds=i, iscrowd=False))
+            )
         ]
-        cat_ids = sorted(self.coco.getCatIds())
-        self.cat_to_label = {c: i for i, c in enumerate(cat_ids)}  # contiguous, 0-based
-        self.label_to_cat = {i: c for c, i in self.cat_to_label.items()}
-        self.transform = build_transforms(input_size, train, letterbox=letterbox)
+        self.transform = build_transforms(
+            input_size, train, letterbox=letterbox, augment=augment
+        )
         self.supervises = list(supervises)
 
     def __len__(self):
@@ -178,10 +242,14 @@ class CocoDetDataset(Dataset):
         anns = self.coco.loadAnns(self.coco.getAnnIds(imgIds=img_id, iscrowd=False))
         boxes, labels = [], []
         for a in anns:
+            # An image kept for one subset class can still carry boxes from classes the
+            # subset drops; those are not background, they are simply not this head's
+            # problem, so they are left out rather than mapped to some other channel.
+            label = self.cat_to_label.get(a["category_id"])
             x, y, w, h = a["bbox"]
-            if w > 1 and h > 1:
+            if label is not None and w > 1 and h > 1:
                 boxes.append([x, y, x + w, y + h])
-                labels.append(self.cat_to_label[a["category_id"]])
+                labels.append(label)
         s = Sample(
             image=img,
             boxes=np.asarray(boxes, dtype=np.float32).reshape(-1, 4),
@@ -220,7 +288,9 @@ def resolve_split(dcfg: dict, split: str) -> str:
     return dcfg[key]
 
 
-def build_dataset(dcfg, input_size, split: str = "train", letterbox: bool = False):
+def build_dataset(
+    dcfg, input_size, split: str = "train", letterbox: bool = False, augment: dict | None = None
+):
     """Build one dataset. Augmentation is applied to the train split only."""
     folder = resolve_split(dcfg, split)
     train = split == "train"
@@ -235,9 +305,18 @@ def build_dataset(dcfg, input_size, split: str = "train", letterbox: bool = Fals
             supervises=sup,
             label_map=dcfg.get("label_map"),
             letterbox=letterbox,
+            augment=augment,
         )
     if dcfg["type"] == "coco":
         return CocoDetDataset(
-            dcfg["root"], folder, input_size, train, supervises=sup, letterbox=letterbox
+            dcfg["root"],
+            folder,
+            input_size,
+            train,
+            supervises=sup,
+            letterbox=letterbox,
+            augment=augment,
+            classes=dcfg.get("classes"),
+            score_classes=dcfg.get("score_classes"),
         )
     raise ValueError(f"unknown dataset type: {dcfg['type']}")

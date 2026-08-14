@@ -263,15 +263,48 @@ class ToTensor:
         return s
 
 
-def build_transforms(input_size, train: bool, letterbox: bool = False) -> Compose:
+# Augmentation defaults. These were hard-coded until they became config: identical
+# values, so runs before and after the change remain comparable.
+AUGMENT_DEFAULTS = {
+    "scale_range": (0.75, 1.5),
+    "flip_p": 0.5,
+    "brightness": 0.3,
+    "contrast": 0.3,
+    "saturation": 0.3,
+}
+
+
+def build_transforms(
+    input_size, train: bool, letterbox: bool = False, augment: dict | None = None
+) -> Compose:
     """``letterbox=False`` keeps the original stretch-to-fit behaviour.
 
     RUGD is about 1.25:1 and the default 512x640 input is 1.25:1 too, so the off-road
     configs lose nothing by stretching. Footage from your own camera rarely matches,
     so set ``data.letterbox: true`` there.
+
+    ``augment`` overrides :data:`AUGMENT_DEFAULTS`. It comes from ``data.augment`` in the
+    config, which means it is recorded in ``meta.json`` -- and augmentation strength
+    belongs in a run's lineage as much as the learning rate does. It was hard-coded here
+    until this project's own rule ("the most expensive mistake is a setting that never
+    took effect") was noticed to apply to itself: a change of jitter strength between two
+    runs was invisible, and the difference in their scores unexplainable.
     """
+    a = {**AUGMENT_DEFAULTS, **(augment or {})}
     if train:
-        geom = LetterboxScaleCrop(input_size) if letterbox else RandomScaleCrop(input_size)
-        return Compose([geom, RandomHorizontalFlip(), ColorJitter(), ToTensor()])
+        geom_cls = LetterboxScaleCrop if letterbox else RandomScaleCrop
+        geom = geom_cls(input_size, scale_range=tuple(a["scale_range"]))
+        return Compose(
+            [
+                geom,
+                RandomHorizontalFlip(p=float(a["flip_p"])),
+                ColorJitter(
+                    brightness=float(a["brightness"]),
+                    contrast=float(a["contrast"]),
+                    saturation=float(a["saturation"]),
+                ),
+                ToTensor(),
+            ]
+        )
     geom = LetterboxResize(input_size) if letterbox else Resize(input_size)
     return Compose([geom, ToTensor()])

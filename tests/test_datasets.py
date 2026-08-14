@@ -123,3 +123,54 @@ def test_letterbox_padding_is_ignore_labelled(dataset_root):
 def test_missing_directory_names_the_expected_layout(tmp_path):
     with pytest.raises(FileNotFoundError, match="README"):
         build_dataset(_cfg(tmp_path), SIZE, "train")
+
+
+def test_sessions_with_the_same_filenames_are_all_kept(tmp_path):
+    """Every per-session numbering scheme produces `0000.png` more than once.
+
+    Keyed on the bare stem, the second session's frames overwrite the first's in the
+    lookup and the loader trains on a third of what was annotated -- with no error, and
+    with the run's meta.json reporting the smaller dataset size as though it were right.
+    `hydranet-annotation check` reported 60 masks with no counterpart on a three-session
+    batch that had one for every frame, which is how this was found.
+    """
+    from syncai_hydranet.data.datasets import _index_pairs
+
+    img_dir, ann_dir = tmp_path / "images", tmp_path / "annotations"
+    for session in ("cam_a", "cam_b", "cam_c"):
+        (img_dir / session).mkdir(parents=True)
+        (ann_dir / session).mkdir(parents=True)
+        for i in range(4):
+            Image.fromarray(np.zeros((8, 8, 3), np.uint8)).save(
+                img_dir / session / f"{i:04d}.jpg"
+            )
+            Image.fromarray(np.zeros((8, 8), np.uint8)).save(ann_dir / session / f"{i:04d}.png")
+
+    pairs = _index_pairs(img_dir, ann_dir)
+    assert len(pairs) == 12, f"expected every frame, got {len(pairs)}"
+    for img, ann in pairs:  # and each is paired with its own session's mask
+        assert img.parent.name == ann.parent.name
+
+
+def test_a_flat_dataset_still_pairs_by_stem(tmp_path):
+    """ADE20K and RUGD have no session directories; the relative path is the stem there."""
+    from syncai_hydranet.data.datasets import _index_pairs
+
+    img_dir, ann_dir = tmp_path / "images", tmp_path / "annotations"
+    img_dir.mkdir(parents=True)
+    ann_dir.mkdir(parents=True)
+    Image.fromarray(np.zeros((8, 8, 3), np.uint8)).save(img_dir / "x.jpg")
+    Image.fromarray(np.zeros((8, 8), np.uint8)).save(ann_dir / "x.png")
+    assert len(_index_pairs(img_dir, ann_dir)) == 1
+
+
+def test_differently_nested_trees_fall_back_to_stem_matching(tmp_path):
+    """Images in a subdirectory, masks flat: a real layout, and it must keep working."""
+    from syncai_hydranet.data.datasets import _index_pairs
+
+    img_dir, ann_dir = tmp_path / "images", tmp_path / "annotations"
+    (img_dir / "nested").mkdir(parents=True)
+    ann_dir.mkdir(parents=True)
+    Image.fromarray(np.zeros((8, 8, 3), np.uint8)).save(img_dir / "nested" / "y.jpg")
+    Image.fromarray(np.zeros((8, 8), np.uint8)).save(ann_dir / "y.png")
+    assert len(_index_pairs(img_dir, ann_dir)) == 1
