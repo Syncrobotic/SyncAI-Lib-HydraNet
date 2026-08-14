@@ -1,0 +1,67 @@
+name: CI (promote)
+
+# Tier 2 of the promotion flow feat/* → dev → stage → main. The full gate runs at
+# feat→dev (ci.yml); this is a COMBINED-STATE check on the dev→stage promotion PR.
+#
+# It exists because GitHub does not re-run a green PR when its base advances: branch
+# B can merge into dev having been tested against a dev that never contained branch
+# A. The failures that shape lets through are all cross-file, and this repo has a
+# particular appetite for them, because several of its invariants are held between
+# files that different branches would touch:
+#
+#   · a config lowers batch_size while another branch edits the base's lr -- the two
+#     halves of `lr = batch_size x 1.25e-5` live in different files by design
+#   · a taxonomy gains a class in one branch and the palette gains its colour in
+#     another, or does not (tests/test_palettes.py)
+#   · the Jetson standalone copies drift from the package they duplicate
+#     (tests/test_orin_standalone_copies.py)
+#   · the indoor-25 baseline's three pinned copies stop agreeing
+#     (tests/test_indoor25_baseline.py)
+#
+# Unlike the sibling Gateway repo, this one re-runs the WHOLE test suite here rather
+# than a hand-picked smoke subset. That is following the intent, not departing from
+# it: the reason to hand-pick there is that its heavy tiers cost minutes of
+# Testcontainers, whereas this suite is ~30 s, so listing a subset would buy nothing
+# and would silently stop covering whatever invariant is added next.
+#
+# The heavy lane -- ONNX export parity, ~2 min across every shipped config -- does
+# stay at feat→dev. It is the one check here whose cost is real, and an export is a
+# function of one config and the model code, not of how branches combined.
+#
+# NOTE: this workflow only RUNS the checks. To actually BLOCK a bad promotion, mark
+# "CI (promote) / Combined-state smoke" as a required status check in the `stage`
+# branch protection rule.
+on:
+  pull_request:
+    branches: [stage]
+
+# Least-privilege default: jobs only check out code.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-promote-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Combined-state smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+      - run: uv sync --group dev --extra export
+      # Cheapest first, so the gate fails fast.
+      - name: Lint
+        run: uv run ruff check --output-format=github .
+      - name: Format
+        run: uv run ruff format --check .
+      # Coverage threshold included: a promotion that drops the floor is exactly the
+      # kind of thing that only shows up once branches are combined.
+      - name: Tests on the combined state
+        run: uv run pytest --cov --cov-fail-under=80

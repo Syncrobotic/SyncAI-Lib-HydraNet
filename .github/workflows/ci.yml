@@ -1,45 +1,166 @@
-name: CI
+name: CI (dev)
 
+# Tier 1 of the linear promotion flow feat/* → dev → stage → main: the full gate
+# where new code first enters. Runs format · lint · unit tests (coverage matrix) ·
+# ONNX export parity · release-bundle refusals.
+#
+# The export and bundler checks used to sit on stage/main (the since-removed
+# release-gate.yml) with the stated reason that "a broken export is discovered on
+# the robot otherwise". That reason argues for the opposite placement: the earliest
+# tier is where the fix is cheapest, and an export regression that only reds at
+# dev→stage has already travelled a whole tier past the branch that caused it. They
+# take ~2 min on random weights and no dataset, so there is no cost argument for
+# deferring them either.
+#
+# PR-only: promotion is strictly PR-based and the PR already tests the merge
+# result, so a post-merge `push` re-run would just duplicate this gate. The old
+# `on.push.branches: [main, stage, dev]` also meant `feat/*` — where the flow
+# actually starts — got no CI at all until a PR was opened.
 on:
-  push:
-    # dev is where the work happens; gating only main means a broken commit is
-    # discovered at merge time, long after it was cheap to fix.
-    branches: [main, stage, dev]
   pull_request:
+    branches: [dev]
+
+# Least-privilege default: jobs only check out code.
+permissions:
+  contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-dev-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  lint:
+  format:
+    name: Format
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+      - run: uv sync --group dev
+      - run: uv run ruff format --check .
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
       - run: uv sync --group dev
       - run: uv run ruff check --output-format=github .
-      - run: uv run ruff format --check .
 
+  # No dataset needed: the model runs on random tensors, the dataset tests build a
+  # fixture in tmp_path, and test_overfit.py memorises one synthetic batch on CPU.
+  #
+  # The coverage floor tracks what the suite actually reaches. It sat at 68 while the
+  # four user-facing CLIs had *zero* coverage -- a threshold a green tick can clear
+  # with the entry points untested is not a gate, it is decoration.
+  #
+  # The suite runs in ~30 s, so it is not sharded. Revisit if it passes a few minutes;
+  # the sibling Gateway repo's 4-way shard + merged-threshold pattern is the model.
   test:
+    name: Unit tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.12"]
+        python-version: ['3.10', '3.12']
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
       - run: uv sync --group dev --extra export
-      # No dataset needed: the model runs on random tensors, the dataset tests build a
-      # fixture in tmp_path, and test_overfit.py memorises one synthetic batch on CPU.
-      #
-      # The floor tracks what the suite actually reaches. It sat at 68 while the four
-      # user-facing CLIs had *zero* coverage -- a threshold that a green tick could clear
-      # with the entry points untested is not a gate, it is decoration.
       - run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=80
+
+  # No checkpoint and no dataset: a randomly initialised model exercises the same
+  # graph. Catches an operator that stopped exporting cleanly, a shape that drifted,
+  # and a numerical mismatch between PyTorch and the exported graph.
+  export-parity:
+    name: ONNX Export Parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+      - run: uv sync --group dev --extra export
+
+      - name: Export every shipped config and check parity
+        run: |
+          for cfg in configs/*.yaml; do
+            echo "::group::$cfg"
+            uv run hydranet-export-onnx --config "$cfg" \
+              --output "/tmp/$(basename "$cfg" .yaml).onnx" --check-parity
+            echo "::endgroup::"
+          done
+
+      # The guard exists so an unsupervised head cannot reach an engine. If it stops
+      # refusing, that protection is gone and nothing else would notice.
+      - name: The export guard still refuses an unsupervised head
+        run: |
+          if uv run hydranet-export-onnx --config configs/hydranet_indoor.yaml \
+               --output /tmp/should-not-exist.onnx \
+               --set 'data.datasets=[{name: ade20k, type: seg_folder, root: datasets/ADE20K, split_train: train, split_val: val, label_map: ade20k_indoor, supervises: [traversability, terrain], sample_ratio: 1.0}]'
+          then
+            echo "::error::export guard did not refuse an unsupervised detection head"
+            exit 1
+          fi
+          echo "guard refused as expected"
+
+  # The bundler is the only thing standing between an unreproducible run and a
+  # published model, so its refusals are worth testing rather than trusting.
+  release-bundle:
+    name: Release Bundle Refusals
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+      - run: uv sync --group dev --extra export
+
+      - name: The bundler refuses a run it cannot reproduce
+        run: |
+          mkdir -p /tmp/fakerun
+          cp configs/hydranet_indoor.yaml /tmp/fakerun/config.yaml
+          touch /tmp/fakerun/best.pt /tmp/fakerun/metrics.jsonl
+          printf '{"git": {"commit": "%s", "dirty": true}}' "$GITHUB_SHA" > /tmp/fakerun/meta.json
+          if PYTHON="uv run python" ./scripts/release_bundle.sh create /tmp/fakerun vci; then
+            echo "::error::bundler accepted a run trained from a dirty tree"
+            exit 1
+          fi
+          echo "bundler refused the dirty run as expected"
+
+  # Single required status for branch protection: depends on every job above, so
+  # adding a new job can't silently slip past a rule that only listed the old set.
+  # Fails closed if any dependency failed, was cancelled, or was skipped.
+  ci-success:
+    name: CI success
+    runs-on: ubuntu-latest
+    needs: [format, lint, test, export-parity, release-bundle]
+    if: always()
+    steps:
+      - name: Assert every job succeeded
+        run: |
+          for result in $(echo '${{ toJSON(needs) }}' | grep -o '"result": "[a-z]*"' | cut -d'"' -f4); do
+            [ "$result" = "success" ] || { echo "A required job did not succeed ($result)"; exit 1; }
+          done
