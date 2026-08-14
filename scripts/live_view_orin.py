@@ -24,8 +24,15 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from bench_camera_orin import MEAN, RAW_INPUT, STD, Cudart, letterbox
 
-# Same palettes the training-time TensorBoard grids use, so a live frame and a val_pred
-# image are directly comparable.
+# Copied rather than imported: this file runs on a Jetson with numpy and TensorRT and
+# no syncai_hydranet installed, which is also why MEAN, STD and letterbox live in
+# bench_camera_orin.
+#
+# It must stay equal to utils.visualize's indoor palette, and for a long time the
+# comment here claimed it did while the package held the *off-road* palette instead --
+# so a live frame and a val_pred grid coloured the same class differently, and the
+# claim was the reason nobody checked. tests/test_orin_standalone_copies.py checks it
+# now, on the dev box where both are importable.
 TRAV_COLORS = np.array([[220, 40, 40], [250, 200, 40], [40, 200, 80]], dtype=np.uint8)
 TERRAIN_COLORS = np.array(
     [

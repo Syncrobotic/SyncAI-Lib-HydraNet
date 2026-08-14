@@ -43,7 +43,7 @@ from ..data.label_maps_retail import (
     RETAIL_TERRAIN,
     RETAIL_TERRAIN_TO_TRAV,
 )
-from ..utils.visualize import TERRAIN_COLORS
+from ..utils.visualize import terrain_palette
 
 IGNORE = 255
 TRAV_NAMES = {0: "blocked", 1: "caution", 2: "go", IGNORE: "ignore"}
@@ -85,10 +85,6 @@ SCHEMES = {
 }
 DEFAULT_SCHEME = "indoor"
 
-# Colours for classes beyond the shared 12-entry palette. Retail's display_fixture is
-# the first; anything added later needs its own entry here rather than a wrap-around.
-EXTRA_COLORS = ((0, 200, 200),)
-
 
 # --------------------------------------------------------------------- labels
 
@@ -105,17 +101,16 @@ def label_spec(scheme: Scheme | None = None) -> list[dict]:
     an annotator draws. See ``check`` for why that distinction has teeth.
     """
     scheme = scheme or SCHEMES[DEFAULT_SCHEME]
+    # The palette for *this* scheme, so retail's display_fixture gets the colour the
+    # renderers give it. It used to index a single 12-entry palette and fall back to a
+    # separate EXTRA_COLORS tuple for anything past the end -- two sources for one
+    # question, and the fallback's colour matched nothing that ever drew a prediction.
+    palette = terrain_palette(list(scheme.terrain))
     spec = []
     for name, tid in scheme.terrain.items():
         if name == "void":
             continue
-        # The palette has an entry per indoor class; classes appended past it (retail's
-        # display_fixture) get a distinct colour rather than wrapping onto another
-        # class's, which would make two classes indistinguishable in an exported mask.
-        if tid < len(TERRAIN_COLORS):
-            r, g, b = (int(c) for c in TERRAIN_COLORS[tid])
-        else:
-            r, g, b = EXTRA_COLORS[(tid - len(TERRAIN_COLORS)) % len(EXTRA_COLORS)]
+        r, g, b = (int(c) for c in palette[tid])
         trav = TRAV_NAMES.get(scheme.trav[tid], "?")
         spec.append(
             {

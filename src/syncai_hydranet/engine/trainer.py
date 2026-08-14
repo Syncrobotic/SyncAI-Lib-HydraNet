@@ -34,7 +34,7 @@ from ..utils.seeding import (
     resolve_amp_dtype,
     seed_everything,
 )
-from ..utils.visualize import TERRAIN_COLORS, TRAV_COLORS, prediction_grid
+from ..utils.visualize import TRAV_COLORS, prediction_grid, terrain_palette
 from .evaluator import build_val_loaders, evaluate, select_metric
 
 DEFAULT_PRIMARY_METRIC = "traversability_mIoU"
@@ -472,9 +472,15 @@ class Trainer:
         Curves only say the loss is falling. This says whether the model is calling a
         whole floor a wall, and how much of the frame is ignore padding.
         """
-        palettes = {"traversability": TRAV_COLORS, "terrain": TERRAIN_COLORS}
+        classes = self.cfg["data"].get("terrain_classes")
         for head, (imgs, preds, gts) in (samples or {}).items():
-            grid = prediction_grid(imgs, preds, gts, palettes.get(head, TERRAIN_COLORS))
+            if head == "traversability":
+                palette = TRAV_COLORS
+            else:
+                # n_classes is the fallback for a config that names no classes; a config
+                # that does name them gets the palette built for that taxonomy.
+                palette = terrain_palette(classes, self.model.seg_heads[head].num_classes)
+            grid = prediction_grid(imgs, preds, gts, palette)
             self.tb.add_image(f"val_pred/{head}", grid, self.global_step, dataformats="HWC")
 
     def _log_task_weights(self) -> None:

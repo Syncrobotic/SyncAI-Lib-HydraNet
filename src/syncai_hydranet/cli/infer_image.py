@@ -22,7 +22,13 @@ from ..models.heads.detection import SCORE_THR_VIEW
 from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint
 from ..utils.device import pick_device
-from ..utils.visualize import TERRAIN_COLORS, TRAV_COLORS, crop_box, letterbox, overlay
+from ..utils.visualize import (
+    TRAV_COLORS,
+    crop_box,
+    letterbox,
+    overlay,
+    terrain_palette,
+)
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp"}
 
@@ -69,6 +75,7 @@ def main(argv: list[str] | None = None) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     size = cfg["data"]["input_size"]
     use_lb = bool(cfg["data"].get("letterbox", False))
+    terrain_colors = terrain_palette(cfg["data"].get("terrain_classes"))
 
     for p in paths:
         if p.suffix.lower() not in IMG_EXTS:
@@ -82,7 +89,7 @@ def main(argv: list[str] | None = None) -> None:
         terr = crop_box(result["terrain"][0].cpu().numpy(), region)
         vis_img = canvas.crop((x0, y0, x0 + cw, y0 + ch))
         vis_trav = overlay(vis_img, trav, TRAV_COLORS)
-        vis_terr = overlay(vis_img, terr, TERRAIN_COLORS)
+        vis_terr = overlay(vis_img, terr, terrain_colors)
 
         det = result.get("detection", [{}])[0]
         if det:

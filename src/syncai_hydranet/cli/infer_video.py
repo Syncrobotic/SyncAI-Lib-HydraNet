@@ -28,7 +28,13 @@ from ..models.heads.detection import SCORE_THR_VIEW
 from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint
 from ..utils.device import pick_device
-from ..utils.visualize import TERRAIN_COLORS, TRAV_COLORS, crop_box, letterbox, overlay
+from ..utils.visualize import (
+    TRAV_COLORS,
+    crop_box,
+    letterbox,
+    overlay,
+    terrain_palette,
+)
 
 
 def probe(path: str) -> tuple[int, int, float]:
@@ -122,6 +128,7 @@ def main(argv: list[str] | None = None) -> None:
     model.load_state_dict(ckpt.get("ema") or ckpt["model"])
 
     size = cfg["data"]["input_size"]  # (H, W)
+    terrain_colors = terrain_palette(cfg["data"].get("terrain_classes"))
     src_w, src_h, src_fps = probe(args.input)
     out_fps = args.fps or src_fps
     print(
@@ -148,7 +155,7 @@ def main(argv: list[str] | None = None) -> None:
         content = lb.crop((x0, y0, x0 + cw, y0 + ch))
 
         vis_trav = overlay(content, trav, TRAV_COLORS)
-        vis_terr = overlay(content, terr, TERRAIN_COLORS)
+        vis_terr = overlay(content, terr, terrain_colors)
 
         det = res.get("detection", [{}])[0]
         if det and len(det.get("boxes", [])):

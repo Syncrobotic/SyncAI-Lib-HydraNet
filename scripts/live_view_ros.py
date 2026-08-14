@@ -62,11 +62,11 @@ from syncai_hydranet.config import load_config  # noqa: E402  # isort: skip
 from syncai_hydranet.data.transforms import IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.visualize import (  # noqa: E402
-    TERRAIN_COLORS,
     TRAV_COLORS,
     crop_box,
     letterbox,
     overlay,
+    terrain_palette,
 )
 
 GO = 2
@@ -327,6 +327,7 @@ def inference_loop(args):
     model = build_model(cfg).to(device).eval()
     model.load_state_dict(torch.load(args.weights, map_location=device), strict=False)
     size = cfg["data"]["input_size"]
+    terrain_colors = terrain_palette(cfg["data"].get("terrain_classes"))
     print(f"model on {device}, input {size}", flush=True)
 
     rclpy.init()
@@ -430,7 +431,7 @@ def inference_loop(args):
         left = overlay(
             vis,
             terr if state["view"] == "terrain" else trav,
-            TERRAIN_COLORS if state["view"] == "terrain" else TRAV_COLORS,
+            terrain_colors if state["view"] == "terrain" else TRAV_COLORS,
         )
         det = result.get("detection", [{}])[0]
         if det and len(det.get("boxes", [])):
