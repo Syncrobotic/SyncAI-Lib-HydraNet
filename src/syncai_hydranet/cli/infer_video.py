@@ -23,11 +23,17 @@ import torch
 from PIL import Image, ImageDraw
 
 from ..config import load_config
-from ..data.transforms import IMAGENET_MEAN, IMAGENET_STD
+from ..models.heads.detection import SCORE_THR_VIEW
 from ..models.hydranet import build_model
-from ..utils.checkpoint import load_checkpoint
+from ..utils.checkpoint import load_checkpoint, select_weights
 from ..utils.device import pick_device
-from ..utils.visualize import TERRAIN_COLORS, TRAV_COLORS, crop_box, letterbox, overlay
+from ..utils.visualize import (
+    TRAV_COLORS,
+    crop_box,
+    overlay,
+    preprocess,
+    terrain_palette,
+)
 
 
 def probe(path: str) -> tuple[int, int, float]:
@@ -100,8 +106,14 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--checkpoint", required=True)
     ap.add_argument("--input", required=True, help="video file")
     ap.add_argument("--output", default="pred.mp4")
+    ap.add_argument(
+        "--weights",
+        choices=["ema", "model"],
+        default="ema",
+        help="EMA weights need enough training steps to be meaningful; see docs/TRAIN_MACOS.md",
+    )
     ap.add_argument("--fps", type=float, default=None, help="sampling and output fps")
-    ap.add_argument("--score-thr", type=float, default=0.35)
+    ap.add_argument("--score-thr", type=float, default=SCORE_THR_VIEW)
     ap.add_argument("--max-frames", type=int, default=0, help="0 means all")
     ap.add_argument("--layout", choices=["side", "trav", "terrain"], default="side")
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
@@ -118,9 +130,10 @@ def main(argv: list[str] | None = None) -> None:
     device = pick_device(cfg.get("device"))
     model = build_model(cfg).to(device).eval()
     ckpt = load_checkpoint(args.checkpoint)
-    model.load_state_dict(ckpt.get("ema") or ckpt["model"])
+    model.load_state_dict(select_weights(ckpt, args.weights))
 
     size = cfg["data"]["input_size"]  # (H, W)
+    terrain_colors = terrain_palette(cfg["data"].get("terrain_classes"))
     src_w, src_h, src_fps = probe(args.input)
     out_fps = args.fps or src_fps
     print(
@@ -133,11 +146,8 @@ def main(argv: list[str] | None = None) -> None:
     n_done, t0 = 0, time.time()
     sample_fps = args.fps if args.fps and args.fps < src_fps else None
     for frame in frames(args.input, src_w, src_h, sample_fps):
-        img = Image.fromarray(frame)
-        lb, region = letterbox(img, size)
-
-        arr = (np.asarray(lb, np.float32) / 255.0 - IMAGENET_MEAN) / IMAGENET_STD
-        x = torch.from_numpy(arr.transpose(2, 0, 1))[None].to(device)
+        x, lb, region = preprocess(Image.fromarray(frame), size)
+        x = x.to(device)
         with torch.no_grad():
             res = model.predict(x, score_thr=args.score_thr)
 
@@ -147,7 +157,7 @@ def main(argv: list[str] | None = None) -> None:
         content = lb.crop((x0, y0, x0 + cw, y0 + ch))
 
         vis_trav = overlay(content, trav, TRAV_COLORS)
-        vis_terr = overlay(content, terr, TERRAIN_COLORS)
+        vis_terr = overlay(content, terr, terrain_colors)
 
         det = res.get("detection", [{}])[0]
         if det and len(det.get("boxes", [])):

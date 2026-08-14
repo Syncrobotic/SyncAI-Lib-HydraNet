@@ -54,28 +54,31 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
+from bev_page import PAGE as BEV_PAGE  # noqa: E402
+from bev_scene import build_scene  # noqa: E402
 from live_view_orin import COCO_NAMES  # noqa: E402
 
 from syncai_hydranet.config import load_config  # noqa: E402  # isort: skip
-from syncai_hydranet.data.transforms import IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.visualize import (  # noqa: E402
-    TERRAIN_COLORS,
     TRAV_COLORS,
     crop_box,
-    letterbox,
     overlay,
+    preprocess,
+    terrain_palette,
 )
 
 GO = 2
 COLOR_TOPIC = "/camera/camera/color/image_raw"
 DEPTH_TOPIC = "/camera/camera/aligned_depth_to_color/image_raw"
+COLOR_INFO_TOPIC = "/camera/camera/color/camera_info"
+DEPTH_INFO_TOPIC = "/camera/camera/aligned_depth_to_color/camera_info"
 
 # reachable / out of range / no depth return
 REACH_COLORS = np.array([[0, 0, 0], [40, 220, 90], [250, 200, 40], [230, 60, 230]], np.uint8)
 
 state = {"range": 5.0, "score": 0.30, "view": "both"}
-latest = {"jpeg": None, "stats": {}}
+latest = {"jpeg": None, "stats": {}, "scene": None}
 lock = threading.Lock()
 recorders: list = []  # closed on SIGTERM so the video has a readable index
 
@@ -97,6 +100,8 @@ PAGE = b"""<!doctype html><meta charset=utf-8><title>HydraNet live</title>
  <span class=k style="margin-left:14px">score</span>
  <a href="/set?score=0.15">0.15</a><a href="/set?score=0.30">0.30</a>
  <a href="/set?score=0.50">0.50</a>
+</div>
+<a href="/3d">3D scene</a>
 </div>
 <img src="/stream">
 <div class=row id=s></div>
@@ -141,6 +146,27 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         if url.path == "/":
             return self._send(PAGE)
+        if url.path == "/3d":
+            return self._send(BEV_PAGE)
+        if url.path == "/scene.json":
+            with lock:
+                scene = latest["scene"]
+            body = json.dumps(
+                scene
+                or {
+                    "grid": {
+                        "nx": 0,
+                        "nz": 0,
+                        "cells": [],
+                        "cell": 0.2,
+                        "x_min": 0.0,
+                        "blind_fraction": 0.0,
+                    },
+                    "objects": [],
+                    "range_m": state["range"],
+                }
+            )
+            return self._send(body.encode(), "application/json")
         if url.path == "/stats":
             with lock:
                 body = json.dumps(latest["stats"]).encode()
@@ -185,6 +211,13 @@ class Recorder:
 
     The stats file is what makes the video searchable -- scrubbing 10 minutes of footage
     for the moment the floor stopped returning depth is worse than sorting a JSONL by it.
+
+    And the calibration: the camera's intrinsic matrix, written once per session. Without
+    K, nothing recorded here can ever be projected to metres -- no ground plane, no BEV
+    costmap, no distance gate -- and the omission is invisible until someone tries, by
+    which time the building has been walked and the robot has moved on. A session without
+    its intrinsics is the same class of defect as a frame without its session: usable for
+    looking at, useless for the thing it was collected for.
     """
 
     def __init__(self, root: Path, session: str, keyframe_hz: float):
@@ -203,9 +236,44 @@ class Recorder:
         self.video_path = root / f"{session}_overlay.avi"
         self.writer = None
         self.stats = (root / f"{session}_stats.jsonl").open("a", buffering=1)
+        self.calib_path = root / f"{session}_calibration.json"
         self.period = (1.0 / keyframe_hz) if keyframe_hz > 0 else 0.0
         self.last_key = 0.0
         self.n_frames = self.n_keys = 0
+
+    def write_calibration(self, color_info, depth_info, stride: int) -> None:
+        """Intrinsics, once. They do not change during a session, and the stride this
+        script applies to the stream does change them -- so what is written is the
+        calibration of the frames on disk, not of the topic."""
+        if self.calib_path.exists():
+            return
+
+        def one(msg):
+            if msg is None:
+                return None
+            k = list(msg.k)
+            # Subsampling scales fx, fy, cx, cy by exactly the same factor. Writing the
+            # topic's K next to decimated frames would be off by that factor, silently.
+            if stride > 1:
+                k = [v / stride if i in (0, 2, 4, 5) else v for i, v in enumerate(k)]
+            return {
+                "K": k,
+                "distortion_model": msg.distortion_model,
+                "D": list(msg.d),
+                "width": msg.width // stride,
+                "height": msg.height // stride,
+                "frame_id": msg.header.frame_id,
+            }
+
+        payload = {
+            "color": one(color_info),
+            "depth_aligned_to_color": one(depth_info),
+            "subsample_stride": stride,
+            "depth_units": "millimetres, uint16",
+            "note": "K is scaled for the frames written here, not the raw topic",
+        }
+        self.calib_path.write_text(json.dumps(payload, indent=2) + "\n")
+        print(f"wrote {self.calib_path}", flush=True)
 
     def write(self, pair: Image.Image, color: np.ndarray, depth_mm: np.ndarray, stats: dict):
         import numpy as np_
@@ -240,16 +308,10 @@ class Recorder:
         self.stats.close()
 
 
-def preprocess(img: Image.Image, size):
-    img, region = letterbox(img.convert("RGB"), size)
-    arr = np.asarray(img, dtype=np.float32) / 255.0
-    arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
-    return torch.from_numpy(arr.transpose(2, 0, 1))[None], img, region
-
-
 def inference_loop(args):
     import rclpy
     from rclpy.qos import qos_profile_sensor_data
+    from sensor_msgs.msg import CameraInfo
     from sensor_msgs.msg import Image as ImageMsg
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -257,6 +319,7 @@ def inference_loop(args):
     model = build_model(cfg).to(device).eval()
     model.load_state_dict(torch.load(args.weights, map_location=device), strict=False)
     size = cfg["data"]["input_size"]
+    terrain_colors = terrain_palette(cfg["data"].get("terrain_classes"))
     print(f"model on {device}, input {size}", flush=True)
 
     rclpy.init()
@@ -275,9 +338,38 @@ def inference_loop(args):
         ImageMsg, COLOR_TOPIC, lambda m: msgs.__setitem__("color", m), qos_profile_sensor_data
     )
     node.create_subscription(ImageMsg, DEPTH_TOPIC, depth_buf.append, qos_profile_sensor_data)
+    # Intrinsics. Latched-ish and cheap, and without them the whole recording is
+    # geometrically meaningless later; see Recorder.write_calibration.
+    info = {"color": None, "depth": None}
+    node.create_subscription(
+        CameraInfo,
+        COLOR_INFO_TOPIC,
+        lambda m: info.__setitem__("color", m),
+        qos_profile_sensor_data,
+    )
+    node.create_subscription(
+        CameraInfo,
+        DEPTH_INFO_TOPIC,
+        lambda m: info.__setitem__("depth", m),
+        qos_profile_sensor_data,
+    )
 
     def stamp_of(msg) -> float:
         return msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+
+    def scaled_k(msg, stride: int):
+        """The intrinsics of the frames this loop actually works on.
+
+        Subsampling scales fx, fy, cx, cy by the stride. Using the topic's K on a
+        decimated image puts every metre off by exactly that factor, and nothing
+        complains -- the scene is simply the wrong size.
+        """
+        k = np.array(msg.k, dtype=np.float64).reshape(3, 3)
+        k[0, 0] /= stride
+        k[1, 1] /= stride
+        k[0, 2] /= stride
+        k[1, 2] /= stride
+        return k
 
     recorder = None
     if args.record_dir:
@@ -331,7 +423,7 @@ def inference_loop(args):
         left = overlay(
             vis,
             terr if state["view"] == "terrain" else trav,
-            TERRAIN_COLORS if state["view"] == "terrain" else TRAV_COLORS,
+            terrain_colors if state["view"] == "terrain" else TRAV_COLORS,
         )
         det = result.get("detection", [{}])[0]
         if det and len(det.get("boxes", [])):
@@ -374,7 +466,41 @@ def inference_loop(args):
         with lock:
             latest["jpeg"] = buf.getvalue()
             latest["stats"] = frame_stats
+        # The metric scene for /3d. Boxes come back in canvas coordinates, so they are
+        # mapped to the colour frame before any depth is read through them.
+        if info["color"] is not None:
+            sx = color.shape[1] / max(cw, 1)
+            sy = color.shape[0] / max(ch, 1)
+            dets = []
+            if det and len(det.get("boxes", [])):
+                for box, score, label in zip(
+                    det["boxes"].cpu().numpy(),
+                    det["scores"].cpu().numpy(),
+                    det["labels"].cpu().numpy(),
+                    strict=True,
+                ):
+                    dets.append(
+                        {
+                            "box": (
+                                (box[0] - x0) * sx,
+                                (box[1] - y0) * sy,
+                                (box[2] - x0) * sx,
+                                (box[3] - y0) * sy,
+                            ),
+                            "cls": COCO_NAMES[int(label)]
+                            if int(label) < len(COCO_NAMES)
+                            else str(label),
+                            "score": float(score),
+                        }
+                    )
+            scene = build_scene(trav_full, depth_m, scaled_k(info["color"], args.stride), dets)
+            scene["range_m"] = state["range"]
+            with lock:
+                latest["scene"] = scene
+
         if recorder is not None:
+            if info["color"] is not None:
+                recorder.write_calibration(info["color"], info["depth"], args.stride)
             recorder.write(pair, color, depth_mm, frame_stats)
 
 

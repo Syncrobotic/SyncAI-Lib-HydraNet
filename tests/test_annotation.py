@@ -127,7 +127,9 @@ def test_background_left_as_zero_fails_when_zero_is_a_trained_class(
     one was -- and the same dataset has to be rejected, because then every unlabelled
     pixel teaches the model to predict `void` there.
     """
-    monkeypatch.setattr(annotation, "INDOOR_NATIVE_ID", {v: v for v in INDOOR_TERRAIN.values()})
+    # The scheme object is what the check consults now, so that is what has to change.
+    identity = {v: v for v in INDOOR_TERRAIN.values()}
+    monkeypatch.setattr(annotation.SCHEMES["indoor"], "native", identity)
     mask = good_mask()
     mask[mask == 255] = 0
     write_frame(dataset, "train", "lobby-a", "000003", mask)
@@ -136,7 +138,9 @@ def test_background_left_as_zero_fails_when_zero_is_a_trained_class(
 
 
 def test_background_as_zero_can_be_accepted_explicitly(dataset, monkeypatch):
-    monkeypatch.setattr(annotation, "INDOOR_NATIVE_ID", {v: v for v in INDOOR_TERRAIN.values()})
+    # The scheme object is what the check consults now, so that is what has to change.
+    identity = {v: v for v in INDOOR_TERRAIN.values()}
+    monkeypatch.setattr(annotation.SCHEMES["indoor"], "native", identity)
     mask = good_mask()
     mask[mask == 255] = 0
     write_frame(dataset, "train", "lobby-a", "000003", mask)
@@ -233,3 +237,54 @@ def test_empty_split_fails(tmp_path: Path):
     (root / "images" / "val").mkdir(parents=True)
     (root / "annotations" / "val").mkdir(parents=True)
     assert check(root) == 1
+
+
+# ---------------------------------------------------------------------- schemes
+
+
+def test_the_retail_scheme_adds_display_fixture_to_the_label_list():
+    """A store annotated under the indoor scheme produces data with no fixtures in it at
+    all, and nothing downstream reports that: the masks validate, they train, and the
+    model quietly learns that shelving is furniture."""
+    indoor = {e["name"] for e in annotation.label_spec(annotation.SCHEMES["indoor"])}
+    retail = {e["name"] for e in annotation.label_spec(annotation.SCHEMES["retail"])}
+    assert retail - indoor == {"display_fixture"}
+    assert indoor - retail == set()
+
+
+def test_display_fixture_gets_its_own_colour():
+    """The shared palette has 12 entries, so class 12 would wrap onto void's colour --
+    two classes indistinguishable in an exported mask, which is unrecoverable."""
+    spec = annotation.label_spec(annotation.SCHEMES["retail"])
+    colours = [e["color"] for e in spec]
+    assert len(set(colours)) == len(colours)
+
+
+def test_display_fixture_is_blocked():
+    entry = next(
+        e
+        for e in annotation.label_spec(annotation.SCHEMES["retail"])
+        if e["name"] == "display_fixture"
+    )
+    assert entry["traversability"] == "blocked"
+
+
+def test_the_retail_scheme_accepts_id_12_that_indoor_refuses(dataset, capsys):
+    """The check follows the scheme it is given, so the same mask is valid retail data
+    and invalid indoor data -- which is the whole reason the flag exists."""
+    mask = good_mask()
+    mask[0, 0] = 12  # display_fixture
+    write_frame(dataset, "train", "lobby-a", "000003", mask)
+
+    assert main(["check", str(dataset), "--scheme", "retail"]) == 0
+    assert main(["check", str(dataset)]) == 1
+    assert "12" in capsys.readouterr().out
+
+
+def test_priority_flags_display_fixture_when_it_is_missing(dataset, capsys):
+    """Early store annotation will have very little of it, and the coverage table is
+    where that becomes visible rather than being discovered after a training run."""
+    main(["check", str(dataset), "--scheme", "retail"])
+    out = capsys.readouterr().out
+    assert "display_fixture" in out
+    assert "priority" in out

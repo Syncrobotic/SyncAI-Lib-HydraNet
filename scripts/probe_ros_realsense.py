@@ -37,13 +37,12 @@ for candidate in (HERE.parent / "src", HERE / "src"):
         sys.path.insert(0, str(candidate))
 
 from syncai_hydranet.config import load_config  # noqa: E402
-from syncai_hydranet.data.transforms import IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.visualize import (  # noqa: E402
     TRAV_COLORS,
     crop_box,
-    letterbox,
     overlay,
+    preprocess,
 )
 
 GO = 2
@@ -74,13 +73,6 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--score-thr", type=float, default=0.30)
     ap.add_argument("--out", default="shots")
     return ap
-
-
-def preprocess(img: Image.Image, size):
-    img, region = letterbox(img.convert("RGB"), size)
-    arr = np.asarray(img, dtype=np.float32) / 255.0
-    arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
-    return torch.from_numpy(arr.transpose(2, 0, 1))[None], img, region
 
 
 def main() -> int:

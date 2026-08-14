@@ -18,17 +18,24 @@ from ..data.fingerprint import fingerprint_dataset
 from ..data.multitask import MultiTaskLoader
 from ..models.hydranet import build_model
 from ..utils.checkpoint import CKPT_FORMAT, load_checkpoint
-from ..utils.device import pick_device, supports_amp, supports_pinned_memory
+from ..utils.device import (
+    pick_device,
+    supports_amp,
+    supports_bfloat16,
+    supports_pinned_memory,
+)
 from ..utils.logger import get_logger
 from ..utils.runmeta import append_metrics, resolve_out_dir, write_run_meta
 from ..utils.seeding import (
+    apply_channels_last,
     configure_backends,
+    model_memory_format,
     needs_grad_scaler,
     resolve_amp_dtype,
     seed_everything,
 )
-from ..utils.visualize import TERRAIN_COLORS, TRAV_COLORS, prediction_grid
-from .evaluator import evaluate, select_metric
+from ..utils.visualize import TRAV_COLORS, prediction_grid, terrain_palette
+from .evaluator import build_val_loaders, evaluate, select_metric
 
 DEFAULT_PRIMARY_METRIC = "traversability_mIoU"
 
@@ -189,14 +196,24 @@ class Trainer:
         )
 
         self.model = build_model(cfg).to(self.device)
+        # Before the EMA copy is taken below: it deep-copies the model, so converting
+        # afterwards would leave the weights validation actually runs on in NCHW.
+        apply_channels_last(
+            self.model,
+            bool(cfg["train"].get("channels_last", False)),
+            logger=self.logger,
+        )
+        self.memory_format = model_memory_format(self.model)
         tcfg = cfg["train"]
         dcfg = cfg["data"]
         input_size = dcfg["input_size"]
 
         lb = bool(dcfg.get("letterbox", False))
+        aug = dcfg.get("augment")
         train_sets, val_sets, names, ratios = [], [], [], []
         for ds in dcfg["datasets"]:
-            train_sets.append(build_dataset(ds, input_size, "train", letterbox=lb))
+            train_sets.append(build_dataset(ds, input_size, "train", letterbox=lb, augment=aug))
+            # Validation never augments, so it takes no augment argument.
             val_sets.append(build_dataset(ds, input_size, "val", letterbox=lb))
             names.append(ds["name"])
             ratios.append(float(ds.get("sample_ratio", 1.0)))
@@ -210,6 +227,9 @@ class Trainer:
             pin_memory=supports_pinned_memory(self.device),
         )
         self.val_sets = list(zip(names, val_sets, strict=True))
+        # Built once: validation runs every epoch, and a DataLoader's worker pool is
+        # expensive to create and pointless to throw away.
+        self.val_loaders = build_val_loaders(self.val_sets, cfg, self.device)
 
         self.epochs = int(tcfg["epochs"])
         # Accumulation decouples the batch the optimiser sees from the batch that has to
@@ -231,7 +251,17 @@ class Trainer:
         )
 
         self.amp = bool(tcfg.get("amp", True)) and supports_amp(self.device)
-        self.amp_dtype = resolve_amp_dtype(str(tcfg.get("amp_dtype", "float16")))
+        # bfloat16, not float16, because that is what every run this project has
+        # produced was actually trained in -- all of them passing it on the command
+        # line while the default here said otherwise.
+        self.amp_dtype = resolve_amp_dtype(str(tcfg.get("amp_dtype", "bfloat16")))
+        if self.amp and self.amp_dtype is torch.bfloat16 and not supports_bfloat16(self.device):
+            raise ValueError(
+                "train.amp_dtype=bfloat16 needs an Ampere-or-newer CUDA device; this "
+                f"one ({torch.cuda.get_device_name(self.device)}) does not support it. "
+                "Set train.amp_dtype=float16 explicitly -- no run in this project has "
+                "used fp16, so treat its first results as unvalidated."
+            )
         self.scaler = torch.amp.GradScaler(enabled=needs_grad_scaler(self.amp, self.amp_dtype))
         self.grad_clip = float(tcfg.get("grad_clip", 0.0))
         if self.accum_steps > 1:
@@ -359,7 +389,11 @@ class Trainer:
                 # samples than every other step, at a schedule position that assumed
                 # otherwise. Cheaper to drop it than to explain it later.
                 break
+            # Layout is changed after the transfer, not during it: `.to(memory_format=)`
+            # on the copy itself would give up the pinned-memory async path. When the
+            # format is contiguous_format this returns the tensor unchanged.
             images = batch["image"].to(self.device, non_blocking=True)
+            images = images.contiguous(memory_format=self.memory_format)
             targets = _targets_to_device(batch["targets"], self.device)
             with torch.amp.autocast(self.device.type, enabled=self.amp, dtype=self.amp_dtype):
                 outputs = self.model(images)
@@ -382,7 +416,11 @@ class Trainer:
 
             if (i + 1) % self.log_interval == 0:
                 lr = self.optimizer.param_groups[0]["lr"]
-                msg = " ".join(f"{k}={v:.3f}" for k, v in logs.items())
+                # The one place the loss tensors are read back. compute_losses returns
+                # them detached but on-device precisely so this synchronisation happens
+                # once per log_interval rather than three or four times per step.
+                scalars = {k: float(v) for k, v in logs.items()}
+                msg = " ".join(f"{k}={v:.3f}" for k, v in scalars.items())
                 ips = self.log_interval * images.shape[0] / (time.time() - t0)
                 t0 = time.time()
                 self.logger.info(
@@ -390,7 +428,7 @@ class Trainer:
                     f"ds={batch['dataset']} lr={lr:.2e} {msg} ({ips:.1f} img/s)"
                 )
                 if self.tb:
-                    for k, v in logs.items():
+                    for k, v in scalars.items():
                         self.tb.add_scalar(f"train/{k}", v, self.global_step)
                     self.tb.add_scalar("train/lr", lr, self.global_step)
                     self.tb.add_scalar("train/img_per_sec", ips, self.global_step)
@@ -402,7 +440,13 @@ class Trainer:
         model = self.ema.ema if self.ema else self.model
         samples: dict | None = {} if self.tb else None
         metrics = evaluate(
-            model, self.val_sets, self.cfg, self.device, self.logger, samples=samples
+            model,
+            self.val_sets,
+            self.cfg,
+            self.device,
+            self.logger,
+            samples=samples,
+            loaders=self.val_loaders,
         )
         append_metrics(
             self.out_dir,
@@ -428,9 +472,15 @@ class Trainer:
         Curves only say the loss is falling. This says whether the model is calling a
         whole floor a wall, and how much of the frame is ignore padding.
         """
-        palettes = {"traversability": TRAV_COLORS, "terrain": TERRAIN_COLORS}
+        classes = self.cfg["data"].get("terrain_classes")
         for head, (imgs, preds, gts) in (samples or {}).items():
-            grid = prediction_grid(imgs, preds, gts, palettes.get(head, TERRAIN_COLORS))
+            if head == "traversability":
+                palette = TRAV_COLORS
+            else:
+                # n_classes is the fallback for a config that names no classes; a config
+                # that does name them gets the palette built for that taxonomy.
+                palette = terrain_palette(classes, self.model.seg_heads[head].num_classes)
+            grid = prediction_grid(imgs, preds, gts, palette)
             self.tb.add_image(f"val_pred/{head}", grid, self.global_step, dataformats="HWC")
 
     def _log_task_weights(self) -> None:

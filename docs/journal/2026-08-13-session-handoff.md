@@ -1,5 +1,9 @@
 # Session handoff
 
+> **Journal entry, 2026-08-13.** A record of one day, not maintained since. Facts here
+> about what was running, what was unfinished and who was doing what were true then and
+> are the first thing to go stale. The durable material is in `docs/`.
+
 Written 2026-08-13 as one working session's context filled up. This is state and open
 threads, not a design document — the durable knowledge is in the other `docs/` files, which
 this points to rather than repeats.
@@ -8,7 +12,7 @@ this points to rather than repeats.
 
 `origin/dev` is at `ed44b6e`, clean and synced. All work this session is committed and
 pushed. `main` and `stage` still sit at the post-rewrite root (`495227b9`); nothing has been
-promoted, deliberately — the acceptance gates in [RELEASE.md](RELEASE.md) are all unmet.
+promoted, deliberately — the acceptance gates in [RELEASE.md](../RELEASE.md) are all unmet.
 
 **A second session (`syncai-lib-hydranet-5d`) is running.** Coordinate before touching
 `src/`, `configs/`, or `pyproject.toml`. It has been doing the training runs and the ADE20K
@@ -18,7 +22,7 @@ other's files by announcing scope over SendMessage each time.
 ## The one true fact about the model
 
 **Nothing is shippable yet, and the blocker is data, not code or infrastructure.** The model
-design is sound (measured — see [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md)); what is
+design is sound (measured — see [ARCHITECTURE_REVIEW.md](../ARCHITECTURE_REVIEW.md)); what is
 missing is training data at the robot's viewpoint and for three safety classes. A team that
 staffs tuning over annotation gets a better-tuned model with the same ceiling.
 
@@ -55,24 +59,31 @@ Concrete evidence gathered this session:
    root works. Tried video group, chgrp on scheduler nodes + udev, debug group, reboot —
    none worked. Suspected cause: `nvidia-jetpack 6.2.1` on an `nvidia-l4t 36.4.0` base.
    **The two Unitree Orins do not have this problem** (`cuInit` → 0 as normal user), which
-   supports the version-mismatch theory. Documented in [ORIN_BRINGUP.md](ORIN_BRINGUP.md) §4.
+   supports the version-mismatch theory. Documented in [ORIN_BRINGUP.md](../ORIN_BRINGUP.md) §4.
 4. **`pre-conventional-commits` tag deleted** at the user's request, local and remote. The
    old history is unreachable but byte-identical to `dev`; recovery is by commit *message*,
-   see [CONTRIBUTING.md](../CONTRIBUTING.md). Do not recreate the tag.
+   see [CONTRIBUTING.md](../../CONTRIBUTING.md). Do not recreate the tag.
 
 ## Machines
 
 | Host | What | Access | Notes |
 |---|---|---|---|
-| `10.8.140.130` | AGX Orin Dev Kit 64 GB, L4T **R36.4.7**, TRT **10.3.0.30**, CUDA 12.2/12.6 | `unitree`/`123` | **The best target we have.** CUDA works unprivileged (`cuInit` → 0), an Intel **RealSense D435I** is attached (`/dev/video2,4,6`), torch 2.3.0 + CUDA, cv2 4.10, MAXN. Also on the Unitree robot LAN (`192.168.123.101`). Caveats: **no `trtexec` binary** (TRT libs only — build engines via the Python API or install it), `libnvonnxparsers8 8.6.2.3` is co-installed beside 10.3, and the disk is **88% full (27 GB free)**. |
+| `10.8.140.130` | AGX Orin Dev Kit 64 GB, L4T **R36.4.7**, TRT **10.3.0.30**, CUDA 12.2/12.6 | `unitree`, password — see the team password manager | **The best target we have.** CUDA works unprivileged (`cuInit` → 0), an Intel **RealSense D435I** is attached (`/dev/video2,4,6`), torch 2.3.0 + CUDA, cv2 4.10, MAXN. Also on the Unitree robot LAN (`192.168.123.101`). Caveats: **no `trtexec` binary** (TRT libs only — build engines via the Python API or install it), `libnvonnxparsers8 8.6.2.3` is co-installed beside 10.3, and the disk is **88% full (27 GB free)**. |
 | `10.8.140.124` | AGX Orin, JetPack 6.1, TRT 10.3 | `paul`, **SSH key installed** | The bench rig. Has USB camera `/dev/video0`. CUDA needs root here. Streaming service was stopped on request. Has `hydranet.onnx` + both `.engine` + the three scripts in `~`. |
-| `10.8.140.116` | AGX Orin `syncai-robot`, TRT **8.6** | `unitree`/`123` (password) | Unitree compute unit. CUDA works unprivileged. No local camera. |
-| `10.8.140.127` | AGX Orin `ubuntu`, TRT 8.6 | `unitree`/`123` | Older sibling of .116. |
+| `10.8.140.116` | AGX Orin `syncai-robot`, TRT **8.6** | `unitree`, password — password manager | Unitree compute unit. CUDA works unprivileged. No local camera. |
+| `10.8.140.127` | AGX Orin `ubuntu`, TRT 8.6 | `unitree`, password — password manager | Older sibling of .116. |
 | `10.8.100.178` | DDS peer in `.116`'s cyclonedds.xml — the camera source | **offline** | The robot body / camera publisher. Unreachable from every vantage tried. |
+
+> Credentials do not live in this repository. The three Unitree boards ship with the
+> vendor's default password and it is still set; that is worth changing on its own merits,
+> and [ORIN_BRINGUP.md](../ORIN_BRINGUP.md) §1 says how to move to key auth. Until then the
+> password belongs in the team password manager. It was written here in plain text until
+> `dev`; the git history still holds it, which is one more reason to rotate rather than to
+> rewrite history — the rewrite is forbidden by [RELEASE.md](../RELEASE.md) and would not help.
 
 **A camera does exist after all — on `.130`.** The RealSense D435I there is a local USB
 device, so it needs none of the DDS/robot-network path below. It also returns metric depth,
-which retires the homography question in [RETAIL_SCOPE.md](RETAIL_SCOPE.md) §2 for any
+which retires the homography question in [RETAIL_SCOPE.md](../RETAIL_SCOPE.md) §2 for any
 robot built on this configuration: the 5 m mask is a depth threshold, not a calibration.
 
 **The Unitree camera is not on `.116`/`.127`.** It is published over DDS by the robot-side
@@ -98,7 +109,7 @@ this workstation.
 - CVAT annotation host `hydranet-annotation` (asia-east1-b, no public IP, IAP tunnel).
   **Currently RUNNING and idle** (~$59/month against ~$10 stopped). It still runs the
   hand-made bring-up — CVAT `develop@7064c1b` on the floating `:dev` tag — and holds no
-  annotations, so moving it onto the pinned stack in [`deploy/annotation/`](../deploy/annotation/)
+  annotations, so moving it onto the pinned stack in [`deploy/annotation/`](../../deploy/annotation/)
   is free right now and needs a backup later. The admin account still does not exist;
   `./cvat.sh admin <user>` creates it. Stop it when idle:
   `gcloud compute instances stop hydranet-annotation --zone=asia-east1-b`.
@@ -112,7 +123,7 @@ this workstation.
    hydranet-annotation labels --out cvat_labels.json               # paste into CVAT
    hydranet-annotation check datasets/<site>                       # before the first run on it
    ```
-   Priority order is in [METHODOLOGY.md](METHODOLOGY.md): glass, wet_slippery, floor_metal
+   Priority order is in [METHODOLOGY.md](../METHODOLOGY.md): glass, wet_slippery, floor_metal
    first (LiDAR-blind, hand-label only), threshold_ramp/stairs later. All three
    zero-example classes are confirmed annotate-only — the full-vocabulary ADE20K was
    checked and does not supply them.
@@ -127,8 +138,8 @@ this workstation.
 
 ## Docs map
 
-`README.md` links all of these. Newest first: [ORIN_BRINGUP.md](ORIN_BRINGUP.md),
-[RELEASE.md](RELEASE.md), [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md),
-[ANNOTATION_SETUP.md](ANNOTATION_SETUP.md), [METHODOLOGY.md](METHODOLOGY.md),
-[TRAINING_GUIDE.md](TRAINING_GUIDE.md), [HANDOVER.md](HANDOVER.md) (MPS→CUDA move),
-[DEPLOY_JETSON.md](DEPLOY_JETSON.md), [TRAIN_MACOS.md](TRAIN_MACOS.md).
+`README.md` links all of these. Newest first: [ORIN_BRINGUP.md](../ORIN_BRINGUP.md),
+[RELEASE.md](../RELEASE.md), [ARCHITECTURE_REVIEW.md](../ARCHITECTURE_REVIEW.md),
+[ANNOTATION_SETUP.md](../ANNOTATION_SETUP.md), [METHODOLOGY.md](../METHODOLOGY.md),
+[TRAINING_GUIDE.md](../TRAINING_GUIDE.md), [the CUDA move](2026-08-12-mps-to-cuda.md),
+[DEPLOY_JETSON.md](../DEPLOY_JETSON.md), [TRAIN_MACOS.md](../TRAIN_MACOS.md).

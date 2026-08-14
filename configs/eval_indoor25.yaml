@@ -1,0 +1,54 @@
+# =============================================================================
+# Scoring an indoor checkpoint over the 25 indoor COCO categories.
+#
+#   hydranet-eval --config configs/eval_indoor25.yaml \
+#     --checkpoint runs/hydranet_joint_coco10/best.pt --split val
+#
+# expected:  detection_mAP 0.3245647505782422   mAP@50 0.49341168993493867
+#
+# This file exists because that number was quoted as the bar a narrowed detection head
+# has to beat -- 0.3246, not the 0.3348 the same checkpoint scores over all 80 -- while
+# the 25 names defining it survived only in one session's shell history. A baseline that
+# cannot be re-run is a claim, not a measurement.
+#
+# `score_classes` narrows COCOeval and nothing else: the head still has 80 outputs and
+# the label numbering is untouched, which is what makes an 80-class checkpoint and a
+# narrowed one comparable. Use `classes` to narrow what a head learns; the two are
+# separate keys because they are separate jobs.
+#
+# Evaluation only. Do not train from this config -- `sample_ratio: 0.1` below is the
+# ratio the baseline was measured at, not a training choice.
+# =============================================================================
+
+_base_: hydranet_indoor.yaml
+
+data:
+  # Redeclared in full because list values replace rather than merge, so the COCO block
+  # cannot be amended in isolation. Keep in step with hydranet_indoor.yaml's datasets;
+  # tests/test_indoor25_baseline.py checks that the two ADE20K blocks still agree.
+  datasets:
+    - name: ade20k
+      type: seg_folder
+      root: datasets/ADE20K
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: ade20k_indoor
+      supervises: [traversability, terrain]
+      sample_ratio: 1.0
+
+    - name: coco
+      type: coco
+      root: datasets/coco
+      split_train: train2017
+      split_val: val2017
+      supervises: [detection]
+      # The value the published figure was measured at. Scoring is over whichever
+      # images the split contains, so this is part of the baseline's definition.
+      sample_ratio: 0.1
+      # Canonical copy: syncai_hydranet.data.coco_subsets.INDOOR_25, which this must
+      # match exactly. The test above fails if either side is edited alone.
+      score_classes: [person, chair, couch, potted plant, bed, dining table, toilet,
+                      tv, laptop, mouse, remote, keyboard, cell phone, microwave,
+                      oven, sink, refrigerator, book, clock, vase, bottle, cup,
+                      backpack, handbag, umbrella]

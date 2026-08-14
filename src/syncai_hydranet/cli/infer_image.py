@@ -12,35 +12,23 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
 from ..config import load_config
-from ..data.transforms import IMAGENET_MEAN, IMAGENET_STD
+from ..models.heads.detection import SCORE_THR_VIEW
 from ..models.hydranet import build_model
-from ..utils.checkpoint import load_checkpoint
+from ..utils.checkpoint import load_checkpoint, select_weights
 from ..utils.device import pick_device
-from ..utils.visualize import TERRAIN_COLORS, TRAV_COLORS, crop_box, letterbox, overlay
+from ..utils.visualize import (
+    TRAV_COLORS,
+    crop_box,
+    overlay,
+    preprocess,
+    terrain_palette,
+)
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp"}
-
-
-def preprocess(img: Image.Image, size, use_letterbox: bool = False):
-    """Return ``(tensor, canvas, region)``.
-
-    ``region`` locates the real content inside the canvas so predictions can be cropped
-    back and the output keeps the source aspect ratio instead of carrying grey bars.
-    """
-    h, w = size
-    img = img.convert("RGB")
-    if use_letterbox:
-        img, region = letterbox(img, size)
-    else:
-        img, region = img.resize((w, h), Image.BILINEAR), (0, 0, w, h)
-    arr = np.asarray(img, dtype=np.float32) / 255.0
-    arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
-    return torch.from_numpy(arr.transpose(2, 0, 1))[None], img, region
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -49,7 +37,13 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--checkpoint", required=True)
     ap.add_argument("--input", required=True, help="image file or directory")
     ap.add_argument("--output", default="out")
-    ap.add_argument("--score-thr", type=float, default=0.35)
+    ap.add_argument(
+        "--weights",
+        choices=["ema", "model"],
+        default="ema",
+        help="EMA weights need enough training steps to be meaningful; see docs/TRAIN_MACOS.md",
+    )
+    ap.add_argument("--score-thr", type=float, default=SCORE_THR_VIEW)
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
     return ap
 
@@ -60,7 +54,7 @@ def main(argv: list[str] | None = None) -> None:
     device = pick_device(cfg.get("device"))
     model = build_model(cfg).to(device).eval()
     ckpt = load_checkpoint(args.checkpoint)
-    model.load_state_dict(ckpt.get("ema") or ckpt["model"])
+    model.load_state_dict(select_weights(ckpt, args.weights))
 
     in_path = Path(args.input)
     paths = sorted(in_path.glob("*")) if in_path.is_dir() else [in_path]
@@ -68,6 +62,7 @@ def main(argv: list[str] | None = None) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     size = cfg["data"]["input_size"]
     use_lb = bool(cfg["data"].get("letterbox", False))
+    terrain_colors = terrain_palette(cfg["data"].get("terrain_classes"))
 
     for p in paths:
         if p.suffix.lower() not in IMG_EXTS:
@@ -81,7 +76,7 @@ def main(argv: list[str] | None = None) -> None:
         terr = crop_box(result["terrain"][0].cpu().numpy(), region)
         vis_img = canvas.crop((x0, y0, x0 + cw, y0 + ch))
         vis_trav = overlay(vis_img, trav, TRAV_COLORS)
-        vis_terr = overlay(vis_img, terr, TERRAIN_COLORS)
+        vis_terr = overlay(vis_img, terr, terrain_colors)
 
         det = result.get("detection", [{}])[0]
         if det:
