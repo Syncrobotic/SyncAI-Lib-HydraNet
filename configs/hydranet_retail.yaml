@@ -1,12 +1,12 @@
 # =============================================================================
 # SyncAI-Lib-HydraNet: retail deployments (shops, supermarkets, showrooms).
 #
-# The same network as hydranet_indoor. Four things differ, and none of them are the
-# model:
+# The same network as hydranet_indoor; everything unstated comes from
+# _base/hydranet.yaml. What differs, and nothing else:
 #   1. data.terrain_classes   the indoor 12 with display_fixture appended as id 12
 #   2. label_map              ade20k_retail / retail_native
-#   3. detection num_classes  still 80 to train, narrowed at export -- see below
-#   4. primary_metric         chosen for what strands a robot in a shop
+#   3. COCO sample_ratio      0.1, which was measured rather than chosen -- see below
+#   4. terrain head width     13
 #
 # What this config deliberately does NOT model: "walkable within 5 m" and "the
 # merchandise zone on the floor". Both are geometry on the ground plane, both are
@@ -14,40 +14,21 @@
 # threshold in a semantic class asks an annotator to distinguish 4.8 m of floor from
 # 5.2 m of the same floor.
 # =============================================================================
+_base_: _base/hydranet.yaml
 
 experiment: hydranet_retail
 output_dir: runs/hydranet_retail
-seed: 42
 
 model:
-  backbone:
-    name: regnet_x_800mf
-    pretrained: true
-    frozen_stages: 0
-  neck:
-    name: bifpn
-    out_channels: 96
-    num_repeats: 2
-    num_levels: 5
   heads:
     traversability:
-      type: semantic_fpn
-      num_classes: 3              # 0=blocked 1=caution 2=go
-      in_levels: [0, 1, 2]
-      channels: 64
-      dropout: 0.1
       # Same reasoning as indoor: a wet floor after a mop and a glass storefront are
       # both small in pixels and both the ways a shop robot fails.
       loss: { ce_weight: 1.0, dice_weight: 1.5, ignore_index: 255 }
     terrain:
-      type: semantic_fpn
       num_classes: 13             # indoor 12 + display_fixture
-      in_levels: [0, 1, 2]
-      channels: 64
-      dropout: 0.1
       loss: { ce_weight: 1.0, dice_weight: 1.0, ignore_index: 255 }
     detection:
-      type: fcos
       # Train on all 80: COCO supervision is free signal for the shared trunk, and
       # dropping classes at training time does not speed up the robot. Narrow at export
       # instead -- on an AGX Orin the measured post-processing was 43% of the frame,
@@ -55,16 +36,8 @@ model:
       # classes change a shop robot's behaviour (person, chair, backpack, handbag,
       # suitcase, bottle, cup, potted plant); the rest are traffic.
       num_classes: 80
-      in_levels: [0, 1, 2, 3, 4]
-      channels: 96
-      num_convs: 4
-      strides: [8, 16, 32, 64, 128]
-      loss: { cls_weight: 1.0, reg_weight: 1.0, centerness_weight: 1.0 }
-  loss_balancing: uncertainty
-  fixed_weights: { traversability: 1.0, terrain: 1.0, detection: 1.0 }
 
 data:
-  input_size: [512, 640]          # H, W
   letterbox: true
 
   # Order defines the class id; matches label_maps_retail.RETAIL_TERRAIN.
@@ -125,20 +98,7 @@ data:
   workers: 4
 
 train:
-  epochs: 60
   batch_size: 8
-  optimizer: adamw
-  lr: 2.0e-4
-  backbone_lr_mult: 0.1
-  weight_decay: 0.05
-  warmup_iters: 1000
-  scheduler: cosine
-  amp: true
-  grad_clip: 10.0
-  ema: true
-  ema_decay: 0.9998
-  log_interval: 50
-  val_interval: 1
 
   # A shop robot's expensive mistakes are: walking into a glass storefront, walking
   # into a display, and slipping on a mopped floor. Two of those are `blocked`, so the
@@ -147,7 +107,3 @@ train:
   #   primary_metric: IoU/terrain/12_display_fixture
   #   primary_metric: IoU/terrain/08_glass
   primary_metric: traversability_mIoU
-
-export:
-  opset: 17
-  input_size: [512, 640]

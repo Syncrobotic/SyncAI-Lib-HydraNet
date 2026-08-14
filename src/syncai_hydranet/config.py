@@ -91,19 +91,74 @@ def _parse_value(v: Any) -> Any:
         return v
 
 
+BASE_KEY = "_base_"
+_MAX_BASE_DEPTH = 8
+
+
+def merge_config(base: dict, over: dict) -> dict:
+    """Recursively overlay ``over`` on ``base``; ``over`` wins at every leaf.
+
+    Dicts merge, everything else replaces. Lists in particular replace rather than
+    concatenate: ``data.datasets`` is the case that matters, and a config that meant to
+    *change* the dataset list would otherwise silently get both.
+    """
+    out = copy.deepcopy(base)
+    for key, value in over.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = merge_config(out[key], value)
+        else:
+            out[key] = copy.deepcopy(value)
+    return out
+
+
+def _load_with_bases(path: Path, seen: list[Path] | None = None) -> dict:
+    """Load one YAML file and everything it inherits from.
+
+    ``_base_`` names a file, or a list of files, relative to the config that declares it.
+    Later entries win over earlier ones, and the declaring file wins over all of them.
+    """
+    seen = seen or []
+    path = path.resolve()
+    if path in seen:
+        chain = " -> ".join(p.name for p in [*seen, path])
+        raise ValueError(f"circular _base_ chain: {chain}")
+    if len(seen) >= _MAX_BASE_DEPTH:
+        raise ValueError(f"_base_ nested more than {_MAX_BASE_DEPTH} deep, at {path.name}")
+
+    with path.open(encoding="utf-8") as f:
+        raw = yaml.safe_load(f) or {}
+    bases = raw.pop(BASE_KEY, None)
+    if not bases:
+        return raw
+    if isinstance(bases, str):
+        bases = [bases]
+    merged: dict = {}
+    for b in bases:
+        merged = merge_config(merged, _load_with_bases(path.parent / b, [*seen, path]))
+    return merge_config(merged, raw)
+
+
 def load_config(
     path: str | Path, overrides: list[str] | None = None, validate: bool = True
 ) -> Config:
-    """Load a YAML config.
+    """Load a YAML config, resolving ``_base_`` inheritance and dot-path overrides.
 
     ``overrides`` looks like ``["train.lr=1e-4", "model.neck.name=fpn"]``.
 
     Validation runs after the overrides, because a typo on the command line is exactly
     as expensive as one in the file: the setting silently falls back to its default and
     the run looks legitimate. Pass ``validate=False`` only to inspect a broken config.
+
+    Inheritance exists because the three shipped configs were 390 lines of which the
+    optimiser, schedule and export blocks were repeated verbatim three times. The cost of
+    that is not the duplication, it is that changing ``warmup_iters`` in two files out of
+    three produces an experiment whose difference nobody intended. What a config file
+    should show is what makes this run *different*; the rest belongs in a base.
+
+    Note the run's ``meta.json`` records the fully merged result, so lineage is unaffected
+    by how the file was assembled.
     """
-    with Path(path).open(encoding="utf-8") as f:
-        cfg = Config(yaml.safe_load(f))
+    cfg = Config(_load_with_bases(Path(path)))
     for ov in overrides or []:
         key, sep, val = ov.partition("=")
         if not sep:
