@@ -23,16 +23,35 @@ IMG_EXTS = {".png", ".jpg", ".jpeg", ".bmp"}
 
 
 def _index_pairs(img_dir: Path, ann_dir: Path) -> list[tuple[Path, Path]]:
-    """Pair images with annotations by filename stem, recursively, ignoring extensions."""
-    anns = {}
+    """Pair images with annotations by their path under the split, ignoring extensions.
+
+    By *path*, not by bare filename. Session directories are what carry an honest
+    train/val split, and every per-session numbering scheme produces ``0000.png`` more
+    than once. Keyed on the stem alone, the second session's frames overwrite the first's
+    in the lookup and the loader silently trains on a third of what was annotated --
+    caught by `hydranet-annotation check`, which reported 60 masks with no counterpart on
+    a three-session batch that had one for every frame.
+
+    Flat datasets are unaffected: with no subdirectories the relative path *is* the stem.
+    Layouts that nest images and annotations differently fall back to stem matching, so
+    ADE20K and RUGD keep working.
+    """
+    anns_by_rel, anns_by_stem = {}, {}
     for p in ann_dir.rglob("*"):
         if p.suffix.lower() in IMG_EXTS:
-            anns[p.stem] = p
-    pairs = []
-    for p in sorted(img_dir.rglob("*")):
-        if p.suffix.lower() in IMG_EXTS and p.stem in anns:
-            pairs.append((p, anns[p.stem]))
-    return pairs
+            anns_by_rel[p.relative_to(ann_dir).with_suffix("")] = p
+            anns_by_stem.setdefault(p.stem, p)
+
+    images = [p for p in sorted(img_dir.rglob("*")) if p.suffix.lower() in IMG_EXTS]
+    pairs = [
+        (p, anns_by_rel[rel])
+        for p in images
+        if (rel := p.relative_to(img_dir).with_suffix("")) in anns_by_rel
+    ]
+    if pairs:
+        return pairs
+    # Nothing matched by path: the two trees are shaped differently, so fall back.
+    return [(p, anns_by_stem[p.stem]) for p in images if p.stem in anns_by_stem]
 
 
 class SegFolderDataset(Dataset):
