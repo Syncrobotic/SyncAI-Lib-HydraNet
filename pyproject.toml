@@ -12,14 +12,42 @@ requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "SYNCROBOTIC" }]
-keywords = ["robotics", "perception", "multi-task", "segmentation", "detection"]
+# Keywords are what a PyPI or GitHub search actually matches on, so they name the
+# things someone would type when they do not yet know this project exists: the task,
+# the architecture parts, and the hardware it deploys to.
+keywords = [
+    "robotics",
+    "computer-vision",
+    "perception",
+    "multi-task-learning",
+    "semantic-segmentation",
+    "object-detection",
+    "traversability",
+    "terrain-classification",
+    "quadruped",
+    "hydranet",
+    "bifpn",
+    "fcos",
+    "pytorch",
+    "onnx",
+    "tensorrt",
+    "jetson",
+    "autonomous-navigation",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
+    "Environment :: GPU :: NVIDIA CUDA",
     "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Topic :: Scientific/Engineering :: Image Processing",
 ]
 dependencies = [
     "torch>=2.1",
@@ -49,7 +77,10 @@ hydranet-annotation = "syncai_hydranet.cli.annotation:main"
 hydranet-report = "syncai_hydranet.cli.report:main"
 
 [project.urls]
-Repository = "https://github.com/syncrobotic/SyncAI-Lib-HydraNet"
+Homepage = "https://github.com/Syncrobotic/SyncAI-Lib-HydraNet"
+Repository = "https://github.com/Syncrobotic/SyncAI-Lib-HydraNet"
+Documentation = "https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/tree/main/docs"
+Issues = "https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/issues"
 
 # Dev tooling lives in a PEP 735 dependency group: installed by `uv sync`,
 # excluded from the published wheel and from `pip install syncai-hydranet`.
