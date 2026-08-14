@@ -95,6 +95,12 @@ project.
 it is the more accurate of the two. It costs an extrinsic calibration between LiDAR and
 camera, which is more work than A and worth it if floors are not reliably flat.
 
+**C. The depth camera, if the platform has one.** `10.8.140.130` carries an Intel RealSense
+**D435I**, which returns metric depth already registered to the colour frame. On that
+configuration the 5 m test is `depth < 5.0` — no calibration, no flat-floor assumption, no
+extrinsics. Check what the retail robot will actually ship with before doing A: if it has a
+D435-class camera, A is work that does not need doing.
+
 Either way the model stays honest about what it can see, and the horizon stays a number in
 a config file.
 
