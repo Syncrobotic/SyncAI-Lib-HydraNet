@@ -12,12 +12,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
 from ..config import load_config
-from ..data.transforms import IMAGENET_MEAN, IMAGENET_STD
 from ..models.heads.detection import SCORE_THR_VIEW
 from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint, select_weights
@@ -25,29 +23,12 @@ from ..utils.device import pick_device
 from ..utils.visualize import (
     TRAV_COLORS,
     crop_box,
-    letterbox,
     overlay,
+    preprocess,
     terrain_palette,
 )
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp"}
-
-
-def preprocess(img: Image.Image, size, use_letterbox: bool = False):
-    """Return ``(tensor, canvas, region)``.
-
-    ``region`` locates the real content inside the canvas so predictions can be cropped
-    back and the output keeps the source aspect ratio instead of carrying grey bars.
-    """
-    h, w = size
-    img = img.convert("RGB")
-    if use_letterbox:
-        img, region = letterbox(img, size)
-    else:
-        img, region = img.resize((w, h), Image.BILINEAR), (0, 0, w, h)
-    arr = np.asarray(img, dtype=np.float32) / 255.0
-    arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
-    return torch.from_numpy(arr.transpose(2, 0, 1))[None], img, region
 
 
 def build_parser() -> argparse.ArgumentParser:

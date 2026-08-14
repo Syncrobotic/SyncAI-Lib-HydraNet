@@ -170,6 +170,32 @@ def letterbox(img: Image.Image, size, fill=(114, 114, 114)):
     return canvas, (x0, y0, nw, nh)
 
 
+def preprocess(img: Image.Image, size, use_letterbox: bool = True):
+    """Turn one frame into ``(tensor, canvas, region)`` the way every inference path does.
+
+    ``region`` locates the real content inside the canvas, so predictions can be cropped
+    back and the output keeps the source aspect ratio instead of carrying grey bars.
+
+    This existed four times: byte-identical in bev_video, live_view_ros and
+    probe_ros_realsense, and once more in infer_image with the letterbox switch. Four
+    copies of a normalisation is four chances to feed the model something it was not
+    trained on, and the failure mode is a model that merely looks worse in one tool.
+    """
+    import torch
+
+    from ..data.transforms import IMAGENET_MEAN, IMAGENET_STD
+
+    h, w = size
+    img = img.convert("RGB")
+    if use_letterbox:
+        img, region = letterbox(img, size)
+    else:
+        img, region = img.resize((w, h), Image.BILINEAR), (0, 0, w, h)
+    arr = np.asarray(img, dtype=np.float32) / 255.0
+    arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
+    return torch.from_numpy(arr.transpose(2, 0, 1))[None], img, region
+
+
 def crop_box(arr: np.ndarray, region) -> np.ndarray:
     """Crop an ``HxW`` array produced on a letterboxed canvas back to its content."""
     x0, y0, w, h = region

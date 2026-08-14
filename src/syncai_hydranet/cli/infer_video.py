@@ -23,7 +23,6 @@ import torch
 from PIL import Image, ImageDraw
 
 from ..config import load_config
-from ..data.transforms import IMAGENET_MEAN, IMAGENET_STD
 from ..models.heads.detection import SCORE_THR_VIEW
 from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint, select_weights
@@ -31,8 +30,8 @@ from ..utils.device import pick_device
 from ..utils.visualize import (
     TRAV_COLORS,
     crop_box,
-    letterbox,
     overlay,
+    preprocess,
     terrain_palette,
 )
 
@@ -147,11 +146,8 @@ def main(argv: list[str] | None = None) -> None:
     n_done, t0 = 0, time.time()
     sample_fps = args.fps if args.fps and args.fps < src_fps else None
     for frame in frames(args.input, src_w, src_h, sample_fps):
-        img = Image.fromarray(frame)
-        lb, region = letterbox(img, size)
-
-        arr = (np.asarray(lb, np.float32) / 255.0 - IMAGENET_MEAN) / IMAGENET_STD
-        x = torch.from_numpy(arr.transpose(2, 0, 1))[None].to(device)
+        x, lb, region = preprocess(Image.fromarray(frame), size)
+        x = x.to(device)
         with torch.no_grad():
             res = model.predict(x, score_thr=args.score_thr)
 

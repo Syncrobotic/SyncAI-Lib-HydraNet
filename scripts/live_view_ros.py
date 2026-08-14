@@ -59,13 +59,12 @@ from bev_scene import build_scene  # noqa: E402
 from live_view_orin import COCO_NAMES  # noqa: E402
 
 from syncai_hydranet.config import load_config  # noqa: E402  # isort: skip
-from syncai_hydranet.data.transforms import IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.visualize import (  # noqa: E402
     TRAV_COLORS,
     crop_box,
-    letterbox,
     overlay,
+    preprocess,
     terrain_palette,
 )
 
@@ -307,13 +306,6 @@ class Recorder:
         if self.writer is not None:
             self.writer.release()
         self.stats.close()
-
-
-def preprocess(img: Image.Image, size):
-    img, region = letterbox(img.convert("RGB"), size)
-    arr = np.asarray(img, dtype=np.float32) / 255.0
-    arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
-    return torch.from_numpy(arr.transpose(2, 0, 1))[None], img, region
 
 
 def inference_loop(args):

@@ -41,7 +41,6 @@ from live_view_orin import COCO_NAMES  # noqa: E402
 
 from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402  # isort: skip
 from syncai_hydranet.config import load_config  # noqa: E402
-from syncai_hydranet.data.transforms import IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
 from syncai_hydranet.geometry.bev import IGNORE, BevGrid, scene  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera, GroundPlane  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
@@ -49,8 +48,8 @@ from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # 
 from syncai_hydranet.utils.visualize import (  # noqa: E402
     TRAV_COLORS,
     crop_box,
-    letterbox,
     overlay,
+    preprocess,
 )
 
 CELL_RGB = {0: (224, 72, 60), 1: (250, 200, 40), 2: (40, 220, 90)}
@@ -91,13 +90,6 @@ def free_space_map(bev: np.ndarray, grid: BevGrid, n_rays: int = 240) -> np.ndar
     edge = (np.abs(rng - reach[ray]) <= grid.cell * 1.5) & (reach[ray] > 0) & ~walkable
     out[edge] = 0
     return out
-
-
-def preprocess(img: Image.Image, size):
-    img, region = letterbox(img.convert("RGB"), size)
-    arr = np.asarray(img, dtype=np.float32) / 255.0
-    arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
-    return torch.from_numpy(arr.transpose(2, 0, 1))[None], img, region
 
 
 def render_bev(bev: np.ndarray, grid: BevGrid, objects, height: int) -> Image.Image:
