@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from . import label_maps_cocostuff as _cs
 from . import label_maps_indoor as _ind
 from . import label_maps_retail as _ret
 
@@ -187,6 +188,23 @@ SCHEMES: dict[str, LabelScheme] = {
         "retail_native",
         "id",
         _ret.RETAIL_NATIVE_ID,
+        _ret.RETAIL_TERRAIN_TO_TRAV,
+        _ret.RETAIL_TERRAIN,
+    ),
+    # COCO-Stuff rides on the images already in datasets/coco. Its PNG values sit one
+    # below the ids in the dataset's own labels.txt, and `person` is value 0 -- both are
+    # handled inside the module and pinned by tests/test_cocostuff_scheme.py.
+    "cocostuff_indoor": _scheme(
+        "cocostuff_indoor",
+        "id",
+        _cs.COCOSTUFF_ID_TO_INDOOR,
+        _ind.INDOOR_TERRAIN_TO_TRAV,
+        _ind.INDOOR_TERRAIN,
+    ),
+    "cocostuff_retail": _scheme(
+        "cocostuff_retail",
+        "id",
+        _cs.COCOSTUFF_ID_TO_RETAIL,
         _ret.RETAIL_TERRAIN_TO_TRAV,
         _ret.RETAIL_TERRAIN,
     ),
