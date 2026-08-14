@@ -183,3 +183,45 @@ the trunk — and narrow at export, rather than choosing one or the other.
    `threshold_ramp` and `stairs` stay low on the annotation priority list or move back up.
    One measurement on the real robot settles it; until then the ordering in
    [METHODOLOGY.md](METHODOLOGY.md) carries an assumption rather than a result.
+
+---
+
+## The COCO ratio sweep has two variables in it
+
+Sweeping `sample_ratio` produced a sharp result on the held-out test split:
+
+| | segmentation only | COCO 0.1 | COCO 1.0 |
+|---|---|---|---|
+| `glass` IoU | 0.5021 | **0.5462** | 0.0692 |
+| terrain mIoU | 0.5718 | **0.5968** | 0.3591 |
+| detection mAP | — | 0.1985 | **0.3348** |
+
+The natural reading is dilution: at ratio 1.0 the segmentation heads receive about a
+quarter of the optimiser steps and the rare classes starve. **That reading is not
+established, because the sweep moved two things at once.**
+
+With Kendall uncertainty weighting the model learns a `log_var` per head, and each head's
+loss is scaled by it. Change the sampling ratio and every head's `log_var` converges
+somewhere else — so the ratio changes the *effective learning rate per head* as well as
+the step counts. Whether glass fell from 0.502 to 0.069 because the segmentation heads saw
+fewer steps, or because the balancer handed the trunk's gradients to detection, cannot be
+read off these numbers.
+
+### The control, and what each outcome would mean
+
+Rerun ratio 1.0 with `model.loss_balancing: fixed` and equal weights, changing nothing
+else. One run, at the point of maximum effect, rather than a fixed-weight sweep across
+every ratio:
+
+| Outcome at ratio 1.0, fixed weights | Reading |
+|---|---|
+| glass still collapses | **Dilution.** Step count is the mechanism; the balancer is a bystander. The fix is sampling, and the current 0.1 is right. |
+| glass survives | **The balancer.** Uncertainty weighting is amplifying the imbalance, and the fix is a floor on the segmentation weights — which would recover detection mAP *and* glass, rather than trading them. |
+| glass partly recovers | Both, and the split is now quantified. |
+
+Cost is about 8 hours on an RTX PRO 6000 (measured: the ratio-1.0 run took 22:00→06:08
+exclusive, and a second run on the same card costs the pair roughly 55% each).
+
+The result matters beyond this project's tuning: if it is the balancer, then every
+multi-task config here — indoor, retail, and whatever comes next — is carrying a knob that
+silently reallocates capacity whenever a dataset's size changes.
