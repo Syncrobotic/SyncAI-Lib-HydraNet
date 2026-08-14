@@ -54,6 +54,7 @@ class SegFolderDataset(Dataset):
         supervises=("traversability", "terrain"),
         label_map: str | None = None,
         letterbox: bool = False,
+        augment: dict | None = None,
     ):
         self.root = Path(root)
         img_dir = self.root / "images" / split
@@ -71,7 +72,9 @@ class SegFolderDataset(Dataset):
         # legacy auto-detection between RGB palette and integer ids.
         self.scheme = label_maps.get_scheme(label_map) if label_map else None
         self.label_format = label_format
-        self.transform = build_transforms(input_size, train, letterbox=letterbox)
+        self.transform = build_transforms(
+            input_size, train, letterbox=letterbox, augment=augment
+        )
         self.supervises = list(supervises)
         self._color_lut = None
         self._id_lut = None
@@ -148,6 +151,7 @@ class CocoDetDataset(Dataset):
         train: bool,
         supervises=("detection",),
         letterbox: bool = False,
+        augment: dict | None = None,
     ):
         from pycocotools.coco import COCO
 
@@ -165,7 +169,9 @@ class CocoDetDataset(Dataset):
         cat_ids = sorted(self.coco.getCatIds())
         self.cat_to_label = {c: i for i, c in enumerate(cat_ids)}  # contiguous, 0-based
         self.label_to_cat = {i: c for c, i in self.cat_to_label.items()}
-        self.transform = build_transforms(input_size, train, letterbox=letterbox)
+        self.transform = build_transforms(
+            input_size, train, letterbox=letterbox, augment=augment
+        )
         self.supervises = list(supervises)
 
     def __len__(self):
@@ -220,7 +226,9 @@ def resolve_split(dcfg: dict, split: str) -> str:
     return dcfg[key]
 
 
-def build_dataset(dcfg, input_size, split: str = "train", letterbox: bool = False):
+def build_dataset(
+    dcfg, input_size, split: str = "train", letterbox: bool = False, augment: dict | None = None
+):
     """Build one dataset. Augmentation is applied to the train split only."""
     folder = resolve_split(dcfg, split)
     train = split == "train"
@@ -235,9 +243,16 @@ def build_dataset(dcfg, input_size, split: str = "train", letterbox: bool = Fals
             supervises=sup,
             label_map=dcfg.get("label_map"),
             letterbox=letterbox,
+            augment=augment,
         )
     if dcfg["type"] == "coco":
         return CocoDetDataset(
-            dcfg["root"], folder, input_size, train, supervises=sup, letterbox=letterbox
+            dcfg["root"],
+            folder,
+            input_size,
+            train,
+            supervises=sup,
+            letterbox=letterbox,
+            augment=augment,
         )
     raise ValueError(f"unknown dataset type: {dcfg['type']}")

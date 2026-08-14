@@ -194,9 +194,11 @@ class Trainer:
         input_size = dcfg["input_size"]
 
         lb = bool(dcfg.get("letterbox", False))
+        aug = dcfg.get("augment")
         train_sets, val_sets, names, ratios = [], [], [], []
         for ds in dcfg["datasets"]:
-            train_sets.append(build_dataset(ds, input_size, "train", letterbox=lb))
+            train_sets.append(build_dataset(ds, input_size, "train", letterbox=lb, augment=aug))
+            # Validation never augments, so it takes no augment argument.
             val_sets.append(build_dataset(ds, input_size, "val", letterbox=lb))
             names.append(ds["name"])
             ratios.append(float(ds.get("sample_ratio", 1.0)))

@@ -64,11 +64,18 @@ Concrete evidence gathered this session:
 
 | Host | What | Access | Notes |
 |---|---|---|---|
-| `10.8.140.130` | AGX Orin Dev Kit 64 GB, L4T **R36.4.7**, TRT **10.3.0.30**, CUDA 12.2/12.6 | `unitree`/`123` | **The best target we have.** CUDA works unprivileged (`cuInit` → 0), an Intel **RealSense D435I** is attached (`/dev/video2,4,6`), torch 2.3.0 + CUDA, cv2 4.10, MAXN. Also on the Unitree robot LAN (`192.168.123.101`). Caveats: **no `trtexec` binary** (TRT libs only — build engines via the Python API or install it), `libnvonnxparsers8 8.6.2.3` is co-installed beside 10.3, and the disk is **88% full (27 GB free)**. |
+| `10.8.140.130` | AGX Orin Dev Kit 64 GB, L4T **R36.4.7**, TRT **10.3.0.30**, CUDA 12.2/12.6 | `unitree`, password — see the team password manager | **The best target we have.** CUDA works unprivileged (`cuInit` → 0), an Intel **RealSense D435I** is attached (`/dev/video2,4,6`), torch 2.3.0 + CUDA, cv2 4.10, MAXN. Also on the Unitree robot LAN (`192.168.123.101`). Caveats: **no `trtexec` binary** (TRT libs only — build engines via the Python API or install it), `libnvonnxparsers8 8.6.2.3` is co-installed beside 10.3, and the disk is **88% full (27 GB free)**. |
 | `10.8.140.124` | AGX Orin, JetPack 6.1, TRT 10.3 | `paul`, **SSH key installed** | The bench rig. Has USB camera `/dev/video0`. CUDA needs root here. Streaming service was stopped on request. Has `hydranet.onnx` + both `.engine` + the three scripts in `~`. |
-| `10.8.140.116` | AGX Orin `syncai-robot`, TRT **8.6** | `unitree`/`123` (password) | Unitree compute unit. CUDA works unprivileged. No local camera. |
-| `10.8.140.127` | AGX Orin `ubuntu`, TRT 8.6 | `unitree`/`123` | Older sibling of .116. |
+| `10.8.140.116` | AGX Orin `syncai-robot`, TRT **8.6** | `unitree`, password — password manager | Unitree compute unit. CUDA works unprivileged. No local camera. |
+| `10.8.140.127` | AGX Orin `ubuntu`, TRT 8.6 | `unitree`, password — password manager | Older sibling of .116. |
 | `10.8.100.178` | DDS peer in `.116`'s cyclonedds.xml — the camera source | **offline** | The robot body / camera publisher. Unreachable from every vantage tried. |
+
+> Credentials do not live in this repository. The three Unitree boards ship with the
+> vendor's default password and it is still set; that is worth changing on its own merits,
+> and [ORIN_BRINGUP.md](ORIN_BRINGUP.md) §1 says how to move to key auth. Until then the
+> password belongs in the team password manager. It was written here in plain text until
+> `dev`; the git history still holds it, which is one more reason to rotate rather than to
+> rewrite history — the rewrite is forbidden by [RELEASE.md](RELEASE.md) and would not help.
 
 **A camera does exist after all — on `.130`.** The RealSense D435I there is a local USB
 device, so it needs none of the DDS/robot-network path below. It also returns metric depth,

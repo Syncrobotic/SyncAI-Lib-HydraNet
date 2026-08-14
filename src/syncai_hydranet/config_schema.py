@@ -98,9 +98,22 @@ LOSS_BY_TYPE = {
 DATA = {
     "input_size": Spec((list,), required=True),
     "letterbox": Spec((bool,)),
+    # Augmentation strength is part of what produced a checkpoint, so it is declared
+    # here and therefore recorded in meta.json. Omitted keys fall back to
+    # transforms.AUGMENT_DEFAULTS, which are the values this project trained on before
+    # they were configurable.
+    "augment": Spec((dict,)),
     "terrain_classes": Spec((list,)),
     "datasets": Spec((list,), required=True),
     "workers": Spec((int,)),
+}
+
+AUGMENT = {
+    "scale_range": Spec((list, tuple)),
+    "flip_p": Spec(NUMBER),
+    "brightness": Spec(NUMBER),
+    "contrast": Spec(NUMBER),
+    "saturation": Spec(NUMBER),
 }
 
 DATASET = {
@@ -305,6 +318,8 @@ def check_config(cfg: dict) -> list[str]:
     data = cfg.get("data")
     if isinstance(data, dict):
         _check_section(rep, data, DATA, "data")
+        if isinstance(data.get("augment"), dict):
+            _check_section(rep, data["augment"], AUGMENT, "data.augment")
         _check_size(rep, data.get("input_size"), "data.input_size")
         heads = model.get("heads", {}) if isinstance(model, dict) else {}
         _check_datasets(rep, data, set(heads) if isinstance(heads, dict) else set())
