@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 
 from ..data.multitask import collate
 from ..data.transforms import invert_geom
+from ..models.heads.detection import SCORE_THR_EVAL
 
 
 class ConfusionMatrix:
@@ -125,13 +126,17 @@ def evaluate(
     model.eval()
     metrics: dict[str, float] = {}
     seg_cms: dict[str, ConfusionMatrix] = {}
-    det_results = []
-    coco_gt = None
+    # Detections are kept per dataset. They used to share one list and one `coco_gt`
+    # that each detection dataset overwrote, so with two of them every box was scored
+    # against the last one's ground truth -- a wrong mAP, silently, and only when
+    # someone added a second detection source.
+    det_results: dict[str, list] = {}
+    coco_gts: dict[str, object] = {}
     disagree = disagree_total = 0
     if loaders is None:
         loaders = build_val_loaders(val_sets, cfg, device)
 
-    for (_name, loader), (_, ds) in zip(loaders, val_sets, strict=True):
+    for (name, loader), (_, ds) in zip(loaders, val_sets, strict=True):
         sup = ds.supervises
         trav_map = getattr(getattr(ds, "scheme", None), "trav", None)
         for batch in loader:
@@ -160,12 +165,13 @@ def evaluate(
                 disagree_total += n
 
             if model.det_head is not None and model.det_head_name in sup:
-                coco_gt = ds.coco
+                coco_gts[name] = ds.coco
+                results_for_ds = det_results.setdefault(name, [])
                 dets = model.det_head.decode(
                     out["det_cls"],
                     out["det_reg"],
                     out["det_ctr"],
-                    score_thr=0.05,
+                    score_thr=SCORE_THR_EVAL,
                     nms_thr=0.6,
                     img_size=images.shape[-2:],
                 )
@@ -183,7 +189,7 @@ def evaluate(
                         det["labels"].cpu().numpy(),
                         strict=True,
                     ):
-                        det_results.append(
+                        results_for_ds.append(
                             {
                                 "image_id": int(img_id),
                                 "category_id": ds.label_to_cat[int(label)],
@@ -218,17 +224,26 @@ def evaluate(
             + " ".join(f"{x:.3f}" if np.isfinite(x) else "-" for x in per_class)
         )
 
-    if det_results and coco_gt is not None:
+    for ds_name, results in det_results.items():
+        if not results:
+            continue
         from pycocotools.cocoeval import COCOeval
 
-        coco_dt = coco_gt.loadRes(det_results)
+        coco_gt = coco_gts[ds_name]
+        coco_dt = coco_gt.loadRes(results)
         ev = COCOeval(coco_gt, coco_dt, "bbox")
         ev.evaluate()
         ev.accumulate()
         ev.summarize()
-        metrics["detection_mAP"] = float(ev.stats[0])
-        metrics["detection_mAP50"] = float(ev.stats[1])
-        logger.info(f"[val] detection mAP = {ev.stats[0]:.4f}, mAP@50 = {ev.stats[1]:.4f}")
+        # One detection dataset keeps the unqualified key, which is what
+        # train.primary_metric and every existing metrics.jsonl refer to. A second one
+        # gets its own suffixed keys rather than quietly redefining that number.
+        suffix = "" if len(det_results) == 1 else f"/{ds_name}"
+        metrics[f"detection_mAP{suffix}"] = float(ev.stats[0])
+        metrics[f"detection_mAP50{suffix}"] = float(ev.stats[1])
+        logger.info(
+            f"[val] {ds_name} detection mAP = {ev.stats[0]:.4f}, mAP@50 = {ev.stats[1]:.4f}"
+        )
 
     if disagree_total:
         frac = disagree / disagree_total

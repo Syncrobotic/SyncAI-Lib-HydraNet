@@ -18,6 +18,7 @@ from PIL import Image, ImageDraw
 
 from ..config import load_config
 from ..data.transforms import IMAGENET_MEAN, IMAGENET_STD
+from ..models.heads.detection import SCORE_THR_VIEW
 from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint
 from ..utils.device import pick_device
@@ -49,7 +50,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--checkpoint", required=True)
     ap.add_argument("--input", required=True, help="image file or directory")
     ap.add_argument("--output", default="out")
-    ap.add_argument("--score-thr", type=float, default=0.35)
+    ap.add_argument("--score-thr", type=float, default=SCORE_THR_VIEW)
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
     return ap
 

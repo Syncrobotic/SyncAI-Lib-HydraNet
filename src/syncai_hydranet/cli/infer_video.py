@@ -24,6 +24,7 @@ from PIL import Image, ImageDraw
 
 from ..config import load_config
 from ..data.transforms import IMAGENET_MEAN, IMAGENET_STD
+from ..models.heads.detection import SCORE_THR_VIEW
 from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint
 from ..utils.device import pick_device
@@ -101,7 +102,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--input", required=True, help="video file")
     ap.add_argument("--output", default="pred.mp4")
     ap.add_argument("--fps", type=float, default=None, help="sampling and output fps")
-    ap.add_argument("--score-thr", type=float, default=0.35)
+    ap.add_argument("--score-thr", type=float, default=SCORE_THR_VIEW)
     ap.add_argument("--max-frames", type=int, default=0, help="0 means all")
     ap.add_argument("--layout", choices=["side", "trav", "terrain"], default="side")
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")

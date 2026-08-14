@@ -15,7 +15,7 @@ import torch
 import torch.nn as nn
 
 from .backbone import build_backbone
-from .heads.detection import build_det_head
+from .heads.detection import SCORE_THR_VIEW, build_det_head
 from .heads.segmentation import build_seg_head
 from .losses import FCOSLoss, FixedWeighting, SegLoss, UncertaintyWeighting
 from .neck import build_neck
@@ -117,7 +117,7 @@ class HydraNet(nn.Module):
 
     @torch.no_grad()
     def predict(
-        self, images: torch.Tensor, score_thr: float = 0.3, nms_thr: float = 0.6
+        self, images: torch.Tensor, score_thr: float = SCORE_THR_VIEW, nms_thr: float = 0.6
     ) -> dict:
         """Single-frame inference: per-pixel class maps plus NMS-filtered boxes."""
         out = self.forward(images)
