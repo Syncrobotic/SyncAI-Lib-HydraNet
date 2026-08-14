@@ -5,11 +5,14 @@ outputs — traversable surface, terrain class, object detection.**
 The architecture follows the Tesla HydraNet idea: a shared backbone and neck carry almost
 all of the compute, while the task heads stay tiny and mutually independent.
 
-![traversability and terrain from one forward pass](assets/hydranet_demo.gif)
+![traversability and the same answer projected onto the floor](assets/bev_ground_projection.gif)
 
-Left, traversability: green is walkable, red is blocked. Right, the terrain head from the
-same forward pass. Handheld footage of an office corridor, run through
-`hydranet-infer-video` on the 60-epoch multi-task checkpoint.
+Left, traversability with detections: green is walkable, red is blocked. Right, the same
+answer projected onto the floor in metres, each detected object placed where its box meets
+the ground — the one range a single camera can recover. Handheld footage of a building
+lobby, run through the 60-epoch multi-task checkpoint. The camera height and pitch there
+are assumed, not measured; on the robot the ground plane is fitted to the depth return
+each frame, which also tracks the pitch and roll of a walking quadruped.
 
 **Read it for what it is.** The floor, the walls and the partitions are solid, and the two
 heads agree with each other — the trunk is doing its job. What this clip cannot show is the
@@ -114,6 +117,7 @@ uv run hydranet-eval  --config configs/hydranet_indoor.yaml \
 | deploying | [docs/DEPLOY_JETSON.md](docs/DEPLOY_JETSON.md), then [docs/ORIN_BRINGUP.md](docs/ORIN_BRINGUP.md) for a board from scratch |
 | shipping a version | [docs/RELEASE.md](docs/RELEASE.md) — `dev → stage → main`, and separately how a *model* gets a version |
 | scoping a retail robot | [docs/RETAIL_SCOPE.md](docs/RETAIL_SCOPE.md) — what to build and what to keep out of the network |
+| turning a mask into metres | [docs/GROUND_PROJECTION.md](docs/GROUND_PROJECTION.md) — the projection above, and why the camera pose is fitted per frame |
 | on a Mac | [docs/TRAIN_MACOS.md](docs/TRAIN_MACOS.md) |
 
 `docs/journal/` holds dated notes from particular days — a session handoff, a hardware
