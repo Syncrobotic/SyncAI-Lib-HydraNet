@@ -120,10 +120,10 @@ uv run hydranet-eval  --config configs/hydranet_indoor.yaml \
 | turning a mask into metres | [docs/GROUND_PROJECTION.md](docs/GROUND_PROJECTION.md) — the projection above, and why the camera pose is fitted per frame |
 | on a Mac | [docs/TRAIN_MACOS.md](docs/TRAIN_MACOS.md) |
 
-`docs/journal/` holds dated notes from particular days — the newest is
-[2026-08-14](docs/journal/2026-08-14-deploy-retail-handoff.md), which says what is in flight — a session handoff, a hardware
-move. They are records, not documentation: they are accurate about the day they describe
-and are not maintained afterwards.
+`docs/journal/` holds dated notes from particular days: session handoffs, a hardware move.
+They are records, not documentation — accurate about the day they describe and not
+maintained afterwards. The newest,
+[2026-08-14](docs/journal/2026-08-14-deploy-retail-handoff.md), says what is in flight.
 
 ## Commands
 
