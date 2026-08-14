@@ -175,9 +175,16 @@ def test_schemes_are_self_consistent():
     255 is allowed as a mapping target: indoor_native sends unlabelled background there
     on purpose. It needs no entry in ``trav`` because terrain_to_traversability starts
     from an all-255 array and only overwrites the ids it knows.
+
+    Each scheme is checked against its own class list rather than a fixed count. The
+    count used to be pinned at 12, which held only while every scheme shared one
+    taxonomy; retail appends display_fixture as a 13th. What actually has to be true is
+    that a scheme's mapping and its class list agree with each other -- a scheme whose
+    mapping reaches past its own classes indexes off the end of the head.
     """
     for name, sc in label_maps.SCHEMES.items():
-        assert sc.num_classes == 12, name
+        assert sc.classes[0] == "void", name
+        assert len(sc.classes) == len(set(sc.classes)), f"{name}: duplicate class name"
         for t in set(sc.mapping.values()):
             if t == 255:
                 continue

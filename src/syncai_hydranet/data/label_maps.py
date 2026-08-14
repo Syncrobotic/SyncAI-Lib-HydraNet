@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import label_maps_indoor as _ind
+from . import label_maps_retail as _ret
 
 # Unified 12-class terrain, aligned with ``data.terrain_classes`` in the configs.
 TERRAIN = {
@@ -158,6 +159,22 @@ SCHEMES: dict[str, LabelScheme] = {
         _ind.INDOOR_NATIVE_ID,
         _ind.INDOOR_TERRAIN_TO_TRAV,
         _ind.INDOOR_TERRAIN,
+    ),
+    # Retail is the indoor 12 with display_fixture appended as 12; ids 0-11 are
+    # unchanged, so an indoor checkpoint warm-starts and indoor masks stay readable.
+    "ade20k_retail": _scheme(
+        "ade20k_retail",
+        "id",
+        _ret.ADE20K_ID_TO_RETAIL,
+        _ret.RETAIL_TERRAIN_TO_TRAV,
+        _ret.RETAIL_TERRAIN,
+    ),
+    "retail_native": _scheme(
+        "retail_native",
+        "id",
+        _ret.RETAIL_NATIVE_ID,
+        _ret.RETAIL_TERRAIN_TO_TRAV,
+        _ret.RETAIL_TERRAIN,
     ),
 }
 
