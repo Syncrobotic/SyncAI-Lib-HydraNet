@@ -1,11 +1,18 @@
-# SyncAI-Lib-HydraNet
+# SyncAI-Lib-HydraNet — multi-task perception for quadruped robots
+
+[![CI](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/actions/workflows/ci.yml)
+[![Python 3.10 – 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](pyproject.toml)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.1%2B-ee4c2c)](https://pytorch.org/)
+[![Licence Apache-2.0](https://img.shields.io/badge/licence-Apache--2.0-green)](LICENSE)
 
 Multi-head perception network for quadruped robots: **one forward pass, one frame, three
 outputs — traversable surface, terrain class, object detection.**
 The architecture follows the Tesla HydraNet idea: a shared backbone and neck carry almost
 all of the compute, while the task heads stay tiny and mutually independent.
+Written in PyTorch, trained on a CUDA box or an Apple Silicon Mac, exported to ONNX and
+run with TensorRT on a Jetson Orin.
 
-![traversability and the same answer projected onto the floor](assets/bev_ground_projection.gif)
+![traversability segmentation and object detection projected onto the floor in metres, from a quadruped robot camera](assets/bev_ground_projection.gif)
 
 Left, traversability with detections: green is walkable, red is blocked. Right, the same
 answer projected onto the floor in metres, each detected object placed where its box meets

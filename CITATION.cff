@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+title: "SyncAI-Lib-HydraNet: multi-task perception for quadruped robots"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - name: SYNCROBOTIC
+repository-code: "https://github.com/Syncrobotic/SyncAI-Lib-HydraNet"
+abstract: >-
+  A multi-head perception network for quadruped robots. One shared RegNetX backbone and
+  BiFPN neck feed three independent heads in a single forward pass: traversability
+  segmentation, terrain classification and anchor-free FCOS object detection. Trained in
+  PyTorch under partial supervision across datasets, exported to ONNX for TensorRT on a
+  Jetson Orin.
+keywords:
+  - robotics
+  - computer vision
+  - multi-task learning
+  - semantic segmentation
+  - object detection
+  - traversability
+  - quadruped
+license: Apache-2.0
+version: 0.1.0
