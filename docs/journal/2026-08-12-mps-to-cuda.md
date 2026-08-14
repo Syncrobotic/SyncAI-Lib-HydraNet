@@ -1,5 +1,10 @@
 # Handover: moving from Apple Silicon to a CUDA machine
 
+> **Journal entry, 2026-08-12.** A record of the move from Apple Silicon to a CUDA
+> workstation, written as it happened and not maintained since. Still the best account
+> of *why* the settings changed; check current values against `configs/` rather than
+> against this.
+
 The development machine (M4 Pro / MPS) is only good for development and smoke testing.
 This is the runbook for moving training onto a CUDA workstation (e.g. an RTX PRO 6000
 Blackwell), plus the known state of things at handover time.
@@ -10,8 +15,8 @@ Blackwell), plus the known state of things at handover time.
 > they are the procedure to repeat on the next machine — but CUDA, not MPS, is the
 > reference now.
 
-For the macOS setup see [TRAIN_MACOS.md](TRAIN_MACOS.md); for Jetson deployment see
-[DEPLOY_JETSON.md](DEPLOY_JETSON.md).
+For the macOS setup see [TRAIN_MACOS.md](../TRAIN_MACOS.md); for Jetson deployment see
+[DEPLOY_JETSON.md](../DEPLOY_JETSON.md).
 
 ## 1. The code needs no changes for a different GPU
 

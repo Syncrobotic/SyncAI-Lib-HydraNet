@@ -325,7 +325,7 @@ difficulty.
 
 ---
 
-*Related: [TRAIN_MACOS.md](TRAIN_MACOS.md) for local development, [HANDOVER.md](HANDOVER.md)
+*Related: [TRAIN_MACOS.md](TRAIN_MACOS.md) for local development, [the CUDA move](journal/2026-08-12-mps-to-cuda.md)
 for moving to a CUDA machine, [DEPLOY_JETSON.md](DEPLOY_JETSON.md) for deployment. The
 architecture diagram and per-component parameter counts are in the
 [README](../README.md).*
