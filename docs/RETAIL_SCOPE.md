@@ -207,6 +207,119 @@ is nearly the right thing is the right thing. This project has already paid for 
 mistake once, with COCO diluting the segmentation heads. Both classes are `blocked`
 regardless, so the cost of the omission is semantic, not a safety regression.
 
+### Self-training on the site's own frames: what it bought, and what it did not
+
+Measured 2026-08-14, `runs/hydranet_retail_cctv`. Twelve epochs from the retail baseline's
+E22 checkpoint, adding 400 frames from two site clips labelled by that same baseline at
+`sample_ratio: 3.0`, with the input raised to 512x896 for the 16:9 source.
+
+**The fine-tune changes three things at once**, so a run with `site_cctv_pseudo` removed and
+everything else identical was done alongside it (`runs/hydranet_retail_cctv_noself`). Without
+that control none of what follows can be attributed, because a fresh low-LR cosine restart
+buys gains on its own. All three checkpoints on the 329 held-out ADE20K test images under
+`configs/hydranet_retail.yaml`, nothing differing but the weights. The two runs were trained
+several commits apart, so all three were re-scored in one pass under one code state before
+the differences below were believed — they reproduced to the last digit.
+
+| | baseline | restart only | restart + site | the restart | the site data |
+|---|---|---|---|---|---|
+| traversability mIoU | 0.6685 | 0.6785 | 0.6766 | **+0.0100** | −0.0019 |
+| terrain mIoU | 0.5410 | 0.5460 | 0.5453 | **+0.0050** | −0.0007 |
+| glass IoU | 0.5461 | 0.5574 | 0.5587 | **+0.0114** | +0.0013 |
+| caution IoU | 0.2217 | 0.2464 | 0.2393 | **+0.0248** | −0.0072 |
+| stairs IoU | 0.2080 | 0.2605 | 0.2446 | **+0.0524** | −0.0159 |
+| person IoU | 0.6503 | 0.6777 | 0.6804 | **+0.0274** | +0.0027 |
+| door IoU | 0.2985 | 0.2760 | 0.2745 | −0.0226 | −0.0015 |
+| **display_fixture IoU** | **0.3668** | **0.3475** | **0.3379** | −0.0193 | **−0.0096** |
+
+**On the source domain the pseudo-labels do nothing.** Every gain in the middle column is
+the low-LR restart; the site data's own contribution is a wash and slightly negative on most
+classes. There is no source-domain cost either — the expected trade never appeared — but do
+not read the rise as evidence that self-training works. Without the control this run would
+have been written up as "adaptation improved ADE20K too", which is false.
+
+Two other explanations were checked and eliminated: it is **not the evaluation resolution**
+(the fine-tune scores 0.6725 / 0.5459 / 0.5585 at its native 512x896, the same picture), and
+it is **not simply more epochs** (the baseline peaked at E22 and then ran 38 further epochs
+on the same ADE20K without beating it, ending at val trav 0.6255).
+
+**`display_fixture` is where the site data does its own damage.** It is the only class the
+pseudo-labels move meaningfully on their own (−0.0096, on top of the restart's −0.0193), and
+the mechanism is the one this file predicted: the podiums come back unlabelled, so the
+pseudo-labels teach "fixture-shaped things in a shop are not `display_fixture`". Note where
+that lands — on ADE20K's *wall shelving*, the half of the class the bootstrap could already
+reach. Self-training did not merely fail to add the podiums; it eroded the part that worked.
+
+**Benefit side, which lives entirely on the target domain.** The third site clip
+(`archive_20260802-125220`) is not in the training data. It is not perfectly clean either:
+eight of its frames are the run's val split, so it did influence which epoch became
+`best.pt` — a weak channel against ADE20K's val set, but not zero.
+
+![clip 3, baseline vs restart-only vs restart+site](../assets/retail_cctv_clip3_ab.png)
+
+The baseline paints `caution` on a **fixed structural column** (boxed; enlarged in
+[`retail_cctv_clip3_column.png`](../assets/retail_cctv_clip3_column.png)). On a camera that
+never moves, a static false hazard is in every frame the site will ever produce — it does not
+average out, and it is the failure that matters most here. A column is never `caution`, so
+the box is a region whose answer is known in advance and the false positives can simply be
+counted over all 1830 frames rather than eyeballed (`scripts/count_false_caution.py`):
+
+| | frames with the column marked `caution` | mean area of the box |
+|---|---|---|
+| baseline | 1782 / 1830 (97.4%) | 21.3% |
+| restart only | 909 / 1830 (49.7%) | 9.8% |
+| restart + site | **117 / 1830 (6.4%)** | **0.6%** |
+
+**This is what the site data bought, and only the target domain can see it.** The restart
+halves the false positive; the pseudo-labels remove most of what is left. Four frames
+sampled by eye had suggested the opposite — that the restart did the work — because the four
+happened to be frames where the control was clean. The full count is the whole result.
+
+Also observed, by eye and not counted: recovered floor is more contiguous under the
+fine-tune, and **the free-standing podiums are still unmarked by all three models** —
+unchanged, as predicted.
+
+The honest summary: **judge domain adaptation on the target domain or not at all.** The
+source-domain split, which is the only place with labels, scores the pseudo-labels at
+approximately zero and would have got the decision wrong. What adaptation cannot do is
+create the missing class — it made that one slightly worse. Annotation is still the only
+thing that supplies the podiums.
+
+### A fixed camera makes the floor one polygon, not a labelling campaign
+
+Measured on `archive_20260802-125220`, 610 frames through
+`runs/hydranet_retail_cctv/best.pt`. Because the camera never moves, every pixel can be
+asked the same question 610 times, and the answers split three ways:
+
+| how often the pixel came back `go` | share of frame |
+|---|---|
+| ≥ 98% — settled floor | **2.2%** |
+| 80–98% | 17.2% |
+| **20–80% — the model cannot decide** | **16.7%** |
+| ≤ 2% — settled not-floor | 59.6% |
+
+The unstable 16.7% is not scattered. It sits in three places: the **brighter, more
+specular near-field floor** — the same tiles as the stable region, differing only in how
+much light they throw back; the **bases of the podium and the shelf runs**; and the paths
+people walk, which is the only honest part of it. The first is the failure this file
+already predicts for polished retail floors, arriving without any depth sensor involved.
+
+**None of the training options touch it.** Another self-training round draws its labels
+from the model that is confused there, so it hardens the confusion — `hydranet_retail_cctv.yaml`
+says as much. COCO-Stuff is web photography of homes and public interiors and knows
+nothing about this shop's lighting. More epochs only make a contradictory signal more
+confident.
+
+What does touch it is one annotator and one image. **On a fixed camera the floor is a
+single static region**, so the polygon drawn once is correct for every frame that camera
+will ever produce — 1,830 in this clip alone. Thresholding the frame-consensus at 90/5%
+leaves 12.7% of the frame confidently floor, 61.2% confidently not, and **26.1% needing a
+human**, which is a ten-minute correction rather than a labelling campaign. Per camera,
+not per frame: N cameras cost N polygons.
+
+That is also the right order of work. Real labels for the floor first, then a fine-tune on
+them; a fine-tune before them is training on the model's own uncertainty.
+
 ### Capture rules, in priority order
 
 1. **Robot camera height and pitch.** Not eye level. This is the single biggest gap between
