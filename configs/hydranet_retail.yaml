@@ -1,0 +1,153 @@
+# =============================================================================
+# SyncAI-Lib-HydraNet: retail deployments (shops, supermarkets, showrooms).
+#
+# The same network as hydranet_indoor. Four things differ, and none of them are the
+# model:
+#   1. data.terrain_classes   the indoor 12 with display_fixture appended as id 12
+#   2. label_map              ade20k_retail / retail_native
+#   3. detection num_classes  still 80 to train, narrowed at export -- see below
+#   4. primary_metric         chosen for what strands a robot in a shop
+#
+# What this config deliberately does NOT model: "walkable within 5 m" and "the
+# merchandise zone on the floor". Both are geometry on the ground plane, both are
+# post-processing, and both are argued out in docs/RETAIL_SCOPE.md. Putting a distance
+# threshold in a semantic class asks an annotator to distinguish 4.8 m of floor from
+# 5.2 m of the same floor.
+# =============================================================================
+
+experiment: hydranet_retail
+output_dir: runs/hydranet_retail
+seed: 42
+
+model:
+  backbone:
+    name: regnet_x_800mf
+    pretrained: true
+    frozen_stages: 0
+  neck:
+    name: bifpn
+    out_channels: 96
+    num_repeats: 2
+    num_levels: 5
+  heads:
+    traversability:
+      type: semantic_fpn
+      num_classes: 3              # 0=blocked 1=caution 2=go
+      in_levels: [0, 1, 2]
+      channels: 64
+      dropout: 0.1
+      # Same reasoning as indoor: a wet floor after a mop and a glass storefront are
+      # both small in pixels and both the ways a shop robot fails.
+      loss: { ce_weight: 1.0, dice_weight: 1.5, ignore_index: 255 }
+    terrain:
+      type: semantic_fpn
+      num_classes: 13             # indoor 12 + display_fixture
+      in_levels: [0, 1, 2]
+      channels: 64
+      dropout: 0.1
+      loss: { ce_weight: 1.0, dice_weight: 1.0, ignore_index: 255 }
+    detection:
+      type: fcos
+      # Train on all 80: COCO supervision is free signal for the shared trunk, and
+      # dropping classes at training time does not speed up the robot. Narrow at export
+      # instead -- on an AGX Orin the measured post-processing was 43% of the frame,
+      # nearly all of it the sigmoid over 80 classes at 6,825 positions. About eight
+      # classes change a shop robot's behaviour (person, chair, backpack, handbag,
+      # suitcase, bottle, cup, potted plant); the rest are traffic.
+      num_classes: 80
+      in_levels: [0, 1, 2, 3, 4]
+      channels: 96
+      num_convs: 4
+      strides: [8, 16, 32, 64, 128]
+      loss: { cls_weight: 1.0, reg_weight: 1.0, centerness_weight: 1.0 }
+  loss_balancing: uncertainty
+  fixed_weights: { traversability: 1.0, terrain: 1.0, detection: 1.0 }
+
+data:
+  input_size: [512, 640]          # H, W
+  letterbox: true
+
+  # Order defines the class id; matches label_maps_retail.RETAIL_TERRAIN.
+  # 0-11 are byte-identical to the indoor scheme on purpose -- see the module docstring.
+  terrain_classes: [void, floor_hard, floor_soft, floor_metal, wet_slippery,
+                    stairs, threshold_ramp, wall, glass, door,
+                    obstacle_furniture, person, display_fixture]
+
+  datasets:
+    # Bootstrap only. ADE20K's indoor images are homes and restaurants, so it teaches
+    # the shape of a waist-height surface holding objects, not a shop. It cannot teach
+    # a gondola aisle, a storefront reflection, or the robot's own viewpoint -- the
+    # indoor runs measured a ceiling coming back 25% "go" for exactly that reason.
+    - name: ade20k
+      type: seg_folder
+      root: datasets/ADE20K
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: ade20k_retail
+      supervises: [traversability, terrain]
+      sample_ratio: 1.0
+
+    # Store footage. This is the dataset that decides whether the model works, and it
+    # is the only source of display_fixture that means anything. Capture at the robot's
+    # camera height and pitch, one directory per session, and split by store -- never
+    # by frame, and preferably not even by session within one store: aisles repeat, and
+    # a val score taken inside the same shop measures memorisation of that shop.
+    # - name: store_site
+    #   type: seg_folder
+    #   root: datasets/retail
+    #   split_train: train
+    #   split_val: val
+    #   label_map: retail_native   # annotation ids are already the retail 13
+    #   supervises: [traversability, terrain]
+    #   sample_ratio: 3.0          # oversample: fewer images, far more relevant
+
+    - name: coco
+      type: coco
+      root: datasets/coco
+      split_train: train2017
+      split_val: val2017
+      supervises: [detection]
+      # Do not raise this. It was swept on the indoor model, measured on the held-out
+      # test split, and the answer is sharp -- 0.1 matches or beats the segmentation-only
+      # baseline on every class while picking up mAP 0.20 for free, and 1.0 blinds the
+      # model to glass:
+      #
+      #   glass IoU     baseline 0.5021 | ratio 0.1 0.5462 | ratio 1.0 0.0692
+      #   terrain mIoU  baseline 0.5718 | ratio 0.1 0.5968 | ratio 1.0 0.3591
+      #   detection mAP          --     | ratio 0.1 0.1985 | ratio 1.0 0.3348
+      #
+      # Glass is the first class to collapse under dilution and a shop is made of it --
+      # storefronts, display cases, mirrored columns. Buying mAP with glass is the worst
+      # trade available in this deployment.
+      sample_ratio: 0.1
+
+  workers: 4
+
+train:
+  epochs: 60
+  batch_size: 8
+  optimizer: adamw
+  lr: 2.0e-4
+  backbone_lr_mult: 0.1
+  weight_decay: 0.05
+  warmup_iters: 1000
+  scheduler: cosine
+  amp: true
+  grad_clip: 10.0
+  ema: true
+  ema_decay: 0.9998
+  log_interval: 50
+  val_interval: 1
+
+  # A shop robot's expensive mistakes are: walking into a glass storefront, walking
+  # into a display, and slipping on a mopped floor. Two of those are `blocked`, so the
+  # balanced default is a reasonable start -- but once store data exists, selecting on
+  # the class that actually strands the robot is more honest, e.g.
+  #   primary_metric: IoU/terrain/12_display_fixture
+  #   primary_metric: IoU/terrain/08_glass
+  primary_metric: traversability_mIoU
+
+export:
+  opset: 17
+  input_size: [512, 640]

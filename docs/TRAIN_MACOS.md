@@ -1,60 +1,65 @@
-# 在 Apple Silicon Mac 上用 uv 訓練
+# Training on an Apple Silicon Mac with uv
 
-本機開發與冒煙驗證用；正式訓練仍建議在 CUDA 機器上跑（AMP 只有 CUDA 支援）。
-以下數字為 M4 Pro / 48 GB 統一記憶體 / PyTorch 2.13 實測。
+For local development and smoke testing; real training still belongs on a CUDA machine
+(AMP is CUDA-only). The numbers below were measured on an M4 Pro / 48 GB unified memory /
+PyTorch 2.13.
 
-## 一、建立環境
+## 1. Setting up the environment
 
-`uv` 會自己下載對應版本的 Python，不需要先裝 pyenv 或 conda。
+`uv` downloads a suitable Python itself, so there is no need for pyenv or conda first.
 
 ```bash
-uv sync --group dev --extra export   # 建立 .venv 並安裝全部相依（含 uv.lock）
+uv sync --group dev --extra export   # create .venv and install everything (per uv.lock)
 ```
 
-- `uv sync` 會依 `uv.lock` 還原完全一致的相依版本，並以可編輯模式安裝本專案。
-- `--group dev` 是 PEP 735 相依群組（pytest / ruff / pre-commit），不會進入發佈的 wheel。
+- `uv sync` restores exactly the dependency versions in `uv.lock` and installs this project
+  in editable mode.
+- `--group dev` is a PEP 735 dependency group (pytest / ruff / pre-commit) and does not end
+  up in the published wheel.
 
-之後所有指令有兩種寫法，擇一即可：
+From then on every command has two forms; pick either:
 
 ```bash
-uv run hydranet-train ...              # 不必啟用 venv
-# 或
-source .venv/bin/activate              # 啟用後直接用指令名
+uv run hydranet-train ...              # no need to activate the venv
+# or
+source .venv/bin/activate              # then use the command names directly
 ```
 
-驗證環境：
+Verifying the environment:
 
 ```bash
-uv run pytest -q                                              # 20 passed
+uv run pytest -q                                              # 166 passed
 uv run python -c "import torch; print(torch.backends.mps.is_available())"   # True
 ```
 
-## 二、裝置選擇
+## 2. Device selection
 
-`src/syncai_hydranet/utils/device.py` 的 `pick_device()` 依序挑
-**CUDA → MPS → CPU**，所有 CLI 指令共用。
-Mac 上會自動走 MPS，訓練 log 第一行會印出 `device=mps`。
+`pick_device()` in `src/syncai_hydranet/utils/device.py` picks **CUDA → MPS → CPU** in that
+order, and every CLI command shares it.
+On a Mac it goes to MPS automatically, and the first line of the training log prints
+`device=mps`.
 
-要強制指定：
+To force a device:
 
 ```bash
 uv run hydranet-train --config ... --set device=cpu
 ```
 
-MPS 上有兩項自動關閉，都由 `device.py` 判斷，不需手動改 config：
+Two things switch themselves off on MPS, both decided in `device.py`, so the config needs no
+manual editing:
 
-| 項目 | 狀態 | 原因 |
+| Item | State | Reason |
 |---|---|---|
-| AMP (`train.amp`) | 自動關閉 | `GradScaler` / `autocast` 目前只有 CUDA 完整支援 |
-| DataLoader `pin_memory` | 自動關閉 | MPS 尚未支援 pinned memory，設 True 只會噴警告 |
+| AMP (`train.amp`) | Disabled automatically | `GradScaler` / `autocast` are only fully supported on CUDA |
+| DataLoader `pin_memory` | Disabled automatically | MPS does not support pinned memory yet; setting True only produces warnings |
 
-關掉 AMP 在 Mac 上不痛：48 GB 統一記憶體足以在 FP32 下跑 batch 16。
+Losing AMP costs little on a Mac: 48 GB of unified memory is enough for batch 16 in FP32.
 
-## 三、實測效能
+## 3. Measured performance
 
-RegNetX-800MF + BiFPN×2、三個頭全開、含 backward + AdamW step：
+RegNetX-800MF + BiFPN×2, all three heads active, including backward and the AdamW step:
 
-| 裝置 | 解析度 | batch | ms/step | img/s | 峰值記憶體 |
+| Device | Resolution | batch | ms/step | img/s | Peak memory |
 |---|---|---|---|---|---|
 | CPU | 384×512 | 4 | 705 | 5.7 | — |
 | MPS | 384×512 | 4 | 97 | 41.2 | — |
@@ -62,10 +67,11 @@ RegNetX-800MF + BiFPN×2、三個頭全開、含 backward + AdamW step：
 | MPS | 512×640 | 8 | 300 | 26.7 | 5.6 GB |
 | MPS | 512×640 | 16 | 628 | 25.5 | 10.8 GB |
 
-**MPS 比 CPU 快約 7.3 倍**，所以務必確認 log 印的是 `device=mps`。
-batch 8 → 16 幾乎沒有吞吐增益（GPU 已飽和），記憶體卻翻倍，本機建議停在 8。
+**MPS is about 7.3× faster than CPU**, so do check that the log prints `device=mps`.
+Going from batch 8 to 16 gains almost no throughput (the GPU is already saturated) while
+doubling memory, so locally it is worth stopping at 8.
 
-## 四、建議的本機 config 覆寫
+## 4. Suggested local config overrides
 
 ```bash
 uv run hydranet-train --config configs/hydranet_regnet800mf.yaml --set \
@@ -74,81 +80,95 @@ uv run hydranet-train --config configs/hydranet_regnet800mf.yaml --set \
   "data.workers=3"
 ```
 
-### `data.workers` 要調小
+### `data.workers` should come down
 
-`MultiTaskLoader` 是**每個資料集各建一個 DataLoader**，且 `persistent_workers=True`。
-預設 `workers: 8` 搭配三個資料集，代表同時常駐 **24 個 worker process**，
-在 14 核的筆電上會過度訂閱、反而拖慢資料供給。本機建議 `3`～`4`。
+`MultiTaskLoader` builds **one DataLoader per dataset**, with `persistent_workers` on
+whenever `workers > 0`. The default `workers: 8` with three datasets means **24 worker
+processes resident at once**, which on a 14-core laptop over-subscribes the machine and ends
+up slowing data delivery down. Locally, `3`–`4` is the better range.
 
-### COCO 的 `sample_ratio` 要調小
+### COCO's `sample_ratio` should come down
 
-每個 epoch 的 step 數是 `Σ len(loader_i) × ratio_i`。COCO train2017 有約 11.7 萬張，
-`ratio: 1.0` 時它單獨就貢獻 ~14,600 steps，一個 epoch 要 80 分鐘，60 epochs 是 80 小時。
+Steps per epoch is `Σ len(loader_i) × ratio_i`. COCO train2017 holds about 117,000 images,
+so at `ratio: 1.0` it alone contributes ~14,600 steps: 80 minutes for one epoch, and 80
+hours for 60 epochs.
 
-把 COCO 的 `sample_ratio` 降到 `0.1`：每個 epoch 隨機取 10%，而因為 `shuffle=True`
-且每個 epoch 會重建 iterator，各 epoch 看到的是不同的 10%，長期仍會掃過整個資料集。
+Drop COCO's `sample_ratio` to `0.1` and each epoch takes a random 10%. Because
+`shuffle=True` and the iterator is rebuilt every epoch, each epoch sees a *different* 10%,
+so over a full run the whole dataset is still covered.
 
-注意 `config.py` 的 `set_path` **不支援 list 索引** —— `--set data.datasets[2].sample_ratio=0.1`
-不會報錯，但會默默建出一個名為 `datasets[2]` 的無用鍵。兩個可行做法：
+Note that `set_path` in `config.py` does **not support list indices** —
+`--set data.datasets[2].sample_ratio=0.1` raises no error but silently creates a useless key
+literally named `datasets[2]`. Two workable approaches:
 
 ```bash
-# 做法 A：複製一份 config（推薦，設定留得住）
+# Approach A: copy the config (recommended, the settings persist)
 cp configs/hydranet_regnet800mf.yaml configs/local_mac.yaml
-# 編輯 local_mac.yaml，把 coco 那段的 sample_ratio 改成 0.1
+# edit local_mac.yaml and change sample_ratio in the coco entry to 0.1
 
-# 做法 B：整個 list 一次覆寫（--set 的值會被 yaml.safe_load 解析）
+# Approach B: override the whole list at once (--set values go through yaml.safe_load)
 --set "data.datasets=[{name: rugd, type: seg_folder, root: datasets/RUGD, \
   split_train: train, split_val: val, supervises: [traversability, terrain], sample_ratio: 1.0}, \
   {name: coco, type: coco, root: datasets/coco, split_train: train2017, \
   split_val: val2017, supervises: [detection], sample_ratio: 0.1}]"
 ```
 
-調整後單一 epoch 約 14 分鐘、60 epochs 約 14 小時 —— 可以跑一個晚上。
+After that one epoch takes about 14 minutes and 60 epochs about 14 hours — an overnight run.
 
-### 只跑分割也是合法的
+### Segmentation-only is a legitimate setup
 
-把 `data.datasets` 刪到剩 RUGD，偵測頭照樣會建立、只是不被監督。
-RUGD + RELLIS 兩個資料集（約 1.3 萬張）在 512×640 下約 8 分鐘/epoch。
+Trim `data.datasets` down to just RUGD and the detection head is still built, merely left
+unsupervised.
+RUGD + RELLIS together (about 13,000 images) run at roughly 8 minutes per epoch at 512×640.
 
-## 五、短跑實驗一定要關掉 EMA
+## 5. EMA is now safe on short runs (historical issue)
 
-驗證用的是 EMA 權重，而 EMA 從**模型的初始隨機權重**起步 —— n 步之後仍殘留
-`ema_decay^n` 的初始化。預設 `ema_decay: 0.9998` 需要約 2 萬步才洗得掉：
+Validation uses the EMA weights, and the EMA starts from the model's **initial random
+weights**. The old fixed decay left `ema_decay^n` of that initialisation behind after n
+steps, so short runs were dominated by random weights:
 
-| 步數 | 殘留的隨機初始化 | 驗證分數 |
+| Steps | Random init remaining | Validation score |
 |---|---|---|
-| 160 步 @ 0.995 | 45% | 可走性 mIoU 0.16 |
-| 同一份權重（非 EMA） | 0% | 可走性 mIoU **0.95** |
+| 160 steps @ 0.995 (old) | 45% | traversability mIoU 0.16 |
+| The same weights, non-EMA | 0% | traversability mIoU **0.95** |
 
-分數會靜默偏低，看起來像模型完全沒學到東西。本機做幾百步的冒煙實驗時：
+The decay now ramps with the update count, `decay * (1 - exp(-updates / ema_warmup_steps))`
+(the standard YOLOv5 / timm approach): the first few steps copy the model almost exactly,
+and the smoothing only strengthens as the average accumulates history.
+An 18-step smoke run now scores the same with EMA on or off, so **there is no longer any
+need to disable it for short runs**.
+
+`ema_warmup_steps` defaults to 2000. If a run really is too short to finish even the ramp,
+`Trainer` still prints a warning with the residual fraction; that is the point to consider:
 
 ```bash
 --set train.ema=false
 ```
 
-`Trainer` 會在總步數不足時主動印出警告，但仍請養成短跑關 EMA 的習慣。
+## 6. Checking whether training is data-starved
 
-## 六、觀察訓練是否被資料供給卡住
+The log prints img/s every `log_interval` steps. Compare it against the table above:
 
-log 每 `log_interval` 步會印 img/s。拿它跟上表對照：
+- Close to the table → the GPU is the bottleneck, which is normal.
+- Clearly below the table → data delivery is not keeping up. RELLIS-3D is 1920×1200 JPEG,
+  and decoding it is CPU-heavy. Try raising `data.workers` by 1–2 first; if that does not
+  help, downsample the dataset offline.
 
-- 接近表中數字 → GPU 是瓶頸，正常。
-- 明顯低於表中數字 → 資料供給跟不上。RELLIS-3D 是 1920×1200 的 JPEG，解碼很吃 CPU。
-  先試著把 `data.workers` 往上加 1～2，仍不行就先把資料集離線降取樣。
-
-TensorBoard：
+TensorBoard:
 
 ```bash
 uv run tensorboard --logdir runs/
 ```
 
-## 七、ONNX 匯出
+## 7. ONNX export
 
-`hydranet-export-onnx` 不涉及裝置選擇，在 CPU 上匯出，Mac 可直接執行：
+`hydranet-export-onnx` does not go through device selection — it exports on CPU, so a Mac
+can run it directly:
 
 ```bash
 uv run hydranet-export-onnx --config configs/hydranet_regnet800mf.yaml \
     --checkpoint runs/.../best.pt --output hydranet.onnx
 ```
 
-後續 `trtexec` 轉 engine 必須在 Jetson 上做，見 [DEPLOY_JETSON.md](DEPLOY_JETSON.md)。
+Converting to a TensorRT engine with `trtexec` afterwards has to happen on the Jetson; see
+[DEPLOY_JETSON.md](DEPLOY_JETSON.md).

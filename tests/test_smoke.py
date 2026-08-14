@@ -117,3 +117,23 @@ def test_onnx_export(model, tmp_path):
     )
     onnx.checker.check_model(onnx.load(out_file))
     model.train()
+
+
+def test_public_api_is_importable():
+    """__all__ that names something the package does not export breaks `from x import *`
+    and misleads anyone reading it for the supported surface."""
+    import syncai_hydranet
+    from syncai_hydranet import data, engine, utils
+
+    for module in (syncai_hydranet, data, engine, utils):
+        missing = [n for n in module.__all__ if not hasattr(module, n)]
+        assert not missing, f"{module.__name__} exports nothing named {missing}"
+
+
+def test_version_has_a_single_source():
+    """pyproject reads the version out of __init__, so the two cannot drift."""
+    from importlib.metadata import version
+
+    import syncai_hydranet
+
+    assert version("syncai-hydranet") == syncai_hydranet.__version__

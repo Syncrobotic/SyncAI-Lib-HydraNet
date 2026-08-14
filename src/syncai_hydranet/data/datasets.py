@@ -17,7 +17,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 
 from . import label_maps
-from .transforms import Sample, build_transforms
+from .transforms import GEOM_IDENTITY, Sample, build_transforms
 
 IMG_EXTS = {".png", ".jpg", ".jpeg", ".bmp"}
 
@@ -193,16 +193,42 @@ class CocoDetDataset(Dataset):
             "targets": {"boxes": s["boxes"], "labels": s["labels"]},
             "supervises": self.supervises,
             "image_id": img_id,
+            # How this image was scaled and padded, so COCOeval gets boxes in original
+            # image coordinates instead of an after-the-fact guess from the frame size.
+            "geom": s.get("geom", GEOM_IDENTITY),
         }
 
 
-def build_dataset(dcfg, input_size, train: bool, letterbox: bool = False):
-    split = dcfg["split_train"] if train else dcfg["split_val"]
+SPLITS = ("train", "val", "test")
+
+
+def resolve_split(dcfg: dict, split: str) -> str:
+    """Map a logical split to the folder name this dataset uses for it.
+
+    ``test`` is optional and deliberately unconfigured by default: a held-out split is
+    only meaningful if nothing in training ever reads it, so it has to be created on
+    purpose rather than defaulted into existence.
+    """
+    if split not in SPLITS:
+        raise ValueError(f"unknown split {split!r}, expected one of {', '.join(SPLITS)}")
+    key = f"split_{split}"
+    if key not in dcfg:
+        raise KeyError(
+            f"dataset {dcfg.get('name')!r} has no {key}. Add it to the config and "
+            f"populate the matching folder; see README on splitting by sequence."
+        )
+    return dcfg[key]
+
+
+def build_dataset(dcfg, input_size, split: str = "train", letterbox: bool = False):
+    """Build one dataset. Augmentation is applied to the train split only."""
+    folder = resolve_split(dcfg, split)
+    train = split == "train"
     sup = dcfg["supervises"]
     if dcfg["type"] == "seg_folder":
         return SegFolderDataset(
             dcfg["root"],
-            split,
+            folder,
             input_size,
             train,
             label_format=dcfg.get("label_format", "auto"),
@@ -212,6 +238,6 @@ def build_dataset(dcfg, input_size, train: bool, letterbox: bool = False):
         )
     if dcfg["type"] == "coco":
         return CocoDetDataset(
-            dcfg["root"], split, input_size, train, supervises=sup, letterbox=letterbox
+            dcfg["root"], folder, input_size, train, supervises=sup, letterbox=letterbox
         )
     raise ValueError(f"unknown dataset type: {dcfg['type']}")

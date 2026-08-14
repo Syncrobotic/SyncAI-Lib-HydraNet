@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from ..data.multitask import collate
+from ..data.transforms import invert_geom
 
 
 class ConfusionMatrix:
@@ -23,10 +24,37 @@ class ConfusionMatrix:
         self.mat += np.bincount(idx, minlength=self.n**2).reshape(self.n, self.n)
 
     def miou(self) -> tuple[float, np.ndarray]:
+        """Mean IoU, and the per-class IoUs it averaged.
+
+        A class absent from both prediction and ground truth has no IoU to compute and
+        becomes NaN, which ``nanmean`` drops. That is the only defensible choice, but it
+        means **the denominator changes with the dataset**: the indoor scheme declares 12
+        terrain classes while ADE20K contains 8 of them, so this returns a mean over 8.
+        Annotating the missing classes will therefore tend to *lower* mIoU even as the
+        model improves. ``mIoU_classes`` is emitted alongside so the two are never
+        compared without noticing.
+        """
         inter = np.diag(self.mat).astype(np.float64)
         union = self.mat.sum(1) + self.mat.sum(0) - inter
         iou = np.where(union > 0, inter / np.maximum(union, 1), np.nan)
         return float(np.nanmean(iou)), iou
+
+
+def head_disagreement(trav_pred, terrain_pred, trav_map: dict, valid) -> tuple[int, int]:
+    """Pixels where the traversability head contradicts the terrain head, and the total.
+
+    The traversability target is a deterministic function of the terrain target, so the
+    two heads should agree by construction -- but nothing in the model enforces it, and
+    they are free to disagree at inference. "Glass, and walkable" is the failure this
+    counts. It is reported rather than corrected, because which head should win is a
+    deployment decision, not an evaluation one.
+    """
+    lut = torch.full((max(trav_map) + 1,), 255, dtype=torch.long, device=terrain_pred.device)
+    for k, v in trav_map.items():
+        lut[k] = v
+    derived = lut[terrain_pred.clamp(max=len(lut) - 1)]
+    both = valid & (derived != 255)
+    return int((both & (derived != trav_pred)).sum()), int(both.sum())
 
 
 @torch.no_grad()
@@ -37,11 +65,16 @@ def evaluate(model, val_sets, cfg, device, logger, samples: dict | None = None) 
     segmentation head as ``{head: (images, preds, targets)}``, which the trainer turns
     into TensorBoard comparison grids.
     """
+    # Restore whatever mode the caller had it in. Training passes the EMA copy, which
+    # lives in eval mode; leaving it in train mode would let a stray forward pass move
+    # its BatchNorm statistics, and hydranet-eval would return a model set to train.
+    was_training = model.training
     model.eval()
     metrics: dict[str, float] = {}
     seg_cms: dict[str, ConfusionMatrix] = {}
     det_results = []
     coco_gt = None
+    disagree = disagree_total = 0
     bs = max(int(cfg["train"]["batch_size"]) // 2, 1)
     workers = int(cfg["data"].get("workers", 4))
 
@@ -50,10 +83,12 @@ def evaluate(model, val_sets, cfg, device, logger, samples: dict | None = None) 
             ds, batch_size=bs, shuffle=False, num_workers=workers, collate_fn=collate
         )
         sup = ds.supervises
+        trav_map = getattr(getattr(ds, "scheme", None), "trav", None)
         for batch in loader:
             images = batch["image"].to(device)
             out = model(images)
 
+            seg_preds: dict[str, torch.Tensor] = {}
             for head in model.seg_heads:
                 if head in sup and head in batch["targets"]:
                     if head not in seg_cms:
@@ -61,9 +96,18 @@ def evaluate(model, val_sets, cfg, device, logger, samples: dict | None = None) 
                     pred = out[head].argmax(dim=1)
                     tgt = batch["targets"][head].to(device)
                     seg_cms[head].update(pred, tgt)
+                    seg_preds[head] = (pred, tgt)
                     if samples is not None and head not in samples:
                         k = min(4, images.shape[0])
                         samples[head] = (images[:k].cpu(), pred[:k].cpu(), tgt[:k].cpu())
+
+            if trav_map and {"traversability", "terrain"} <= set(seg_preds):
+                trav_pred, trav_tgt = seg_preds["traversability"]
+                d, n = head_disagreement(
+                    trav_pred, seg_preds["terrain"][0], trav_map, trav_tgt != 255
+                )
+                disagree += d
+                disagree_total += n
 
             if model.det_head is not None and model.det_head_name in sup:
                 coco_gt = ds.coco
@@ -75,14 +119,14 @@ def evaluate(model, val_sets, cfg, device, logger, samples: dict | None = None) 
                     nms_thr=0.6,
                     img_size=images.shape[-2:],
                 )
-                # Scale boxes back to original image coordinates for COCOeval.
-                for img_id, det in zip(batch["image_ids"], dets, strict=True):
-                    info = ds.coco.loadImgs(img_id)[0]
-                    sx = info["width"] / images.shape[-1]
-                    sy = info["height"] / images.shape[-2]
-                    boxes = det["boxes"].cpu().numpy()
-                    boxes[:, [0, 2]] *= sx
-                    boxes[:, [1, 3]] *= sy
+                # Map boxes back to original image coordinates for COCOeval. The dataset
+                # records the exact scale and padding it applied; deriving it here from
+                # the frame size would be wrong for every letterboxed image, because the
+                # padding is not part of the original frame.
+                for img_id, det, geom in zip(
+                    batch["image_ids"], dets, batch["geoms"], strict=True
+                ):
+                    boxes = invert_geom(det["boxes"].cpu().numpy(), geom)
                     for box, score, label in zip(
                         boxes,
                         det["scores"].cpu().numpy(),
@@ -106,11 +150,12 @@ def evaluate(model, val_sets, cfg, device, logger, samples: dict | None = None) 
     trav_names = ("blocked", "caution", "go")
     terrain_names = tuple(cfg["data"].get("terrain_classes", []))
 
-    scores = []
     for head, cm in seg_cms.items():
         miou, per_class = cm.miou()
         metrics[f"{head}_mIoU"] = miou
-        scores.append(miou)
+        # How many classes that mean covers. Without it, a run on richer data looks like
+        # a regression when it is really averaging over more, harder classes.
+        metrics[f"{head}_mIoU_classes"] = float(np.isfinite(per_class).sum())
         # Log every class separately: the safety-critical indoor classes (glass,
         # stairs) are tiny, so mIoU alone hides the fact that they never converged.
         names = trav_names if head == "traversability" else terrain_names
@@ -133,9 +178,28 @@ def evaluate(model, val_sets, cfg, device, logger, samples: dict | None = None) 
         ev.summarize()
         metrics["detection_mAP"] = float(ev.stats[0])
         metrics["detection_mAP50"] = float(ev.stats[1])
-        scores.append(float(ev.stats[0]))
         logger.info(f"[val] detection mAP = {ev.stats[0]:.4f}, mAP@50 = {ev.stats[1]:.4f}")
 
-    metrics["mean_score"] = float(np.mean(scores)) if scores else 0.0
-    model.train()
+    if disagree_total:
+        frac = disagree / disagree_total
+        metrics["head_disagreement"] = float(frac)
+        logger.info(f"[val] traversability vs terrain disagree on {100 * frac:.2f}% of pixels")
+
+    model.train(was_training)
     return metrics
+
+
+def select_metric(metrics: dict, name: str) -> float:
+    """Pull the one number that decides which checkpoint wins.
+
+    Averaging mIoU with mAP, as this used to, is not a quantity: the scales differ by
+    a factor of two, so segmentation quietly outvoted detection, and the average
+    changed meaning whenever a dataset was added or removed. One named metric is
+    comparable across runs; everything else stays in metrics.jsonl for analysis.
+    """
+    if name in metrics:
+        return float(metrics[name])
+    raise KeyError(
+        f"train.primary_metric={name!r} was not produced by validation. "
+        f"Available: {', '.join(sorted(metrics))}"
+    )

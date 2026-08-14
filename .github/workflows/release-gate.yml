@@ -1,0 +1,72 @@
+name: Release gate
+
+# Extra checks for release candidates. dev gets the fast CI in ci.yml; stage and main
+# additionally have to prove the export path still works, because a broken export is
+# discovered on the robot otherwise -- long after it was cheap to fix.
+on:
+  push:
+    branches: [stage, main]
+  pull_request:
+    branches: [stage, main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  export-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --group dev --extra export
+
+      # No checkpoint and no dataset needed: a randomly initialised model exercises the
+      # same graph. This catches an operator that stopped exporting cleanly, a shape that
+      # drifted, and a numerical mismatch between PyTorch and the exported graph.
+      - name: Export every shipped config and check parity
+        run: |
+          for cfg in configs/*.yaml; do
+            echo "::group::$cfg"
+            uv run hydranet-export-onnx --config "$cfg" \
+              --output "/tmp/$(basename "$cfg" .yaml).onnx" --check-parity
+            echo "::endgroup::"
+          done
+
+      # The guard exists so an unsupervised head cannot reach an engine. If it stops
+      # refusing, that protection is gone and nothing else would notice.
+      - name: The export guard still refuses an unsupervised head
+        run: |
+          if uv run hydranet-export-onnx --config configs/hydranet_indoor.yaml \
+               --output /tmp/should-not-exist.onnx \
+               --set 'data.datasets=[{name: ade20k, type: seg_folder, root: datasets/ADE20K, split_train: train, split_val: val, label_map: ade20k_indoor, supervises: [traversability, terrain], sample_ratio: 1.0}]'
+          then
+            echo "::error::export guard did not refuse an unsupervised detection head"
+            exit 1
+          fi
+          echo "guard refused as expected"
+
+  release-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --group dev --extra export
+
+      # The bundler is the only thing standing between an unreproducible run and a
+      # published model, so its refusals are worth testing rather than trusting.
+      - name: The bundler refuses a run it cannot reproduce
+        run: |
+          mkdir -p /tmp/fakerun
+          cp configs/hydranet_indoor.yaml /tmp/fakerun/config.yaml
+          touch /tmp/fakerun/best.pt /tmp/fakerun/metrics.jsonl
+          printf '{"git": {"commit": "%s", "dirty": true}}' "$GITHUB_SHA" > /tmp/fakerun/meta.json
+          if PYTHON="uv run python" ./scripts/release_bundle.sh create /tmp/fakerun vci; then
+            echo "::error::bundler accepted a run trained from a dirty tree"
+            exit 1
+          fi
+          echo "bundler refused the dirty run as expected"
