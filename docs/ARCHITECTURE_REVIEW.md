@@ -222,6 +222,14 @@ every ratio:
 Cost is about 8 hours on an RTX PRO 6000 (measured: the ratio-1.0 run took 22:00→06:08
 exclusive, and a second run on the same card costs the pair roughly 55% each).
 
+> **Status: started, stopped at epoch 6 of 60, no conclusion.** `runs/hydranet_fixed_coco10`
+> holds a resumable checkpoint (optimizer and schedule included) and
+> `hydranet-overnight/resume_fixed.sh` restarts it. **Its numbers at epoch 6 answer
+> nothing** — glass was 0.4199 there, and the collapse this control exists to explain only
+> became visible late in the ratio-1.0 run. Read that directory as an experiment in
+> progress, not a result; a half-finished run left on disk without a note is worse than no
+> run at all, because the next person finds numbers and no warning.
+
 The result matters beyond this project's tuning: if it is the balancer, then every
 multi-task config here — indoor, retail, and whatever comes next — is carrying a knob that
 silently reallocates capacity whenever a dataset's size changes.
