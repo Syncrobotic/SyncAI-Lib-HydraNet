@@ -196,6 +196,17 @@ uv run hydranet-infer-video --config ... --checkpoint runs/.../best.pt \
     --input clip.mp4 --output clip_pred.mp4 --fps 10
 ```
 
+`--layout side` (the default) writes traversability on the left and terrain on the right,
+both from the same forward pass:
+
+![traversability and terrain from one forward pass](../assets/hydranet_demo.gif)
+
+An office corridor on the 60-epoch multi-task checkpoint. Floor, wall and partition are
+solid because those are the classes ADE20K has in quantity; the same model scores
+`caution` 0.33 and `stairs` 0.32 on the test split, and returns a quarter of a ceiling as
+"go". Watch a clip before trusting a number — a curve cannot show you a model calling a
+ceiling a floor, and this is the cheapest way to find it.
+
 ## Deploying to Jetson Orin
 
 A run directory is not something you deploy. `scripts/release_bundle.sh` freezes one into

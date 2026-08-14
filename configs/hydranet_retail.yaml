@@ -81,18 +81,28 @@ data:
       split_train: train2017
       split_val: val2017
       supervises: [detection]
-      # Do not raise this. It was swept on the indoor model, measured on the held-out
-      # test split, and the answer is sharp -- 0.1 matches or beats the segmentation-only
-      # baseline on every class while picking up mAP 0.20 for free, and 1.0 blinds the
-      # model to glass:
+      # Do not raise this. Swept on the indoor model at 60 epochs and scored on the
+      # held-out test split (329 images, never used to select a checkpoint):
       #
-      #   glass IoU     baseline 0.5021 | ratio 0.1 0.5462 | ratio 1.0 0.0692
-      #   terrain mIoU  baseline 0.5718 | ratio 0.1 0.5968 | ratio 1.0 0.3591
-      #   detection mAP          --     | ratio 0.1 0.1985 | ratio 1.0 0.3348
+      #   ratio            0        0.1       0.3       1.0
+      #   detection mAP    --     0.1988    0.2790    0.3348
+      #   terrain mIoU   0.5718   0.5968    0.5025    0.3591
+      #   glass IoU      0.5021   0.5462    0.4438    0.0692
+      #   caution IoU    0.3252   0.3346    0.2649    0.1064
       #
-      # Glass is the first class to collapse under dilution and a shop is made of it --
-      # storefronts, display cases, mirrored columns. Buying mAP with glass is the worst
-      # trade available in this deployment.
+      # Every segmentation metric falls monotonically after 0.1 -- there is no ratio that
+      # buys detection without paying in segmentation. Worse, the exchange rate gets
+      # worse as you climb: 0.1->0.3 costs 0.102 of glass for 0.080 of mAP, and
+      # 0.3->1.0 costs 0.375 for 0.056.
+      #
+      # Glass is the first class to collapse and a shop is made of it -- storefronts,
+      # display cases, mirrored columns. Buying mAP with glass is the worst trade
+      # available in this deployment.
+      #
+      # If detection has to be better than mAP 0.20, buy it with detection data or a
+      # wider detection head, not by starving the segmentation heads. Note also that at
+      # ratio 0.3 the best checkpoint was the last one -- detection had not converged, so
+      # 0.279 understates it, while the segmentation cost was already fully paid.
       sample_ratio: 0.1
 
   workers: 4
