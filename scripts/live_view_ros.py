@@ -54,6 +54,8 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
+from bev_page import PAGE as BEV_PAGE  # noqa: E402
+from bev_scene import build_scene  # noqa: E402
 from live_view_orin import COCO_NAMES  # noqa: E402
 
 from syncai_hydranet.config import load_config  # noqa: E402  # isort: skip
@@ -77,7 +79,7 @@ DEPTH_INFO_TOPIC = "/camera/camera/aligned_depth_to_color/camera_info"
 REACH_COLORS = np.array([[0, 0, 0], [40, 220, 90], [250, 200, 40], [230, 60, 230]], np.uint8)
 
 state = {"range": 5.0, "score": 0.30, "view": "both"}
-latest = {"jpeg": None, "stats": {}}
+latest = {"jpeg": None, "stats": {}, "scene": None}
 lock = threading.Lock()
 recorders: list = []  # closed on SIGTERM so the video has a readable index
 
@@ -99,6 +101,8 @@ PAGE = b"""<!doctype html><meta charset=utf-8><title>HydraNet live</title>
  <span class=k style="margin-left:14px">score</span>
  <a href="/set?score=0.15">0.15</a><a href="/set?score=0.30">0.30</a>
  <a href="/set?score=0.50">0.50</a>
+</div>
+<a href="/3d">3D scene</a>
 </div>
 <img src="/stream">
 <div class=row id=s></div>
@@ -143,6 +147,27 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         if url.path == "/":
             return self._send(PAGE)
+        if url.path == "/3d":
+            return self._send(BEV_PAGE)
+        if url.path == "/scene.json":
+            with lock:
+                scene = latest["scene"]
+            body = json.dumps(
+                scene
+                or {
+                    "grid": {
+                        "nx": 0,
+                        "nz": 0,
+                        "cells": [],
+                        "cell": 0.2,
+                        "x_min": 0.0,
+                        "blind_fraction": 0.0,
+                    },
+                    "objects": [],
+                    "range_m": state["range"],
+                }
+            )
+            return self._send(body.encode(), "application/json")
         if url.path == "/stats":
             with lock:
                 body = json.dumps(latest["stats"]).encode()
@@ -339,6 +364,20 @@ def inference_loop(args):
     def stamp_of(msg) -> float:
         return msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
 
+    def scaled_k(msg, stride: int):
+        """The intrinsics of the frames this loop actually works on.
+
+        Subsampling scales fx, fy, cx, cy by the stride. Using the topic's K on a
+        decimated image puts every metre off by exactly that factor, and nothing
+        complains -- the scene is simply the wrong size.
+        """
+        k = np.array(msg.k, dtype=np.float64).reshape(3, 3)
+        k[0, 0] /= stride
+        k[1, 1] /= stride
+        k[0, 2] /= stride
+        k[1, 2] /= stride
+        return k
+
     recorder = None
     if args.record_dir:
         recorder = Recorder(Path(args.record_dir), args.session, args.keyframe_hz)
@@ -434,6 +473,38 @@ def inference_loop(args):
         with lock:
             latest["jpeg"] = buf.getvalue()
             latest["stats"] = frame_stats
+        # The metric scene for /3d. Boxes come back in canvas coordinates, so they are
+        # mapped to the colour frame before any depth is read through them.
+        if info["color"] is not None:
+            sx = color.shape[1] / max(cw, 1)
+            sy = color.shape[0] / max(ch, 1)
+            dets = []
+            if det and len(det.get("boxes", [])):
+                for box, score, label in zip(
+                    det["boxes"].cpu().numpy(),
+                    det["scores"].cpu().numpy(),
+                    det["labels"].cpu().numpy(),
+                    strict=True,
+                ):
+                    dets.append(
+                        {
+                            "box": (
+                                (box[0] - x0) * sx,
+                                (box[1] - y0) * sy,
+                                (box[2] - x0) * sx,
+                                (box[3] - y0) * sy,
+                            ),
+                            "cls": COCO_NAMES[int(label)]
+                            if int(label) < len(COCO_NAMES)
+                            else str(label),
+                            "score": float(score),
+                        }
+                    )
+            scene = build_scene(trav_full, depth_m, scaled_k(info["color"], args.stride), dets)
+            scene["range_m"] = state["range"]
+            with lock:
+                latest["scene"] = scene
+
         if recorder is not None:
             if info["color"] is not None:
                 recorder.write_calibration(info["color"], info["depth"], args.stride)
