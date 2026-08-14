@@ -19,6 +19,25 @@ What survives, and what this view is for: where the free space ends, in which di
 and what class the thing at the boundary is. That last part is the reason it exists --
 the flat map paints a boundary cell `blocked` and stops, while the terrain head knows
 whether the robot is looking at a wall, a glass storefront or a display fixture.
+
+How it is drawn, and why:
+
+* **Supersampled.** Every edge here is a polygon and PIL does not anti-alias one, so the
+  geometry is drawn at 2x and resolved down. Text is drawn after the downsample, where it
+  is already sharp and does not pay for it.
+* **The floor warp samples NEAREST, not BILINEAR.** The raster is a label map wearing
+  colours; interpolating across a class edge produces a colour that belongs to no class,
+  and a viewer cannot tell that invented colour from a real one. Supersampling is what
+  keeps the edge smooth, and it does it without inventing anything.
+* **The floor is quiet and the hazards are loud.** The drivable plate is desaturated
+  toward the panel's own blue-grey with the terrain colour mixed in at `FLOOR_TINT`, so
+  `floor_metal` and `floor_hard` stay distinguishable while neither competes with
+  `caution`, which keeps its colour at full strength.
+* **The boundary is one polygon per class run**, not one per ray. Per-ray quads with their
+  own outlines drew a seam down every wall.
+* **The far edge dissolves** rather than ending on a line. The mapped window has an edge;
+  the floor it describes does not, and a crisp boundary there reads as "the room stops
+  here".
 """
 
 from __future__ import annotations
@@ -47,6 +66,24 @@ CLASS_HEIGHT_M = {
     12: 1.4,  # display_fixture
 }
 DEFAULT_HEIGHT_M = 1.0
+
+# The drivable plate. Deliberately quiet and cool: the floor is the largest area on the
+# panel, and a saturated floor leaves nothing for the hazards to contrast against.
+DRIVABLE_RGB = (38, 52, 68)
+# How much of the terrain colour survives on the floor. Enough to tell floor_metal from
+# floor_hard, not enough to make the floor the loudest thing in frame.
+FLOOR_TINT = 0.34
+# Brightness of the far edge of the mapped window, against 1.0 at the ego. Low enough
+# that the floor dissolves into the background instead of ending on a hard line -- the
+# mapped window has an edge, but the floor it describes does not, and a crisp boundary
+# there reads as "the room stops here".
+FAR_FADE = 0.16
+
+OBJECT_RGB = {
+    "person": (255, 138, 196),
+    "chair": (150, 196, 236),
+    "_": (150, 196, 236),
+}
 
 
 @dataclass(frozen=True)
@@ -111,12 +148,11 @@ def boundary_rays(trav_bev: np.ndarray, grid: BevGrid, n_rays: int = 160):
     return angles, reach
 
 
-def _fit_camera(cam: VirtualCam, grid: BevGrid, size: tuple[int, int]) -> VirtualCam:
-    """The same camera, with a focal length and centre that fit `grid` into `size`.
+def _fit_cam(cam: VirtualCam, grid: BevGrid, size: tuple[int, int]) -> VirtualCam:
+    """Size the virtual camera so the mapped window fills the panel.
 
-    Fitted rather than hand-tuned: the mapped window is set by --range at the call site,
-    so a fixed focal leaves the floor as a postage stamp in a black field the moment
-    anyone changes it.
+    The window is set by ``--range`` at the call site, so a fixed focal length leaves the
+    floor as a postage stamp the moment anyone changes it.
     """
     w, h = size
     probe = VirtualCam(cam.height_m, cam.setback_m, cam.pitch_deg, 1.0, 0.0, 0.0)
@@ -130,195 +166,90 @@ def _fit_camera(cam: VirtualCam, grid: BevGrid, size: tuple[int, int]) -> Virtua
                 vs.append(float(pv))
     span_u = max(max(us) - min(us), 1e-6)
     span_v = max(max(vs) - min(vs), 1e-6)
-    # A room seen at this pitch projects roughly square, so fit it into a square region
-    # at the top and leave the remainder for the legend. Fitting to the full panel
-    # height on a tall column stretches nothing and wastes everything: the scene stays
-    # the same shape and simply floats in black.
-    fit_h = min(h, w)
-    focal = min(w / span_u, fit_h / span_v) * 0.92
-    # `project` adds focal*u to cx and adds focal*v to cy (its own minus is already in
-    # the probe's output), so both offsets are subtracted. Getting this sign wrong
-    # centres nothing and only shows once the fit is tight enough to clip.
+    focal = min(w / span_u, h / span_v) * 0.94
     mid_u = (max(us) + min(us)) / 2 * focal
     mid_v = (max(vs) + min(vs)) / 2 * focal
     return VirtualCam(
-        cam.height_m, cam.setback_m, cam.pitch_deg, focal, w / 2 - mid_u, fit_h / 2 - mid_v
+        cam.height_m, cam.setback_m, cam.pitch_deg, focal, w / 2 - mid_u, h / 2 - mid_v
     )
 
 
-def _paste_floor(panel, cam, trav_bev, terrain_bev, grid, *, trav_colors, terrain_colors, bg):
-    """Warp the flat map onto the ground plane and paste it under everything else.
+def _font(px: int):
+    """A real face if the system has one; PIL's bitmap default is a poor last resort but
+    it keeps this importable on a bare Jetson."""
+    from PIL import ImageFont
 
-    Coloured by terrain where the flat map has it and the cell is walkable, falling back
-    to traversability. The floor a robot drives on is the part terrain calls floor_*, so
-    anything else there is either the boundary or a mistake, and both should look
-    different from clean floor rather than be smoothed into it.
+    for path in (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
+    ):
+        try:
+            return ImageFont.truetype(path, px)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
+def _runs(values):
+    """Contiguous spans of equal value: [(start, stop_exclusive, value), ...].
+
+    The boundary used to be drawn as one quad per ray with its own outline, which showed
+    up as vertical seams down every wall. A wall is one surface; it should be one polygon.
     """
-    src = np.full((*trav_bev.shape, 3), bg, dtype=np.uint8)
+    out, start = [], 0
+    for i in range(1, len(values) + 1):
+        if i == len(values) or values[i] != values[start]:
+            out.append((start, i, values[start]))
+            start = i
+    return out
+
+
+def _floor_raster(trav_bev, terrain_bev, trav_colors, terrain_colors, bg):
+    """The flat map as pixels, in the Tesla-ish value structure: the drivable surface is a
+    quiet cool plate, and saturation is spent on the things that change behaviour."""
+    src = np.zeros((*trav_bev.shape, 3), dtype=np.float32)
+    src[:] = bg
     walk = (trav_bev == 2) | (trav_bev == 1)
+
+    # Drivable floor: desaturated toward the panel's blue-grey rather than painted with
+    # the terrain colour at full strength. Terrain still tints it, so `floor_metal` and
+    # `floor_hard` remain distinguishable, but the floor stops competing with the hazards.
+    base = np.array(DRIVABLE_RGB, dtype=np.float32)
     if terrain_bev is not None and terrain_colors is not None:
         ok = walk & (terrain_bev != IGNORE)
-        src[ok] = np.asarray(terrain_colors)[terrain_bev[ok]]
-    fallback = walk if terrain_bev is None else (walk & ~(terrain_bev != IGNORE))
-    src[fallback] = np.asarray(trav_colors)[trav_bev[fallback]]
+        tint = np.asarray(terrain_colors, dtype=np.float32)[terrain_bev[ok]]
+        src[ok] = base * (1 - FLOOR_TINT) + tint * FLOOR_TINT
+        rest = walk & ~ok
+    else:
+        rest = walk
+    src[rest] = base
 
-    rows, cols = trav_bev.shape
-    corners_m = [
-        (grid.x_min, grid.z_min),
-        (grid.x_max, grid.z_min),
-        (grid.x_max, grid.z_max),
-        (grid.x_min, grid.z_max),
-    ]
-    corners_px = [
-        (0.0, float(rows)),
-        (float(cols), float(rows)),
-        (float(cols), 0.0),
-        (0.0, 0.0),
-    ]
-    scr = [cam.project(x, 0.0, z)[:2] for x, z in corners_m]
-    scr = [(float(a), float(b)) for a, b in scr]
-    coeffs = _perspective_coeffs(scr, corners_px)
-    ground = Image.fromarray(src).transform(
-        panel.size, Image.Transform.PERSPECTIVE, coeffs, Image.Resampling.BILINEAR, fillcolor=bg
-    )
-    # Only paste where the warp actually landed on floor, so the fill does not wipe the bg.
-    mask = Image.fromarray(
-        ((np.asarray(ground) != np.array(bg)).any(-1) * 255).astype(np.uint8)
-    )
-    panel.paste(ground, (0, 0), mask)
+    # `caution` keeps its own colour at full strength: it is the one floor state that is
+    # about the robot's behaviour rather than about what the floor is made of.
+    care = walk & (trav_bev == 1)
+    src[care] = np.asarray(trav_colors, dtype=np.float32)[1]
+
+    # Range fade. Row 0 is the far field, so the ramp runs down the array.
+    rows, cols = src.shape[:2]
+    fade = np.linspace(FAR_FADE, 1.0, rows, dtype=np.float32)[:, None, None]
+    # A little extra light straight ahead of the ego, falling off to the sides: the near
+    # centre is where the depth return is densest, and the panel should look like it
+    # knows most about the place it knows most about.
+    lateral = 1.0 - 0.22 * np.abs(np.linspace(-1, 1, cols, dtype=np.float32))[None, :, None]
+    fade = fade * lateral
+    lit = src * fade + np.array(bg, dtype=np.float32) * (1 - fade)
+    lit[~walk] = bg
+    return np.clip(lit, 0, 255).astype(np.uint8)
 
 
-def _draw_distance_rules(d, cam, grid: BevGrid, size: tuple[int, int]) -> None:
-    """Range rings and lateral lines, drawn on the plane so they carry the perspective."""
+def _vignette(size, strength=0.34):
     w, h = size
-    for z in range(int(np.ceil(grid.z_min)), int(grid.z_max) + 1):
-        xs = np.linspace(grid.x_min, grid.x_max, 40)
-        pts = [tuple(map(float, cam.project(x, 0.0, float(z))[:2])) for x in xs]
-        d.line(pts, fill=(96, 112, 132, 150), width=1)
-        lx, ly = pts[-1]
-        lx = min(max(lx + 6, 2), w - 34)  # a rule that runs off the panel loses its label
-        d.text((lx, min(max(ly - 7, 2), h - 14)), f"{z} m", fill=(120, 140, 165))
-    for x in np.arange(np.ceil(grid.x_min), grid.x_max + 0.01, 2.0):
-        zs = np.linspace(grid.z_min, grid.z_max, 40)
-        pts = [tuple(map(float, cam.project(float(x), 0.0, z)[:2])) for z in zs]
-        d.line(pts, fill=(96, 112, 132, 90), width=1)
-
-
-def _boundary_height_and_colour(terrain_bev, grid, terrain_colors, p0, p1):
-    """How tall to raise the wall between two rays, and what colour it should be.
-
-    The class is read a little *past* the boundary, because what ended the floor is the
-    thing standing behind the last walkable cell rather than the cell itself.
-    """
-    cls = None
-    if terrain_bev is not None:
-        mid = ((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2)
-        cell = grid.to_cell(*mid)
-        if cell is not None:
-            r, c = cell
-            v = int(terrain_bev[max(r - 3, 0), c])
-            cls = v if v != IGNORE else None
-    ht = CLASS_HEIGHT_M.get(cls, DEFAULT_HEIGHT_M) if cls is not None else DEFAULT_HEIGHT_M
-    if ht <= 0.01:
-        ht = 0.25  # something ended the floor even if the class says it is flat
-    colour = (
-        tuple(np.asarray(terrain_colors)[cls])
-        if (cls is not None and terrain_colors is not None)
-        else (150, 165, 190)
-    )
-    return ht, colour
-
-
-def _draw_boundary(d, cam, trav_bev, terrain_bev, grid: BevGrid, terrain_colors) -> None:
-    """Raise a wall at the edge of the free space, painter's-algorithm ordered."""
-    angles, reach = boundary_rays(trav_bev, grid)
-    quads = []
-    for i in range(len(angles) - 1):
-        r0, r1 = reach[i], reach[i + 1]
-        if r0 <= 0 or r1 <= 0:
-            continue
-        a0, a1 = angles[i], angles[i + 1]
-        p0 = (r0 * np.sin(a0), r0 * np.cos(a0))
-        p1 = (r1 * np.sin(a1), r1 * np.cos(a1))
-        ht, colour = _boundary_height_and_colour(terrain_bev, grid, terrain_colors, p0, p1)
-        b0 = cam.project(p0[0], 0.0, p0[1])
-        b1 = cam.project(p1[0], 0.0, p1[1])
-        t0 = cam.project(p0[0], ht, p0[1])
-        t1 = cam.project(p1[0], ht, p1[1])
-        quads.append(
-            (
-                float(b0[2]),
-                [
-                    (float(b0[0]), float(b0[1])),
-                    (float(b1[0]), float(b1[1])),
-                    (float(t1[0]), float(t1[1])),
-                    (float(t0[0]), float(t0[1])),
-                ],
-                colour,
-            )
-        )
-    for _, poly, colour in sorted(quads, key=lambda q: -q[0]):  # far first
-        d.polygon(poly, fill=(*_shade(colour, 0.72), 205), outline=(*_shade(colour, 1.15), 235))
-
-
-def _draw_objects(d, cam, grid: BevGrid, objects) -> None:
-    """Detections as boxes standing on the floor, far ones first."""
-    for obj in sorted(objects, key=lambda o: -o.get("z_m", 0.0)):
-        x, z = obj.get("x_m"), obj.get("z_m")
-        if x is None or z is None:
-            continue
-        if not (grid.x_min <= x <= grid.x_max and grid.z_min <= z <= grid.z_max):
-            continue
-        half = max(float(obj.get("width_m") or 0.5), 0.15) / 2
-        ht = float(obj.get("height_m") or 1.7)
-        base = [
-            (x - half, z - half),
-            (x + half, z - half),
-            (x + half, z + half),
-            (x - half, z + half),
-        ]
-        bp = [tuple(map(float, cam.project(px, 0.0, pz)[:2])) for px, pz in base]
-        tp = [tuple(map(float, cam.project(px, ht, pz)[:2])) for px, pz in base]
-        col = (90, 200, 255)
-        for i in range(4):  # vertical faces
-            j = (i + 1) % 4
-            d.polygon([bp[i], bp[j], tp[j], tp[i]], fill=(*col, 55), outline=(*col, 170))
-        d.polygon(tp, fill=(*col, 80), outline=(*col, 230))
-        d.polygon(bp, outline=(*col, 255))
-        lx, ly = tp[0]
-        d.text(
-            (lx + 4, ly - 12),
-            f"{obj.get('name', '?')} {obj.get('range_m', 0):.1f}m",
-            fill=(225, 240, 255),
-        )
-
-
-def _draw_legend(d, terrain_bev, terrain_colors, class_names, height: int) -> None:
-    """Only what this frame actually contains: a key listing absent classes is noise."""
-    if terrain_bev is None or terrain_colors is None or not class_names:
-        return
-    present = [
-        int(c) for c in np.unique(terrain_bev) if c != IGNORE and int(c) < len(class_names)
-    ]
-    y = height - 12 - 15 * len(present)
-    for cid in present:
-        col = tuple(int(v) for v in np.asarray(terrain_colors)[cid])
-        d.rectangle([10, y, 22, y + 10], fill=col, outline=(0, 0, 0))
-        d.text((28, y - 2), class_names[cid], fill=(200, 214, 234))
-        y += 15
-
-
-def _draw_ego(d, cam, grid: BevGrid) -> None:
-    """The robot, at the near edge of the mapped window."""
-    ex, ey = cam.project(0.0, 0.0, grid.z_min)[:2]
-    d.polygon(
-        [
-            (float(ex), float(ey)),
-            (float(ex) - 13, float(ey) + 20),
-            (float(ex) + 13, float(ey) + 20),
-        ],
-        fill=(235, 245, 255),
-    )
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    dx = (xx - w / 2) / (w / 2)
+    dy = (yy - h / 2) / (h / 2)
+    r = np.clip(np.sqrt(dx * dx + dy * dy) / 1.35, 0, 1)
+    a = (r**2.2 * 255 * strength).astype(np.uint8)
+    return Image.fromarray(a, mode="L")
 
 
 def render(
@@ -332,30 +263,242 @@ def render(
     terrain_colors=None,
     cam: VirtualCam | None = None,
     class_names=None,
-    bg=(11, 14, 19),
+    bg=(7, 9, 13),
+    supersample: int = 2,
 ) -> Image.Image:
-    """Draw the panel. `trav_bev`/`terrain_bev` are the flat maps, far field at row 0.
+    """Draw the panel. ``trav_bev``/``terrain_bev`` are the flat maps, far field at row 0.
 
-    The order below is the draw order, and it is load-bearing: the floor is a warped
-    image and everything after it is vector work on top, the boundary walls occlude the
-    distance rules behind them, and the ego marker sits over all of it.
+    Geometry is drawn at ``supersample``x and resolved down, because every edge here is a
+    polygon and PIL does not anti-alias one. Text is drawn afterwards at final size, where
+    it is already sharp and does not pay the downsample.
     """
-    cam = _fit_camera(cam or VirtualCam(), grid, size)
-    panel = Image.new("RGB", size, bg)
-    _paste_floor(
-        panel,
-        cam,
+    w, h = size
+    s = max(int(supersample), 1)
+    cam = cam or VirtualCam()
+    big = _draw_geometry(
         trav_bev,
         terrain_bev,
         grid,
-        trav_colors=trav_colors,
-        terrain_colors=terrain_colors,
-        bg=bg,
+        objects,
+        (w * s, h * s),
+        cam,
+        trav_colors,
+        terrain_colors,
+        bg,
     )
-    d = ImageDraw.Draw(panel, "RGBA")
-    _draw_distance_rules(d, cam, grid, size)
-    _draw_boundary(d, cam, trav_bev, terrain_bev, grid, terrain_colors)
-    _draw_objects(d, cam, grid, objects)
-    _draw_legend(d, terrain_bev, terrain_colors, class_names, size[1])
-    _draw_ego(d, cam, grid)
+    panel = big.resize((w, h), Image.LANCZOS) if s > 1 else big
+    _draw_annotations(panel, terrain_bev, grid, objects, cam, terrain_colors, class_names)
     return panel
+
+
+def _draw_geometry(
+    trav_bev, terrain_bev, grid, objects, size, cam, trav_colors, terrain_colors, bg
+) -> Image.Image:
+    w, h = size
+    cam = _fit_cam(cam, grid, size)
+    panel = Image.new("RGB", (w, h), bg)
+
+    # --- the floor, warped ---------------------------------------------------
+    src = _floor_raster(trav_bev, terrain_bev, trav_colors, terrain_colors, bg)
+    rows, cols = trav_bev.shape
+    corners_m = [
+        (grid.x_min, grid.z_min),
+        (grid.x_max, grid.z_min),
+        (grid.x_max, grid.z_max),
+        (grid.x_min, grid.z_max),
+    ]
+    corners_px = [
+        (0.0, float(rows)),
+        (float(cols), float(rows)),
+        (float(cols), 0.0),
+        (0.0, 0.0),
+    ]
+    scr = [tuple(map(float, cam.project(x, 0.0, z)[:2])) for x, z in corners_m]
+    coeffs = _perspective_coeffs(scr, corners_px)
+    # NEAREST, not BILINEAR: this raster is a label map wearing colours, and interpolating
+    # across a class edge invents a colour that belongs to no class. Supersampling is what
+    # keeps the edge smooth, and it does it without inventing anything.
+    ground = Image.fromarray(src).transform(
+        (w, h), Image.Transform.PERSPECTIVE, coeffs, Image.Resampling.NEAREST, fillcolor=bg
+    )
+    hit = (np.asarray(ground) != np.array(bg)).any(-1)
+    mask = Image.fromarray((hit * 255).astype(np.uint8))
+    panel.paste(ground, (0, 0), mask)
+
+    d = ImageDraw.Draw(panel, "RGBA")
+    px = max(w // 380, 1)  # line weight that survives the downsample
+
+    # --- distance rules, faint: the scene is the subject, not the graph paper ---
+    for z in range(int(np.ceil(grid.z_min)), int(grid.z_max) + 1):
+        xs = np.linspace(grid.x_min, grid.x_max, 40)
+        pts = [tuple(map(float, cam.project(x, 0.0, float(z))[:2])) for x in xs]
+        d.line(pts, fill=(120, 150, 190, 34), width=px)
+
+    # --- the boundary, raised as one surface per class run ---------------------
+    angles, reach = boundary_rays(trav_bev, grid)
+    classes = []
+    for i in range(len(angles)):
+        cls = None
+        if terrain_bev is not None and reach[i] > 0:
+            p = (reach[i] * np.sin(angles[i]), reach[i] * np.cos(angles[i]))
+            cell = grid.to_cell(*p)
+            if cell is not None:
+                r, c = cell
+                v = int(terrain_bev[max(r - 3, 0), c])
+                cls = v if v != IGNORE else None
+        classes.append(cls if reach[i] > 0 else "gap")
+
+    strips = []
+    for a, b, cls in _runs(classes):
+        if cls == "gap" or b - a < 2:
+            continue
+        ht = CLASS_HEIGHT_M.get(cls, DEFAULT_HEIGHT_M) if cls is not None else DEFAULT_HEIGHT_M
+        if ht <= 0.01:
+            ht = 0.25  # something ended the floor even where the class list says it is flat
+        colour = (
+            tuple(int(v) for v in np.asarray(terrain_colors)[cls])
+            if (cls is not None and terrain_colors is not None)
+            else (150, 165, 190)
+        )
+        pts = [
+            (reach[i] * np.sin(angles[i]), reach[i] * np.cos(angles[i])) for i in range(a, b)
+        ]
+        bpts = [tuple(map(float, cam.project(x, 0.0, z)[:2])) for x, z in pts]
+        depth = float(np.mean([cam.project(x, 0.0, z)[2] for x, z in pts]))
+        # Three stacked bands instead of one flat quad: a wall lit evenly reads as a
+        # cut-out, and the gradient is what makes it read as a standing surface.
+        bands = []
+        for k in range(3):
+            y0, y1 = ht * k / 3, ht * (k + 1) / 3
+            lo = [tuple(map(float, cam.project(x, y0, z)[:2])) for x, z in pts]
+            hi = [tuple(map(float, cam.project(x, y1, z)[:2])) for x, z in pts]
+            bands.append((lo + hi[::-1], 0.34 + 0.26 * k))
+        cap = [tuple(map(float, cam.project(x, ht, z)[:2])) for x, z in pts]
+        strips.append((depth, bands, cap, colour, bpts))
+
+    for _, bands, cap, colour, _bp in sorted(strips, key=lambda q: -q[0]):  # far first
+        for poly, f in bands:
+            d.polygon(poly, fill=(*_shade(colour, f), 232))
+        # the bright top edge is the whole Tesla trick: it is what makes an extrusion read
+        # as an edge you could bump into rather than as a coloured region
+        d.line(cap, fill=(*_shade(colour, 1.6), 255), width=px * 2, joint="curve")
+
+    # --- objects, solid and standing on the floor ------------------------------
+    for obj in sorted(objects, key=lambda o: -(o.get("z_m") or 0.0)):
+        x, z = obj.get("x_m"), obj.get("z_m")
+        if x is None or z is None:
+            continue
+        if not (grid.x_min <= x <= grid.x_max and grid.z_min <= z <= grid.z_max):
+            continue
+        half = max(float(obj.get("width_m") or 0.5), 0.15) / 2
+        ht = float(obj.get("height_m") or 1.7)
+        col = OBJECT_RGB.get(str(obj.get("name", "")), OBJECT_RGB["_"])
+
+        # contact shadow first, so the volume sits on the floor instead of hovering
+        sh = [
+            tuple(
+                map(
+                    float,
+                    cam.project(x + half * 1.5 * np.cos(t), 0.0, z + half * 1.5 * np.sin(t))[
+                        :2
+                    ],
+                )
+            )
+            for t in np.linspace(0, 2 * np.pi, 20, endpoint=False)
+        ]
+        d.polygon(sh, fill=(0, 0, 0, 120))
+
+        base = [
+            (x - half, z - half),
+            (x + half, z - half),
+            (x + half, z + half),
+            (x - half, z + half),
+        ]
+        bp = [tuple(map(float, cam.project(px_, 0.0, pz)[:2])) for px_, pz in base]
+        tp = [tuple(map(float, cam.project(px_, ht, pz)[:2])) for px_, pz in base]
+        # Solid, but deliberately a plain extrusion of the measured footprint and height --
+        # not a chair asset. It asserts exactly what the flat map and the box already did.
+        for i, f in ((0, 0.52), (1, 0.40), (3, 0.62)):  # skip the hidden rear face
+            j = (i + 1) % 4
+            d.polygon([bp[i], bp[j], tp[j], tp[i]], fill=(*_shade(col, f), 250))
+        d.polygon(tp, fill=(*_shade(col, 0.95), 255))
+        d.line([*tp, tp[0]], fill=(*_shade(col, 1.45), 255), width=px * 2, joint="curve")
+
+    # --- ego -------------------------------------------------------------------
+    ex, ey = (float(v) for v in cam.project(0.0, 0.0, grid.z_min)[:2])
+    r = max(w // 60, 6)
+    d.polygon(
+        [
+            (ex, ey - r * 0.2),
+            (ex - r * 0.72, ey + r),
+            (ex, ey + r * 0.6),
+            (ex + r * 0.72, ey + r),
+        ],
+        fill=(226, 240, 255, 255),
+    )
+
+    panel.paste(Image.new("RGB", (w, h), bg), (0, 0), _vignette((w, h)))
+    return panel
+
+
+def _draw_annotations(
+    panel, terrain_bev, grid, objects, cam, terrain_colors, class_names
+) -> None:
+    """Text, at final resolution. Drawn after the downsample so it stays crisp."""
+    w, h = panel.size
+    cam = _fit_cam(cam, grid, (w, h))
+    d = ImageDraw.Draw(panel, "RGBA")
+    f_small = _font(max(h // 75, 10))
+    f_label = _font(max(h // 64, 11))
+
+    for z in range(int(np.ceil(grid.z_min)), int(grid.z_max) + 1):
+        pu, pv = (float(v) for v in cam.project(grid.x_max, 0.0, float(z))[:2])
+        lx = min(max(pu + 7, 2), w - 40)
+        d.text(
+            (lx, min(max(pv - 7, 2), h - 16)),
+            f"{z} m",
+            font=f_small,
+            fill=(150, 172, 200, 210),
+            stroke_width=2,
+            stroke_fill=(0, 0, 0, 190),
+        )
+
+    for obj in sorted(objects, key=lambda o: -(o.get("z_m") or 0.0)):
+        x, z = obj.get("x_m"), obj.get("z_m")
+        if x is None or z is None:
+            continue
+        if not (grid.x_min <= x <= grid.x_max and grid.z_min <= z <= grid.z_max):
+            continue
+        ht = float(obj.get("height_m") or 1.7)
+        lu, lv = (float(v) for v in cam.project(x, ht, z)[:2])
+        txt = f"{obj.get('name', '?')}  {obj.get('range_m', 0):.1f} m"
+        d.text(
+            (lu, lv - h // 52),
+            txt,
+            font=f_label,
+            anchor="mb",
+            fill=(232, 243, 255, 255),
+            stroke_width=3,
+            stroke_fill=(0, 0, 0, 205),
+        )
+
+    if terrain_bev is not None and terrain_colors is not None and class_names:
+        present = [
+            int(c) for c in np.unique(terrain_bev) if c != IGNORE and int(c) < len(class_names)
+        ]
+        step = max(h // 46, 15)
+        y = h - 12 - step * len(present)
+        for cid in present:
+            col = tuple(int(v) for v in np.asarray(terrain_colors)[cid])
+            d.rounded_rectangle(
+                [12, y, 12 + step // 2, y + step // 2], radius=max(step // 8, 2), fill=col
+            )
+            d.text(
+                (12 + step, y - 1),
+                class_names[cid],
+                font=f_small,
+                fill=(206, 220, 238, 255),
+                stroke_width=2,
+                stroke_fill=(0, 0, 0, 190),
+            )
+            y += step
