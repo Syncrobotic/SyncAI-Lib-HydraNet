@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from ..data.multitask import collate
 from ..data.transforms import invert_geom
 from ..models.heads.detection import SCORE_THR_EVAL
+from ..utils.seeding import model_memory_format
 
 
 class ConfusionMatrix:
@@ -139,11 +140,16 @@ def evaluate(
     if loaders is None:
         loaders = build_val_loaders(val_sets, cfg, device)
 
+    # Read off the model rather than the config: a checkpoint does not record its
+    # memory format, so a caller who loaded weights into an NCHW module gets NCHW here
+    # and one training in NHWC gets NHWC, without either having to say so.
+    memory_format = model_memory_format(model)
+
     for (name, loader), (_, ds) in zip(loaders, val_sets, strict=True):
         sup = ds.supervises
         trav_map = getattr(getattr(ds, "scheme", None), "trav", None)
         for batch in loader:
-            images = batch["image"].to(device)
+            images = batch["image"].to(device).contiguous(memory_format=memory_format)
             out = model(images)
 
             seg_preds: dict[str, torch.Tensor] = {}

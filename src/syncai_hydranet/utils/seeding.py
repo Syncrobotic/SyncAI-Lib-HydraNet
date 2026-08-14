@@ -78,6 +78,61 @@ def configure_backends(
         log(f"cuda backends: cudnn_benchmark={cudnn_benchmark}, tf32={tf32}")
 
 
+def apply_channels_last(
+    model: torch.nn.Module,
+    enabled: bool,
+    *,
+    logger: logging.Logger | None = None,
+) -> None:
+    """Move 4-D weights to NHWC, which is the layout tensor cores read natively.
+
+    This changes no arithmetic -- only the strides the same numbers are stored with --
+    but it removes the implicit transposes cuDNN would otherwise insert around every
+    convolution. Measured on an RTX PRO 6000 at batch 48, 512x640, bf16 autocast:
+    153.2 -> 121.1 ms, about -21% (`scripts/bench_channels_last.py`). Under fp32 it is
+    worth nothing -- 219.6 -> 220.9 ms -- because those convolutions run on CUDA cores,
+    which do not care about layout. The saving is entirely in work not done, which is
+    why high GPU utilisation beforehand did not rule it out: transposing counts as
+    utilisation.
+    """
+    if not enabled:
+        return
+    model.to(memory_format=torch.channels_last)
+    if logger:
+        logger.info("memory format: channels_last (NHWC)")
+
+
+def model_memory_format(model: torch.nn.Module) -> torch.memory_format:
+    """The layout a model's convolutions want, read off its own weights.
+
+    Inference and evaluation get this without the training flag threaded through to
+    them: a checkpoint's memory format is not in its state_dict, so asking the live
+    module is the only reliable source.
+
+    A weight is only allowed to vote if it distinguishes the two formats. A 1x1 conv
+    weight satisfies both `is_contiguous()` and `is_contiguous(channels_last)`, and
+    `is_contiguous()` wins that tie by convention -- so a model whose first 4-D
+    parameter is a 1x1 conv would otherwise report NCHW however it was converted.
+
+    Anything without `parameters()` -- the evaluator's test stubs are the live case --
+    has no weights to have a preference, and NCHW is the answer that costs nothing:
+    `contiguous(contiguous_format)` on an already-contiguous input is a no-op. Kept
+    duck-typed rather than requiring nn.Module because `evaluate` is, and widening its
+    contract for a layout hint would be the tail wagging the dog.
+    """
+    parameters = getattr(model, "parameters", None)
+    if parameters is None:
+        return torch.contiguous_format
+    for p in parameters():
+        if (
+            p.dim() == 4
+            and p.is_contiguous(memory_format=torch.channels_last)
+            and not p.is_contiguous()
+        ):
+            return torch.channels_last
+    return torch.contiguous_format
+
+
 def needs_grad_scaler(amp: bool, dtype: torch.dtype) -> bool:
     """Loss scaling is an fp16 workaround, not a mixed-precision requirement.
 

@@ -22,7 +22,9 @@ from ..utils.device import pick_device, supports_amp, supports_pinned_memory
 from ..utils.logger import get_logger
 from ..utils.runmeta import append_metrics, resolve_out_dir, write_run_meta
 from ..utils.seeding import (
+    apply_channels_last,
     configure_backends,
+    model_memory_format,
     needs_grad_scaler,
     resolve_amp_dtype,
     seed_everything,
@@ -189,6 +191,14 @@ class Trainer:
         )
 
         self.model = build_model(cfg).to(self.device)
+        # Before the EMA copy is taken below: it deep-copies the model, so converting
+        # afterwards would leave the weights validation actually runs on in NCHW.
+        apply_channels_last(
+            self.model,
+            bool(cfg["train"].get("channels_last", False)),
+            logger=self.logger,
+        )
+        self.memory_format = model_memory_format(self.model)
         tcfg = cfg["train"]
         dcfg = cfg["data"]
         input_size = dcfg["input_size"]
@@ -364,7 +374,11 @@ class Trainer:
                 # samples than every other step, at a schedule position that assumed
                 # otherwise. Cheaper to drop it than to explain it later.
                 break
+            # Layout is changed after the transfer, not during it: `.to(memory_format=)`
+            # on the copy itself would give up the pinned-memory async path. When the
+            # format is contiguous_format this returns the tensor unchanged.
             images = batch["image"].to(self.device, non_blocking=True)
+            images = images.contiguous(memory_format=self.memory_format)
             targets = _targets_to_device(batch["targets"], self.device)
             with torch.amp.autocast(self.device.type, enabled=self.amp, dtype=self.amp_dtype):
                 outputs = self.model(images)

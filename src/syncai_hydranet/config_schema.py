@@ -160,6 +160,9 @@ TRAIN = {
     "deterministic": Spec((bool,)),
     "cudnn_benchmark": Spec((bool,)),
     "tf32": Spec((bool,)),
+    # NHWC weights and activations. Off by default so that resuming an in-flight run
+    # after a code change does not silently move it to a different kernel set.
+    "channels_last": Spec((bool,)),
     "grad_clip": Spec(NUMBER),
     "ema": Spec((bool,)),
     "ema_decay": Spec(NUMBER),
@@ -334,6 +337,26 @@ def _check_detection_subset(rep: _Report, cfg: dict) -> None:
             rep.errors.append(f"dataset {ds.get('name')!r}: duplicate entries in classes")
 
 
+def _check_channels_last(rep: _Report, cfg: dict) -> None:
+    """NHWC pays only under autocast.
+
+    Measured on an RTX PRO 6000, batch 48 at 512x640: bf16 153.2 -> 121.1 ms (-21%),
+    fp32 219.6 -> 220.9 ms (+0.6%). NHWC is the layout tensor cores want; fp32
+    convolutions run on CUDA cores and are indifferent. Asking
+    for it without AMP is not an error, it just buys nothing, and someone reading a
+    benchmark later deserves to know which of the two knobs did the work.
+    """
+    train = cfg.get("train")
+    if not isinstance(train, dict) or not train.get("channels_last"):
+        return
+    if not train.get("amp", True):
+        rep.warnings.append(
+            "train.channels_last is set but train.amp is false: NHWC was measured at "
+            "+0.6% (i.e. nothing) without autocast, because fp32 convolutions do not "
+            "use tensor cores"
+        )
+
+
 def check_config(cfg: dict) -> list[str]:
     """Validate a config. Returns non-fatal warnings; raises ConfigError otherwise."""
     rep = _Report()
@@ -366,6 +389,7 @@ def check_config(cfg: dict) -> list[str]:
 
     _check_class_counts(rep, cfg)
     _check_detection_subset(rep, cfg)
+    _check_channels_last(rep, cfg)
 
     if rep.errors:
         listing = "\n".join(f"  - {e}" for e in rep.errors)
