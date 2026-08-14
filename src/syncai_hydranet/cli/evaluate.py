@@ -72,11 +72,19 @@ def main(argv: list[str] | None = None) -> None:
         logger.info(f"{k}: {v:.4f}")
 
     if args.json:
+        # The command line goes in because a metric is only meaningful alongside what it
+        # was measured over, and `--set` can change that completely -- a detection mAP
+        # scored over 25 categories and one scored over 80 are different quantities that
+        # serialise to the same key. A file recording 0.3246 with no trace of which 25
+        # cost most of a day to reconstruct from a shell history.
         record = {
             "checkpoint": args.checkpoint,
             "epoch": ckpt.get("epoch"),
             "weights": args.weights,
             "split": args.split,
+            "config": args.config,
+            "set": list(args.set),
+            "datasets": cfg["data"]["datasets"],
             "git": git_state(),
             **metrics,
         }

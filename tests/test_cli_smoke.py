@@ -214,6 +214,13 @@ def test_eval_reports_and_writes_json(config, trained, tmp_path):
     assert record["split"] == "val"
     assert "traversability_mIoU" in record
     assert "git" in record, "a metric without its commit is not comparable to anything"
+    # The same argument applied to what was measured rather than to which code measured
+    # it. `--set` can redefine the datasets entirely -- a detection mAP over 25
+    # categories and one over 80 serialise to the same key -- so the record has to carry
+    # the definition, not just the number.
+    assert record["config"] == str(config)
+    assert record["set"] == []
+    assert [d["name"] for d in record["datasets"]]
 
 
 def test_eval_can_read_the_test_split(config, trained, tmp_path):
