@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import signal
 import sys
 import threading
 import time
@@ -76,6 +77,7 @@ REACH_COLORS = np.array([[0, 0, 0], [40, 220, 90], [250, 200, 40], [230, 60, 230
 state = {"range": 5.0, "score": 0.30, "view": "both"}
 latest = {"jpeg": None, "stats": {}}
 lock = threading.Lock()
+recorders: list = []  # closed on SIGTERM so the video has a readable index
 
 PAGE = b"""<!doctype html><meta charset=utf-8><title>HydraNet live</title>
 <style>
@@ -172,6 +174,72 @@ class Handler(BaseHTTPRequestHandler):
             pass  # the tab closed
 
 
+class Recorder:
+    """Write a walk-through to disk as three things, not one.
+
+    The overlay video is for review. The raw keyframes are the point: footage at the
+    robot's camera height is the single thing this project is short of, and a walk round
+    a building produces it as a by-product of testing. They are written in the layout
+    `hydranet-annotation check` expects, under a session directory, because a frame
+    without a session cannot be split honestly later.
+
+    The stats file is what makes the video searchable -- scrubbing 10 minutes of footage
+    for the moment the floor stopped returning depth is worse than sorting a JSONL by it.
+    """
+
+    def __init__(self, root: Path, session: str, keyframe_hz: float):
+        import cv2
+
+        self.cv2 = cv2
+        self.root = root
+        self.img_dir = root / "images" / session
+        self.depth_dir = root / "depth" / session
+        root.mkdir(parents=True, exist_ok=True)
+        if keyframe_hz > 0:
+            for d in (self.img_dir, self.depth_dir):
+                d.mkdir(parents=True, exist_ok=True)
+        # MJPG in AVI: a run that ends with a pulled power cable still plays back. mp4
+        # needs its trailer written, and a robot session is exactly when that is missed.
+        self.video_path = root / f"{session}_overlay.avi"
+        self.writer = None
+        self.stats = (root / f"{session}_stats.jsonl").open("a", buffering=1)
+        self.period = (1.0 / keyframe_hz) if keyframe_hz > 0 else 0.0
+        self.last_key = 0.0
+        self.n_frames = self.n_keys = 0
+
+    def write(self, pair: Image.Image, color: np.ndarray, depth_mm: np.ndarray, stats: dict):
+        import numpy as np_
+
+        frame = self.cv2.cvtColor(np_.asarray(pair), self.cv2.COLOR_RGB2BGR)
+        if self.writer is None:
+            h, w = frame.shape[:2]
+            self.writer = self.cv2.VideoWriter(
+                str(self.video_path), self.cv2.VideoWriter_fourcc(*"MJPG"), 10.0, (w, h)
+            )
+        self.writer.write(frame)
+        self.n_frames += 1
+
+        now = time.time()
+        if self.period > 0 and now - self.last_key >= self.period:
+            self.last_key = now
+            stem = f"{self.n_keys:06d}"
+            self.cv2.imwrite(
+                str(self.img_dir / f"{stem}.jpg"),
+                self.cv2.cvtColor(color, self.cv2.COLOR_RGB2BGR),
+                [int(self.cv2.IMWRITE_JPEG_QUALITY), 92],
+            )
+            # 16-bit PNG keeps millimetres exactly; a lossy depth frame is a lie.
+            self.cv2.imwrite(str(self.depth_dir / f"{stem}.png"), depth_mm)
+            self.n_keys += 1
+            stats = {**stats, "keyframe": stem}
+        self.stats.write(json.dumps({"t": round(now, 3), **stats}) + "\n")
+
+    def close(self):
+        if self.writer is not None:
+            self.writer.release()
+        self.stats.close()
+
+
 def preprocess(img: Image.Image, size):
     img, region = letterbox(img.convert("RGB"), size)
     arr = np.asarray(img, dtype=np.float32) / 255.0
@@ -211,6 +279,12 @@ def inference_loop(args):
     def stamp_of(msg) -> float:
         return msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
 
+    recorder = None
+    if args.record_dir:
+        recorder = Recorder(Path(args.record_dir), args.session, args.keyframe_hz)
+        recorders.append(recorder)
+        print(f"recording to {args.record_dir}/{args.session}*", flush=True)
+
     fps, last = 0.0, time.perf_counter()
     while True:
         rclpy.spin_once(node, timeout_sec=0.5)
@@ -229,7 +303,8 @@ def inference_loop(args):
         skew_ms = 1000 * abs(stamp_of(depth_msg) - t_color)
         age_ms = 1000 * (time.time() - t_color)
         color = decode(color_msg)[:: args.stride, :: args.stride]
-        depth_m = decode(depth_msg)[:: args.stride, :: args.stride].astype(np.float32) * 0.001
+        depth_mm = decode(depth_msg)[:: args.stride, :: args.stride]
+        depth_m = depth_mm.astype(np.float32) * 0.001
 
         x, canvas, region = preprocess(Image.fromarray(color), size)
         with torch.no_grad():
@@ -283,21 +358,24 @@ def inference_loop(args):
         now = time.perf_counter()
         fps = 0.8 * fps + 0.2 / max(now - last, 1e-6)
         last = now
+        frame_stats = {
+            "fps": f"{fps:.1f}",
+            "range": f"{state['range']:.0f} m",
+            "score": f"{state['score']:.2f}",
+            "go": f"{100 * go.mean():.1f}%",
+            "go within range": f"{100 * (reach == 1).mean():.1f}%",
+            "go beyond range": f"{100 * (reach == 2).mean():.1f}%",
+            "go with no depth": f"{100 * (reach == 3).sum() / max(go.sum(), 1):.1f}% of go",
+            "depth valid": f"{100 * valid.mean():.1f}%",
+            "frame age": f"{age_ms:.0f} ms",
+            "colour/depth skew": f"{skew_ms:.0f} ms",
+            "detections": int(len(det.get("boxes", [])) if det else 0),
+        }
         with lock:
             latest["jpeg"] = buf.getvalue()
-            latest["stats"] = {
-                "fps": f"{fps:.1f}",
-                "range": f"{state['range']:.0f} m",
-                "score": f"{state['score']:.2f}",
-                "go": f"{100 * go.mean():.1f}%",
-                "go within range": f"{100 * (reach == 1).mean():.1f}%",
-                "go beyond range": f"{100 * (reach == 2).mean():.1f}%",
-                "go with no depth": f"{100 * (reach == 3).sum() / max(go.sum(), 1):.1f}% of go",
-                "depth valid": f"{100 * valid.mean():.1f}%",
-                "frame age": f"{age_ms:.0f} ms",
-                "colour/depth skew": f"{skew_ms:.0f} ms",
-                "detections": int(len(det.get("boxes", [])) if det else 0),
-            }
+            latest["stats"] = frame_stats
+        if recorder is not None:
+            recorder.write(pair, color, depth_mm, frame_stats)
 
 
 def main() -> int:
@@ -310,8 +388,35 @@ def main() -> int:
     ap.add_argument(
         "--stride", type=int, default=2, help="subsample the 1280x720 stream before resizing"
     )
+    ap.add_argument(
+        "--record-dir",
+        help="record the session here: overlay video, raw keyframes, depth, per-frame stats",
+    )
+    ap.add_argument(
+        "--session",
+        default="session",
+        help="session name. It becomes the frame directory, and session identity is what "
+        "makes an honest train/val/test split possible later",
+    )
+    ap.add_argument(
+        "--keyframe-hz",
+        type=float,
+        default=0.0,
+        help="also keep raw colour+depth pairs this often, for annotation later. 0 is off, "
+        "which records only what the page shows",
+    )
     args = ap.parse_args()
     state["range"], state["score"] = args.range, args.score
+
+    def shutdown(_signum, _frame):
+        # An AVI killed mid-write still plays, but only if the writer released its index.
+        for rec in recorders:
+            rec.close()
+            print(f"recorded {rec.n_frames} frames to {rec.video_path}", flush=True)
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGINT, shutdown)
 
     threading.Thread(target=inference_loop, args=(args,), daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
