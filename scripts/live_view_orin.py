@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from bench_camera_orin import MEAN, STD, Cudart, letterbox
+from bench_camera_orin import MEAN, RAW_INPUT, STD, Cudart, letterbox
 
 # Same palettes the training-time TensorBoard grids use, so a live frame and a val_pred
 # image are directly comparable.
@@ -241,6 +241,11 @@ def capture_loop(args):
 
     names = [engine.get_tensor_name(i) for i in range(engine.num_io_tensors)]
     in_name = next(n for n in names if engine.get_tensor_mode(n) == trt.TensorIOMode.INPUT)
+    # The engine's input name states whether normalisation is inside the graph. Reading
+    # it beats assuming it: an engine built before that change wants the mean subtracted
+    # here, one built after wants raw pixels, and doing the wrong one is silent.
+    graph_normalises = in_name == RAW_INPUT
+    print(f"input '{in_name}': graph normalises = {graph_normalises}", flush=True)
     outs = [n for n in names if engine.get_tensor_mode(n) != trt.TensorIOMode.INPUT]
 
     host, dev = {}, {}
@@ -268,11 +273,10 @@ def capture_loop(args):
             continue
 
         lb = letterbox(frame, args.height, args.width)
-        rgb = cv2.cvtColor(lb, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
-        np.copyto(
-            host[in_name],
-            ((rgb - MEAN) / STD).transpose(2, 0, 1)[None].astype(host[in_name].dtype),
-        )
+        rgb = cv2.cvtColor(lb, cv2.COLOR_BGR2RGB).astype(np.float32)
+        if not graph_normalises:
+            rgb = (rgb / 255.0 - MEAN) / STD
+        np.copyto(host[in_name], rgb.transpose(2, 0, 1)[None].astype(host[in_name].dtype))
 
         cuda.memcpy_htod(dev[in_name], host[in_name], stream)
         ctx.execute_async_v3(stream.value)

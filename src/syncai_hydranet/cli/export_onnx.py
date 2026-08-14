@@ -17,17 +17,48 @@ import torch.nn as nn
 
 from ..config import load_config
 from ..config_schema import unsupervised_heads
+from ..data.transforms import IMAGENET_MEAN, IMAGENET_STD
 from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint
 
+# The input name *is* the contract. A graph that normalises internally takes raw RGB in
+# 0-255; one that does not takes an already-normalised tensor. Naming them differently
+# means a runtime written for one fails to find its binding in the other, loudly, instead
+# of feeding the wrong range and producing plausible nonsense.
+INPUT_RAW = "image_rgb_255"
+INPUT_NORMALISED = "images"
+
 
 class ExportWrapper(nn.Module):
-    """Flatten the dict/list output into a fixed-order tuple of tensors, as ONNX needs."""
+    """Flatten the dict/list output into a fixed-order tuple of tensors, as ONNX needs.
 
-    def __init__(self, model):
+    With ``embed_preprocessing`` the graph also does its own normalisation, taking raw
+    RGB in 0-255 rather than an ImageNet-normalised tensor.
+
+    Why that is worth two extra operators: pre-processing parity between training and the
+    robot is listed in METHODOLOGY.md as a deployment responsibility, and the repository
+    was implementing it twice -- ``data/transforms.py`` for training and a hand-copied
+    mean/std in ``scripts/bench_camera_orin.py`` for the Jetson. Nothing connects the two.
+    Change one and no test fails, no error appears, and the model on the robot is simply
+    worse in a way that gets blamed on quantisation or on the camera.
+
+    Folded into the graph it stops being a discipline problem. The constants ship with the
+    weights, TensorRT fuses them into the first convolution, and the robot's only job is
+    to hand over pixels in the order and range the input name states.
+    """
+
+    def __init__(self, model, embed_preprocessing: bool = True):
         super().__init__()
         self.model = model
         self.seg_names = list(model.seg_heads.keys())
+        self.embed_preprocessing = embed_preprocessing
+        if embed_preprocessing:
+            # Training divides by 255 and then normalises in 0-1 units. Scaling the
+            # constants by 255 instead makes those two steps one, exactly.
+            mean = torch.tensor(IMAGENET_MEAN, dtype=torch.float32).view(1, 3, 1, 1) * 255.0
+            std = torch.tensor(IMAGENET_STD, dtype=torch.float32).view(1, 3, 1, 1) * 255.0
+            self.register_buffer("pre_mean", mean)
+            self.register_buffer("pre_std", std)
         # nn.Module defaults to training=True, and torch.onnx.export propagates the
         # wrapper's mode down the tree -- so without this the inner model comes back from
         # export in train mode, with BatchNorm switched to batch statistics. The exported
@@ -35,7 +66,13 @@ class ExportWrapper(nn.Module):
         # in the same process silently gets different numbers.
         self.eval()
 
+    @property
+    def input_name(self) -> str:
+        return INPUT_RAW if self.embed_preprocessing else INPUT_NORMALISED
+
     def forward(self, images):
+        if self.embed_preprocessing:
+            images = (images - self.pre_mean) / self.pre_std
         out = self.model(images)
         flat = [out[n] for n in self.seg_names]
         if self.model.det_head is not None:
@@ -98,7 +135,7 @@ def check_parity(wrapper, dummy, path: str, out_names: list[str], tol: float = 1
     with torch.no_grad():
         ref = [t.numpy() for t in wrapper(dummy)]
     sess = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
-    got = sess.run(None, {"images": dummy.numpy()})
+    got = sess.run(None, {sess.get_inputs()[0].name: dummy.numpy()})
 
     print(f"\nparity vs PyTorch ({len(out_names)} outputs, relative tolerance {tol:g})")
     worst, worst_name, failures = 0.0, "", []
@@ -135,6 +172,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="run the exported graph against PyTorch on the same input and fail if they "
         "disagree; the deployment acceptance gate, needs onnxruntime",
     )
+    ap.add_argument(
+        "--no-embed-preprocessing",
+        action="store_true",
+        help="export a graph that expects an already-normalised tensor, as before. The "
+        "input is then named 'images' rather than 'image_rgb_255', and the runtime owns "
+        "the mean/std -- which is the parity risk this defaults away from",
+    )
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
     return ap
 
@@ -157,8 +201,17 @@ def main(argv: list[str] | None = None) -> None:
     ecfg = cfg.get("export") or {}
     h, w = ecfg.get("input_size") or cfg["data"]["input_size"]
     print(f"exporting at {h}x{w}")
-    dummy = torch.randn(args.batch, 3, h, w)
-    wrapper = ExportWrapper(model)
+    embed = not args.no_embed_preprocessing
+    wrapper = ExportWrapper(model, embed_preprocessing=embed)
+    # Exercise the graph over the range it will actually see. Feeding a 0-255 graph
+    # standard-normal noise would make the parity check pass on inputs no camera produces.
+    dummy = (
+        torch.rand(args.batch, 3, h, w) * 255.0 if embed else torch.randn(args.batch, 3, h, w)
+    )
+    print(
+        f"input '{wrapper.input_name}': "
+        + ("raw RGB 0-255, normalisation is inside the graph" if embed else "pre-normalised")
+    )
 
     out_names = list(wrapper.seg_names)
     if model.det_head is not None:
@@ -171,7 +224,7 @@ def main(argv: list[str] | None = None) -> None:
         wrapper,
         dummy,
         args.output,
-        input_names=["images"],
+        input_names=[wrapper.input_name],
         output_names=out_names,
         opset_version=int(ecfg.get("opset", 17)),
         do_constant_folding=True,
@@ -185,6 +238,17 @@ def main(argv: list[str] | None = None) -> None:
 
         m = onnx.load(args.output)
         onnx.checker.check_model(m)
+        # The input name carries the contract into the TensorRT engine, which does not
+        # keep these properties; they are here for anyone reading the ONNX itself.
+        for key, value in {
+            "preprocessing": "embedded" if embed else "external",
+            "input_range": "0-255" if embed else "imagenet-normalised",
+            "input_layout": "NCHW",
+            "channel_order": "RGB",
+        }.items():
+            entry = m.metadata_props.add()
+            entry.key, entry.value = key, value
+        onnx.save(m, args.output)
         print("ONNX check passed")
         try:
             from onnxsim import simplify
@@ -201,6 +265,11 @@ def main(argv: list[str] | None = None) -> None:
     if args.check_parity and not check_parity(wrapper, dummy, args.output, out_names):
         raise SystemExit("export parity check FAILED: see the per-output table above")
 
+    if embed:
+        print(
+            "\nThe robot feeds raw RGB in 0-255, NCHW. It must NOT subtract a mean: the "
+            "graph does that, and doing it twice is the failure this export prevents."
+        )
     print("\nOn Jetson Orin, build the TensorRT engine with:")
     print(f"  trtexec --onnx={args.output} --saveEngine=hydranet.engine --fp16")
 

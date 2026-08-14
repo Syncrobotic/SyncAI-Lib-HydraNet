@@ -48,6 +48,31 @@ error per output: the outputs span three orders of magnitude, so a single absolu
 either fires spuriously on the regression maps or is loosened until it cannot see a real
 error in the logits.
 
+### The graph normalises. The robot must not.
+
+The exported graph subtracts the ImageNet mean and divides by the standard deviation
+itself, so its input is **raw RGB in 0–255, NCHW**. The robot's job is to letterbox, convert
+BGR→RGB, transpose, and hand the pixels over.
+
+This used to be the runtime's job, with the constants copied by hand into
+`scripts/bench_camera_orin.py`. Nothing tied that copy to `data/transforms.py`: change one
+and no test fails, no error appears, and the model is simply worse in a way that gets
+blamed on quantisation. Folded into the graph, the constants ship with the weights and
+TensorRT fuses them into the first convolution, so the cost is nil.
+
+**The input binding name carries the contract**, because a TensorRT engine keeps binding
+names but not ONNX metadata:
+
+| input name | meaning |
+|---|---|
+| `image_rgb_255` | the graph normalises — feed raw pixels, subtract nothing |
+| `images` | pre-normalised, from an export before this change — the runtime owns mean/std |
+
+`bench_camera_orin.py` and `live_view_orin.py` read that name and switch. A runtime that
+ignores it and normalises anyway does so *twice*, which is silent and costs accuracy, not
+a crash. `--no-embed-preprocessing` restores the old convention if an existing runtime
+needs it.
+
 ## 2. Build the TensorRT engine (run on the Jetson)
 
 ```bash

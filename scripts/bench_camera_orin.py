@@ -22,6 +22,14 @@ from pathlib import Path
 
 import numpy as np
 
+# Only used for engines built before the normalisation moved into the graph. The
+# engine says which convention it wants through its input binding name: `image_rgb_255`
+# means the graph normalises and this script must not, `images` means the reverse.
+# Two copies of a mean and standard deviation, one here and one in training, is the
+# classic silent deployment failure -- so new exports carry the constants with them and
+# this pair only serves the engines that predate that.
+LEGACY_INPUT = "images"
+RAW_INPUT = "image_rgb_255"
 MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
@@ -141,6 +149,16 @@ def main():
         ctx.set_tensor_address(n, dev[n].value)
     stream = cuda.stream_create()
     in_name = inputs[0]
+    # The contract, read off the engine rather than assumed.
+    graph_normalises = in_name == RAW_INPUT
+    print(
+        f"input '{in_name}': "
+        + (
+            "raw RGB 0-255, the graph normalises"
+            if graph_normalises
+            else "pre-normalised; this script applies ImageNet mean/std (legacy export)"
+        )
+    )
 
     cap = cv2.VideoCapture(args.device, cv2.CAP_V4L2)
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
@@ -168,8 +186,10 @@ def main():
 
             with pre_s:
                 lb = letterbox(frame, args.height, args.width)
-                rgb = cv2.cvtColor(lb, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
-                chw = ((rgb - MEAN) / STD).transpose(2, 0, 1)[None]
+                rgb = cv2.cvtColor(lb, cv2.COLOR_BGR2RGB).astype(np.float32)
+                if not graph_normalises:
+                    rgb = (rgb / 255.0 - MEAN) / STD
+                chw = rgb.transpose(2, 0, 1)[None]
                 np.copyto(host[in_name], chw.astype(host[in_name].dtype))
 
             with h2d_s:
