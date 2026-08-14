@@ -96,10 +96,32 @@ it is the more accurate of the two. It costs an extrinsic calibration between Li
 camera, which is more work than A and worth it if floors are not reliably flat.
 
 **C. The depth camera, if the platform has one.** `10.8.140.130` carries an Intel RealSense
-**D435I**, which returns metric depth already registered to the colour frame. On that
-configuration the 5 m test is `depth < 5.0` — no calibration, no flat-floor assumption, no
-extrinsics. Check what the retail robot will actually ship with before doing A: if it has a
-D435-class camera, A is work that does not need doing.
+**D435I** publishing metric depth already registered to the colour frame, so the 5 m test
+looks like `depth < 5.0` — no calibration, no extrinsics, no flat-floor assumption.
+
+**It is not sufficient on its own, and the reason is exactly the floor retail has.** Run
+live on that robot in a lobby with a polished stone floor:
+
+![walkable and depth on a polished lobby floor](../assets/lobby_polished_floor_depth_holes.jpg)
+
+Left is traversability, right is the same frame split by depth: green within range, yellow
+beyond it, **magenta walkable with no depth return at all**. The magenta is scattered right
+across the near floor — 10.6% of all walkable pixels in that frame — because a polished
+floor is specular and reflects the projector's IR pattern away from the sensor instead of
+back to it. Depth-only range gating therefore punches holes in the walkable mask precisely
+where the robot is about to drive.
+
+Two consequences worth carrying into the design:
+
+1. **Prefer the homography for the range gate and use depth to confirm obstacles.** A
+   homography does not care whether a surface returns IR; it maps floor pixels to floor
+   distances geometrically. On specular retail floors that makes A more robust than C, which
+   inverts the usual ordering.
+2. **"No depth return" is ambiguous, and geometry disambiguates it.** Glass at eye level
+   returns nothing and is lethal; polished floor below the horizon returns nothing and is
+   perfectly walkable. The same pixel value means opposite things depending on where it sits
+   relative to the ground plane — which is one more thing the homography answers and a
+   depth threshold alone cannot.
 
 Either way the model stays honest about what it can see, and the horizon stays a number in
 a config file.

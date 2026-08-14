@@ -273,6 +273,47 @@ slower here, and it also logs `cudnnException: CUDNN_STATUS_NOT_SUPPORTED` and f
 a slower path. Use this script to *see* what the model does on a real camera; build an engine
 before quoting any number to anyone.
 
+### What the ROS camera path actually costs
+
+The camera is not remote — it is a D435I on `/sys/bus/usb/devices/2-2`, USB 3 at 5 Gbps,
+plugged into this board. What is remote-shaped is the *access*: `realsense2_camera_node`
+owns the device and everything else reads copies over DDS (`rmw_cyclonedds_cpp`,
+`ROS_LOCALHOST_ONLY=0`). Measured on the running robot:
+
+| | |
+|---|---|
+| colour `image_raw` | 2.76 MB/msg, **41.6 MB/s** at 15 Hz |
+| aligned depth | 1.84 MB/msg, **27.8 MB/s** |
+| subscribers already present | `record`, `ros_interface` — ours was the third |
+| colour frame age at the subscriber | mean **145 ms**, p95 227 ms, max 248 ms |
+| depth frame age | mean 99 ms, p95 173 ms |
+
+Three things follow, and they matter more for deployment than the model does.
+
+**The wire cost is ~70 MB/s and every subscriber pays for a copy.** Adding an inference
+node this way adds serialisation and loopback traffic to a board already running nav2 and
+Cartographer. The ROS answer is composition: load the camera driver and the inference node
+into one component container and get intra-process zero-copy. That is the difference between
+a demo and something that can be left running.
+
+**Nothing sees a fresh frame.** 145 ms of transport is already spent before inference
+starts, and the model then adds 90–120 ms in PyTorch. At walking pace, a decision acts on
+a world about 25 cm out of date — which is a planner constraint, not a perception one, but
+it belongs in whatever latency budget the robot is designed against.
+
+**A slow subscriber makes it worse, silently.** Running inference at ~11 FPS against a 15 Hz
+publisher queues callbacks, and `spin_once` returns the *oldest* first: the displayed frame
+was 535 ms stale while the loop itself took 90 ms. Draining the queue each iteration and
+keeping the newest message brought it back to 150 ms, the transport floor. A lag like that
+is invisible in the picture — it looks like a working live view — so it is worth asserting
+on `now - header.stamp` rather than trusting the frame rate.
+
+One more, on pairing: take "the latest colour and the latest depth" and the two are up to a
+full frame apart (measured: mean 33 ms, max 67 ms). `scripts/live_view_ros.py` keeps a short
+depth history and picks the nearest stamp, which brings the skew to 0 ms because the driver
+stamps aligned depth with its colour frame's time. Without that, the range mask describes
+the world 67 ms beside the image it is drawn on.
+
 ### One number worth keeping
 
 The script reports `go where depth is invalid` — pixels the model calls walkable and the

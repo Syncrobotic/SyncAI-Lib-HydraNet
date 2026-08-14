@@ -29,12 +29,17 @@ from PIL import Image, ImageDraw
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image as ImageMsg
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+HERE = Path(__file__).resolve().parent
+# In the repo the package is at ../src; on a robot the deploy copies it to ./src next to
+# this script. Accept both rather than making the caller care which layout they are in.
+for candidate in (HERE.parent / "src", HERE / "src"):
+    if candidate.is_dir():
+        sys.path.insert(0, str(candidate))
 
-from syncai_hydranet.config import load_config
-from syncai_hydranet.data.transforms import IMAGENET_MEAN, IMAGENET_STD
-from syncai_hydranet.models.hydranet import build_model
-from syncai_hydranet.utils.visualize import (
+from syncai_hydranet.config import load_config  # noqa: E402
+from syncai_hydranet.data.transforms import IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
+from syncai_hydranet.models.hydranet import build_model  # noqa: E402
+from syncai_hydranet.utils.visualize import (  # noqa: E402
     TRAV_COLORS,
     crop_box,
     letterbox,
