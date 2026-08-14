@@ -70,6 +70,8 @@ from syncai_hydranet.utils.visualize import (  # noqa: E402
 GO = 2
 COLOR_TOPIC = "/camera/camera/color/image_raw"
 DEPTH_TOPIC = "/camera/camera/aligned_depth_to_color/image_raw"
+COLOR_INFO_TOPIC = "/camera/camera/color/camera_info"
+DEPTH_INFO_TOPIC = "/camera/camera/aligned_depth_to_color/camera_info"
 
 # reachable / out of range / no depth return
 REACH_COLORS = np.array([[0, 0, 0], [40, 220, 90], [250, 200, 40], [230, 60, 230]], np.uint8)
@@ -185,6 +187,13 @@ class Recorder:
 
     The stats file is what makes the video searchable -- scrubbing 10 minutes of footage
     for the moment the floor stopped returning depth is worse than sorting a JSONL by it.
+
+    And the calibration: the camera's intrinsic matrix, written once per session. Without
+    K, nothing recorded here can ever be projected to metres -- no ground plane, no BEV
+    costmap, no distance gate -- and the omission is invisible until someone tries, by
+    which time the building has been walked and the robot has moved on. A session without
+    its intrinsics is the same class of defect as a frame without its session: usable for
+    looking at, useless for the thing it was collected for.
     """
 
     def __init__(self, root: Path, session: str, keyframe_hz: float):
@@ -203,9 +212,44 @@ class Recorder:
         self.video_path = root / f"{session}_overlay.avi"
         self.writer = None
         self.stats = (root / f"{session}_stats.jsonl").open("a", buffering=1)
+        self.calib_path = root / f"{session}_calibration.json"
         self.period = (1.0 / keyframe_hz) if keyframe_hz > 0 else 0.0
         self.last_key = 0.0
         self.n_frames = self.n_keys = 0
+
+    def write_calibration(self, color_info, depth_info, stride: int) -> None:
+        """Intrinsics, once. They do not change during a session, and the stride this
+        script applies to the stream does change them -- so what is written is the
+        calibration of the frames on disk, not of the topic."""
+        if self.calib_path.exists():
+            return
+
+        def one(msg):
+            if msg is None:
+                return None
+            k = list(msg.k)
+            # Subsampling scales fx, fy, cx, cy by exactly the same factor. Writing the
+            # topic's K next to decimated frames would be off by that factor, silently.
+            if stride > 1:
+                k = [v / stride if i in (0, 2, 4, 5) else v for i, v in enumerate(k)]
+            return {
+                "K": k,
+                "distortion_model": msg.distortion_model,
+                "D": list(msg.d),
+                "width": msg.width // stride,
+                "height": msg.height // stride,
+                "frame_id": msg.header.frame_id,
+            }
+
+        payload = {
+            "color": one(color_info),
+            "depth_aligned_to_color": one(depth_info),
+            "subsample_stride": stride,
+            "depth_units": "millimetres, uint16",
+            "note": "K is scaled for the frames written here, not the raw topic",
+        }
+        self.calib_path.write_text(json.dumps(payload, indent=2) + "\n")
+        print(f"wrote {self.calib_path}", flush=True)
 
     def write(self, pair: Image.Image, color: np.ndarray, depth_mm: np.ndarray, stats: dict):
         import numpy as np_
@@ -250,6 +294,7 @@ def preprocess(img: Image.Image, size):
 def inference_loop(args):
     import rclpy
     from rclpy.qos import qos_profile_sensor_data
+    from sensor_msgs.msg import CameraInfo
     from sensor_msgs.msg import Image as ImageMsg
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -275,6 +320,21 @@ def inference_loop(args):
         ImageMsg, COLOR_TOPIC, lambda m: msgs.__setitem__("color", m), qos_profile_sensor_data
     )
     node.create_subscription(ImageMsg, DEPTH_TOPIC, depth_buf.append, qos_profile_sensor_data)
+    # Intrinsics. Latched-ish and cheap, and without them the whole recording is
+    # geometrically meaningless later; see Recorder.write_calibration.
+    info = {"color": None, "depth": None}
+    node.create_subscription(
+        CameraInfo,
+        COLOR_INFO_TOPIC,
+        lambda m: info.__setitem__("color", m),
+        qos_profile_sensor_data,
+    )
+    node.create_subscription(
+        CameraInfo,
+        DEPTH_INFO_TOPIC,
+        lambda m: info.__setitem__("depth", m),
+        qos_profile_sensor_data,
+    )
 
     def stamp_of(msg) -> float:
         return msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
@@ -375,6 +435,8 @@ def inference_loop(args):
             latest["jpeg"] = buf.getvalue()
             latest["stats"] = frame_stats
         if recorder is not None:
+            if info["color"] is not None:
+                recorder.write_calibration(info["color"], info["depth"], args.stride)
             recorder.write(pair, color, depth_mm, frame_stats)
 
 
