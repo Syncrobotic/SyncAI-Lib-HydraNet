@@ -257,6 +257,18 @@ We deliberately do not default `split_test` to val. If it is not configured, ask
 fails loudly, because a silent fallback here produces an official-looking number that is
 quietly wrong.
 
+And a split stays held out only for as long as the directory it lives in does.
+`hydranet-prepare-ade20k --test-fraction` used to leave an existing `test/` in place when
+re-run without the flag — which defaults to 0, so simply omitting it was enough — while
+rebuilding `val/` over every kept frame. The held-out images ended up in both, silently.
+Fixed, but the general point survives the fix: **rebuilding a dataset can undo a split
+without touching any code**, and nothing downstream can tell. After regenerating, check
+that the splits are still disjoint:
+
+```bash
+comm -12 <(ls datasets/ADE20K/images/val | sort) <(ls datasets/ADE20K/images/test | sort) | wc -l
+```
+
 ### Aspect ratio
 
 If the camera is 9:16 and the network input is 4:5, naively resizing squeezes the image more
