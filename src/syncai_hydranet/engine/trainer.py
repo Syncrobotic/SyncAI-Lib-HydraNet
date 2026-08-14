@@ -211,12 +211,30 @@ class Trainer:
         lb = bool(dcfg.get("letterbox", False))
         aug = dcfg.get("augment")
         train_sets, val_sets, names, ratios = [], [], [], []
+        val_names = []
         for ds in dcfg["datasets"]:
             train_sets.append(build_dataset(ds, input_size, "train", letterbox=lb, augment=aug))
-            # Validation never augments, so it takes no augment argument.
-            val_sets.append(build_dataset(ds, input_size, "val", letterbox=lb))
+            # A dataset may contribute training signal without joining checkpoint
+            # selection: omit `split_val` and it is trained on but never validated on.
+            #
+            # This is not a convenience. The evaluator accumulates one confusion matrix
+            # per head across every val set, so anything listed here lands in the number
+            # that picks best.pt -- and on 2026-08-14 eight pseudo-labelled frames were
+            # enough to read `display_fixture` 0.4224 against a 0.3612 baseline, which
+            # meant nothing because the model was being scored against its own
+            # predecessor. A second labelled domain is worth far more as a split nothing
+            # selects on than as another voice in the selection.
+            if ds.get("split_val"):
+                # Validation never augments, so it takes no augment argument.
+                val_sets.append(build_dataset(ds, input_size, "val", letterbox=lb))
+                val_names.append(ds["name"])
             names.append(ds["name"])
             ratios.append(float(ds.get("sample_ratio", 1.0)))
+        if not val_sets:
+            raise ValueError(
+                "no dataset declares split_val, so nothing can select a checkpoint; "
+                "at least one is required"
+            )
         self.train_loader = MultiTaskLoader(
             train_sets,
             names,
@@ -226,7 +244,14 @@ class Trainer:
             seed=seed,
             pin_memory=supports_pinned_memory(self.device),
         )
-        self.val_sets = list(zip(names, val_sets, strict=True))
+        self.val_sets = list(zip(val_names, val_sets, strict=True))
+        val_size = {n: len(v) for n, v in self.val_sets}
+        skipped = [n for n in names if n not in val_size]
+        if skipped:
+            self.logger.info(
+                f"trained on but not validated on: {', '.join(skipped)} "
+                "(no split_val, so they take no part in choosing best.pt)"
+            )
         # Built once: validation runs every epoch, and a DataLoader's worker pool is
         # expensive to create and pointless to throw away.
         self.val_loaders = build_val_loaders(self.val_sets, cfg, self.device)
@@ -322,14 +347,14 @@ class Trainer:
                 {
                     "name": n,
                     "train_size": len(t),
-                    "val_size": len(v),
+                    # None, not 0: "not validated on" and "validated on nothing" are
+                    # different facts and the run meta should not blur them.
+                    "val_size": val_size.get(n),
                     # Datasets live outside git; without this, "which data produced
                     # this checkpoint" has no answer six months later.
                     **fingerprint_dataset(ds),
                 }
-                for n, t, v, ds in zip(
-                    names, train_sets, val_sets, dcfg["datasets"], strict=True
-                )
+                for n, t, ds in zip(names, train_sets, dcfg["datasets"], strict=True)
             ],
         )
         git = meta["git"]

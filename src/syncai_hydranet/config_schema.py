@@ -121,7 +121,12 @@ DATASET = {
     "type": Spec((str,), required=True, choices=("seg_folder", "coco")),
     "root": Spec((str,), required=True),
     "split_train": Spec((str,), required=True),
-    "split_val": Spec((str,), required=True),
+    # Not required: a dataset may be trained on without joining checkpoint selection.
+    # The evaluator accumulates one confusion matrix per head across every val set, so
+    # listing a second domain here puts it into the number that picks best.pt -- and a
+    # split that selects the answer cannot also measure it. Trainer raises if *no*
+    # dataset declares one.
+    "split_val": Spec((str,)),
     # Optional and unset by default: a held-out split only means anything if
     # nothing in training reads it, so it must be created deliberately.
     "split_test": Spec((str,)),
