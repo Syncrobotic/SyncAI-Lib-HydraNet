@@ -14,7 +14,7 @@ from ..config import load_config
 from ..data.datasets import SPLITS, build_dataset
 from ..engine.evaluator import evaluate
 from ..models.hydranet import build_model
-from ..utils.checkpoint import load_checkpoint
+from ..utils.checkpoint import load_checkpoint, select_weights
 from ..utils.device import pick_device
 from ..utils.logger import get_logger
 from ..utils.runmeta import git_state
@@ -58,8 +58,7 @@ def main(argv: list[str] | None = None) -> None:
 
     model = build_model(cfg).to(device).eval()
     ckpt = load_checkpoint(args.checkpoint)
-    state = ckpt.get("ema") if (args.weights == "ema" and ckpt.get("ema")) else ckpt["model"]
-    model.load_state_dict(state)
+    model.load_state_dict(select_weights(ckpt, args.weights))
 
     input_size = cfg["data"]["input_size"]
     lb = bool(cfg["data"].get("letterbox", False))

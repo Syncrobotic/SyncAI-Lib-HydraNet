@@ -20,7 +20,7 @@ from ..config import load_config
 from ..data.transforms import IMAGENET_MEAN, IMAGENET_STD
 from ..models.heads.detection import SCORE_THR_VIEW
 from ..models.hydranet import build_model
-from ..utils.checkpoint import load_checkpoint
+from ..utils.checkpoint import load_checkpoint, select_weights
 from ..utils.device import pick_device
 from ..utils.visualize import (
     TRAV_COLORS,
@@ -56,6 +56,12 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--checkpoint", required=True)
     ap.add_argument("--input", required=True, help="image file or directory")
     ap.add_argument("--output", default="out")
+    ap.add_argument(
+        "--weights",
+        choices=["ema", "model"],
+        default="ema",
+        help="EMA weights need enough training steps to be meaningful; see docs/TRAIN_MACOS.md",
+    )
     ap.add_argument("--score-thr", type=float, default=SCORE_THR_VIEW)
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
     return ap
@@ -67,7 +73,7 @@ def main(argv: list[str] | None = None) -> None:
     device = pick_device(cfg.get("device"))
     model = build_model(cfg).to(device).eval()
     ckpt = load_checkpoint(args.checkpoint)
-    model.load_state_dict(ckpt.get("ema") or ckpt["model"])
+    model.load_state_dict(select_weights(ckpt, args.weights))
 
     in_path = Path(args.input)
     paths = sorted(in_path.glob("*")) if in_path.is_dir() else [in_path]

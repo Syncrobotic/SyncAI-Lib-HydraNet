@@ -19,7 +19,7 @@ from ..config import load_config
 from ..config_schema import unsupervised_heads
 from ..data.transforms import IMAGENET_MEAN, IMAGENET_STD
 from ..models.hydranet import build_model
-from ..utils.checkpoint import load_checkpoint
+from ..utils.checkpoint import load_checkpoint, select_weights
 
 # The input name *is* the contract. A graph that normalises internally takes raw RGB in
 # 0-255; one that does not takes an already-normalised tensor. Naming them differently
@@ -190,10 +190,7 @@ def main(argv: list[str] | None = None) -> None:
     model = build_model(cfg).eval()
     if args.checkpoint:
         ckpt = load_checkpoint(args.checkpoint)
-        state = (
-            ckpt.get("ema") if (args.weights == "ema" and ckpt.get("ema")) else ckpt["model"]
-        )
-        model.load_state_dict(state)
+        model.load_state_dict(select_weights(ckpt, args.weights))
 
     # The export section is optional: without it, exporting at the training resolution
     # is the sane default, and a TensorRT engine built for the wrong input size is a

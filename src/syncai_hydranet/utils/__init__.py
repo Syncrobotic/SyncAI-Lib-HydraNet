@@ -1,4 +1,4 @@
-from .checkpoint import CKPT_FORMAT, load_checkpoint
+from .checkpoint import CKPT_FORMAT, load_checkpoint, select_weights
 from .device import pick_device, supports_amp, supports_pinned_memory
 from .logger import get_logger
 from .runmeta import append_metrics, git_state, resolve_out_dir, write_run_meta
@@ -23,6 +23,7 @@ __all__ = [
     "resolve_amp_dtype",
     "resolve_out_dir",
     "seed_everything",
+    "select_weights",
     "supports_amp",
     "supports_pinned_memory",
     "write_run_meta",

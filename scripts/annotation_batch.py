@@ -50,7 +50,7 @@ from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402  # isort
 from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.transforms import IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
-from syncai_hydranet.utils.checkpoint import load_checkpoint  # noqa: E402
+from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
 
 IGNORE = 255
 DESCRIPTOR = (12, 16)  # a coarse grey thumbnail is enough to tell scenes apart
@@ -87,6 +87,12 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("clips", nargs="+")
     ap.add_argument("--config", required=True)
     ap.add_argument("--checkpoint", required=True)
+    ap.add_argument(
+        "--weights",
+        choices=["ema", "model"],
+        default="ema",
+        help="EMA weights need enough training steps to be meaningful; see docs/TRAIN_MACOS.md",
+    )
     ap.add_argument("--out", required=True, help="dataset root to write")
     ap.add_argument("--split", default="train")
     ap.add_argument("--frames", type=int, default=40, help="frames to keep per clip")
@@ -108,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
     cfg = load_config(args.config, args.set)
     model = build_model(cfg).to(device).eval()
     ckpt = load_checkpoint(args.checkpoint)
-    model.load_state_dict(ckpt.get("ema") or ckpt["model"])
+    model.load_state_dict(select_weights(ckpt, args.weights))
     size = cfg["data"]["input_size"]
     classes = cfg["data"].get("terrain_classes", [])
 

@@ -45,7 +45,7 @@ from syncai_hydranet.data.transforms import IMAGENET_MEAN, IMAGENET_STD  # noqa:
 from syncai_hydranet.geometry.bev import IGNORE, BevGrid, scene  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera, GroundPlane  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
-from syncai_hydranet.utils.checkpoint import load_checkpoint  # noqa: E402
+from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
 from syncai_hydranet.utils.visualize import (  # noqa: E402
     TRAV_COLORS,
     crop_box,
@@ -134,6 +134,12 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--config", required=True)
     ap.add_argument("--checkpoint", required=True)
+    ap.add_argument(
+        "--weights",
+        choices=["ema", "model"],
+        default="ema",
+        help="EMA weights need enough training steps to be meaningful; see docs/TRAIN_MACOS.md",
+    )
     ap.add_argument("--input", required=True)
     ap.add_argument("--output", default="bev.mp4")
     ap.add_argument("--fps", type=float, default=6.0, help="sampling and output fps")
@@ -157,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
     cfg = load_config(args.config, args.set)
     model = build_model(cfg).to(device).eval()
     ckpt = load_checkpoint(args.checkpoint)
-    model.load_state_dict(ckpt.get("ema") or ckpt["model"])
+    model.load_state_dict(select_weights(ckpt, args.weights))
     size = cfg["data"]["input_size"]
 
     src_w, src_h, src_fps = probe(args.input)
