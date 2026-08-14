@@ -171,6 +171,7 @@ class CocoDetDataset(Dataset):
         supervises=("detection",),
         letterbox: bool = False,
         augment: dict | None = None,
+        classes: list[str] | None = None,
     ):
         from pycocotools.coco import COCO
 
@@ -180,14 +181,34 @@ class CocoDetDataset(Dataset):
             raise FileNotFoundError(f"{ann_file} does not exist.")
         self.coco = COCO(str(ann_file))
         self.img_dir = self.root / split
+
+        # A subset spends the head's capacity on the classes the robot meets. COCO's 80
+        # include zebra and snowboard; indoors, nine tenths of the output channels are
+        # learning to say "no". Names are checked against the annotation file rather
+        # than trusted, because a typo would otherwise silently drop a whole class.
+        if classes:
+            cat_ids = sorted(self.coco.getCatIds(catNms=list(classes)))
+            found = {c["name"] for c in self.coco.loadCats(cat_ids)}
+            missing = [n for n in classes if n not in found]
+            if missing:
+                raise ValueError(f"not COCO category names: {', '.join(sorted(missing))}")
+        else:
+            cat_ids = sorted(self.coco.getCatIds())
+        self.cat_ids = cat_ids
+        self.cat_to_label = {c: i for i, c in enumerate(cat_ids)}  # contiguous, 0-based
+        self.label_to_cat = {i: c for c, i in self.cat_to_label.items()}
+
+        # Images whose only annotations were dropped carry no signal for this subset, and
+        # would train the head that everything in them is background.
+        keep = set(cat_ids)
         self.ids = [
             i
             for i in sorted(self.coco.imgs.keys())
-            if len(self.coco.getAnnIds(imgIds=i, iscrowd=False)) > 0
+            if any(
+                a["category_id"] in keep
+                for a in self.coco.loadAnns(self.coco.getAnnIds(imgIds=i, iscrowd=False))
+            )
         ]
-        cat_ids = sorted(self.coco.getCatIds())
-        self.cat_to_label = {c: i for i, c in enumerate(cat_ids)}  # contiguous, 0-based
-        self.label_to_cat = {i: c for c, i in self.cat_to_label.items()}
         self.transform = build_transforms(
             input_size, train, letterbox=letterbox, augment=augment
         )
@@ -203,10 +224,14 @@ class CocoDetDataset(Dataset):
         anns = self.coco.loadAnns(self.coco.getAnnIds(imgIds=img_id, iscrowd=False))
         boxes, labels = [], []
         for a in anns:
+            # An image kept for one subset class can still carry boxes from classes the
+            # subset drops; those are not background, they are simply not this head's
+            # problem, so they are left out rather than mapped to some other channel.
+            label = self.cat_to_label.get(a["category_id"])
             x, y, w, h = a["bbox"]
-            if w > 1 and h > 1:
+            if label is not None and w > 1 and h > 1:
                 boxes.append([x, y, x + w, y + h])
-                labels.append(self.cat_to_label[a["category_id"]])
+                labels.append(label)
         s = Sample(
             image=img,
             boxes=np.asarray(boxes, dtype=np.float32).reshape(-1, 4),
@@ -273,5 +298,6 @@ def build_dataset(
             supervises=sup,
             letterbox=letterbox,
             augment=augment,
+            classes=dcfg.get("classes"),
         )
     raise ValueError(f"unknown dataset type: {dcfg['type']}")

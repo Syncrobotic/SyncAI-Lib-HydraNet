@@ -129,6 +129,10 @@ DATASET = {
     "label_map": Spec((str,)),
     "label_format": Spec((str,), choices=("auto", "color", "id", "rugd_color")),
     "sample_ratio": Spec(NUMBER),
+    # COCO only: train the head on this subset of category names instead of all 80.
+    # The head's num_classes must match the length, and the check below enforces it --
+    # a mismatch trains every box against the wrong channel and still converges.
+    "classes": Spec((list,)),
 }
 
 TRAIN = {
@@ -301,6 +305,29 @@ def _check_class_counts(rep: _Report, cfg: dict) -> None:
         )
 
 
+def _check_detection_subset(rep: _Report, cfg: dict) -> None:
+    """A COCO subset has to match the detection head's width.
+
+    Nothing downstream would complain: the head keeps 80 channels, every box trains
+    against the channel its contiguous index happens to land on, and the loss falls.
+    The run only looks wrong at the point someone reads a class name off a prediction.
+    """
+    head = cfg.get("model", {}).get("heads", {}).get("detection")
+    if not isinstance(head, dict) or not isinstance(head.get("num_classes"), int):
+        return
+    for ds in cfg.get("data", {}).get("datasets") or []:
+        if not isinstance(ds, dict) or ds.get("type") != "coco":
+            continue
+        subset = ds.get("classes")
+        if isinstance(subset, list) and len(subset) != head["num_classes"]:
+            rep.errors.append(
+                f"dataset {ds.get('name')!r} lists {len(subset)} classes but "
+                f"model.heads.detection.num_classes is {head['num_classes']}"
+            )
+        if isinstance(subset, list) and len(subset) != len(set(subset)):
+            rep.errors.append(f"dataset {ds.get('name')!r}: duplicate entries in classes")
+
+
 def check_config(cfg: dict) -> list[str]:
     """Validate a config. Returns non-fatal warnings; raises ConfigError otherwise."""
     rep = _Report()
@@ -332,6 +359,7 @@ def check_config(cfg: dict) -> list[str]:
             _check_size(rep, cfg["export"]["input_size"], "export.input_size")
 
     _check_class_counts(rep, cfg)
+    _check_detection_subset(rep, cfg)
 
     if rep.errors:
         listing = "\n".join(f"  - {e}" for e in rep.errors)

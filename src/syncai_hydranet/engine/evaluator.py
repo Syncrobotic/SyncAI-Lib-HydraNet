@@ -132,6 +132,9 @@ def evaluate(
     # someone added a second detection source.
     det_results: dict[str, list] = {}
     coco_gts: dict[str, object] = {}
+    # The categories each dataset actually trains on, so mAP is scored over those and
+    # not over all 80 with the untrained ones counted as misses.
+    det_cat_ids: dict[str, list] = {}
     disagree = disagree_total = 0
     if loaders is None:
         loaders = build_val_loaders(val_sets, cfg, device)
@@ -166,6 +169,7 @@ def evaluate(
 
             if model.det_head is not None and model.det_head_name in sup:
                 coco_gts[name] = ds.coco
+                det_cat_ids[name] = list(getattr(ds, "cat_ids", []) or [])
                 results_for_ds = det_results.setdefault(name, [])
                 dets = model.det_head.decode(
                     out["det_cls"],
@@ -232,6 +236,13 @@ def evaluate(
         coco_gt = coco_gts[ds_name]
         coco_dt = coco_gt.loadRes(results)
         ev = COCOeval(coco_gt, coco_dt, "bbox")
+        # Score only the categories this dataset trains on. Without it a model trained on
+        # a subset is measured against all 80 and every absent class counts as a miss;
+        # worse in the other direction, comparing a 15-class model's mAP to an 80-class
+        # model's rewards the smaller one for a easier denominator rather than for being
+        # better. Restricting both to the same categories is what makes them comparable.
+        if det_cat_ids.get(ds_name):
+            ev.params.catIds = list(det_cat_ids[ds_name])
         ev.evaluate()
         ev.accumulate()
         ev.summarize()
