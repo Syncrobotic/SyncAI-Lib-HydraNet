@@ -48,39 +48,13 @@ for candidate in (HERE.parent / "src", HERE / "src"):
 
 from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402  # isort: skip
 from syncai_hydranet.config import load_config  # noqa: E402
+from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
 from syncai_hydranet.data.transforms import IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
 
 IGNORE = 255
-DESCRIPTOR = (12, 16)  # a coarse grey thumbnail is enough to tell scenes apart
-
-
-def describe(frame: np.ndarray) -> np.ndarray:
-    """A tiny grey thumbnail, normalised. Cheap, and robust to compression noise."""
-    img = Image.fromarray(frame).convert("L").resize(DESCRIPTOR[::-1], Image.BILINEAR)
-    v = np.asarray(img, dtype=np.float32).reshape(-1)
-    return v / (np.linalg.norm(v) + 1e-6)
-
-
-def farthest_first(descs: list[np.ndarray], k: int) -> list[int]:
-    """Pick k frames that disagree with each other as much as possible.
-
-    Starts from the frame furthest from the average -- the least typical one -- rather
-    than from frame zero, so a clip that opens on an empty room does not anchor the whole
-    selection on it.
-    """
-    if len(descs) <= k:
-        return list(range(len(descs)))
-    x = np.stack(descs)
-    chosen = [int(np.argmax(np.linalg.norm(x - x.mean(0), axis=1)))]
-    dist = np.linalg.norm(x - x[chosen[0]], axis=1)
-    while len(chosen) < k:
-        nxt = int(np.argmax(dist))
-        chosen.append(nxt)
-        dist = np.minimum(dist, np.linalg.norm(x - x[nxt], axis=1))
-    return sorted(chosen)
 
 
 def build_parser() -> argparse.ArgumentParser:
