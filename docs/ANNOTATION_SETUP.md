@@ -268,6 +268,51 @@ eight site frames, 2026-08-15:
   region, so one polygon per camera beats a pre-label per frame. `--include floor_hard`
   if a camera is not in fact fixed.
 
+### When there is no annotation budget
+
+Everything above assumes a human corrects the pre-label. Where nobody is available that
+assumption does not degrade gracefully — an unchecked pre-label *is* a label, and SAM 3's
+mistakes go into the weights unopposed.
+
+The instinct in that situation is to add classes anyway and hope. Do not: `wet_slippery`,
+`floor_metal` and `threshold_ramp` have been in the taxonomy since the beginning and are
+all still 0.000, because **a class with nobody to draw it is a permanently empty channel**.
+Adding more produces more of those.
+
+What works instead is to spend compute where labour is not available.
+`--consensus 0.9` votes each pixel across a clip and keeps only what agrees:
+
+```bash
+python3 scripts/sam3_prelabel.py --out datasets/site --consensus 0.9 \
+    --frames 12 --upscale 1.0 /path/to/cam*/clip.mp4
+```
+
+The camera does not move, so a shelf is the same pixels in every frame; a pixel labelled
+differently between two frames is one SAM 3 was guessing at. Nobody has to say which
+frame was right — the question is only whether the answer was stable, and that is free to
+ask. Over 10 frames per camera on the three pilot stores:
+
+| camera | ≥60% | ≥80% | **≥90%** | 100% |
+|---|---|---|---|---|
+| Kaohsiung-cam08 | 63.5% | 62.1% | **51.2%** | 43.6% |
+| Taichung-cam01 | 56.2% | 45.8% | **37.4%** | 23.0% |
+| Tao-Hsin-cam05 | 62.8% | 48.7% | **36.8%** | 11.5% |
+
+At 0.9 the surviving pixels are 56% `floor_hard`, 25% `wall`, 19% `display_fixture`.
+`person` disappears entirely, which is correct — it moves, so it is excluded from the vote
+and composited per frame instead. That split is also what makes long runs affordable: the
+static pass is paid once per camera, and further frames cost one prompt each.
+
+Two limits, both structural. It removes only *random* error; a fixture SAM 3 consistently
+misses and pavement it consistently calls glass are perfectly stable and survive untouched.
+And it improves precision while saying nothing about recall.
+
+**The one thing this cannot produce is a test split.** Scoring a model against SAM 3's own
+masks measures agreement with SAM 3, and a consensus filter does not change that — it makes
+the labels more self-consistent, not more true. If only a couple of hours of human time
+exist, spend all of it hand-labelling ~10 held-out frames and none of it on training data:
+those frames are what decides whether any later number means anything.
+
 ### Which cameras are worth pre-labelling at all
 
 A 48-camera site does not have 48 usable cameras, and the ways one fails are independent

@@ -20,6 +20,33 @@ second model with its own errors rather than an oracle. Nothing here is ground t
 Everything it writes lands in the `seg_folder` layout that
 `hydranet-annotation check --scheme retail` gates, and the gate is not optional.
 
+## `--consensus`, for when there is no annotation budget at all
+
+Above assumes a human corrects the mask afterwards. Where nobody is available, that
+assumption fails quietly and badly: a pre-label nobody checks is a label, and SAM 3's
+mistakes go straight into the weights.
+
+    python3 scripts/sam3_prelabel.py --out datasets/site --consensus 0.9 \\
+        --frames 12 --upscale 1.0 /path/to/cam*/clip.mp4
+
+**The camera does not move, so the answer should not either.** A shelf is the same
+pixels in every frame of a fixed CCTV clip, and any pixel SAM 3 labels differently
+between two frames is one it was guessing at. Voting across the clip and keeping only
+what agrees turns that into a free denoiser -- no human has to say which frame was
+right, because the question is only whether the answer was stable.
+
+It buys precision and pays in coverage, which is the correct direction when nothing
+downstream will catch a mistake. Measured over 10 frames per camera on the three
+pilot stores at 0.9: 37-51% of each frame survives, `display_fixture` is 19% of it.
+
+Two limits, both structural. It removes SAM 3's *random* error and leaves every
+systematic one untouched -- a fixture it consistently misses, or pavement it
+consistently calls glass, are perfectly stable. And it says nothing about recall.
+
+`person` is excluded from the vote and composited per frame, since people move and
+would otherwise vanish. That split is also what makes long runs affordable: the
+static pass is paid once per camera, and additional frames cost one prompt each.
+
 Requires the `annotate` extra:  uv pip install -e '.[annotate]'
 """
 
@@ -42,7 +69,11 @@ for candidate in (HERE.parent / "src", HERE / "src"):
 
 from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402
 from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
-from syncai_hydranet.data.sam3_prompts import BY_NAME, resolve  # noqa: E402
+from syncai_hydranet.data.sam3_prompts import (  # noqa: E402
+    BY_NAME,
+    LAYER_PERSON,
+    resolve,
+)
 
 IGNORE = 255
 CONTESTED = -1  # a pixel two classes on one layer both claim; resolved to IGNORE
@@ -131,6 +162,76 @@ def compose(claims: dict[str, np.ndarray], shape: tuple[int, int], concepts) -> 
     return out.astype(np.uint8)
 
 
+def consensus(masks: list[np.ndarray], threshold: float) -> tuple[np.ndarray, float]:
+    """Collapse one camera's per-frame static masks into the part they agree on.
+
+    This is the whole answer to "there is no annotation budget", so it is worth being
+    exact about why it works. The camera does not move. A shelf is therefore the same
+    pixels in every frame, and any pixel SAM 3 labels differently between two frames
+    is a pixel it was guessing at in at least one of them. **Disagreement across
+    frames is an error signal that costs nothing to collect** -- no human has to say
+    which frame was right, because the question is only whether the answer was stable.
+
+    What it removes is SAM 3's *random* error: a prompt that fires on one frame and
+    not the next, a boundary that breathes, an instance that splits in two. What it
+    cannot remove is systematic error -- a fixture SAM 3 consistently misses, or the
+    pavement it consistently calls glass, are both perfectly stable and survive
+    untouched. So this raises precision and says nothing about recall.
+
+    Measured over 10 frames per camera on the three pilot stores, at 0.9: 37-51% of
+    each frame survives, and `display_fixture` is 19% of what survives.
+
+    ``person`` must NOT be passed in here. People move, so their pixels agree with
+    nothing and would simply vanish -- which is correct behaviour and the reason the
+    caller composites a per-frame person layer over the result instead.
+    """
+    stack = np.stack(masks)
+    n = len(masks)
+    flat = stack.reshape(n, -1)
+    modal = np.full(flat.shape[1], IGNORE, np.uint8)
+    best = np.zeros(flat.shape[1], np.int32)
+    for cid in np.unique(flat):
+        count = (flat == cid).sum(0)
+        win = count > best
+        modal[win] = cid
+        best[win] = count[win]
+    agree = best / n
+    keep = (agree >= threshold - 1e-9) & (modal != IGNORE)
+    modal[~keep] = IGNORE
+    labelled = float(keep.mean())
+    return modal.reshape(stack.shape[1:]), labelled
+
+
+def frame_masks(proc, model, frame: np.ndarray, subset, args) -> tuple[Image.Image, np.ndarray]:
+    """One frame through one subset of the concept table: the image and its id mask.
+
+    Takes the frame rather than an index into the caller's list, so it can be reused
+    for the static pass and the per-frame `person` pass without closing over the
+    clip loop's variables.
+    """
+    img = Image.fromarray(frame)
+    probe_img = (
+        img.resize(
+            (int(img.width * args.upscale), int(img.height * args.upscale)), Image.LANCZOS
+        )
+        if args.upscale != 1.0
+        else img
+    )
+    shape = (probe_img.height, probe_img.width)
+    # Per class, the union over its prompts, keeping the best score per pixel.
+    claims: dict[str, np.ndarray] = {}
+    for concept in subset:
+        acc = np.zeros(shape, dtype=np.float32)
+        for prompt in concept.prompts:
+            for mask, score in segment(
+                proc, model, probe_img, prompt, concept.min_score, args.device
+            ):
+                np.maximum(acc, mask * score, out=acc)
+        if acc.any():
+            claims[concept.name] = acc
+    return img, compose(claims, shape, subset)
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -159,6 +260,17 @@ def build_parser() -> argparse.ArgumentParser:
         "for why each one is off -- the reasons are not the same)",
     )
     ap.add_argument("--exclude", action="append", default=[], metavar="CLASS")
+    ap.add_argument(
+        "--consensus",
+        type=float,
+        default=None,
+        metavar="FRACTION",
+        help="fixed-camera mode: keep a static pixel only where this fraction of the "
+        "clip's frames agree on its class, and write 255 everywhere else. 0.9 is the "
+        "measured setting. Costs coverage and buys precision, which is the right trade "
+        "when nobody is available to correct a mistake -- see `consensus()`. `person` "
+        "is excluded from the vote and composited per frame instead",
+    )
     return ap
 
 
@@ -201,39 +313,45 @@ def main(argv: list[str] | None = None) -> int:
         picks = farthest_first(descs, args.frames)
         print(f"{session}: {len(kept)} candidates -> {len(picks)} kept")
 
-        for n, idx in enumerate(picks):
-            img = Image.fromarray(kept[idx])
-            probe_img = (
-                img.resize(
-                    (int(img.width * args.upscale), int(img.height * args.upscale)),
-                    Image.LANCZOS,
-                )
-                if args.upscale != 1.0
-                else img
+        # In consensus mode the two halves of the frame are computed differently:
+        # everything that cannot move is voted on across the clip, and everything that
+        # can is left per frame. Splitting them here rather than in `compose` keeps the
+        # rule visible -- `person` is on LAYER_PERSON precisely because it moves.
+        moving = [c for c in concepts if c.layer == LAYER_PERSON] if args.consensus else []
+        static = [c for c in concepts if c not in moving]
+
+        per_frame: list[tuple[Image.Image, np.ndarray]] = [
+            frame_masks(proc, model, kept[idx], static, args) for idx in picks
+        ]
+        shared = None
+        if args.consensus:
+            shared, kept_share = consensus([m for _, m in per_frame], args.consensus)
+            print(
+                f"  consensus @{args.consensus:.2f} over {len(per_frame)} frames: "
+                f"{100 * kept_share:.1f}% of the frame survives as static structure"
             )
-            shape = (probe_img.height, probe_img.width)
 
-            # Per class, the union over its prompts, keeping the best score per pixel.
-            claims: dict[str, np.ndarray] = {}
-            for concept in concepts:
-                acc = np.zeros(shape, dtype=np.float32)
-                for prompt in concept.prompts:
-                    for mask, score in segment(
-                        proc, model, probe_img, prompt, concept.min_score, args.device
-                    ):
-                        np.maximum(acc, mask * score, out=acc)
-                if acc.any():
-                    claims[concept.name] = acc
-
-            mask = compose(claims, shape, concepts)
+        for n, (img, own) in enumerate(per_frame):
+            mask = own if shared is None else shared.copy()
+            if moving:
+                # Painted after the vote, not into it: LAYER_PERSON overwrites, which
+                # is what a person standing in front of a shelf should do.
+                _, mv = frame_masks(proc, model, kept[picks[n]], moving, args)
+                mask = mask.copy()
+                mask[mv != IGNORE] = mv[mv != IGNORE]
             mask_img = Image.fromarray(mask).resize(img.size, Image.NEAREST)
-
             stem = f"{n:04d}"
             img.save(img_dir / f"{stem}.jpg", quality=92)
             mask_img.save(ann_dir / f"{stem}.png")
             totals.update(np.asarray(mask_img).ravel().tolist())
 
-        manifest["clips"].append({"session": session, "source": clip, "frames": len(picks)})
+        entry = {"session": session, "source": clip, "frames": len(picks)}
+        if args.consensus:
+            entry["consensus"] = {
+                "threshold": args.consensus,
+                "static_share": round(kept_share, 4),
+            }
+        manifest["clips"].append(entry)
 
     total_px = sum(totals.values()) or 1
     labelled = total_px - totals[IGNORE]
