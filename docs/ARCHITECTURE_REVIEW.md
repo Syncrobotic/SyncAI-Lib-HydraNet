@@ -114,9 +114,24 @@ instead of being merely observed.
 - **Operator set.** The forward graph remains Conv/BN/ReLU/Resize/MaxPool/Exp/Mul, with
   target assignment and NMS outside it. The TensorRT constraint has been respected
   consistently.
-- **`channels_last`.** Still unimplemented, and worth less than it looks: the training GPU
-  runs at 93% utilisation against a 300 W power cap, so it is already saturated. Evaluate
-  this on the Jetson, where the memory format actually matters, not on the workstation.
+- **`channels_last`.** Built (`train.channels_last`, default off) and worth about **−21%**
+  per training step: 153.2 → 121.1 ms at batch 48, 512×640, bf16 autocast on an RTX PRO
+  6000, reproducible with `scripts/bench_channels_last.py`. Under fp32 it buys nothing
+  (219.6 → 220.9 ms), because those convolutions run on CUDA cores, which are indifferent
+  to layout; the config schema warns when the flag is set without AMP.
+
+  **This entry previously argued the opposite and was wrong twice**, which is why it is
+  kept rather than quietly rewritten. It said the GPU was already saturated at 93%
+  utilisation against a 300 W cap, so there was nothing to win — but implicit transposes
+  count as utilisation, and the saving is in work not done. It then said the layout
+  changes no arithmetic: true of the strides, false of the run. NHWC selects different
+  convolution kernels, which accumulate in a different order, and under the TF32 every run
+  enables the two layouts disagree by ~1e-2 of scale (1e-5 with TF32 off — both pinned in
+  `tests/test_channels_last.py`).
+
+  That divergence is why the default is off rather than on. A run whose flag is flipped
+  partway through is not bit-comparable to itself, and a control that exists to isolate one
+  variable must not pick up a second one from a restart.
 
 ---
 
