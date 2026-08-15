@@ -65,6 +65,20 @@ def test_terrain_palette_matches_the_indoor_one(orin):
     assert np.array_equal(live.TERRAIN_COLORS, TERRAIN_COLORS_INDOOR)
 
 
+def test_class_names_match_the_package_modulo_the_hyphen(orin):
+    """The board draws category names on frames; the package scores against them.
+
+    The two spellings differ by one documented rule -- the board hyphenates so a label
+    stays one token on an overlay -- and by nothing else. Order matters as much as
+    spelling: index i is class i out of the head, so a list that drifts by one entry
+    renames every detection after it and still looks like a working system.
+    """
+    from syncai_hydranet.data.coco_subsets import COCO_NAMES
+
+    _, live = orin
+    assert [n.replace("-", " ") for n in live.COCO_NAMES] == COCO_NAMES
+
+
 @pytest.mark.skipif(
     __import__("importlib").util.find_spec("cv2") is None,
     reason="bench_camera_orin.letterbox needs cv2, which the board has and this box "

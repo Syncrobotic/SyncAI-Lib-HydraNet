@@ -195,3 +195,16 @@ def test_score_classes_may_be_a_subset_of_a_trained_subset(tmp_path):
         score_classes=["chair"],
     )
     assert ds.cat_ids == [1, 62] and ds.score_cat_ids == [62]
+
+
+def test_indoor_25_is_spelled_the_way_coco_spells_it():
+    """A name that COCO does not use scores nothing, and mAP over nothing is not zero --
+    it is a shorter mean over the categories that did match. The 0.3246 baseline is
+    defined by this list, so a spelling drift here moves what that number refers to
+    without changing anything that looks like a measurement."""
+    from syncai_hydranet.data.coco_subsets import COCO_NAMES, INDOOR_25
+
+    assert len(COCO_NAMES) == 80 == len(set(COCO_NAMES))
+    unknown = [n for n in INDOOR_25 if n not in COCO_NAMES]
+    assert not unknown, f"not COCO category names: {unknown}"
+    assert len(INDOOR_25) == 25 == len(set(INDOOR_25))

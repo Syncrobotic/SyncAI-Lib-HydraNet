@@ -12,6 +12,37 @@ one session's history. This module is where they live now.
 
 from __future__ import annotations
 
+# COCO's 80 categories in sorted-category-id order, which is the order CocoDetDataset
+# assigns contiguous labels in: index i is class i out of the detection head.
+#
+# Spelled the way COCO spells them, spaces and all, because these names are matched
+# against COCOeval's own categories -- `INDOOR_25` below is checked against this list for
+# exactly that reason. `scripts/live_view_orin.py` keeps a hyphenated copy for drawing on
+# frames; tests/test_orin_standalone_copies.py pins that the only difference is the
+# hyphen, so the board cannot start naming a class something this list does not know.
+COCO_NAMES = [
+    "person", "bicycle", "car", "motorcycle",
+    "airplane", "bus", "train", "truck",
+    "boat", "traffic light", "fire hydrant", "stop sign",
+    "parking meter", "bench", "bird", "cat",
+    "dog", "horse", "sheep", "cow",
+    "elephant", "bear", "zebra", "giraffe",
+    "backpack", "umbrella", "handbag", "tie",
+    "suitcase", "frisbee", "skis", "snowboard",
+    "sports ball", "kite", "baseball bat", "baseball glove",
+    "skateboard", "surfboard", "tennis racket", "bottle",
+    "wine glass", "cup", "fork", "knife",
+    "spoon", "bowl", "banana", "apple",
+    "sandwich", "orange", "broccoli", "carrot",
+    "hot dog", "pizza", "donut", "cake",
+    "chair", "couch", "potted plant", "bed",
+    "dining table", "toilet", "tv", "laptop",
+    "mouse", "remote", "keyboard", "cell phone",
+    "microwave", "oven", "toaster", "sink",
+    "refrigerator", "book", "clock", "vase",
+    "scissors", "teddy bear", "hair drier", "toothbrush",
+]  # fmt: skip
+
 # Reproduces mAP 0.3245647505782422 / mAP@50 0.49341168993493867 for
 # runs/hydranet_joint_coco10/best.pt on val2017 with the COCO block at
 # sample_ratio 0.1 -- see configs/eval_indoor25.yaml, which is the runnable form.
