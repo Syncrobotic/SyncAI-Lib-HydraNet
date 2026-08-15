@@ -40,6 +40,43 @@ git checkout stage && git merge --ff-only origin/dev && git push origin stage
 git checkout main && git merge --ff-only origin/stage && git push origin main
 ```
 
+### Where the version number comes in
+
+Nothing above changes when a release is cut, and that is the point.
+[`.github/workflows/release-please.yml`](../.github/workflows/release-please.yml) splits a
+release into the two halves that belong at opposite ends of this flow:
+
+| | Runs on | Does | Merged how |
+|---|---|---|---|
+| `release-pr` | `dev` | opens a PR bumping `__version__` and writing `CHANGELOG.md` | an ordinary PR into `dev`, like any `feat/*` |
+| `release` | `main` | sees a version with no tag, tags it, cuts the GitHub Release, attaches the wheel and sdist | nothing — it only reads |
+
+So the bump enters at the bottom and rides the same fast-forward promotions as the code
+it describes. **No branch ever gains a commit that did not come from the branch below
+it**, and the rules above stay exactly as written.
+
+The obvious alternative — pointing release-please at `main`, as the sibling Gateway repo
+does — was rejected because it cannot work here. A release PR merges *into* its target, so
+`main` would gain a commit `stage` does not have and the next promotion would be refused:
+
+```text
+$ git checkout main && git merge --ff-only origin/stage
+fatal: Not possible to fast-forward, aborting.
+```
+
+Cutting the tag on `dev` instead was rejected for the opposite reason: a tag is a claim
+that code is released, and this table defines `main` as what a robot in the field is
+running. Tagging on `dev` would label code that has not been through `stage`'s acceptance
+checklist.
+
+Because promotion is fast-forward, the commit the tag names is the same git object that
+was reviewed on `dev` and accepted on `stage` — not a copy of it.
+
+The version bump lands on `dev` before the code is released, so `dev` and `stage` will
+report a version whose tag does not exist yet. That is expected: the version is the *next*
+release's number from the moment the PR merges. `pip install` from a tag is unaffected —
+it can only resolve tags that exist.
+
 ## 2. Model releases
 
 A model version is the weights, the graph, the config, the lineage and the numbers, frozen

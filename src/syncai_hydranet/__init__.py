@@ -15,7 +15,12 @@ from .config import Config, load_config
 from .config_schema import ConfigError, check_config
 from .models.hydranet import HydraNet, build_model
 
-__version__ = "0.1.0"
+# The single source of version truth: `[tool.hatch.version]` reads this file, and
+# `release-please-config.json` lists it under `extra-files` so a release PR rewrites
+# the line below. The trailing annotation is what release-please matches on -- remove
+# it and releases will bump CHANGELOG.md and the git tag while leaving the package
+# reporting the previous version, which nothing would fail on.
+__version__ = "0.1.0"  # x-release-please-version
 
 __all__ = [
     "Config",
