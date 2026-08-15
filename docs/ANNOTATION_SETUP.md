@@ -213,6 +213,91 @@ For 4 and 5, ask whether the point cloud can **pre-label** them: detect the edge
 geometrically, project into the image, and correct a mask rather than draw one. The
 material classes above have no such shortcut, which is the second reason they come first.
 
+### Pre-labelling the missing classes with SAM 3
+
+```bash
+uv pip install -e '.[annotate]'
+hf auth login                       # facebook/sam3 is a gated repo
+
+python3 scripts/sam3_prelabel.py --out datasets/retail_sam3_batch01 \
+    --frames 40 /path/to/hls-record/cam*/archive_*.mp4
+hydranet-annotation check datasets/retail_sam3_batch01 --scheme retail
+```
+
+There are now two pre-labellers, and they are not alternatives:
+
+| | label source | what it can do |
+|---|---|---|
+| `scripts/annotation_batch.py` | the model itself | correct what it already half-knows |
+| `scripts/sam3_prelabel.py` | SAM 3, promptable by text | **propose a class it has never seen** |
+
+The second capability is the whole point, and it rests on one property.
+[RETAIL_SCOPE.md](RETAIL_SCOPE.md) §5 measured self-training on this footage: it moved
+`display_fixture` by **−0.0096**, because the podiums came back unlabelled and the model
+was then taught that shop fixtures are not fixtures. A label drawn from the model can
+only reinforce what the model already believes. SAM 3's knowledge is **external**, so a
+podium it segments is new information rather than an echo — which also means it is a
+second model with its own errors, not an oracle. Everything it writes is a pre-label and
+`check` still gates it.
+
+Prompts live in [`data/sam3_prompts.py`](../src/syncai_hydranet/data/sam3_prompts.py),
+next to the label maps and importing their ids rather than restating them. Measured on
+eight site frames, 2026-08-15:
+
+- **`display_fixture` needs eight prompts, not one.** `display table` finds the island
+  podiums, `shelving unit` the wall runs, `retail counter` the service desk — each misses
+  the other two. One class here is three objects to SAM 3. `gondola shelf` scored 0/8
+  despite being the trade term: prompts should read like a caption, not a spec sheet.
+- **`table` and `display table` fight over the same pixels on 6/8 frames.** Which is
+  right depends on what the shop uses the table for, which is not visible from the
+  ceiling. Those pixels are written as 255 for an annotator to settle — the same reason
+  `label_maps_retail.py` refuses to map ADE20K's `table` to `display_fixture`.
+- **`glass` segments what is *behind* the pane.** On the storefront camera it returned
+  the pavement, a truck and two pedestrians along with the glass. Accepted as-is that
+  teaches the model a street is glass, in the one class whose failure mode is walking
+  into it. Redraw every glass pre-label; the raised threshold buys fewer, not better.
+- **`stairs`, `threshold_ramp`, `wet_slippery`, `floor_metal` all returned 0/8**, and the
+  reason splits in half. `stairs` and `threshold_ramp` are solid object concepts SAM 3
+  would very likely find — this site is a single flat floor and has neither, so that is a
+  **capture gap** and the fix is filming a site that has them. `wet_slippery` and
+  `floor_metal` are *materials*: a wet floor is the same object as a dry floor, and a
+  promptable concept model has no handle on it. They stay hand-drawn, exactly as the
+  priority list above says.
+- **The floor is off by default.** Not because SAM 3 fails on it (`tiled floor` hits 4/8)
+  but because §5 measured the cheaper answer: on a fixed camera the floor is one static
+  region, so one polygon per camera beats a pre-label per frame. `--include floor_hard`
+  if a camera is not in fact fixed.
+
+### Which cameras are worth pre-labelling at all
+
+A 48-camera site does not have 48 usable cameras, and the ways one fails are independent
+— each check below passed cameras the others rejected, so running one and calling it a
+survey overstates the fleet. Measured across the three stores:
+
+| check | reads | caught | misses |
+|---|---|---|---|
+| container metadata | `ffprobe` width/height | 7 never-1080p cameras | everything about the image |
+| **pixel level** | per-channel mean/std | 4 cameras outputting **pure black** — recorder running, timestamps live, no image; 2 stuck in **greyscale during trading hours** (`R_mean == G_mean == B_mean`, both bright, textured and 1080p) | what the camera is pointed at |
+| **scene type** | the pre-labels themselves | a **stockroom** (boxes and racking, floor 1.5%) and a **top-down repair workbench** (ignore 74%, no fixtures) — neither is a room view, so neither can supervise traversability | — |
+
+The black cameras pass nothing but a container check; the monochrome pair passes both
+container *and* blackness and fails only on chroma; the stockroom passes all three and
+fails only on what it shows. A low floor share is the signal for the last one — but read
+it as a question, not a verdict, since it is also what a genuinely crowded frame looks
+like.
+
+Store-level exposure is worth knowing before tuning anything per-camera: across 16
+cameras Taichung runs ~28 luma brighter and ~12 std flatter than Kaohsiung, and four of
+the five lowest-contrast cameras on the whole site are Taichung's. That is a store
+setting, not per-camera noise.
+
+Two consequences to plan around. A batch with the floor off is **100% `blocked`** in its
+labelled pixels — it supervises where the robot cannot go and says nothing about where it
+can, so pair it with the per-camera floor polygon before reading any traversability
+number. And **never pre-label the test split with SAM 3**: a model scored against SAM 3's
+own masks measures agreement with SAM 3. §6 already requires building that split by hand,
+before the first training run.
+
 ### Capture and split rules
 
 - Shoot at **robot camera height and pitch**, not eye level. ADE20K's weakness is exactly

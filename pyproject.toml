@@ -64,6 +64,11 @@ dependencies = [
 # onnxruntime is capped: 1.23 dropped cp310 wheels, and requires-python still allows
 # 3.10, which is also half the CI matrix. Raise the cap when the floor moves to 3.11.
 export = ["onnx>=1.15", "onnxsim>=0.4", "onnxruntime>=1.17,<1.23"]
+# SAM 3 pre-labelling (scripts/sam3_prelabel.py). An annotation-time tool, never a
+# runtime dependency: nothing under src/ imports transformers, and the robot must not
+# carry a 6.5 GB checkpoint it never runs. `facebook/sam3` is a gated repo, so this
+# installs the code and leaves the weights to `hf auth login`.
+annotate = ["transformers>=5.0"]
 
 [project.scripts]
 hydranet-train = "syncai_hydranet.cli.train:main"
