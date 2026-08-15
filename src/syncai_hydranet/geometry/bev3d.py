@@ -28,7 +28,7 @@ from dataclasses import dataclass
 import numpy as np
 from PIL import Image, ImageDraw
 
-from .bev import IGNORE, BevGrid
+from .bev import IGNORE, BevGrid, ray_reach
 
 # Nominal heights, in metres, for the boundary ribbon. Drawing, not measurement -- see
 # the module docstring. Keyed by the retail/indoor terrain id, which share 0-11.
@@ -101,24 +101,13 @@ def _shade(rgb, factor: float):
 
 
 def boundary_rays(trav_bev: np.ndarray, grid: BevGrid, n_rays: int = 160):
-    """Per ray: how far the floor reached, and the grid cell that ended it.
+    """Per ray: how far the floor reached, as a polyline rather than a raster.
 
-    Same quantity the flat map's free-space filter uses -- the last walkable range along
-    each bearing -- returned rather than rasterised, because a ribbon needs the polyline.
+    The same reduction the flat map's free-space filter runs on, and deliberately the
+    same code: a ribbon drawn from a second implementation would drift away from the map
+    it is supposed to be a picture of, and drift is the failure nobody looks for.
     """
-    xx, zz = grid.centres()
-    xx = xx[::-1]
-    zz = zz[::-1]
-    ang = np.arctan2(xx, zz)
-    rng = np.hypot(xx, zz)
-    lo, hi = float(ang.min()), float(ang.max())
-    ray = np.clip(
-        ((ang - lo) / max(hi - lo, 1e-9) * (n_rays - 1)).astype(np.int32), 0, n_rays - 1
-    )
-    walkable = (trav_bev == 2) | (trav_bev == 1)
-    reach = np.zeros(n_rays)
-    np.maximum.at(reach, ray[walkable], rng[walkable])
-    angles = lo + (np.arange(n_rays) + 0.5) / n_rays * (hi - lo)
+    angles, reach, _, _ = ray_reach(trav_bev, grid, n_rays)
     return angles, reach
 
 

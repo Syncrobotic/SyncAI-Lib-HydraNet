@@ -115,6 +115,61 @@ def box_extents(boxes: np.ndarray, cam: Camera, plane: GroundPlane) -> np.ndarra
     return np.stack([width, height], axis=-1)
 
 
+def ray_reach(bev: np.ndarray, grid: BevGrid, n_rays: int = 240):
+    """Per bearing: how far the floor reached. Also the per-cell bearing and range.
+
+    The one reduction both the flat map's free-space filter and the perspective renderer
+    are built on, so that they cannot disagree about where the floor ends.
+
+    ``bev`` is a map as ``project_mask`` returns it, **far field at row 0**. The grid's
+    own ``centres()`` runs the other way, so it is reversed here rather than at each call
+    site: a caller that forgets computes every range mirrored and produces a map that is
+    smooth, plausible and wrong about the only distance anyone reads off it.
+    """
+    xx, zz = grid.centres()
+    xx, zz = xx[::-1], zz[::-1]
+    ang = np.arctan2(xx, zz)
+    rng = np.hypot(xx, zz)
+    lo, hi = float(ang.min()), float(ang.max())
+    ray = np.clip(
+        ((ang - lo) / max(hi - lo, 1e-9) * (n_rays - 1)).astype(np.int32), 0, n_rays - 1
+    )
+    walkable = (bev == 2) | (bev == 1)
+    reach = np.zeros(n_rays, dtype=np.float64)  # last walkable range per bearing
+    np.maximum.at(reach, ray[walkable], rng[walkable])
+    angles = lo + (np.arange(n_rays) + 0.5) / n_rays * (hi - lo)
+    return angles, reach, ray, rng
+
+
+def free_space_map(bev: np.ndarray, grid: BevGrid, n_rays: int = 240) -> np.ndarray:
+    """Keep what a camera can actually assert: free space, its boundary, nothing beyond.
+
+    Projecting a mask onto the floor treats every pixel as if it lay on the floor. For
+    walkable pixels that is true. For a wall or a shelf it is not -- the ray through a
+    wall pixel meets the ground plane somewhere well past the wall -- so the naive map
+    paints the whole far field `blocked`, and a map that says "obstacle" where it means
+    "I cannot see" will be trusted in the wrong direction.
+
+    What a single camera knows along each ray is: floor out to the last walkable cell,
+    something standing at that boundary, and nothing at all behind it. That is what this
+    returns. It is also why the far field of an honest camera map is mostly empty, which
+    is the correct shape for one camera and the reason a robot carries a second sensor.
+    """
+    _, reach, ray, rng = ray_reach(bev, grid, n_rays)
+    walkable = (bev == 2) | (bev == 1)
+    out = np.full_like(bev, IGNORE)
+    # The floor is copied whole. This used to be gated on `rng <= reach[ray]`, which reads
+    # like a range filter and is not one: a cell's own bearing's reach is the maximum over
+    # that bearing's walkable cells, so the test is true for every one of them. What makes
+    # the far field empty is that non-walkable cells are never copied at all.
+    out[walkable] = bev[walkable]
+    # The boundary: one cell thick, where the floor stopped. Rays that never saw floor
+    # get no boundary, because nothing was established about them.
+    edge = (np.abs(rng - reach[ray]) <= grid.cell * 1.5) & (reach[ray] > 0) & ~walkable
+    out[edge] = 0
+    return out
+
+
 def scene(
     mask: np.ndarray,
     cam: Camera,

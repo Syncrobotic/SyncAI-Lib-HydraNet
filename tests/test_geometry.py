@@ -16,10 +16,12 @@ from syncai_hydranet.geometry import (
     Camera,
     GroundPlane,
     fit_ground_plane,
+    free_space_map,
     ground_to_pixel,
     pixel_to_ground,
     place_boxes,
     project_mask,
+    ray_reach,
     scene,
     unproject,
 )
@@ -203,6 +205,95 @@ def test_scene_reports_metres_and_omits_unplaceable_objects():
     assert obj["range_m"] == pytest.approx(math.hypot(0.5, 2.0), abs=1e-3)
     assert doc["plane"]["height_m"] == pytest.approx(PLANE.height)
     assert bev.shape == tuple(doc["grid"]["shape"])
+
+
+# ----------------------------------------------------------------- free space
+
+# A grid whose rows are easy to name: 40 rows of 0.1 m from 0.5 m out to 4.5 m. Row 0 is
+# the far edge, because that is the order `project_mask` returns and every consumer of a
+# BEV array in this package has to agree with it.
+FS_GRID = BevGrid(x_min=-2.0, x_max=2.0, z_min=0.5, z_max=4.5, cell=0.1)
+FS_ROWS, FS_COLS = FS_GRID.shape
+FS_LAST_WALKABLE_ROW = 20  # rows 20..39 are floor, i.e. everything nearer than 2.5 m
+
+
+def floor_out_to_2m5() -> np.ndarray:
+    """A BEV with clean floor across the near half and something blocking it at 2.5 m."""
+    bev = np.zeros((FS_ROWS, FS_COLS), np.uint8)  # blocked
+    bev[FS_LAST_WALKABLE_ROW:] = 2  # go
+    return bev
+
+
+def test_free_space_reads_rows_the_way_project_mask_writes_them():
+    """The boundary belongs just beyond the last floor cell, on the far side of it.
+
+    This is the whole row-order contract in one assertion. A consumer that takes row 0 for
+    the near edge computes every range mirrored: the map it draws is still smooth, still
+    plausible, and puts the edge of the free space at the wrong distance -- which is the
+    one number a navigation stack reads off it.
+    """
+    out = free_space_map(floor_out_to_2m5(), FS_GRID)
+    edge_rows = np.unique(np.where(out == 0)[0])
+    assert edge_rows.size, "the floor ended somewhere and that has to be marked"
+    assert edge_rows.max() < FS_LAST_WALKABLE_ROW, "the boundary is on the far side"
+    assert edge_rows.min() >= FS_LAST_WALKABLE_ROW - 6, (
+        f"and adjacent to the floor, not out at the far edge: rows {edge_rows}"
+    )
+
+
+def test_nothing_is_asserted_behind_the_boundary():
+    """Beyond the boundary a single camera knows nothing, and must not say `blocked`.
+
+    The mask calls the far field blocked because a wall pixel's ray meets the plane well
+    past the wall. Copying that through would paint an obstacle over ground the camera
+    never saw, and it would be trusted in the direction that costs a robot a route.
+    """
+    out = free_space_map(floor_out_to_2m5(), FS_GRID)
+    beyond = out[: FS_LAST_WALKABLE_ROW - 6]
+    assert (beyond == IGNORE).all(), "the far field is unknown, not blocked"
+
+
+def test_a_ray_that_never_saw_floor_gets_no_boundary():
+    bev = floor_out_to_2m5()
+    bev[:, :10] = 0  # a whole column of bearings with no floor at any range
+    out = free_space_map(bev, FS_GRID)
+    assert (out[:, :6] == IGNORE).all(), "nothing was established about those bearings"
+
+
+def test_the_perspective_renderer_shares_the_ray_reduction():
+    """`bev3d` draws the boundary the flat map filters on. Two implementations of "how
+    far did the floor reach" would drift, and the picture would stop agreeing with the
+    map it is drawn from."""
+    from syncai_hydranet.geometry import bev3d
+
+    bev = floor_out_to_2m5()
+    angles, reach, _, _ = ray_reach(bev, FS_GRID, n_rays=64)
+    a3, r3 = bev3d.boundary_rays(bev, FS_GRID, n_rays=64)
+    assert np.allclose(angles, a3)
+    assert np.allclose(reach, r3)
+
+
+def test_every_walkable_cell_survives_the_filter():
+    """The floor is kept whole; only the far field is dropped.
+
+    Worth pinning because it is easy to write this filter as a range test against the
+    reach -- and a range test can never remove a walkable cell, since the reach *is* that
+    cell's own bearing's maximum. Anything that looks like it is filtering the floor here
+    is either doing nothing or is a bug; this asserts the first.
+    """
+    bev = floor_out_to_2m5()
+    bev[30:, 5:9] = 1  # a caution patch, which counts as floor for reachability
+    out = free_space_map(bev, FS_GRID)
+    walkable = (bev == 2) | (bev == 1)
+    assert np.array_equal(out[walkable], bev[walkable])
+    assert (out[walkable] != IGNORE).all()
+
+
+def test_the_reach_is_the_distance_to_the_floor_edge_not_the_grid_edge():
+    """Straight ahead the floor stops at 2.5 m, so that is what the reduction reports."""
+    _, reach, _, _ = ray_reach(floor_out_to_2m5(), FS_GRID, n_rays=64)
+    ahead = reach[len(reach) // 2]
+    assert ahead == pytest.approx(2.45, abs=0.1), "the last floor cell is centred at 2.45 m"
 
 
 def test_intrinsics_rescale_with_the_image():
