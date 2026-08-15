@@ -168,8 +168,10 @@ Installation provides these console scripts:
 | `hydranet-eval` | Run validation on a checkpoint |
 | `hydranet-infer-image` | Overlay inference on a single image or a folder |
 | `hydranet-infer-video` | Video inference (uses the system ffmpeg, no opencv needed) |
+| `hydranet-scene` | Project a frame or clip onto the floor in metres — the panel above, and the scene as JSON |
 | `hydranet-export-onnx` | Export ONNX for TensorRT |
 | `hydranet-prepare-ade20k` | Filter ADE20K to its indoor subset and lay it out as `seg_folder` |
+| `hydranet-prepare-cocostuff` | The same, for COCO-Stuff's segmentation labels over the COCO images |
 | `hydranet-report` | Summarise one run, or rank runs and diff their configs |
 | `hydranet-annotation` | Emit the CVAT label schema; gate an annotated dataset before training on it |
 
@@ -186,6 +188,13 @@ Run them all with `uv run <command>`, or `source .venv/bin/activate` first.
 Model structure, losses and training mechanics are identical across all three — the
 differences are `data.terrain_classes`, `label_map` and the data sources. All three use
 COCO for the detection head, unchanged.
+
+`configs/` holds three more, each narrower than a deployment: `hydranet_retail_cctv.yaml`
+(the fixed-camera fine-tune at 512×896), `hydranet_retail_cocostuff.yaml` (a queued
+one-variable experiment, with the control it must be read against named in the file), and
+`eval_indoor25.yaml`, which is an evaluation rather than a training run — it reproduces the
+0.3246 indoor-subset detection baseline in one command, with the expected numbers written
+in the file you would run.
 
 Each inherits `configs/_base/hydranet.yaml`, so a config file contains only what makes
 that deployment different. What is *not* in a file comes from the base, and the run's
@@ -216,8 +225,9 @@ uv run pytest --cov          # tests + coverage
 uv run pre-commit install    # enable pre-commit checks
 ```
 
-CI runs lint plus a Python 3.10 / 3.12 test matrix on GitHub Actions, and fails below 68%
-coverage. The tests need no datasets: model tests run on random tensors, dataset tests build
+CI runs lint plus a Python 3.10 / 3.12 test matrix on GitHub Actions, and fails below 80%
+coverage (currently 85% across 464 tests). The tests need no datasets: model tests run on
+random tensors, dataset tests build
 a fixture in `tmp_path`, and `test_overfit.py` verifies the training loop really converges by
 memorising one synthetic batch to over 95% pixel accuracy (chance is 33% across three classes).
 
@@ -238,10 +248,17 @@ src/syncai_hydranet/
 ├── data/
 │   ├── label_maps.py         # off-road mappings + the SCHEMES registry
 │   ├── label_maps_indoor.py  # indoor 12 classes + ADE20K mapping
+│   ├── label_maps_retail.py  # the indoor 12 + display_fixture, ids 0-11 kept aligned
+│   ├── label_maps_cocostuff.py  # COCO-Stuff ids -> the indoor / retail taxonomies
+│   ├── coco_subsets.py       # the COCO 80 names, and INDOOR_25 (the 0.3246 denominator)
 │   ├── datasets.py           # SegFolderDataset / CocoDetDataset / split resolution
 │   ├── transforms.py         # joint image+mask+box augmentation, letterbox, geometry inversion
 │   ├── fingerprint.py        # dataset fingerprints, written into meta.json
 │   └── multitask.py          # round-robin loader across datasets
+├── geometry/                 # image -> floor, in metres (hydranet-scene runs it)
+│   ├── ground.py             # intrinsics, ground plane, pixel<->floor, RANSAC plane fit
+│   ├── bev.py                # mask -> metric top-down map, object placement, scene payload
+│   └── bev3d.py              # the same map drawn in perspective, for a person
 ├── engine/
 │   ├── trainer.py            # AMP / EMA / cosine / gradient accumulation / checkpoints / TB
 │   └── evaluator.py          # mIoU + COCO mAP + primary metric selection

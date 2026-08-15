@@ -13,7 +13,7 @@ says nothing about which weights are running on a robot.
 
 | Branch | Means | Who merges | Gate |
 |---|---|---|---|
-| `dev` | Integration. Work lands here. | Anyone | CI: lint, format, tests, coverage ≥ 68% |
+| `dev` | Integration. Work lands here. | Anyone | CI: lint, format, tests, coverage ≥ 80% |
 | `stage` | Release candidate. Deployed to test robots. | Release owner | Everything above, plus the export gate and the acceptance checklist |
 | `main` | Released. What a robot in the field is running. | Release owner | Fast-forward from `stage` only |
 

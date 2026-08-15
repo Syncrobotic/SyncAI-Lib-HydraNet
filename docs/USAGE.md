@@ -207,6 +207,29 @@ solid because those are the classes ADE20K has in quantity; the same model score
 "go". Watch a clip before trusting a number — a curve cannot show you a model calling a
 ceiling a floor, and this is the cheapest way to find it.
 
+### The floor in metres
+
+```bash
+uv run hydranet-scene --config ... --checkpoint runs/.../best.pt \
+    --input clip.mp4 --output clip_bev.mp4
+
+# the scene as data rather than a picture: one JSON object per frame
+uv run hydranet-scene --config ... --checkpoint ... --input frame.jpg --json scene.json
+```
+
+Camera view on the left, the floor rebuilt in metres on the right, with each detection
+placed where its box meets the ground. It needs a camera pose and does not have one, so it
+takes `--camera-height` (1.5 m), `--pitch` (15° down) and `--vfov` (55°) and **prints them
+on every frame**: get any of them wrong and every distance is off by a smooth factor that
+looks entirely plausible. `--range` sets how far out to map, `--flat-bev` gives the plain
+top-down panel instead of the perspective one.
+
+Those three numbers are assumptions for archived footage and a phone video. On a fixed
+camera, `scripts/fit_camera_from_people.py` recovers height and pitch by fitting detected
+people against a 1.70 m adult; pass the result with `--pose-note` so the caption stops
+claiming a guess. [GROUND_PROJECTION.md](GROUND_PROJECTION.md) is what the projection does
+and what survives the assumption.
+
 ## Deploying to Jetson Orin
 
 A run directory is not something you deploy. `scripts/release_bundle.sh` freezes one into

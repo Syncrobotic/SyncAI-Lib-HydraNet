@@ -14,10 +14,17 @@ For a flat floor, every ground cell has exactly one image pixel. The projection 
 leaves holes in the far field where one pixel covers many cells.
 
 Each cell needs the camera's intrinsics and its pose above the floor. Intrinsics come from
-the session's `*_calibration.json`. The pose does **not** come from a tape measure:
+the session's `*_calibration.json`. The pose is meant not to come from a tape measure:
 
 > Fit a plane to the lower half of the depth return, every frame. Its normal is pitch and
 > roll; its distance is camera height.
+
+**That is the design, and it is not what runs today.** `fit_ground_plane` is implemented
+and tested (`geometry/ground.py`, six tests including a recovery check against synthetic
+floors at three known poses) and **has no caller outside those tests**. Everything that
+executes — `hydranet-scene`, and the archived clips rendered with it — takes the pose from
+`--camera-height` and `--pitch` and prints on every frame that it did. Read the rest of
+this file as what the module is for; read the Status section for what has been run.
 
 That matters on a quadruped. A wheeled robot's camera pose is a constant you can measure
 once; a walking one pitches and rolls with every step, so a fixed homography smears in a
@@ -45,9 +52,31 @@ cases that look alike in the mask: a reflective floor still lies **on** the grou
 while glass does not. Whether it actually separates them is untested and worth one
 walk-through to find out.
 
+## Running it
+
+```bash
+hydranet-scene --config configs/hydranet_indoor.yaml --checkpoint runs/.../best.pt \
+    --input clip.mp4 --output clip_bev.mp4          # camera view + the floor panel
+
+hydranet-scene --config ... --checkpoint ... --input frame.jpg --json scene.json
+```
+
+`--json` is the payload the module exists to produce: metres and class ids, no colours,
+for a renderer, an RViz overlay or a costmap publisher to share. One JSON object for an
+image, one per line for a clip.
+
+The pose flags are `--camera-height`, `--pitch` and `--vfov`, and their values are printed
+on every rendered frame. `--pose-note` replaces that caption, for the case where the pose
+came from a fit rather than a guess — `scripts/fit_camera_from_people.py` recovers a fixed
+camera's height and pitch from detected people, which is the only pose here that is fitted
+to data today.
+
 ## Status
 
-The projection runs offline against recorded clips. It is not wired into ROS, and the
-figures published so far assume the camera rather than measuring it, which the captions
-say. What unblocks the measured version is a session recorded on the robot — the same
-capture that the annotation pipeline and the 3D work are both waiting on.
+The projection runs offline against recorded clips. It is not wired into ROS; the live ROS
+view (`scripts/live_view_ros.py`) builds its scene from registered metric depth by
+back-projection instead, and deliberately fits no plane. The figures published so far
+assume the camera rather than measuring it, which the captions say. What unblocks the
+measured version — and gives `fit_ground_plane` its first caller — is a session recorded on
+the robot, the same capture that the annotation pipeline and the 3D work are both waiting
+on.

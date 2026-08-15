@@ -220,7 +220,7 @@ to val produces an official-looking number that is quietly circular.
 
 ### Before the first run
 
-1. `uv sync --group dev --extra export`, then `uv run pytest -q` — 206 tests, no dataset
+1. `uv sync --group dev --extra export`, then `uv run pytest -q` — 464 tests, no dataset
    needed. If these fail, stop; nothing downstream will be interpretable.
 2. `uv run pre-commit install --hook-type pre-commit --hook-type commit-msg` — both types, see
    [CONTRIBUTING.md](../CONTRIBUTING.md).
@@ -295,12 +295,12 @@ another.
 ### Level 1 — Does the code work? (every commit)
 
 ```bash
-uv run pytest -q          # 206 tests, no dataset required
+uv run pytest -q          # 464 tests, no dataset required
 ```
 
 Includes `test_overfit.py`, which memorises one synthetic batch to >95% pixel accuracy. Shape
 tests pass on a model wired backwards; this is what separates "it runs" from "it trains".
-CI runs the same on Python 3.10 and 3.12 and fails below 68% coverage.
+CI runs the same on Python 3.10 and 3.12 and fails below 80% coverage.
 
 ### Level 2 — Is the model learning? (every epoch)
 
