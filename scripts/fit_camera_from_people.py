@@ -39,6 +39,44 @@ So this recovers a *family* of poses, not a pose. What is genuinely constrained 
 shape of the floor and the ordering of ranges; the absolute scale is not. One tape
 measure on site, or one object of known size lying on the floor, collapses the family
 immediately and is worth more than any amount of fitting here.
+
+**Followed up, 2026-08-16, on Taichung-cam01. The known-size object was already in every
+frame: the floor tiles.** Three things came out of that, and the first two mean this
+script should no longer be the primary estimator on fixed CCTV.
+
+**1. Fit lens distortion first, or nothing downstream is what it claims to be.** A
+pinhole fit to the tile vanishing points gave 92.5 deg vfov and 65.4 deg pitch -- clean,
+prior-free, and it measured 142 people at 1.0-1.2 m tall. Fitting Fitzgibbon's division
+model first, by maximising Hough accumulator concentration (straight grout lines make
+sharp peaks; curved ones smear across bins), found ``k1 = -0.225`` at a genuine
+*interior* maximum -- the first parameter in this project's camera work that did not run
+to its search boundary. Undistorted, the same tiles give 70.4 deg vfov and 50.2 deg
+pitch. The limitation recorded above is therefore not really about vfov: every pinhole
+parameter was absorbing barrel distortion, and the residual stayed healthy while it did.
+
+**2. People are a worse arbiter than a tile grid, which inverts this script's premise.**
+The 142 detections include staff bent over a counter, customers on stools, half-occluded
+shoppers and people wearing backpacks. Their box heights are not 1.70 m, so the residual
+has a floor set by *human posture* rather than by camera pose -- which is exactly why it
+keeps sliding to the search boundary under any lens model. A manufactured tile grid has
+no such floor. Treat the tile fit as the estimate and this script as a sanity bound.
+
+**3. What the corrected pose is worth, and it is not a refinement.** Cast down the centre
+column of a 1080-row frame, ``pixel_to_ground`` gives:
+
+    43.0 deg, f 540, h 1.96 m   floor 0.07 -> 3543 m   worst row 2275 m    81 rows > 0.3 m/row
+    50.2 deg, f 766, h 2.38 m   floor 0.19 ->    8.9 m  worst row 0.031 m   0 rows > 0.3 m/row
+
+At 43 deg the horizon sits at row 36 *inside the image*, so rows below it are grazing
+rays and manufacture a floor that is not there; at 50.2 deg it is at row -379 and grazing
+rays are geometrically impossible. Camera height also converged for the first time --
+2.38 m from tiles against 2.33 m from people under the corrected lens, versus 1.96 m
+before -- and 2.3-2.4 m is what a ceiling mount actually is.
+
+Two method notes that cost a run each: restrict the Hough transform to the segmentation
+mask of the floor, not to a rectangular ROI, or it latches onto counter edges instead of
+grout; and expect a *metric* range gate to hide this failure rather than fix it, since it
+puts the artefact's edge at a tidy number the eye reads as the end of the room.
 """
 
 from __future__ import annotations
