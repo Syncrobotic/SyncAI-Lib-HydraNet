@@ -341,6 +341,27 @@ class Trainer:
                     f"train.ema=false for runs this short."
                 )
 
+        # torch.compile, held as a *separate handle* rather than replacing self.model.
+        #
+        # `torch.compile(m)` returns an OptimizedModule wrapping m. It shares m's
+        # parameters, so the optimizer and EMA see the same tensors either way -- but
+        # its `state_dict()` prefixes every key with `_orig_mod.`. Assigning it to
+        # self.model would therefore write checkpoints that neither `hydranet-eval`,
+        # `hydranet-export-onnx` nor an older checkpoint loader can read, and the
+        # breakage would surface at export time rather than here.
+        #
+        # So: self.model stays eager and owns state_dict, EMA and compute_losses;
+        # self.forward_module is what the training step calls. Validation runs on the
+        # EMA copy, which is eager by construction.
+        self.forward_module = self.model
+        if bool(tcfg.get("compile", False)):
+            mode = str(tcfg.get("compile_mode", "default"))
+            self.forward_module = torch.compile(self.model, mode=mode)
+            self.logger.info(
+                f"torch.compile enabled (mode={mode}); the first steps of epoch 1 "
+                "include graph capture and will look stalled"
+            )
+
         self.log_interval = int(tcfg.get("log_interval", 50))
         self.val_interval = int(tcfg.get("val_interval", 1))
         # One named metric decides best.pt. For a robot the honest choice is a
@@ -444,7 +465,7 @@ class Trainer:
             images = images.contiguous(memory_format=self.memory_format)
             targets = _targets_to_device(batch["targets"], self.device)
             with torch.amp.autocast(self.device.type, enabled=self.amp, dtype=self.amp_dtype):
-                outputs = self.model(images)
+                outputs = self.forward_module(images)
                 loss, logs = self.model.compute_losses(outputs, targets, batch["supervises"])
             # Gradients sum across the group, so each micro-batch contributes its share
             # rather than a full step's worth.

@@ -168,6 +168,17 @@ TRAIN = {
     # NHWC weights and activations. Off by default so that resuming an in-flight run
     # after a code change does not silently move it to a different kernel set.
     "channels_last": Spec((bool,)),
+    # torch.compile. Off by default, and the reason is not caution about correctness:
+    # this project's step is small (batch 8 at 512x640 measured 46-63% GPU on an RTX
+    # PRO 6000, host-bound rather than compute-bound), which is exactly the regime
+    # where graph capture pays off -- and also exactly the regime where a first-epoch
+    # compile of several minutes shows up as a mysterious stall. Opt in per run, and
+    # expect the gain to shrink as batch size rises.
+    #
+    # It is a *training* knob only. Export goes through torch.onnx with dynamo=False
+    # and must see the eager module, and EMA deep-copies the model before any of this.
+    "compile": Spec((bool,)),
+    "compile_mode": Spec((str,), choices=("default", "reduce-overhead", "max-autotune")),
     "grad_clip": Spec(NUMBER),
     "ema": Spec((bool,)),
     "ema_decay": Spec(NUMBER),
