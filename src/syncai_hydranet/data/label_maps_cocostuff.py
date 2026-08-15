@@ -42,8 +42,8 @@ one assumption that would corrupt every label cannot regress silently.
 
 from __future__ import annotations
 
-from .label_maps_indoor import INDOOR_TERRAIN, INDOOR_TERRAIN_TO_TRAV
-from .label_maps_retail import RETAIL_TERRAIN, RETAIL_TERRAIN_TO_TRAV
+from .label_maps_indoor import INDOOR_TERRAIN
+from .label_maps_retail import RETAIL_TERRAIN
 
 _T = INDOOR_TERRAIN
 
@@ -136,7 +136,3 @@ COCOSTUFF_ID_TO_RETAIL = _shift(
         **dict.fromkeys(_LABELS_TXT_FIXTURES, RETAIL_TERRAIN["display_fixture"]),
     }
 )
-
-# Re-exported so the scheme registry reads the same as the other datasets'.
-COCOSTUFF_INDOOR_TERRAIN_TO_TRAV = INDOOR_TERRAIN_TO_TRAV
-COCOSTUFF_RETAIL_TERRAIN_TO_TRAV = RETAIL_TERRAIN_TO_TRAV
