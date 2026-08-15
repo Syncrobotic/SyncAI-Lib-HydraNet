@@ -157,3 +157,18 @@ def test_every_problem_is_reported_in_one_pass():
     with pytest.raises(ConfigError) as e:
         check_config(cfg)
     assert str(e.value).startswith("3 problem(s)")
+
+
+def test_a_dataset_that_supervises_nothing_is_an_error_not_a_warning():
+    """Every batch it contributes reaches `compute_losses` with no loss to build.
+
+    The balancer sums an empty dict to None and the step dies on `None.detach()`, deep in
+    the training loop and hours from the config that caused it. A dataset supervising no
+    head also cannot be what anyone meant: it costs optimiser steps and contributes no
+    gradient to anything.
+    """
+    cfg = _cfg()
+    cfg["data"]["datasets"][0]["supervises"] = []
+    with pytest.raises(ConfigError) as exc:
+        check_config(cfg)
+    assert "supervises" in str(exc.value)

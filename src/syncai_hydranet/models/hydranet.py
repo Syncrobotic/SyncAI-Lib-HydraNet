@@ -111,6 +111,17 @@ class HydraNet(nn.Module):
             losses[self.det_head_name] = det_loss
             logs[self.det_head_name] = det_loss.detach()
             logs.update({k: v.detach() if torch.is_tensor(v) else v for k, v in sub.items()})
+        if not losses:
+            # The balancer sums an empty dict to None, and the next line would fail as
+            # `'NoneType' object has no attribute 'detach'` -- deep in the training loop,
+            # naming neither the dataset nor the config key that caused it.
+            raise ValueError(
+                f"nothing to supervise: this batch declares supervises={supervised!r} and "
+                f"carries targets {sorted(targets)!r}, which name no head this model has "
+                f"({', '.join([*self.seg_heads, *filter(None, [self.det_head_name])])}). "
+                "A dataset that supervises no head costs optimiser steps and contributes "
+                "no gradient; fix its `supervises` list."
+            )
         total = self.balancer(losses)
         logs["total"] = total.detach()
         return total, logs

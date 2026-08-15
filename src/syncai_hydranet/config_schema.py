@@ -279,6 +279,15 @@ def _check_datasets(rep: _Report, dcfg: dict, head_names: set[str]) -> None:
         if name in seen:
             rep.errors.append(f"{path}.name: {name!r} is used by an earlier dataset")
         seen.add(name)
+        if isinstance(ds.get("supervises"), list) and not ds["supervises"]:
+            # Every batch this dataset contributes reaches compute_losses with no loss to
+            # build, which is a crash rather than a slow run -- and it is caught here so
+            # it happens before the first step rather than during it.
+            rep.errors.append(
+                f"{path}.supervises: empty. A dataset that supervises no head costs "
+                f"optimiser steps and contributes no gradient to anything; drop the "
+                f"dataset, or name the heads its labels train."
+            )
         for head in ds.get("supervises", []) or []:
             # A typo here is invisible at runtime: the head simply never gets a loss.
             if head not in head_names:
