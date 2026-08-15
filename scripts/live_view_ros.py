@@ -55,9 +55,9 @@ for candidate in (HERE.parent / "src", HERE / "src"):
         sys.path.insert(0, str(candidate))
 
 from bev_page import PAGE as BEV_PAGE  # noqa: E402
-from bev_scene import build_scene  # noqa: E402
 
 from syncai_hydranet.data.coco_subsets import COCO_NAMES  # noqa: E402
+from syncai_hydranet.geometry.depth_scene import build_scene  # noqa: E402
 
 from syncai_hydranet.config import load_config  # noqa: E402  # isort: skip
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402

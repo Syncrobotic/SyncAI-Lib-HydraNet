@@ -212,6 +212,10 @@ def scene(
                 }
             )
     return {
+        # Which evidence built this. `depth_scene.build_scene` emits the same word with
+        # the value "depth", and the two payloads share key names only where the quantity
+        # is the same -- see that module's docstring.
+        "source": "plane",
         "camera": {"fx": cam.fx, "fy": cam.fy, "cx": cam.cx, "cy": cam.cy},
         "plane": {
             "height_m": round(plane.height, 4),

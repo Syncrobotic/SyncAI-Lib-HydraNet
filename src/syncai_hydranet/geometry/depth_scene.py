@@ -1,5 +1,10 @@
-#!/usr/bin/env python3
 """Turn one frame's masks, boxes and depth into a metric scene a renderer can draw.
+
+The **depth** half of this package. `bev.scene` answers the same question from a ground
+plane -- assumed, or fitted -- and is what runs on footage with no depth at all; this one
+back-projects registered metric depth and needs no plane. Both emit a payload called a
+scene, both carry `grid` and `objects`, and they are not interchangeable, so each declares
+its `source` and they share key names only where the quantity really is the same.
 
 The output is the Tesla-style picture's input: a floor tiled into cells with a label
 each, and a list of objects with a position, an extent and a heading -- all in metres,
@@ -105,7 +110,7 @@ def bev_grid(
     return {
         "nx": nx,
         "nz": nz,
-        "cell": cell,
+        "cell_m": cell,
         "x_min": x_min,
         "cells": grid.reshape(-1).tolist(),
         "blind_fraction": float(blind.sum() / max(walkable.sum(), 1)),
@@ -206,12 +211,12 @@ def object_from_box(box, points: np.ndarray, *, min_points: int = 30) -> dict | 
     ratio = float(np.sqrt(max(eigvals[1], 1e-9) / max(eigvals[0], 1e-9)))
 
     return {
-        "x": float(centre[0]),
-        "z": float(centre[2]),
-        "w": float(hi[0] - lo[0]),
-        "d": float(hi[2] - lo[2]),
-        "h": float(hi[1] - lo[1]),
-        "yaw": yaw,
+        "x_m": float(centre[0]),
+        "z_m": float(centre[2]),
+        "width_m": float(hi[0] - lo[0]),
+        "depth_m": float(hi[2] - lo[2]),
+        "height_m": float(hi[1] - lo[1]),
+        "yaw_rad": yaw,
         "yaw_confidence": min(1.0, (ratio - 1.0) / 2.0) if ratio > 1 else 0.0,
         "range_m": float(np.linalg.norm(centre[[0, 2]])),
         "n_points": len(patch),
@@ -221,12 +226,15 @@ def object_from_box(box, points: np.ndarray, *, min_points: int = 30) -> dict | 
 def build_scene(trav: np.ndarray, depth_m: np.ndarray, k: np.ndarray, detections=None) -> dict:
     """The whole per-frame payload: floor cells plus objects, in metres."""
     points = backproject(depth_m, k)
-    scene = {"grid": bev_grid(points, trav), "objects": []}
+    # `source` is not decoration. A renderer handed the wrong payload would find `grid`
+    # and `objects` where it expected them and draw something plausible out of the other
+    # half of this package; this is what lets it refuse instead.
+    scene = {"source": "depth", "grid": bev_grid(points, trav), "objects": []}
     for det in detections or []:
         obj = object_from_box(det["box"], points)
         if obj is None:
             continue
-        obj["cls"] = det.get("cls", "object")
+        obj["name"] = det.get("cls", "object")
         obj["score"] = float(det.get("score", 0.0))
         scene["objects"].append(obj)
     return scene

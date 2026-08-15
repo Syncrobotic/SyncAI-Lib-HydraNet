@@ -78,7 +78,7 @@ const CELL_COLOURS = {1: 'rgba(40,220,90,.55)', 2: 'rgba(250,200,40,.55)',
                       3: 'rgba(224,72,60,.45)'};
 
 function drawGrid(grid) {
-  const {nx, nz, cell, x_min, cells} = grid;
+  const {nx, nz, cell_m: cell, x_min, cells} = grid;
   for (let iz = nz - 1; iz >= 0; iz--) {          // far to near, so near overdraws
     for (let ix = 0; ix < nx; ix++) {
       const v = cells[iz * nx + ix];
@@ -104,10 +104,10 @@ function drawRing(r) {                             // the distance gate, on the 
 }
 
 function drawObject(o) {
-  const hw = Math.max(o.w, 0.15) / 2, hd = Math.max(o.d, 0.15) / 2, h = Math.max(o.h, 0.2);
-  const cy = Math.cos(o.yaw_confidence > 0.35 ? o.yaw : 0);
-  const sy = Math.sin(o.yaw_confidence > 0.35 ? o.yaw : 0);
-  const corner = (dx, dz, y) => [o.x + dx * cy - dz * sy, -y, o.z + dx * sy + dz * cy];
+  const hw = Math.max(o.width_m, 0.15) / 2, hd = Math.max(o.depth_m, 0.15) / 2, h = Math.max(o.height_m, 0.2);
+  const cy = Math.cos(o.yaw_confidence > 0.35 ? o.yaw_rad : 0);
+  const sy = Math.sin(o.yaw_confidence > 0.35 ? o.yaw_rad : 0);
+  const corner = (dx, dz, y) => [o.x_m + dx * cy - dz * sy, -y, o.z_m + dx * sy + dz * cy];
   const base = [corner(-hw, -hd, 0), corner(hw, -hd, 0), corner(hw, hd, 0), corner(-hw, hd, 0)];
   const top  = base.map(p => [p[0], -h, p[2]]);
   const shade = o.range_m > 4.5 ? .35 : .95;       // beyond a D435's honest range
@@ -122,10 +122,10 @@ function drawObject(o) {
     const a = project(corner(0, 0, h * 0.5)), b = project(corner(hw * 1.6, 0, h * 0.5));
     if (a && b) { g.strokeStyle = 'rgba(255,220,120,.9)'; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
   }
-  const lab = project([o.x, -h - 0.12, o.z]);
+  const lab = project([o.x_m, -h - 0.12, o.z_m]);
   if (lab) {
     g.fillStyle = `rgba(232,238,247,${shade})`; g.font = '12px system-ui';
-    g.fillText(`${o.cls} ${o.range_m.toFixed(1)}m`, lab[0] - 18, lab[1]);
+    g.fillText(`${o.name} ${o.range_m.toFixed(1)}m`, lab[0] - 18, lab[1]);
   }
 }
 
@@ -139,7 +139,7 @@ function draw() {
   if (!scene) { g.fillStyle = '#5d6b7f'; g.fillText('waiting for a frame...', 20, 30); return; }
   drawGrid(scene.grid);
   drawRing(scene.range_m || 5);
-  (scene.objects || []).sort((a, b) => b.z - a.z).forEach(drawObject);
+  (scene.objects || []).sort((a, b) => b.z_m - a.z_m).forEach(drawObject);
 }
 
 c.addEventListener('pointerdown', e => drag = e.clientX);

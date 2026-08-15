@@ -22,10 +22,17 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+# In the repo the package is at ../src; on a robot the deploy copies it to ./src next to
+# this script. Accept both rather than making the caller care which layout they are in.
+for candidate in (HERE.parent / "src", HERE / "src"):
+    if candidate.is_dir():
+        sys.path.insert(0, str(candidate))
 
-from bev_page import PAGE
-from bev_scene import BLOCKED, GO, build_scene
+from bev_page import PAGE  # noqa: E402
+
+from syncai_hydranet.geometry.depth_scene import BLOCKED, GO, build_scene  # noqa: E402
 
 H, W = 240, 320
 K = np.array([[260.0, 0.0, W / 2], [0.0, 260.0, H / 2], [0.0, 0.0, 1.0]])
