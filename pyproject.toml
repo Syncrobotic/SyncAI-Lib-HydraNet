@@ -144,6 +144,32 @@ known-first-party = ["syncai_hydranet"]
 quote-style = "double"
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Type checking. 89% of functions here already carry annotations; until something
+# reads them they are documentation that cannot go stale loudly, which is the worst
+# kind. `ty` is the same vendor and the same speed class as ruff, so it costs one
+# tool rather than a new toolchain.
+#
+# Deliberately NOT wired into CI as a blocking gate yet. A first run reports 48
+# diagnostics, and the honest split is roughly: torch/PIL stub noise, three optional
+# imports that only exist under the `export` extra, and a handful of genuine
+# type-modelling weaknesses (`_decode_ann`'s `mapping` is two different dict shapes
+# selected by a string; `det_head`/`det_loss`/`det_head_name` are a coupled triple
+# nothing enforces). None is a live bug. Turning the gate red on all of them at once
+# is how a checker gets disabled again a week later.
+#
+# The useful setting is therefore: run it, keep the count from rising, fix the real
+# ones as the files are touched anyway.
+#     uv tool run ty check src/
+# ---------------------------------------------------------------------------
+[tool.ty.rules]
+# onnx, onnxruntime and onnxsim live in the `export` extra, so a base install cannot
+# resolve them and should not be told about it every run.
+unresolved-import = "ignore"
+
+[tool.ty.src]
+root = "./src"
+
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
