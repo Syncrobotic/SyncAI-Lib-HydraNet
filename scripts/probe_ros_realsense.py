@@ -38,6 +38,7 @@ for candidate in (HERE.parent / "src", HERE / "src"):
 
 from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
+from syncai_hydranet.utils.device import pick_device  # noqa: E402
 from syncai_hydranet.utils.visualize import (  # noqa: E402
     TRAV_COLORS,
     crop_box,
@@ -80,10 +81,10 @@ def main() -> int:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # pretrained=false: the weights come from the checkpoint, and this board should not
     # reach out to download a backbone it is about to overwrite.
     cfg = load_config(args.config, ["model.backbone.pretrained=false"])
+    device = pick_device(cfg.get("device"))
     model = build_model(cfg).to(device).eval()
     missing, unexpected = model.load_state_dict(
         torch.load(args.weights, map_location=device), strict=False

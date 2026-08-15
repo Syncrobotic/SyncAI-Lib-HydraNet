@@ -56,10 +56,12 @@ for candidate in (HERE.parent / "src", HERE / "src"):
 
 from bev_page import PAGE as BEV_PAGE  # noqa: E402
 from bev_scene import build_scene  # noqa: E402
-from live_view_orin import COCO_NAMES  # noqa: E402
+
+from syncai_hydranet.data.coco_subsets import COCO_NAMES  # noqa: E402
 
 from syncai_hydranet.config import load_config  # noqa: E402  # isort: skip
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
+from syncai_hydranet.utils.device import pick_device  # noqa: E402
 from syncai_hydranet.utils.visualize import (  # noqa: E402
     TRAV_COLORS,
     crop_box,
@@ -314,8 +316,8 @@ def inference_loop(args):
     from sensor_msgs.msg import CameraInfo
     from sensor_msgs.msg import Image as ImageMsg
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     cfg = load_config(args.config, ["model.backbone.pretrained=false"])
+    device = pick_device(cfg.get("device"))
     model = build_model(cfg).to(device).eval()
     model.load_state_dict(torch.load(args.weights, map_location=device), strict=False)
     size = cfg["data"]["input_size"]

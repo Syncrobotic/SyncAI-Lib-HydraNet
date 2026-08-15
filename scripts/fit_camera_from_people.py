@@ -4,7 +4,7 @@
     python3 scripts/fit_camera_from_people.py --config configs/hydranet_retail_cctv.yaml \\
         --checkpoint runs/hydranet_retail_cctv/best.pt --input assets/clip.mp4
 
-`bev_video.py` needs a camera height and a down-pitch, and its defaults (1.5 m, 15 deg)
+`hydranet-scene` needs a camera height and a down-pitch, and its defaults (1.5 m, 15 deg)
 describe a robot's own camera. Pointed at ceiling CCTV they are simply wrong, and wrong
 in the way this project keeps warning about: every distance in the panel comes out scaled
 by a smooth factor and nothing looks broken.
@@ -57,14 +57,15 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
-from live_view_orin import COCO_NAMES  # noqa: E402
 
 from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402  # isort: skip
 from syncai_hydranet.config import load_config  # noqa: E402
+from syncai_hydranet.data.coco_subsets import COCO_NAMES  # noqa: E402
 from syncai_hydranet.geometry.bev import box_extents  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera, GroundPlane  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
+from syncai_hydranet.utils.device import pick_device  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
 ADULT_M = 1.70
@@ -156,7 +157,7 @@ def main(argv=None) -> int:
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
     a = ap.parse_args(argv)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = pick_device()
     boxes, shape = collect(a, device)
     spread, pitch, cam_h, n = fit(
         boxes, shape, a.vfov, heights=(1.0, 8.0), pitches=np.arange(5.0, 80.1, 0.5)

@@ -51,6 +51,7 @@ from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.transforms import IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
+from syncai_hydranet.utils.device import pick_device  # noqa: E402
 
 IGNORE = 255
 DESCRIPTOR = (12, 16)  # a coarse grey thumbnail is enough to tell scenes apart
@@ -110,8 +111,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     cfg = load_config(args.config, args.set)
+    device = pick_device(cfg.get("device"))
     model = build_model(cfg).to(device).eval()
     ckpt = load_checkpoint(args.checkpoint)
     model.load_state_dict(select_weights(ckpt, args.weights))
