@@ -23,7 +23,7 @@ import yaml
 from PIL import Image
 
 from syncai_hydranet.cli import evaluate as eval_cli
-from syncai_hydranet.cli import infer_image, infer_video
+from syncai_hydranet.cli import infer_image, infer_video, scene
 from syncai_hydranet.cli import train as train_cli
 
 ADE_FLOOR, ADE_WALL = 4, 1  # ids from objectInfo150.txt
@@ -123,7 +123,7 @@ def trained(config) -> Path:
 
 
 @pytest.mark.parametrize(
-    "module", [train_cli, eval_cli, infer_image, infer_video], ids=lambda m: m.__name__
+    "module", [train_cli, eval_cli, infer_image, infer_video, scene], ids=lambda m: m.__name__
 )
 def test_help_builds(module, capsys):
     """--help exercises every argument definition, and costs milliseconds."""
@@ -311,3 +311,90 @@ def test_infer_video_writes_a_video(config, trained, tmp_path):
         ]
     )
     assert out.is_file() and out.stat().st_size > 0
+
+
+# ----------------------------------------------------------------------------- scene
+
+
+def test_scene_writes_a_panel_and_a_payload(config, trained, dataset, tmp_path):
+    """The geometry module's entry point: a frame in, a picture and metres out."""
+    png = tmp_path / "scene.png"
+    doc = tmp_path / "scene.json"
+    scene.main(
+        [
+            "--config",
+            str(config),
+            "--checkpoint",
+            str(trained / "best.pt"),
+            "--weights",
+            "model",
+            "--input",
+            str(dataset / "images" / "val" / "0.jpg"),
+            "--output",
+            str(png),
+            "--json",
+            str(doc),
+        ]
+    )
+    assert png.is_file() and png.stat().st_size > 0
+    payload = json.loads(doc.read_text())
+    assert payload["grid"]["z_max"] == 9.0
+    assert payload["plane"]["height_m"] == 1.5
+    # The panel is only honest while it says the pose was assumed rather than measured.
+    assert payload["pose_is_assumed"] is True
+    assert 0.0 <= payload["known_fraction"] <= 1.0
+
+
+def test_scene_refuses_to_do_nothing(config, trained, dataset):
+    """Neither --output nor --json means the run would compute a scene and drop it."""
+    with pytest.raises(SystemExit) as exc:
+        scene.main(
+            [
+                "--config",
+                str(config),
+                "--checkpoint",
+                str(trained / "best.pt"),
+                "--input",
+                str(dataset / "images" / "val" / "0.jpg"),
+            ]
+        )
+    assert exc.value.code != 0
+
+
+@pytest.mark.skipif(
+    not (shutil.which("ffmpeg") and shutil.which("ffprobe")), reason="needs ffmpeg"
+)
+def test_scene_over_a_clip_writes_one_payload_per_frame(config, trained, tmp_path):
+    """JSON lines, not an array: a reader that wants frame 0 should not load the clip."""
+    import subprocess
+
+    src = tmp_path / "clip.mp4"
+    lavfi = f"testsrc=size={FRAME[1]}x{FRAME[0]}:rate=5:duration=2"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", lavfi, str(src)], check=True
+    )
+    out = tmp_path / "bev.mp4"
+    doc = tmp_path / "scenes.jsonl"
+    scene.main(
+        [
+            "--config",
+            str(config),
+            "--checkpoint",
+            str(trained / "best.pt"),
+            "--weights",
+            "model",
+            "--input",
+            str(src),
+            "--output",
+            str(out),
+            "--json",
+            str(doc),
+            "--flat-bev",
+            "--max-frames",
+            "3",
+        ]
+    )
+    assert out.is_file() and out.stat().st_size > 0
+    rows = [json.loads(line) for line in doc.read_text().splitlines()]
+    assert len(rows) == 3
+    assert [r["frame"] for r in rows] == [0, 1, 2]

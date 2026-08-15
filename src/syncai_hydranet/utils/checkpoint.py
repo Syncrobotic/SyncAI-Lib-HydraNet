@@ -36,7 +36,7 @@ def select_weights(ckpt: dict, prefer: str = "ema") -> dict:
     """Choose between a checkpoint's EMA and raw weights.
 
     Two rules used to coexist. hydranet-eval and the ONNX export honoured a --weights
-    flag; hydranet-infer-image, hydranet-infer-video, bev_video and annotation_batch
+    flag; hydranet-infer-image, hydranet-infer-video, hydranet-scene and annotation_batch
     hardcoded `ckpt.get("ema") or ckpt["model"]`, always taking the average with no way
     to ask for anything else.
 

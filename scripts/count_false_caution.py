@@ -60,7 +60,7 @@ def is_caution(px):
 # different number of pixels in each -- report area as a fraction of the box, never raw px
 missing = [p for _, p, _, _ in RUNS if not Path(p).is_file()]
 if missing:
-    sys.exit("re-render these with scripts/bev_video.py first:\n  " + "\n  ".join(missing))
+    sys.exit("re-render these with hydranet-scene first:\n  " + "\n  ".join(missing))
 
 header = f"{'model':16}{'frames with the column marked caution':>40}"
 print(header + f"{'mean % of box':>16}")
