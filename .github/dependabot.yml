@@ -1,0 +1,53 @@
+version: 2
+
+# This repository pins every GitHub Action to a commit SHA rather than a tag, which
+# is the right call and also the reason this file has to exist: a SHA cannot float,
+# so a pinned action never picks up its own security fixes. Nothing was watching
+# them. Dependabot rewrites the SHA and the trailing `# vX.Y.Z` comment together,
+# so the pins stay readable.
+#
+# PRs target `dev`, because that is where work enters -- feat/* → dev → stage → main.
+# A dependency PR opened against `main` could not be merged without breaking the
+# fast-forward promotion rule in docs/RELEASE.md.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    target-branch: dev
+    commit-message:
+      # Conventional Commits are enforced at commit-msg by pre-commit, and
+      # release-please groups the CHANGELOG by these types. A Dependabot PR whose
+      # title is not typed would land untyped in the history.
+      prefix: build
+    labels: [dependencies]
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the routine version drift; a lone action bumping is rarely worth
+      # its own review, and five open PRs a week is how this gets muted.
+      actions:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    target-branch: dev
+    commit-message:
+      prefix: build
+    labels: [dependencies]
+    open-pull-requests-limit: 5
+    # `torch` and `torchvision` are excluded on purpose. They are not a dependency
+    # here in the ordinary sense: the CUDA build is chosen to match the driver on the
+    # workstation and the JetPack on the Orin, docs/DEPLOY_JETSON.md pins what the
+    # board can run, and RETAIL_SCOPE.md's numbers were measured under one version.
+    # An automated bump would change the training result silently and could produce a
+    # wheel the robot cannot install. Move them by hand, with a run to show it.
+    ignore:
+      - dependency-name: torch
+      - dependency-name: torchvision
+    groups:
+      dev-tooling:
+        patterns: [ruff, pytest, pytest-cov, pre-commit]
+        update-types: [minor, patch]
