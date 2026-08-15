@@ -38,6 +38,13 @@ from ..utils.visualize import (
 
 def probe(path: str) -> tuple[int, int, float]:
     """Return display width, height and fps, accounting for rotation metadata."""
+    # `-show_streams` rather than `-show_entries`, because the section holding rotation
+    # has been spelled three ways across the ffmpeg versions this has to run on:
+    # `stream_side_data_list` on 4.x, `stream_side_data` on 7.x, and naming the wrong
+    # one is not a missing field but a hard `Invalid argument` exit -- ffprobe refuses
+    # the whole invocation, so every video path in the project dies on the ffmpeg the
+    # distro happens to ship (Ubuntu 22.04 carries 4.4). `-show_streams` needs no
+    # section name, emits `side_data_list` on both, and the parsing below is unchanged.
     out = subprocess.run(
         [
             "ffprobe",
@@ -45,8 +52,7 @@ def probe(path: str) -> tuple[int, int, float]:
             "error",
             "-select_streams",
             "v:0",
-            "-show_entries",
-            "stream=width,height,r_frame_rate:stream_side_data=rotation",
+            "-show_streams",
             "-of",
             "json",
             path,
