@@ -95,15 +95,20 @@ def frames(path: str, w: int, h: int, stride_fps: float | None):
         ],
         stdout=subprocess.PIPE,
     )
+    # `Popen.stdout` is Optional because it is None unless `stdout=PIPE` was asked for.
+    # It was, one line up. Bind it once so the fact is stated where it is true instead
+    # of being re-derived at every read.
+    stdout = proc.stdout
+    assert stdout is not None
     n = w * h * 3
     try:
         while True:
-            buf = proc.stdout.read(n)
+            buf = stdout.read(n)
             if len(buf) < n:
                 break
             yield np.frombuffer(buf, np.uint8).reshape(h, w, 3)
     finally:
-        proc.stdout.close()
+        stdout.close()
         proc.wait()
 
 
@@ -268,9 +273,15 @@ def main(argv: list[str] | None = None) -> None:
                 ],
                 stdin=subprocess.PIPE,
             )
+        # `writer` and `enc_size` are set together on the first frame and never again,
+        # and `Popen.stdin` is Optional only because `stdin=PIPE` is optional in
+        # general. One place to state all of that, rather than three re-derivations
+        # spread over the next four lines.
+        sink = writer.stdin
+        assert sink is not None and enc_size is not None
         if out_img.size != enc_size:
             out_img = out_img.resize(enc_size, Image.Resampling.BILINEAR)
-        writer.stdin.write(np.asarray(out_img, np.uint8).tobytes())
+        sink.write(np.asarray(out_img, np.uint8).tobytes())
 
         n_done += 1
         if n_done % 30 == 0:
@@ -278,7 +289,8 @@ def main(argv: list[str] | None = None) -> None:
         if args.max_frames and n_done >= args.max_frames:
             break
 
-    if writer:
+    if writer is not None:
+        assert writer.stdin is not None
         writer.stdin.close()
         writer.wait()
     dt = time.time() - t0

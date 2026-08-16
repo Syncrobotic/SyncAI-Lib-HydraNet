@@ -541,6 +541,11 @@ class Trainer:
         Curves only say the loss is falling. This says whether the model is calling a
         whole floor a wall, and how much of the frame is ignore padding.
         """
+        # The one caller already guards on `self.tb`, and `samples` is only ever built
+        # when it is set -- but that is the caller's invariant, not this method's. State
+        # it here so the method is safe to call on its own and the writer is a writer.
+        if self.tb is None:
+            return
         classes = self.cfg["data"].get("terrain_classes")
         for head, (imgs, preds, gts) in (samples or {}).items():
             if head == "traversability":

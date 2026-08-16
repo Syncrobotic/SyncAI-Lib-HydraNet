@@ -134,6 +134,7 @@ def test_extent_comes_back_in_metres_slightly_under():
     the size, and an object drawn slightly small is a smaller lie than one drawn large."""
     depth, box = _scene_with_slab(z=2.0, half_w=0.3, half_h=0.45)
     obj = object_from_box(box, backproject(depth, K))
+    assert obj is not None
     assert obj["width_m"] == pytest.approx(0.6 * 0.9, abs=0.06)
     assert obj["height_m"] == pytest.approx(0.9 * 0.9, abs=0.06)
 

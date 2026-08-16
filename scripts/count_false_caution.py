@@ -37,13 +37,17 @@ def frames(path, w, h):
         ["ffmpeg", "-v", "error", "-i", path, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
         stdout=subprocess.PIPE,
     )
+    # stdout=PIPE was requested, so the pipe exists; Popen types it Optional because
+    # that argument is optional in general. Same shape as `cli/infer_video.frames`.
+    stdout = p.stdout
+    assert stdout is not None
     n = w * h * 3
     while True:
-        buf = p.stdout.read(n)
+        buf = stdout.read(n)
         if len(buf) < n:
             break
         yield np.frombuffer(buf, np.uint8).reshape(h, w, 3)
-    p.stdout.close()
+    stdout.close()
     p.wait()
 
 
