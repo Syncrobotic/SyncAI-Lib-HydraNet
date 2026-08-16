@@ -132,6 +132,12 @@ select = [
     "RET",      # flake8-return
     "PTH",      # prefer pathlib over os.path/open
     "ARG",      # unused arguments, which usually mean a stale signature
+    # Needs naming explicitly -- ruff keeps it out of a bare "RUF" on purpose, because
+    # under a partial rule selection a `# noqa` for an unselected rule looks unused when
+    # it is merely irrelevant. Named here it means: a suppression must suppress
+    # something. The 41 stale `# noqa`s this appears to find on a `--select RUF100` run
+    # are that artefact and not real; run it as `--extend-select` to see the true zero.
+    "RUF100",   # a `# noqa` that no longer suppresses anything
 ]
 ignore = [
     "E741",     # ambiguous names: l/t/r/b are the standard FCOS distance symbols
