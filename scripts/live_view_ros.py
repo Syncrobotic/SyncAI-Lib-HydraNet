@@ -31,7 +31,6 @@ depth sensor, so magenta is where this deployment's worst failure would appear f
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import signal
 import sys
@@ -44,7 +43,6 @@ from urllib.parse import parse_qs, urlparse
 
 import numpy as np
 import torch
-from PIL import Image, ImageDraw
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -56,28 +54,16 @@ for candidate in (HERE.parent / "src", HERE / "src"):
 
 from bev_page import PAGE as BEV_PAGE  # noqa: E402
 
-from syncai_hydranet.data.coco_subsets import COCO_NAMES  # noqa: E402
-from syncai_hydranet.geometry.depth_scene import build_scene  # noqa: E402
-
 from syncai_hydranet.config import load_config  # noqa: E402  # isort: skip
+from syncai_hydranet.live import LiveSettings, Recorder, render_frame  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
-from syncai_hydranet.utils.visualize import (  # noqa: E402
-    TRAV_COLORS,
-    crop_box,
-    overlay,
-    preprocess,
-    terrain_palette,
-)
+from syncai_hydranet.utils.visualize import terrain_palette  # noqa: E402
 
-GO = 2
 COLOR_TOPIC = "/camera/camera/color/image_raw"
 DEPTH_TOPIC = "/camera/camera/aligned_depth_to_color/image_raw"
 COLOR_INFO_TOPIC = "/camera/camera/color/camera_info"
 DEPTH_INFO_TOPIC = "/camera/camera/aligned_depth_to_color/camera_info"
-
-# reachable / out of range / no depth return
-REACH_COLORS = np.array([[0, 0, 0], [40, 220, 90], [250, 200, 40], [230, 60, 230]], np.uint8)
 
 state = {"range": 5.0, "score": 0.30, "view": "both"}
 latest = {"jpeg": None, "stats": {}, "scene": None}
@@ -202,114 +188,6 @@ class Handler(BaseHTTPRequestHandler):
             pass  # the tab closed
 
 
-class Recorder:
-    """Write a walk-through to disk as three things, not one.
-
-    The overlay video is for review. The raw keyframes are the point: footage at the
-    robot's camera height is the single thing this project is short of, and a walk round
-    a building produces it as a by-product of testing. They are written in the layout
-    `hydranet-annotation check` expects, under a session directory, because a frame
-    without a session cannot be split honestly later.
-
-    The stats file is what makes the video searchable -- scrubbing 10 minutes of footage
-    for the moment the floor stopped returning depth is worse than sorting a JSONL by it.
-
-    And the calibration: the camera's intrinsic matrix, written once per session. Without
-    K, nothing recorded here can ever be projected to metres -- no ground plane, no BEV
-    costmap, no distance gate -- and the omission is invisible until someone tries, by
-    which time the building has been walked and the robot has moved on. A session without
-    its intrinsics is the same class of defect as a frame without its session: usable for
-    looking at, useless for the thing it was collected for.
-    """
-
-    def __init__(self, root: Path, session: str, keyframe_hz: float):
-        import cv2  # pyright: ignore[reportMissingImports]
-
-        self.cv2 = cv2
-        self.root = root
-        self.img_dir = root / "images" / session
-        self.depth_dir = root / "depth" / session
-        root.mkdir(parents=True, exist_ok=True)
-        if keyframe_hz > 0:
-            for d in (self.img_dir, self.depth_dir):
-                d.mkdir(parents=True, exist_ok=True)
-        # MJPG in AVI: a run that ends with a pulled power cable still plays back. mp4
-        # needs its trailer written, and a robot session is exactly when that is missed.
-        self.video_path = root / f"{session}_overlay.avi"
-        self.writer = None
-        self.stats = (root / f"{session}_stats.jsonl").open("a", buffering=1)
-        self.calib_path = root / f"{session}_calibration.json"
-        self.period = (1.0 / keyframe_hz) if keyframe_hz > 0 else 0.0
-        self.last_key = 0.0
-        self.n_frames = self.n_keys = 0
-
-    def write_calibration(self, color_info, depth_info, stride: int) -> None:
-        """Intrinsics, once. They do not change during a session, and the stride this
-        script applies to the stream does change them -- so what is written is the
-        calibration of the frames on disk, not of the topic."""
-        if self.calib_path.exists():
-            return
-
-        def one(msg):
-            if msg is None:
-                return None
-            k = list(msg.k)
-            # Subsampling scales fx, fy, cx, cy by exactly the same factor. Writing the
-            # topic's K next to decimated frames would be off by that factor, silently.
-            if stride > 1:
-                k = [v / stride if i in (0, 2, 4, 5) else v for i, v in enumerate(k)]
-            return {
-                "K": k,
-                "distortion_model": msg.distortion_model,
-                "D": list(msg.d),
-                "width": msg.width // stride,
-                "height": msg.height // stride,
-                "frame_id": msg.header.frame_id,
-            }
-
-        payload = {
-            "color": one(color_info),
-            "depth_aligned_to_color": one(depth_info),
-            "subsample_stride": stride,
-            "depth_units": "millimetres, uint16",
-            "note": "K is scaled for the frames written here, not the raw topic",
-        }
-        self.calib_path.write_text(json.dumps(payload, indent=2) + "\n")
-        print(f"wrote {self.calib_path}", flush=True)
-
-    def write(self, pair: Image.Image, color: np.ndarray, depth_mm: np.ndarray, stats: dict):
-        import numpy as np_
-
-        frame = self.cv2.cvtColor(np_.asarray(pair), self.cv2.COLOR_RGB2BGR)
-        if self.writer is None:
-            h, w = frame.shape[:2]
-            self.writer = self.cv2.VideoWriter(
-                str(self.video_path), self.cv2.VideoWriter_fourcc(*"MJPG"), 10.0, (w, h)
-            )
-        self.writer.write(frame)
-        self.n_frames += 1
-
-        now = time.time()
-        if self.period > 0 and now - self.last_key >= self.period:
-            self.last_key = now
-            stem = f"{self.n_keys:06d}"
-            self.cv2.imwrite(
-                str(self.img_dir / f"{stem}.jpg"),
-                self.cv2.cvtColor(color, self.cv2.COLOR_RGB2BGR),
-                [int(self.cv2.IMWRITE_JPEG_QUALITY), 92],
-            )
-            # 16-bit PNG keeps millimetres exactly; a lossy depth frame is a lie.
-            self.cv2.imwrite(str(self.depth_dir / f"{stem}.png"), depth_mm)
-            self.n_keys += 1
-            stats = {**stats, "keyframe": stem}
-        self.stats.write(json.dumps({"t": round(now, 3), **stats}) + "\n")
-
-    def close(self):
-        if self.writer is not None:
-            self.writer.release()
-        self.stats.close()
-
-
 def inference_loop(args):
     import rclpy  # pyright: ignore[reportMissingImports]
     from rclpy.qos import qos_profile_sensor_data  # pyright: ignore[reportMissingImports]
@@ -400,110 +278,36 @@ def inference_loop(args):
         depth_mm = decode(depth_msg)[:: args.stride, :: args.stride]
         depth_m = depth_mm.astype(np.float32) * 0.001
 
-        x, canvas, region = preprocess(Image.fromarray(color), size)
-        with torch.no_grad():
-            result = model.predict(x.to(device), score_thr=state["score"])
-        trav = crop_box(result["traversability"][0].cpu().numpy(), region)
-        terr = crop_box(result["terrain"][0].cpu().numpy(), region)
-        x0, y0, cw, ch = region
-        vis = canvas.crop((x0, y0, x0 + cw, y0 + ch))
-
-        # Walkable is the network's answer; range is the sensor's. They meet here, not
-        # inside the weights -- so the threshold is a slider rather than a training run.
-        trav_full = np.asarray(
-            Image.fromarray(trav.astype(np.uint8)).resize(
-                (color.shape[1], color.shape[0]), Image.Resampling.NEAREST
-            )
-        )
-        go = trav_full == GO
-        valid = depth_m > 0
-        reach = np.zeros_like(trav_full)
-        reach[go & valid & (depth_m <= state["range"])] = 1
-        reach[go & valid & (depth_m > state["range"])] = 2
-        reach[go & ~valid] = 3
-
-        left = overlay(
-            vis,
-            terr if state["view"] == "terrain" else trav,
-            terrain_colors if state["view"] == "terrain" else TRAV_COLORS,
-        )
-        det = result.get("detection", [{}])[0]
-        if det and len(det.get("boxes", [])):
-            draw = ImageDraw.Draw(left)
-            boxes = det["boxes"].cpu().numpy()
-            scores = det["scores"].cpu().numpy()
-            labels = det["labels"].cpu().numpy()
-            for box, score, label in zip(boxes, scores, labels, strict=True):
-                bx = [box[0] - x0, box[1] - y0, box[2] - x0, box[3] - y0]
-                draw.rectangle(bx, outline=(255, 255, 0), width=2)
-                name = COCO_NAMES[int(label)] if int(label) < len(COCO_NAMES) else str(label)
-                draw.text((bx[0] + 2, bx[1] + 2), f"{name} {score:.2f}", fill=(255, 255, 0))
-
-        right_ids = np.asarray(
-            Image.fromarray(reach.astype(np.uint8)).resize(vis.size, Image.Resampling.NEAREST)
-        )
-        right = overlay(vis, right_ids, REACH_COLORS, alpha=0.5)
-        pair = Image.new("RGB", (left.width * 2 + 8, left.height), (16, 16, 16))
-        pair.paste(left, (0, 0))
-        pair.paste(right, (left.width + 8, 0))
-
-        buf = io.BytesIO()
-        pair.save(buf, format="JPEG", quality=80)
         now = time.perf_counter()
         fps = 0.8 * fps + 0.2 / max(now - last, 1e-6)
         last = now
-        frame_stats = {
-            "fps": f"{fps:.1f}",
-            "range": f"{state['range']:.0f} m",
-            "score": f"{state['score']:.2f}",
-            "go": f"{100 * go.mean():.1f}%",
-            "go within range": f"{100 * (reach == 1).mean():.1f}%",
-            "go beyond range": f"{100 * (reach == 2).mean():.1f}%",
-            "go with no depth": f"{100 * (reach == 3).sum() / max(go.sum(), 1):.1f}% of go",
-            "depth valid": f"{100 * valid.mean():.1f}%",
-            "frame age": f"{age_ms:.0f} ms",
-            "colour/depth skew": f"{skew_ms:.0f} ms",
-            "detections": int(len(det.get("boxes", [])) if det else 0),
-        }
+        frame = render_frame(
+            color,
+            depth_m,
+            model,
+            device,
+            size=size,
+            terrain_colors=terrain_colors,
+            settings=LiveSettings(state["range"], state["score"], state["view"]),
+            # Skipped rather than guessed until the intrinsics arrive: a scene built from
+            # the wrong K is self-consistent and the wrong size.
+            k=None if info["color"] is None else scaled_k(info["color"], args.stride),
+            extra_stats={
+                "fps": f"{fps:.1f}",
+                "frame age": f"{age_ms:.0f} ms",
+                "colour/depth skew": f"{skew_ms:.0f} ms",
+            },
+        )
         with lock:
-            latest["jpeg"] = buf.getvalue()
-            latest["stats"] = frame_stats
-        # The metric scene for /3d. Boxes come back in canvas coordinates, so they are
-        # mapped to the colour frame before any depth is read through them.
-        if info["color"] is not None:
-            sx = color.shape[1] / max(cw, 1)
-            sy = color.shape[0] / max(ch, 1)
-            dets = []
-            if det and len(det.get("boxes", [])):
-                for box, score, label in zip(
-                    det["boxes"].cpu().numpy(),
-                    det["scores"].cpu().numpy(),
-                    det["labels"].cpu().numpy(),
-                    strict=True,
-                ):
-                    dets.append(
-                        {
-                            "box": (
-                                (box[0] - x0) * sx,
-                                (box[1] - y0) * sy,
-                                (box[2] - x0) * sx,
-                                (box[3] - y0) * sy,
-                            ),
-                            "cls": COCO_NAMES[int(label)]
-                            if int(label) < len(COCO_NAMES)
-                            else str(label),
-                            "score": float(score),
-                        }
-                    )
-            scene = build_scene(trav_full, depth_m, scaled_k(info["color"], args.stride), dets)
-            scene["range_m"] = state["range"]
-            with lock:
-                latest["scene"] = scene
+            latest["jpeg"] = frame.jpeg
+            latest["stats"] = frame.stats
+            if frame.scene is not None:
+                latest["scene"] = frame.scene
 
         if recorder is not None:
             if info["color"] is not None:
                 recorder.write_calibration(info["color"], info["depth"], args.stride)
-            recorder.write(pair, color, depth_mm, frame_stats)
+            recorder.write(frame.panel, color, depth_mm, frame.stats)
 
 
 def main() -> int:
