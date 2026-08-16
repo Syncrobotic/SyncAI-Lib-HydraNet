@@ -1,13 +1,20 @@
-"""Training engine: AMP, warmup + cosine schedule, EMA, checkpoints, TensorBoard."""
+"""A run's lifecycle: build it, step it, validate it, checkpoint it.
+
+The three separable ideas that used to sit in this file are next door -- `ema.py` for the
+weight average, `optim.py` for the parameter-group policy and the schedule. They left
+because they are not about the loop: two test modules were already importing them past
+`Trainer` to use on their own, which is the tell.
+
+What stays is genuinely one thing. `Trainer` holds model, optimiser, scheduler, scaler,
+EMA and the best-so-far metric, and every method here reads several of them at once;
+splitting that further would move the coupling into signatures rather than remove it.
+"""
 
 from __future__ import annotations
 
-import copy
-import math
 import time
 from pathlib import Path
 
-import numpy as np
 import torch
 import torch.nn as nn
 
@@ -35,150 +42,11 @@ from ..utils.seeding import (
     seed_everything,
 )
 from ..utils.visualize import TRAV_COLORS, prediction_grid, terrain_palette
+from .ema import ModelEMA
 from .evaluator import build_val_loaders, evaluate, select_metric
+from .optim import WarmupCosine, build_optimizer
 
 DEFAULT_PRIMARY_METRIC = "traversability_mIoU"
-
-
-class ModelEMA:
-    """Exponential moving average of the weights, with a warmed-up decay.
-
-    The average starts from the model's *initial* random weights. At a fixed decay of
-    0.9998 that initialisation is still 45% of the EMA after 160 steps, and validation
-    -- which runs on the EMA -- reported 0.16 mIoU for a model whose raw weights scored
-    0.95. The failure is silent and looks exactly like a model that did not learn.
-
-    The decay is therefore ramped: ``decay * (1 - exp(-updates / warmup_steps))``, so
-    the first updates copy the model almost outright and the smoothing strengthens as
-    the average acquires real history. This is the standard fix (YOLOv5, timm) and it
-    makes EMA safe on short runs instead of merely warned about.
-    """
-
-    def __init__(self, model: nn.Module, decay: float = 0.9998, warmup_steps: int = 2000):
-        self.ema = copy.deepcopy(model).eval()
-        for p in self.ema.parameters():
-            p.requires_grad_(False)
-        self.decay = decay
-        self.warmup_steps = max(int(warmup_steps), 0)
-        self.updates = 0
-
-    def decay_at(self, updates: int) -> float:
-        if self.warmup_steps <= 0:
-            return self.decay
-        return self.decay * (1 - math.exp(-updates / self.warmup_steps))
-
-    def residual_init_fraction(self, steps: int) -> float:
-        """How much of the random initialisation survives after ``steps`` updates."""
-        if steps <= 0:
-            return 1.0
-        if self.warmup_steps <= 0:
-            return float(self.decay**steps)
-        n = np.arange(1, steps + 1)
-        decays = self.decay * (1 - np.exp(-n / self.warmup_steps))
-        return float(np.exp(np.log(decays).sum()))
-
-    @torch.no_grad()
-    def update(self, model: nn.Module):
-        """One EMA step, batched across tensors rather than looped over them.
-
-        The obvious loop -- ``v.mul_(d).add_(msd[k], alpha=1-d)`` per entry -- issues two
-        CUDA kernels per tensor, and this model's state_dict holds 504 floating-point
-        ones. That is ~1,000 launches every optimizer step, for 8.3 M parameters of
-        actual arithmetic. Measured on an RTX PRO 6000: **4.81 ms per update, against
-        0.20 ms for the ``_foreach`` form** -- 8% of a 60 ms training step spent almost
-        entirely in launch overhead, which is also why the trainer process sat at 114%
-        CPU while neither the GPU nor the loader was saturated.
-
-        ``torch._foreach_*`` is the same arithmetic on the same tensors, grouped into a
-        handful of kernels. Verified bit-identical against the loop (max abs diff 0.0),
-        which matters more here than the speed: EMA weights are what validation scores
-        and what ships, so a "faster" update that drifted would be invisible.
-
-        Integer buffers are copied outright -- num_batches_tracked has no meaningful
-        average -- and kept out of the batched call, which requires a uniform dtype.
-        """
-        self.updates += 1
-        d = self.decay_at(self.updates)
-        msd = model.state_dict()
-        ema_f, model_f = [], []
-        for k, v in self.ema.state_dict().items():
-            if v.dtype.is_floating_point:
-                ema_f.append(v)
-                model_f.append(msd[k].detach())
-            else:
-                v.copy_(msd[k])
-        if ema_f:
-            torch._foreach_mul_(ema_f, d)
-            torch._foreach_add_(ema_f, model_f, alpha=1 - d)
-
-
-def build_optimizer(model: nn.Module, tcfg) -> torch.optim.Optimizer:
-    """Lower LR for the backbone (transfer-learning convention); no weight decay on
-    biases and norm parameters."""
-    lr = float(tcfg["lr"])
-    bb_mult = float(tcfg.get("backbone_lr_mult", 1.0))
-    wd = float(tcfg.get("weight_decay", 0.05))
-    decay, no_decay, bb_decay, bb_no_decay = [], [], [], []
-    for name, p in model.named_parameters():
-        if not p.requires_grad:
-            continue
-        is_bb = name.startswith("backbone.")
-        no_wd = p.ndim <= 1  # bias or norm
-        target = (
-            bb_no_decay
-            if is_bb and no_wd
-            else bb_decay
-            if is_bb
-            else no_decay
-            if no_wd
-            else decay
-        )
-        target.append(p)
-    groups = [
-        {"params": decay, "lr": lr, "weight_decay": wd},
-        {"params": no_decay, "lr": lr, "weight_decay": 0.0},
-        {"params": bb_decay, "lr": lr * bb_mult, "weight_decay": wd},
-        {"params": bb_no_decay, "lr": lr * bb_mult, "weight_decay": 0.0},
-    ]
-    if tcfg.get("optimizer", "adamw") == "adamw":
-        return torch.optim.AdamW(groups)
-    return torch.optim.SGD(groups, momentum=0.9, nesterov=True)
-
-
-class WarmupCosine:
-    def __init__(self, optimizer, warmup_iters: int, total_iters: int):
-        self.opt = optimizer
-        self.warmup = max(warmup_iters, 1)
-        self.total = total_iters
-        self.base_lrs = [g["lr"] for g in optimizer.param_groups]
-        self.it = 0
-
-    def _factor(self, it: int) -> float:
-        if it <= self.warmup:
-            return it / self.warmup
-        t = (it - self.warmup) / max(self.total - self.warmup, 1)
-        return 0.5 * (1 + math.cos(math.pi * min(t, 1.0)))
-
-    def _apply(self):
-        f = self._factor(self.it)
-        for g, base in zip(self.opt.param_groups, self.base_lrs, strict=True):
-            g["lr"] = base * f
-
-    def step(self):
-        self.it += 1
-        self._apply()
-
-    def state_dict(self) -> dict:
-        return {"it": self.it}
-
-    def load_state_dict(self, state: dict) -> None:
-        """Restore the schedule position and immediately re-apply it.
-
-        Without the re-apply the first resumed step would run at the base LR, which for
-        a run resumed near the end of cosine decay is orders of magnitude too high.
-        """
-        self.it = int(state["it"])
-        self._apply()
 
 
 def _targets_to_device(targets: dict, device) -> dict:

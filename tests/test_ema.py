@@ -10,7 +10,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from syncai_hydranet.engine.trainer import ModelEMA
+from syncai_hydranet.engine.ema import ModelEMA
 
 DECAY = 0.9998
 WARMUP = 2000

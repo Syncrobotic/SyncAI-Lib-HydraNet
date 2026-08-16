@@ -14,7 +14,7 @@ pytest tests/test_overfit.py -v
 import pytest
 import torch
 
-from syncai_hydranet.engine.trainer import WarmupCosine, build_optimizer
+from syncai_hydranet.engine.optim import WarmupCosine, build_optimizer
 from syncai_hydranet.models.hydranet import build_model
 
 H, W = 128, 160

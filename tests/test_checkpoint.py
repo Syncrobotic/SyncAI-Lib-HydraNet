@@ -12,7 +12,8 @@ import pytest
 import torch
 import torch.nn as nn
 
-from syncai_hydranet.engine.trainer import CKPT_FORMAT, Trainer, WarmupCosine
+from syncai_hydranet.engine.optim import WarmupCosine
+from syncai_hydranet.engine.trainer import CKPT_FORMAT, Trainer
 from syncai_hydranet.utils.checkpoint import load_checkpoint
 
 WARMUP, TOTAL = 10, 100
@@ -185,7 +186,7 @@ def test_last_pt_carries_the_current_best_not_the_previous_one(tmp_path):
 def test_ema_progress_survives_a_resume(tmp_path):
     """The decay ramp is a function of the update count. Losing it restarts the ramp,
     dragging a mature average back towards whatever the model is at the resume point."""
-    from syncai_hydranet.engine.trainer import ModelEMA
+    from syncai_hydranet.engine.ema import ModelEMA
 
     t = _stub_trainer()
     t.ema = ModelEMA(t.model, decay=0.99, warmup_steps=100)

@@ -197,7 +197,7 @@ def test_the_ema_copy_inherits_the_layout():
     the copy in NCHW: training would take the speedup and validation would quietly not,
     on a model whose reported layout no longer describes what runs.
     """
-    from syncai_hydranet.engine.trainer import ModelEMA
+    from syncai_hydranet.engine.ema import ModelEMA
 
     cfg = load_config(CFG, ["model.backbone.pretrained=false"])
     model = build_model(cfg)
