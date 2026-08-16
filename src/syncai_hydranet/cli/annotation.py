@@ -233,23 +233,30 @@ def check_split(root: Path, split: str, rep: Report, allow_void: bool, scheme: S
         rep.error(f"{split}: no image/annotation pairs -- training would refuse this split")
         return stats
 
-    # Anything unpaired is dropped silently by the loader, which is how an annotation
-    # run "finishes" with a third of its work not being trained on.
+    _report_unpaired(split, img_dir, ann_dir, pairs, rep)
+    void_pixels = _scan_pairs(pairs, img_dir, scheme, rep, stats)
+    _report_unlabelled(split, stats, void_pixels, scheme, allow_void, rep)
+    return stats
+
+
+def _report_unpaired(split: str, img_dir: Path, ann_dir: Path, pairs, rep: Report) -> None:
+    """Anything unpaired is dropped silently by the loader.
+
+    Which is how an annotation run "finishes" with a third of its work not being trained
+    on, and why this is an error rather than a note.
+    """
     paired_imgs = {p.resolve() for p, _ in pairs}
     paired_anns = {a.resolve() for _, a in pairs}
-    lonely_imgs = [
-        p
-        for p in img_dir.rglob("*")
-        if p.suffix.lower() in {".png", ".jpg", ".jpeg", ".bmp"}
-        and p.resolve() not in paired_imgs
-    ]
-    lonely_anns = [
-        p
-        for p in ann_dir.rglob("*")
-        if p.suffix.lower() in {".png", ".jpg", ".jpeg", ".bmp"}
-        and p.resolve() not in paired_anns
-    ]
-    for label, lonely in (("image", lonely_imgs), ("annotation", lonely_anns)):
+    for label, directory, paired in (
+        ("image", img_dir, paired_imgs),
+        ("annotation", ann_dir, paired_anns),
+    ):
+        lonely = [
+            p
+            for p in directory.rglob("*")
+            if p.suffix.lower() in {".png", ".jpg", ".jpeg", ".bmp"}
+            and p.resolve() not in paired
+        ]
         if lonely:
             shown = ", ".join(p.name for p in sorted(lonely)[:3])
             rep.error(
@@ -257,49 +264,66 @@ def check_split(root: Path, split: str, rep: Report, allow_void: bool, scheme: S
                 f"dropped by the loader (e.g. {shown})"
             )
 
+
+def _check_one_mask(img_path: Path, ann_path: Path, allowed: set, scheme: Scheme, rep: Report):
+    """Read and validate one mask. Returns the array, or None if it cannot be counted.
+
+    Each refusal is separate because each has a different fix, and a mask that fails any
+    of them must not reach the counters -- a wrong shape counted anyway is worse than an
+    uncounted one, because it makes the class shares below quietly wrong.
+    """
+    mask = _read_mask(ann_path)
+    if mask is None:
+        rep.error(
+            f"{ann_path.name}: {Image.open(ann_path).mode} mode, not single channel. "
+            "Export the mask as a single-channel PNG whose pixel value is the class id."
+        )
+        return None
+    if mask.ndim != 2:
+        rep.error(f"{ann_path.name}: {mask.ndim}-d annotation, expected 2-d")
+        return None
+    with Image.open(img_path) as im:
+        if im.size != (mask.shape[1], mask.shape[0]):
+            rep.error(
+                f"{ann_path.name}: mask {mask.shape[1]}x{mask.shape[0]} but image "
+                f"{im.size[0]}x{im.size[1]} -- the two are resized independently, so "
+                "the labels would be geometrically wrong, not merely misaligned"
+            )
+            return None
+    unknown = sorted(int(v) for v in np.unique(mask) if int(v) not in allowed)
+    if unknown:
+        rep.error(
+            f"{ann_path.name}: ids {unknown} are not in the {scheme.name} scheme; the "
+            "loader maps them to ignore, so those pixels train on nothing"
+        )
+    return mask
+
+
+def _scan_pairs(pairs, img_dir: Path, scheme: Scheme, rep: Report, stats: dict) -> int:
+    """Fold every valid pair into `stats`. Returns the void (id 0) pixel count."""
     allowed = set(scheme.native) | {IGNORE}
-    void_is_trained = scheme.native.get(0) == 0
     void_pixels = 0
-
     for img_path, ann_path in pairs:
-        mask = _read_mask(ann_path)
+        mask = _check_one_mask(img_path, ann_path, allowed, scheme, rep)
         if mask is None:
-            rep.error(
-                f"{ann_path.name}: {Image.open(ann_path).mode} mode, not single channel. "
-                "Export the mask as a single-channel PNG whose pixel value is the class id."
-            )
             continue
-        if mask.ndim != 2:
-            rep.error(f"{ann_path.name}: {mask.ndim}-d annotation, expected 2-d")
-            continue
-
-        with Image.open(img_path) as im:
-            if im.size != (mask.shape[1], mask.shape[0]):
-                rep.error(
-                    f"{ann_path.name}: mask {mask.shape[1]}x{mask.shape[0]} but image "
-                    f"{im.size[0]}x{im.size[1]} -- the two are resized independently, so "
-                    "the labels would be geometrically wrong, not merely misaligned"
-                )
-                continue
-
-        present = np.unique(mask)
-        unknown = sorted(int(v) for v in present if int(v) not in allowed)
-        if unknown:
-            rep.error(
-                f"{ann_path.name}: ids {unknown} are not in the {scheme.name} scheme; the "
-                "loader maps them to ignore, so those pixels train on nothing"
-            )
         counts = np.bincount(mask.ravel(), minlength=256)
-        for tid in present:
+        for tid in np.unique(mask):
             tid = int(tid)
             if tid in allowed:
                 stats["pixels"][tid] += int(counts[tid])
                 stats["images"][tid] += 1
         void_pixels += int(counts[0])
         stats["sessions"][_session_of(img_path, img_dir)] += 1
+    return void_pixels
 
+
+def _report_unlabelled(
+    split: str, stats: dict, void_pixels: int, scheme: Scheme, allow_void: bool, rep: Report
+) -> None:
+    """The two ways a split can be mostly unlabelled without looking like it."""
     total_px = sum(stats["pixels"].values())
-    if void_pixels and void_is_trained and not allow_void:
+    if void_pixels and scheme.native.get(0) == 0 and not allow_void:
         share = 100 * void_pixels / max(total_px, 1)
         rep.error(
             f"{split}: {share:.1f}% of pixels are id 0 (void), and the indoor_native map "
@@ -310,8 +334,8 @@ def check_split(root: Path, split: str, rep: Report, allow_void: bool, scheme: S
 
     # A forgotten background and a deliberately blank one are the same pixels, so this
     # cannot be an error. It can be said out loud, which is enough: nobody sets out to
-    # ship a batch that is four-fifths ignore, and the per-class shares below are shares
-    # of what *was* labelled, so they stay reassuring while it happens.
+    # ship a batch that is four-fifths ignore, and the per-class shares reported later
+    # are shares of what *was* labelled, so they stay reassuring while it happens.
     ignored_px = sum(stats["pixels"][tid] for tid in _ignored_ids(scheme))
     if total_px and ignored_px / total_px > 0.6:
         rep.warn(
@@ -320,7 +344,6 @@ def check_split(root: Path, split: str, rep: Report, allow_void: bool, scheme: S
             "fine and the loss simply skips them. If it is not, most of this batch will "
             "train on nothing"
         )
-    return stats
 
 
 def check_sessions(per_split: dict[str, dict], rep: Report) -> None:
