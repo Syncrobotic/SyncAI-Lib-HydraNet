@@ -18,6 +18,7 @@ import torch.nn as nn
 
 from .backbone import build_backbone
 from .heads.detection import SCORE_THR_VIEW, FCOSHead, build_det_head
+from .heads.registry import DetectionHead, Head, SegmentationHead
 from .heads.segmentation import build_seg_head
 from .losses import FCOSLoss, FixedWeighting, SegLoss, UncertaintyWeighting
 from .neck import build_neck
@@ -87,17 +88,30 @@ class HydraNet(nn.Module):
     def forward(self, images: torch.Tensor) -> dict:
         """Pure convolution graph. This is exactly what gets exported to ONNX."""
         feats = self.neck(self.backbone(images))
-        out = {}
+        out: dict = {}
         h, w = images.shape[-2:]
-        for name, head in self.seg_heads.items():
-            out[name] = head(feats, (h, w))  # [B, C, H, W] logits
+        for head in self.heads():
+            head.forward_into(out, feats, (h, w))
+        return out
+
+    def heads(self) -> list[Head]:
+        """Every head this model has, in a form the rest of the network can treat alike.
+
+        Rebuilt on each call and deliberately cheap: the adapters hold references to the
+        registered modules rather than owning them, which is what keeps `det_head.*` and
+        `seg_heads.*` as the state_dict keys every checkpoint written so far uses.
+
+        Segmentation first, then detection. The order reaches the loss balancer, which
+        stacks the terms it is given, so it is part of the arithmetic and not cosmetic.
+        """
+        heads: list[Head] = [
+            SegmentationHead(name, self.seg_heads[name], self.seg_losses[name])
+            for name in self.seg_heads
+        ]
         det = self._detection()
         if det is not None:
-            cls_o, reg_o, ctr_o = det.head(feats)
-            out["det_cls"] = cls_o  # list of [B, C, h, w]
-            out["det_reg"] = reg_o
-            out["det_ctr"] = ctr_o
-        return out
+            heads.append(DetectionHead(det.name, det.head, det.loss))
+        return heads
 
     def _detection(self) -> Detection | None:
         """The detection triple, or None if this model has no detection head.
@@ -140,24 +154,14 @@ class HydraNet(nn.Module):
         """
         losses: dict[str, torch.Tensor] = {}
         logs: dict[str, torch.Tensor] = {}
-        for name in self.seg_heads:
-            if name in supervised and name in targets:
-                seg_loss = self.seg_losses[name](outputs[name], targets[name])
-                losses[name] = seg_loss
-                logs[name] = seg_loss.detach()
-        det = self._detection()
-        if det is not None and det.name in supervised:
-            det_loss, sub = det.loss(
-                det.head,
-                outputs["det_cls"],
-                outputs["det_reg"],
-                outputs["det_ctr"],
-                targets["boxes"],
-                targets["labels"],
-            )
-            losses[det.name] = det_loss
-            logs[det.name] = det_loss.detach()
-            logs.update({k: v.detach() if torch.is_tensor(v) else v for k, v in sub.items()})
+        heads = self.heads()
+        for head in heads:
+            if head.name not in supervised or not head.supervised_by(targets):
+                continue
+            loss, extra = head.loss(outputs, targets)
+            losses[head.name] = loss
+            logs[head.name] = loss.detach()
+            logs.update({k: v.detach() if torch.is_tensor(v) else v for k, v in extra.items()})
         if not losses:
             # The balancer stacks an empty list of terms, which raises out of torch with
             # nothing in the message about datasets or config keys -- deep in the
@@ -165,7 +169,7 @@ class HydraNet(nn.Module):
             raise ValueError(
                 f"nothing to supervise: this batch declares supervises={supervised!r} and "
                 f"carries targets {sorted(targets)!r}, which name no head this model has "
-                f"({', '.join([*self.seg_heads, *([det.name] if det else [])])}). "
+                f"({', '.join(h.name for h in heads)}). "
                 "A dataset that supervises no head costs optimiser steps and contributes "
                 "no gradient; fix its `supervises` list."
             )
@@ -179,15 +183,11 @@ class HydraNet(nn.Module):
     ) -> dict:
         """Single-frame inference: per-pixel class maps plus NMS-filtered boxes."""
         out = self.forward(images)
-        result = {}
-        for name in self.seg_heads:
-            result[name] = out[name].argmax(dim=1)  # [B, H, W]
-        det = self._detection()
-        if det is not None:
-            result[det.name] = det.head.decode(
-                out["det_cls"],
-                out["det_reg"],
-                out["det_ctr"],
+        result: dict = {}
+        for head in self.heads():
+            head.decode_into(
+                result,
+                out,
                 score_thr=score_thr,
                 nms_thr=nms_thr,
                 img_size=images.shape[-2:],
