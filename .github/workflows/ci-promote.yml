@@ -55,12 +55,18 @@ jobs:
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
-      - run: uv sync --group dev --extra export
+      - run: uv sync --locked --group dev --extra export
       # Cheapest first, so the gate fails fast.
       - name: Lint
         run: uv run ruff check --output-format=github .
       - name: Format
         run: uv run ruff format --check .
+      # Here for the same reason as the test suite: a signature changed on one branch
+      # and its caller on another is a cross-file failure that neither branch's own CI
+      # run could have seen. Same script and same baseline as ci.yml, so the two tiers
+      # cannot disagree about what the number is.
+      - name: Type ratchet
+        run: ./scripts/ty_ratchet.sh
       # Coverage threshold included: a promotion that drops the floor is exactly the
       # kind of thing that only shows up once branches are combined.
       - name: Tests on the combined state

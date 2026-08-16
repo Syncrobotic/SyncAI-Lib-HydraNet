@@ -28,6 +28,11 @@ concurrency:
   group: ci-dev-${{ github.ref }}
   cancel-in-progress: true
 
+# Every job installs with `uv sync --locked`. A bare `uv sync` silently re-resolves
+# when uv.lock has drifted from pyproject.toml, so CI tests a dependency set nobody
+# committed and the drift never reds. That is not hypothetical here: the `annotate`
+# extra sat in pyproject for a while without ever reaching the lock, and CI stayed
+# green throughout. `--locked` fails the job instead, which is the point of a lock.
 jobs:
   format:
     name: Format
@@ -40,7 +45,7 @@ jobs:
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
-      - run: uv sync --group dev
+      - run: uv sync --locked --group dev
       - run: uv run ruff format --check .
 
   lint:
@@ -54,8 +59,25 @@ jobs:
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
-      - run: uv sync --group dev
+      - run: uv sync --locked --group dev
       - run: uv run ruff check --output-format=github .
+
+  # A RATCHET, not a pass/fail gate: the count may fall, never rise. The baseline and
+  # the reasoning both live in the script, because ci-promote.yml runs the same check
+  # on the combined state and a second copy here would be the one nobody updates.
+  types:
+    name: Type ratchet
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+      - run: uv sync --locked --group dev
+      - run: ./scripts/ty_ratchet.sh
 
   # No dataset needed: the model runs on random tensors, the dataset tests build a
   # fixture in tmp_path, and test_overfit.py memorises one synthetic batch on CPU.
@@ -82,7 +104,7 @@ jobs:
         with:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
-      - run: uv sync --group dev --extra export
+      - run: uv sync --locked --group dev --extra export
       - run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=80
 
   # No checkpoint and no dataset: a randomly initialised model exercises the same
@@ -99,7 +121,7 @@ jobs:
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
-      - run: uv sync --group dev --extra export
+      - run: uv sync --locked --group dev --extra export
 
       - name: Export every shipped config and check parity
         run: |
@@ -136,7 +158,7 @@ jobs:
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
-      - run: uv sync --group dev --extra export
+      - run: uv sync --locked --group dev --extra export
 
       - name: The bundler refuses a run it cannot reproduce
         run: |
@@ -156,7 +178,7 @@ jobs:
   ci-success:
     name: CI success
     runs-on: ubuntu-latest
-    needs: [format, lint, test, export-parity, release-bundle]
+    needs: [format, lint, types, test, export-parity, release-bundle]
     if: always()
     steps:
       - name: Assert every job succeeded
