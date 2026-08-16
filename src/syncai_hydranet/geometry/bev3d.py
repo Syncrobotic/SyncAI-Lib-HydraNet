@@ -111,32 +111,19 @@ def boundary_rays(trav_bev: np.ndarray, grid: BevGrid, n_rays: int = 160):
     return angles, reach
 
 
-def render(
-    trav_bev: np.ndarray,
-    terrain_bev: np.ndarray | None,
-    grid: BevGrid,
-    objects,
-    size: tuple[int, int],
-    *,
-    trav_colors,
-    terrain_colors=None,
-    cam: VirtualCam | None = None,
-    class_names=None,
-    bg=(11, 14, 19),
-) -> Image.Image:
-    """Draw the panel. `trav_bev`/`terrain_bev` are the flat maps, far field at row 0."""
+def _fit_camera(cam: VirtualCam, grid: BevGrid, size: tuple[int, int]) -> VirtualCam:
+    """The same camera, with a focal length and centre that fit `grid` into `size`.
+
+    Fitted rather than hand-tuned: the mapped window is set by --range at the call site,
+    so a fixed focal leaves the floor as a postage stamp in a black field the moment
+    anyone changes it.
+    """
     w, h = size
-    cam = cam or VirtualCam()
-    # Fit the mapped window to the panel instead of trusting a hand-tuned focal length:
-    # the window is set by --range at the call site, so a fixed focal leaves the floor
-    # as a postage stamp in a black field the moment anyone changes it.
     probe = VirtualCam(cam.height_m, cam.setback_m, cam.pitch_deg, 1.0, 0.0, 0.0)
-    cx_m = [grid.x_min, grid.x_max]
-    cz_m = [grid.z_min, grid.z_max]
     top_m = max(CLASS_HEIGHT_M.values())
     us, vs = [], []
-    for x in cx_m:
-        for z in cz_m:
+    for x in (grid.x_min, grid.x_max):
+        for z in (grid.z_min, grid.z_max):
             for y in (0.0, top_m):
                 pu, pv, _ = probe.project(x, y, z)
                 us.append(float(pu))
@@ -154,16 +141,19 @@ def render(
     # centres nothing and only shows once the fit is tight enough to clip.
     mid_u = (max(us) + min(us)) / 2 * focal
     mid_v = (max(vs) + min(vs)) / 2 * focal
-    cam = VirtualCam(
+    return VirtualCam(
         cam.height_m, cam.setback_m, cam.pitch_deg, focal, w / 2 - mid_u, fit_h / 2 - mid_v
     )
-    panel = Image.new("RGB", (w, h), bg)
 
-    # --- the floor, warped ---------------------------------------------------
-    # Colour by terrain where the flat map has it and the cell is walkable; fall back to
-    # traversability. The floor a robot drives on is the part terrain calls floor_*, so
-    # anything else there is either the boundary or a mistake, and both should look
-    # different from clean floor rather than be smoothed into it.
+
+def _paste_floor(panel, cam, trav_bev, terrain_bev, grid, *, trav_colors, terrain_colors, bg):
+    """Warp the flat map onto the ground plane and paste it under everything else.
+
+    Coloured by terrain where the flat map has it and the cell is walkable, falling back
+    to traversability. The floor a robot drives on is the part terrain calls floor_*, so
+    anything else there is either the boundary or a mistake, and both should look
+    different from clean floor rather than be smoothed into it.
+    """
     src = np.full((*trav_bev.shape, 3), bg, dtype=np.uint8)
     walk = (trav_bev == 2) | (trav_bev == 1)
     if terrain_bev is not None and terrain_colors is not None:
@@ -189,7 +179,7 @@ def render(
     scr = [(float(a), float(b)) for a, b in scr]
     coeffs = _perspective_coeffs(scr, corners_px)
     ground = Image.fromarray(src).transform(
-        (w, h), Image.Transform.PERSPECTIVE, coeffs, Image.Resampling.BILINEAR, fillcolor=bg
+        panel.size, Image.Transform.PERSPECTIVE, coeffs, Image.Resampling.BILINEAR, fillcolor=bg
     )
     # Only paste where the warp actually landed on floor, so the fill does not wipe the bg.
     mask = Image.fromarray(
@@ -197,9 +187,10 @@ def render(
     )
     panel.paste(ground, (0, 0), mask)
 
-    d = ImageDraw.Draw(panel, "RGBA")
 
-    # --- distance rules, drawn on the plane so they carry the perspective ----
+def _draw_distance_rules(d, cam, grid: BevGrid, size: tuple[int, int]) -> None:
+    """Range rings and lateral lines, drawn on the plane so they carry the perspective."""
+    w, h = size
     for z in range(int(np.ceil(grid.z_min)), int(grid.z_max) + 1):
         xs = np.linspace(grid.x_min, grid.x_max, 40)
         pts = [tuple(map(float, cam.project(x, 0.0, float(z))[:2])) for x in xs]
@@ -212,7 +203,34 @@ def render(
         pts = [tuple(map(float, cam.project(float(x), 0.0, z)[:2])) for z in zs]
         d.line(pts, fill=(96, 112, 132, 90), width=1)
 
-    # --- the boundary, raised ------------------------------------------------
+
+def _boundary_height_and_colour(terrain_bev, grid, terrain_colors, p0, p1):
+    """How tall to raise the wall between two rays, and what colour it should be.
+
+    The class is read a little *past* the boundary, because what ended the floor is the
+    thing standing behind the last walkable cell rather than the cell itself.
+    """
+    cls = None
+    if terrain_bev is not None:
+        mid = ((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2)
+        cell = grid.to_cell(*mid)
+        if cell is not None:
+            r, c = cell
+            v = int(terrain_bev[max(r - 3, 0), c])
+            cls = v if v != IGNORE else None
+    ht = CLASS_HEIGHT_M.get(cls, DEFAULT_HEIGHT_M) if cls is not None else DEFAULT_HEIGHT_M
+    if ht <= 0.01:
+        ht = 0.25  # something ended the floor even if the class says it is flat
+    colour = (
+        tuple(np.asarray(terrain_colors)[cls])
+        if (cls is not None and terrain_colors is not None)
+        else (150, 165, 190)
+    )
+    return ht, colour
+
+
+def _draw_boundary(d, cam, trav_bev, terrain_bev, grid: BevGrid, terrain_colors) -> None:
+    """Raise a wall at the edge of the free space, painter's-algorithm ordered."""
     angles, reach = boundary_rays(trav_bev, grid)
     quads = []
     for i in range(len(angles) - 1):
@@ -222,24 +240,7 @@ def render(
         a0, a1 = angles[i], angles[i + 1]
         p0 = (r0 * np.sin(a0), r0 * np.cos(a0))
         p1 = (r1 * np.sin(a1), r1 * np.cos(a1))
-        cls = None
-        if terrain_bev is not None:
-            mid = ((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2)
-            cell = grid.to_cell(*mid)
-            if cell is not None:
-                r, c = cell
-                # look a little past the boundary for the thing that ended the floor
-                rr = max(r - 3, 0)
-                v = int(terrain_bev[rr, c])
-                cls = v if v != IGNORE else None
-        ht = CLASS_HEIGHT_M.get(cls, DEFAULT_HEIGHT_M) if cls is not None else DEFAULT_HEIGHT_M
-        if ht <= 0.01:
-            ht = 0.25  # something ended the floor even if the class says it is flat
-        colour = (
-            tuple(np.asarray(terrain_colors)[cls])
-            if (cls is not None and terrain_colors is not None)
-            else (150, 165, 190)
-        )
+        ht, colour = _boundary_height_and_colour(terrain_bev, grid, terrain_colors, p0, p1)
         b0 = cam.project(p0[0], 0.0, p0[1])
         b1 = cam.project(p1[0], 0.0, p1[1])
         t0 = cam.project(p0[0], ht, p0[1])
@@ -259,7 +260,9 @@ def render(
     for _, poly, colour in sorted(quads, key=lambda q: -q[0]):  # far first
         d.polygon(poly, fill=(*_shade(colour, 0.72), 205), outline=(*_shade(colour, 1.15), 235))
 
-    # --- objects, as boxes standing on the floor -----------------------------
+
+def _draw_objects(d, cam, grid: BevGrid, objects) -> None:
+    """Detections as boxes standing on the floor, far ones first."""
     for obj in sorted(objects, key=lambda o: -o.get("z_m", 0.0)):
         x, z = obj.get("x_m"), obj.get("z_m")
         if x is None or z is None:
@@ -289,19 +292,24 @@ def render(
             fill=(225, 240, 255),
         )
 
-    # --- legend, only for what this frame actually contains ------------------
-    if terrain_bev is not None and terrain_colors is not None and class_names:
-        present = [
-            int(c) for c in np.unique(terrain_bev) if c != IGNORE and int(c) < len(class_names)
-        ]
-        y = h - 12 - 15 * len(present)
-        for cid in present:
-            col = tuple(int(v) for v in np.asarray(terrain_colors)[cid])
-            d.rectangle([10, y, 22, y + 10], fill=col, outline=(0, 0, 0))
-            d.text((28, y - 2), class_names[cid], fill=(200, 214, 234))
-            y += 15
 
-    # --- ego ------------------------------------------------------------------
+def _draw_legend(d, terrain_bev, terrain_colors, class_names, height: int) -> None:
+    """Only what this frame actually contains: a key listing absent classes is noise."""
+    if terrain_bev is None or terrain_colors is None or not class_names:
+        return
+    present = [
+        int(c) for c in np.unique(terrain_bev) if c != IGNORE and int(c) < len(class_names)
+    ]
+    y = height - 12 - 15 * len(present)
+    for cid in present:
+        col = tuple(int(v) for v in np.asarray(terrain_colors)[cid])
+        d.rectangle([10, y, 22, y + 10], fill=col, outline=(0, 0, 0))
+        d.text((28, y - 2), class_names[cid], fill=(200, 214, 234))
+        y += 15
+
+
+def _draw_ego(d, cam, grid: BevGrid) -> None:
+    """The robot, at the near edge of the mapped window."""
     ex, ey = cam.project(0.0, 0.0, grid.z_min)[:2]
     d.polygon(
         [
@@ -311,4 +319,43 @@ def render(
         ],
         fill=(235, 245, 255),
     )
+
+
+def render(
+    trav_bev: np.ndarray,
+    terrain_bev: np.ndarray | None,
+    grid: BevGrid,
+    objects,
+    size: tuple[int, int],
+    *,
+    trav_colors,
+    terrain_colors=None,
+    cam: VirtualCam | None = None,
+    class_names=None,
+    bg=(11, 14, 19),
+) -> Image.Image:
+    """Draw the panel. `trav_bev`/`terrain_bev` are the flat maps, far field at row 0.
+
+    The order below is the draw order, and it is load-bearing: the floor is a warped
+    image and everything after it is vector work on top, the boundary walls occlude the
+    distance rules behind them, and the ego marker sits over all of it.
+    """
+    cam = _fit_camera(cam or VirtualCam(), grid, size)
+    panel = Image.new("RGB", size, bg)
+    _paste_floor(
+        panel,
+        cam,
+        trav_bev,
+        terrain_bev,
+        grid,
+        trav_colors=trav_colors,
+        terrain_colors=terrain_colors,
+        bg=bg,
+    )
+    d = ImageDraw.Draw(panel, "RGBA")
+    _draw_distance_rules(d, cam, grid, size)
+    _draw_boundary(d, cam, trav_bev, terrain_bev, grid, terrain_colors)
+    _draw_objects(d, cam, grid, objects)
+    _draw_legend(d, terrain_bev, terrain_colors, class_names, size[1])
+    _draw_ego(d, cam, grid)
     return panel
