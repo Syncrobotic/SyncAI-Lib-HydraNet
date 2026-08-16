@@ -98,7 +98,11 @@ def _is_test(stem: str, fraction: float) -> bool:
     """
     if fraction <= 0:
         return False
-    digest = hashlib.sha1(stem.encode("utf-8")).hexdigest()
+    # `usedforsecurity=False` says what this hash is for: a stable bucketing of a
+    # filename, never a signature. It leaves the digest byte-identical -- which it has
+    # to, because a changed digest would silently move images between test and val and
+    # contaminate exactly the number this function exists to protect.
+    digest = hashlib.sha1(stem.encode("utf-8"), usedforsecurity=False).hexdigest()
     return int(digest[:8], 16) / 0xFFFFFFFF < fraction
 
 
