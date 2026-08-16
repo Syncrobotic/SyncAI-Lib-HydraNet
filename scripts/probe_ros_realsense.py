@@ -23,11 +23,11 @@ import time
 from pathlib import Path
 
 import numpy as np
-import rclpy
+import rclpy  # pyright: ignore[reportMissingImports]
 import torch
 from PIL import Image, ImageDraw
-from rclpy.qos import qos_profile_sensor_data
-from sensor_msgs.msg import Image as ImageMsg
+from rclpy.qos import qos_profile_sensor_data  # pyright: ignore[reportMissingImports]
+from sensor_msgs.msg import Image as ImageMsg  # pyright: ignore[reportMissingImports]
 
 HERE = Path(__file__).resolve().parent
 # In the repo the package is at ../src; on a robot the deploy copies it to ./src next to

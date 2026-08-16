@@ -223,7 +223,7 @@ class Recorder:
     """
 
     def __init__(self, root: Path, session: str, keyframe_hz: float):
-        import cv2
+        import cv2  # pyright: ignore[reportMissingImports]
 
         self.cv2 = cv2
         self.root = root
@@ -311,10 +311,10 @@ class Recorder:
 
 
 def inference_loop(args):
-    import rclpy
-    from rclpy.qos import qos_profile_sensor_data
-    from sensor_msgs.msg import CameraInfo
-    from sensor_msgs.msg import Image as ImageMsg
+    import rclpy  # pyright: ignore[reportMissingImports]
+    from rclpy.qos import qos_profile_sensor_data  # pyright: ignore[reportMissingImports]
+    from sensor_msgs.msg import CameraInfo  # pyright: ignore[reportMissingImports]
+    from sensor_msgs.msg import Image as ImageMsg  # pyright: ignore[reportMissingImports]
 
     cfg = load_config(args.config, ["model.backbone.pretrained=false"])
     device = pick_device(cfg.get("device"))

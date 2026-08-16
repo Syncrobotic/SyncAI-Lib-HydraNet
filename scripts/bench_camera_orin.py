@@ -105,7 +105,7 @@ class Stage:
 def letterbox(frame, out_h, out_w):
     """Preserve aspect ratio, pad the rest. The camera is 16:9 and the model is 1.25:1,
     so a plain resize would squeeze the image horizontally and break every learned shape."""
-    import cv2
+    import cv2  # pyright: ignore[reportMissingImports]
 
     h, w = frame.shape[:2]
     scale = min(out_h / h, out_w / w)
@@ -126,8 +126,8 @@ def main():
     ap.add_argument("--width", type=int, default=640)
     args = ap.parse_args()
 
-    import cv2
-    import tensorrt as trt
+    import cv2  # pyright: ignore[reportMissingImports]
+    import tensorrt as trt  # pyright: ignore[reportMissingImports]
 
     cuda = Cudart()
 

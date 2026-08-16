@@ -237,8 +237,8 @@ def colourise(ids, palette):
 
 def capture_loop(args):
     global latest_jpeg
-    import cv2
-    import tensorrt as trt
+    import cv2  # pyright: ignore[reportMissingImports]
+    import tensorrt as trt  # pyright: ignore[reportMissingImports]
 
     cuda = Cudart()
     logger = trt.Logger(trt.Logger.ERROR)

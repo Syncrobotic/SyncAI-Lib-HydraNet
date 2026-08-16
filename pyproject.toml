@@ -186,6 +186,35 @@ quote-style = "double"
 # resolve them and should not be told about it every run.
 unresolved-import = "ignore"
 
+# ---------------------------------------------------------------------------
+# Pyright is NOT a second CI checker -- ty holds that job, and two gates disagreeing
+# about the same tree is how both get ignored. This block exists because Pyright is
+# already running whether the repo configures it or not: it is the engine inside
+# Pylance, so every VS Code contributor sees its output in the editor. Configured, it
+# reads the project venv and the `scripts/` path the way the tests do; unconfigured,
+# it cannot resolve numpy or torch and buries the real findings under import noise.
+#
+# What it still reports on a plain `uv sync --group dev`: onnx, onnxsim, onnxruntime
+# and transformers, which live in the `export` and `annotate` extras. Those are left
+# speaking up on purpose -- they resolve the moment the extra is installed, so
+# `uv sync --all-extras` clears them and a suppression here would just hide which
+# extra you are missing.
+#
+# The ROS and TensorRT imports cannot resolve on a dev box at all: no wheel exists to
+# install, they only exist on the robot and on the Orin. Those are tagged per-line at
+# the import with `# pyright: ignore[reportMissingImports]` rather than muted here,
+# so a genuinely misspelled import in the same file is still caught.
+# ---------------------------------------------------------------------------
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+include = ["src", "scripts", "tests"]
+# `tests/test_orin_standalone_copies.py` imports the two standalone Jetson scripts by
+# module name, the same way it does at runtime after inserting scripts/ on sys.path.
+extraPaths = ["scripts"]
+# Matches the Pylance default, so the editor and a CLI run agree on what counts.
+typeCheckingMode = "basic"
+
 [tool.ty.environment]
 root = ["./src"]
 
