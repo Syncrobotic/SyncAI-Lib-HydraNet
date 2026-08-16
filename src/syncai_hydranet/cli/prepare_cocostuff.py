@@ -180,9 +180,11 @@ def _link(src: Path, dst: Path) -> None:
     dst.symlink_to(os.path.relpath(src, dst.parent))
 
 
-def main(argv=None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        prog="hydranet-prepare-cocostuff",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("--coco", type=Path, default=Path("datasets/coco"))
     ap.add_argument("--stuff", type=Path, default=Path("datasets/cocostuff"))
@@ -208,7 +210,64 @@ def main(argv=None) -> int:
     )
     ap.add_argument("--workers", type=int, default=min(16, (os.cpu_count() or 4)))
     ap.add_argument("--force", action="store_true", help="overwrite a non-empty split")
-    a = ap.parse_args(argv)
+    return ap
+
+
+def _refuse_existing_splits(out: Path, plan, force: bool) -> None:
+    """Refuse before any work, rather than merging into what a previous run left.
+
+    A half-rebuilt split looks exactly like a good one from the outside: the right
+    directories, plausible counts, and no way to tell which frames came from which
+    filter settings.
+    """
+    for _src_split, dst_split in plan:
+        for kind in ("images", "annotations"):
+            d = out / kind / dst_split
+            if d.is_dir() and any(d.iterdir()) and not force:
+                raise SystemExit(
+                    f"{d} already has files. Refusing to merge into an existing split -- "
+                    "a half-rebuilt split is indistinguishable from a good one. "
+                    "Delete it or pass --force."
+                )
+
+
+def _link_split(keep, img_dir: Path, ann_dir: Path, out_img: Path, out_ann: Path):
+    """Symlink the kept pairs. Returns `(linked, missing)`.
+
+    An annotation whose image is absent is collected rather than skipped quietly: it
+    means the two archives were unpacked from different releases, and the count is the
+    only signal of that.
+    """
+    out_img.mkdir(parents=True, exist_ok=True)
+    out_ann.mkdir(parents=True, exist_ok=True)
+    linked, missing = 0, []
+    for name in keep:
+        jpg = img_dir / (Path(name).stem + ".jpg")
+        if not jpg.exists():
+            missing.append(name)
+            continue
+        _link(jpg, out_img / jpg.name)
+        _link(ann_dir / name, out_ann / name)
+        linked += 1
+    return linked, missing
+
+
+def _report_split(src_split, dst_split, files, keep, linked, dropped, missing, img_dir, names):
+    """What this split scanned, kept and linked -- never a filtered count as the whole."""
+    print(
+        f"[{src_split} -> {dst_split}] scanned {len(files):,}, "
+        f"kept {len(keep):,}, linked {linked:,}"
+    )
+    if dropped:
+        print(f"    dropped {dropped:,} that carried the classes but were not indoor scenes")
+    for v, n in sorted(names.items(), key=lambda kv: -kv[1]):
+        print(f"    {v:14} {n:>7,}")
+    if missing:
+        print(f"    !! {len(missing)} annotations had no image in {img_dir} and were skipped")
+
+
+def main(argv=None) -> int:
+    a = build_parser().parse_args(argv)
 
     png = _load_png_values(a.stuff)
     values = {n: png[n] for n in _resolve_named(png, a.classes)}
@@ -226,21 +285,12 @@ def main(argv=None) -> int:
 
     # train2017 -> train,  val2017 -> test.  Deliberately no val; see the module docstring.
     plan = [("train2017", "train"), ("val2017", "test")]
-    for _src_split, dst_split in plan:
-        for kind in ("images", "annotations"):
-            d = a.out / kind / dst_split
-            if d.is_dir() and any(d.iterdir()) and not a.force:
-                raise SystemExit(
-                    f"{d} already has files. Refusing to merge into an existing split -- "
-                    "a half-rebuilt split is indistinguishable from a good one. "
-                    "Delete it or pass --force."
-                )
+    _refuse_existing_splits(a.out, plan, a.force)
 
-    indoor = sets is not None
     manifest = {
         "classes": list(a.classes),
         "min_fraction": a.min_fraction,
-        "indoor_filter": indoor,
+        "indoor_filter": sets is not None,
         "splits": {},
     }
     for src_split, dst_split in plan:
@@ -253,36 +303,17 @@ def main(argv=None) -> int:
         files, keep, per_class, dropped = _select(
             ann_dir, wanted, a.min_fraction, a.workers, sets
         )
-        out_img = a.out / "images" / dst_split
-        out_ann = a.out / "annotations" / dst_split
-        out_img.mkdir(parents=True, exist_ok=True)
-        out_ann.mkdir(parents=True, exist_ok=True)
-
-        linked, missing = 0, []
-        for name in keep:
-            jpg = img_dir / (Path(name).stem + ".jpg")
-            if not jpg.exists():
-                missing.append(name)
-                continue
-            _link(jpg, out_img / jpg.name)
-            _link(ann_dir / name, out_ann / name)
-            linked += 1
-
-        # Never report a filtered count as if it were the whole set.
-        print(
-            f"[{src_split} -> {dst_split}] scanned {len(files):,}, "
-            f"kept {len(keep):,}, linked {linked:,}"
+        named = {by_value[v]: n for v, n in per_class.items()}
+        linked, missing = _link_split(
+            keep,
+            img_dir,
+            ann_dir,
+            a.out / "images" / dst_split,
+            a.out / "annotations" / dst_split,
         )
-        if dropped:
-            print(
-                f"    dropped {dropped:,} that carried the classes but were not indoor scenes"
-            )
-        for v, n in sorted(per_class.items(), key=lambda kv: -kv[1]):
-            print(f"    {by_value[v]:14} {n:>7,}")
-        if missing:
-            print(
-                f"    !! {len(missing)} annotations had no image in {img_dir} and were skipped"
-            )
+        _report_split(
+            src_split, dst_split, files, keep, linked, dropped, missing, img_dir, named
+        )
         manifest["splits"][dst_split] = {
             "source": src_split,
             "scanned": len(files),
@@ -290,7 +321,7 @@ def main(argv=None) -> int:
             "linked": linked,
             "missing_images": len(missing),
             "dropped_not_indoor": dropped,
-            "per_class": {by_value[v]: n for v, n in per_class.items()},
+            "per_class": named,
         }
 
     (a.out / "manifest.json").write_text(json.dumps(manifest, indent=2))
