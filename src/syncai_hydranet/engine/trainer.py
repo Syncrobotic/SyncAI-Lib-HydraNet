@@ -193,6 +193,113 @@ def _targets_to_device(targets: dict, device) -> dict:
     return out
 
 
+def _build_datasets(dcfg, input_size):
+    """Every dataset in the config, split into what trains and what selects.
+
+    Returns `(train_sets, val_sets, names, ratios, val_names)`. Kept as a function
+    returning values rather than a method assigning attributes, so the order the
+    constructor does things in stays visible where it matters -- the loaders below need
+    these, and the step count needs the loaders.
+    """
+    lb = bool(dcfg.get("letterbox", False))
+    aug = dcfg.get("augment")
+    train_sets, val_sets, names, ratios, val_names = [], [], [], [], []
+    for ds in dcfg["datasets"]:
+        train_sets.append(build_dataset(ds, input_size, "train", letterbox=lb, augment=aug))
+        # A dataset may contribute training signal without joining checkpoint selection:
+        # omit `split_val` and it is trained on but never validated on.
+        #
+        # This is not a convenience. The evaluator accumulates one confusion matrix per
+        # head across every val set, so anything listed here lands in the number that
+        # picks best.pt -- and on 2026-08-14 eight pseudo-labelled frames were enough to
+        # read `display_fixture` 0.4224 against a 0.3612 baseline, which meant nothing
+        # because the model was being scored against its own predecessor. A second
+        # labelled domain is worth far more as a split nothing selects on than as
+        # another voice in the selection.
+        if ds.get("split_val"):
+            # Validation never augments, so it takes no augment argument.
+            val_sets.append(build_dataset(ds, input_size, "val", letterbox=lb))
+            val_names.append(ds["name"])
+        names.append(ds["name"])
+        ratios.append(float(ds.get("sample_ratio", 1.0)))
+    if not val_sets:
+        raise ValueError(
+            "no dataset declares split_val, so nothing can select a checkpoint; "
+            "at least one is required"
+        )
+    return train_sets, val_sets, names, ratios, val_names
+
+
+def _resolve_amp(tcfg, device):
+    """Returns `(enabled, dtype, scaler)`, refusing a dtype this device cannot do."""
+    amp = bool(tcfg.get("amp", True)) and supports_amp(device)
+    # bfloat16, not float16, because that is what every run this project has produced
+    # was actually trained in -- all of them passing it on the command line while the
+    # default here said otherwise.
+    amp_dtype = resolve_amp_dtype(str(tcfg.get("amp_dtype", "bfloat16")))
+    if amp and amp_dtype is torch.bfloat16 and not supports_bfloat16(device):
+        raise ValueError(
+            "train.amp_dtype=bfloat16 needs an Ampere-or-newer CUDA device; this "
+            f"one ({torch.cuda.get_device_name(device)}) does not support it. "
+            "Set train.amp_dtype=float16 explicitly -- no run in this project has "
+            "used fp16, so treat its first results as unvalidated."
+        )
+    return amp, amp_dtype, torch.amp.GradScaler(enabled=needs_grad_scaler(amp, amp_dtype))
+
+
+def _make_ema(model, tcfg, total_iters: int, logger):
+    """The EMA copy validation will run on, or None, plus the warning it may deserve."""
+    if not tcfg.get("ema", True):
+        return None
+    decay = float(tcfg.get("ema_decay", 0.9998))
+    warmup = int(tcfg.get("ema_warmup_steps", 2000))
+    ema = ModelEMA(model, decay, warmup)
+    # The ramp makes this rare rather than routine, but a run shorter than the ramp
+    # itself can still validate on weights that are mostly noise, and that failure looks
+    # exactly like a model that did not learn.
+    residual = ema.residual_init_fraction(total_iters)
+    if residual > 0.05:
+        logger.warning(
+            f"EMA warning: {total_iters} optimizer steps at decay={decay} "
+            f"(warmup {warmup}) leave {residual:.0%} of the random "
+            f"initialisation in the EMA weights used for validation. Scores "
+            f"will be understated. Lower train.ema_warmup_steps or set "
+            f"train.ema=false for runs this short."
+        )
+    return ema
+
+
+def _open_tensorboard(out_dir: Path):
+    """A SummaryWriter under `out_dir/tb`, or None if tensorboard is not importable.
+
+    Best-effort on purpose: curves are worth having and never worth failing a run over,
+    and `Trainer._log_images` and `_log_task_weights` both check for None.
+    """
+    try:
+        from torch.utils.tensorboard import SummaryWriter
+
+        return SummaryWriter(str(out_dir / "tb"))
+    except Exception:
+        return None
+
+
+def _log_code_version(git: dict, out_dir: Path, logger) -> None:
+    """Say which commit produced this run, or why that cannot be said.
+
+    Datasets live outside git and checkpoints outlive branches, so "which code produced
+    this" has to be answered at write time or not at all.
+    """
+    if not git.get("available"):
+        logger.warning("not a git checkout: this run's code version is unrecorded")
+    elif git["dirty"]:
+        logger.warning(
+            f"working tree is dirty at {git['commit'][:8]}; the exact code is only "
+            f"recoverable via {out_dir / 'uncommitted.patch'}"
+        )
+    else:
+        logger.info(f"code version: {git['commit'][:8]} ({git['branch']})")
+
+
 class Trainer:
     def __init__(self, cfg, resuming: bool = False):
         self.cfg = cfg
@@ -231,33 +338,7 @@ class Trainer:
         dcfg = cfg["data"]
         input_size = dcfg["input_size"]
 
-        lb = bool(dcfg.get("letterbox", False))
-        aug = dcfg.get("augment")
-        train_sets, val_sets, names, ratios = [], [], [], []
-        val_names = []
-        for ds in dcfg["datasets"]:
-            train_sets.append(build_dataset(ds, input_size, "train", letterbox=lb, augment=aug))
-            # A dataset may contribute training signal without joining checkpoint
-            # selection: omit `split_val` and it is trained on but never validated on.
-            #
-            # This is not a convenience. The evaluator accumulates one confusion matrix
-            # per head across every val set, so anything listed here lands in the number
-            # that picks best.pt -- and on 2026-08-14 eight pseudo-labelled frames were
-            # enough to read `display_fixture` 0.4224 against a 0.3612 baseline, which
-            # meant nothing because the model was being scored against its own
-            # predecessor. A second labelled domain is worth far more as a split nothing
-            # selects on than as another voice in the selection.
-            if ds.get("split_val"):
-                # Validation never augments, so it takes no augment argument.
-                val_sets.append(build_dataset(ds, input_size, "val", letterbox=lb))
-                val_names.append(ds["name"])
-            names.append(ds["name"])
-            ratios.append(float(ds.get("sample_ratio", 1.0)))
-        if not val_sets:
-            raise ValueError(
-                "no dataset declares split_val, so nothing can select a checkpoint; "
-                "at least one is required"
-            )
+        train_sets, val_sets, names, ratios, val_names = _build_datasets(dcfg, input_size)
         self.train_loader = MultiTaskLoader(
             train_sets,
             names,
@@ -298,19 +379,7 @@ class Trainer:
             self.optimizer, int(tcfg.get("warmup_iters", 500)), total_iters
         )
 
-        self.amp = bool(tcfg.get("amp", True)) and supports_amp(self.device)
-        # bfloat16, not float16, because that is what every run this project has
-        # produced was actually trained in -- all of them passing it on the command
-        # line while the default here said otherwise.
-        self.amp_dtype = resolve_amp_dtype(str(tcfg.get("amp_dtype", "bfloat16")))
-        if self.amp and self.amp_dtype is torch.bfloat16 and not supports_bfloat16(self.device):
-            raise ValueError(
-                "train.amp_dtype=bfloat16 needs an Ampere-or-newer CUDA device; this "
-                f"one ({torch.cuda.get_device_name(self.device)}) does not support it. "
-                "Set train.amp_dtype=float16 explicitly -- no run in this project has "
-                "used fp16, so treat its first results as unvalidated."
-            )
-        self.scaler = torch.amp.GradScaler(enabled=needs_grad_scaler(self.amp, self.amp_dtype))
+        self.amp, self.amp_dtype, self.scaler = _resolve_amp(tcfg, self.device)
         self.grad_clip = float(tcfg.get("grad_clip", 0.0))
         if self.accum_steps > 1:
             self.logger.info(
@@ -322,24 +391,7 @@ class Trainer:
         if self.amp:
             self.logger.info(f"mixed precision: {self.amp_dtype}")
 
-        ema_decay = float(tcfg.get("ema_decay", 0.9998))
-        ema_warmup = int(tcfg.get("ema_warmup_steps", 2000))
-        self.ema = (
-            ModelEMA(self.model, ema_decay, ema_warmup) if tcfg.get("ema", True) else None
-        )
-        if self.ema:
-            # The ramp makes this rare rather than routine, but a run shorter than the
-            # ramp itself can still validate on weights that are mostly noise, and that
-            # failure looks exactly like a model that did not learn.
-            residual = self.ema.residual_init_fraction(total_iters)
-            if residual > 0.05:
-                self.logger.warning(
-                    f"EMA warning: {total_iters} optimizer steps at decay={ema_decay} "
-                    f"(warmup {ema_warmup}) leave {residual:.0%} of the random "
-                    f"initialisation in the EMA weights used for validation. Scores "
-                    f"will be understated. Lower train.ema_warmup_steps or set "
-                    f"train.ema=false for runs this short."
-                )
+        self.ema = _make_ema(self.model, tcfg, total_iters, self.logger)
 
         # torch.compile, held as a *separate handle* rather than replacing self.model.
         #
@@ -369,12 +421,7 @@ class Trainer:
         # floor is not compensated by a good mAP on chairs.
         self.primary_metric = str(tcfg.get("primary_metric", DEFAULT_PRIMARY_METRIC))
         self.logger.info(f"model selection: primary_metric={self.primary_metric}")
-        try:
-            from torch.utils.tensorboard import SummaryWriter
-
-            self.tb = SummaryWriter(str(self.out_dir / "tb"))
-        except Exception:
-            self.tb = None
+        self.tb = _open_tensorboard(self.out_dir)
         self.global_step = 0
         self.best_metric = -1.0
         self.start_epoch = 0  # last completed epoch; --resume advances it
@@ -401,16 +448,7 @@ class Trainer:
                 for n, t, ds in zip(names, train_sets, dcfg["datasets"], strict=True)
             ],
         )
-        git = meta["git"]
-        if not git.get("available"):
-            self.logger.warning("not a git checkout: this run's code version is unrecorded")
-        elif git["dirty"]:
-            self.logger.warning(
-                f"working tree is dirty at {git['commit'][:8]}; the exact code is only "
-                f"recoverable via {self.out_dir / 'uncommitted.patch'}"
-            )
-        else:
-            self.logger.info(f"code version: {git['commit'][:8]} ({git['branch']})")
+        _log_code_version(meta["git"], self.out_dir, self.logger)
 
     # ------------------------------------------------------------------
     def train(self):
