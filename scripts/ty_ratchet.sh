@@ -20,7 +20,7 @@
 set -euo pipefail
 
 # Lower this when you fix things. Raising it needs a reason in the PR body.
-BASELINE="${TY_BASELINE:-17}"
+BASELINE="${TY_BASELINE:-15}"
 
 TARGET="${1:-src/}"
 RUNNER=(uv run ty check "$TARGET" --output-format=concise)

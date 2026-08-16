@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
@@ -108,122 +110,79 @@ def build_val_loaders(val_sets, cfg, device=None) -> list[tuple[str, DataLoader]
 
 
 @torch.no_grad()
-def evaluate(
-    model, val_sets, cfg, device, logger, samples: dict | None = None, loaders=None
-) -> dict:
-    """Return a metrics dict.
+def _update_seg_heads(model, out, batch, sup, device, seg_cms, samples, images) -> dict:
+    """Fold one batch into the per-head confusion matrices.
 
-    If ``samples`` is a dict it is filled with the first validation batch per
-    segmentation head as ``{head: (images, preds, targets)}``, which the trainer turns
-    into TensorBoard comparison grids.
-
-    ``loaders`` lets a caller that validates repeatedly build them once; without it they
-    are built here, which is right for a one-shot ``hydranet-eval``.
+    Returns `{head: (pred, target)}` for the heads this batch supervised, which the
+    disagreement check needs and which the caller cannot recompute without redoing the
+    argmax.
     """
-    # Restore whatever mode the caller had it in. Training passes the EMA copy, which
-    # lives in eval mode; leaving it in train mode would let a stray forward pass move
-    # its BatchNorm statistics, and hydranet-eval would return a model set to train.
-    was_training = model.training
-    model.eval()
-    metrics: dict[str, float] = {}
-    seg_cms: dict[str, ConfusionMatrix] = {}
-    # Detections are kept per dataset. They used to share one list and one `coco_gt`
-    # that each detection dataset overwrote, so with two of them every box was scored
-    # against the last one's ground truth -- a wrong mAP, silently, and only when
-    # someone added a second detection source.
-    det_results: dict[str, list] = {}
-    coco_gts: dict[str, object] = {}
-    # The categories each dataset actually trains on, so mAP is scored over those and
-    # not over all 80 with the untrained ones counted as misses.
-    det_cat_ids: dict[str, list] = {}
-    disagree = disagree_total = 0
-    if loaders is None:
-        loaders = build_val_loaders(val_sets, cfg, device)
+    seg_preds: dict[str, tuple] = {}
+    for head in model.seg_heads:
+        if head not in sup or head not in batch["targets"]:
+            continue
+        if head not in seg_cms:
+            seg_cms[head] = ConfusionMatrix(model.seg_heads[head].num_classes)
+        pred = out[head].argmax(dim=1)
+        tgt = batch["targets"][head].to(device)
+        seg_cms[head].update(pred, tgt)
+        seg_preds[head] = (pred, tgt)
+        if samples is not None and head not in samples:
+            k = min(4, images.shape[0])
+            samples[head] = (images[:k].cpu(), pred[:k].cpu(), tgt[:k].cpu())
+    return seg_preds
 
-    # Read off the model rather than the config: a checkpoint does not record its
-    # memory format, so a caller who loaded weights into an NCHW module gets NCHW here
-    # and one training in NHWC gets NHWC, without either having to say so.
-    memory_format = model_memory_format(model)
 
-    for (name, loader), (_, ds) in zip(loaders, val_sets, strict=True):
-        sup = ds.supervises
-        trav_map = getattr(getattr(ds, "scheme", None), "trav", None)
-        for batch in loader:
-            images = batch["image"].to(device).contiguous(memory_format=memory_format)
-            out = model(images)
+def _collect_detections(model, out, batch, ds, images, results_for_ds) -> None:
+    """Decode one batch's boxes and append them in COCO result form."""
+    dets = model.det_head.decode(
+        out["det_cls"],
+        out["det_reg"],
+        out["det_ctr"],
+        score_thr=SCORE_THR_EVAL,
+        nms_thr=0.6,
+        img_size=images.shape[-2:],
+    )
+    # Map boxes back to original image coordinates for COCOeval. The dataset records the
+    # exact scale and padding it applied; deriving it here from the frame size would be
+    # wrong for every letterboxed image, because the padding is not part of the original
+    # frame.
+    for img_id, det, geom in zip(batch["image_ids"], dets, batch["geoms"], strict=True):
+        boxes = invert_geom(det["boxes"].cpu().numpy(), geom)
+        for box, score, label in zip(
+            boxes, det["scores"].cpu().numpy(), det["labels"].cpu().numpy(), strict=True
+        ):
+            results_for_ds.append(
+                {
+                    "image_id": int(img_id),
+                    "category_id": ds.label_to_cat[int(label)],
+                    "bbox": [
+                        float(box[0]),
+                        float(box[1]),
+                        float(box[2] - box[0]),
+                        float(box[3] - box[1]),
+                    ],
+                    "score": float(score),
+                }
+            )
 
-            seg_preds: dict[str, torch.Tensor] = {}
-            for head in model.seg_heads:
-                if head in sup and head in batch["targets"]:
-                    if head not in seg_cms:
-                        seg_cms[head] = ConfusionMatrix(model.seg_heads[head].num_classes)
-                    pred = out[head].argmax(dim=1)
-                    tgt = batch["targets"][head].to(device)
-                    seg_cms[head].update(pred, tgt)
-                    seg_preds[head] = (pred, tgt)
-                    if samples is not None and head not in samples:
-                        k = min(4, images.shape[0])
-                        samples[head] = (images[:k].cpu(), pred[:k].cpu(), tgt[:k].cpu())
 
-            if trav_map and {"traversability", "terrain"} <= set(seg_preds):
-                trav_pred, trav_tgt = seg_preds["traversability"]
-                d, n = head_disagreement(
-                    trav_pred, seg_preds["terrain"][0], trav_map, trav_tgt != 255
-                )
-                disagree += d
-                disagree_total += n
+def _seg_metrics(seg_cms, cfg, logger) -> dict:
+    """mIoU per head, plus every class separately.
 
-            if model.det_head is not None and model.det_head_name in sup:
-                coco_gts[name] = ds.coco
-                det_cat_ids[name] = list(getattr(ds, "score_cat_ids", None) or [])
-                results_for_ds = det_results.setdefault(name, [])
-                dets = model.det_head.decode(
-                    out["det_cls"],
-                    out["det_reg"],
-                    out["det_ctr"],
-                    score_thr=SCORE_THR_EVAL,
-                    nms_thr=0.6,
-                    img_size=images.shape[-2:],
-                )
-                # Map boxes back to original image coordinates for COCOeval. The dataset
-                # records the exact scale and padding it applied; deriving it here from
-                # the frame size would be wrong for every letterboxed image, because the
-                # padding is not part of the original frame.
-                for img_id, det, geom in zip(
-                    batch["image_ids"], dets, batch["geoms"], strict=True
-                ):
-                    boxes = invert_geom(det["boxes"].cpu().numpy(), geom)
-                    for box, score, label in zip(
-                        boxes,
-                        det["scores"].cpu().numpy(),
-                        det["labels"].cpu().numpy(),
-                        strict=True,
-                    ):
-                        results_for_ds.append(
-                            {
-                                "image_id": int(img_id),
-                                "category_id": ds.label_to_cat[int(label)],
-                                "bbox": [
-                                    float(box[0]),
-                                    float(box[1]),
-                                    float(box[2] - box[0]),
-                                    float(box[3] - box[1]),
-                                ],
-                                "score": float(score),
-                            }
-                        )
-
+    The per-class breakdown is not detail for its own sake: the safety-critical indoor
+    classes (glass, stairs) are tiny, so a mean alone hides the fact that they never
+    converged.
+    """
     trav_names = ("blocked", "caution", "go")
     terrain_names = tuple(cfg["data"].get("terrain_classes", []))
-
+    metrics: dict[str, float] = {}
     for head, cm in seg_cms.items():
         miou, per_class = cm.miou()
         metrics[f"{head}_mIoU"] = miou
         # How many classes that mean covers. Without it, a run on richer data looks like
         # a regression when it is really averaging over more, harder classes.
         metrics[f"{head}_mIoU_classes"] = float(np.isfinite(per_class).sum())
-        # Log every class separately: the safety-critical indoor classes (glass,
-        # stairs) are tiny, so mIoU alone hides the fact that they never converged.
         names = trav_names if head == "traversability" else terrain_names
         for i, iou in enumerate(per_class):
             if np.isfinite(iou):
@@ -233,7 +192,12 @@ def evaluate(
             f"[val] {head} mIoU = {miou:.4f} | per-class IoU = "
             + " ".join(f"{x:.3f}" if np.isfinite(x) else "-" for x in per_class)
         )
+    return metrics
 
+
+def _det_metrics(det_results, coco_gts: dict[str, Any], det_cat_ids, logger) -> dict:
+    """COCO mAP per detection dataset."""
+    metrics: dict[str, float] = {}
     for ds_name, results in det_results.items():
         if not results:
             continue
@@ -261,6 +225,77 @@ def evaluate(
         logger.info(
             f"[val] {ds_name} detection mAP = {ev.stats[0]:.4f}, mAP@50 = {ev.stats[1]:.4f}"
         )
+    return metrics
+
+
+def evaluate(
+    model, val_sets, cfg, device, logger, samples: dict | None = None, loaders=None
+) -> dict:
+    """Return a metrics dict.
+
+    If ``samples`` is a dict it is filled with the first validation batch per
+    segmentation head as ``{head: (images, preds, targets)}``, which the trainer turns
+    into TensorBoard comparison grids.
+
+    ``loaders`` lets a caller that validates repeatedly build them once; without it they
+    are built here, which is right for a one-shot ``hydranet-eval``.
+    """
+    # Restore whatever mode the caller had it in. Training passes the EMA copy, which
+    # lives in eval mode; leaving it in train mode would let a stray forward pass move
+    # its BatchNorm statistics, and hydranet-eval would return a model set to train.
+    was_training = model.training
+    model.eval()
+    metrics: dict[str, float] = {}
+    seg_cms: dict[str, ConfusionMatrix] = {}
+    # Detections are kept per dataset. They used to share one list and one `coco_gt`
+    # that each detection dataset overwrote, so with two of them every box was scored
+    # against the last one's ground truth -- a wrong mAP, silently, and only when
+    # someone added a second detection source.
+    det_results: dict[str, list] = {}
+    # `Any`, not `object`: pycocotools ships no stubs, so the COCO handle genuinely has
+    # no type here. Declaring `object` claimed more than was known and made every
+    # `coco_gt.loadRes(...)` an error against a class nothing can describe.
+    coco_gts: dict[str, Any] = {}
+    # The categories each dataset actually trains on, so mAP is scored over those and
+    # not over all 80 with the untrained ones counted as misses.
+    det_cat_ids: dict[str, list] = {}
+    disagree = disagree_total = 0
+    if loaders is None:
+        loaders = build_val_loaders(val_sets, cfg, device)
+
+    # Read off the model rather than the config: a checkpoint does not record its
+    # memory format, so a caller who loaded weights into an NCHW module gets NCHW here
+    # and one training in NHWC gets NHWC, without either having to say so.
+    memory_format = model_memory_format(model)
+
+    for (name, loader), (_, ds) in zip(loaders, val_sets, strict=True):
+        sup = ds.supervises
+        trav_map = getattr(getattr(ds, "scheme", None), "trav", None)
+        for batch in loader:
+            images = batch["image"].to(device).contiguous(memory_format=memory_format)
+            out = model(images)
+
+            seg_preds = _update_seg_heads(
+                model, out, batch, sup, device, seg_cms, samples, images
+            )
+
+            if trav_map and {"traversability", "terrain"} <= set(seg_preds):
+                trav_pred, trav_tgt = seg_preds["traversability"]
+                d, n = head_disagreement(
+                    trav_pred, seg_preds["terrain"][0], trav_map, trav_tgt != 255
+                )
+                disagree += d
+                disagree_total += n
+
+            if model.det_head is not None and model.det_head_name in sup:
+                coco_gts[name] = ds.coco
+                det_cat_ids[name] = list(getattr(ds, "score_cat_ids", None) or [])
+                _collect_detections(
+                    model, out, batch, ds, images, det_results.setdefault(name, [])
+                )
+
+    metrics.update(_seg_metrics(seg_cms, cfg, logger))
+    metrics.update(_det_metrics(det_results, coco_gts, det_cat_ids, logger))
 
     if disagree_total:
         frac = disagree / disagree_total
