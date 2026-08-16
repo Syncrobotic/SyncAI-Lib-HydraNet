@@ -34,6 +34,7 @@ import json
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -302,6 +303,114 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+@dataclass(frozen=True)
+class Renderer:
+    """The model and the per-run settings every frame needs, as one value.
+
+    These are fixed for a whole run and `compose` needs all of them for every frame.
+    Passing them individually is what kept both frame loops inside `main` -- there were
+    eight names to thread, so it was easier to leave the loop where they were already in
+    scope. Bundled, the loops can move out and be called from something that is not
+    argparse.
+    """
+
+    model: torch.nn.Module
+    device: torch.device | str
+    compose_kw: dict
+
+
+def build_renderer(
+    cfg: dict,
+    checkpoint: str,
+    weights: str,
+    *,
+    z_max: float,
+    pitch_deg: float,
+    camera_height: float,
+) -> Renderer:
+    """Load the model and settle everything that does not change between frames."""
+    device = pick_device(cfg.get("device"))
+    model = build_model(cfg).to(device).eval()
+    ckpt = load_checkpoint(checkpoint)
+    model.load_state_dict(select_weights(ckpt, weights))
+    terrain_classes = cfg["data"].get("terrain_classes")
+    n_terrain = cfg["model"]["heads"].get("terrain", {}).get("num_classes")
+    return Renderer(
+        model=model,
+        device=device,
+        compose_kw={
+            "size": cfg["data"]["input_size"],
+            "use_lb": bool(cfg["data"].get("letterbox", True)),
+            "palette": terrain_palette(terrain_classes, n_terrain),
+            "terrain_classes": terrain_classes,
+            "plane": GroundPlane(height=camera_height, pitch=np.radians(pitch_deg)),
+            "grid": BevGrid(z_max=z_max),
+        },
+    )
+
+
+def render_still(in_path: Path, renderer: Renderer, args) -> int:
+    """One image in, one panel and/or one JSON document out."""
+    out_img, payload = compose(
+        Image.open(in_path), renderer.model, renderer.device, args, **renderer.compose_kw
+    )
+    if args.output:
+        out_img.save(args.output)
+        print(f"wrote {args.output}")
+    if args.json:
+        Path(args.json).write_text(json.dumps(payload, indent=2) + "\n")
+        print(f"wrote {args.json} ({len(payload['objects'])} objects)")
+    return 0
+
+
+def render_video(in_path: Path, renderer: Renderer, args) -> int:
+    """Every sampled frame in, an encoded video and/or a JSONL stream out."""
+    for tool in ("ffmpeg", "ffprobe"):
+        if not shutil.which(tool):
+            sys.exit(f"{tool} not found. On macOS: brew install ffmpeg")
+    src_w, src_h, src_fps = probe(args.input)
+    print(f"{in_path.name}: {src_w}x{src_h} @ {src_fps:.1f} fps -> {args.fps} fps")
+
+    writer, n = None, 0
+    with contextlib.ExitStack() as stack:
+        jsonl = stack.enter_context(Path(args.json).open("w")) if args.json else None
+        try:
+            for frame in frames(args.input, src_w, src_h, args.fps):
+                out_img, payload = compose(
+                    Image.fromarray(frame),
+                    renderer.model,
+                    renderer.device,
+                    args,
+                    **renderer.compose_kw,
+                )
+                if jsonl is not None:
+                    record: SceneRecord = {**payload, "frame": n}
+                    jsonl.write(json.dumps(record) + "\n")
+                if args.output:
+                    if writer is None:
+                        writer = subprocess.Popen(
+                            encoder_argv(out_img.width, out_img.height, args),
+                            stdin=subprocess.PIPE,
+                        )
+                    # stdin=PIPE was requested just above, so the pipe exists; Popen
+                    # types it Optional because that argument is optional in general.
+                    sink = writer.stdin
+                    assert sink is not None
+                    sink.write(np.asarray(out_img).tobytes())
+                n += 1
+                if n % 25 == 0:
+                    print(f"  {n} frames", flush=True)
+                if args.max_frames and n >= args.max_frames:
+                    break
+        finally:
+            if writer is not None:
+                assert writer.stdin is not None
+                writer.stdin.close()
+                writer.wait()
+    print(f"wrote {args.output or args.json} ({n} frames)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.output is None and args.json is None:
@@ -320,75 +429,22 @@ def main(argv: list[str] | None = None) -> int:
             "keeps model.heads.traversability, or hydranet-infer-video for a plain "
             "terrain overlay."
         )
-    device = pick_device(cfg.get("device"))
-    model = build_model(cfg).to(device).eval()
-    ckpt = load_checkpoint(args.checkpoint)
-    model.load_state_dict(select_weights(ckpt, args.weights))
-    size = cfg["data"]["input_size"]
-    use_lb = bool(cfg["data"].get("letterbox", True))
-    terrain_classes = cfg["data"].get("terrain_classes")
-    n_terrain = cfg["model"]["heads"].get("terrain", {}).get("num_classes")
-    palette = terrain_palette(terrain_classes, n_terrain)
-
-    grid = BevGrid(z_max=args.range)
-    plane = GroundPlane(height=args.camera_height, pitch=np.radians(args.pitch))
-    kw = {
-        "size": size,
-        "use_lb": use_lb,
-        "palette": palette,
-        "terrain_classes": terrain_classes,
-        "plane": plane,
-        "grid": grid,
-    }
+    renderer = build_renderer(
+        cfg,
+        args.checkpoint,
+        args.weights,
+        z_max=args.range,
+        pitch_deg=args.pitch,
+        camera_height=args.camera_height,
+    )
     print(
         f"assumed camera: {args.camera_height:.2f} m high, {args.pitch:.0f} deg down, "
         f"{args.vfov:.0f} deg vfov -- the metric scale is only as good as these"
     )
-
     in_path = Path(args.input)
-    if in_path.suffix.lower() not in VIDEO_EXTS:
-        out_img, payload = compose(Image.open(in_path), model, device, args, **kw)
-        if args.output:
-            out_img.save(args.output)
-            print(f"wrote {args.output}")
-        if args.json:
-            Path(args.json).write_text(json.dumps(payload, indent=2) + "\n")
-            print(f"wrote {args.json} ({len(payload['objects'])} objects)")
-        return 0
-
-    for tool in ("ffmpeg", "ffprobe"):
-        if not shutil.which(tool):
-            sys.exit(f"{tool} not found. On macOS: brew install ffmpeg")
-    src_w, src_h, src_fps = probe(args.input)
-    print(f"{in_path.name}: {src_w}x{src_h} @ {src_fps:.1f} fps -> {args.fps} fps")
-
-    writer, n = None, 0
-    with contextlib.ExitStack() as stack:
-        jsonl = stack.enter_context(Path(args.json).open("w")) if args.json else None
-        try:
-            for frame in frames(args.input, src_w, src_h, args.fps):
-                out_img, payload = compose(Image.fromarray(frame), model, device, args, **kw)
-                if jsonl is not None:
-                    record: SceneRecord = {**payload, "frame": n}
-                    jsonl.write(json.dumps(record) + "\n")
-                if args.output:
-                    if writer is None:
-                        writer = subprocess.Popen(
-                            encoder_argv(out_img.width, out_img.height, args),
-                            stdin=subprocess.PIPE,
-                        )
-                    writer.stdin.write(np.asarray(out_img).tobytes())
-                n += 1
-                if n % 25 == 0:
-                    print(f"  {n} frames", flush=True)
-                if args.max_frames and n >= args.max_frames:
-                    break
-        finally:
-            if writer is not None:
-                writer.stdin.close()
-                writer.wait()
-    print(f"wrote {args.output or args.json} ({n} frames)")
-    return 0
+    if in_path.suffix.lower() in VIDEO_EXTS:
+        return render_video(in_path, renderer, args)
+    return render_still(in_path, renderer, args)
 
 
 if __name__ == "__main__":

@@ -151,6 +151,72 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def render_frame(frame, model, device, args, *, size, terrain_colors, name_of) -> Image.Image:
+    """One decoded frame -> the panel to encode.
+
+    Split out of `main`'s loop because everything interesting happens here: the model
+    call, both overlays, the boxes and the `--layout` choice. Left inline it was reachable
+    only by running ffmpeg against a real video, so the layout rules -- including the
+    no-traversability-head branch below -- had no way to be tested at all.
+    """
+    x, lb, region = preprocess(Image.fromarray(frame), size)
+    x = x.to(device)
+    with torch.no_grad():
+        res = model.predict(x, score_thr=args.score_thr, nms_thr=args.nms_thr)
+
+    x0, y0, cw, ch = region
+    terr = crop_box(res["terrain"][0].cpu().numpy(), region)
+    content = lb.crop((x0, y0, x0 + cw, y0 + ch))
+
+    vis_terr = overlay(content, terr, terrain_colors)
+    # See infer_image: traversability is optional, because it is a lookup on terrain
+    # and the object-segmentation configs drop the head entirely.
+    vis_trav = (
+        overlay(content, crop_box(res["traversability"][0].cpu().numpy(), region), TRAV_COLORS)
+        if "traversability" in res
+        else None
+    )
+    box_panel = vis_trav if vis_trav is not None else vis_terr
+
+    det = res.get("detection", [{}])[0]
+    if det and len(det.get("boxes", [])):
+        draw = ImageDraw.Draw(box_panel)
+        for box, score, label in zip(
+            det["boxes"].cpu().numpy(),
+            det["scores"].cpu().numpy(),
+            det["labels"].cpu().numpy(),
+            strict=True,
+        ):
+            b = [box[0] - x0, box[1] - y0, box[2] - x0, box[3] - y0]
+            if b[2] <= 0 or b[3] <= 0 or b[0] >= cw or b[1] >= ch:
+                continue
+            draw.rectangle(b, outline=(255, 255, 255), width=2)
+            draw.text(
+                (b[0] + 2, b[1] + 2),
+                f"{name_of(int(label))} {score:.2f}",
+                fill=(255, 255, 255),
+            )
+
+    if vis_trav is None:
+        # Nothing to put in the left panel and nothing to select with --layout.
+        # Checked here rather than at argument-parse time because whether the head
+        # exists is a property of the checkpoint's config, not of the command line.
+        if args.layout == "trav":
+            sys.exit(
+                "--layout trav, but this config has no traversability head "
+                "(model.heads.traversability). Use --layout terrain."
+            )
+        return vis_terr
+    if args.layout == "trav":
+        return vis_trav
+    if args.layout == "terrain":
+        return vis_terr
+    out_img = Image.new("RGB", (cw * 2, ch))
+    out_img.paste(vis_trav, (0, 0))
+    out_img.paste(vis_terr, (cw, 0))
+    return out_img
+
+
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     for tool in ("ffmpeg", "ffprobe"):
@@ -184,65 +250,15 @@ def main(argv: list[str] | None = None) -> None:
     n_done, t0 = 0, time.time()
     sample_fps = args.fps if args.fps and args.fps < src_fps else None
     for frame in frames(args.input, src_w, src_h, sample_fps):
-        x, lb, region = preprocess(Image.fromarray(frame), size)
-        x = x.to(device)
-        with torch.no_grad():
-            res = model.predict(x, score_thr=args.score_thr, nms_thr=args.nms_thr)
-
-        x0, y0, cw, ch = region
-        terr = crop_box(res["terrain"][0].cpu().numpy(), region)
-        content = lb.crop((x0, y0, x0 + cw, y0 + ch))
-
-        vis_terr = overlay(content, terr, terrain_colors)
-        # See infer_image: traversability is optional, because it is a lookup on terrain
-        # and the object-segmentation configs drop the head entirely.
-        vis_trav = (
-            overlay(
-                content, crop_box(res["traversability"][0].cpu().numpy(), region), TRAV_COLORS
-            )
-            if "traversability" in res
-            else None
+        out_img = render_frame(
+            frame,
+            model,
+            device,
+            args,
+            size=size,
+            terrain_colors=terrain_colors,
+            name_of=name_of,
         )
-        box_panel = vis_trav if vis_trav is not None else vis_terr
-
-        det = res.get("detection", [{}])[0]
-        if det and len(det.get("boxes", [])):
-            draw = ImageDraw.Draw(box_panel)
-            for box, score, label in zip(
-                det["boxes"].cpu().numpy(),
-                det["scores"].cpu().numpy(),
-                det["labels"].cpu().numpy(),
-                strict=True,
-            ):
-                b = [box[0] - x0, box[1] - y0, box[2] - x0, box[3] - y0]
-                if b[2] <= 0 or b[3] <= 0 or b[0] >= cw or b[1] >= ch:
-                    continue
-                draw.rectangle(b, outline=(255, 255, 255), width=2)
-                draw.text(
-                    (b[0] + 2, b[1] + 2),
-                    f"{name_of(int(label))} {score:.2f}",
-                    fill=(255, 255, 255),
-                )
-
-        if vis_trav is None:
-            # Nothing to put in the left panel and nothing to select with --layout.
-            # Checked here rather than at argument-parse time because whether the head
-            # exists is a property of the checkpoint's config, not of the command line.
-            if args.layout == "trav":
-                sys.exit(
-                    "--layout trav, but this config has no traversability head "
-                    "(model.heads.traversability). Use --layout terrain."
-                )
-            out_img = vis_terr
-        elif args.layout == "trav":
-            out_img = vis_trav
-        elif args.layout == "terrain":
-            out_img = vis_terr
-        else:
-            out_img = Image.new("RGB", (cw * 2, ch))
-            out_img.paste(vis_trav, (0, 0))
-            out_img.paste(vis_terr, (cw, 0))
-
         if writer is None:
             ow, oh = out_img.size
             ow, oh = ow - ow % 2, oh - oh % 2  # H.264 requires even dimensions
