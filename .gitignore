@@ -28,6 +28,13 @@ runs/
 assets/*.mp4
 assets/*.mov
 
+# Site documents. Everything tracked under assets/ is a figure for the README or the
+# docs; the PDFs that land here are customer fixture drawings, named for the store and
+# the city they came from. Same second-line-of-defence reasoning as the credentials
+# block below -- `git add -A` in a hurry should not be able to publish a client's
+# floor plan. Use `git add -f` if a PDF ever genuinely belongs in the repo.
+assets/*.pdf
+
 # Editors / OS
 .vscode/
 .idea/
