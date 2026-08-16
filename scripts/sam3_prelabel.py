@@ -97,7 +97,26 @@ IGNORE = 255
 CONTESTED = -1
 # Below this an "instance" is a speck: SAM 3 emits a handful of stray pixels on a
 # confident prompt, and a 3-pixel box trains a detector to fire on noise.
-MIN_BOX_PIXELS = 40  # a pixel two classes on one layer both claim; resolved to IGNORE
+MIN_BOX_PIXELS = 40
+
+# And above this it is not an instance either. `product box` occasionally fires on a
+# whole display counter rather than on the items sitting along it -- the right idea at
+# the wrong scale, and the resulting box teaches a detector that a counter is stock.
+#
+# 2% of the frame, chosen from the distribution rather than picked. Measured over 137
+# `boxed_stock` and 34 `device` boxes on Taichung-cam01:
+#
+#     boxed_stock   median 0.256%   p90 0.560%   p98 0.78%   p99 3.53%   max 22.6%
+#     device        median 0.073%   p90 0.493%   p98 1.04%   p99 1.06%   max  1.1%
+#
+# There is a 4.5x gap between p98 and p99 on `boxed_stock` and nothing in it. A cut
+# anywhere in that gap removes the two bad boxes and no good ones; 2% sits in the
+# middle of it and leaves `device` -- whose largest real instance is 1.1% -- untouched.
+#
+# One camera, so it is a default rather than a constant: a shop whose merchandise is
+# genuinely large in frame (an iMac on a near table) wants --max-box-frac raised, and
+# the summary prints what the cut discarded so that case is visible rather than silent.
+MAX_BOX_FRAC = 0.02  # a pixel two classes on one layer both claim; resolved to IGNORE
 MODEL_ID = "facebook/sam3"
 
 
@@ -281,6 +300,7 @@ def frame_boxes(proc, model, frame: np.ndarray, det_classes, args) -> list[dict]
     )
     sx, sy = img.width / probe_img.width, img.height / probe_img.height
     out: list[dict] = []
+    dropped: Counter = Counter()
     for cat_id, (name, prompts) in enumerate(det_classes, start=1):
         for prompt in prompts:
             for mask, score in segment(
@@ -293,6 +313,9 @@ def frame_boxes(proc, model, frame: np.ndarray, det_classes, args) -> list[dict]
                 y0, y1 = float(ys.min()) * sy, float(ys.max() + 1) * sy
                 if x1 - x0 < 2 or y1 - y0 < 2:
                     continue
+                if (x1 - x0) * (y1 - y0) > args.max_box_frac * img.width * img.height:
+                    dropped[name] += 1
+                    continue
                 out.append(
                     {
                         "category_id": cat_id,
@@ -304,7 +327,7 @@ def frame_boxes(proc, model, frame: np.ndarray, det_classes, args) -> list[dict]
                         "iscrowd": 0,
                     }
                 )
-    return _dedupe(out)
+    return _dedupe(out), dropped
 
 
 def _dedupe(boxes: list[dict], iou_thr: float = 0.55) -> list[dict]:
@@ -392,6 +415,15 @@ def build_parser() -> argparse.ArgumentParser:
         "which is the taxonomy that has a merchandise class",
     )
     ap.add_argument(
+        "--max-box-frac",
+        type=float,
+        default=MAX_BOX_FRAC,
+        metavar="FRACTION",
+        help="drop an instance box larger than this fraction of the frame. See "
+        "MAX_BOX_FRAC for the distribution it was cut from; the summary reports what "
+        "it discarded rather than dropping boxes silently",
+    )
+    ap.add_argument(
         "--include",
         action="append",
         default=[],
@@ -440,6 +472,7 @@ def main(argv: list[str] | None = None) -> int:
                 "Merchandise instances are defined for --scheme retail_objects."
             )
     box_totals: Counter = Counter()
+    oversize: Counter = Counter()
     coco = {
         "info": {
             "description": "SAM 3 merchandise pre-labels -- NOT ground truth",
@@ -551,7 +584,9 @@ def main(argv: list[str] | None = None) -> int:
                         "height": img.height,
                     }
                 )
-                for box in frame_boxes(proc, model, kept[picks[n]], det_classes, args):
+                found, drop = frame_boxes(proc, model, kept[picks[n]], det_classes, args)
+                oversize.update(drop)
+                for box in found:
                     box = dict(box, id=len(coco["annotations"]) + 1, image_id=image_id)
                     coco["annotations"].append(box)
                     box_totals[box["category"]] += 1
@@ -599,6 +634,12 @@ def main(argv: list[str] | None = None) -> int:
         for name, _ in det_classes:
             n = box_totals[name]
             print(f"  {name:<14} {n:>6} boxes  ({n / n_img:.1f}/frame)")
+        if sum(oversize.values()):
+            detail = ", ".join(f"{k} {v}" for k, v in sorted(oversize.items()))
+            print(
+                f"  dropped as oversize (>{100 * args.max_box_frac:.0f}% of frame): "
+                f"{detail}. Raise --max-box-frac if this shop's stock really is that big"
+            )
         if not coco["annotations"]:
             print("  FOUND NOTHING -- prompts, threshold, or footage?")
         manifest["boxes"] = {n: box_totals[n] for n, _ in det_classes}
