@@ -72,13 +72,14 @@ class BiFPNLayer(nn.Module):
 
     def forward(self, feats: list[torch.Tensor]) -> list[torch.Tensor]:
         n = self.num_levels
-        td = [None] * n
-        td[n - 1] = feats[n - 1]
+        # Seeded from `feats` rather than `[None] * n`: the top level of each pass is
+        # already its input (td[n-1] = feats[n-1], out[0] = td[0]) and every other slot
+        # is overwritten below, so the placeholder only ever held a type nobody wanted.
+        td = list(feats)
         for i in range(n - 2, -1, -1):
             up = F.interpolate(td[i + 1], size=feats[i].shape[-2:], mode="nearest")
             td[i] = self.td_conv[i](self.td_fuse[i]([feats[i], up]))
-        out = [None] * n
-        out[0] = td[0]
+        out = list(td)
         for i in range(1, n):
             down = F.max_pool2d(out[i - 1], 3, stride=2, padding=1)
             ins = [td[i], down] if i == n - 1 else [feats[i], td[i], down]
