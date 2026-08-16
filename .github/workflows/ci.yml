@@ -88,6 +88,12 @@ jobs:
   #
   # The suite runs in ~30 s, so it is not sharded. Revisit if it passes a few minutes;
   # the sibling Gateway repo's 4-way shard + merged-threshold pattern is the model.
+  #
+  # 3.13 is in the matrix because it is what the maintainer's venv actually runs, and a
+  # matrix that stops at 3.12 leaves the most-used version the least-tested one -- the
+  # wrong way round. `requires-python = ">=3.10"` already let it install; the classifier
+  # and this row are the project catching up to that. 3.11 is claimed but not tested,
+  # which is a pre-existing gap: add a row if it ever costs anything.
   test:
     name: Unit tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -95,7 +101,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.10', '3.12']
+        python-version: ['3.10', '3.12', '3.13']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
