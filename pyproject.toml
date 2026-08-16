@@ -96,6 +96,10 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.6",
     "pre-commit>=3.7",
+    # Pinned through uv.lock rather than run as `uv tool run ty`, because CI ratchets
+    # on the diagnostic count and a floating pre-1.0 checker would move that number on
+    # its own schedule. Dependabot bumps it; the count moving is then a reviewed event.
+    "ty>=0.0.72",
 ]
 
 [tool.hatch.version]
@@ -150,25 +154,40 @@ quote-style = "double"
 # kind. `ty` is the same vendor and the same speed class as ruff, so it costs one
 # tool rather than a new toolchain.
 #
-# Deliberately NOT wired into CI as a blocking gate yet. A first run reports 48
-# diagnostics, and the honest split is roughly: torch/PIL stub noise, three optional
-# imports that only exist under the `export` extra, and a handful of genuine
-# type-modelling weaknesses (`_decode_ann`'s `mapping` is two different dict shapes
-# selected by a string; `det_head`/`det_loss`/`det_head_name` are a coupled triple
-# nothing enforces). None is a live bug. Turning the gate red on all of them at once
-# is how a checker gets disabled again a week later.
+# Wired into CI as a RATCHET, not a pass/fail gate: the `types` job in ci.yml holds
+# src/ to a baseline count that may fall and never rise. Run it the same way locally:
+#     uv run ty check src/
 #
-# The useful setting is therefore: run it, keep the count from rising, fix the real
-# ones as the files are touched anyway.
-#     uv tool run ty check src/
+# src/ sits at 17, and the honest split is that most of it is not this project's code:
+# torch's own stubs (`Module.to(memory_format=...)` has no matching overload, `nn.init`
+# and `list.__init__` reject what torch itself hands them) and pycocotools, which ships
+# none. What is genuinely ours is `data/datasets.py` -- `__getitem__` returns a dict
+# where `Dataset` declares a single item, and `_decode_ann`'s `mapping` is two different
+# dict shapes selected by a string -- plus the numpy scalars `data/transforms.py` feeds
+# to `float()`. None is a live bug, which is why the whole set is not blocking; turning
+# the gate red on all of them at once is how a checker gets deleted a week later.
+# scripts/ and tests/ carry another ~23 and are outside the ratchet.
+#
+# The count was 45 before two passes over it:
+#   · PIL constants moved to their enum homes (`Image.Resampling.BILINEAR` over
+#     `Image.BILINEAR`). Pillow injects the flat aliases at import time with
+#     `setattr(module, ...)`, so they exist at runtime and are invisible to every
+#     static checker. The enum spelling is the documented one since 9.1, which the
+#     >=10.0 floor already guarantees, and `Image.Transform.PERSPECTIVE` /
+#     `Image.Transpose.FLIP_LEFT_RIGHT` were type errors under the flat name besides.
+#   · four annotations that were wrong rather than merely unproven: `bev.scene` was
+#     annotated `-> dict` while every caller unpacks the `(dict, ndarray)` it actually
+#     returns, the head `in_levels`/`strides` said `list[int]` over tuple defaults, and
+#     both multi-task weighters promised a Tensor while returning None for an empty
+#     `losses`. Those are the ones worth having a checker for.
 # ---------------------------------------------------------------------------
 [tool.ty.rules]
 # onnx, onnxruntime and onnxsim live in the `export` extra, so a base install cannot
 # resolve them and should not be told about it every run.
 unresolved-import = "ignore"
 
-[tool.ty.src]
-root = "./src"
+[tool.ty.environment]
+root = ["./src"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"

@@ -49,5 +49,5 @@ updates:
       - dependency-name: torchvision
     groups:
       dev-tooling:
-        patterns: [ruff, pytest, pytest-cov, pre-commit]
+        patterns: [ruff, pytest, pytest-cov, pre-commit, ty]
         update-types: [minor, patch]
