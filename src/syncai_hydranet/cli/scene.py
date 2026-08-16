@@ -274,6 +274,18 @@ def main(argv: list[str] | None = None) -> int:
         sys.exit("nothing to write: pass --output, --json, or both")
 
     cfg = load_config(args.config, args.set)
+    # Every panel this command draws starts from free space, and free space is the
+    # traversability head. Refuse here, naming the config key, rather than raising
+    # KeyError on the first frame after the model and the video are both loaded --
+    # configs/hydranet_retail_objects.yaml drops that head deliberately.
+    if "traversability" not in (cfg["model"]["heads"] or {}):
+        sys.exit(
+            f"{args.config} has no traversability head, and the scene panel is built "
+            "from free space: the floor polygon, the wall it raises at the boundary and "
+            "the ground projection of every box all start there. Use a config that "
+            "keeps model.heads.traversability, or hydranet-infer-video for a plain "
+            "terrain overlay."
+        )
     device = pick_device(cfg.get("device"))
     model = build_model(cfg).to(device).eval()
     ckpt = load_checkpoint(args.checkpoint)

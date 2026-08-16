@@ -209,6 +209,28 @@ was checked: across our 6,612 indoor frames that is 1 image of `floor_metal`, 0 
 Everything else — floor, wall, door, furniture, person — is adequately covered already.
 Annotating more of those is close to wasted effort.
 
+**Annotating for the object taxonomy instead?** The ranking above is for the robot: it
+orders classes by danger × how blind LiDAR is. The object taxonomy
+([RETAIL_OBJECTS.md](RETAIL_OBJECTS.md)) has no robot and no LiDAR, so nothing about it
+carries over, and the two priority lists barely overlap:
+
+1. **`column`** — zero examples and unrecoverable from anything already drawn, because
+   every site mask so far puts columns inside `wall`. Also the cheapest class in either
+   taxonomy: the cameras are fixed, so it is **one polygon per camera**, correct for
+   every frame that camera will ever produce. 41 cameras.
+2. **`product`** — zero examples, no public dataset, and no measurement yet of whether
+   SAM 3 can find it. The first batch is an experiment.
+3. `fixture` — has data, and needs a *review* rather than fresh drawing: the migration
+   merges `obstacle_furniture` and `display_fixture` pixel-exactly, so what arrives is
+   as good as those two classes were, which for `display_fixture` was IoU 0.336.
+
+`glass` leaves the list entirely — the object taxonomy folds it into `wall`, so its
+failure stops being a class-level hazard. The pixels are still wrong; they are now wrong
+inside a class rather than being their own class.
+
+    hydranet-annotation labels --scheme retail_objects --out cvat_objects.json
+    hydranet-annotation check <dataset> --scheme retail_objects
+
 For 4 and 5, ask whether the point cloud can **pre-label** them: detect the edges
 geometrically, project into the image, and correct a mask rather than draw one. The
 material classes above have no such shortcut, which is the second reason they come first.

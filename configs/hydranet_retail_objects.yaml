@@ -1,0 +1,163 @@
+# =============================================================================
+# SyncAI-Lib-HydraNet: retail *object* segmentation.
+#
+# Answers "what object is this pixel" -- person, floor, wall, column, fixture,
+# product -- where configs/hydranet_retail.yaml answers "can the robot step here".
+# Both are real deployments and neither replaces the other; see
+# src/syncai_hydranet/data/label_maps_retail_objects.py for why they cannot be one
+# taxonomy.
+#
+# What differs from hydranet_retail.yaml, and nothing else:
+#   1. no traversability head      it is a lookup on terrain, not a second signal
+#   2. terrain head width          7
+#   3. label_map                   ade20k_retail_objects / retail_objects_*
+#   4. primary_metric              terrain_mIoU -- there is no other head to select on
+#   5. batch 32 / lr 4.0e-4        no prior results to stay comparable with
+#
+# Built from an audit of the shipped checkpoint over 18 fixed-camera site clips and
+# 1,620 frames (runs/review_20260816/). The three findings that shaped it:
+#   * wall is 39.8% of every frame and the columns are inside it
+#   * fixtures arrive split across obstacle_furniture (17.6%) and display_fixture
+#     (10.7%) -- one Apple-store frame labels the podium one and the shelving the other
+#   * merchandise has no class in any taxonomy this project has had
+# =============================================================================
+_base_: _base/hydranet.yaml
+
+experiment: hydranet_retail_objects
+output_dir: runs/hydranet_retail_objects
+
+model:
+  heads:
+    # ------------------------------------------------------------------------
+    # The traversability head is REMOVED, and this is the one change here that is
+    # about the network rather than the labels.
+    #
+    # It was never a second supervision signal on segmentation data. `SegFolderDataset`
+    # builds its target by running the terrain mask through TERRAIN_TO_TRAV -- a lookup
+    # table, applied per pixel, with no new information in it. The 60-epoch retail run
+    # measured the consequence directly: head_disagreement 0.0091, i.e. the two heads
+    # already agree on 99.1% of pixels, because one is a deterministic function of the
+    # other and the model found that out.
+    #
+    # Under the traversability goal that redundancy still bought something: a head whose
+    # three classes are exactly the deployment question, exportable on its own, and the
+    # thing the robot reads. Under the object goal it buys nothing and costs a share of
+    # the trunk's gradient budget plus one more term for the uncertainty balancer to
+    # divide attention across.
+    #
+    # Nothing else needs changing to remove it: HydraNet builds heads from this dict, and
+    # heads are mutually independent by construction (models/hydranet.py, design rule 2).
+    # `null` deletes the key that _base/hydranet.yaml sets, rather than merging into it.
+    traversability: null
+
+    terrain:
+      num_classes: 7              # void floor wall column fixture product person
+      # dice_weight raised from the base's 0.5 to 1.5, for a different reason than the
+      # robot configs raise it. There it is because the dangerous classes are rare
+      # (glass, wet floor). Here it is because the class sizes are wildly uneven --
+      # wall and floor are 66% of the frame between them, and `column` and `product` are
+      # the two smallest and the two this taxonomy was built for. Cross-entropy averages
+      # over pixels and would spend the run polishing the floor.
+      loss: { ce_weight: 1.0, dice_weight: 1.5, ignore_index: 255 }
+
+    detection:
+      # Still all 80. The audit found this head is already the best merchandise
+      # localiser available: at score 0.05-0.15 it fires on boxed product as `book`
+      # (914 hits over 40 frames on Taichung-cam01, 1,683 on Kaohsiung-cam08), on
+      # accessories as `bottle`, and on demo units as `refrigerator` / `tv`. The boxes
+      # are in the right places and only the vocabulary is wrong, so the classes stay
+      # and data/product_vocab.py maps them to retail terms at inference.
+      num_classes: 80
+
+data:
+  letterbox: true
+
+  # Order defines the class id; matches label_maps_retail_objects.RETAIL_OBJECTS.
+  terrain_classes: [void, floor, wall, column, fixture, product, person]
+
+  datasets:
+    # Bootstrap for the trunk. Note this map is NOT the retail one with two ids moved:
+    # ADE20K's `table`, `cabinet` and `desk` are pulled INTO fixture here, having been
+    # deliberately withheld from display_fixture in the robot scheme. The reasoning
+    # inverts with the taxonomy and label_maps_retail_objects.py argues it out in full.
+    #
+    # It supplies five of the seven classes. `product` gets nothing from it -- no public
+    # segmentation dataset labels merchandise -- and `column` gets only ADE20K's id 43,
+    # which is architectural columns in atriums and lobbies rather than a shop's.
+    - name: ade20k
+      type: seg_folder
+      root: datasets/ADE20K
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: ade20k_retail_objects
+      supervises: [terrain]
+      sample_ratio: 1.0
+
+    # The site masks already drawn, read under the new taxonomy. This is what makes the
+    # SAM 3 consensus work carry over instead of being redone: obstacle_furniture and
+    # display_fixture both become `fixture`, which is the merge this whole config is for.
+    #
+    # Commented out until the paths are pointed at a real export, because the migration
+    # cannot supply `column` -- those masks put columns inside wall -- and a run with
+    # this as its only site source trains an empty channel. get_scheme() warns; the
+    # coverage table in `hydranet-annotation check` shows it as 0.00%; and both are
+    # easier to act on before the GPU hours than after.
+    # - name: site_migrated
+    #   type: seg_folder
+    #   root: datasets/retail_objects_migrated
+    #   split_train: train
+    #   split_val: val
+    #   label_map: retail_objects_migrated
+    #   supervises: [terrain]
+    #   sample_ratio: 3.0
+
+    # Freshly drawn columns and products. One polygon per fixed camera covers a column
+    # for every frame that camera will ever produce -- the same argument sam3_prompts.py
+    # already makes for the floor, and the reason `column` is cheap despite being new.
+    # - name: site_native
+    #   type: seg_folder
+    #   root: datasets/retail_objects_site
+    #   split_train: train
+    #   split_val: val
+    #   label_map: retail_objects_native
+    #   supervises: [terrain]
+    #   sample_ratio: 3.0
+
+    - name: coco
+      type: coco
+      root: datasets/coco
+      split_train: train2017
+      split_val: val2017
+      supervises: [detection]
+      # Unchanged at 0.1, and the sweep behind it (in hydranet_retail.yaml) still
+      # applies: every segmentation metric falls monotonically above this ratio.
+      #
+      # One caveat that does change here. That sweep's headline casualty was `glass`,
+      # which this taxonomy folds into `wall` -- so the specific class that made 0.3
+      # indefensible is no longer separately scored. The trade is still bad, just less
+      # dramatically so: re-measure before raising it rather than inheriting either
+      # verdict, and if detection has to be better, buy it with detection data.
+      sample_ratio: 0.1
+
+  workers: 8
+
+train:
+  # batch 32 with lr 4.0e-4: this project's own scaling rule, lr = batch_size x 1.25e-5.
+  #
+  # hydranet_retail.yaml stays at batch 8 because every number in RETAIL_SCOPE.md was
+  # measured there and a faster baseline that no longer compares to those tables is a
+  # bad trade. That constraint does not apply to this config -- it is a new taxonomy
+  # with no prior results to stay comparable with, so it starts at the measured
+  # throughput ceiling instead: 433.9 img/s at batch 32 against 233.5 at batch 8 on an
+  # RTX PRO 6000, and compute plateaus above 32 (48 buys nothing and costs 3.6 GiB).
+  batch_size: 32
+  lr: 4.0e-4
+  channels_last: true             # +26% from batch 16 up on this card
+
+  # There is no traversability head to select on. terrain_mIoU averages over seven
+  # classes of very different sizes, so it is a blunt instrument here -- once site data
+  # exists, select on the class that actually decides whether this model is useful:
+  #   primary_metric: IoU/terrain/05_product
+  #   primary_metric: IoU/terrain/03_column
+  primary_metric: terrain_mIoU

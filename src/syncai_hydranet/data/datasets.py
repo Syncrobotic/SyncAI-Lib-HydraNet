@@ -149,12 +149,17 @@ class SegFolderDataset(Dataset):
     def __getitem__(self, idx: int):
         img_path, ann_path = self.pairs[idx]
         terrain = self._decode_ann(ann_path)
-        trav_map = self.scheme.trav if self.scheme else None
-        trav = label_maps.terrain_to_traversability(terrain, trav_map)
-        s = Sample(
-            image=Image.open(img_path).convert("RGB"),
-            masks={"terrain": terrain, "traversability": trav},
-        )
+        masks = {"terrain": terrain}
+        # Only build the traversability target if some head is going to read it. It is a
+        # per-pixel lookup through the policy table plus a second mask carried through
+        # every augmentation and collated into every batch, and a config without that
+        # head (configs/hydranet_retail_objects.yaml) pays all of it for a tensor
+        # `compute_losses` then ignores. `supervises` is the declaration that decides,
+        # which keeps this consistent with what the trainer actually asks for.
+        if "traversability" in self.supervises:
+            trav_map = self.scheme.trav if self.scheme else None
+            masks["traversability"] = label_maps.terrain_to_traversability(terrain, trav_map)
+        s = Sample(image=Image.open(img_path).convert("RGB"), masks=masks)
         s = self.transform(s)
         return {"image": s["image"], "targets": dict(s["masks"]), "supervises": self.supervises}
 

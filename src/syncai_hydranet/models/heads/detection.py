@@ -66,16 +66,43 @@ def _tower(ch: int, n: int) -> nn.Sequential:
 SCORE_THR_EVAL = 0.05
 SCORE_THR_VIEW = 0.30
 
+# Fixed ceiling CCTV in a shop needs a third, and it is lower than either. Measured on
+# two site cameras, 40 frames each (runs/review_20260816/):
+#
+#     threshold   Taichung-cam01        Kaohsiung-cam08
+#       0.15       11.8 boxes/frame      10.0 boxes/frame
+#       0.25        3.4                   0.0
+#       0.30        ~2                    0.0
+#       0.35        1.6                   0.0
+#
+# Read the right-hand column. At the shipped viewing default this camera returns **no
+# detections at all** -- not few, none -- across an Apple store with a podium of
+# MacBooks, wall shelving of boxed stock and customers in frame. The whole distribution
+# sits below the cut, so nothing downstream can recover it and the frame looks like a
+# scene with nothing in it rather than like a threshold set too high.
+#
+# 0.20 is a compromise and is stated as one. It restores boxes on the dead cameras
+# without the ~10/frame that 0.15 produces, and it is a stopgap for a calibration
+# problem rather than a fix: scores are not comparable between these cameras, so one
+# global number cannot be right for both. The fix is per-class thresholds fitted to
+# hand-labelled site boxes, and this project has none yet -- ANNOTATION_SETUP.md ranks
+# that work and RETAIL_SCOPE.md s6 explains why the test split has to come first.
+#
+# Deliberately NOT the default for SCORE_THR_VIEW: 0.30 was chosen for the robot's
+# forward-facing camera, where a false box is a stop the robot did not need, and
+# nothing here re-measured that case.
+SCORE_THR_RETAIL = 0.20
+
 
 class FCOSHead(nn.Module):
     def __init__(
         self,
         in_channels: int,
         num_classes: int,
-        in_levels: list[int] = (0, 1, 2, 3, 4),
+        in_levels: Sequence[int] = (0, 1, 2, 3, 4),
         channels: int = 96,
         num_convs: int = 4,
-        strides: list[int] = (8, 16, 32, 64, 128),
+        strides: Sequence[int] = (8, 16, 32, 64, 128),
     ):
         super().__init__()
         self.in_levels = list(in_levels)

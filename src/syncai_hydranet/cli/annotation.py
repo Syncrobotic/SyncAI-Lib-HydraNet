@@ -43,6 +43,11 @@ from ..data.label_maps_retail import (
     RETAIL_TERRAIN,
     RETAIL_TERRAIN_TO_TRAV,
 )
+from ..data.label_maps_retail_objects import (
+    RETAIL_OBJECTS,
+    RETAIL_OBJECTS_NATIVE_ID,
+    RETAIL_OBJECTS_TO_TRAV,
+)
 from ..utils.visualize import terrain_palette
 
 IGNORE = 255
@@ -52,6 +57,13 @@ TRAV_NAMES = {0: "blocked", 1: "caution", 2: "go", IGNORE: "ignore"}
 # Confirmed annotate-only -- the full-vocabulary ADE20K does not supply these three.
 # `display_fixture` is retail-only and joins the list for the same reason: no public
 # dataset has shop fixtures, and ADE20K's tables are domestic.
+#
+# `column` and `product` join for the object taxonomy, and they are the two the coverage
+# table must flag loudest. `product` has no public source at all. `column` has one in
+# ADE20K (id 43) but **not** in any mask this project has already drawn: every site mask
+# so far was annotated under the retail 13, where a column is `wall`. Migrated data
+# therefore reports 0.00% for it while looking entirely healthy, which is exactly the
+# shape of the `wet_slippery` failure this list exists to make visible.
 PRIORITY = (
     "glass",
     "wet_slippery",
@@ -59,6 +71,8 @@ PRIORITY = (
     "threshold_ramp",
     "stairs",
     "display_fixture",
+    "column",
+    "product",
 )
 
 
@@ -82,6 +96,13 @@ class Scheme:
 SCHEMES = {
     "indoor": Scheme("indoor", INDOOR_TERRAIN, INDOOR_TERRAIN_TO_TRAV, INDOOR_NATIVE_ID),
     "retail": Scheme("retail", RETAIL_TERRAIN, RETAIL_TERRAIN_TO_TRAV, RETAIL_NATIVE_ID),
+    # The object taxonomy: seven classes, for "what is this" rather than "can the robot
+    # step here". An annotator drawing a shop under `retail` produces no `column` and no
+    # `product` at all -- the same failure the class docstring above describes for
+    # indoor-vs-retail, one taxonomy further on.
+    "retail_objects": Scheme(
+        "retail_objects", RETAIL_OBJECTS, RETAIL_OBJECTS_TO_TRAV, RETAIL_OBJECTS_NATIVE_ID
+    ),
 }
 DEFAULT_SCHEME = "indoor"
 
@@ -434,9 +455,11 @@ def _add_scheme(parser) -> None:
         "--scheme",
         choices=sorted(SCHEMES),
         default=DEFAULT_SCHEME,
-        help="which taxonomy to use. retail is the indoor 12 plus display_fixture; "
-        "annotating a shop under the indoor scheme yields data with no fixtures in it "
-        "at all, and nothing downstream would report that",
+        help="which taxonomy to use. retail is the indoor 12 plus display_fixture, for "
+        "'can the robot step here'; retail_objects is the 7-class object taxonomy, for "
+        "'what is this'. Annotating a shop under the wrong one yields data missing a "
+        "whole class -- fixtures under indoor, columns and products under retail -- and "
+        "nothing downstream would report that",
     )
 
 

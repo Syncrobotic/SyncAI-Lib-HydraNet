@@ -99,7 +99,14 @@ class Concept:
     """
 
     def __init__(
-        self, name, prompts, layer, min_score=DEFAULT_MIN_SCORE, default_on=True, note=""
+        self,
+        name,
+        prompts,
+        layer,
+        min_score=DEFAULT_MIN_SCORE,
+        default_on=True,
+        note="",
+        taxonomy=None,
     ):
         self.name = name
         self.prompts = prompts
@@ -107,10 +114,16 @@ class Concept:
         self.min_score = min_score
         self.default_on = default_on
         self.note = note
+        # Which class list the name resolves against. Defaults to the retail 13 -- the
+        # only taxonomy that existed when this file was written -- so every concept
+        # below is unchanged. `sam3_prompts_objects.py` passes the object taxonomy
+        # instead. The id is still never typed: it is looked up, in one place, from
+        # whichever taxonomy the concept belongs to.
+        self.taxonomy = taxonomy if taxonomy is not None else RETAIL_TERRAIN
 
     @property
     def terrain_id(self) -> int:
-        return RETAIL_TERRAIN[self.name]
+        return self.taxonomy[self.name]
 
 
 CONCEPTS = (
@@ -309,6 +322,17 @@ CONCEPTS = (
 
 BY_NAME = {c.name: c for c in CONCEPTS}
 DEFAULT_ON = tuple(c.name for c in CONCEPTS if c.default_on)
+
+# Classes whose pixels change between frames of a fixed camera, and which the consensus
+# vote in scripts/sam3_prelabel.py must therefore skip. A person is the whole list:
+# people move, so their pixels agree with nothing across a clip and voting on them
+# deletes them. Everything else in a shop stays where it was put.
+#
+# Stated here rather than derived from `layer`, which currently gives the same answer.
+# "always paints over everything" and "moves between frames" are different claims that
+# happen to coincide for `person`, and a class that acquired the first would otherwise
+# be dropped from the vote without anyone deciding that.
+MOVING = ("person",)
 
 
 def resolve(include: list[str] | None, exclude: list[str] | None) -> list[Concept]:

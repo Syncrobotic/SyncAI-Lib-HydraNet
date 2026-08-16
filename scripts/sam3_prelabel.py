@@ -68,12 +68,19 @@ for candidate in (HERE.parent / "src", HERE / "src"):
         sys.path.insert(0, str(candidate))
 
 from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402
+from syncai_hydranet.data import sam3_prompts as _retail_prompts  # noqa: E402
+from syncai_hydranet.data import sam3_prompts_objects as _object_prompts  # noqa: E402
 from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
-from syncai_hydranet.data.sam3_prompts import (  # noqa: E402
-    BY_NAME,
-    LAYER_PERSON,
-    resolve,
-)
+
+# Two taxonomies, two prompt tables, and the pairing is not interchangeable: a concept
+# resolves its class id against the taxonomy it belongs to, so running the retail table
+# and writing the masks as an object dataset would put id 12 (display_fixture) into a
+# 7-class label space where 12 does not exist. Selected together by --scheme, and the
+# annotation gate named in the summary is selected with it.
+PROMPT_SETS = {
+    "retail": _retail_prompts,
+    "retail_objects": _object_prompts,
+}
 
 IGNORE = 255
 CONTESTED = -1  # a pixel two classes on one layer both claim; resolved to IGNORE
@@ -212,7 +219,8 @@ def frame_masks(proc, model, frame: np.ndarray, subset, args) -> tuple[Image.Ima
     img = Image.fromarray(frame)
     probe_img = (
         img.resize(
-            (int(img.width * args.upscale), int(img.height * args.upscale)), Image.LANCZOS
+            (int(img.width * args.upscale), int(img.height * args.upscale)),
+            Image.Resampling.LANCZOS,
         )
         if args.upscale != 1.0
         else img
@@ -252,6 +260,15 @@ def build_parser() -> argparse.ArgumentParser:
         "returns on them. Set 1.0 for footage that is already HD",
     )
     ap.add_argument(
+        "--scheme",
+        choices=sorted(PROMPT_SETS),
+        default="retail",
+        help="which taxonomy to write. retail is the robot's 13 classes; retail_objects "
+        "is the 7-class object taxonomy, where display_fixture and obstacle_furniture "
+        "are one `fixture` class and `column` and `product` exist. The masks are only "
+        "readable under the matching label_map",
+    )
+    ap.add_argument(
         "--include",
         action="append",
         default=[],
@@ -276,7 +293,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    concepts = resolve(args.include, args.exclude)
+    prompts = PROMPT_SETS[args.scheme]
+    concepts = prompts.resolve(args.include, args.exclude)
+    print(f"scheme: {args.scheme}")
     print(f"classes: {', '.join(c.name for c in concepts)}")
     for c in concepts:
         if c.note:
@@ -316,8 +335,12 @@ def main(argv: list[str] | None = None) -> int:
         # In consensus mode the two halves of the frame are computed differently:
         # everything that cannot move is voted on across the clip, and everything that
         # can is left per frame. Splitting them here rather than in `compose` keeps the
-        # rule visible -- `person` is on LAYER_PERSON precisely because it moves.
-        moving = [c for c in concepts if c.layer == LAYER_PERSON] if args.consensus else []
+        # rule visible. The prompt table names which classes move (`MOVING`) rather than
+        # this being read off the layer: they coincide today -- people are foreground in
+        # both taxonomies -- but "paints over everything" and "changes between frames"
+        # are different properties, and a class that gained the first would silently
+        # acquire the second.
+        moving = [c for c in concepts if c.name in prompts.MOVING] if args.consensus else []
         static = [c for c in concepts if c not in moving]
 
         per_frame: list[tuple[Image.Image, np.ndarray]] = [
@@ -357,7 +380,7 @@ def main(argv: list[str] | None = None) -> int:
     labelled = total_px - totals[IGNORE]
     print(f"\nwrote {root}")
     print("pre-label composition (share of labelled pixels)")
-    for name, concept in BY_NAME.items():
+    for name, concept in prompts.BY_NAME.items():
         px = totals[concept.terrain_id]
         if px:
             print(f"  {concept.terrain_id:>3} {name:<20} {100 * px / max(labelled, 1):6.2f}%")
@@ -365,22 +388,47 @@ def main(argv: list[str] | None = None) -> int:
         f"  ignore (unclaimed or contested): "
         f"{100 * totals[IGNORE] / total_px:.1f}% of all pixels"
     )
+    # A class that was asked for and came back with nothing. Printed rather than left to
+    # be noticed in the table above, where a class simply does not appear -- which reads
+    # like the footage not containing one and is indistinguishable from a prompt that
+    # does not work. `product` under --scheme retail_objects is the live case: it has no
+    # prior measurement at all, so its first run is the measurement.
+    empty = [c.name for c in concepts if not totals[c.terrain_id]]
+    if empty:
+        print(f"  FOUND NOTHING: {', '.join(empty)} -- prompts, threshold, or footage?")
     manifest["pre_label_share"] = {
         name: round(totals[c.terrain_id] / max(labelled, 1), 4)
-        for name, c in BY_NAME.items()
+        for name, c in prompts.BY_NAME.items()
         if totals[c.terrain_id]
     }
+    manifest["scheme"] = args.scheme
+    manifest["found_nothing"] = empty
     (root / "sam3_batch.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
+    # The gate has to be named with the same scheme the masks were written under.
+    # Checking object masks under --scheme retail would read id 4 as `wet_slippery`
+    # instead of `fixture` and pass, because both are valid ids in their own taxonomy.
+    gate = args.scheme
     print("\nNext:")
-    print("  hydranet-annotation labels --scheme retail --out cvat_labels_retail.json")
-    print(f"  hydranet-annotation check {root} --scheme retail")
-    print(
-        "\nCorrect every mask before training on any of it. Two to look at hardest:\n"
-        "  glass    SAM 3 segments what is *behind* the pane along with the pane\n"
-        "  ignore   holes are contested table/display_fixture pixels, and they are the\n"
-        "           judgement calls -- that is the work, not a gap in it"
-    )
+    print(f"  hydranet-annotation labels --scheme {gate} --out cvat_labels_{gate}.json")
+    print(f"  hydranet-annotation check {root} --scheme {gate}")
+    if args.scheme == "retail":
+        print(
+            "\nCorrect every mask before training on any of it. Two to look at hardest:\n"
+            "  glass    SAM 3 segments what is *behind* the pane along with the pane\n"
+            "  ignore   holes are contested table/display_fixture pixels, and they are the\n"
+            "           judgement calls -- that is the work, not a gap in it"
+        )
+    else:
+        print(
+            "\nCorrect every mask before training on any of it. Three to look at hardest:\n"
+            "  product  no prior measurement exists for this class -- the first batch is\n"
+            "           an experiment, and the share above is its result\n"
+            "  column   check it did not take the wall with it; it paints over wall by\n"
+            "           design, so an over-wide column mask is not visible as a conflict\n"
+            "  wall     absorbs glass here, and a pane still segments the pavement behind\n"
+            "           it -- contained within one class now, but still wrong pixels"
+        )
     return 0
 
 

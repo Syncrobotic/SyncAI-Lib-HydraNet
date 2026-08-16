@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from . import label_maps_cocostuff as _cs
 from . import label_maps_indoor as _ind
 from . import label_maps_retail as _ret
+from . import label_maps_retail_objects as _obj
 
 # Unified 12-class terrain, aligned with ``data.terrain_classes`` in the configs.
 TERRAIN = {
@@ -191,6 +192,37 @@ SCHEMES: dict[str, LabelScheme] = {
         _ret.RETAIL_TERRAIN_TO_TRAV,
         _ret.RETAIL_TERRAIN,
     ),
+    # ----------------------------------------------------------------- retail objects
+    #
+    # A second retail taxonomy answering "what object is this", where the one above
+    # answers "can the robot step here". Separate on purpose: this one merges the two
+    # fixture classes and splits `column` out of `wall`, and neither is expressible
+    # under the ids-0-11-are-indoor invariant that tests/test_retail_scheme.py pins.
+    # See label_maps_retail_objects.py for what the site audit found.
+    "ade20k_retail_objects": _scheme(
+        "ade20k_retail_objects",
+        "id",
+        _obj.ADE20K_ID_TO_RETAIL_OBJECTS,
+        _obj.RETAIL_OBJECTS_TO_TRAV,
+        _obj.RETAIL_OBJECTS,
+    ),
+    "retail_objects_native": _scheme(
+        "retail_objects_native",
+        "id",
+        _obj.RETAIL_OBJECTS_NATIVE_ID,
+        _obj.RETAIL_OBJECTS_TO_TRAV,
+        _obj.RETAIL_OBJECTS,
+    ),
+    # Reads the retail-13 site masks already collected (SAM 3 consensus, pilot) under
+    # the object taxonomy, so that work carries over. `column` does not survive the
+    # trip -- get_scheme() says so out loud rather than leaving it to an IoU of 0.000.
+    "retail_objects_migrated": _scheme(
+        "retail_objects_migrated",
+        "id",
+        _obj.RETAIL_ID_TO_OBJECTS,
+        _obj.RETAIL_OBJECTS_TO_TRAV,
+        _obj.RETAIL_OBJECTS,
+    ),
     # COCO-Stuff rides on the images already in datasets/coco. Its PNG values sit one
     # below the ids in the dataset's own labels.txt, and `person` is value 0 -- both are
     # handled inside the module and pinned by tests/test_cocostuff_scheme.py.
@@ -228,6 +260,21 @@ def get_scheme(name: str) -> LabelScheme:
             f"class names rather than confirmed against the official table ({detail}). "
             "A wrong entry relabels a whole class without any error. Confirm them before "
             "reporting numbers from RELLIS-3D.",
+            stacklevel=2,
+        )
+    if name == "retail_objects_migrated":
+        import warnings
+
+        # Same shape of warning as rellis, and for the same reason: what is lost here is
+        # lost silently. These masks were drawn under a taxonomy where a column *is*
+        # wall, so migrating them cannot separate the two -- the run trains a `column`
+        # channel on nothing and reports a plausible-looking 0.000 sixty epochs later.
+        warnings.warn(
+            "label_map 'retail_objects_migrated' reads retail-13 masks under the object "
+            "taxonomy. `column` (id 3) cannot survive the migration: those masks put "
+            "columns inside `wall`, so this scheme supplies zero column pixels. Pair it "
+            "with freshly drawn columns -- one polygon per fixed camera -- or the class "
+            "is an empty channel.",
             stacklevel=2,
         )
     return SCHEMES[name]

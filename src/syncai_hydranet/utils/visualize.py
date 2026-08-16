@@ -74,12 +74,41 @@ TERRAIN_COLORS_RETAIL = np.concatenate(
     [TERRAIN_COLORS_INDOOR, np.array([[120, 80, 200]], dtype=np.uint8)]  # display_fixture
 )
 
+# configs/hydranet_retail_objects.yaml: the object taxonomy, seven classes.
+#
+# Deliberately keyed to the retail palette rather than freshly picked, so that the two
+# retail taxonomies can be read side by side in a review: floor keeps the brown it has
+# in every indoor and retail grid, wall keeps its grey, person keeps its pink, and
+# `fixture` takes display_fixture's violet because that is the class it absorbs.
+#
+# Only the two new classes need a colour of their own. `column` gets a deeper, bluer
+# grey than `wall` -- near it, because that is where it came from, and separable from
+# it, because telling those two apart is the entire reason this taxonomy exists.
+# `product` gets amber, the one hue nothing else in any palette here uses.
+TERRAIN_COLORS_RETAIL_OBJECTS = np.array(
+    [
+        [0, 0, 0],  # void
+        [139, 90, 43],  # floor      -- as floor_hard everywhere else
+        [130, 130, 130],  # wall     -- as wall everywhere else
+        [70, 90, 150],  # column     -- new: wall's neighbour, not wall's twin
+        [120, 80, 200],  # fixture   -- as display_fixture, the class it absorbs
+        [255, 170, 30],  # product   -- new
+        [255, 100, 180],  # person   -- as person everywhere else
+    ],
+    dtype=np.uint8,
+)
+
 # Most specific first, and the order is load-bearing: retail is indoor plus one class,
 # so it contains every indoor marker and would match `floor_hard` if that came first.
 # Selection is by name rather than by length because indoor and off-road are both
 # twelve long -- length is precisely the test that would keep agreeing while the
 # colours meant different things.
+#
+# The object taxonomy is matched on `product`, which no other taxonomy contains. Its
+# own class names are otherwise a subset of words the others use (`wall`, `person`),
+# so a less distinctive marker would be a live collision rather than a theoretical one.
 _TERRAIN_PALETTES = (
+    ("product", TERRAIN_COLORS_RETAIL_OBJECTS),
     ("display_fixture", TERRAIN_COLORS_RETAIL),
     ("floor_hard", TERRAIN_COLORS_INDOOR),
     ("dirt", TERRAIN_COLORS_OFFROAD),
@@ -166,7 +195,7 @@ def letterbox(img: Image.Image, size, fill=(114, 114, 114)):
     nw, nh = max(round(ow * s), 1), max(round(oh * s), 1)
     canvas = Image.new("RGB", (w, h), fill)
     x0, y0 = (w - nw) // 2, (h - nh) // 2
-    canvas.paste(img.resize((nw, nh), Image.BILINEAR), (x0, y0))
+    canvas.paste(img.resize((nw, nh), Image.Resampling.BILINEAR), (x0, y0))
     return canvas, (x0, y0, nw, nh)
 
 
@@ -190,7 +219,7 @@ def preprocess(img: Image.Image, size, use_letterbox: bool = True):
     if use_letterbox:
         img, region = letterbox(img, size)
     else:
-        img, region = img.resize((w, h), Image.BILINEAR), (0, 0, w, h)
+        img, region = img.resize((w, h), Image.Resampling.BILINEAR), (0, 0, w, h)
     arr = np.asarray(img, dtype=np.float32) / 255.0
     arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
     return torch.from_numpy(arr.transpose(2, 0, 1))[None], img, region

@@ -23,6 +23,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from ..config import load_config
+from ..data.coco_subsets import COCO_NAMES, retail_box_label
 from ..models.heads.detection import SCORE_THR_VIEW
 from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint, select_weights
@@ -122,6 +123,25 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--score-thr", type=float, default=SCORE_THR_VIEW)
     ap.add_argument("--max-frames", type=int, default=0, help="0 means all")
     ap.add_argument("--layout", choices=["side", "trav", "terrain"], default="side")
+    ap.add_argument(
+        "--nms-thr",
+        type=float,
+        default=0.6,
+        help="IoU above which two boxes of one class are treated as one detection. "
+        "Raise it for crowded scenes, where shoppers overlap and the tighter default "
+        "merges two people into one. Note the audit's evidence for missed people points "
+        "at the SCORE threshold, not at this: on Taichung-cam01 person detections went "
+        "62 -> 72 -> 112 as the score cut fell 0.35 -> 0.25 -> 0.15. This knob is "
+        "exposed because it was hard-coded, not because it was measured",
+    )
+    ap.add_argument(
+        "--vocab",
+        choices=["coco", "retail"],
+        default="coco",
+        help="how to name a box. retail reads COCO's answer as a shop noun -- "
+        "product/book, fixture/refrigerator -- which is a rename of the same head's "
+        "same output, not extra knowledge; see data/coco_subsets.py",
+    )
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
     return ap
 
@@ -140,6 +160,13 @@ def main(argv: list[str] | None = None) -> None:
 
     size = cfg["data"]["input_size"]  # (H, W)
     terrain_colors = terrain_palette(cfg["data"].get("terrain_classes"))
+    # See infer_image: the class id is the least useful of the three things known about
+    # a detection, and scene.py already drew names rather than integers.
+    name_of = (
+        retail_box_label
+        if args.vocab == "retail"
+        else (lambda i: COCO_NAMES[i] if i < len(COCO_NAMES) else str(i))
+    )
     src_w, src_h, src_fps = probe(args.input)
     out_fps = args.fps or src_fps
     print(
@@ -155,19 +182,27 @@ def main(argv: list[str] | None = None) -> None:
         x, lb, region = preprocess(Image.fromarray(frame), size)
         x = x.to(device)
         with torch.no_grad():
-            res = model.predict(x, score_thr=args.score_thr)
+            res = model.predict(x, score_thr=args.score_thr, nms_thr=args.nms_thr)
 
         x0, y0, cw, ch = region
-        trav = crop_box(res["traversability"][0].cpu().numpy(), region)
         terr = crop_box(res["terrain"][0].cpu().numpy(), region)
         content = lb.crop((x0, y0, x0 + cw, y0 + ch))
 
-        vis_trav = overlay(content, trav, TRAV_COLORS)
         vis_terr = overlay(content, terr, terrain_colors)
+        # See infer_image: traversability is optional, because it is a lookup on terrain
+        # and the object-segmentation configs drop the head entirely.
+        vis_trav = (
+            overlay(
+                content, crop_box(res["traversability"][0].cpu().numpy(), region), TRAV_COLORS
+            )
+            if "traversability" in res
+            else None
+        )
+        box_panel = vis_trav if vis_trav is not None else vis_terr
 
         det = res.get("detection", [{}])[0]
         if det and len(det.get("boxes", [])):
-            draw = ImageDraw.Draw(vis_trav)
+            draw = ImageDraw.Draw(box_panel)
             for box, score, label in zip(
                 det["boxes"].cpu().numpy(),
                 det["scores"].cpu().numpy(),
@@ -179,10 +214,22 @@ def main(argv: list[str] | None = None) -> None:
                     continue
                 draw.rectangle(b, outline=(255, 255, 255), width=2)
                 draw.text(
-                    (b[0] + 2, b[1] + 2), f"{int(label)}:{score:.2f}", fill=(255, 255, 255)
+                    (b[0] + 2, b[1] + 2),
+                    f"{name_of(int(label))} {score:.2f}",
+                    fill=(255, 255, 255),
                 )
 
-        if args.layout == "trav":
+        if vis_trav is None:
+            # Nothing to put in the left panel and nothing to select with --layout.
+            # Checked here rather than at argument-parse time because whether the head
+            # exists is a property of the checkpoint's config, not of the command line.
+            if args.layout == "trav":
+                sys.exit(
+                    "--layout trav, but this config has no traversability head "
+                    "(model.heads.traversability). Use --layout terrain."
+                )
+            out_img = vis_terr
+        elif args.layout == "trav":
             out_img = vis_trav
         elif args.layout == "terrain":
             out_img = vis_terr
@@ -222,7 +269,7 @@ def main(argv: list[str] | None = None) -> None:
                 stdin=subprocess.PIPE,
             )
         if out_img.size != enc_size:
-            out_img = out_img.resize(enc_size, Image.BILINEAR)
+            out_img = out_img.resize(enc_size, Image.Resampling.BILINEAR)
         writer.stdin.write(np.asarray(out_img, np.uint8).tobytes())
 
         n_done += 1
