@@ -18,7 +18,17 @@ is an outside opinion, which is the one thing that can add a class -- and equall
 second model with its own errors rather than an oracle. Nothing here is ground truth.
 
 Everything it writes lands in the `seg_folder` layout that
-`hydranet-annotation check --scheme retail` gates, and the gate is not optional.
+`hydranet-annotation check --scheme <scheme>` gates, and the gate is not optional.
+
+`--scheme` picks the taxonomy: `retail` for the robot's 13 classes, `retail_objects` for
+the 7-class object taxonomy where `column` and `product` exist. The masks are only
+readable under the matching `label_map`, so the two are chosen together.
+
+An input may be a video file **or a directory of stills**. The second is not a degraded
+case: the argument this file makes about fixed cameras -- that a column is the same
+pixels in every frame that camera will ever produce -- applies most exactly where nobody
+kept the video. `datasets/retail_cctv_survey41` is 41 cameras at two frames each, which
+is the widest camera coverage this project has and is not a clip at all.
 
 ## `--consensus`, for when there is no annotation budget at all
 
@@ -244,7 +254,13 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("clips", nargs="+", help="video files; one session directory per clip")
+    ap.add_argument(
+        "clips",
+        nargs="+",
+        help="video files, or directories of stills; one session directory per input. "
+        "A directory is for the fixed cameras nobody kept the video of -- the frames "
+        "are used as-is rather than decoded",
+    )
     ap.add_argument("--out", required=True, help="dataset root to write")
     ap.add_argument("--split", default="train")
     ap.add_argument("--frames", type=int, default=40, help="frames to keep per clip")
@@ -321,11 +337,34 @@ def main(argv: list[str] | None = None) -> int:
         img_dir.mkdir(parents=True, exist_ok=True)
         ann_dir.mkdir(parents=True, exist_ok=True)
 
-        w, h, _ = probe(clip)
-        kept, descs = [], []
-        for frame in frames(clip, w, h, args.sample_fps):
-            kept.append(frame.copy())
-            descs.append(describe(frame))
+        # A directory of stills is a legitimate input, not a degraded one. The argument
+        # this whole module makes about fixed cameras -- that a column or a floor is the
+        # same pixels in every frame a camera will ever produce -- is exactly the case
+        # where nobody has kept the video. `datasets/retail_cctv_survey41` is 41 cameras
+        # at two frames each, which is the widest camera coverage this project has and
+        # is not a clip at all.
+        #
+        # `--consensus` still works on stills, and means something slightly different:
+        # the frames are minutes or days apart rather than seconds, so agreement across
+        # them is a stronger claim than agreement across a clip, not a weaker one. It
+        # needs at least two, and says so rather than silently voting with one.
+        if Path(clip).is_dir():
+            paths = sorted(
+                p
+                for p in Path(clip).iterdir()
+                if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp"}
+            )
+            kept = [np.asarray(Image.open(p).convert("RGB")) for p in paths]
+            descs = [describe(f) for f in kept]
+            if args.consensus and len(kept) < 2:
+                print(f"{session}: --consensus needs 2+ frames, found {len(kept)}, skipped")
+                continue
+        else:
+            w, h, _ = probe(clip)
+            kept, descs = [], []
+            for frame in frames(clip, w, h, args.sample_fps):
+                kept.append(frame.copy())
+                descs.append(describe(frame))
         if not kept:
             print(f"{session}: no frames decoded, skipped")
             continue
