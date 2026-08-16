@@ -23,7 +23,9 @@ DESCRIPTOR = (12, 16)  # a coarse grey thumbnail is enough to tell scenes apart
 
 def describe(frame: np.ndarray) -> np.ndarray:
     """A tiny grey thumbnail, normalised. Cheap, and robust to compression noise."""
-    img = Image.fromarray(frame).convert("L").resize(DESCRIPTOR[::-1], Image.BILINEAR)
+    img = (
+        Image.fromarray(frame).convert("L").resize(DESCRIPTOR[::-1], Image.Resampling.BILINEAR)
+    )
     v = np.asarray(img, dtype=np.float32).reshape(-1)
     return v / (np.linalg.norm(v) + 1e-6)
 

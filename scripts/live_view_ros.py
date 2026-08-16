@@ -412,7 +412,7 @@ def inference_loop(args):
         # inside the weights -- so the threshold is a slider rather than a training run.
         trav_full = np.asarray(
             Image.fromarray(trav.astype(np.uint8)).resize(
-                (color.shape[1], color.shape[0]), Image.NEAREST
+                (color.shape[1], color.shape[0]), Image.Resampling.NEAREST
             )
         )
         go = trav_full == GO
@@ -440,7 +440,7 @@ def inference_loop(args):
                 draw.text((bx[0] + 2, bx[1] + 2), f"{name} {score:.2f}", fill=(255, 255, 0))
 
         right_ids = np.asarray(
-            Image.fromarray(reach.astype(np.uint8)).resize(vis.size, Image.NEAREST)
+            Image.fromarray(reach.astype(np.uint8)).resize(vis.size, Image.Resampling.NEAREST)
         )
         right = overlay(vis, right_ids, REACH_COLORS, alpha=0.5)
         pair = Image.new("RGB", (left.width * 2 + 8, left.height), (16, 16, 16))

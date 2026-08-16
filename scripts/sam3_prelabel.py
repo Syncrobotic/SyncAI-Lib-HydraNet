@@ -401,7 +401,7 @@ def main(argv: list[str] | None = None) -> int:
                 _, mv = frame_masks(proc, model, kept[picks[n]], moving, args)
                 mask = mask.copy()
                 mask[mv != IGNORE] = mv[mv != IGNORE]
-            mask_img = Image.fromarray(mask).resize(img.size, Image.NEAREST)
+            mask_img = Image.fromarray(mask).resize(img.size, Image.Resampling.NEAREST)
             stem = f"{n:04d}"
             img.save(img_dir / f"{stem}.jpg", quality=92)
             mask_img.save(ann_dir / f"{stem}.png")

@@ -115,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
         for n, idx in enumerate(picks):
             frame = kept[idx]
             img = Image.fromarray(frame)
-            small = img.resize((size[1], size[0]), Image.BILINEAR)
+            small = img.resize((size[1], size[0]), Image.Resampling.BILINEAR)
             arr = (np.asarray(small, np.float32) / 255.0 - IMAGENET_MEAN) / IMAGENET_STD
             x = torch.from_numpy(arr.transpose(2, 0, 1))[None].to(device)
             with torch.no_grad():
@@ -126,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
             # Unsure means unsure. A confident wrong pre-label is the one an annotator
             # accepts without looking; a hole is the one they fill.
             mask[conf[0].cpu().numpy() < args.confidence] = IGNORE
-            mask_img = Image.fromarray(mask).resize(img.size, Image.NEAREST)
+            mask_img = Image.fromarray(mask).resize(img.size, Image.Resampling.NEAREST)
 
             stem = f"{n:04d}"
             img.save(img_dir / f"{stem}.jpg", quality=92)

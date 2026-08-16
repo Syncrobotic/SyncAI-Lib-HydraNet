@@ -63,10 +63,10 @@ def _resize(sample: Sample, size: tuple[int, int]) -> Sample:
     img = sample["image"]
     ow, oh = img.size
     _geom_scale(sample, w / ow, h / oh)
-    sample["image"] = img.resize((w, h), Image.BILINEAR)
+    sample["image"] = img.resize((w, h), Image.Resampling.BILINEAR)
     if "masks" in sample:
         sample["masks"] = {
-            k: np.array(Image.fromarray(m).resize((w, h), Image.NEAREST))
+            k: np.array(Image.fromarray(m).resize((w, h), Image.Resampling.NEAREST))
             for k, m in sample["masks"].items()
         }
     if "boxes" in sample and len(sample["boxes"]):
@@ -142,7 +142,7 @@ class RandomHorizontalFlip:
             return s
         w = s["image"].size[0]
         s["geom"] = None  # a mirror is not an (sx, sy, px, py) mapping; train-only anyway
-        s["image"] = s["image"].transpose(Image.FLIP_LEFT_RIGHT)
+        s["image"] = s["image"].transpose(Image.Transpose.FLIP_LEFT_RIGHT)
         if "masks" in s:
             s["masks"] = {k: np.ascontiguousarray(m[:, ::-1]) for k, m in s["masks"].items()}
         if "boxes" in s and len(s["boxes"]):

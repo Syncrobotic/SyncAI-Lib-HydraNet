@@ -141,7 +141,7 @@ def main() -> int:
         # and they meet here rather than inside the weights.
         trav_full = np.asarray(
             Image.fromarray(trav.astype(np.uint8)).resize(
-                (color.shape[1], color.shape[0]), Image.NEAREST
+                (color.shape[1], color.shape[0]), Image.Resampling.NEAREST
             )
         )
         valid = depth_m > 0
@@ -172,7 +172,9 @@ def main() -> int:
                     draw.rectangle(bx, outline=(255, 255, 0), width=2)
                     draw.text((bx[0] + 2, bx[1] + 2), f"{score:.2f}", fill=(255, 255, 0))
             right_mask = np.asarray(
-                Image.fromarray(reachable.astype(np.uint8)).resize(vis_img.size, Image.NEAREST)
+                Image.fromarray(reachable.astype(np.uint8)).resize(
+                    vis_img.size, Image.Resampling.NEAREST
+                )
             )
             right = overlay(vis_img, right_mask, REACH_COLORS)
             pair = Image.new("RGB", (left.width * 2 + 8, left.height), (16, 16, 16))

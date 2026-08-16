@@ -189,7 +189,7 @@ def render(
     scr = [(float(a), float(b)) for a, b in scr]
     coeffs = _perspective_coeffs(scr, corners_px)
     ground = Image.fromarray(src).transform(
-        (w, h), Image.PERSPECTIVE, coeffs, Image.BILINEAR, fillcolor=bg
+        (w, h), Image.Transform.PERSPECTIVE, coeffs, Image.Resampling.BILINEAR, fillcolor=bg
     )
     # Only paste where the warp actually landed on floor, so the fill does not wipe the bg.
     mask = Image.fromarray(

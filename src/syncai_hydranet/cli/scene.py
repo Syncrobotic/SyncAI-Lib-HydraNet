@@ -74,7 +74,7 @@ def render_bev(bev: np.ndarray, grid: BevGrid, objects, height: int) -> Image.Im
     # Even width: libx264 with yuv420p rejects odd dimensions, and the panel's aspect
     # follows the --range window, so this is not a constant.
     width = max(int(bev.shape[1] * height / bev.shape[0]) // 2 * 2, 2)
-    panel = Image.fromarray(rgb).resize((width, height), Image.NEAREST)
+    panel = Image.fromarray(rgb).resize((width, height), Image.Resampling.NEAREST)
     draw = ImageDraw.Draw(panel)
     px_per_m = panel.height / (grid.z_max - grid.z_min)
 
