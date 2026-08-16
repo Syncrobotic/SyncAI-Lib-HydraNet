@@ -16,6 +16,7 @@ per site, which matters for a robot that gets redeployed to new environments.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 
 import torch
 import torch.nn as nn

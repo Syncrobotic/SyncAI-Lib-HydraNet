@@ -150,12 +150,15 @@ class UncertaintyWeighting(nn.Module):
         self.log_vars = nn.ParameterDict({t: nn.Parameter(torch.zeros(())) for t in task_names})
 
     def forward(self, losses: dict[str, torch.Tensor]) -> torch.Tensor:
-        total = None
+        # Collect then stack, rather than seeding an accumulator with None: that loop
+        # returned None untouched for an empty `losses`, i.e. it promised a Tensor and
+        # handed back None for the caller's `.backward()` to trip over one frame later.
+        # An empty step is a caller bug either way; this way it says so where it happens.
+        terms = []
         for name, loss in losses.items():
             s = self.log_vars[name]
-            term = torch.exp(-s) * loss + 0.5 * s
-            total = term if total is None else total + term
-        return total
+            terms.append(torch.exp(-s) * loss + 0.5 * s)
+        return torch.stack(terms).sum()
 
 
 class FixedWeighting(nn.Module):
@@ -164,8 +167,6 @@ class FixedWeighting(nn.Module):
         self.weights = dict(weights)
 
     def forward(self, losses: dict[str, torch.Tensor]) -> torch.Tensor:
-        total = None
-        for name, loss in losses.items():
-            term = self.weights.get(name, 1.0) * loss
-            total = term if total is None else total + term
-        return total
+        # Same shape as UncertaintyWeighting.forward above, for the same reason.
+        terms = [self.weights.get(name, 1.0) * loss for name, loss in losses.items()]
+        return torch.stack(terms).sum()
