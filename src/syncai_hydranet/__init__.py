@@ -20,7 +20,7 @@ from .models.hydranet import HydraNet, build_model
 # the line below. The trailing annotation is what release-please matches on -- remove
 # it and releases will bump CHANGELOG.md and the git tag while leaving the package
 # reporting the previous version, which nothing would fail on.
-__version__ = "0.1.0"  # x-release-please-version
+__version__ = "0.2.0"  # x-release-please-version
 
 __all__ = [
     "Config",
