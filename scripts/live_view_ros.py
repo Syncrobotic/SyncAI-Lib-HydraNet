@@ -511,6 +511,11 @@ def main() -> int:
     ap.add_argument("--weights", required=True)
     ap.add_argument("--config", required=True)
     ap.add_argument("--port", type=int, default=8090)
+    # Matches `live_view_orin.py`, which has had this flag all along while this file
+    # hardcoded 0.0.0.0. Same default, so nothing about an existing invocation changes;
+    # the point is that a robot on a shop floor can now be told to serve its camera to
+    # localhost only, which previously was not expressible here at all.
+    ap.add_argument("--bind", default="0.0.0.0", help="interface to serve on")
     ap.add_argument("--range", type=float, default=5.0, help="metres")
     ap.add_argument("--score", type=float, default=0.30)
     ap.add_argument(
@@ -547,8 +552,8 @@ def main() -> int:
     signal.signal(signal.SIGINT, shutdown)
 
     threading.Thread(target=inference_loop, args=(args,), daemon=True).start()
-    server = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
-    print(f"serving on http://0.0.0.0:{args.port}/", flush=True)
+    server = ThreadingHTTPServer((args.bind, args.port), Handler)
+    print(f"serving on http://{args.bind}:{args.port}/", flush=True)
     server.serve_forever()
     return 0
 
