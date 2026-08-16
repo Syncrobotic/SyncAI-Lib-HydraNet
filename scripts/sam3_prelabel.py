@@ -81,6 +81,7 @@ from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402
 from syncai_hydranet.data import sam3_prompts as _retail_prompts  # noqa: E402
 from syncai_hydranet.data import sam3_prompts_objects as _object_prompts  # noqa: E402
 from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
+from syncai_hydranet.data.sam3_prompts import DEFAULT_MIN_SCORE  # noqa: E402
 
 # Two taxonomies, two prompt tables, and the pairing is not interchangeable: a concept
 # resolves its class id against the taxonomy it belongs to, so running the retail table
@@ -93,7 +94,10 @@ PROMPT_SETS = {
 }
 
 IGNORE = 255
-CONTESTED = -1  # a pixel two classes on one layer both claim; resolved to IGNORE
+CONTESTED = -1
+# Below this an "instance" is a speck: SAM 3 emits a handful of stray pixels on a
+# confident prompt, and a 3-pixel box trains a detector to fire on noise.
+MIN_BOX_PIXELS = 40  # a pixel two classes on one layer both claim; resolved to IGNORE
 MODEL_ID = "facebook/sam3"
 
 
@@ -250,6 +254,101 @@ def frame_masks(proc, model, frame: np.ndarray, subset, args) -> tuple[Image.Ima
     return img, compose(claims, shape, subset)
 
 
+def frame_boxes(proc, model, frame: np.ndarray, det_classes, args) -> list[dict]:
+    """Instance boxes for one frame, in the saved image's pixel coordinates.
+
+    Read off the same forward passes `frame_masks` uses -- SAM 3 returns one mask per
+    detection and `compose` discards that identity to fit a single-channel id map. This
+    keeps it, which is the half of the answer a semantic mask cannot carry: thirty boxes
+    on a shelf are one region to a per-pixel classifier and thirty rows here.
+
+    Boxes are **never** put through the consensus vote. That vote exists to denoise
+    *static structure* by asking whether a pixel keeps its class across a clip; an
+    instance is not a pixel and has no identity across frames to vote on. Every box
+    below belongs to the frame it was found in.
+
+    Coordinates are scaled back from the upscaled probe image, so a caller running
+    `--upscale 3` gets boxes that land on the JPEG it actually wrote.
+    """
+    img = Image.fromarray(frame)
+    probe_img = (
+        img.resize(
+            (int(img.width * args.upscale), int(img.height * args.upscale)),
+            Image.Resampling.LANCZOS,
+        )
+        if args.upscale != 1.0
+        else img
+    )
+    sx, sy = img.width / probe_img.width, img.height / probe_img.height
+    out: list[dict] = []
+    for cat_id, (name, prompts) in enumerate(det_classes, start=1):
+        for prompt in prompts:
+            for mask, score in segment(
+                proc, model, probe_img, prompt, DEFAULT_MIN_SCORE, args.device
+            ):
+                ys, xs = np.nonzero(mask)
+                if xs.size < MIN_BOX_PIXELS:
+                    continue
+                x0, x1 = float(xs.min()) * sx, float(xs.max() + 1) * sx
+                y0, y1 = float(ys.min()) * sy, float(ys.max() + 1) * sy
+                if x1 - x0 < 2 or y1 - y0 < 2:
+                    continue
+                out.append(
+                    {
+                        "category_id": cat_id,
+                        "category": name,
+                        "prompt": prompt,
+                        "bbox": [x0, y0, x1 - x0, y1 - y0],
+                        "area": float(mask.sum()) * sx * sy,
+                        "score": float(score),
+                        "iscrowd": 0,
+                    }
+                )
+    return _dedupe(out)
+
+
+def _dedupe(boxes: list[dict], iou_thr: float = 0.55) -> list[dict]:
+    """Greedy per-class NMS across prompts.
+
+    The prompts inside one class are a union by design -- `product box` and `boxed
+    product` are two ways of asking for the same shelf -- so without this every item
+    appears once per prompt that found it. Measured on two frames of Taichung-cam01
+    before this existed: 266 `boxed_stock` boxes from two prompts over roughly 146
+    actual items. A detector trained on that learns that one object is two.
+
+    Kept separate from the segmentation path because `compose` resolves the same overlap
+    a different and equally deliberate way: two prompts of one class agreeing is a union
+    of *pixels*, which needs no arbitration. Two prompts of one class agreeing on an
+    *instance* is a duplicate, which does.
+    """
+    out: list[dict] = []
+    for cat in {b["category_id"] for b in boxes}:
+        cand = sorted(
+            (b for b in boxes if b["category_id"] == cat),
+            key=lambda b: b["score"],
+            reverse=True,
+        )
+        keep: list[dict] = []
+        for b in cand:
+            bx, by, bw, bh = b["bbox"]
+            if any(_iou((bx, by, bw, bh), k["bbox"]) > iou_thr for k in keep):
+                continue
+            keep.append(b)
+        out.extend(keep)
+    return out
+
+
+def _iou(a, b) -> float:
+    ax0, ay0, aw, ah = a
+    bx0, by0, bw, bh = b
+    ax1, ay1, bx1, by1 = ax0 + aw, ay0 + ah, bx0 + bw, by0 + bh
+    ix = max(0.0, min(ax1, bx1) - max(ax0, bx0))
+    iy = max(0.0, min(ay1, by1) - max(ay0, by0))
+    inter = ix * iy
+    union = aw * ah + bw * bh - inter
+    return inter / union if union > 0 else 0.0
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -283,6 +382,14 @@ def build_parser() -> argparse.ArgumentParser:
         "is the 7-class object taxonomy, where display_fixture and obstacle_furniture "
         "are one `fixture` class and `column` and `product` exist. The masks are only "
         "readable under the matching label_map",
+    )
+    ap.add_argument(
+        "--boxes",
+        action="store_true",
+        help="also write instance boxes for merchandise, as COCO-format "
+        "annotations/instances_<split>.json. Free: it reads the same SAM 3 forward "
+        "passes the masks come from. Only meaningful with --scheme retail_objects, "
+        "which is the taxonomy that has a merchandise class",
     )
     ap.add_argument(
         "--include",
@@ -320,6 +427,29 @@ def main(argv: list[str] | None = None) -> int:
     proc, model = load_sam3(args.model, args.device)
     root = Path(args.out)
     totals = Counter()
+
+    # Merchandise instances. `--boxes` is opt-in and only the object taxonomy has a
+    # merchandise class, so asking for it under `--scheme retail` is a mistake worth
+    # naming rather than silently writing an empty file.
+    det_classes = ()
+    if args.boxes:
+        det_classes = getattr(prompts, "DETECTION_CLASSES", ())
+        if not det_classes:
+            raise SystemExit(
+                f"--boxes: scheme {args.scheme!r} declares no DETECTION_CLASSES. "
+                "Merchandise instances are defined for --scheme retail_objects."
+            )
+    box_totals: Counter = Counter()
+    coco = {
+        "info": {
+            "description": "SAM 3 merchandise pre-labels -- NOT ground truth",
+            "model": args.model,
+            "scheme": args.scheme,
+        },
+        "images": [],
+        "annotations": [],
+        "categories": [{"id": i, "name": n} for i, (n, _) in enumerate(det_classes, start=1)],
+    }
     manifest = {
         "model": args.model,
         "upscale": args.upscale,
@@ -407,6 +537,25 @@ def main(argv: list[str] | None = None) -> int:
             mask_img.save(ann_dir / f"{stem}.png")
             totals.update(np.asarray(mask_img).ravel().tolist())
 
+            if det_classes:
+                image_id = len(coco["images"]) + 1
+                coco["images"].append(
+                    {
+                        "id": image_id,
+                        # Relative to <out>/images/<split>/, which is where the seg_folder
+                        # layout keeps them. A COCO loader wants root/<split>/ instead, so
+                        # this file is data ready to be pointed at rather than a dataset
+                        # that drops straight into `type: coco`.
+                        "file_name": f"{session}/{stem}.jpg",
+                        "width": img.width,
+                        "height": img.height,
+                    }
+                )
+                for box in frame_boxes(proc, model, kept[picks[n]], det_classes, args):
+                    box = dict(box, id=len(coco["annotations"]) + 1, image_id=image_id)
+                    coco["annotations"].append(box)
+                    box_totals[box["category"]] += 1
+
         entry = {"session": session, "source": clip, "frames": len(picks)}
         if args.consensus:
             entry["consensus"] = {
@@ -442,6 +591,18 @@ def main(argv: list[str] | None = None) -> int:
     }
     manifest["scheme"] = args.scheme
     manifest["found_nothing"] = empty
+    if det_classes:
+        out_json = root / "annotations" / f"instances_{args.split}.json"
+        out_json.write_text(json.dumps(coco) + "\n")
+        n_img = max(len(coco["images"]), 1)
+        print(f"\nmerchandise instances -> {out_json}")
+        for name, _ in det_classes:
+            n = box_totals[name]
+            print(f"  {name:<14} {n:>6} boxes  ({n / n_img:.1f}/frame)")
+        if not coco["annotations"]:
+            print("  FOUND NOTHING -- prompts, threshold, or footage?")
+        manifest["boxes"] = {n: box_totals[n] for n, _ in det_classes}
+
     (root / "sam3_batch.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
     # The gate has to be named with the same scheme the masks were written under.

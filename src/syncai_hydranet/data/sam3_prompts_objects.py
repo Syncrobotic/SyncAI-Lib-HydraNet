@@ -205,3 +205,70 @@ def resolve(include: list[str] | None, exclude: list[str] | None) -> list[Concep
             raise SystemExit(f"unknown class {name!r}; known: {', '.join(sorted(BY_NAME))}")
         chosen.pop(name, None)
     return [BY_NAME[n] for n in chosen]
+
+
+# ---------------------------------------------------------------------------
+# Instance detection: merchandise, as boxes rather than pixels.
+#
+# A semantic mask cannot count. Thirty identical boxes on a shelf are one connected
+# region to a per-pixel classifier, which is why the site run reads `product` as 93.1%
+# `fixture`: merchandise physically sits on the thing that holds it, and adjacency plus
+# shared texture is all a segmentation head has to go on. Counting stock, spotting a gap
+# on a shelf, and "how many phones are out on this table" are all instance questions.
+#
+# SAM 3 already returns instances -- `segment()` hands back one mask per detection and
+# `compose()` then throws that identity away by painting into a single-channel id map.
+# These classes are the same forward pass read the other way, so the boxes cost no extra
+# GPU time when `--boxes` is on.
+#
+# MEASURED, 22 prompts x 4 site cameras at threshold 0.40 (2026-08-16). The finding that
+# shaped the vocabulary, and it is the same one `gondola shelf` produced in
+# sam3_prompts.py: **brand names do not work, category nouns do.** SAM 3's vocabulary is
+# web English, and the web's `iphone` is a product shot, not thirty pixels of handset on
+# a ceiling camera.
+#
+#     prompt              instances   mean score
+#     product box              116        0.604
+#     boxed product            106        0.609
+#     mobile phone              17        0.601
+#     smartphone                12        0.665
+#     phone on display          10        0.713
+#     laptop                     8        0.800   <- highest score of any prompt
+#     laptop computer            7        0.814
+#     imac                       7        0.715
+#     ipad                       5        0.651
+#     tablet                     5        0.609
+#     macbook                    4        0.478   <- against `laptop` 0.800
+#     iphone                    <2          --    <- essentially silent
+#     apple watch                0          --    <- silent
+#
+# Two classes, not six, and deliberately coarse:
+#
+#   * `headphones` (54) and `phone case` (23) both fired on the *same* wall of mixed
+#     hanging accessories on Tao-Hsin-cam01. Each is right about half of it and neither
+#     can be told which half. A finer taxonomy buys contested pixels, not resolution.
+#   * `product box` scored 73 instances on Taichung-cam01 and **0** on Tao-Hsin-cam01,
+#     where the stock hangs in packets rather than sitting in boxes. One prompt, one
+#     retail brand, 73 against 0 -- so no vocabulary fixed from one store is safe.
+#
+# Splitting `device` into phone / tablet / laptop is the natural next step and is better
+# done as a second-stage classifier on the crop, where the resolution problem that sinks
+# the brand names is much smaller.
+DETECTION_CLASSES = (
+    ("boxed_stock", ("product box", "boxed product")),
+    (
+        "device",
+        (
+            "smartphone",
+            "mobile phone",
+            "phone on display",
+            "tablet",
+            "ipad",
+            "laptop",
+            "laptop computer",
+            "imac",
+        ),
+    ),
+)
+
+DETECTION_BY_NAME = dict(DETECTION_CLASSES)
