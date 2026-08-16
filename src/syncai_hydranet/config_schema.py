@@ -274,6 +274,45 @@ def unsupervised_heads(cfg: dict) -> set[str]:
     return set(heads) - supervised
 
 
+def _check_one_dataset(rep: _Report, ds: dict, path: str, head_names: set[str]) -> set[str]:
+    """Everything checkable about one dataset entry. Returns the heads it claims to train.
+
+    All four failures here are silent at runtime, which is why they are worth a schema
+    pass at all: an empty `supervises` reaches compute_losses with no loss to build, a
+    misspelled head simply never gets one, an unknown `label_map` would resolve to
+    nothing, and a non-positive `sample_ratio` removes the dataset from the mix without
+    removing it from the config.
+    """
+    if isinstance(ds.get("supervises"), list) and not ds["supervises"]:
+        # Every batch this dataset contributes reaches compute_losses with no loss to
+        # build, which is a crash rather than a slow run -- and it is caught here so it
+        # happens before the first step rather than during it.
+        rep.errors.append(
+            f"{path}.supervises: empty. A dataset that supervises no head costs "
+            f"optimiser steps and contributes no gradient to anything; drop the "
+            f"dataset, or name the heads its labels train."
+        )
+    supervised = set()
+    for head in ds.get("supervises", []) or []:
+        # A typo here is invisible at runtime: the head simply never gets a loss.
+        if head not in head_names:
+            rep.errors.append(
+                f"{path}.supervises: {head!r} is not a declared head. "
+                f"Declared: {', '.join(sorted(head_names))}"
+            )
+        supervised.add(head)
+    label_map = ds.get("label_map")
+    if label_map is not None and label_map not in SCHEMES:
+        rep.errors.append(
+            f"{path}.label_map: {label_map!r} is not a known scheme. "
+            f"Available: {', '.join(sorted(SCHEMES))}"
+        )
+    ratio = ds.get("sample_ratio")
+    if isinstance(ratio, NUMBER) and ratio <= 0:
+        rep.errors.append(f"{path}.sample_ratio: must be > 0, got {ratio}")
+    return supervised
+
+
 def _check_datasets(rep: _Report, dcfg: dict, head_names: set[str]) -> None:
     datasets = dcfg.get("datasets")
     if not isinstance(datasets, list) or not datasets:
@@ -290,32 +329,7 @@ def _check_datasets(rep: _Report, dcfg: dict, head_names: set[str]) -> None:
         if name in seen:
             rep.errors.append(f"{path}.name: {name!r} is used by an earlier dataset")
         seen.add(name)
-        if isinstance(ds.get("supervises"), list) and not ds["supervises"]:
-            # Every batch this dataset contributes reaches compute_losses with no loss to
-            # build, which is a crash rather than a slow run -- and it is caught here so
-            # it happens before the first step rather than during it.
-            rep.errors.append(
-                f"{path}.supervises: empty. A dataset that supervises no head costs "
-                f"optimiser steps and contributes no gradient to anything; drop the "
-                f"dataset, or name the heads its labels train."
-            )
-        for head in ds.get("supervises", []) or []:
-            # A typo here is invisible at runtime: the head simply never gets a loss.
-            if head not in head_names:
-                rep.errors.append(
-                    f"{path}.supervises: {head!r} is not a declared head. "
-                    f"Declared: {', '.join(sorted(head_names))}"
-                )
-            supervised.add(head)
-        label_map = ds.get("label_map")
-        if label_map is not None and label_map not in SCHEMES:
-            rep.errors.append(
-                f"{path}.label_map: {label_map!r} is not a known scheme. "
-                f"Available: {', '.join(sorted(SCHEMES))}"
-            )
-        ratio = ds.get("sample_ratio")
-        if isinstance(ratio, NUMBER) and ratio <= 0:
-            rep.errors.append(f"{path}.sample_ratio: must be > 0, got {ratio}")
+        supervised |= _check_one_dataset(rep, ds, path, head_names)
 
     for head in sorted(head_names - supervised):
         rep.warnings.append(
