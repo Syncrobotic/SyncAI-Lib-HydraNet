@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .ground import Camera, GroundPlane, pixel_to_ground
+from .scene_types import PlaneObject, PlaneScene
 
 IGNORE = 255
 
@@ -180,14 +181,14 @@ def scene(
     labels=None,
     scores=None,
     names=None,
-) -> dict:
+) -> tuple[PlaneScene, np.ndarray]:
     """One frame as plain data: the floor, and what is standing on it.
 
     This is the handoff format for anything that renders -- a 3D view, an RViz overlay, a
     costmap publisher. It carries metres and class ids, and deliberately no colours.
     """
     bev = project_mask(mask, cam, plane, grid)
-    objects = []
+    objects: list[PlaneObject] = []
     if boxes is not None and len(boxes):
         pos = place_boxes(boxes, cam, plane)
         ext = box_extents(boxes, cam, plane)

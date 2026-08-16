@@ -45,6 +45,7 @@ from ..data.coco_subsets import COCO_NAMES
 from ..geometry import bev3d
 from ..geometry.bev import IGNORE, BevGrid, free_space_map, project_mask, scene
 from ..geometry.ground import Camera, GroundPlane
+from ..geometry.scene_types import PlaneScene
 from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint, select_weights
 from ..utils.device import pick_device
@@ -96,6 +97,32 @@ def render_bev(bev: np.ndarray, grid: BevGrid, objects, height: int) -> Image.Im
     return panel
 
 
+class SceneReport(PlaneScene):
+    """A `PlaneScene` plus what this renderer measured about its own output.
+
+    These two fields are written into the JSON `hydranet-scene` emits but are not part of
+    what `geometry.bev.scene` produces, so they belong here rather than in the geometry
+    layer's type. The distinction is not academic: a consumer reading the geometry
+    payload directly will not have them, and before this class the only way to learn that
+    was to notice two subscript assignments at the end of `compose`.
+    """
+
+    known_fraction: float
+    pose_is_assumed: bool
+
+
+class SceneRecord(SceneReport):
+    """One line of the `--json` JSONL: a `SceneReport` stamped with its frame index.
+
+    A third shape, because it genuinely is one. `compose` cannot supply `frame` -- it
+    sees a single image and not its position in a stream -- so the field is added at the
+    write site and only when `--json` was asked for. Three payload shapes had been
+    flowing through this file, all of them annotated `dict`; this is the last of them.
+    """
+
+    frame: int
+
+
 def compose(
     frame: Image.Image,
     model,
@@ -108,7 +135,7 @@ def compose(
     terrain_classes,
     plane: GroundPlane,
     grid: BevGrid,
-) -> tuple[Image.Image, dict]:
+) -> tuple[Image.Image, SceneReport]:
     """One frame -> the composed panel and its scene payload."""
     x, canvas, region = preprocess(frame, size, use_lb)
     with torch.no_grad():
@@ -211,9 +238,16 @@ def compose(
         f"known: {100 * known:.0f}% of the window (the rest is behind something)",
         fill=(120, 136, 156),
     )
-    payload["known_fraction"] = round(known, 4)
-    payload["pose_is_assumed"] = args.pose_note is None
-    return out_img, payload
+    # Built as one dict rather than assigned onto `payload`, because these two fields are
+    # not part of what `geometry.bev.scene` produces -- they are what *this* renderer
+    # measured about its own output. `SceneReport` is where that difference is written
+    # down; before it, the JSON this CLI writes had a shape no type described and the
+    # only way to learn about these keys was to read this function.
+    return out_img, {
+        **payload,
+        "known_fraction": round(known, 4),
+        "pose_is_assumed": args.pose_note is None,
+    }
 
 
 def encoder_argv(width: int, height: int, args) -> list[str]:
@@ -335,8 +369,8 @@ def main(argv: list[str] | None = None) -> int:
             for frame in frames(args.input, src_w, src_h, args.fps):
                 out_img, payload = compose(Image.fromarray(frame), model, device, args, **kw)
                 if jsonl is not None:
-                    payload["frame"] = n
-                    jsonl.write(json.dumps(payload) + "\n")
+                    record: SceneRecord = {**payload, "frame": n}
+                    jsonl.write(json.dumps(record) + "\n")
                 if args.output:
                     if writer is None:
                         writer = subprocess.Popen(

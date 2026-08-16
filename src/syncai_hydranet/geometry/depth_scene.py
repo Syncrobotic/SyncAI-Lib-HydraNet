@@ -31,6 +31,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from .scene_types import DepthGrid, DepthObject, DepthObjectMetrics, DepthScene
+
 # Traversability class ids, as in data/label_maps_indoor.py.
 BLOCKED, CAUTION, GO = 0, 1, 2
 
@@ -59,7 +61,7 @@ def bev_grid(
     extent: tuple[float, float, float] = (-4.0, 4.0, 8.0),
     cell: float = 0.2,
     max_height: float = 0.35,
-) -> dict:
+) -> DepthGrid:
     """Bin back-projected points into a top-down grid of labelled cells.
 
     ``extent`` is (x_min, x_max, z_max); the camera sits at z=0. Cells take the label of
@@ -146,7 +148,9 @@ def _centre_stats(points: np.ndarray, box, frac: float = 0.5) -> tuple[float, fl
     return med, float(np.median(np.abs(z - med)))
 
 
-def object_from_box(box, points: np.ndarray, *, min_points: int = 30) -> dict | None:
+def object_from_box(
+    box, points: np.ndarray, *, min_points: int = 30
+) -> DepthObjectMetrics | None:
     """Position, extent and heading for one detection, from the depth inside its box.
 
     Returns None when the box holds too few depth returns to say anything -- which is the
@@ -223,18 +227,26 @@ def object_from_box(box, points: np.ndarray, *, min_points: int = 30) -> dict | 
     }
 
 
-def build_scene(trav: np.ndarray, depth_m: np.ndarray, k: np.ndarray, detections=None) -> dict:
+def build_scene(
+    trav: np.ndarray, depth_m: np.ndarray, k: np.ndarray, detections=None
+) -> DepthScene:
     """The whole per-frame payload: floor cells plus objects, in metres."""
     points = backproject(depth_m, k)
+    objects: list[DepthObject] = []
+    for det in detections or []:
+        metrics = object_from_box(det["box"], points)
+        if metrics is None:
+            continue
+        # Built in one expression rather than by assigning `name`/`score` onto what
+        # `object_from_box` returned. The two stages are genuinely different -- geometry
+        # first, then what the detector called it -- and spreading the first into the
+        # second says so, where mutating it in place claimed `object_from_box` had known
+        # the class all along.
+        objects.append(
+            {**metrics, "name": det.get("cls", "object"), "score": float(det.get("score", 0.0))}
+        )
     # `source` is not decoration. A renderer handed the wrong payload would find `grid`
     # and `objects` where it expected them and draw something plausible out of the other
-    # half of this package; this is what lets it refuse instead.
-    scene = {"source": "depth", "grid": bev_grid(points, trav), "objects": []}
-    for det in detections or []:
-        obj = object_from_box(det["box"], points)
-        if obj is None:
-            continue
-        obj["name"] = det.get("cls", "object")
-        obj["score"] = float(det.get("score", 0.0))
-        scene["objects"].append(obj)
-    return scene
+    # half of this package; this is what lets it refuse instead. `DepthScene` and its
+    # `Literal["depth"]` are the same refusal moved to where a checker can make it.
+    return {"source": "depth", "grid": bev_grid(points, trav), "objects": objects}
