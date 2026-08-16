@@ -12,11 +12,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-
-PAD_COLOR = (114, 114, 114)  # matches utils.visualize.letterbox
-PAD_LABEL = 255  # padded pixels are always ignore, never contribute to the loss
+from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD, PAD_COLOR, PAD_LABEL
 
 
 class Sample(dict):

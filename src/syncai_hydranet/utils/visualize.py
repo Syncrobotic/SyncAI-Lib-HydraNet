@@ -14,6 +14,8 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image
 
+from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD, PAD_COLOR
+
 # Traversability: blocked / caution / go. The one taxonomy that does not change between
 # deployments, so it needs no selection.
 TRAV_COLORS = np.array([[220, 40, 40], [250, 200, 40], [40, 200, 80]], dtype=np.uint8)
@@ -183,7 +185,7 @@ def overlay(
     return Image.fromarray(out)
 
 
-def letterbox(img: Image.Image, size, fill=(114, 114, 114)):
+def letterbox(img: Image.Image, size, fill=PAD_COLOR):
     """Scale to fit inside ``(H, W)`` preserving aspect ratio, then centre-pad.
 
     Returns ``(image, (x0, y0, w, h))``; the region locates the real content inside the
@@ -212,8 +214,6 @@ def preprocess(img: Image.Image, size, use_letterbox: bool = True):
     """
     import torch
 
-    from ..data.transforms import IMAGENET_MEAN, IMAGENET_STD
-
     h, w = size
     img = img.convert("RGB")
     if use_letterbox:
@@ -238,8 +238,6 @@ def crop_box(arr: np.ndarray, region) -> np.ndarray:
 
 def denormalize(t) -> np.ndarray:
     """Convert a normalized ``[3, H, W]`` tensor back to an ``[H, W, 3]`` uint8 array."""
-    from ..data.transforms import IMAGENET_MEAN, IMAGENET_STD
-
     arr = t.detach().cpu().numpy().transpose(1, 2, 0)
     arr = arr * IMAGENET_STD + IMAGENET_MEAN
     return (np.clip(arr, 0, 1) * 255).astype(np.uint8)

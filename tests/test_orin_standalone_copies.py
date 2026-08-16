@@ -42,7 +42,7 @@ def orin():
 
 def test_normalisation_constants_match_the_package(orin):
     """Different numbers here mean the board preprocesses differently from training."""
-    from syncai_hydranet.data.transforms import IMAGENET_MEAN, IMAGENET_STD
+    from syncai_hydranet.preprocessing import IMAGENET_MEAN, IMAGENET_STD
 
     bench, _ = orin
     assert np.array_equal(bench.MEAN, IMAGENET_MEAN)

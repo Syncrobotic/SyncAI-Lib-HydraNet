@@ -17,8 +17,8 @@ import torch.nn as nn
 
 from ..config import load_config
 from ..config_schema import unsupervised_heads
-from ..data.transforms import IMAGENET_MEAN, IMAGENET_STD
 from ..models.hydranet import build_model
+from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD
 from ..utils.checkpoint import load_checkpoint, select_weights
 
 # The input name *is* the contract. A graph that normalises internally takes raw RGB in

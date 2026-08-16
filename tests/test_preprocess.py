@@ -12,7 +12,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from syncai_hydranet.data.transforms import IMAGENET_MEAN, IMAGENET_STD
+from syncai_hydranet.preprocessing import IMAGENET_MEAN, IMAGENET_STD
 from syncai_hydranet.utils.visualize import preprocess
 
 

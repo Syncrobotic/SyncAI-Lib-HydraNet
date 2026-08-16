@@ -21,8 +21,9 @@ from PIL import Image
 
 from syncai_hydranet.cli.export_onnx import INPUT_NORMALISED, INPUT_RAW, ExportWrapper
 from syncai_hydranet.config import load_config
-from syncai_hydranet.data.transforms import IMAGENET_MEAN, IMAGENET_STD, build_transforms
+from syncai_hydranet.data.transforms import build_transforms
 from syncai_hydranet.models.hydranet import build_model
+from syncai_hydranet.preprocessing import IMAGENET_MEAN, IMAGENET_STD
 
 SIZE = (64, 80)
 
