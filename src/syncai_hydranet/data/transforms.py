@@ -270,6 +270,31 @@ AUGMENT_DEFAULTS = {
 }
 
 
+def _augment_pair(a: dict, key: str) -> tuple[float, float]:
+    """Read a two-number setting, and say which key is wrong when it is not one.
+
+    ``a`` is ``AUGMENT_DEFAULTS`` merged with ``data.augment`` from a YAML file, so its
+    values are whatever the config said. Reading them inline left the merged dict typed
+    as "float or a pair of floats" at every use site -- five type errors, and worse, a
+    config writing ``scale_range: 0.5`` failed inside ``tuple()`` with a message naming
+    neither the setting nor the file. Config values are checked where they are read.
+    """
+    v = a[key]
+    if isinstance(v, (int, float)) or len(tuple(v)) != 2:
+        raise ValueError(f"data.augment.{key} must be two numbers, e.g. [0.75, 1.5]; got {v!r}")
+    lo, hi = (float(x) for x in v)
+    if lo > hi:
+        raise ValueError(f"data.augment.{key}: {lo} > {hi}, so the range is empty")
+    return lo, hi
+
+
+def _augment_num(a: dict, key: str) -> float:
+    v = a[key]
+    if not isinstance(v, (int, float)):
+        raise ValueError(f"data.augment.{key} must be a number; got {v!r}")
+    return float(v)
+
+
 def build_transforms(
     input_size, train: bool, letterbox: bool = False, augment: dict | None = None
 ) -> Compose:
@@ -289,15 +314,15 @@ def build_transforms(
     a = {**AUGMENT_DEFAULTS, **(augment or {})}
     if train:
         geom_cls = LetterboxScaleCrop if letterbox else RandomScaleCrop
-        geom = geom_cls(input_size, scale_range=tuple(a["scale_range"]))
+        geom = geom_cls(input_size, scale_range=_augment_pair(a, "scale_range"))
         return Compose(
             [
                 geom,
-                RandomHorizontalFlip(p=float(a["flip_p"])),
+                RandomHorizontalFlip(p=_augment_num(a, "flip_p")),
                 ColorJitter(
-                    brightness=float(a["brightness"]),
-                    contrast=float(a["contrast"]),
-                    saturation=float(a["saturation"]),
+                    brightness=_augment_num(a, "brightness"),
+                    contrast=_augment_num(a, "contrast"),
+                    saturation=_augment_num(a, "saturation"),
                 ),
                 ToTensor(),
             ]

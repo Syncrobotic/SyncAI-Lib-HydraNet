@@ -4,11 +4,22 @@
 #   scripts/ty_ratchet.sh            # check against BASELINE below
 #   TY_BASELINE=12 scripts/ty_ratchet.sh
 #
-# A ratchet rather than a pass/fail gate. What is left in src/ is almost all torch and
-# pycocotools stub gaps rather than anything this repo wrote, and turning a gate red on
-# all of it at once is how a checker gets deleted a week later. Blocking the *increase*
-# is the part worth having: new code type-checks, old debt is paid down as those files
-# are touched anyway.
+# A ratchet rather than a pass/fail gate: turning a gate red on all of the debt at once
+# is how a checker gets deleted a week later. Blocking the *increase* is the part worth
+# having -- new code type-checks, old debt is paid down as those files are touched.
+#
+# This comment used to say the debt was "almost all torch and pycocotools stub gaps
+# rather than anything this repo wrote", and used that to justify a loose baseline. It
+# was measurably backwards. At 17 diagnostics only 7 mentioned a torch type at all, and
+# 10 of them sat in two files -- `data/transforms.py`, where AUGMENT_DEFAULTS mixed
+# `tuple[float, float]` and `float` so every read of it was ambiguous, and
+# `data/datasets.py`, where `LabelScheme` stores `fmt` and `mapping` as independent
+# fields when the mapping's key type *is* the fmt. Fixing the first took the count to
+# 11. The second is a label-decode refactor (ColorScheme/IdScheme) and wants its own
+# reviewed change rather than being smuggled into a green-CI commit.
+#
+# The general lesson, since it cost a day: a comment that excuses debt is itself a claim,
+# and nothing was checking this one.
 #
 # Lives in a script rather than inline in the workflows because two of them run it
 # (ci.yml at feat→dev, ci-promote.yml on the combined dev→stage state). A copy in each
@@ -20,7 +31,12 @@
 set -euo pipefail
 
 # Lower this when you fix things. Raising it needs a reason in the PR body.
-BASELINE="${TY_BASELINE:-15}"
+#
+# 11 is the measured count after `data/transforms.py` was fixed, so the ratchet actually
+# ratchets: a baseline left above the real number is a ceiling, and it lets the next five
+# regressions through without a word. The remaining 11 are 5 in `data/datasets.py` and
+# one each in export_onnx, seeding, detection, backbone, bev and trainer.
+BASELINE="${TY_BASELINE:-11}"
 
 TARGET="${1:-src/}"
 RUNNER=(uv run ty check "$TARGET" --output-format=concise)
