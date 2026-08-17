@@ -2,7 +2,8 @@
 """Turn track ground truth from hours of frame-by-frame work into minutes of judgement.
 
     # 1. propose
-    python3 scripts/track_review.py propose --config configs/hydranet_retail_products.yaml \\
+    python3 scripts/track_review.py propose \\
+        --config runs/hydranet_retail_objects_site_batch02/config.yaml \\
         --checkpoint runs/hydranet_retail_objects_site_batch02/best.pt \\
         --clip datasets/studioa_clips/Kaohsiung-cam04/archive_20260816-112757*.mp4 \\
         --fps 5 --max-frames 300 --out runs/gt_cam04
@@ -34,6 +35,16 @@ merges a human writes back. It stops exactly where judgement starts and does not
 `{track_id: {frame: [x0, y0, x1, y1]}}` because that is what `idf1` and `id_switches`
 consume. A format invented here and converted later is a second place for a frame index
 to go wrong.
+
+**It refuses any detection head that is not the 80-class COCO space.** `PERSON` here is
+`COCO_NAMES.index("person")`, which is **0**, and a label of 0 exists in every detection
+head this repo trains. `configs/hydranet_retail_products.yaml` says so itself: its two
+classes are `boxed_stock` and `device`, and its own comment notes that both taxonomies
+"produce a label `0`". Pointing this script at that checkpoint would not error -- it would
+track shelf stock, lay it out as shoppers, and hand back a ground-truth file. The pairing
+in this docstring's own example was one such mistake: a 2-class config against an 80-class
+checkpoint, which at least fails loudly on a shape mismatch. The refusal below covers the
+case that does not.
 
 **What this does not do: it does not add missing people.** A shopper the detector never
 saw is absent from the proposal and stays absent from the ground truth, so recall against
@@ -70,6 +81,24 @@ CROP_W, CROP_H = 48, 96
 MAX_CROPS = 12
 
 
+def check_person_class_space(n_classes: int) -> None:
+    """Refuse a detection head in which label `PERSON` does not mean a person.
+
+    Raises rather than warns. A warning is the wrong instrument here: the failure produces
+    a complete, well-formed `tracks.json` and a review sheet full of crops, so nothing
+    downstream can tell the difference and the reviewer is looking at the crops rather
+    than at the scrollback.
+    """
+    if n_classes != len(COCO_NAMES):
+        raise SystemExit(
+            f"This detection head has {n_classes} classes, not {len(COCO_NAMES)}. "
+            f"`PERSON` is COCO index {PERSON}, which is a valid label in that head and "
+            f"means something else -- `boxed_stock` in the retail-products taxonomy. "
+            f"Nothing would error; the tracks would just not be people. Use a checkpoint "
+            f"whose detection head is the 80-class COCO space."
+        )
+
+
 def tracks_to_json(tracks) -> dict[str, dict[str, list[float]]]:
     """`Track` objects -> the shape `reid_metrics` consumes.
 
@@ -91,7 +120,26 @@ def apply_merges(tracks: dict, merges: list[list]) -> dict:
     A frame claimed by two tracks in the same group keeps the first -- that is a
     detector duplicate rather than a judgement, and dropping it silently is wrong the
     other way, so `merge_collisions` is reported by the caller.
+
+    **An id that is not in `tracks` is refused rather than ignored.** `merges.json`
+    records ids and nothing else, so it carries no evidence of which proposal it was
+    written against, and a re-run renumbers freely: this directory has already held a
+    114-track proposal and a 24-track one. Under `lookup.get(tid, tid)` a group naming
+    ids from the wrong file is simply absent from the output -- the merge does not
+    happen, no key is missing, no count changes, and the ground truth is silently the
+    unmerged proposal. That is the one error a reviewer cannot see in the result, because
+    what it produces is exactly what "the tracker fragmented nothing" produces.
     """
+    known = set(tracks)
+    missing = sorted({str(g) for group in merges for g in group} - known, key=int)
+    if missing:
+        raise SystemExit(
+            f"merges.json names {len(missing)} track id(s) that tracks.json does not "
+            f"contain: {', '.join(missing[:12])}{' ...' if len(missing) > 12 else ''}. "
+            f"The proposal has {len(known)} tracks. This is what a merge file written "
+            f"against an earlier proposal looks like -- re-review against the current "
+            f"tracks.json rather than editing the ids to fit."
+        )
     lookup = {}
     for group in merges:
         keep = str(sorted(int(g) for g in group)[0])
@@ -113,7 +161,7 @@ def apply_merges(tracks: dict, merges: list[list]) -> dict:
 ROWS_PER_PAGE = 20
 
 
-def _sheet(tracks: dict, crops: dict, out: Path) -> list[Path]:
+def _sheet(tracks: dict, crops: dict, out: Path) -> tuple[list[Path], int]:
     """Pages of rows, one row per fragment, **sorted by first appearance**.
 
     Both of those are the difference between a tool and a 12,000-pixel strip, and the
@@ -125,10 +173,27 @@ def _sheet(tracks: dict, crops: dict, out: Path) -> list[Path]:
     -- so this is ~117 assignment decisions against maybe fifteen identities, not 6,786
     pairwise comparisons. Time ordering puts one shopper's fragments near each other,
     which is what makes an assignment answerable by looking rather than by searching.
+
+    Returns the pages **and the number of crops actually pasted**, because the six pages
+    this replaced were 794 x 2088 each, correct in every dimension, and empty. The page
+    geometry was checked and reported; the page contents were not. A caller that only
+    counts pages cannot tell a sheet from a set of labels.
     """
+    # Clear the previous run's pages before writing this one's. A re-run that yields fewer
+    # tracks writes fewer pages, and the surplus survives: this directory held
+    # `review_03..06.png` from an earlier pass alongside `review_01..02.png` from a later
+    # one, six pages of which four were stale. Empty ones merely waste a reviewer's time;
+    # the dangerous case is stale pages that *have* crops, because their track ids are
+    # from a `tracks.json` that no longer exists and every grouping made from them is
+    # silently against the wrong file. `merges.json` records ids and nothing else, so
+    # there is no later step at which that could be caught.
+    for old in out.glob("review_*.png"):
+        old.unlink()
+
     ids = sorted(tracks, key=lambda t: min(int(f) for f in tracks[t]))
     row_h = CROP_H + 8
     pages = []
+    drawn = 0
     for start in range(0, max(1, len(ids)), ROWS_PER_PAGE):
         chunk = ids[start : start + ROWS_PER_PAGE]
         img = Image.new(
@@ -145,10 +210,11 @@ def _sheet(tracks: dict, crops: dict, out: Path) -> list[Path]:
             d.text((6, y + 36), f"{len(fr)} fr", fill=(170, 170, 165))
             for c, im in enumerate(crops.get(tid, [])[:MAX_CROPS]):
                 img.paste(im, (170 + c * (CROP_W + 4), y))
+                drawn += 1
         path = out / f"review_{start // ROWS_PER_PAGE + 1:02d}.png"
         img.save(path)
         pages.append(path)
-    return pages
+    return pages, drawn
 
 
 def cmd_propose(args) -> int:
@@ -158,6 +224,7 @@ def cmd_propose(args) -> int:
     device = pick_device(cfg.get("device"))
     model = build_model(cfg).to(device).eval()
     model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), args.weights))
+    check_person_class_space(int(model.det_head.cls_pred.bias.shape[0]))
     size = cfg["data"]["input_size"]
 
     src_w, src_h, _ = probe(args.clip)
@@ -185,12 +252,43 @@ def cmd_propose(args) -> int:
 
     tracks = tracks_to_json([t for t in tracker.finished() if t.confirmed])
     (out / "tracks.json").write_text(json.dumps(tracks, indent=1) + "\n")
-    pages = _sheet(tracks, keep, out)
+    pages, drawn = _sheet(tracks, keep, out)
     lengths = sorted(len(v) for v in tracks.values())
     med = lengths[len(lengths) // 2] if lengths else 0
+    (out / "provenance.json").write_text(
+        json.dumps(
+            {
+                "config": args.config,
+                "checkpoint": args.checkpoint,
+                "weights": args.weights,
+                "clip": args.clip,
+                "fps": args.fps,
+                "max_frames": args.max_frames,
+                "score_thr": args.score_thr,
+                "tracker": {
+                    "iou": args.iou,
+                    "max_age": args.max_age,
+                    "min_hits": args.min_hits,
+                },
+                "frames_read": n,
+                "confirmed_tracks": len(tracks),
+                "median_track_frames": med,
+                "crops_drawn": drawn,
+            },
+            indent=1,
+        )
+        + "\n"
+    )
     print(f"\n{n} frames -> {len(tracks)} confirmed tracks, median length {med} frames")
     print(f"  {out / 'tracks.json'}")
-    print(f"  {len(pages)} review pages: {pages[0].name} .. {pages[-1].name}")
+    print(f"  {len(pages)} review pages: {pages[0].name} .. {pages[-1].name}, {drawn} crops")
+    if not drawn:
+        raise SystemExit(
+            f"{len(pages)} pages were written and not one crop was pasted onto them. The "
+            f"only thing a reviewer could group by is the frame ranges printed in the "
+            f"margin, which are the tracker's own output -- so the ground truth would be "
+            f"the tracker grading itself. tracks.json is kept; the sheets are not usable."
+        )
     print(
         "\nWrite merges.json as [[id, id, ...], ...] -- one inner list per shopper -- "
         "then run `apply`."
