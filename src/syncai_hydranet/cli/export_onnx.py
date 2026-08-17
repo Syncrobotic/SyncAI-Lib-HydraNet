@@ -38,6 +38,7 @@ from ..data.coco_subsets import (
     narrow_indices,
     resolve_export_subset,
 )
+from ..models.heads.segmentation import SemanticFPNHead
 from ..models.hydranet import build_model
 from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD
 from ..utils.checkpoint import load_checkpoint, select_weights
@@ -89,13 +90,9 @@ class ExportWrapper(nn.Module):
     two milliseconds a frame. **This is a frame win measured end to end, and it cannot be
     seen from the engine.** Quote it with the whole table or not at all.
 
-    What it costs beyond that is the logits: no confidence, no soft blend, no per-class
-    probability.
-
-    What it costs is the logits. Anything wanting a confidence, a soft blend or a
-    per-class probability has to export without this. That is why it is a flag and not the
-    default, and why the output binding is renamed rather than silently changing dtype and
-    rank underneath a host that would keep running.
+    What it costs is the logits: no confidence, no soft blend, no per-class probability.
+    That is why it is a flag and not the default, and why the output binding is renamed
+    rather than silently changing dtype and rank underneath a host that would keep running.
     """
 
     def __init__(self, model, embed_preprocessing: bool = True, argmax_seg: bool = False):
@@ -455,7 +452,19 @@ def main(argv: list[str] | None = None) -> None:
     print("output nodes:", out_names)
 
     if args.argmax_seg:
-        logits = sum(h.num_classes for h in model.seg_heads.values()) * h * w * 4
+        # `h` is the image height four lines up. Reusing it as the loop variable worked --
+        # a generator expression has its own scope -- but it worked by a language rule
+        # rather than by intent, and the reader has to know that rule to believe the
+        # number. A type checker flagged it before a human did.
+        # `isinstance` rather than a cast or an int(): `ModuleDict.values()` is typed as
+        # `Module`, so `num_classes` is unreadable to a checker, and the narrowing states
+        # the thing that is actually true -- only a segmentation head has a class count.
+        channels = sum(
+            head.num_classes
+            for head in model.seg_heads.values()
+            if isinstance(head, SemanticFPNHead)
+        )
+        logits = channels * h * w * 4
         ids = len(model.seg_heads) * h * w
         print(
             f"segmentation D2H drops from {logits / 1e6:.2f} MB of float logits to "
