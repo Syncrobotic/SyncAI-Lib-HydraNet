@@ -169,13 +169,37 @@ Installation provides these console scripts:
 | `hydranet-infer-image` | Overlay inference on a single image or a folder |
 | `hydranet-infer-video` | Video inference (uses the system ffmpeg, no opencv needed) |
 | `hydranet-scene` | Project a frame or clip onto the floor in metres — the panel above, and the scene as JSON |
-| `hydranet-export-onnx` | Export ONNX for TensorRT |
+| `hydranet-export-onnx` | Export ONNX for TensorRT — see the deployment flags below |
 | `hydranet-prepare-ade20k` | Filter ADE20K to its indoor subset and lay it out as `seg_folder` |
 | `hydranet-prepare-cocostuff` | The same, for COCO-Stuff's segmentation labels over the COCO images |
 | `hydranet-report` | Summarise one run, or rank runs and diff their configs |
 | `hydranet-annotation` | Emit the CVAT label schema; gate an annotated dataset before training on it |
 
 Run them all with `uv run <command>`, or `source .venv/bin/activate` first.
+
+### Two export flags worth knowing before you benchmark
+
+Neither changes the model. The weights are untouched, nothing is retrained, and the network
+graph is identical — what changes is how much work leaves the GPU for the host to redo.
+
+| flag | what it does |
+|---|---|
+| `--argmax-seg` | segmentation heads emit uint8 class maps instead of float logits; the host stops doing the argmax and D2H drops from 9.18 MB to 0.33 MB |
+| `--detection-classes robot_8\|retail_analytics\|<names>` | keeps only the class channels the deployment reads, out of a head still trained on all 80 |
+
+Measured end to end on a GB10 at 512×640 (±15%, shared GPU; the ratios held across three
+repeats): **6.69 ms → 3.29 ms**, and **2.25 ms / 444 fps** with a CUDA graph
+(`live_view_orin.py --cuda-graph`).
+
+> `--argmax-seg` makes the *engine* slower, 2.09 → 2.71 ms — the work moved onto the GPU,
+> where it is cheap. Benchmarked with `trtexec` alone it looks like a 25% regression. It is
+> a whole-frame win and cannot be seen from the engine.
+
+Both rename the bindings they change (`terrain_argmax`, `det_cls8_p3`), so a runtime
+written for the old contract fails to find its binding rather than misreading it, and
+`--detection-classes` writes a `<output>.classes.json` sidecar because a TensorRT engine
+keeps binding names and nothing else. Full tables and the correctness checks are in
+[DEPLOY_JETSON.md](docs/DEPLOY_JETSON.md).
 
 ## Deployment configs
 
@@ -189,12 +213,14 @@ Model structure, losses and training mechanics are identical across all three �
 differences are `data.terrain_classes`, `label_map` and the data sources. All three use
 COCO for the detection head, unchanged.
 
-`configs/` holds three more, each narrower than a deployment: `hydranet_retail_cctv.yaml`
-(the fixed-camera fine-tune at 512×896), `hydranet_retail_cocostuff.yaml` (a queued
-one-variable experiment, with the control it must be read against named in the file), and
-`eval_indoor25.yaml`, which is an evaluation rather than a training run — it reproduces the
-0.3246 indoor-subset detection baseline in one command, with the expected numbers written
-in the file you would run.
+`configs/` holds more, each narrower than a deployment: `hydranet_retail_objects.yaml` (the
+second retail taxonomy — objects rather than traversability, argued in
+[RETAIL_OBJECTS.md](docs/RETAIL_OBJECTS.md)), `hydranet_retail_cctv.yaml` (the fixed-camera
+fine-tune at 512×896), `hydranet_retail_cocostuff.yaml` and
+`hydranet_retail_objects_nc2.yaml` (one-variable experiments, each naming in the file the
+control it must be read against), and `eval_indoor25.yaml`, which is an evaluation rather
+than a training run — it reproduces the 0.3246 indoor-subset detection baseline in one
+command, with the expected numbers written in the file you would run.
 
 Each inherits `configs/_base/hydranet.yaml`, so a config file contains only what makes
 that deployment different. What is *not* in a file comes from the base, and the run's
@@ -250,7 +276,7 @@ src/syncai_hydranet/
 │   ├── label_maps_indoor.py  # indoor 12 classes + ADE20K mapping
 │   ├── label_maps_retail.py  # the indoor 12 + display_fixture, ids 0-11 kept aligned
 │   ├── label_maps_cocostuff.py  # COCO-Stuff ids -> the indoor / retail taxonomies
-│   ├── coco_subsets.py       # the COCO 80 names, and INDOOR_25 (the 0.3246 denominator)
+│   ├── coco_subsets.py       # the COCO 80 names, INDOOR_25 (the 0.3246 denominator), and the export subsets
 │   ├── datasets.py           # SegFolderDataset / CocoDetDataset / split resolution
 │   ├── transforms.py         # joint image+mask+box augmentation, letterbox, geometry inversion
 │   ├── fingerprint.py        # dataset fingerprints, written into meta.json
@@ -261,7 +287,8 @@ src/syncai_hydranet/
 │   └── bev3d.py              # the same map drawn in perspective, for a person
 ├── engine/
 │   ├── trainer.py            # AMP / EMA / cosine / gradient accumulation / checkpoints / TB
-│   └── evaluator.py          # mIoU + COCO mAP + primary metric selection
+│   ├── evaluator.py          # mIoU + COCO mAP + primary metric selection
+│   └── consensus.py          # fixed-camera frame consensus: a target-domain check needing no labels
 └── utils/
     ├── device.py             # CUDA → MPS → CPU
     ├── checkpoint.py         # safe loading (weights_only) + format version

@@ -203,6 +203,19 @@ sudo python3 ~/bench_camera_orin.py ~/hydranet_fp16.engine --frames 200
 80 classes at 6,825 positions. Narrowing the detection head at export is the single largest
 win available, and it is measured rather than argued.
 
+> **Corrected 2026-08-17: "nearly all of it the sigmoid" was wrong, and this table is why
+> nobody could tell.** `postprocess` is one bucket. Split on a GB10 it came apart into a
+> detection decode *and* a host argmax over the segmentation logits, and the argmax was the
+> larger of the two — larger than the engine itself. Narrowing the detection classes is
+> real (a measured 2.7× on the decode) but it was not the single largest win; folding the
+> argmax into the graph was.
+>
+> The numbers on that board do not transfer here — different silicon, TRT 10.16 against
+> this rig's 10.3 — so **the table above stands as measured and is not restated**. What
+> transfers is the method: re-run `bench_camera_orin.py` on this board with
+> `--argmax-seg`, and split `postprocess` before concluding anything from its share again.
+> See [DEPLOY_JETSON.md](DEPLOY_JETSON.md) §3.
+
 Also measure the camera's own ceiling — ours is 30 FPS, so 26.5 was already near the limit
 and the real headroom is in the GPU's 7× spare capacity, not in frame rate.
 

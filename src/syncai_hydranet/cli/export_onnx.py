@@ -4,8 +4,20 @@
         --checkpoint runs/hydranet_indoor/best.pt --output hydranet.onnx
 
 The forward graph holds only convolution, resize and exp: no NMS and no dynamic control
-flow, so trtexec fuses it in one piece. NMS and argmax stay in the host post-processing
-code (see docs/DEPLOY_JETSON.md).
+flow, so trtexec fuses it in one piece. NMS stays in the host post-processing code (see
+docs/DEPLOY_JETSON.md).
+
+Two flags move work off the host, and both change the output contract rather than the
+model -- the weights are untouched and nothing is retrained:
+
+* ``--argmax-seg`` folds the segmentation argmax into the graph. It was the largest single
+  item in the frame on a GB10, larger than the engine itself.
+* ``--detection-classes`` slices the class channels the deployment does not read, which is
+  where the host's sigmoid cost lives.
+
+Together, measured end to end: 6.69 -> 3.29 ms, and 2.25 ms with a CUDA graph. Both rename
+the bindings they change, so a runtime written for the old contract fails to find them
+rather than misreading them.
 """
 
 from __future__ import annotations

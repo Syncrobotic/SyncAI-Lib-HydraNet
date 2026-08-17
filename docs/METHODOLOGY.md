@@ -74,7 +74,8 @@ Owns everything from `best.pt` to a running engine on the robot.
 
 - ONNX export and its validation
 - TensorRT engine builds, FP16 now, INT8 when the model settles
-- The C++/Python runtime and post-processing (argmax, decode, NMS)
+- The C++/Python runtime and post-processing (decode, NMS — and argmax, unless the export
+  folded it into the graph, which on one board halved the frame)
 - Pre-processing parity between training and the robot
 - Latency budgets on the target board
 

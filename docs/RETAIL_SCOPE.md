@@ -398,8 +398,38 @@ not after the numbers look interesting.
    result before any of it reaches training.
 3. Calibrate the homography and build the distance LUT. This is independent of the model
    and can be finished before the first store mask is drawn.
-4. Narrow the detection export to the eight classes that matter, and re-measure on the
-   Orin. Expect most of the 16.33 ms post-processing to go away.
+4. ~~Narrow the detection export to the eight classes that matter, and re-measure on the
+   Orin. Expect most of the 16.33 ms post-processing to go away.~~ **Done 2026-08-17, and
+   two of the three predictions in that sentence were wrong.** See below.
+
+### What the export narrowing actually bought
+
+`hydranet-export-onnx --detection-classes` landed and was measured end to end on a GB10
+(TRT 10.16), not the AGX Orin — so the numbers below are a different board and are not
+comparable to the 37.8 ms frame quoted above. Treat the ratios as the result.
+
+**The prediction that held.** Narrowing collapses the host sigmoid exactly as argued:
+545,600 → 218,240 values a frame at `retail_analytics`, and the detect stage went 1.73 →
+0.64 ms, a measured 2.7× against a predicted 2.5×.
+
+**The first thing that was wrong: eight is the wrong list for this deployment.** §4 names
+eight classes that change a shop *robot's* behaviour. For retail *analytics* that list
+deletes `book`, which is the single strongest merchandise signal the head produces — 1,683
+instances on Kaohsiung-cam08, and the whole subject of
+[RETAIL_OBJECTS.md](RETAIL_OBJECTS.md)'s audit. So there are two subsets, `robot_8` and
+`retail_analytics` (32 classes), and neither is a default. The eight-class figure is real
+and it is for the robot.
+
+**The second thing that was wrong: the post-processing was not mostly the sigmoid.** On a
+6.69 ms frame the detect stage was 1.70 ms and the **host argmax over the segmentation
+logits was 2.53 ms** — larger than the engine's 2.09 ms, and on nobody's list here or in
+DEPLOY_JETSON.md §4, which offers four ways to shrink the engine. `--argmax-seg` folds it
+into the graph: 6.69 → 4.00 ms, and 3.29 ms with both flags.
+
+The reusable part is not the millisecond count. **This document reasoned carefully about
+the largest item in a frame it had measured, and named the second largest** — because the
+16.33 ms figure was a single bucket labelled "post-processing" and nobody had split it. A
+number that is 43% of the frame and undivided is not a finding, it is a place to look.
 
 ## 8. Open questions for whoever owns the product
 
