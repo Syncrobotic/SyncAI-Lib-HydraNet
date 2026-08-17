@@ -83,6 +83,42 @@ class Cudart:
     def sync(self, stream):
         self._check(self.lib.cudaStreamSynchronize(stream), "cudaStreamSynchronize")
 
+    # --- CUDA graph capture -------------------------------------------------
+    #
+    # This graph is launch-bound rather than compute-bound: 416 kernel launches over
+    # tensors as small as 4x5, and on a GB10 `--useCudaGraph` alone took trtexec from
+    # 2.61 to 1.95 ms. Capturing the whole H2D -> enqueue -> D2H sequence once and
+    # replaying it removes that per-frame launch cost from the runtime too, and it is the
+    # only remaining lever that needs no export change and no retraining.
+    #
+    # The capture bakes in the device *and host* pointers, so every frame afterwards must
+    # write into the same host buffers -- which the callers here already do, because the
+    # buffers are allocated once and reused.
+
+    def capture_begin(self, stream):
+        # 1 = cudaStreamCaptureModeThreadLocal. Global mode would fail on any unrelated
+        # CUDA call made by another thread during capture; TensorRT's own threads count.
+        self._check(
+            self.lib.cudaStreamBeginCapture(stream, ctypes.c_int(1)),
+            "cudaStreamBeginCapture",
+        )
+
+    def capture_end(self, stream):
+        graph = ctypes.c_void_p()
+        self._check(
+            self.lib.cudaStreamEndCapture(stream, ctypes.byref(graph)),
+            "cudaStreamEndCapture",
+        )
+        exec_ = ctypes.c_void_p()
+        self._check(
+            self.lib.cudaGraphInstantiate(ctypes.byref(exec_), graph, ctypes.c_ulonglong(0)),
+            "cudaGraphInstantiate",
+        )
+        return exec_
+
+    def graph_launch(self, exec_, stream):
+        self._check(self.lib.cudaGraphLaunch(exec_, stream), "cudaGraphLaunch")
+
 
 class Stage:
     """Wall-clock accumulator; reports the median, which ignores the first-frame spike."""

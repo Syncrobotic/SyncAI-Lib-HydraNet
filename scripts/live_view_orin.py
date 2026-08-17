@@ -325,6 +325,47 @@ def capture_loop(args):
         ctx.set_tensor_address(n, dev[n].value)
     stream = cuda.stream_create()
 
+    def enqueue():
+        """One frame's device work, from the host input buffer to the host output ones."""
+        cuda.memcpy_htod(dev[in_name], host[in_name], stream)
+        ctx.execute_async_v3(stream.value)
+        for n in outs:
+            cuda.memcpy_dtoh(host[n], dev[n], stream)
+
+    def run_eager():
+        enqueue()
+        cuda.sync(stream)
+
+    run_once = run_eager
+    if args.cuda_graph:
+        # Worth 0.6-1.0 ms a frame on a GB10, because this graph is launch-bound rather
+        # than compute-bound -- 416 kernel launches over tensors as small as 4x5. Capture
+        # replaces all of them with one.
+        #
+        # **Opt-in, and it falls back rather than failing.** Capture is a property of the
+        # driver, the TensorRT version and what else is touching the context, and this
+        # runs on boards nobody here can test against. A live viewer that refuses to start
+        # is a worse outcome than one that runs at the speed it ran at yesterday, so a
+        # capture that does not take is reported and stepped over.
+        try:
+            # The input buffer is np.empty at this point and no frame has arrived yet.
+            # Zero it so the warm-up runs on numbers rather than on whatever the
+            # allocator handed back, which can be inf and would propagate through BN.
+            host[in_name][...] = 0
+            run_eager()  # TensorRT wants one real execution before it can be captured
+            cuda.capture_begin(stream)
+            enqueue()
+            graph_exec = cuda.capture_end(stream)
+
+            def run_graph():
+                cuda.graph_launch(graph_exec, stream)
+                cuda.sync(stream)
+
+            run_once = run_graph
+            print("cuda graph: captured", flush=True)
+        except (RuntimeError, OSError, AttributeError) as exc:
+            print(f"cuda graph: capture failed, running eager ({exc})", flush=True)
+
     cap = cv2.VideoCapture(args.device, cv2.CAP_V4L2)
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
@@ -345,11 +386,7 @@ def capture_loop(args):
             rgb = (rgb / 255.0 - MEAN) / STD
         np.copyto(host[in_name], rgb.transpose(2, 0, 1)[None].astype(host[in_name].dtype))
 
-        cuda.memcpy_htod(dev[in_name], host[in_name], stream)
-        ctx.execute_async_v3(stream.value)
-        for n in outs:
-            cuda.memcpy_dtoh(host[n], dev[n], stream)
-        cuda.sync(stream)
+        run_once()
 
         trav_ids = seg_map(host, "traversability")
         terr = colourise(seg_map(host, "terrain"), TERRAIN_COLORS)
@@ -435,6 +472,14 @@ def main():
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--quality", type=int, default=80)
     ap.add_argument("--score", type=float, default=0.35, help="detection score threshold")
+    ap.add_argument(
+        "--cuda-graph",
+        action="store_true",
+        help="capture the H2D/inference/D2H sequence as a CUDA graph and replay it. Worth "
+        "0.6-1.0 ms a frame on a GB10, where this graph is launch-bound rather than "
+        "compute-bound. Opt-in and self-disabling: a capture that does not take is "
+        "reported and the eager path runs instead",
+    )
     ap.add_argument(
         "--classes",
         default=None,
