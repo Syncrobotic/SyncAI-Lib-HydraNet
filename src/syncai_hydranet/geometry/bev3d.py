@@ -286,7 +286,7 @@ def render(
         terrain_colors,
         bg,
     )
-    panel = big.resize((w, h), Image.LANCZOS) if s > 1 else big
+    panel = big.resize((w, h), Image.Resampling.LANCZOS) if s > 1 else big
     _draw_annotations(panel, terrain_bev, grid, objects, cam, terrain_colors, class_names)
     return panel
 

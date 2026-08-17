@@ -50,6 +50,7 @@ from ..geometry.scene_types import PlaneScene
 from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint, select_weights
 from ..utils.device import pick_device
+from ..utils.temporal import FixedCameraStabiliser
 from ..utils.visualize import (
     TRAV_COLORS,
     crop_box,
@@ -136,14 +137,22 @@ def compose(
     terrain_classes,
     plane: GroundPlane,
     grid: BevGrid,
+    stabiliser: FixedCameraStabiliser | None = None,
 ) -> tuple[Image.Image, SceneReport]:
-    """One frame -> the composed panel and its scene payload."""
+    """One frame -> the composed panel and its scene payload.
+
+    `stabiliser` is the one argument here that carries state between calls, so it is not
+    part of `Renderer.compose_kw`: a still has no history to vote over, and two clips
+    rendered by one process must not inherit each other's background plate.
+    """
     x, canvas, region = preprocess(frame, size, use_lb)
     with torch.no_grad():
         out = model.predict(x.to(device), score_thr=args.score_thr)
     x0, y0, cw, ch = region
     base = canvas.crop((x0, y0, x0 + cw, y0 + ch))
     trav = crop_box(out["traversability"][0].cpu().numpy(), region)
+    if stabiliser is not None:
+        trav = stabiliser(np.asarray(base), trav)
     view = overlay(base, trav, TRAV_COLORS)
     terrain = None
     if "terrain" in out:
@@ -295,6 +304,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="the original top-down panel instead of the perspective one",
     )
     ap.add_argument(
+        "--stabilise",
+        type=int,
+        default=0,
+        metavar="FRAMES",
+        help="clips only: fixed-camera temporal vote over N frames, applied only where "
+        "the image is unchanged",
+    )
+    ap.add_argument(
         "--pose-note",
         default=None,
         help="replace the on-frame assumption line, e.g. when the pose came from a fit",
@@ -371,6 +388,11 @@ def render_video(in_path: Path, renderer: Renderer, args) -> int:
     src_w, src_h, src_fps = probe(args.input)
     print(f"{in_path.name}: {src_w}x{src_h} @ {src_fps:.1f} fps -> {args.fps} fps")
 
+    stabiliser = (
+        FixedCameraStabiliser(window=args.stabilise, num_classes=len(TRAV_COLORS))
+        if args.stabilise > 1
+        else None
+    )
     writer, n = None, 0
     with contextlib.ExitStack() as stack:
         jsonl = stack.enter_context(Path(args.json).open("w")) if args.json else None
@@ -382,6 +404,7 @@ def render_video(in_path: Path, renderer: Renderer, args) -> int:
                     renderer.device,
                     args,
                     **renderer.compose_kw,
+                    stabiliser=stabiliser,
                 )
                 if jsonl is not None:
                     record: SceneRecord = {**payload, "frame": n}
