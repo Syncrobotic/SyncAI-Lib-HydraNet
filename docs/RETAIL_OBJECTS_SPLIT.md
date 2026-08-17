@@ -29,6 +29,27 @@ model reproduced SAM 3, not whether it is right — a record produced by the thi
 being used to check. That is the failure the session board of 2026-08-17 spent a day
 naming, and it is not less circular for being about pixels.
 
+> **R3 IS CURRENTLY UNSATISFIED, and this is the honest record of it.** A human pass on
+> batch02's 72 test frames was attempted on 2026-08-17 and not completed — correcting dense
+> retail masks with a brush is expensive, which is a fact about the task and not a failure
+> of will. What is on disk is SAM 3's pre-label plus one automated device-recovery pass;
+> 0.49% of test pixels differ from the raw pre-label and every one of those differences is
+> machine-made. `datasets/retail_objects_batch02/split.json` carries the same statement
+> under `test_provenance`, so it travels with the data rather than living only here.
+>
+> **Therefore every site number this project can currently produce is an *agreement* with
+> SAM 3, not an accuracy**, and it shares SAM 3's systematic errors with any model trained
+> on batch02 — the two cancel exactly where both are wrong. Quote such numbers with the
+> word "agreement" attached, or not at all.
+>
+> **A cheaper path than full correction, for whoever picks this up.** Redrawing every mask
+> is the expensive version of the question. The cheap version is *judging* rather than
+> drawing: present each connected component of a class and take keep / drop / relabel.
+> That is clicks instead of brushwork, it bounds precision honestly, and it is enough to
+> say whether SAM 3's `fixture` boundaries and over-wide `column` masks — the two the
+> consistency measurement flags as least stable — are trustworthy. It does not measure
+> recall, and a split corrected that way must say so.
+
 **R4 — Every rare class appears on at least two test cameras.** One fixed camera is one
 scene measured N times, not N samples. A `column` IoU resting on a single camera is that
 camera's IoU, and it will move for reasons that have nothing to do with the model.
