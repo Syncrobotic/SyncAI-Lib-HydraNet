@@ -51,6 +51,14 @@ dataset. No amount of public data supplies that. It is the first thing worth ann
 and `datasets/retail_batch01` (90 frames, three sessions, model pre-labels, passing
 `hydranet-annotation check --scheme retail`) is ready for it.
 
+> **Later correction, 2026-08-17, appended rather than edited in.** "The free-standing
+> display podiums are **not** found" is wrong, and re-running the same baseline on store
+> CCTV shows why: they are found, and labelled `obstacle_furniture` while the wall shelving
+> beside them is `display_fixture`. The bootstrap does not decline to answer, it answers
+> with the wrong class — which is the worse of the two failures, because a gap is visible
+> and a wrong label is not. The conclusion drawn here still holds; the evidence for it was
+> misread. `docs/RETAIL_SCOPE.md` carries the measured version and the replacement figure.
+
 ### Running right now
 
 ```

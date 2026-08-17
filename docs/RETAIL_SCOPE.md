@@ -187,10 +187,32 @@ staffed wrongly: **the model is not the constraint.**
 
 ### What the bootstrap transfers, and what it cannot
 
-The retail baseline was run and its pre-labels put over real store CCTV. **Wall-mounted
-shelving is marked; the free-standing display podiums in the middle of the floor are not**
-— they come back as unlabelled, which is the model saying it does not know rather than
-guessing.
+The retail baseline was run and its pre-labels put over real store CCTV:
+
+![the bootstrap splits one kind of fixture across two classes](../assets/retail_bootstrap_fixture_split.jpg)
+
+`runs/hydranet_retail_base` — ADE20K and COCO only, no site data — on a held-out shop
+camera, `Taichung-cam06`. Left is free space with detection boxes, right is the 13-class
+terrain map. **Wall-mounted shelving comes back purple as `display_fixture`; the
+free-standing podiums in the middle of the same floor come back red as
+`obstacle_furniture`.** Measured on this frame: `wall` 30.7%, `obstacle_furniture` 29.2%,
+`floor_hard` 23.9%, `display_fixture` 15.0%.
+
+That is the split, and it is worth stating precisely because the older version of this
+section got it wrong in the model's favour: it said the podiums came back *unlabelled*,
+"the model saying it does not know rather than guessing". It does not say that. It answers
+confidently, with a different class for the same kind of object, which is the worse
+failure of the two — an unlabelled region is visible as a gap, and a wrong label is not.
+It is also the exact frame `label_maps_retail_objects.py` was written from: "the round
+podium is `obstacle_furniture` while the wall shelving three metres away is
+`display_fixture`", and `display_fixture` carries the lowest test IoU of any class with
+real data at 0.336.
+
+Reproduce with:
+
+    hydranet-infer-image --config runs/hydranet_retail_base/config.yaml \
+      --checkpoint runs/hydranet_retail_base/best.pt --input <frame.jpg> \
+      --output out/ --vocab retail
 
 > The figure that stood here was deleted in `f9d4fcf` (history: `55ec787`,
 > `assets/retail_prelabel_gap.jpg`). What replaces it is stronger than a picture, because
