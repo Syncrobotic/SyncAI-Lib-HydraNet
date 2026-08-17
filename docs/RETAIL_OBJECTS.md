@@ -140,40 +140,81 @@ because the failure it prevents — a permanently empty output channel reporting
 after sixty epochs with no error anywhere — is the one this project has already shipped
 three times (`floor_metal`, `wet_slippery`, `threshold_ramp`).
 
+> **Correction, 2026-08-17: the predicted failure mode is the milder member of its family.**
+> The 60-epoch run happened, and `product` did not report IoU 0.000. It reported **nothing**
+> — no `IoU/terrain/05_product` key at any epoch, and `terrain_mIoU_classes` 5.0 for all 60
+> rows, because a class absent from the ground truth never enters the confusion matrix. A
+> 0.000 in the table is visible and looks wrong; an absent row looks like a taxonomy with
+> five classes and reads as normal. The three warnings above were right to exist and none of
+> them fired at the moment that mattered, because none of them ran: `unsourced_classes()`
+> had no caller outside its own tests until `config_schema.py` gained one the same day.
+> Per-class support now travels with per-class IoU in `metrics.jsonl` for the same reason.
+
 ---
 
 ## What is still missing, in order
 
-**1. Columns.** ADE20K supplies id 43, which is atrium and lobby columns rather than a
-shop's. The cheap source is the site: the cameras are fixed, so a column is **one polygon
-per camera**, correct for every frame that camera will ever produce. Same argument the
-floor already gets in `sam3_prompts.py`. 41 cameras, one polygon each.
+**1. Columns — sourced 2026-08-17, still unlearned.** ADE20K supplies id 43, which is atrium
+and lobby columns rather than a shop's, and the 60-epoch run showed exactly what that buys:
+`column` scores val IoU 0.40–0.51 and predicts **0.00% on every daytime site clip measured**.
+Taichung-cam11 has a clad pillar with STUDIO A on it, centre of frame, and the model calls it
+`wall`. The gap was never hidden — `configs/hydranet_retail_objects.yaml:84-86` says it in a
+comment written before the run — and nothing executed that comment.
+
+Two things the val number could not show, both from the site pre-labels. SAM 3 finds those
+columns at 7.14% of labelled pixels across 24 shop-floor cameras, so the footage carries the
+signal and the model does not. And `column`'s entire val IoU stands on **22 images and 0.66%
+of labelled pixels**, printed in the same format as `wall`'s 283 images and 61.86%.
+
+**2. Products — measured 2026-08-17, and the prompts work.** No public segmentation dataset
+labels merchandise; site pre-labels are the only source, and their coverage figure was the
+experiment. Result, from `datasets/retail_objects_batch01`: `product` is **19.28%** of
+labelled pixels in train and **17.23%** in test, present in every frame, plus 10,524
+merchandise instance boxes.
+
+That result overturns a figure worth naming, because it would otherwise have talked someone
+out of the material that works. The earlier `product box` measurement of **0 instances** on
+accessory walls was a property of 352×240 footage and one prompt out of eight, not of the
+footage: at 1920×1080 with `--upscale 1.0`, `packaged goods` and `merchandise on a shelf`
+segment each hanging packet individually, 33% of labelled pixels on Kaohsiung-cam07.
 
 ```bash
 hydranet-annotation labels --scheme retail_objects --out cvat_objects.json
-```
-
-**2. Products.** No public segmentation dataset labels merchandise, and nothing has yet
-asked SAM 3 for it — the prompts in
-[`sam3_prompts_objects.py`](../src/syncai_hydranet/data/sam3_prompts_objects.py) are
-unmeasured, so the first batch is an experiment and its coverage figure is the result.
-The script prints `FOUND NOTHING:` for any class that came back empty rather than
-letting it vanish from the composition table.
-
-```bash
-python3 scripts/sam3_prelabel.py --scheme retail_objects --consensus 0.9 \
-    --out datasets/retail_objects_batch01 --frames 12 --upscale 1.0 /path/to/cam*/clip.mp4
+python3 scripts/sam3_prelabel.py --scheme retail_objects --boxes \
+    --out datasets/retail_objects_batch01 --frames 6 --upscale 1.0 /path/to/cam*/clip.mp4
 hydranet-annotation check datasets/retail_objects_batch01 --scheme retail_objects
 ```
+
+`--consensus 0.9` is deliberately absent from that command. It buys precision by writing 255
+wherever the clip's frames disagree, which is the right trade when nobody will correct the
+masks — but the pixels it discards are the class boundaries, which is what an IoU compares.
+Measured on the six site test cameras, only **31.1%** of static pixels are stable at 0.9,
+and of the unstable remainder `fixture` is 71.9%, `product` 17.4%, `column` 10.6%. A
+consensus pass here would have produced a high-precision dataset that had thrown away the
+argument.
+
+**Which cameras, and which are held back for measurement, is
+[RETAIL_OBJECTS_SPLIT.md](RETAIL_OBJECTS_SPLIT.md).** Split by camera and never by frame,
+six cameras reserved, and a rule that a per-class number standing on fewer than two test
+cameras is not reported at all.
 
 The consensus pass removes only *random* error — a fixture SAM 3 consistently misses
 survives untouched — and it cannot produce a test split, because scoring a model against
 SAM 3's masks measures agreement with SAM 3.
 
-**3. A hand-drawn test split.** Still the critical path, and still absent. Every mask in
-`datasets/retail_cctv_pilot*` and `datasets/retail_sam3_consensus*` is SAM 3 output with
-no human pass. RETAIL_SCOPE.md §6 argues why this has to come first; nothing here changes
-that.
+**3. A hand-drawn test split. Still the critical path, and still absent — now designed and
+reserved, which is not the same thing.** Six cameras are held out under
+[RETAIL_OBJECTS_SPLIT.md](RETAIL_OBJECTS_SPLIT.md) and their 72 frames sit in the `test`
+split, but **every mask in that split is still SAM 3 output with no human pass**, exactly as
+in `datasets/retail_cctv_pilot*` and `datasets/retail_sam3_consensus*`. Scoring against them
+would measure agreement with SAM 3, and since the training masks come from SAM 3 too, the
+systematic errors are shared and cancel. Until someone corrects those 72 frames, this
+taxonomy has **no site number at all** — not a low one.
+
+What the reservation does buy, before anyone draws anything: the cameras are decided in
+advance, from measured class share rather than from a contact sheet, so the split cannot be
+chosen after seeing which cameras a model happens to do well on. RETAIL_SCOPE.md §6 argues
+why this has to come first; nothing here changes that.
 
 **4. Detection calibration.** `SCORE_THR_RETAIL = 0.20` restores boxes on the cameras
 that return none at 0.30, and it is a stopgap, not a fix: scores are not comparable
@@ -189,7 +230,11 @@ it is a rename, and it inherits every mistake the head makes.
 ## Running it
 
 ```bash
-# train (ADE20K bootstrap only until the site data above exists)
+# train. Still the ADE20K bootstrap alone: datasets/retail_objects_batch01 exists but is
+# not wired into this config, because its masks have had no human pass. Adding it means a
+# second dataset entry with label_map: retail_objects_native -- at which point the
+# unsourced-class warning for `product` should stop firing, and if it does not, the
+# pre-labels are not reaching id 5 and that is worth knowing before sixty epochs.
 hydranet-train --config configs/hydranet_retail_objects.yaml
 
 # inference; there is no traversability panel, so the terrain overlay carries the boxes
