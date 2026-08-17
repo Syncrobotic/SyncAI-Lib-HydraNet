@@ -155,6 +155,21 @@ hydranet-export-onnx --config configs/hydranet_retail_objects.yaml \
 | `retail_analytics` | 32 | 218,240 | **2.5×** less |
 | `robot_8` | 8 | 54,560 | **10.0×** less |
 
+**There is a second, similar-looking knob, and reaching for it instead is a real mistake.**
+`data.datasets[].classes` also takes a list of COCO names, and it is the one someone
+looking through a config will find first:
+
+| | what it narrows | `num_classes` | when |
+|---|---|---|---|
+| `data.datasets[].classes` | what the head **learns** — it changes the output space | must match it, and `config_schema.py` errors if it does not | training |
+| `--detection-classes` | what the engine **emits** | left alone, with the trained weights | export |
+
+Setting the config key against an existing checkpoint renumbers every label under it: the
+run completes, the loss falls, and each box is reported as a confident wrong class. It also
+throws away COCO supervision the shared trunk gets for free, which is what RETAIL_SCOPE.md
+§4 is arguing against. If the goal is a smaller engine from a model you already trained, it
+is the export flag, every time.
+
 The two lists are different deployments and neither is a default. `robot_8` deletes
 `book`, which the cam08 audit found 1,683 of and which is the strongest merchandise signal
 the head produces — narrowing an analytics build with the robot's list would silently
