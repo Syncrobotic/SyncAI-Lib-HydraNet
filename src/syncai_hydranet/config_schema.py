@@ -312,24 +312,93 @@ def unsourced_terrain_classes(cfg: dict) -> dict[str, tuple[str, ...]]:
     shop sign dead centre of frame, which it calls `wall`. A sourced class can still be
     identically absent in deployment. Only site evaluation catches that; a config cannot.
     """
-    by_taxonomy: dict[tuple, list] = {}
-    for ds in (cfg.get("data") or {}).get("datasets") or []:
-        if not isinstance(ds, dict):
-            continue
-        scheme = SCHEMES.get(ds.get("label_map"))
-        if scheme is not None:
-            by_taxonomy.setdefault(scheme.classes, []).append(scheme)
-
     out: dict[str, tuple[str, ...]] = {}
-    for classes, schemes in by_taxonomy.items():
-        produced = {v for s in schemes for v in s.mapping.values() if v != 255}
+    for classes, members in _taxonomy_groups(cfg).items():
+        produced = {v for _n, s, _r in members for v in s.mapping.values() if v != 255}
         # Class 0 is `void` in every scheme and is not a class anyone trains, so a
         # mapping that never emits it is correct rather than incomplete.
         missing = tuple(name for tid, name in enumerate(classes) if tid and tid not in produced)
         if missing:
-            names = "+".join(sorted({s.name for s in schemes}))
-            out[names] = missing
+            out["+".join(sorted({s.name for _n, s, _r in members}))] = missing
     return out
+
+
+def _taxonomy_groups(cfg: dict) -> dict[tuple, list[tuple[str, Any, float]]]:
+    """Segmentation datasets grouped by the taxonomy they label into.
+
+    ``(dataset name, scheme, sample_ratio)`` per member. Datasets with no ``label_map``
+    are omitted deliberately: a COCO detection set contributes no segmentation target at
+    all, so it neither supplies a terrain class nor supplies a negative for one, and
+    counting it either way would misdescribe the mix.
+    """
+    groups: dict[tuple, list[tuple[str, Any, float]]] = {}
+    for ds in (cfg.get("data") or {}).get("datasets") or []:
+        if not isinstance(ds, dict):
+            continue
+        scheme = SCHEMES.get(ds.get("label_map"))
+        if scheme is None:
+            continue
+        ratio = ds.get("sample_ratio")
+        groups.setdefault(scheme.classes, []).append(
+            (str(ds.get("name")), scheme, float(ratio) if isinstance(ratio, NUMBER) else 1.0)
+        )
+    return groups
+
+
+def minority_sourced_terrain_classes(cfg: dict) -> dict[str, tuple[list, list]]:
+    """Classes some segmentation dataset can produce and another cannot.
+
+    ``unsourced_terrain_classes`` above asks "can *any* dataset produce this class" -- a
+    yes/no over the union. That is the right question only while the answer is no. The
+    moment one dataset supplies a class and a larger one cannot, the union says yes and
+    goes quiet, and a harder failure begins.
+
+    **A class absent from the dominant dataset is suppressed, not merely unlearned**, and
+    the difference is sign rather than dilution. Measured on the retail-objects site run:
+    ADE20K was 90.2% of segmentation steps and contains zero `product` pixels, so in nine
+    batches out of ten every pixel was a *negative* for that channel. `product` sat at
+    0.000 for 22 epochs while the run looked entirely normal. The gate above had said
+    "`ade20k_retail_objects` can never produce product" all along and stopped saying it
+    the instant a 5% site dataset was added -- which is exactly when it started to matter.
+
+    Returns ``{class name: (producers, non_producers)}`` where each side is a list of
+    ``(dataset name, sample_ratio)``.
+
+    **What it deliberately does not compute: the step share.** `sample_ratio` is in the
+    config; the number of images behind it is not, so a percentage derived from ratios
+    alone would be an invented figure with a confident shape. The real share is known in
+    ``MultiTaskLoader``, after the datasets are built, and belongs there. This reports the
+    partition and the declared ratios and points at the measurement.
+    """
+    out: dict[str, tuple[list, list]] = {}
+    for classes, members in _taxonomy_groups(cfg).items():
+        if len(members) < 2:
+            continue  # one dataset cannot be a minority within its own taxonomy
+        for tid, name in enumerate(classes):
+            if not tid:
+                continue
+            produces = [(n, r) for n, s, r in members if tid in s.mapping.values()]
+            lacks = [(n, r) for n, s, r in members if tid not in s.mapping.values()]
+            if produces and lacks:
+                out[name] = (produces, lacks)
+    return out
+
+
+def _check_minority_sourced(rep: _Report, cfg: dict) -> None:
+    def _fmt(pairs: list) -> str:
+        return ", ".join(f"{n} (sample_ratio {r:g})" for n, r in pairs)
+
+    for name, (produces, lacks) in sorted(minority_sourced_terrain_classes(cfg).items()):
+        rep.warnings.append(
+            f"class {name!r} is produced only by {_fmt(produces)}; "
+            f"{_fmt(lacks)} supplies it as a negative in every batch. A class absent from "
+            f"the dominant dataset is suppressed, not merely unlearned -- `product` sat at "
+            f"IoU 0.000 for 22 epochs this way. Check the step share, which only the loader "
+            f"knows. If it needs correcting, prefer lowering the abundant dataset's "
+            f"sample_ratio: raising the scarce one reaches the same balance by showing the "
+            f"same few images many times an epoch, trading a suppressed channel for a "
+            f"memorised one."
+        )
 
 
 def _check_fixed_weights(rep: _Report, cfg: dict) -> None:
@@ -541,6 +610,7 @@ def check_config(cfg: dict) -> list[str]:
     _check_channels_last(rep, cfg)
     _check_fixed_weights(rep, cfg)
     _check_unsourced_classes(rep, cfg)
+    _check_minority_sourced(rep, cfg)
 
     if rep.errors:
         listing = "\n".join(f"  - {e}" for e in rep.errors)

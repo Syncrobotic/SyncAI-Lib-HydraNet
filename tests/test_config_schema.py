@@ -10,7 +10,10 @@ import pytest
 from syncai_hydranet.config import load_config
 from syncai_hydranet.config_schema import (
     ConfigError,
+    _check_minority_sourced,
+    _Report,
     check_config,
+    minority_sourced_terrain_classes,
     unsourced_terrain_classes,
 )
 from syncai_hydranet.data.label_maps import SCHEMES
@@ -52,16 +55,49 @@ KNOWN_UNSOURCED = {
 }
 
 
+# Classes one segmentation dataset in the config produces and another cannot. Not empty
+# channels -- these train on real pixels -- but the larger dataset supplies every one of
+# those pixels as a *negative*, which suppresses rather than merely dilutes. Pinned for
+# the same reason as the table above: a new one has to be noticed.
+#
+# `hydranet_retail_cctv` is the entry worth reading. `floor_metal`, `wet_slippery` and
+# `threshold_ramp` have been IoU 0.000 in this project since the beginning and were
+# assumed to be starved of data. They are not unsourced here -- `site_cctv_pseudo` draws
+# them. They are outvoted by ADE20K, which is a different problem with a different fix.
+KNOWN_MINORITY_SOURCED = {
+    "hydranet_regnet800mf.yaml": ("rock",),
+    "hydranet_retail_cctv.yaml": ("floor_metal", "threshold_ramp", "wet_slippery"),
+    "hydranet_retail_objects_site.yaml": ("product",),
+    "hydranet_retail_objects_site_balanced.yaml": ("product",),
+}
+
+
 @pytest.mark.parametrize("path", CONFIGS, ids=lambda p: p.name)
-def test_shipped_configs_raise_nothing_and_warn_only_about_empty_channels(path):
+def test_shipped_configs_raise_nothing_and_warn_only_about_pinned_class_problems(path):
     """This assertion used to be `== []`.
 
     That was true only because nothing measured the empty channels; it was not evidence
-    that there were none. Keeping the form strict -- every warning must be one of the
-    pinned ones -- means a config that grows any *other* warning still fails here.
+    that there were none. Keeping the form strict -- every warning must be one of the two
+    pinned kinds -- means a config that grows any *other* warning still fails here.
     """
     warnings = check_config(load_config(path, validate=False))
-    assert [w for w in warnings if "empty output channel" not in w] == []
+    unpinned = [
+        w
+        for w in warnings
+        if "empty output channel" not in w and "is produced only by" not in w
+    ]
+    assert unpinned == []
+
+
+@pytest.mark.parametrize("path", CONFIGS, ids=lambda p: p.name)
+def test_shipped_config_minority_sourced_classes_are_the_known_ones(path):
+    """The check that would have named `product`'s 22 epochs at 0.000 before the run.
+
+    Fails on a new one rather than after sixty epochs of a plausible-looking curve, which
+    is the same bargain as the empty-channel table above and the reason both are data.
+    """
+    found = minority_sourced_terrain_classes(load_config(path, validate=False))
+    assert tuple(sorted(found)) == KNOWN_MINORITY_SOURCED.get(path.name, ())
 
 
 @pytest.mark.parametrize("path", CONFIGS, ids=lambda p: p.name)
@@ -314,3 +350,87 @@ def test_an_inherited_stray_weight_is_silent_under_uncertainty():
     assert "traversability" in cfg["model"]["fixed_weights"]
     assert "traversability" not in cfg["model"]["heads"]
     assert [w for w in check_config(cfg) if "fixed_weights" in w] == []
+
+
+# ------------------------------------------ classes one dataset has and another lacks
+
+
+def _two_source_cfg(second_map: str = "retail_objects_native"):
+    return {
+        "data": {
+            "datasets": [
+                {"name": "ade20k", "label_map": "ade20k_retail_objects", "sample_ratio": 1.0},
+                {"name": "site", "label_map": second_map, "sample_ratio": 0.05},
+            ]
+        }
+    }
+
+
+def test_a_class_only_the_small_dataset_can_produce_is_reported():
+    found = minority_sourced_terrain_classes(_two_source_cfg())
+    assert "product" in found
+    produces, lacks = found["product"]
+    assert produces == [("site", 0.05)]
+    assert lacks == [("ade20k", 1.0)]
+
+
+def test_the_unsourced_gate_goes_quiet_on_exactly_this_case():
+    """Why this function had to exist, stated as a test rather than as a docstring claim.
+
+    `unsourced_terrain_classes` asks whether *any* dataset can produce the class. Adding
+    one tiny source flips that to yes and silences it -- at the moment the harder failure
+    begins, because the dominant dataset now supplies every pixel of that class as a
+    negative. `product` sat at IoU 0.000 for 22 epochs in exactly this configuration.
+    """
+    cfg = _two_source_cfg()
+    assert unsourced_terrain_classes(cfg) == {}, "the old gate says nothing here"
+    assert "product" in minority_sourced_terrain_classes(cfg), "the new one has to"
+
+
+def test_a_wholly_unsourced_class_is_not_also_reported_as_minority_sourced():
+    """The two checks partition the problem; a class in both would be double-warned."""
+    cfg = {"data": {"datasets": [{"name": "ade20k", "label_map": "ade20k_retail_objects"}]}}
+    assert unsourced_terrain_classes(cfg) == {"ade20k_retail_objects": ("product",)}
+    assert minority_sourced_terrain_classes(cfg) == {}
+
+
+def test_a_detection_dataset_is_not_counted_as_supplying_negatives():
+    """A COCO set has no `label_map` and contributes no segmentation target at all.
+
+    Counting it among the datasets that "cannot produce" a terrain class would report
+    every class in every multi-task config as minority-sourced, which is both wrong and
+    the fastest way to get a warning ignored.
+    """
+    cfg = {
+        "data": {
+            "datasets": [
+                {"name": "ade20k", "label_map": "ade20k_retail_objects", "sample_ratio": 1.0},
+                {"name": "coco", "type": "coco", "supervises": ["detection"]},
+            ]
+        }
+    }
+    assert minority_sourced_terrain_classes(cfg) == {}
+
+
+def test_the_advice_prefers_lowering_the_abundant_ratio():
+    """Raising the scarce dataset reaches the same balance by repeating a few images many
+    times an epoch -- it trades a suppressed channel for a memorised one. The message has
+    to say which direction, or it pushes people toward the worse of the two fixes."""
+    rep = _Report()
+    _check_minority_sourced(rep, _two_source_cfg())
+    assert len(rep.warnings) == 1
+    assert "prefer lowering the abundant" in rep.warnings[0]
+    assert "memorised" in rep.warnings[0]
+    assert "ade20k (sample_ratio 1)" in rep.warnings[0]
+
+
+def test_two_taxonomies_do_not_vouch_for_each_other():
+    """A config may mix schemes sharing no class list; a class in one is not "missing"
+    from a dataset that labels into the other."""
+    cfg = _two_source_cfg()
+    cfg["data"]["datasets"].append(
+        {"name": "offroad", "label_map": "rugd", "sample_ratio": 1.0}
+    )
+    found = minority_sourced_terrain_classes(cfg)
+    assert "product" in found
+    assert [n for n, _ in found["product"][1]] == ["ade20k"], "rugd must not be listed"
