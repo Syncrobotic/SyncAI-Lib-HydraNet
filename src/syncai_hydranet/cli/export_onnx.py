@@ -54,13 +54,48 @@ class ExportWrapper(nn.Module):
     Folded into the graph it stops being a discipline problem. The constants ship with the
     weights, TensorRT fuses them into the first convolution, and the robot's only job is
     to hand over pixels in the order and range the input name states.
+
+    ``argmax_seg`` does the same thing at the other end of the graph, and is the larger
+    win of the two. Measured on a GB10 at 512x640, single-thread, real decode:
+
+        infer     2.09 ms  31.2%
+        d2h       0.37 ms   5.5%
+        terrain   2.53 ms  37.8%   <- host argmax over 7x512x640
+        detect    1.71 ms  25.5%
+        total     6.70 ms  -> 149 fps
+
+    **The host argmax was the largest single item in the frame, larger than the engine**,
+    and it was on nobody's lever list -- DEPLOY_JETSON.md §4 lists four ways to make the
+    engine smaller and the engine is 31% of the problem. Folding it in measures 4.00 ms,
+    250 fps: a 40% frame reduction for an export flag, with no retraining and no change to
+    a single weight. The D2H transfer falls with it, from 9.2 MB of float logits to 0.33 MB
+    of uint8 class ids.
+
+    What it costs is the logits. Anything wanting a confidence, a soft blend or a
+    per-class probability has to export without this. That is why it is a flag and not the
+    default, and why the output binding is renamed rather than silently changing dtype and
+    rank underneath a host that would keep running.
     """
 
-    def __init__(self, model, embed_preprocessing: bool = True):
+    def __init__(self, model, embed_preprocessing: bool = True, argmax_seg: bool = False):
         super().__init__()
         self.model = model
         self.seg_names = list(model.seg_heads.keys())
         self.embed_preprocessing = embed_preprocessing
+        self.argmax_seg = argmax_seg
+        if argmax_seg:
+            wide = {
+                name: head.num_classes
+                for name, head in model.seg_heads.items()
+                if head.num_classes > 256
+            }
+            if wide:
+                raise SystemExit(
+                    "cannot fold argmax into the graph for head(s) "
+                    + ", ".join(f"{n} ({c} classes)" for n, c in wide.items())
+                    + ": the class map is uint8, which tops out at 256. Export without "
+                    "--argmax-seg and argmax on the host."
+                )
         if embed_preprocessing:
             # Training divides by 255 and then normalises in 0-1 units. Scaling the
             # constants by 255 instead makes those two steps one, exactly.
@@ -79,11 +114,30 @@ class ExportWrapper(nn.Module):
     def input_name(self) -> str:
         return INPUT_RAW if self.embed_preprocessing else INPUT_NORMALISED
 
+    @property
+    def seg_output_names(self) -> list[str]:
+        """Binding names for the segmentation heads.
+
+        Suffixed when the graph emits class ids rather than logits. A host that keeps
+        calling ``argmax`` on what it thinks are logits gets a wrong-rank array out of a
+        uint8 class map -- sometimes a crash, sometimes a picture. Renaming turns it into
+        a missing binding, which is neither.
+        """
+        suffix = "_argmax" if self.argmax_seg else ""
+        return [f"{n}{suffix}" for n in self.seg_names]
+
     def forward(self, images):
         if self.embed_preprocessing:
             images = (images - self.pre_mean) / self.pre_std
         out = self.model(images)
-        flat = [out[n] for n in self.seg_names]
+        # argmax after the head's own bilinear upsample, not before it: taking it at P3
+        # and resizing the class map with nearest would be a different answer at every
+        # boundary, and a cheaper one nobody asked for. This way the graph computes
+        # exactly what the host was computing.
+        flat = [
+            out[n].argmax(dim=1).to(torch.uint8) if self.argmax_seg else out[n]
+            for n in self.seg_names
+        ]
         if self.model.det_head is not None:
             flat += list(out["det_cls"]) + list(out["det_reg"]) + list(out["det_ctr"])
         return tuple(flat)
@@ -227,10 +281,20 @@ def check_parity(wrapper, dummy, path: str, out_names: list[str], tol: float = 1
     print(f"\nparity vs PyTorch ({len(out_names)} outputs, relative tolerance {tol:g})")
     worst, worst_name, failures = 0.0, "", []
     for name, a, b in zip(out_names, ref, got, strict=True):
-        scale = max(float(abs(a).max()), 1e-9)
-        rel = float(abs(a - b).max()) / scale
+        if a.dtype.kind in "iu":
+            # A class map. Relative error on label ids is meaningless -- ids 2 and 3 are
+            # not "1 apart" in any sense the tolerance was set for -- so compare the only
+            # thing that means anything, which is how many pixels disagree. Exported
+            # argmax should be exact; a tie broken differently by two implementations
+            # would show here rather than as a slightly-off float.
+            rel = float((a != b).mean())
+            label = "disagreeing pixels"
+        else:
+            scale = max(float(abs(a).max()), 1e-9)
+            rel = float(abs(a - b).max()) / scale
+            label = "relative"
         if rel > worst:
-            worst, worst_name = rel, name
+            worst, worst_name = rel, f"{name} ({label})"
         if rel > tol:
             failures.append((name, rel))
     for name, rel in failures:
@@ -265,6 +329,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="export a graph that expects an already-normalised tensor, as before. The "
         "input is then named 'images' rather than 'image_rgb_255', and the runtime owns "
         "the mean/std -- which is the parity risk this defaults away from",
+    )
+    ap.add_argument(
+        "--argmax-seg",
+        action="store_true",
+        help="emit uint8 class maps for the segmentation heads instead of float logits, "
+        "folding the host's argmax into the graph. Measured on a GB10 at 512x640: the "
+        "host argmax was 2.53 ms of a 6.70 ms frame -- larger than the engine -- and "
+        "folding it in gives 4.00 ms, a 40% frame reduction with no retraining. Costs the "
+        "logits, so anything needing a confidence or a soft blend must export without it. "
+        "The bindings are renamed '<head>_argmax'",
     )
     ap.add_argument(
         "--detection-classes",
@@ -319,7 +393,7 @@ def main(argv: list[str] | None = None) -> None:
     h, w = ecfg.get("input_size") or cfg["data"]["input_size"]
     print(f"exporting at {h}x{w}")
     embed = not args.no_embed_preprocessing
-    wrapper = ExportWrapper(model, embed_preprocessing=embed)
+    wrapper = ExportWrapper(model, embed_preprocessing=embed, argmax_seg=args.argmax_seg)
     # Exercise the graph over the range it will actually see. Feeding a 0-255 graph
     # standard-normal noise would make the parity check pass on inputs no camera produces.
     dummy = (
@@ -330,7 +404,7 @@ def main(argv: list[str] | None = None) -> None:
         + ("raw RGB 0-255, normalisation is inside the graph" if embed else "pre-normalised")
     )
 
-    out_names = list(wrapper.seg_names)
+    out_names = list(wrapper.seg_output_names)
     if model.det_head is not None:
         out_names += det_output_names(n_lv, len(kept_names) if kept_names else None)
 
@@ -346,6 +420,14 @@ def main(argv: list[str] | None = None) -> None:
     )
     print(f"exported {args.output}")
     print("output nodes:", out_names)
+
+    if args.argmax_seg:
+        logits = sum(h.num_classes for h in model.seg_heads.values()) * h * w * 4
+        ids = len(model.seg_heads) * h * w
+        print(
+            f"segmentation D2H drops from {logits / 1e6:.2f} MB of float logits to "
+            f"{ids / 1e6:.2f} MB of uint8 class ids, and the host no longer argmaxes"
+        )
 
     if kept_names is not None:
         # A TensorRT engine keeps its binding names and nothing else, so the ONNX
@@ -391,6 +473,7 @@ def main(argv: list[str] | None = None) -> None:
         }
         if kept_names is not None:
             props["detection_classes"] = ",".join(kept_names)
+        props["segmentation_output"] = "class_ids_uint8" if args.argmax_seg else "logits"
         for key, value in props.items():
             entry = m.metadata_props.add()
             entry.key, entry.value = key, value

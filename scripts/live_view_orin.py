@@ -144,6 +144,23 @@ def cls_bindings(names):
     return sorted(found, key=lambda n: int(n.rsplit("_p", 1)[1]))
 
 
+def seg_map(host, name):
+    """Class ids for one segmentation head, from whichever binding form the engine has.
+
+    An engine exported with `--argmax-seg` emits `<head>_argmax`, a uint8 class map, and
+    the host's argmax has already happened inside the graph -- which on a GB10 was 2.53 ms
+    of a 6.70 ms frame, the largest single item in it. An engine exported without emits
+    `<head>` float logits and the argmax is this line.
+
+    Reading the binding rather than assuming a form is the same discipline as
+    `graph_normalises` above: two engines that want opposite things from the host, told
+    apart by what they are called.
+    """
+    if f"{name}_argmax" in host:
+        return host[f"{name}_argmax"][0]
+    return host[name][0].argmax(0)
+
+
 def load_class_names(path, n_channels):
     """What to write on a box, and a refusal when that cannot be known.
 
@@ -334,8 +351,9 @@ def capture_loop(args):
             cuda.memcpy_dtoh(host[n], dev[n], stream)
         cuda.sync(stream)
 
-        trav = colourise(host["traversability"][0].argmax(0), TRAV_COLORS)
-        terr = colourise(host["terrain"][0].argmax(0), TERRAIN_COLORS)
+        trav_ids = seg_map(host, "traversability")
+        terr = colourise(seg_map(host, "terrain"), TERRAIN_COLORS)
+        trav = colourise(trav_ids, TRAV_COLORS)
         # Blend rather than replace: the overlay is only readable against the frame it
         # describes, and a solid mask hides exactly the detail you are checking.
         left = cv2.addWeighted(lb, 0.45, cv2.cvtColor(trav, cv2.COLOR_RGB2BGR), 0.55, 0)
@@ -343,8 +361,7 @@ def capture_loop(args):
 
         # Per-class share of the traversability map: a quick read on whether the model has
         # collapsed to one class, which the picture alone can hide.
-        ids = host["traversability"][0].argmax(0)
-        shares = [100.0 * float((ids == c).mean()) for c in range(3)]
+        shares = [100.0 * float((trav_ids == c).mean()) for c in range(3)]
         label = "  ".join(f"{n} {s:.0f}%" for n, s in zip(TRAV_NAMES, shares, strict=True))
 
         # Boxes go on the traversability pane, where a person or a chair is the thing a
