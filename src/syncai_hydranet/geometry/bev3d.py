@@ -47,6 +47,7 @@ from dataclasses import dataclass
 import numpy as np
 from PIL import Image, ImageDraw
 
+from . import meshes
 from .bev import IGNORE, BevGrid, ray_reach
 
 # Nominal heights, in metres, for the boundary ribbon. Drawing, not measurement -- see
@@ -394,6 +395,22 @@ def _draw_geometry(
         ht = float(obj.get("height_m") or 1.7)
         col = OBJECT_RGB.get(str(obj.get("name", "")), OBJECT_RGB["_"])
 
+        # A shape where one is earned, the extrusion everywhere else. `meshes.for_object`
+        # owns that decision so this file does not grow a second opinion about it.
+        mesh = meshes.for_object(obj)
+        sigma = obj.get("position_sigma_m")
+        if sigma:
+            # The uncertainty gets its own channel on the floor, in the same metres as
+            # everything else on it. `analytics/dwell.py` measures this error in *metres*
+            # when a shopper's feet are occluded behind a counter, and a confident figure
+            # standing at a wrong position is the most convincing wrong number this
+            # project can produce. Drawn only when the payload supplies it -- inventing a
+            # radius would be the same failure wearing a warning's clothes.
+            _draw_ground_disc(d, cam, x, z, float(sigma))
+        if mesh is not None:
+            _draw_mesh(d, cam, mesh, x, z, col)
+            continue
+
         # contact shadow first, so the volume sits on the floor instead of hovering
         sh = [
             tuple(
@@ -439,6 +456,43 @@ def _draw_geometry(
 
     panel.paste(Image.new("RGB", (w, h), bg), (0, 0), _vignette((w, h)))
     return panel
+
+
+def _draw_ground_disc(d, cam, x: float, z: float, radius_m: float) -> None:
+    """The position's error radius, on the floor, in metres."""
+    ring = [
+        tuple(
+            map(float, cam.project(x + radius_m * np.cos(t), 0.0, z + radius_m * np.sin(t))[:2])
+        )
+        for t in np.linspace(0, 2 * np.pi, 28, endpoint=False)
+    ]
+    d.polygon(ring, fill=(238, 172, 64, 90))
+
+
+def _draw_mesh(d, cam, mesh, x: float, z: float, col) -> None:
+    """Project a mesh through the panel's own virtual camera and paint it back to front.
+
+    The same `cam.project` the floor and the boxes use, so a mesh cannot drift from the
+    geometry around it. Painter's algorithm by face centroid depth: correct for a convex
+    figure standing alone, and wrong where two surfaces interpenetrate -- which is why
+    this draws *objects* and not the room.
+    """
+    verts, faces = mesh
+    world = verts + np.array([x, 0.0, z])
+    normals = meshes.smooth_normals(verts, faces)
+    projected = np.array(
+        [cam.project(float(vx), float(vy), float(vz))[:2] for vx, vy, vz in world], dtype=float
+    )
+    # Depth is the panel's, not the world's: the virtual camera looks down the -z axis of
+    # the map, so a larger z is further away and sorts first.
+    depth = world[faces][:, :, 2].mean(axis=1)
+    # Key light from above-front plus a floor bounce, so nothing goes flat black. The
+    # constants match `_shade`'s range rather than a physical model.
+    lift = 0.42 + 0.62 * np.maximum(normals @ np.array([0.35, 0.86, -0.37]), 0.0)
+    lift += 0.20 * np.maximum(normals @ np.array([-0.5, 0.3, 0.4]), 0.0)
+    for order in np.argsort(-depth):
+        tri = [tuple(projected[i]) for i in faces[order]]
+        d.polygon(tri, fill=(*_shade(col, float(lift[order])), 250))
 
 
 def _draw_annotations(

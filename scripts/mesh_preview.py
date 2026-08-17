@@ -11,11 +11,11 @@ repository keeps finding and cannot re-derive.
 triangles of tubes and prisms; the same meshes rendered with flat per-face shading read as
 a faceted low-poly toy. Four things do the work, in order of how much:
 
-1. **Smooth normals.** Each face is shaded by the average of its vertices' normals, where
-   a vertex normal is the mean of the faces touching it. Adjacent faces then differ by a
-   little instead of a lot, and a 20-sided tube reads as a cylinder rather than a prism.
-   PIL cannot interpolate across a polygon, so this is the cheap stand-in for Gouraud and
-   it is most of the difference.
+1. **Smooth normals**, from `geometry.meshes.smooth_normals`. Each face is shaded by the
+   average of its vertices' normals. Adjacent faces then differ by a little instead of a
+   lot, and a 20-sided tube reads as a cylinder rather than a prism. It lives in the
+   package rather than here because `geometry/bev3d.py` needs the same answer -- this
+   script had the only copy of it while every real render still drew cuboids.
 2. **Three lights, not one.** A key light, a dim fill from the opposite side so nothing
    goes to pure black, and a rim term that brightens faces turned away from the camera --
    which is what separates a dark object from a dark background without an outline.
@@ -54,6 +54,7 @@ from syncai_hydranet.geometry.meshes import (  # noqa: E402
     ground_disc,
     human,
     place,
+    smooth_normals,
     table,
     wall,
 )
@@ -77,21 +78,6 @@ PALETTE = {
     "person": (168, 208, 250),
     "disc": (242, 180, 78),
 }
-
-
-def smooth_normals(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
-    """Per-face shading normals, averaged through the vertices they share."""
-    fn = np.cross(
-        verts[faces[:, 1]] - verts[faces[:, 0]], verts[faces[:, 2]] - verts[faces[:, 0]]
-    )
-    lengths = np.linalg.norm(fn, axis=1, keepdims=True)
-    fn = fn / np.maximum(lengths, 1e-12)
-    vn = np.zeros_like(verts)
-    for k in range(3):
-        np.add.at(vn, faces[:, k], fn)
-    vn /= np.maximum(np.linalg.norm(vn, axis=1, keepdims=True), 1e-12)
-    out = vn[faces].mean(axis=1)
-    return out / np.maximum(np.linalg.norm(out, axis=1, keepdims=True), 1e-12)
 
 
 class View:

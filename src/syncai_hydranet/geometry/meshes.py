@@ -438,6 +438,53 @@ def place(mesh: Mesh, at: Placement) -> Mesh:
     return verts, faces
 
 
+def smooth_normals(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
+    """One shading normal per face, averaged through the vertices its neighbours share.
+
+    Geometry rather than rendering, which is why it lives here: it is a property of the
+    mesh and any renderer wants the same answer. It is also **most of the difference
+    between a figure and a faceted toy** -- with per-face geometric normals a 10-sided
+    tube reads as a prism, and with these it reads as a cylinder. PIL cannot interpolate
+    across a polygon, so this is the cheap stand-in for Gouraud: adjacent faces differ by
+    a little instead of a lot.
+    """
+    if len(faces) == 0:
+        return np.zeros((0, 3))
+    fn = np.cross(
+        verts[faces[:, 1]] - verts[faces[:, 0]], verts[faces[:, 2]] - verts[faces[:, 0]]
+    )
+    fn = fn / np.maximum(np.linalg.norm(fn, axis=1, keepdims=True), 1e-12)
+    vn = np.zeros_like(verts)
+    for k in range(3):
+        np.add.at(vn, faces[:, k], fn)
+    vn /= np.maximum(np.linalg.norm(vn, axis=1, keepdims=True), 1e-12)
+    out = vn[faces].mean(axis=1)
+    return out / np.maximum(np.linalg.norm(out, axis=1, keepdims=True), 1e-12)
+
+
+def for_object(obj: dict) -> Mesh | None:
+    """The mesh a scene-payload object should be drawn as, or None to leave it alone.
+
+    The mapping from a detected class to a shape, in one place, so the renderer does not
+    grow a second opinion about it. Everything not named here stays the extruded footprint
+    the flat map already asserted -- adding a shape is a claim about what the thing looks
+    like, and the only one currently earned is that a person is person-shaped.
+
+    Heights follow the payload where it has one. `height_m` is None when the box could not
+    be placed against the ground plane (`bev.scene` says so explicitly rather than
+    substituting a number), and a person then falls back to 1.70 m -- the same assumption
+    `fit_camera_from_people.py` fits camera pose against, and an assumption there too.
+    """
+    name = str(obj.get("name", ""))
+    height = obj.get("height_m")
+    width = obj.get("width_m")
+    if name == "person":
+        return human(float(height) if height and height > 0.6 else 1.70)
+    if width and height:
+        return box(float(width), float(height), float(width))
+    return None
+
+
 def to_obj(mesh: Mesh, name: str = "mesh") -> str:
     """Wavefront OBJ. Text, no dependency, and read by every 3D tool including Blender,
     three.js, Open3D and rerun -- which keeps this module free of a renderer choice."""

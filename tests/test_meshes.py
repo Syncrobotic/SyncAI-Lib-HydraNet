@@ -219,3 +219,74 @@ def test_obj_is_one_indexed_and_complete():
 def test_impossible_dimensions_are_refused(call, match):
     with pytest.raises(ValueError, match=match):
         call()
+
+
+# --- what a scene payload gets drawn as ------------------------------------
+
+
+def test_a_person_becomes_a_person():
+    """The join `bev3d` uses. Before it existed the mesh library had no consumer at all
+    and every real render drew cuboids, which is indistinguishable from the outside."""
+    from syncai_hydranet.geometry.meshes import for_object
+
+    verts, _ = for_object({"name": "person", "height_m": 1.63, "width_m": 0.5})
+    assert np.ptp(verts[:, 1]) == pytest.approx(1.63)
+    assert np.ptp(verts[:, 0]) < 0.7  # a figure, not a 0.5 m cube
+
+
+def test_a_person_with_no_measured_height_falls_back_rather_than_vanishing():
+    """`bev.scene` emits height_m None when the box could not be placed against the ground
+    plane. 1.70 m is the same assumption `fit_camera_from_people.py` fits pose against."""
+    from syncai_hydranet.geometry.meshes import for_object
+
+    verts, _ = for_object({"name": "person", "height_m": None, "width_m": 0.5})
+    assert np.ptp(verts[:, 1]) == pytest.approx(1.70)
+
+
+def test_an_implausible_person_height_is_not_believed():
+    """A box whose bottom landed on a counter edge gives a 0.3 m person. Drawing that
+    would put the projection error into the figure's stature, where it reads as a child."""
+    from syncai_hydranet.geometry.meshes import for_object
+
+    verts, _ = for_object({"name": "person", "height_m": 0.31, "width_m": 0.4})
+    assert np.ptp(verts[:, 1]) == pytest.approx(1.70)
+
+
+def test_anything_else_stays_the_extruded_footprint():
+    """Adding a shape is a claim about what the thing looks like. The only one currently
+    earned is that a person is person-shaped."""
+    from syncai_hydranet.geometry.meshes import for_object
+
+    verts, faces = for_object({"name": "chair", "width_m": 0.6, "height_m": 0.9})
+    assert len(faces) == 12  # a box
+    assert np.ptp(verts[:, 1]) == pytest.approx(0.9)
+
+
+def test_an_object_with_no_extent_gets_no_mesh():
+    """`width_m`/`height_m` are None when they could not be measured, and `bev.scene` says
+    so rather than substituting. A renderer must be able to say so too."""
+    from syncai_hydranet.geometry.meshes import for_object
+
+    assert for_object({"name": "chair", "width_m": None, "height_m": None}) is None
+
+
+def test_smooth_normals_are_unit_and_one_per_face():
+    from syncai_hydranet.geometry.meshes import smooth_normals
+
+    verts, faces = human(1.70)
+    n = smooth_normals(verts, faces)
+    assert n.shape == (len(faces), 3)
+    assert np.allclose(np.linalg.norm(n, axis=1), 1.0)
+
+
+def test_smooth_normals_differ_from_flat_ones_on_a_curved_surface():
+    """The whole reason they exist: with per-face geometric normals a 10-sided tube reads
+    as a prism."""
+    from syncai_hydranet.geometry.meshes import smooth_normals
+
+    verts, faces = human(1.70)
+    flat = np.cross(
+        verts[faces[:, 1]] - verts[faces[:, 0]], verts[faces[:, 2]] - verts[faces[:, 0]]
+    )
+    flat /= np.maximum(np.linalg.norm(flat, axis=1, keepdims=True), 1e-12)
+    assert not np.allclose(smooth_normals(verts, faces), flat, atol=1e-3)
