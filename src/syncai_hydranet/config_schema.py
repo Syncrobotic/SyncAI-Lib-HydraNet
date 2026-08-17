@@ -408,6 +408,24 @@ def _is_identity(scheme: Any) -> bool:
     return all(k == v for k, v in scheme.mapping.items() if v != 255)
 
 
+# Deliberately NOT reported here: which class the dominant dataset gives those pixels
+# instead. `274a4a08`'s mechanism for `product` is sharper than "absent" and is correct --
+# `ADE20K_ID_TO_RETAIL_OBJECTS` sends 15 source ids to `fixture` and 0 to `product`, so a
+# shelf of goods is one `fixture` region under ADE20K and a `fixture` + `product` split
+# under the site masks: the same pixels, two contradictory targets, and the louder dataset
+# wins. It also predicts something the "absent" reading does not, that `fixture` comes out
+# inflated rather than merely unharmed.
+#
+# It was implemented here and removed, because the only config-time proxy for "where do
+# those pixels go" is the source-id count, and that proxy does not support the claim. Under
+# `ade20k_retail` the class with the most ids is `obstacle_furniture` at 45 -- a catch-all
+# -- so the check would have announced that `floor_metal`'s pixels are labelled
+# `obstacle_furniture`, which is nonsense: `floor_metal` is a floor surface. The
+# product/fixture mechanism is true because someone looked at a shelf, not because 15 was
+# the largest number. Asserting a pixel-level mechanism from a scheme-level count is the
+# same error this function shipped with once already, and once was enough.
+
+
 def _check_minority_sourced(rep: _Report, cfg: dict) -> None:
     def _fmt(rows: list) -> str:
         return ", ".join(f"{n} (sample_ratio {r:g})" for n, r, _i in rows)
