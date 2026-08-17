@@ -114,12 +114,38 @@ CONCEPTS = (
         LAYER_THING,
         note="promoted out of wall's prompt list; sits above wall so it is not erased",
     ),
-    # --- new, and unmeasured ------------------------------------------------------
+    # --- measured 2026-08-17, after the first batch ---------------------------------
     #
-    # min_score is left at the default rather than tuned. There is nothing to tune it
-    # against: the 0.40 in sam3_prompts.py came from a seven-threshold sweep on classes
-    # that had coverage figures, and inventing a number for a class nobody has run would
-    # be the kind of unsourced constant this project keeps deleting.
+    # min_score is 0.25 here rather than the 0.40 default, and this is now the sweep the
+    # note below asked for. Union coverage of `product` against the threshold, on three
+    # frames chosen for three kinds of merchandise:
+    #
+    #                                  0.20    0.25    0.30    0.35    0.40
+    #   Taichung-cam10 laptop counter 22.29%  21.77%  19.46%  15.01%  12.92%
+    #   Kaohsiung-cam07 packet wall   38.69%  38.65%  38.61%  33.69%  33.67%
+    #   Taichung-cam01 mixed floor    19.94%  18.18%  16.86%  15.05%  14.94%
+    #
+    # 0.20 buys almost nothing over 0.25 and 0.30 starts costing; the knee is the same
+    # on all three. What 0.40 was discarding is visible rather than statistical: on the
+    # laptop counter `laptop on a table` returns 14 instances at 0.20 and **4** at 0.40,
+    # against seven or eight laptops actually on the table, so most of them came back
+    # unlabelled and a human reviewing the batch spotted it by eye.
+    #
+    # Why this class needs its own number, which is the part worth keeping: SAM 3 scores
+    # furniture far higher than goods. On the same frame `display table` peaks at 0.926
+    # and `retail counter` at 0.922, while `merchandise on a shelf` peaks at 0.543 and
+    # `boxed product` at 0.500. A fixture is one large object with a clean silhouette; a
+    # product is small, dense and half-occluded by its neighbours. One threshold across
+    # both is right for the first and too strict for the second.
+    #
+    # Two prompts return nothing at any score on this footage -- `tablet on display` and
+    # `packaged goods` -- and are kept rather than deleted: one frame set is not enough
+    # to retire a vocabulary entry, and the cost is a forward pass, not a wrong label.
+    #
+    # The original note, which asked for exactly this and was right to refuse to guess:
+    # the 0.40 in sam3_prompts.py came from a seven-threshold sweep on classes that had
+    # coverage figures, and inventing a number for a class nobody had run would have been
+    # the kind of unsourced constant this project keeps deleting.
     #
     # The prompt list deliberately mixes three registers, because the sweep's lesson was
     # that SAM 3's vocabulary is web English rather than trade jargon (`gondola shelf`
@@ -138,7 +164,8 @@ CONCEPTS = (
             "headphones box",
         ),
         LAYER_PRODUCT,
-        note="UNMEASURED -- first run is an experiment; check it before trusting it",
+        min_score=0.25,
+        note="min_score 0.25, swept on 3 cameras; 0.40 kept 4 of ~8 laptops on a counter",
     ),
     # --- carried over unchanged ---------------------------------------------------
     #
