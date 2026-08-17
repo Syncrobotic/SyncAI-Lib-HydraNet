@@ -255,13 +255,10 @@ reach. Self-training did not merely fail to add the podiums; it eroded the part 
 eight of its frames are the run's val split, so it did influence which epoch became
 `best.pt` — a weak channel against ADE20K's val set, but not zero.
 
-![clip 3, baseline vs restart-only vs restart+site](../assets/retail_cctv_clip3_ab.png)
-
-The baseline paints `caution` on a **fixed structural column** (boxed; enlarged in
-[`retail_cctv_clip3_column.png`](../assets/retail_cctv_clip3_column.png)). On a camera that
+The baseline paints `caution` on a **fixed structural column**. On a camera that
 never moves, a static false hazard is in every frame the site will ever produce — it does not
 average out, and it is the failure that matters most here. A column is never `caution`, so
-the box is a region whose answer is known in advance and the false positives can simply be
+that region's answer is known in advance and the false positives can simply be
 counted over all 1830 frames rather than eyeballed (`scripts/count_false_caution.py`):
 
 | | frames with the column marked `caution` | mean area of the box |
@@ -269,6 +266,14 @@ counted over all 1830 frames rather than eyeballed (`scripts/count_false_caution
 | baseline | 1782 / 1830 (97.4%) | 21.3% |
 | restart only | 909 / 1830 (49.7%) | 9.8% |
 | restart + site | **117 / 1830 (6.4%)** | **0.6%** |
+
+> A side-by-side figure and a close-up of the column stood above this table until
+> 2026-08-17, when they were deleted along with the three `assets/cmp_clip3_*.mp4` renders
+> they were cut from. **The table is the record, and always was** — the figure was four
+> frames chosen by eye, and the paragraph below is about how badly that sampling misled.
+> `scripts/count_false_caution.py` still names the three renders it reads; they were
+> gitignored from the start, so it has never been runnable by anyone but their author, and
+> regenerating them from a checkpoint is what re-running it requires.
 
 **This is what the site data bought, and only the target domain can see it.** The restart
 halves the false positive; the pseudo-labels remove most of what is left. Four frames
