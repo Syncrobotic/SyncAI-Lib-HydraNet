@@ -1,0 +1,79 @@
+# =============================================================================
+# Control run: the FCOS towers at half depth, and nothing else.
+#
+# `hydranet_retail_objects.yaml` with `model.heads.detection.num_convs: 4 -> 2`. One
+# variable. Everything else -- seed 42, 60 epochs, batch 32, lr 4.0e-4, 512x640, the
+# taxonomy, the datasets, the sample ratios -- is inherited rather than restated, so it
+# cannot drift from the run this is a control for.
+#
+# ---------------------------------------------------------------------------
+# Why this run exists
+#
+# DEPLOY_JETSON.md §4 has listed `num_convs: 2` as latency lever 4 since it was written,
+# with nothing measured behind it. Two things arrived on 2026-08-17 that make it worth
+# settling rather than recommending.
+#
+# 1. A GB10 layer profile attributes at least 19.5% of graph time to the detection head
+#    by name, and that undercounts -- the large "fused" bucket is dominated by the
+#    GroupNorm and reshape operators sandwiched between the FCOS tower convolutions.
+#
+# 2. The head's arithmetic at 512x640, channels 96, over 6,820 positions:
+#
+#        cls_tower        2,263 MMAC      <- 4 convs
+#        reg_tower        2,263 MMAC      <- 4 convs
+#        cls_pred (80)      471 MMAC
+#        reg + ctr preds     29 MMAC
+#        total            5,026 MMAC
+#
+#    The towers are 90% of the head. `--detection-classes robot_8` -- the other lever
+#    landed the same day -- takes 424 MMAC off `cls_pred`, which is 8.4%; it is a *host*
+#    decode win (545,600 sigmoids a frame to 54,560) and was never a GPU one. Halving
+#    both towers is worth roughly 2,263 MMAC, i.e. ~45% of the head. That is the largest
+#    GPU-side lever available short of changing the backbone.
+#
+# ---------------------------------------------------------------------------
+# What this run can and cannot answer
+#
+# **Can:** whether the capacity is needed. `num_convs` is detection-head depth, so
+# detection mAP on COCO val2017 is the instrument that matches the question, and COCO
+# val is a fair test for it in a way ADE20K is not for the shop.
+#
+# Watch the segmentation heads too, but as a *control on the control*: they share the
+# trunk, so a change in terrain mIoU here means the towers were feeding the trunk
+# gradients rather than that the towers matter for segmentation.
+#
+# **Cannot:** anything about the store. RETAIL_OBJECTS_SPLIT.md opens with this run's
+# parent scoring terrain_mIoU 0.7668 while predicting `column` 0.00% and `product` 0.00%
+# on the footage it is meant to serve. Both numbers are true. Do not read an ADE20K
+# delta here as evidence about a shop, in either direction. The target-domain question
+# needs the label-free fixed-camera consensus measurement, which is a separate
+# instrument and not this file's job.
+#
+# **And cannot answer the latency question either**, which is the whole motivation --
+# MMAC is not milliseconds. That number comes from `trtexec` on the board. This run only
+# establishes what accuracy the saving costs, so that the two halves can be put together
+# by whoever owns the deployment.
+#
+# ---------------------------------------------------------------------------
+# Comparability
+#
+# The parent ran at `ce8445f`. Commits since then that touch `engine/`, `models/`,
+# `data/` or the config loader are validation and reporting only -- `a716c37` a
+# config-time gate, `e4655a0` per-class support alongside each IoU, `5d9e448` a
+# `fixed_weights` check, `4fb05ff` export-time class narrowing. None changes training
+# arithmetic. That is an argument, not a measurement, so **re-score both checkpoints in
+# one pass under one code state before believing any delta** -- the same discipline
+# RETAIL_SCOPE.md §5 applied to the three self-training checkpoints, which is the only
+# reason its numbers were trustworthy.
+# =============================================================================
+_base_: hydranet_retail_objects.yaml
+
+experiment: hydranet_retail_objects_nc2
+output_dir: runs/hydranet_retail_objects_nc2
+
+model:
+  heads:
+    detection:
+      # The one variable. 4 -> 2 halves both the classification and the regression
+      # tower; FCOS shares this depth between them by construction in FCOSHead.
+      num_convs: 2
