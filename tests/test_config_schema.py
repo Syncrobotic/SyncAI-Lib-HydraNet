@@ -98,6 +98,12 @@ KNOWN_MINORITY_SOURCED = {
     # 3.58% in 201/360 masks, which is the first real data for the class that predicted
     # 0.00% on store cameras.
     "hydranet_retail_products.yaml": ("product",),
+    # Same dataset as the line above and the same count: 12.88% `product` in 360/360 masks
+    # of `datasets/retail_objects_batch02`. This is the config that was training when the
+    # entry was added, and the run confirms the warning was right about the *direction* --
+    # `product` went from 22 epochs pinned at 0.000 under the old ratios to 0.253 by
+    # epoch 10 under ade20k 1.0 -> 0.15. Suppression, not absence.
+    "hydranet_retail_objects_site_batch02.yaml": ("product",),
 }
 
 

@@ -170,3 +170,33 @@ def test_a_well_evidenced_run_warns_about_nothing():
     cfg = {"data": {"terrain_classes": ["void", "floor"]}}
     _seg_metrics({"terrain": _cm([0, 0, 1, 1], [0, 0, 1, 1], n=2)}, cfg, logger)
     assert warned == []
+
+
+def test_void_is_not_reported_as_a_thin_measurement():
+    """`void` is the ignore class, so "confirm it on site" is not advice anyone can act on.
+
+    It reaches the per-class loop at all because a head sometimes *predicts* class 0 where
+    no target has it -- union > 0, so the IoU is a finite 0.000 rather than NaN. Keeping it
+    as a metric is right, a head hallucinating the ignore class is real. Warning about it
+    is not: on the live batch02 run it was the only warning of the epoch, which is how a
+    warning channel stops being read.
+    """
+    warned: list[str] = []
+    logger = SimpleNamespace(info=lambda *_: None, warning=warned.append)
+    cfg = {"data": {"terrain_classes": ["void", "floor", "column"]}}
+    # class 0 predicted once where the target is class 1: void gets a finite IoU on ~0%.
+    cm = _cm([0] + [1] * 999, [1] + [1] * 999, n=3)
+    metrics = _seg_metrics({"terrain": cm}, cfg, logger)
+    assert metrics["IoU/terrain/00_void"] == 0.0, "the hallucination must still be scored"
+    assert metrics["support/terrain/00_void"] == 0.0
+    assert warned == [], f"void must not be caveated: {warned}"
+
+
+def test_a_real_class_0_is_still_checked():
+    """Excluded by name, not by index. The traversability head's class 0 is `blocked` --
+    a real class, and the one whose failure matters most."""
+    warned: list[str] = []
+    logger = SimpleNamespace(info=lambda *_: None, warning=warned.append)
+    cm = _cm([0] + [2] * 999, [0] + [2] * 999, n=3)
+    _seg_metrics({"traversability": cm}, {"data": {}}, logger)
+    assert any("blocked" in w for w in warned), f"blocked at 0.1% must warn: {warned}"

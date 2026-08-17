@@ -308,7 +308,15 @@ def _seg_metrics(seg_cms, cfg, logger) -> dict:
             # the dataset behind it is gone, which is the same reason runs fingerprint
             # their splits rather than trusting the path to still mean something.
             metrics[f"support/{head}/{i:02d}_{cname}"] = share
-            if share < THIN_SUPPORT:
+            # `void` is the ignore class and nobody trains it, so "confirm this on site"
+            # is not advice anyone can act on. It reaches here at all because the model
+            # sometimes *predicts* class 0 where no target has it: union > 0, so the IoU
+            # is a finite 0.000 rather than NaN. That is worth keeping as a metric -- a
+            # head hallucinating the ignore class is real -- but it is not a thin
+            # measurement, and it fired on the live batch02 run as the only warning of
+            # the epoch. Excluded by name rather than by index: the traversability head's
+            # class 0 is `blocked`, which is a real class and must still be checked.
+            if share < THIN_SUPPORT and cname != "void":
                 thin.append(f"{cname} {iou:.3f} on {100 * share:.2f}%")
         logger.info(
             f"[val] {head} mIoU = {miou:.4f} | per-class IoU = "
