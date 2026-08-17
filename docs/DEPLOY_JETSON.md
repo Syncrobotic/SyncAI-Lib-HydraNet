@@ -125,6 +125,54 @@ box   = [cx - l, cy - t, cx + r, cy + b]
 Then apply a score threshold and NMS. The Python reference implementation is
 `syncai_hydranet/models/heads/detection.py::FCOSHead.decode`; a C++ port is around 100 lines.
 
+### Narrowing the detection classes at export
+
+That sigmoid is the single largest item in the frame. On the AGX Orin the measured split
+was GPU inference 5.12 ms (14%) and post-processing 16.33 ms (43%), nearly all of it
+80 classes × 6,820 positions = **545,600 values per frame**. Most of those classes are
+`zebra` and `snowboard`.
+
+`--detection-classes` slices the class channels out of the classification convolution at
+export. The checkpoint still trained on all 80 — COCO supervision is free signal for the
+shared trunk and RETAIL_SCOPE.md §4 argues at length for keeping it — this only stops the
+engine emitting, and the host decoding, what the deployment does not read.
+
+```bash
+# a shop robot: what a planner has to react to
+hydranet-export-onnx --config configs/hydranet_retail.yaml \
+    --checkpoint runs/hydranet_retail/best.pt \
+    --output hydranet.onnx --detection-classes robot_8
+
+# retail analytics: merchandise, fixtures, people and customers' belongings
+hydranet-export-onnx --config configs/hydranet_retail_objects.yaml \
+    --checkpoint runs/hydranet_retail_objects/best.pt \
+    --output hydranet.onnx --detection-classes retail_analytics
+```
+
+| subset | classes | values/frame at 512×640 | host sigmoid |
+|---|---|---|---|
+| (none) | 80 | 545,600 | — |
+| `retail_analytics` | 32 | 218,240 | **2.5×** less |
+| `robot_8` | 8 | 54,560 | **10.0×** less |
+
+The two lists are different deployments and neither is a default. `robot_8` deletes
+`book`, which the cam08 audit found 1,683 of and which is the strongest merchandise signal
+the head produces — narrowing an analytics build with the robot's list would silently
+remove the class the audit was about. A comma-separated list of COCO names works too.
+
+**Two things change in the contract, both deliberately loud:**
+
+1. **The `det_cls` bindings are renamed** to carry the count — `det_cls8_p3` rather than
+   `det_cls_p3`. Same reasoning as `image_rgb_255` on the input side: a host decoder
+   written for 80 classes must fail to find its binding rather than read 8 channels as 80
+   and report `zebra` for a customer. `det_reg` and `det_ctr` keep their names, so a
+   runtime that only wants boxes is unaffected, and an export without the flag is
+   byte-for-byte the contract it always was.
+2. **A `<output>.classes.json` sidecar is written**, and it has to ship with the engine.
+   A TensorRT engine keeps binding names and nothing else, so the class *identities* do
+   not survive the `trtexec` step. `live_view_orin.py --classes hydranet.classes.json`
+   reads it; without it, against a narrowed engine, it refuses to draw rather than guess.
+
 ## 4. Expected performance (RegNetX-800MF + BiFPN96, 512x640, FP16)
 
 | Platform | Estimated latency |

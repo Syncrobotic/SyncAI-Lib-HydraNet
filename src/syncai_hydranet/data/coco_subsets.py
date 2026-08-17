@@ -12,6 +12,8 @@ one session's history. This module is where they live now.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
+
 # COCO's 80 categories in sorted-category-id order, which is the order CocoDetDataset
 # assigns contiguous labels in: index i is class i out of the detection head.
 #
@@ -175,3 +177,102 @@ def retail_box_label(label_id: int) -> str:
     name = COCO_NAMES[label_id]
     group = RETAIL_OBJECT_GROUP.get(name)
     return f"{group}/{name}" if group and group != name else name
+
+
+# ---------------------------------------------------------------------------
+# Export-time narrowing.
+#
+# RETAIL_SCOPE.md §4 draws the distinction these lists exist for: **train on 80, narrow
+# at export.** `data.datasets[].classes` narrows at training time, which is the opposite
+# trade -- it throws away COCO supervision the shared trunk gets for free, and buys the
+# robot nothing, because a head trained on 80 and a head trained on 8 cost the same to
+# run. What costs is decoding: on the AGX Orin, post-processing was 16.33 ms of a 37.8 ms
+# frame, nearly all of it the sigmoid over 80 classes at 6,825 positions.
+#
+# So these are deployment decisions, applied to a checkpoint that already saw all 80.
+
+# The eight classes RETAIL_SCOPE.md §4 names as changing a shop robot's behaviour. This
+# is the *motion* list: what a planner has to react to.
+ROBOT_8 = [
+    "person",
+    "backpack",
+    "handbag",
+    "suitcase",
+    "bottle",
+    "cup",
+    "chair",
+    "potted plant",
+]
+
+# The analytics list, derived rather than written out: everything RETAIL_OBJECT_GROUP
+# gives a retail reading to, plus the belongings it deliberately leaves ungrouped.
+#
+# Derived on purpose. Written out, it would be a second copy of the grouping table that
+# drifts the first time someone decides a `tv` in a phone shop is signage after all --
+# and the failure would be silent, because an engine that never emits `tv` and a mapping
+# that never reads it look identical from the frame.
+#
+# **Note it is not eight.** ROBOT_8 would delete `book`, which the cam08 sweep found
+# 1,683 of and which is the single strongest merchandise signal the head produces. The
+# two lists narrow for different deployments and neither is a default.
+RETAIL_ANALYTICS = sorted(
+    set(RETAIL_OBJECT_GROUP) | set(RETAIL_BELONGINGS), key=COCO_NAMES.index
+)
+
+EXPORT_SUBSETS = {
+    "robot_8": ROBOT_8,
+    "retail_analytics": RETAIL_ANALYTICS,
+    "indoor_25": INDOOR_25,
+}
+
+
+def head_order(names: Iterable[str]) -> list[str]:
+    """The order a detection head assigns these classes -- which is not the order they
+    were written in.
+
+    ``CocoDetDataset`` builds its label map from ``sorted(getCatIds(...))``, so the head's
+    channel order is COCO category-id order regardless of how the config listed them.
+    ``INDOOR_25`` below is written in neither order, and ``configs/eval_indoor25.yaml``
+    has always relied on this sort happening inside the dataset.
+
+    Getting it wrong is the quiet kind of wrong: every channel still decodes, every box
+    still gets a name, and the names are someone else's.
+    """
+    unknown = sorted(n for n in names if n not in COCO_NAMES)
+    if unknown:
+        raise ValueError(f"not COCO category names: {', '.join(unknown)}")
+    return sorted(set(names), key=COCO_NAMES.index)
+
+
+def resolve_export_subset(spec: str) -> list[str]:
+    """A named subset or a comma-separated list of COCO names, in head order."""
+    if spec in EXPORT_SUBSETS:
+        return head_order(EXPORT_SUBSETS[spec])
+    names = [s.strip() for s in spec.split(",") if s.strip()]
+    if not names:
+        raise ValueError(
+            f"empty class list. Give COCO names separated by commas, or one of: "
+            f"{', '.join(sorted(EXPORT_SUBSETS))}"
+        )
+    return head_order(names)
+
+
+def narrow_indices(keep: Iterable[str], trained: Sequence[str]) -> list[int]:
+    """Channel indices of ``keep`` within a head trained on ``trained``.
+
+    ``trained`` is the head's own class list -- ``COCO_NAMES`` for the usual 80-class
+    head, or the dataset's ``classes`` in head order for a head that was already narrowed
+    at training time. Narrowing an already-narrow head is legitimate; narrowing it to a
+    class it never saw is not, and refusing here is the difference between an empty
+    channel and one nobody notices is empty.
+    """
+    trained = list(trained)
+    index = {name: i for i, name in enumerate(trained)}
+    missing = [n for n in keep if n not in index]
+    if missing:
+        raise ValueError(
+            f"class(es) {', '.join(sorted(missing))} are not in this head's {len(trained)} "
+            f"trained classes, so no channel of it predicts them. Trained: "
+            f"{', '.join(trained)}"
+        )
+    return [index[n] for n in keep]

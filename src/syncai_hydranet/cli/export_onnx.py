@@ -11,12 +11,21 @@ code (see docs/DEPLOY_JETSON.md).
 from __future__ import annotations
 
 import argparse
+import json
+from pathlib import Path
 
 import torch
 import torch.nn as nn
 
 from ..config import load_config
 from ..config_schema import unsupervised_heads
+from ..data.coco_subsets import (
+    COCO_NAMES,
+    EXPORT_SUBSETS,
+    head_order,
+    narrow_indices,
+    resolve_export_subset,
+)
 from ..models.hydranet import build_model
 from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD
 from ..utils.checkpoint import load_checkpoint, select_weights
@@ -114,6 +123,84 @@ def check_heads_are_trained(cfg: dict, allow: bool) -> None:
     )
 
 
+def trained_detection_classes(cfg: dict, num_classes: int) -> list[str]:
+    """The class list the detection head's channels actually mean, in channel order.
+
+    Read from the config's COCO block rather than assumed, because a head narrowed at
+    *training* time via ``data.datasets[].classes`` has channel 0 meaning whatever that
+    list's first class is in category-id order -- not ``person``. Assuming COCO's 80 there
+    would rename every box and nothing would look wrong.
+    """
+    for ds in (cfg.get("data") or {}).get("datasets") or []:
+        if not isinstance(ds, dict) or ds.get("type") != "coco":
+            continue
+        if "detection" not in (ds.get("supervises") or []):
+            continue
+        subset = ds.get("classes")
+        names = head_order(subset) if subset else list(COCO_NAMES)
+        break
+    else:
+        names = list(COCO_NAMES)
+
+    if len(names) != num_classes:
+        raise SystemExit(
+            f"cannot name the detection head's channels: the config's COCO block implies "
+            f"{len(names)} classes but model.heads.detection.num_classes is {num_classes}. "
+            f"Narrowing would map names onto the wrong channels, silently. Fix the config "
+            f"so the two agree before exporting a narrowed engine."
+        )
+    return names
+
+
+def narrow_detection_head(model, keep_idx: list[int]) -> None:
+    """Slice the classification convolution down to ``keep_idx``, in place.
+
+    Slicing the weights rather than gathering channels in the graph: the exported ONNX
+    then has a smaller convolution and no extra operator at all, so the saving is in the
+    head's own arithmetic as well as in the host's sigmoid. A Gather would have cost a
+    node and saved only the latter.
+
+    Done after ``load_state_dict``, and it mutates the model -- which is fine here because
+    nothing in this process uses it again, and would not be fine anywhere else.
+    """
+    conv = model.det_head.cls_pred
+    narrowed = nn.Conv2d(
+        conv.in_channels,
+        len(keep_idx),
+        kernel_size=conv.kernel_size,
+        stride=conv.stride,
+        padding=conv.padding,
+    )
+    idx = torch.tensor(keep_idx, dtype=torch.long)
+    with torch.no_grad():
+        narrowed.weight.copy_(conv.weight[idx])
+        narrowed.bias.copy_(conv.bias[idx])
+    model.det_head.cls_pred = narrowed
+    model.det_head.num_classes = len(keep_idx)
+
+
+def det_output_names(n_levels: int, narrowed_to: int | None) -> list[str]:
+    """Output binding names, with the class count in the ``det_cls`` name when narrowed.
+
+    Same trick as ``INPUT_RAW`` / ``INPUT_NORMALISED``, on the output side. A host decoder
+    written for the 80-class engine looks up ``det_cls_p3``, and against a narrowed engine
+    it does not find it -- rather than finding 8 channels where it expects 80 and reporting
+    ``zebra`` for a customer. ``det_reg`` and ``det_ctr`` keep their names because their
+    shapes do not change, so a runtime that only wants boxes is unaffected.
+    """
+    tag = "" if narrowed_to is None else str(narrowed_to)
+    return (
+        [f"det_cls{tag}_p{i + 3}" for i in range(n_levels)]
+        + [f"det_reg_p{i + 3}" for i in range(n_levels)]
+        + [f"det_ctr_p{i + 3}" for i in range(n_levels)]
+    )
+
+
+def sidecar_path(output: str) -> Path:
+    p = Path(output)
+    return p.with_suffix(".classes.json") if p.suffix else Path(f"{output}.classes.json")
+
+
 def check_parity(wrapper, dummy, path: str, out_names: list[str], tol: float = 1e-4) -> bool:
     """Compare the exported graph against PyTorch on the same input.
 
@@ -179,6 +266,17 @@ def build_parser() -> argparse.ArgumentParser:
         "input is then named 'images' rather than 'image_rgb_255', and the runtime owns "
         "the mean/std -- which is the parity risk this defaults away from",
     )
+    ap.add_argument(
+        "--detection-classes",
+        default=None,
+        metavar="SUBSET|name,name,...",
+        help="narrow the detection head's class channels at export. A named subset ("
+        + ", ".join(sorted(EXPORT_SUBSETS))
+        + ") or a comma-separated list of COCO names. The checkpoint still trained on all "
+        "80 -- this only stops the engine emitting, and the host decoding, channels the "
+        "deployment does not read. The 'det_cls' bindings gain the class count, and the "
+        "names are written to a <output>.classes.json sidecar",
+    )
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
     return ap
 
@@ -191,6 +289,28 @@ def main(argv: list[str] | None = None) -> None:
     if args.checkpoint:
         ckpt = load_checkpoint(args.checkpoint)
         model.load_state_dict(select_weights(ckpt, args.weights))
+
+    kept_names: list[str] | None = None
+    kept_idx: list[int] = []
+    trained: list[str] = []
+    n_lv = 0 if model.det_head is None else len(model.det_head.in_levels)
+    if args.detection_classes:
+        if model.det_head is None:
+            raise SystemExit(
+                "--detection-classes was given but this model has no detection head; "
+                "nothing to narrow."
+            )
+        trained = trained_detection_classes(cfg, model.det_head.num_classes)
+        try:
+            kept_names = resolve_export_subset(args.detection_classes)
+            kept_idx = narrow_indices(kept_names, trained)
+        except ValueError as exc:
+            raise SystemExit(f"--detection-classes: {exc}") from exc
+        narrow_detection_head(model, kept_idx)
+        print(
+            f"detection narrowed {len(trained)} -> {len(kept_names)} classes: "
+            f"{', '.join(kept_names)}"
+        )
 
     # The export section is optional: without it, exporting at the training resolution
     # is the sane default, and a TensorRT engine built for the wrong input size is a
@@ -212,10 +332,7 @@ def main(argv: list[str] | None = None) -> None:
 
     out_names = list(wrapper.seg_names)
     if model.det_head is not None:
-        n_lv = len(model.det_head.in_levels)
-        out_names += [f"det_cls_p{i + 3}" for i in range(n_lv)]
-        out_names += [f"det_reg_p{i + 3}" for i in range(n_lv)]
-        out_names += [f"det_ctr_p{i + 3}" for i in range(n_lv)]
+        out_names += det_output_names(n_lv, len(kept_names) if kept_names else None)
 
     torch.onnx.export(
         wrapper,
@@ -230,6 +347,35 @@ def main(argv: list[str] | None = None) -> None:
     print(f"exported {args.output}")
     print("output nodes:", out_names)
 
+    if kept_names is not None:
+        # A TensorRT engine keeps its binding names and nothing else, so the ONNX
+        # metadata below never reaches the board. The sidecar is what does -- it is the
+        # only record of which COCO class each remaining channel means, and an engine
+        # shipped without it is a set of unlabelled numbers.
+        with torch.no_grad():
+            cls_out = wrapper(dummy)[len(wrapper.seg_names) : len(wrapper.seg_names) + n_lv]
+        positions = sum(int(t.shape[-1] * t.shape[-2]) for t in cls_out)
+        side = sidecar_path(args.output)
+        side.write_text(
+            json.dumps(
+                {
+                    "detection_classes": kept_names,
+                    "source_indices": kept_idx,
+                    "cls_outputs": out_names[len(wrapper.seg_names) :][:n_lv],
+                    "input_size": [h, w],
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        before = positions * len(trained)
+        after = positions * len(kept_names)
+        print(f"wrote {side}")
+        print(
+            f"host sigmoid drops from {before:,} to {after:,} values per frame "
+            f"({before / after:.1f}x) at {h}x{w}, over {positions:,} positions"
+        )
+
     try:
         import onnx
 
@@ -237,12 +383,15 @@ def main(argv: list[str] | None = None) -> None:
         onnx.checker.check_model(m)
         # The input name carries the contract into the TensorRT engine, which does not
         # keep these properties; they are here for anyone reading the ONNX itself.
-        for key, value in {
+        props = {
             "preprocessing": "embedded" if embed else "external",
             "input_range": "0-255" if embed else "imagenet-normalised",
             "input_layout": "NCHW",
             "channel_order": "RGB",
-        }.items():
+        }
+        if kept_names is not None:
+            props["detection_classes"] = ",".join(kept_names)
+        for key, value in props.items():
             entry = m.metadata_props.add()
             entry.key, entry.value = key, value
         onnx.save(m, args.output)

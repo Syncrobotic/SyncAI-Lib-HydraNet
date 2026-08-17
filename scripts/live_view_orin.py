@@ -13,6 +13,7 @@ compatible with calling a whole floor a wall, and this is where that shows up.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import threading
 import time
@@ -131,17 +132,56 @@ COCO_NAMES = [
 STRIDES = (8, 16, 32, 64, 128)
 
 
-def decode_detections(host, strides=STRIDES, score_thr=0.35, nms_thr=0.5, top_k=50):
+def cls_bindings(names):
+    """The engine's class-logit bindings, in level order.
+
+    Discovered rather than spelled, because an engine exported with
+    ``--detection-classes`` names them ``det_cls8_p3`` instead of ``det_cls_p3``. That
+    rename is deliberate -- it is what stops this file reading 8 channels as 80 -- so the
+    right response to it is to look, not to hard-code either form.
+    """
+    found = [n for n in names if n.startswith("det_cls")]
+    return sorted(found, key=lambda n: int(n.rsplit("_p", 1)[1]))
+
+
+def load_class_names(path, n_channels):
+    """What to write on a box, and a refusal when that cannot be known.
+
+    A TensorRT engine keeps its binding names and nothing else, so a narrowed engine
+    arrives on the board carrying the *number* of classes and not their identity. Guessing
+    would put `zebra` on a customer; the sidecar written beside the ONNX is the record,
+    and without it this is not something to do a best effort at.
+    """
+    if path:
+        names = json.loads(Path(path).read_text())["detection_classes"]
+        if len(names) != n_channels:
+            raise SystemExit(
+                f"{path} lists {len(names)} classes but the engine emits {n_channels} "
+                f"channels. That sidecar belongs to a different export."
+            )
+        return list(names)
+    if n_channels == len(COCO_NAMES):
+        return COCO_NAMES
+    raise SystemExit(
+        f"the engine emits {n_channels} class channels, not COCO's {len(COCO_NAMES)}, so "
+        f"it was narrowed at export and nothing here knows which classes were kept. Pass "
+        f"--classes <the .classes.json written beside the ONNX>."
+    )
+
+
+def decode_detections(host, cls_names, strides=STRIDES, score_thr=0.35, nms_thr=0.5, top_k=50):
     """FCOS decode in numpy: grid centres, distances to corners, then NMS.
 
     The engine emits raw logits per level because the graph deliberately excludes NMS and
     anything with dynamic shape, which is what lets TensorRT convert it in one piece. That
     means this arithmetic is the host's job, and it is also 43% of the frame time -- almost
-    all of it the sigmoid over 80 classes at every one of 6,825 positions.
+    all of it the sigmoid over every class at every one of 6,820 positions. Narrowing the
+    export is what makes that number smaller; this loop is unchanged by it, because it
+    reads however many channels the engine hands it.
     """
     boxes, scores, labels = [], [], []
     for i, stride in enumerate(strides):
-        cls = host[f"det_cls_p{i + 3}"][0]  # [C, h, w] logits
+        cls = host[cls_names[i]][0]  # [C, h, w] logits
         reg = host[f"det_reg_p{i + 3}"][0]  # [4, h, w] pixel distances, already exp'd
         ctr = host[f"det_ctr_p{i + 3}"][0]  # [1, h, w] logit
         conf = 1.0 / (1.0 + np.exp(-cls)) * (1.0 / (1.0 + np.exp(-ctr)))
@@ -254,6 +294,9 @@ def capture_loop(args):
     graph_normalises = in_name == RAW_INPUT
     print(f"input '{in_name}': graph normalises = {graph_normalises}", flush=True)
     outs = [n for n in names if engine.get_tensor_mode(n) != trt.TensorIOMode.INPUT]
+    det_cls = cls_bindings(outs)
+    label_names = load_class_names(args.classes, int(ctx.get_tensor_shape(det_cls[0])[1]))
+    print(f"detection: {len(label_names)} classes over {len(det_cls)} levels", flush=True)
 
     host, dev = {}, {}
     for n in names:
@@ -306,11 +349,11 @@ def capture_loop(args):
 
         # Boxes go on the traversability pane, where a person or a chair is the thing a
         # planner has to react to. Drawn after blending so the outline stays readable.
-        dets = decode_detections(host, score_thr=args.score)
+        dets = decode_detections(host, det_cls, score_thr=args.score)
         for (x1, y1, x2, y2), sc, cl in zip(*dets, strict=True):
             p1 = (int(np.clip(x1, 0, args.width - 1)), int(np.clip(y1, 0, args.height - 1)))
             p2 = (int(np.clip(x2, 0, args.width - 1)), int(np.clip(y2, 0, args.height - 1)))
-            name = COCO_NAMES[int(cl)] if int(cl) < len(COCO_NAMES) else str(int(cl))
+            name = label_names[int(cl)] if int(cl) < len(label_names) else str(int(cl))
             cv2.rectangle(left, p1, p2, (255, 255, 255), 2)
             cv2.putText(
                 left,
@@ -375,6 +418,12 @@ def main():
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--quality", type=int, default=80)
     ap.add_argument("--score", type=float, default=0.35, help="detection score threshold")
+    ap.add_argument(
+        "--classes",
+        default=None,
+        help="the .classes.json written beside a narrowed ONNX export. Required for an "
+        "engine built from one: the engine carries the channel count and not the names",
+    )
     args = ap.parse_args()
 
     threading.Thread(target=capture_loop, args=(args,), daemon=True).start()
