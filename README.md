@@ -32,15 +32,24 @@ says what to collect and in what order.
 
 ### The deployment that actually exists: fixed ceiling CCTV in a shop
 
-![all three heads and the floor raised into a scene](assets/retail_cctv_3heads.gif)
+![all three heads and the floor raised into a scene](assets/scene3d_taichung-cam11.gif)
 
-All three heads on one frame, on a site clip **held out of training**: traversability with
-detections top left, the 13-class terrain map bottom left, and the floor rebuilt as a scene
+Every head on one frame of `Taichung-cam11`: free space with detections top left, the
+seven-class terrain map bottom left, and the floor rebuilt as a scene
 on the right. The panel raises the edge of the free space into a wall and colours it by what
 the terrain head says is standing there — purple display fixtures, grey wall, pink people —
 which is the part a flat occupancy map cannot express: it marks the cell blocked and stops.
 Object boxes get their footprint from the two bottom corners projected onto the floor and
 their height from the top edge's ray, so those are derived rather than nominal.
+
+**Two claims the previous version of this figure carried and this one does not.**
+`Taichung-cam11` is a **train** camera in `datasets/retail_objects_batch02`, not a held-out
+one, so nothing here is evidence of generalisation — it shows what the panel draws, not how
+well the model does it. And there is **no traversability head** in this config: the free
+space top left is derived from the terrain map through the taxonomy's own table, so it can
+be no better than the terrain classes it is read off. Both were true of the render, not of
+the caption, until the figure was replaced in `f9d4fcf` and the caption was checked against
+it rather than carried over.
 
 **Three things in this picture are weaker than they look.**
 The camera pose was recovered by fitting 287 detected people against a 1.70 m adult, and the

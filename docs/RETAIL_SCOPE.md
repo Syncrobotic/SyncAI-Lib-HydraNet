@@ -102,9 +102,13 @@ looks like `depth < 5.0` — no calibration, no extrinsics, no flat-floor assump
 **It is not sufficient on its own, and the reason is exactly the floor retail has.** Run
 live on that robot in a lobby with a polished stone floor:
 
-![walkable and depth on a polished lobby floor](../assets/lobby_polished_floor_depth_holes.jpg)
+> The figure that stood here was deleted in `f9d4fcf`. It is in history at `4eb8b56` as
+> `assets/lobby_polished_floor_depth_holes.jpg`, and **nothing replaces it**: reproducing
+> it needs that robot, that lobby and that RealSense, and no site camera in
+> `datasets/studioa_clips` carries depth at all. The measurement below is the finding; the
+> picture was its illustration.
 
-Left is traversability, right is the same frame split by depth: green within range, yellow
+It showed traversability beside the same frame split by depth: green within range, yellow
 beyond it, **magenta walkable with no depth return at all**. The magenta is scattered right
 across the near floor — 10.6% of all walkable pixels in that frame — because a polished
 floor is specular and reflects the projector's IR pattern away from the sensor instead of
@@ -183,13 +187,26 @@ staffed wrongly: **the model is not the constraint.**
 
 ### What the bootstrap transfers, and what it cannot
 
-The retail baseline was run and its pre-labels put over real store CCTV:
+The retail baseline was run and its pre-labels put over real store CCTV. **Wall-mounted
+shelving is marked; the free-standing display podiums in the middle of the floor are not**
+— they come back as unlabelled, which is the model saying it does not know rather than
+guessing.
 
-![what the ADE20K bootstrap does and does not mark](../assets/retail_prelabel_gap.jpg)
-
-Cyan is `display_fixture`. **Wall-mounted shelving is marked; the free-standing display
-podiums in the middle of the floor are not** — they come back as unlabelled, which is the
-model saying it does not know rather than guessing.
+> The figure that stood here was deleted in `f9d4fcf` (history: `55ec787`,
+> `assets/retail_prelabel_gap.jpg`). What replaces it is stronger than a picture, because
+> the gap it showed has since been **counted** rather than pointed at. Per-class support on
+> the ADE20K splits, mapped through `ade20k_retail_objects`: `product` appears in
+> **0 of 285 val images and 0.00% of labelled pixels**, against `wall` at 61.86% and
+> `floor` at 24.60%. A figure showing one unlabelled podium is an example; a class that is
+> absent from every image of the source dataset is the whole claim.
+>
+> What was done about it is also now on disk rather than proposed:
+> `datasets/retail_objects_batch02` — 288 frames over 24 shop-floor cameras, split by
+> camera, 10,517 merchandise boxes — and `configs/hydranet_retail_products.yaml`, which
+> stops asking a dense head what fraction of a shelf is product and gives the boxes to the
+> instrument that can resolve them. Read `split.json`'s `test_provenance` before quoting a
+> number off it: the human pass was never completed, so those numbers are agreement with
+> SAM 3, not accuracy.
 
 That split is not arbitrary. A wall of shelves looks like ADE20K's `bookcase` and `shelf`,
 so the bootstrap reaches it. A waist-height island podium with three phones on it has no

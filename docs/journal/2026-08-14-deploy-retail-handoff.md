@@ -41,7 +41,9 @@ a plausible number. So most of the work was making those cases fail loudly.
 **The deployment is fixed ceiling CCTV, not a robot camera.** Three site clips are in
 `assets/archive_*.mp4` with `*_bev.mp4` renders beside them.
 
-**What the model does and does not mark** (evidence: `assets/retail_prelabel_gap.jpg`):
+**What the model does and does not mark** (evidence: `assets/retail_prelabel_gap.jpg`, on
+2026-08-17 deleted from the tree in `f9d4fcf` and still readable at `55ec787` — the entry
+below is left as it was written, because a dated record is not refreshed):
 wall-mounted shelving *is* found — a wall of shelves resembles ADE20K's `bookcase`, so the
 bootstrap reaches it. The free-standing display podiums in the middle of the floor are
 **not**: a waist-height island with three phones on it has no analogue in any public

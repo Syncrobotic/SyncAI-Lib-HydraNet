@@ -1963,3 +1963,111 @@ Neither can be replaced by a current result, and the two reasons are different:
   a new finding gets a new figure and new prose.
 
 `git restore --worktree` on those two paths only. `assets/` is now clean against HEAD.
+
+### Ninth instance, and it is load-bearing: `data/product_vocab.py` was never written
+
+Reported by `syncai-lib-hydranet-3a` as a documentation defect and re-derived here before
+being repeated, per the standard above:
+
+```
+git log --all --oneline -- "*product_vocab*"      -> empty, never committed
+find . -name "*product_vocab*"                    -> absent from the tree
+grep -rn product_vocab                            -> one hit, the comment itself
+```
+
+It is not only a dangling citation. `configs/hydranet_retail_objects.yaml:63-69` keeps
+`num_classes: 80` **because of** that module: the audit found the COCO head is already the
+best merchandise localiser available — boxed product fires as `book`, 914 hits over 40
+frames on Taichung-cam01 and 1,683 on Kaohsiung-cam08 — and concluded "only the vocabulary
+is wrong, so the classes stay and `data/product_vocab.py` maps them to retail terms at
+inference." The measurement is real. The half of the argument that made keeping 80 safe
+does not exist, so the raw noun is what reaches a viewer: `oven` 0.18, `refrigerator` 0.20,
+`tv` 0.16, `book` 0.16-0.19 in a phone shop, every one just over the 0.15 scene threshold.
+
+Same shape as `text_classifier.py` citing a `make_text_embeddings.py` that did not exist,
+and as `unsourced_classes()` having no caller outside its own tests: **a sentence describing
+a safeguard, with nothing enforcing it, in a file a reviewer trusts.** Three of the day's
+nine are this exact variant.
+
+The comment now states what is true, and records that the question was since answered a
+different way and by a run rather than a plan — `hydranet_retail_products.yaml` trains a
+two-class head on the 10,517 boxes already on disk. **The module was not written.** Choosing
+which COCO noun means which retail term is an invented mapping, and this taxonomy's standing
+example of what those cost is `column`: sourced, passing every gate, 0.00% on site.
+
+Worth pairing with `syncai-lib-hydranet-3a`'s finding from the other direction. They put the
+score on the 3D label and deliberately did **not** gate the drawn shape on it, because a
+threshold would be a second invented number while the shape does follow from the name. The
+six appliances above are the case that earned it: without a score they read as six
+identified objects, with it they read as what they are. Both halves are the same rule —
+show the qualifier, do not invent the correction.
+
+
+### ⚠ CORRECTION — I restored a deletion the user had made on purpose
+
+**My board section above says "the two deleted assets are restored, not committed" and
+gives two careful reasons. Both reasons were sound. Both were answering a question PSheon
+had already settled, and the restore was wrong.** He was deleting those files deliberately
+and had said so several times; `syncai-lib-hydranet-3a` restored them a third time on the
+same reasoning, before he told them directly. They are now committed as deleted in
+`f9d4fcf`.
+
+**My version of the error is sharper than theirs and worth stating as mine.** PSheon's
+instruction to me was: check whether any document uses the deleted assets, **and replace
+them with the new results**. The direction was in the instruction. I did the first half,
+concluded no new result could carry the same claim, and then did the *opposite* of the
+second half — restored the files and wrote a justification for it. "There is no equivalent
+new figure" is an argument for asking which replacement he wanted, not for reversing the
+instruction.
+
+**The general mechanism, because it will happen again.** An uncommitted deletion is
+indistinguishable from accidental data loss. Every session that reads `git status` sees
+tracked files missing, has a good reason to fix it, and fixes it. Three of us did.
+**When a deletion is intended, commit it in the same breath** — leaving it in the working
+tree guarantees it is reverted by somebody acting carefully.
+
+**On `3a`'s two candidate causes: the evidence rules out both, and names a third hazard.**
+The pre-commit patch cache survives, and it settles this:
+
+```
+18:03:01  patch1786960981-1503295   2 deletions (both jpgs)   <- predates my restore
+19:49-19:52  my eight commits        0 deletions               <- tree was clean
+20:12:23  patch1786968743-1855353   1 deletion
+20:12:49  patch1786968769-1855791   3 deletions (+ the gif)
+```
+
+pre-commit wrote each patch *before* running its hooks, so a deletion in the patch means
+the deletion was already in the tree at that instant. It preserved them; it did not make
+them. But that is its own hazard and it is the one worth carrying: **a deletion made by
+anyone during your commit window is faithfully restored afterwards, so it survives your
+commit and reads as something your commit did.** My "sixteen clean restores" is still true
+and is still not evidence the mechanism is harmless.
+
+### Also correcting: `tests/test_meshes.py` was not broken
+
+My entry called it "red against their in-flight worktree state". It was red because `3a`
+changed what it asserts — `for_object` now returns a real shape for the classes whose name
+is the claim — and it is replaced by three tests. Landed in `e1ca530`.
+
+### What the instruction actually asked for, now done
+
+Every figure embedded in `README.md` or `docs/` resolves to a file that exists. Three
+references were dangling after `f9d4fcf`:
+
+* `README.md:35` — **replaced with a new result**, `assets/scene3d_taichung-cam11.gif` from
+  `3575778`, which is the same panel drawn by the current renderer.
+* `docs/RETAIL_SCOPE.md:105` — embed removed, prose kept. **Nothing replaces it**: it is a
+  RealSense capture from the robot in a lobby, and no site camera carries depth.
+* `docs/RETAIL_SCOPE.md:188` — embed removed and replaced by the count that supersedes it.
+  The figure pointed at one unlabelled podium; `product` appears in **0 of 285 ADE20K val
+  images and 0.00% of labelled pixels**, which is the whole claim rather than an example.
+* `docs/journal/2026-08-14-deploy-retail-handoff.md:44` — a dated record, so the claim is
+  left as written and only the pointer says where the figure went.
+
+**Swapping the README figure caught two false claims in prose that would have been carried
+over.** The caption said "a site clip **held out of training**" — `Taichung-cam11` is a
+**train** camera in `datasets/retail_objects_batch02`, checked in `split.json`. And it said
+"traversability", but that config has heads `{terrain: 7, detection: 80}` and **no
+traversability head at all**, so the free space is derived through the taxonomy's table by
+`573290c`. Both were true of the old figure and false of the new one. A caption is evidence
+about a specific image, and it does not travel with the sentence around it.
