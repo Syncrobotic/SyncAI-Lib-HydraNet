@@ -372,6 +372,89 @@ def _iou(a, b) -> float:
     return inter / union if union > 0 else 0.0
 
 
+def validate_inputs(clips: list[str]) -> None:
+    """Refuse the run if any input does not exist, naming every one of them.
+
+    Sibling of `session_names` and called beside it, for the same reason: the whole input
+    list is checked before anything opens. Kept separate because that function has one job
+    and a name that says so, and existence is a different job.
+
+    What this replaces. A path that does not exist reached `probe()`, which runs ffprobe
+    with `check=True`, and nothing here caught `CalledProcessError` -- so a single typo in a
+    48-clip batch produced a raw traceback, aborted every clip after it, and did so *after*
+    the session directory was created and the model load was already paid for. Worse, the
+    file looks like it handles this: there is a `no frames decoded, skipped` branch nine
+    lines further down, and it is unreachable for a missing file because `probe()` dies
+    first. It is reachable for a *directory* input with no images, which takes the other
+    branch. So the two input kinds degrade completely differently and reading top to bottom
+    suggests otherwise.
+
+    Limit, stated rather than implied: this catches a path that is not there. A file that
+    exists and is not decodable still fails at `probe()`, because proving decodability means
+    decoding. The common failure is a typo or a glob that matched nothing near what was
+    meant, and that is what this refuses.
+    """
+    missing = [c for c in clips if not Path(c).exists()]
+    if missing:
+        listed = "\n".join(f"    {p}" for p in missing)
+        raise SystemExit(
+            f"{len(missing)} of {len(clips)} input(s) do not exist; refusing before writing "
+            f"anything.\n{listed}\n"
+            "Checked up front so a typo in a long batch fails now rather than part-way "
+            "through, after the model load and with directories already created."
+        )
+
+
+def session_names(clips: list[str]) -> list[str]:
+    """One output directory per input, and refuse the run if two inputs claim the same one.
+
+    The session name is the input's filename stem, and **a filename is not an identity** --
+    it is chosen by whoever wrote the footage. `gs://studioa-recording` names a clip by its
+    recording timestamp, so two cameras that start recording in the same second produce the
+    same stem. Four of 96 clips in one real pull did. Both wrote into one directory, the
+    second silently replaced the first, and the run finished reporting a plausible per-class
+    composition over the frames that happened to survive. It cost a day to notice, and only
+    because a class share moved 33.33% -> 2.49% between a partial and a full pass, which is
+    arithmetically impossible for an average over one more clip.
+
+    Widening the key -- to include the parent directory, say -- makes that particular
+    collision go away without making the name an identity, so two cameras can still collide
+    under it and the failure stays silent. The assertion is the fix; the key is not. A
+    caller whose names genuinely collide can pass symlinks that do not, which is how the
+    affected clips were re-run.
+
+    Scope, stated rather than implied: this catches collisions **within one invocation**.
+    Running twice into the same `--out` with the same clip still overwrites, which is what a
+    re-run should do.
+    """
+    names = [Path(c).stem for c in clips]
+    seen: dict[str, list[str]] = {}
+    for clip, name in zip(clips, names, strict=True):
+        seen.setdefault(name, []).append(clip)
+    clashes = {n: paths for n, paths in seen.items() if len(paths) > 1}
+    if not clashes:
+        return names
+
+    detail = "\n".join(
+        f"  {n}\n" + "\n".join(f"    {p}" for p in paths)
+        for n, paths in sorted(clashes.items())
+    )
+    # Two different failures wear the same shape here, and the remedy for one is a dead end
+    # for the other: distinct paths need names that differ, a repeated path needs removing.
+    # Telling someone to symlink their way out of a doubled glob sends them in a circle.
+    if all(len(set(paths)) == 1 for paths in clashes.values()):
+        advice = "The same input is listed more than once. De-duplicate the list and re-run."
+    else:
+        advice = (
+            "Each input needs its own output directory or one silently overwrites the other. "
+            "Pass symlinks whose names differ -- e.g. <camera>__<stem>.mp4 -- and re-run."
+        )
+    raise SystemExit(
+        f"{len(clashes)} session name(s) claimed by more than one input; refusing before "
+        f"writing anything.\n{detail}\n{advice}"
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -456,6 +539,12 @@ def main(argv: list[str] | None = None) -> int:
         if c.note:
             print(f"  {c.name:<20} {c.note}")
 
+    # Both before the model loads, because they cost nothing and a half-written dataset is
+    # worse than a refused one. Existence first: a missing path is the likelier mistake and
+    # the more confusing message to receive second.
+    validate_inputs(args.clips)
+    sessions = session_names(args.clips)
+
     proc, model = load_sam3(args.model, args.device)
     root = Path(args.out)
     totals = Counter()
@@ -493,8 +582,7 @@ def main(argv: list[str] | None = None) -> int:
         },
     }
 
-    for clip in args.clips:
-        session = Path(clip).stem
+    for clip, session in zip(args.clips, sessions, strict=True):
         img_dir = root / "images" / args.split / session
         ann_dir = root / "annotations" / args.split / session
         img_dir.mkdir(parents=True, exist_ok=True)
