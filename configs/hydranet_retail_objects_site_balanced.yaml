@@ -98,3 +98,20 @@ data:
       split_val: val2017
       supervises: [detection]
       sample_ratio: 0.1
+
+train:
+  # Scoped to the store's own val frames, and that scoping is the point.
+  #
+  # The unqualified `IoU/terrain/05_product` pools every validation set into one confusion
+  # matrix. ADE20K's `product` ground truth is necessarily zero -- that is why batch01
+  # exists -- so every product pixel predicted there is a false positive with nothing to
+  # offset it, and at 285 ADE20K frames against 72 store frames those dominate. Measured
+  # at epoch 2 of the first attempt at this run:
+  #
+  #     site val only     product IoU 0.5832   TP 333,877  FP  70,232
+  #     ade20k val only   product IoU 0.0000   TP       0  FP  62,235
+  #
+  # The pooled figure oscillated 0.05-0.35 and read as a channel failing to learn, while
+  # recall on the store was 65%. Selecting `best.pt` on it selects partly for "hallucinate
+  # less product on ADE20K", which is not what this run is for.
+  primary_metric: IoU/terrain/05_product/site_sam3
