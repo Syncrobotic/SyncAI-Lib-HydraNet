@@ -19,6 +19,7 @@ exists to prevent.
 pytest tests/test_sam3_sessions.py -v
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -184,3 +185,59 @@ def test_the_whole_input_list_is_checked_before_the_model_loads(
         prelabel.main(["--out", str(out), "--scheme", "retail_objects", *two_cameras])
     assert "refusing before writing anything" in str(exc.value)
     assert not out.exists(), "the refused run left a dataset directory behind"
+
+
+# ------------------------------- a session directory means frames were written
+
+
+@pytest.fixture
+def empty_camera(tmp_path):
+    """A directory input holding no images: decodes to nothing and is *skipped*, not an
+    error. A camera that legitimately yielded nothing is a real case, not a bad path."""
+    d = tmp_path / "Tao-Hsin-cam04"
+    d.mkdir()
+    return d
+
+
+def test_a_skipped_clip_leaves_no_session_directory(
+    prelabel, empty_camera, tmp_path, monkeypatch
+):
+    """The half `validate_inputs` cannot reach.
+
+    Existence checking cannot tell you a real input will decode to zero frames, so the
+    in-loop skips are the only place this can be handled. They used to run *after* the two
+    `mkdir` calls, so a skipped clip left `images/<split>/<session>/` and
+    `annotations/<split>/<session>/` behind, empty -- and an empty session directory is
+    indistinguishable from a camera that produced nothing, which is exactly the ambiguity
+    the refusal machinery exists to remove.
+
+    This regresses the moment someone tidies: the natural place to write those two lines is
+    beside the path construction, which is where they were and why they were wrong.
+    """
+    monkeypatch.setattr(prelabel, "load_sam3", lambda *_a, **_k: (None, None))
+    out = tmp_path / "dataset"
+    assert (
+        prelabel.main(["--out", str(out), "--scheme", "retail_objects", str(empty_camera)]) == 0
+    )
+    for kind in ("images", "annotations"):
+        assert not (out / kind / "train" / empty_camera.name).exists(), (
+            f"{kind}/train/{empty_camera.name} was created for a clip that wrote no frames"
+        )
+
+
+def test_a_run_that_skips_everything_still_writes_its_manifest(
+    prelabel, empty_camera, tmp_path, monkeypatch
+):
+    """`root` used to be created as a side effect of the first session's `mkdir`.
+
+    With the session directories moved below the skips, a run where every clip skips
+    creates none of them, so the manifest write has to make `root` itself. It is wanted:
+    `found_nothing` is precisely what an operator needs after a run that produced no data.
+    A dataset root holding a manifest that says so is an answer; an empty session directory
+    is an ambiguity. Without this the same run raises FileNotFoundError at the last line.
+    """
+    monkeypatch.setattr(prelabel, "load_sam3", lambda *_a, **_k: (None, None))
+    out = tmp_path / "dataset"
+    prelabel.main(["--out", str(out), "--scheme", "retail_objects", str(empty_camera)])
+    manifest = json.loads((out / "sam3_batch.json").read_text())
+    assert manifest["found_nothing"], "a run that labelled nothing must say so in its manifest"

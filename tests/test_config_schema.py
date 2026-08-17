@@ -44,6 +44,11 @@ KNOWN_UNSOURCED = {
     # Documented in label_maps_retail_objects.py: no public segmentation dataset labels
     # merchandise, so this one is filled from site annotation or it is not filled.
     "hydranet_retail_objects.yaml": ("product",),
+    # Inherits the line above, and inherits its empty channel with it. Listed rather than
+    # pattern-matched on the parent: a derived config is free to add a dataset that fills
+    # the channel, and if it does, this entry has to change. The whole point of pinning
+    # these as data is that a config's empty channels are stated per config.
+    "hydranet_retail_objects_nc2.yaml": ("product",),
 }
 
 

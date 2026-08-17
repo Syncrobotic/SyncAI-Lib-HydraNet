@@ -585,8 +585,6 @@ def main(argv: list[str] | None = None) -> int:
     for clip, session in zip(args.clips, sessions, strict=True):
         img_dir = root / "images" / args.split / session
         ann_dir = root / "annotations" / args.split / session
-        img_dir.mkdir(parents=True, exist_ok=True)
-        ann_dir.mkdir(parents=True, exist_ok=True)
 
         # A directory of stills is a legitimate input, not a degraded one. The argument
         # this whole module makes about fixed cameras -- that a column or a floor is the
@@ -621,6 +619,17 @@ def main(argv: list[str] | None = None) -> int:
             continue
         picks = farthest_first(descs, args.frames)
         print(f"{session}: {len(kept)} candidates -> {len(picks)} kept")
+
+        # Created here rather than beside the path construction above, and that is the
+        # whole point: both skips before this line -- `--consensus needs 2+ frames` and
+        # `no frames decoded` -- used to leave two empty directories behind. An empty
+        # session directory is indistinguishable from a camera that legitimately yielded
+        # nothing, which is the same complaint `validate_inputs` answers for a path that
+        # was never there. Below the skips, a session directory existing *means frames
+        # were written*. The natural place to write these two lines is next to the paths,
+        # so this regresses the moment someone tidies -- hence a test.
+        img_dir.mkdir(parents=True, exist_ok=True)
+        ann_dir.mkdir(parents=True, exist_ok=True)
 
         # In consensus mode the two halves of the frame are computed differently:
         # everything that cannot move is voted on across the clip, and everything that
@@ -716,6 +725,7 @@ def main(argv: list[str] | None = None) -> int:
     manifest["found_nothing"] = empty
     if det_classes:
         out_json = root / "annotations" / f"instances_{args.split}.json"
+        out_json.parent.mkdir(parents=True, exist_ok=True)
         out_json.write_text(json.dumps(coco) + "\n")
         n_img = max(len(coco["images"]), 1)
         print(f"\nmerchandise instances -> {out_json}")
@@ -732,6 +742,12 @@ def main(argv: list[str] | None = None) -> int:
             print("  FOUND NOTHING -- prompts, threshold, or footage?")
         manifest["boxes"] = {n: box_totals[n] for n, _ in det_classes}
 
+    # The session directories are created only where frames were written, so a run in which
+    # every clip skipped creates none of them and `root` may not exist yet. The manifest is
+    # still wanted in that case -- it carries `found_nothing`, which is precisely what an
+    # operator needs after a run that produced no data. A dataset root holding a manifest
+    # that says so is an answer; an empty session directory is an ambiguity.
+    root.mkdir(parents=True, exist_ok=True)
     (root / "sam3_batch.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
     # The gate has to be named with the same scheme the masks were written under.
