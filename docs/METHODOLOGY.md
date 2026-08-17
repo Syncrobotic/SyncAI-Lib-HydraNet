@@ -316,6 +316,21 @@ validation set* — currently 8 of 12. Two consequences:
   average. That is not a regression. Record the class count alongside the number, and compare
   per-class IoU when the dataset changes.
 
+The retail-objects line is the worked example, and it is the reason to read `mIoU_classes`
+before reading `mIoU`. The 60-epoch run reports **0.7668 over five classes** on ADE20K val;
+the site runs report **~0.56–0.60 over six**, on a val set that also contains real store
+frames. Nothing got worse: a sixth and much harder class entered the mean, and the mean is
+now taken against harder data. **The number went down and the measurement got better** — at
+the same epoch the newer run is ahead, 0.5973 against 0.5585.
+
+**And a per-class IoU needs its support, which is the same argument one level down.**
+`support/<head>/NN_<name>` is emitted beside every `IoU/<head>/NN_<name>` for exactly this:
+`column` scored 0.40–0.51 on **0.66% of ADE20K val pixels**, 22 of 285 images, and then
+predicted **0.00% of pixels** across 240 frames of four daytime store cameras. A number and a
+well-evidenced number are formatted identically, and only one of them is a measurement. Below
+`evaluator.THIN_SUPPORT` (1% of labelled pixels) the log says so and the honest reading is
+"not measured".
+
 **A mean can hide a class that stopped learning entirely.** This is the sharper failure, and
 it happened here. Adding COCO to supervise the detection head moved `traversability_mIoU`
 from 0.6765 to 0.6303 — a 7% drop, easy to accept as the cost of a second task. Underneath:
@@ -341,6 +356,48 @@ ADE20K's 5,998, so even at `sample_ratio: 0.1` the segmentation heads received r
 quarter of the optimiser steps. Common classes had signal to spare. `stairs` occupies 0.3% of
 pixels and starved, and since three of `caution`'s four constituent classes have no data at
 all, `caution` is effectively `stairs` and starved with it.
+
+**It recurred on 2026-08-17 as `product`, and one part of the account is established while
+another is not. Both are recorded here, because this is the process reference and a reader
+should be able to tell which is which.**
+
+*Established.* `product` sat at exactly **0.000 for 22 consecutive epochs**. ADE20K was
+**90.2% of segmentation steps and contains zero `product` pixels**, so in nine batches out of
+ten every pixel was a labelled *negative* for that channel. That is a stronger statement than
+starvation: a starved class learns slowly, and this one did not move at all. **Sign, not
+share, is what explains a channel pinned at exactly zero.**
+
+*Not established: that sign is the whole account.* Rebalancing to 41.9% site did not hold the
+class. `runs/hydranet_retail_objects_site_balanced` is the control and the shape is the point
+— read it rather than the claim:
+
+| epoch | 2 | 3 | 10 | 15 | 25 | 39 |
+|---|---|---|---|---|---|---|
+| `IoU/terrain/05_product/site_sam3` | **0.4821** | 0.0395 | 0.1030 | 0.0300 | 0.0677 | 0.0526 |
+
+**It spiked and collapsed.** If removing the negative evidence were sufficient, it should have
+held. Rebalancing *delayed* the collapse rather than preventing it, and `best.pt` at epoch 10
+captured 0.1030 on the way down — a value the mean liked, not a value the class reached.
+
+The competing account is that this is a *contradiction* rather than an absence:
+`ADE20K_ID_TO_RETAIL_OBJECTS` sends **15 source ids to `fixture` and 0 to `product`**, so a
+shelf of goods is one `fixture` region under ADE20K and a `fixture` + `product` split under
+the site masks — the same pixels with two targets. **That account is unmeasured, not
+refuted**, and the reason is worth knowing: `retail_objects_batch01` leaves floor and wall at
+255 (57.5% of its pixels are ignored, `floor` and `wall` are both 0.00%), so `fixture`
+over-predicting into the floor is invisible to every metric computed on that split.
+`retail_objects_batch02` asserts them — floor 29.8%, wall 21.1%, 11.7% ignored — which is why
+it exists.
+
+**The fix has a direction, and the obvious one is wrong.** Lower the abundant dataset's
+`sample_ratio`; do not raise the scarce one. Both reach the same balance, but raising the
+scarce one gets there by showing the same few images many times an epoch, which trades a
+suppressed channel for a memorised one. That direction holds whichever account is right.
+
+`config_schema.unsourced_terrain_classes` names classes *no* dataset can produce, and
+`minority_sourced_terrain_classes` names the ones only a smaller dataset can — both before a
+GPU-hour is spent. Neither can see pixels, so both are candidates to confirm rather than
+conclusions; see the identity-map caveat in the second one's docstring.
 
 **So: never read a mIoU without the per-class numbers next to it**, and when a dataset mix
 changes, check that the rare classes still have a pulse before accepting the mean.
