@@ -42,7 +42,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from ..config import load_config
-from ..data.coco_subsets import COCO_NAMES
+from ..data.coco_subsets import COCO_NAMES, head_order
 from ..geometry import bev3d
 from ..geometry.bev import IGNORE, BevGrid, free_space_map, project_mask, scene
 from ..geometry.ground import Camera, GroundPlane
@@ -137,6 +137,7 @@ def compose(
     terrain_classes,
     plane: GroundPlane,
     grid: BevGrid,
+    det_names: tuple[str, ...] | None = None,
     stabiliser: FixedCameraStabiliser | None = None,
 ) -> tuple[Image.Image, SceneReport]:
     """One frame -> the composed panel and its scene payload.
@@ -175,7 +176,7 @@ def compose(
         boxes=boxes,
         labels=det["labels"].cpu().numpy() if boxes is not None else None,
         scores=det["scores"].cpu().numpy() if boxes is not None else None,
-        names=dict(enumerate(COCO_NAMES)),
+        names=dict(enumerate(det_names or ())),
     )
     bev = free_space_map(np.asarray(bev), grid)
 
@@ -190,7 +191,11 @@ def compose(
                 outline=(90, 200, 255),
                 width=2,
             )
-            name = COCO_NAMES[int(lab)] if int(lab) < len(COCO_NAMES) else str(int(lab))
+            name = (
+                det_names[int(lab)]
+                if det_names and int(lab) < len(det_names)
+                else str(int(lab))
+            )
             dv.text(
                 (float(bx[0]) + 3, float(bx[1]) + 2),
                 f"{name} {float(sc):.2f}",
@@ -320,6 +325,51 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def detection_class_names(cfg: dict) -> tuple[str, ...] | None:
+    """What this config's detection channels mean, or None if it cannot be established.
+
+    **This function exists because the panel was labelling boxes with COCO's names
+    unconditionally.** Rendered against `hydranet_retail_openvocab.yaml`, whose head has
+    two classes, channel 0 was drawn as `person` and channel 1 as `bicycle`. They are
+    `boxed_stock` and `device`. Nothing errored, and "person" over a shopper-height box in
+    a shop is the most convincing possible wrong answer -- the label was read off a
+    hardcoded table and happened to name something the scene contains.
+
+    The guard is the **count**, because it is the one piece of evidence available:
+    `COCO_NAMES` is only correct for a head that has exactly as many channels as COCO has
+    names. A head with two is not a narrowed COCO head whose names still apply; it is a
+    different vocabulary, and `--detection-classes` narrowing at export makes that
+    ordinary rather than exotic.
+
+    When names cannot be established the caller falls back to the **bare channel index**.
+    That is deliberately worse to read and honest: `0` tells a viewer to go and look up
+    what channel 0 is, and `person` tells them not to.
+
+    Order of preference, most specific first:
+
+    1. the head's own ``classes:`` -- declared in head order, and already checked against
+       the text-embedding matrix's names when there is one;
+    2. a COCO dataset's ``classes:`` narrowing list, put through ``head_order`` because
+       ``CocoDetDataset`` sorts by category id and a config's writing order is not that;
+    3. ``COCO_NAMES`` only if the channel count agrees with it exactly.
+    """
+    heads = (cfg.get("model") or {}).get("heads") or {}
+    det = next(
+        (h for h in heads.values() if isinstance(h, dict) and h.get("type") == "fcos"), None
+    )
+    if det is None:
+        return None
+    declared = det.get("classes")
+    if declared:
+        return tuple(str(c) for c in declared)
+    for ds in (cfg.get("data") or {}).get("datasets") or []:
+        if isinstance(ds, dict) and ds.get("type") == "coco" and ds.get("classes"):
+            return tuple(head_order(ds["classes"]))
+    if det.get("num_classes") == len(COCO_NAMES):
+        return tuple(COCO_NAMES)
+    return None
+
+
 @dataclass(frozen=True)
 class Renderer:
     """The model and the per-run settings every frame needs, as one value.
@@ -351,6 +401,7 @@ def build_renderer(
     ckpt = load_checkpoint(checkpoint)
     model.load_state_dict(select_weights(ckpt, weights))
     terrain_classes = cfg["data"].get("terrain_classes")
+    det_names = detection_class_names(cfg)
     n_terrain = cfg["model"]["heads"].get("terrain", {}).get("num_classes")
     return Renderer(
         model=model,
@@ -360,6 +411,7 @@ def build_renderer(
             "use_lb": bool(cfg["data"].get("letterbox", True)),
             "palette": terrain_palette(terrain_classes, n_terrain),
             "terrain_classes": terrain_classes,
+            "det_names": det_names,
             "plane": GroundPlane(height=camera_height, pitch=np.radians(pitch_deg)),
             "grid": BevGrid(z_max=z_max),
         },
