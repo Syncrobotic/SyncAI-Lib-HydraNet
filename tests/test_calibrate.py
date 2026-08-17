@@ -217,10 +217,36 @@ def test_a_horizon_inside_the_frame_is_rejected():
                horizon_row=36.0, image_h=1080, image_w=1920)  # fmt: skip
     good = Pose(k1=-0.225, vfov_deg=70.4, pitch_deg=50.2, height_m=2.38,
                 horizon_row=-379.0, image_h=1080, image_w=1920)  # fmt: skip
-    assert bad.horizon_is_inside
-    assert not good.horizon_is_inside
+    assert bad.rejection is not None and "grazing" in bad.rejection
+    assert good.rejection is None
     assert "REJECT" in bad.summary()
     assert "pass" in good.summary()
+
+
+def test_a_horizon_below_the_frame_is_a_camera_looking_up_and_is_rejected():
+    """**The bug this class shipped with.** `horizon_is_inside` was the acceptance test, so
+    a horizon at row 1425 of 1080 read as "outside the frame" and passed -- but outside
+    *below* means tan(pitch) < 0 means the camera is pitched up. That was a ceiling camera
+    pointed at a floor, and `[pass]` is what a fleet report would have printed for it.
+
+    `GroundPlane` fixes the sign: pitch positive is looking down. So the only acceptable
+    horizon is above the frame, not merely outside it."""
+    up = Pose(k1=-0.21, vfov_deg=29.6, pitch_deg=-23.4, height_m=None,
+              horizon_row=1425.0, image_h=1080, image_w=1920)  # fmt: skip
+    assert not up.horizon_is_inside, "it really is outside the frame -- that was the trap"
+    assert up.rejection is not None
+    assert "pitched up" in up.rejection
+    assert "REJECT" in up.summary()
+
+
+def test_the_summary_says_which_of_the_two_failures_it_is():
+    """They are different problems -- too much floor against no floor at all -- and a fleet
+    report that prints one word for both tells the reader nothing about what to fix."""
+    inside = Pose(-0.2, 95, 43.0, None, 36.0, 1080, 1920)
+    below = Pose(-0.2, 30, -23.4, None, 1425.0, 1080, 1920)
+    assert "grazing" in inside.summary()
+    assert "pitched up" in below.summary()
+    assert inside.rejection != below.rejection
 
 
 def test_horizon_moves_out_of_frame_as_the_pitch_steepens():

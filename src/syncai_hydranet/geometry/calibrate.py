@@ -61,16 +61,56 @@ class Pose:
 
     @property
     def horizon_is_inside(self) -> bool:
-        """The acceptance test. True means the fit manufactures floor that is not there."""
+        """Literally: does the horizon fall within the image rows.
+
+        Kept as the plain geometric fact. It is **not** the acceptance test, and reading it
+        as one is the bug this class shipped with -- see ``rejection``.
+        """
         return 0 <= self.horizon_row < self.image_h
 
+    @property
+    def rejection(self) -> str | None:
+        """Why this pose is unusable for a ground projection, or None if it is usable.
+
+        **The only acceptable horizon for a downward-looking camera is above the frame.**
+        `horizon_is_inside` was the acceptance test and it admitted a pose whose horizon sat
+        at row 1425 of 1080 -- outside the frame, and therefore "pass" -- when outside
+        *below* means ``tan(pitch) < 0`` means the camera is pitched **up**. That was a
+        ceiling camera pointed at a floor, and `[pass]` was what a fleet report would have
+        printed for it in a table of 24.
+
+        `GroundPlane` fixes the sign: pitch is positive when the camera looks down. So
+        there are two distinct failures either side of the frame, and they are different
+        enough to name separately:
+
+        * horizon **inside** the image -- rows below it are grazing rays and manufacture
+          floor that is not there. At 43 deg on cam01 the centre column spanned 0.07 to
+          3543 metres.
+        * horizon **below** the image -- the fit has the camera looking up, and there is no
+          floor in view at all rather than too much of it.
+        """
+        if self.horizon_row >= self.image_h:
+            return (
+                f"horizon at row {self.horizon_row:.0f} is below the frame, so the fit has "
+                f"the camera pitched up ({self.pitch_deg:+.1f}deg); a ceiling camera "
+                f"looking at a floor cannot be"
+            )
+        if self.horizon_row >= 0:
+            return (
+                f"horizon at row {self.horizon_row:.0f} is inside the {self.image_h}-row "
+                f"frame; every row below it is a grazing ray and manufactures floor"
+            )
+        return None
+
     def summary(self) -> str:
-        verdict = "REJECT" if self.horizon_is_inside else "pass"
+        why = self.rejection
         height = "unscaled" if self.height_m is None else f"{self.height_m:.2f} m"
-        return (
+        line = (
             f"k1={self.k1:+.3f}  vfov={self.vfov_deg:.1f}deg  pitch={self.pitch_deg:.1f}deg  "
-            f"height={height}  horizon row {self.horizon_row:.0f}/{self.image_h}  [{verdict}]"
+            f"height={height}  horizon row {self.horizon_row:.0f}/{self.image_h}  "
+            f"[{'pass' if why is None else 'REJECT'}]"
         )
+        return line if why is None else f"{line}\n    {why}"
 
 
 def floor_edge_points(
