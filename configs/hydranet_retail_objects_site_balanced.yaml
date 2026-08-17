@@ -1,0 +1,100 @@
+# =============================================================================
+# The site run again, with the sampling balance as the only change.
+#
+# `hydranet_retail_objects_site.yaml` put SAM 3's store pre-labels in front of the model
+# for the first time and `product` still scored **0.000 for 22 consecutive epochs**. The
+# diagnosis is arithmetic, not a hunch, and it is worth stating precisely because the
+# obvious reading of it is wrong.
+#
+#     dataset      images   ratio   effective   share of segmentation steps
+#     ade20k         5998     1.0        5998        90.2%
+#     site_sam3       216     3.0         648         9.8%
+#
+# `product` is 19.28% of the site masks' labelled pixels, so about **1.9% of every
+# labelled pixel the model sees**.
+#
+# ---------------------------------------------------------------------------
+# It is not dilution. It is sign.
+#
+# In the other 90.2%, `product` is not merely absent -- **every pixel is a labelled
+# negative for it**. ADE20K's images are homes and offices, and every one of their pixels
+# maps to some other class in this taxonomy, so each ADE20K batch pushes the `product`
+# logit down everywhere while site batches push it up on a fraction of 9.8%. The channel
+# was not learning slowly; it was being trained to stay silent.
+#
+# The prediction histogram at epoch 22, on site val, is what that looks like:
+#
+#     class      ground truth      predicted
+#     floor            0.00%         17.43%
+#     wall             0.00%         48.61%
+#     column           9.27%          0.39%
+#     fixture         64.59%         30.46%
+#     product         16.63%          0.00%
+#     person           9.51%          3.11%
+#
+# Two thirds of the frame comes back `wall` or `floor` -- classes SAM 3 left as 255, so
+# those predictions cost nothing. The model found a free answer and the loss agreed.
+#
+# **This is the same shape as RETAIL_SCOPE.md §5.** There, self-training's pseudo-labels
+# taught the model that fixture-shaped things in a shop are not `display_fixture`. Here,
+# ADE20K teaches that a shop contains no `product`. Both times a large, clean, *wrong-domain*
+# dataset actively taught something false, and both times the smaller correct dataset was
+# read as merely "not enough data yet".
+#
+# ---------------------------------------------------------------------------
+# The change, and what it is not
+#
+# `ade20k` sample_ratio 1.0 -> 0.15. Site goes from 9.8% to **41.9%** of segmentation
+# steps. Nothing else differs from the run this is a control for.
+#
+# **Thinning ADE20K rather than inflating the site ratio**, and the choice matters. Raising
+# `site_sam3` to ~20 reaches the same balance by showing 216 images twenty times an epoch,
+# which trades a suppressed channel for a memorised one. Ratios below 1 truncate an epoch
+# and re-shuffle (`data/multitask.py`), so ADE20K at 0.15 is a different random 900 images
+# each epoch rather than a fixed subset -- the abundant data is thinned, the scarce data is
+# not repeated harder.
+#
+# **This is a diagnostic, not the fix.** The fix is more store data: batch01 is 36 clips
+# and `sam3_prompts_objects.py` reports `product box` at 116 instances and 0.604 mean score
+# on Taichung-cam01, so the pre-labelling path is working and simply has not been run out.
+# What this run establishes is whether sampling is the mechanism. If `product` leaves zero,
+# it is; if it does not, the cause is elsewhere -- the 68% ignore, or the taxonomy -- and
+# that is worth knowing before any more labelling is commissioned.
+#
+# Its predecessor's epoch-22 checkpoint is kept at `runs/hydranet_retail_objects_site/` as
+# the control. Read the two together or neither.
+# =============================================================================
+_base_: hydranet_retail_objects_site.yaml
+
+experiment: hydranet_retail_objects_site_balanced
+output_dir: runs/hydranet_retail_objects_site_balanced
+
+data:
+  datasets:
+    - name: ade20k
+      type: seg_folder
+      root: datasets/ADE20K
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: ade20k_retail_objects
+      supervises: [terrain]
+      # The one variable. 5998 x 0.15 = 900 against the site's 648.
+      sample_ratio: 0.15
+
+    - name: site_sam3
+      type: seg_folder
+      root: datasets/retail_objects_batch01
+      split_train: train
+      split_val: test
+      label_map: retail_objects_native
+      supervises: [terrain]
+      sample_ratio: 3.0
+
+    - name: coco
+      type: coco
+      root: datasets/coco
+      split_train: train2017
+      split_val: val2017
+      supervises: [detection]
+      sample_ratio: 0.1
