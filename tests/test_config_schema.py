@@ -81,10 +81,23 @@ KNOWN_UNSOURCED = {
 # and a reader who sees these needs to see why they are here. Found by `26251130`, who
 # counted the pixels instead of believing the label map.
 KNOWN_MINORITY_SOURCED = {
+    # UNVERIFIED. Both `rugd` and `rellis` are explicit maps, so unlike the entry below
+    # this is at least scheme-grounded -- rugd emits `rock`, rellis does not. Neither
+    # dataset is on this machine, so the pixels have not been counted. Do not act on it.
     "hydranet_regnet800mf.yaml": ("rock",),
+    # FALSE POSITIVES, per the paragraph above. 0 pixels in 0 of 408 masks.
     "hydranet_retail_cctv.yaml": ("floor_metal", "threshold_ramp", "wet_slippery"),
+    # VERIFIED by counting: batch01 is 19.28% `product`. Real suppression, and the run that
+    # proved it sat at IoU 0.000 for 22 epochs.
     "hydranet_retail_objects_site.yaml": ("product",),
     "hydranet_retail_objects_site_balanced.yaml": ("product",),
+    # VERIFIED by counting `datasets/retail_objects_batch02`: **12.88% `product` pixels in
+    # 360 of 360 masks**. Counted rather than trusted, because the claimant is again the
+    # `retail_objects_native` identity map and that is exactly what produced the false
+    # positives above. Also worth knowing from the same count: batch02 carries `column` at
+    # 3.58% in 201/360 masks, which is the first real data for the class that predicted
+    # 0.00% on store cameras.
+    "hydranet_retail_products.yaml": ("product",),
 }
 
 
