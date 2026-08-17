@@ -381,6 +381,34 @@ def table(
     return _merge(*parts)
 
 
+def chair(width_m: float, depth_m: float, height_m: float) -> Mesh:
+    """A seat slab on four legs with a back. ``height_m`` is the top of the back.
+
+    The seat sits at 0.45 of the total height, which is the ratio a chair holds across the
+    range of chairs -- an office chair and a dining chair differ in overall height far more
+    than they differ in that proportion. So the one number a detection actually supplies
+    places the seat, and the seat is the feature that makes a chair read as a chair from
+    above rather than as a small box.
+    """
+    for name, value in (("width_m", width_m), ("depth_m", depth_m), ("height_m", height_m)):
+        if value <= 0:
+            raise ValueError(f"{name} must be positive, got {value}")
+    seat_y = height_m * 0.45
+    slab_t = min(0.05, seat_y * 0.14)
+    back_t = min(0.05, depth_m * 0.12)
+    leg_r = min(0.022, width_m * 0.06)
+    parts = [(lambda m: (m[0] + [0, seat_y - slab_t, 0], m[1]))(box(width_m, slab_t, depth_m))]
+    back = box(width_m, height_m - seat_y, back_t)
+    parts.append((back[0] + [0, seat_y, depth_m / 2 - back_t / 2], back[1]))
+    inset = leg_r * 2.5
+    for sx in (-1, 1):
+        for sz in (-1, 1):
+            x = sx * (width_m / 2 - inset)
+            z = sz * (depth_m / 2 - inset)
+            parts.append(_tube([x, 0, z], [x, seat_y - slab_t, z], leg_r, leg_r * 0.85, 8))
+    return _merge(*parts)
+
+
 def cabinet(width_m: float, depth_m: float, height_m: float, *, shelves: int = 3) -> Mesh:
     """A shelf unit or gondola: a carcass with visible shelf slabs.
 
@@ -462,27 +490,88 @@ def smooth_normals(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
     return out / np.maximum(np.linalg.norm(out, axis=1, keepdims=True), 1e-12)
 
 
+# Nominal depth in metres, per class that gets a shape. **Depth is the one dimension the
+# payload never carries**: `bev.scene` measures the footprint width and the height of the
+# box against the ground plane, and nothing measures how far the thing extends away from
+# the camera. The fallback in this module has always invented one -- `box(w, h, w)` says
+# "as deep as it is wide", which is a claim too, just an unlabelled one. These are the same
+# claim written down where it can be argued with.
+_NOMINAL_DEPTH_M = {"chair": 0.50, "table": 0.75, "cabinet": 0.55}
+
+# Which builder a **detection** class gets, keyed on the name `cli/scene.detection_class_
+# names` established -- COCO's 80 when the head has 80 channels, the head's own `classes:`
+# otherwise. Not terrain names: those describe pixels, and nothing here draws a pixel.
+#
+# The shape claim is the *detector's*, not the renderer's: a box labelled `chair` already
+# asserts "this is a chair", and drawing a chair adds nothing to it. What this map must not
+# do is put a shape on a class whose name does not determine one -- `potted plant` and
+# `backpack` are any shape at all, and a viewer cannot tell a modelled silhouette from a
+# measured one, so those keep the extrusion.
+#
+# **`display_fixture` is deliberately absent**, and it is the entry most likely to be
+# proposed again. Two reasons, either sufficient. It is a terrain id (12 in
+# `RETAIL_TERRAIN`), so putting it here quietly claims that a segmentation class can arrive
+# through the detection payload. And `label_maps_retail_objects.py` records its test IoU at
+# **0.336, the lowest of any class with real data**, with the failure being *which* object
+# it is looking at: in one audited frame the round podium is `obstacle_furniture` while wall
+# shelving three metres away is `display_fixture`. A distinctive silhouette on the class
+# least able to tell two objects apart is the shape being more confident than the label
+# under it.
+_SHAPE = {
+    "chair": "chair",
+    "bench": "chair",
+    "dining table": "table",
+    "desk": "table",
+    "table": "table",
+    "shelf": "cabinet",
+    "bookshelf": "cabinet",
+    "cabinet": "cabinet",
+    "refrigerator": "cabinet",
+}
+
+
 def for_object(obj: dict) -> Mesh | None:
     """The mesh a scene-payload object should be drawn as, or None to leave it alone.
 
     The mapping from a detected class to a shape, in one place, so the renderer does not
-    grow a second opinion about it. Everything not named here stays the extruded footprint
-    the flat map already asserted -- adding a shape is a claim about what the thing looks
-    like, and the only one currently earned is that a person is person-shaped.
+    grow a second opinion about it. Everything not named in `_SHAPE` stays the extruded
+    footprint the flat map already asserted.
 
     Heights follow the payload where it has one. `height_m` is None when the box could not
     be placed against the ground plane (`bev.scene` says so explicitly rather than
     substituting a number), and a person then falls back to 1.70 m -- the same assumption
     `fit_camera_from_people.py` fits camera pose against, and an assumption there too.
+
+    **A shape carries no confidence, so whoever draws it has to.** `score` is in the
+    payload and is not read here: a chair at 0.31 gets exactly the mesh a chair at 0.95
+    gets, because the shape follows from the *name* and the name is what the detector
+    committed to. That is the correct split, but it leaves the panel able to look more
+    certain than the run behind it -- `cli/scene.py` labels its 2D boxes `chair 0.31`, and
+    a viewer discounts that in a way they cannot discount a silhouette. `bev3d.py` puts the
+    score on the label beside the mesh for that reason; a renderer that drops it is
+    laundering the detector's doubt.
     """
     name = str(obj.get("name", ""))
     height = obj.get("height_m")
     width = obj.get("width_m")
     if name == "person":
         return human(float(height) if height and height > 0.6 else 1.70)
-    if width and height:
-        return box(float(width), float(height), float(width))
-    return None
+    if not (width and height):
+        return None
+    w, h = float(width), float(height)
+    kind = _SHAPE.get(name)
+    if kind is None:
+        return box(w, h, w)
+    # Never deeper than it is wide: the width is measured and the depth is not, and a
+    # fixture drawn deeper than its own measured footprint contradicts the flat map
+    # underneath it -- which is the one place a viewer could catch this being invented.
+    d = min(_NOMINAL_DEPTH_M[kind], w)
+    if kind == "chair":
+        return chair(w, d, h)
+    if kind == "table":
+        return table(w, d, h)
+    # One shelf per 0.45 m of carcass, which is roughly the pitch a gondola is built on.
+    return cabinet(w, d, h, shelves=max(int(h / 0.45), 1))
 
 
 def to_obj(mesh: Mesh, name: str = "mesh") -> str:

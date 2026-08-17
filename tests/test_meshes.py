@@ -252,14 +252,51 @@ def test_an_implausible_person_height_is_not_believed():
     assert np.ptp(verts[:, 1]) == pytest.approx(1.70)
 
 
-def test_anything_else_stays_the_extruded_footprint():
-    """Adding a shape is a claim about what the thing looks like. The only one currently
-    earned is that a person is person-shaped."""
+def test_a_class_whose_name_does_not_determine_a_shape_stays_a_box():
+    """The line the shape table draws. `potted plant` is any shape at all, and a viewer
+    cannot tell a modelled silhouette from a measured one, so it keeps the extrusion the
+    flat map already asserted."""
+    from syncai_hydranet.geometry.meshes import for_object
+
+    verts, faces = for_object({"name": "potted plant", "width_m": 0.6, "height_m": 0.9})
+    assert len(faces) == 12  # a box
+    assert np.ptp(verts[:, 1]) == pytest.approx(0.9)
+
+
+def test_a_named_shape_carries_the_measured_height():
+    """A box labelled `chair` already asserts "this is a chair", so drawing a chair adds
+    nothing to the claim -- but it must not quietly change the two numbers that *were*
+    measured."""
     from syncai_hydranet.geometry.meshes import for_object
 
     verts, faces = for_object({"name": "chair", "width_m": 0.6, "height_m": 0.9})
-    assert len(faces) == 12  # a box
+    assert len(faces) > 12, "a chair drawn as a box has lost the seat, which is the point"
     assert np.ptp(verts[:, 1]) == pytest.approx(0.9)
+    assert np.ptp(verts[:, 0]) == pytest.approx(0.6)
+
+
+def test_a_terrain_class_name_does_not_reach_the_shape_table():
+    """`display_fixture` is a terrain id, not a detection class, so it cannot arrive here
+    without something having gone wrong upstream -- and it is also the lowest-IoU class
+    with real data (0.336), whose failure is *which* object it is looking at. Either reason
+    alone keeps it out of the table; a silhouette on that class is the shape being more
+    confident than the label under it."""
+    from syncai_hydranet.geometry.meshes import _SHAPE, for_object
+
+    assert "display_fixture" not in _SHAPE
+    _, faces = for_object({"name": "display_fixture", "width_m": 1.9, "height_m": 1.85})
+    assert len(faces) == 12  # the neutral box, same as any unnamed class
+
+
+def test_no_shape_is_deeper_than_its_measured_width():
+    """Depth is the one dimension the payload never carries, so every shape invents it.
+    A fixture drawn deeper than its own measured footprint contradicts the flat map
+    underneath it, which is the one place a viewer could catch the invention."""
+    from syncai_hydranet.geometry.meshes import for_object
+
+    for name, width in (("chair", 0.30), ("dining table", 0.5), ("refrigerator", 0.4)):
+        verts, _ = for_object({"name": name, "width_m": width, "height_m": 1.2})
+        assert np.ptp(verts[:, 2]) <= width + 1e-9, name
 
 
 def test_an_object_with_no_extent_gets_no_mesh():
