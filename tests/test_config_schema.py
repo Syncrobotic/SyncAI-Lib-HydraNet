@@ -8,7 +8,12 @@ from pathlib import Path
 import pytest
 
 from syncai_hydranet.config import load_config
-from syncai_hydranet.config_schema import ConfigError, check_config
+from syncai_hydranet.config_schema import (
+    ConfigError,
+    check_config,
+    unsourced_terrain_classes,
+)
+from syncai_hydranet.data.label_maps import SCHEMES
 
 CONFIG_DIR = Path(__file__).resolve().parents[1] / "configs"
 CONFIGS = sorted(CONFIG_DIR.glob("*.yaml"))
@@ -22,9 +27,44 @@ def _cfg():
 # ------------------------------------------------------- the shipped configs
 
 
+# The empty output channels the shipped configs currently carry, pinned as data rather
+# than allowed as a class of warning. Each of these is a class the taxonomy declares and
+# no dataset in that config can produce: it trains on nothing and reports IoU 0.000 for
+# the life of the run. They are recorded here so that they stay visible and so that a
+# *new* one fails this suite instead of joining them quietly.
+#
+# `hydranet_regnet800mf` and `hydranet_retail_cctv` are absent because they are clean,
+# and the second one shows what clean costs: it pairs ADE20K with site masks under a
+# native identity scheme, so annotation is what fills the channels ADE20K cannot.
+KNOWN_UNSOURCED = {
+    "eval_indoor25.yaml": ("floor_metal", "wet_slippery", "threshold_ramp"),
+    "hydranet_indoor.yaml": ("floor_metal", "wet_slippery", "threshold_ramp"),
+    "hydranet_retail.yaml": ("floor_metal", "wet_slippery", "threshold_ramp"),
+    "hydranet_retail_cocostuff.yaml": ("floor_metal", "wet_slippery", "threshold_ramp"),
+    # Documented in label_maps_retail_objects.py: no public segmentation dataset labels
+    # merchandise, so this one is filled from site annotation or it is not filled.
+    "hydranet_retail_objects.yaml": ("product",),
+}
+
+
 @pytest.mark.parametrize("path", CONFIGS, ids=lambda p: p.name)
-def test_shipped_configs_are_valid(path):
-    assert check_config(load_config(path, validate=False)) == []
+def test_shipped_configs_raise_nothing_and_warn_only_about_empty_channels(path):
+    """This assertion used to be `== []`.
+
+    That was true only because nothing measured the empty channels; it was not evidence
+    that there were none. Keeping the form strict -- every warning must be one of the
+    pinned ones -- means a config that grows any *other* warning still fails here.
+    """
+    warnings = check_config(load_config(path, validate=False))
+    assert [w for w in warnings if "empty output channel" not in w] == []
+
+
+@pytest.mark.parametrize("path", CONFIGS, ids=lambda p: p.name)
+def test_shipped_config_empty_channels_are_the_known_ones(path):
+    """A new empty channel fails here rather than at epoch 60, which is the whole point."""
+    found = unsourced_terrain_classes(load_config(path, validate=False))
+    flat = tuple(name for classes in found.values() for name in classes)
+    assert flat == KNOWN_UNSOURCED.get(path.name, ())
 
 
 def test_configs_exist():
@@ -172,3 +212,64 @@ def test_a_dataset_that_supervises_nothing_is_an_error_not_a_warning():
     with pytest.raises(ConfigError) as exc:
         check_config(cfg)
     assert "supervises" in str(exc.value)
+
+
+# --------------------------------------------------- classes nothing can produce
+
+
+def test_an_empty_channel_warns_but_does_not_fail():
+    """Same reasoning as the unsupervised head above: a class with no source is
+    legitimate while a dataset is still being assembled, and worth saying out loud."""
+    cfg = _cfg()
+    warnings = check_config(cfg)
+    assert any("wet_slippery" in w and "empty output channel" in w for w in warnings)
+
+
+def test_a_native_scheme_silences_it_because_annotation_can_draw_any_class():
+    """The mechanism that will fill `product` once site masks exist, pinned.
+
+    A native scheme is an identity map, so it claims every id in the taxonomy. That is
+    the honest answer at config time -- an annotator may draw any class the taxonomy
+    has -- and it is also the limit of the check: it proves the class is expressible,
+    never that a pixel of it was drawn. See `test_it_cannot_see_whether_any_pixel_exists`.
+    """
+    cfg = _cfg()
+    assert unsourced_terrain_classes(cfg)  # ade20k_indoor alone cannot supply them
+    site = dict(cfg["data"]["datasets"][0])
+    site["name"] = "site_masks"
+    site["label_map"] = "indoor_native"
+    cfg["data"]["datasets"].append(site)
+    assert unsourced_terrain_classes(cfg) == {}
+
+
+def test_it_cannot_see_whether_any_pixel_exists():
+    """The check reads the config, not the masks on disk.
+
+    Stated as a test so the guarantee is not overread later: `retail_objects_native`
+    silences `product` the moment it appears in a config, whether or not the prelabel
+    pass that was supposed to produce it emitted a single instance. Counting instances
+    is a job for whatever writes the masks.
+
+    `column` is the measured case for the stronger limit. It is sourced from ADE20K id
+    43, so it passes here and always has, and it still predicted 0.00% of pixels across
+    four daytime shop-floor cameras while scoring val IoU 0.40-0.51. Passing this check
+    is not evidence that a class works.
+    """
+    assert 5 not in SCHEMES["ade20k_retail_objects"].mapping.values()
+    assert 5 in SCHEMES["retail_objects_native"].mapping.values()
+    assert (
+        3 in SCHEMES["ade20k_retail_objects"].mapping.values()
+    )  # column: sourced, and 0% on site
+
+
+def test_two_taxonomies_in_one_config_are_reported_separately():
+    """A config may legitimately mix schemes that share no class list, and merging their
+    mappings would let one taxonomy's ids vouch for another's classes."""
+    cfg = _cfg()
+    other = dict(cfg["data"]["datasets"][0])
+    other["name"] = "offroad"
+    other["label_map"] = "rugd"
+    cfg["data"]["datasets"].append(other)
+    found = unsourced_terrain_classes(cfg)
+    assert list(found) == ["ade20k_indoor"]
+    assert "wet_slippery" in found["ade20k_indoor"]

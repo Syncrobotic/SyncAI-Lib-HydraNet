@@ -274,6 +274,69 @@ def unsupervised_heads(cfg: dict) -> set[str]:
     return set(heads) - supervised
 
 
+def unsourced_terrain_classes(cfg: dict) -> dict[str, tuple[str, ...]]:
+    """Terrain classes this config declares that no dataset in it can ever produce.
+
+    The config-time counterpart to ``unsupervised_heads``. That one catches a whole head
+    with no gradient; this one catches a single *channel* with no gradient, which is the
+    quieter of the two and has cost this project more. ``wet_slippery``, ``floor_metal``
+    and ``threshold_ramp`` have been in the retail taxonomy since the beginning, are all
+    still IoU 0.000, and every run that trained them looked completely normal --
+    ``label_maps_retail_objects.unsourced_classes`` says as much in its docstring, and
+    then only a test called it. An empty output channel is invisible at training time:
+    the loss falls, the mean is taken over the classes that do have data, and the run
+    reports a plausible number for sixty epochs.
+
+    Returns ``{scheme names joined: classes}``, keyed per taxonomy because a config may
+    legitimately mix schemes that do not share one. Datasets are grouped by their
+    scheme's ``classes`` tuple and their mappings unioned, since two datasets under one
+    taxonomy supply it together -- ``hydranet_retail_cctv`` pairs ADE20K with site masks
+    precisely so that each covers what the other cannot.
+
+    What it cannot do, and the reason it warns rather than raises: a *native* scheme is
+    an identity map, so it claims every id by construction. That is the truth about
+    expressibility -- a site annotator may draw any class in the taxonomy -- but not
+    about the pixels on disk. "The scheme allows `product` and the export contains none"
+    is a count over the masks, not a fact about the config, and nothing here can see it.
+
+    The stronger version of that limit, measured, so nobody reads this gate as more than
+    it is: `column` has an ADE20K source, passes this check, and scored val IoU 0.40-0.51
+    on the 60-epoch retail-objects run -- and predicts **0.00% of pixels** across 240
+    frames of four daytime shop-floor cameras, including one with a clad pillar bearing a
+    shop sign dead centre of frame, which it calls `wall`. A sourced class can still be
+    identically absent in deployment. Only site evaluation catches that; a config cannot.
+    """
+    by_taxonomy: dict[tuple, list] = {}
+    for ds in (cfg.get("data") or {}).get("datasets") or []:
+        if not isinstance(ds, dict):
+            continue
+        scheme = SCHEMES.get(ds.get("label_map"))
+        if scheme is not None:
+            by_taxonomy.setdefault(scheme.classes, []).append(scheme)
+
+    out: dict[str, tuple[str, ...]] = {}
+    for classes, schemes in by_taxonomy.items():
+        produced = {v for s in schemes for v in s.mapping.values() if v != 255}
+        # Class 0 is `void` in every scheme and is not a class anyone trains, so a
+        # mapping that never emits it is correct rather than incomplete.
+        missing = tuple(name for tid, name in enumerate(classes) if tid and tid not in produced)
+        if missing:
+            names = "+".join(sorted({s.name for s in schemes}))
+            out[names] = missing
+    return out
+
+
+def _check_unsourced_classes(rep: _Report, cfg: dict) -> None:
+    for scheme_names, missing in sorted(unsourced_terrain_classes(cfg).items()):
+        rep.warnings.append(
+            f"label_map {scheme_names!r} can never produce {', '.join(missing)}: "
+            f"{'they are' if len(missing) > 1 else 'it is'} an empty output channel, "
+            f"trained on nothing and reported as IoU 0.000. Add a dataset that supplies "
+            f"{'them' if len(missing) > 1 else 'it'}, or drop "
+            f"{'the classes' if len(missing) > 1 else 'the class'} from the taxonomy."
+        )
+
+
 def _check_one_dataset(rep: _Report, ds: dict, path: str, head_names: set[str]) -> set[str]:
     """Everything checkable about one dataset entry. Returns the heads it claims to train.
 
@@ -429,6 +492,7 @@ def check_config(cfg: dict) -> list[str]:
     _check_class_counts(rep, cfg)
     _check_detection_subset(rep, cfg)
     _check_channels_last(rep, cfg)
+    _check_unsourced_classes(rep, cfg)
 
     if rep.errors:
         listing = "\n".join(f"  - {e}" for e in rep.errors)
