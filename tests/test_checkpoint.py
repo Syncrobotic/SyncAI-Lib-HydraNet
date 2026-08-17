@@ -43,6 +43,9 @@ def _stub_trainer(steps_per_epoch=10):
     t.scaler = torch.amp.GradScaler(enabled=False)
     t.global_step = 0
     t.best_metric = -1.0
+    # Patience state rides in the checkpoint for the same reason best_metric does: a
+    # preempted run that resumes with a reset counter either stops early or never stops.
+    t.epochs_since_best = 0
     t.start_epoch = 0
     t.cfg = {"train": {"epochs": 10}, "data": {"input_size": [128, 160]}}
     t.train_loader = _FakeLoader(steps_per_epoch)

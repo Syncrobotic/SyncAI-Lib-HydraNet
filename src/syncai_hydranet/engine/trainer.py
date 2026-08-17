@@ -284,6 +284,28 @@ class Trainer:
 
         self.log_interval = int(tcfg.get("log_interval", 50))
         self.val_interval = int(tcfg.get("val_interval", 1))
+        # Detection validation is 4,952 COCO images and 20% of every epoch, measured on
+        # runs/hydranet_retail_objects: median epoch 85 s of which 17 s is the mAP pass,
+        # 17 minutes of an 84 minute run. Terrain validation is 285 images and stays
+        # every epoch, because it is what selects best.pt.
+        #
+        # An interval, and deliberately not removal. mAP is not dead weight even when it
+        # selects nothing: RETAIL_SCOPE.md's COCO-dilution sweep is only readable because
+        # detection was measured alongside segmentation, and ARCHITECTURE_REVIEW.md's AMP
+        # crash in the FCOS loss survived 166 tests and a full 60-epoch run because
+        # nothing exercised that path. An unvalidated head is not a head with a stale
+        # number; it is a head whose collapse is invisible. The interval keeps the
+        # tripwire and checks it less often.
+        self.det_val_interval = max(1, int(tcfg.get("detection_val_interval", 1)))
+        # 0 disables. Counted in validations rather than epochs, which are the same thing
+        # unless val_interval > 1.
+        #
+        # A smaller `epochs` would be the obvious alternative and it is the wrong one:
+        # across 13 runs in runs/ the peak lands anywhere from epoch 6 (fixed_coco10) to
+        # epoch 53 of 60 (indoor_seed7). A fixed cut either wastes the first case or
+        # truncates the second. Patience only ever removes epochs that improved nothing.
+        self.early_stop_patience = max(0, int(tcfg.get("early_stop_patience", 0)))
+        self.epochs_since_best = 0
         # One named metric decides best.pt. For a robot the honest choice is a
         # traversability number, not an average across heads: mistaking a wall for
         # floor is not compensated by a good mAP on chairs.
@@ -332,8 +354,15 @@ class Trainer:
         )
         for epoch in range(self.start_epoch + 1, self.epochs + 1):
             self.train_one_epoch(epoch)
-            if epoch % self.val_interval == 0:
-                self.record_epoch(epoch, self.validate(epoch))
+            if epoch % self.val_interval != 0:
+                continue
+            if self.should_stop(self.record_epoch(epoch, self.validate(epoch))):
+                self.logger.info(
+                    f"early stop: {self.epochs_since_best} validations without a new best "
+                    f"{self.primary_metric} (patience {self.early_stop_patience}); "
+                    f"best {self.best_metric:.4f}, stopping at epoch {epoch} of {self.epochs}"
+                )
+                break
         self.logger.info("training complete")
 
     def record_epoch(self, epoch: int, metrics: dict) -> bool:
@@ -410,18 +439,60 @@ class Trainer:
                     self._log_task_weights()
 
     # ------------------------------------------------------------------
+    def should_stop(self, is_best: bool) -> bool:
+        """Advance the patience counter and say whether the run is finished.
+
+        Separate from the loop because an off-by-one here does not fail loudly -- it
+        either ends a run several epochs early or never fires at all, and both look like
+        a run that simply took that long.
+        """
+        if is_best:
+            self.epochs_since_best = 0
+            return False
+        self.epochs_since_best += 1
+        return bool(self.early_stop_patience) and (
+            self.epochs_since_best >= self.early_stop_patience
+        )
+
+    def val_subset(self, epoch: int) -> tuple[list, list]:
+        """The validation sets to score this epoch, and their loaders, aligned.
+
+        Filtering here rather than inside ``evaluate`` keeps the change to one caller:
+        ``evaluate`` already accepts the pair, so a subset needs no new API and
+        ``hydranet-eval`` is untouched. A dataset is dropped only when detection is the
+        *only* head it supervises, so a source feeding both still scores both.
+
+        The last epoch always runs everything. A run whose final row carries an mAP from
+        five epochs earlier invites exactly the misreading this repository keeps writing
+        docs about -- a number in a table with nothing saying when it was measured.
+        """
+        last = epoch >= self.epochs
+        if self.det_val_interval == 1 or last or epoch % self.det_val_interval == 0:
+            return self.val_sets, self.val_loaders
+        keep = [
+            i
+            for i, (_, ds) in enumerate(self.val_sets)
+            if set(getattr(ds, "supervises", ())) - {"detection"}
+        ]
+        # Every val set is detection-only: skipping them all would validate nothing and
+        # leave `select_metric` with an empty dict. Score them rather than fail.
+        if not keep:
+            return self.val_sets, self.val_loaders
+        return [self.val_sets[i] for i in keep], [self.val_loaders[i] for i in keep]
+
     @torch.no_grad()
     def validate(self, epoch: int) -> dict:
         model = self.ema.ema if self.ema else self.model
         samples: dict | None = {} if self.tb else None
+        val_sets, loaders = self.val_subset(epoch)
         metrics = evaluate(
             model,
-            self.val_sets,
+            val_sets,
             self.cfg,
             self.device,
             self.logger,
             samples=samples,
-            loaders=self.val_loaders,
+            loaders=loaders,
         )
         append_metrics(
             self.out_dir,
@@ -494,6 +565,10 @@ class Trainer:
             "epoch": epoch,
             "global_step": self.global_step,
             "best_metric": self.best_metric,
+            # Runs on this box get preempted. A resumed run that restarts its patience
+            # counter either stops early or never stops, and neither announces itself --
+            # the same class of silent-wrong as resuming without `best_metric`.
+            "epochs_since_best": self.epochs_since_best,
             "cfg": dict(self.cfg),
         }
 
@@ -550,6 +625,7 @@ class Trainer:
         self.start_epoch = int(ckpt.get("epoch", 0))
         self.global_step = int(ckpt.get("global_step", 0))
         self.best_metric = float(ckpt.get("best_metric", -1.0))
+        self.epochs_since_best = int(ckpt.get("epochs_since_best", 0))
 
         if ckpt.get("scheduler") is not None:
             self.scheduler.load_state_dict(ckpt["scheduler"])

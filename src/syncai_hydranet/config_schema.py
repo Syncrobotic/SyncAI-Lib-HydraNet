@@ -185,6 +185,12 @@ TRAIN = {
     "ema_warmup_steps": Spec((int,)),
     "log_interval": Spec((int,)),
     "val_interval": Spec((int,)),
+    # Score the detection head every Nth validation instead of every one. 1 keeps the
+    # old behaviour. The last epoch always scores it whatever this says, so a run never
+    # ends reporting an mAP from several epochs earlier.
+    "detection_val_interval": Spec((int,)),
+    # Stop after this many validations with no new best `primary_metric`. 0 disables.
+    "early_stop_patience": Spec((int,)),
     "primary_metric": Spec((str,)),
 }
 
