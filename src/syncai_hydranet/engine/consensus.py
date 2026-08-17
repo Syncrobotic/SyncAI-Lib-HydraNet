@@ -39,7 +39,7 @@ about model stability:
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -120,6 +120,47 @@ class ConsensusResult:
             ],
             "unstable_composition": self.unstable_composition,
         }
+
+
+def fleet_summary(results: Mapping[str, ConsensusResult]) -> dict:
+    """Aggregate across cameras, carrying the count of what actually contributed.
+
+    **This exists so that nobody writes it themselves, and the reason is specific.**
+    A camera with no eligible pixels reports NaN rather than 0.0, which defeats
+    ``np.mean``. It does not defeat ``np.nanmean`` -- and ``np.nanmean`` is this
+    codebase's established idiom for exactly this shape: ``ConfusionMatrix.mean_iou``
+    uses it, and its docstring argues at length that dropping the NaN entries is the
+    only defensible choice there. So the next person aggregating six cameras will follow
+    the local precedent, reach for ``nanmean``, and report a mean over five as a mean over
+    six. **The camera that drops out is the one with a crowd across the frame** -- the
+    busiest one, and the one most worth knowing about.
+
+    The trap is that ``nanmean`` looks *more* careful than ``mean``, not less.
+
+    The fix is the one the evaluator already uses one level up: ``terrain_mIoU`` is
+    emitted beside ``terrain_mIoU_classes`` so the two cannot be compared without noticing
+    the denominator moved. Here that is ``cameras`` beside ``contributing``, and the names
+    of the cameras that did not contribute, so a mean of five labelled six is not
+    expressible.
+    """
+    measurable = {k: v for k, v in results.items() if v.measurable}
+    dropped = sorted(set(results) - set(measurable))
+    stable = [v.stable_share for v in measurable.values()]
+    return {
+        "caveat": CAVEAT,
+        "cameras": len(results),
+        "contributing": len(measurable),
+        "not_measurable": dropped,
+        # None rather than NaN: a JSON reader that sees null asks why, and NaN is not
+        # valid JSON in the first place.
+        "mean_stable_share": (sum(stable) / len(stable)) if stable else None,
+        "eligible_pixels": sum(v.eligible_pixels for v in measurable.values()),
+        "frames": sum(v.frames for v in measurable.values()),
+        "per_camera": {
+            k: {"stable_share": v.stable_share, "eligible_pixels": v.eligible_pixels}
+            for k, v in results.items()
+        },
+    }
 
 
 class FrameConsensus:

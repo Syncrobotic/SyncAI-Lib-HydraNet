@@ -17,7 +17,7 @@ pytest tests/test_consensus.py -v
 import numpy as np
 import pytest
 
-from syncai_hydranet.engine.consensus import CAVEAT, FrameConsensus
+from syncai_hydranet.engine.consensus import CAVEAT, FrameConsensus, fleet_summary
 
 CLASSES = ["void", "floor", "wall", "column", "fixture", "product", "person"]
 
@@ -201,6 +201,54 @@ def test_an_impossible_threshold_is_refused(thr):
     fc.update(_const(1))
     with pytest.raises(ValueError, match="agree_threshold"):
         fc.result(agree_threshold=thr)
+
+
+# --- aggregating a fleet, where the NaN stops being enough --------------------
+
+
+def _crowded():
+    """A camera with people across the whole frame: nothing eligible, nothing to say."""
+    preds = []
+    for i in range(5):
+        p = _const(1)
+        p[:, i % 5] = 6
+        preds.append(p)
+    return _run(preds)
+
+
+def test_the_fleet_mean_says_how_many_cameras_are_behind_it():
+    """NaN defeats `np.mean`. It does not defeat `np.nanmean`, and `nanmean` is this
+    codebase's idiom -- `ConfusionMatrix.mean_iou` uses it and argues for it. So the
+    aggregator ships here rather than being written by whoever needs it next, and it
+    carries its denominator the way `terrain_mIoU_classes` does."""
+    results = {"cam01": _run([_const(1)] * 5), "cam02": _crowded()}
+    summary = fleet_summary(results)
+
+    assert summary["cameras"] == 2
+    assert summary["contributing"] == 1
+    assert summary["not_measurable"] == ["cam02"]
+    # The mean is over the one camera that had anything to say, and says so.
+    assert summary["mean_stable_share"] == pytest.approx(1.0)
+
+
+def test_the_crowded_camera_is_named_not_dropped_silently():
+    """The camera that drops out is the one with a crowd across the frame -- the busiest,
+    and the one most worth knowing about."""
+    summary = fleet_summary({"busy": _crowded()})
+    assert summary["not_measurable"] == ["busy"]
+    assert summary["contributing"] == 0
+    assert summary["mean_stable_share"] is None  # not NaN: NaN is not valid JSON
+    assert "busy" in summary["per_camera"]
+
+
+def test_every_share_in_a_report_stands_beside_its_pixel_count():
+    """R7 in pixels rather than cameras: a stable_share over 400 pixels and one over 4
+    million print identically unless the count travels with them."""
+    res = _run([_const(1)] * 5)
+    assert res.to_dict()["pixels"]["eligible"] == 20
+    for entry in res.to_dict()["per_class"]:
+        assert "pixels" in entry and "share_of_eligible" in entry
+    assert fleet_summary({"cam": res})["per_camera"]["cam"]["eligible_pixels"] == 20
 
 
 def test_a_non_2d_prediction_is_refused():
