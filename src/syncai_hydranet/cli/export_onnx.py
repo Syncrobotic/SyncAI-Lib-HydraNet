@@ -236,6 +236,14 @@ def narrow_detection_head(model, keep_idx: list[int]) -> None:
     nothing in this process uses it again, and would not be fine anywhere else.
     """
     conv = model.det_head.cls_pred
+    if hasattr(conv, "narrow"):
+        # The open-vocabulary head. Narrowing is a *row* slice of the text matrix and its
+        # bias; the visual projection is untouched because nothing about it was per-class.
+        # So a narrowed text head is the same model answering a shorter question, where the
+        # linear head below has to be rebuilt around a smaller output.
+        conv.narrow(keep_idx)
+        model.det_head.num_classes = len(keep_idx)
+        return
     narrowed = nn.Conv2d(
         conv.in_channels,
         len(keep_idx),

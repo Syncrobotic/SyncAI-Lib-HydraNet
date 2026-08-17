@@ -80,7 +80,21 @@ HEAD_COMMON = {
 }
 HEAD_BY_TYPE = {
     "semantic_fpn": {**HEAD_COMMON, "dropout": Spec(NUMBER)},
-    "fcos": {**HEAD_COMMON, "num_convs": Spec((int,)), "strides": Spec((list,))},
+    "fcos": {
+        **HEAD_COMMON,
+        "num_convs": Spec((int,)),
+        "strides": Spec((list,)),
+        # `linear` is the shipped classifier: one learned vector per class, class list
+        # frozen into the weights. `text_embedding` scores against a matrix of class-name
+        # embeddings, so the vocabulary is data a config points at rather than a retrain --
+        # which is the only available answer to the cam08 audit's 1,683 `book` and no
+        # `laptop`. See models/heads/text_classifier.py.
+        "cls_head": Spec((str,), choices=("linear", "text_embedding")),
+        # The text encoder's dimension. Ignored under `linear`, and deliberately not
+        # defaulted per encoder: a matrix whose width disagrees with the head is refused at
+        # load rather than broadcast, because a silent mismatch renames every class.
+        "embed_dim": Spec((int,)),
+    },
 }
 LOSS_BY_TYPE = {
     "semantic_fpn": {
