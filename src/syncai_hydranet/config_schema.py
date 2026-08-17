@@ -326,6 +326,47 @@ def unsourced_terrain_classes(cfg: dict) -> dict[str, tuple[str, ...]]:
     return out
 
 
+def _check_fixed_weights(rep: _Report, cfg: dict) -> None:
+    """``fixed_weights`` keys have to name declared heads.
+
+    ``FixedWeighting.forward`` does ``self.weights.get(name, 1.0)``, so a key naming no
+    head is dropped and a head named by no key silently trains at 1.0. Neither shows up
+    anywhere: the loss falls, the run completes, and the reweighting the config asked for
+    never happened. That is this file's opening paragraph -- a setting that never took
+    effect -- and ``data.datasets[].supervises`` is already checked against the declared
+    heads for exactly the same reason. This closes the other half.
+
+    Checked only under ``loss_balancing: fixed``, and that restriction is the point.
+    ``fixed_weights`` is set once in ``_base/hydranet.yaml`` for all three heads, so a
+    derived config that removes a head -- ``hydranet_retail_objects.yaml`` sets
+    ``traversability: null`` -- inherits a weight naming a head it does not have. Under
+    ``uncertainty`` the table is never read, so that stray key is the *normal* result of
+    a correct config and warning about it would train people to ignore warnings. Under
+    ``fixed`` the same key means a number the author wrote is silently discarded, which
+    is worth refusing the run over.
+    """
+    model = cfg.get("model")
+    if not isinstance(model, dict) or model.get("loss_balancing") != "fixed":
+        return
+    if not isinstance(model.get("fixed_weights"), dict):
+        return
+    heads = model.get("heads")
+    if not isinstance(heads, dict):
+        return
+    weights = model["fixed_weights"]
+    for name in sorted(set(weights) - set(heads)):
+        rep.errors.append(
+            f"model.fixed_weights.{name}: names no declared head, so FixedWeighting "
+            f"drops it and the weight never applies. Declared: {', '.join(sorted(heads))}"
+        )
+    for name in sorted(set(heads) - set(weights)):
+        rep.warnings.append(
+            f"model.fixed_weights: head {name!r} has no weight and will train at 1.0, "
+            f"because FixedWeighting defaults rather than raising. State it explicitly "
+            f"if that is what you want."
+        )
+
+
 def _check_unsourced_classes(rep: _Report, cfg: dict) -> None:
     for scheme_names, missing in sorted(unsourced_terrain_classes(cfg).items()):
         rep.warnings.append(
@@ -492,6 +533,7 @@ def check_config(cfg: dict) -> list[str]:
     _check_class_counts(rep, cfg)
     _check_detection_subset(rep, cfg)
     _check_channels_last(rep, cfg)
+    _check_fixed_weights(rep, cfg)
     _check_unsourced_classes(rep, cfg)
 
     if rep.errors:

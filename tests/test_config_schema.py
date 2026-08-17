@@ -273,3 +273,39 @@ def test_two_taxonomies_in_one_config_are_reported_separately():
     found = unsourced_terrain_classes(cfg)
     assert list(found) == ["ade20k_indoor"]
     assert "wet_slippery" in found["ade20k_indoor"]
+
+
+# ------------------------------------------------- fixed_weights names heads
+
+
+def test_a_fixed_weight_naming_no_head_is_rejected():
+    """`FixedWeighting.forward` does `weights.get(name, 1.0)`, so the key is dropped and
+    the reweighting the config asked for silently never happens."""
+    cfg = _cfg()
+    cfg["model"]["loss_balancing"] = "fixed"
+    cfg["model"]["fixed_weights"] = {"terrian": 0.5, **cfg["model"]["fixed_weights"]}
+    with pytest.raises(ConfigError, match="names no declared head"):
+        check_config(cfg)
+
+
+def test_a_head_with_no_fixed_weight_warns_that_it_defaults():
+    cfg = _cfg()
+    cfg["model"]["loss_balancing"] = "fixed"
+    cfg["model"]["fixed_weights"] = {"terrain": 0.5}
+    warnings = check_config(cfg)
+    assert any("detection" in w and "1.0" in w for w in warnings)
+
+
+def test_an_inherited_stray_weight_is_silent_under_uncertainty():
+    """The case that made this check conditional rather than universal.
+
+    `_base/hydranet.yaml` weights all three heads, so every derived config that removes
+    one -- `hydranet_retail_objects.yaml` sets `traversability: null` -- inherits a
+    weight for a head it does not declare. Under `uncertainty` the table is never read,
+    so that is a correct config and must not warn.
+    """
+    cfg = load_config(CONFIG_DIR / "hydranet_retail_objects.yaml", validate=False)
+    assert cfg["model"]["loss_balancing"] == "uncertainty"
+    assert "traversability" in cfg["model"]["fixed_weights"]
+    assert "traversability" not in cfg["model"]["heads"]
+    assert [w for w in check_config(cfg) if "fixed_weights" in w] == []
