@@ -247,6 +247,16 @@ def narrow_detection_head(model, keep_idx: list[int]) -> None:
         padding=conv.padding,
     )
     idx = torch.tensor(keep_idx, dtype=torch.long)
+    if conv.bias is None or narrowed.bias is None:
+        # FCOSHead builds cls_pred with the Conv2d default, bias=True, and the focal-loss
+        # prior is written into that bias in its __init__ -- so a biasless classifier is
+        # not a configuration this project has, it is a sign the head was rebuilt
+        # differently. Copying weights and silently dropping the prior would export a head
+        # whose scores are shifted by ~4.6 logits, which decodes as almost no detections.
+        raise SystemExit(
+            "cannot narrow a classification convolution with no bias: FCOSHead sets one "
+            "and stores the focal-loss prior in it. Something rebuilt the head."
+        )
     with torch.no_grad():
         narrowed.weight.copy_(conv.weight[idx])
         narrowed.bias.copy_(conv.bias[idx])
