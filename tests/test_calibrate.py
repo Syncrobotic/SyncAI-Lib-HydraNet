@@ -287,3 +287,73 @@ def test_an_empty_floor_mask_returns_nothing_rather_than_everything():
 def test_a_mask_of_the_wrong_shape_is_refused():
     with pytest.raises(ValueError, match="differ"):
         floor_edge_points(np.zeros((40, 40)), np.zeros((20, 20), bool))
+
+
+# --- oriented voting, which removes a starburst that looks like a result ---
+
+
+def _oriented_grid():
+    """The grid with each point's true gradient normal: vertical lines have normal 0,
+    horizontal lines have normal pi/2."""
+    vert = [
+        (x0, y) for x0 in np.linspace(120, W - 120, 9) for y in np.linspace(80, H - 80, 200)
+    ]
+    horiz = [
+        (x, y0) for y0 in np.linspace(120, H - 120, 6) for x in np.linspace(60, W - 60, 260)
+    ]
+    pts = np.array(vert + horiz, float)
+    ang = np.concatenate([np.zeros(len(vert)), np.full(len(horiz), math.pi / 2)])
+    return pts, ang
+
+
+def test_a_dense_blob_of_noise_builds_a_ridge_without_orientations():
+    """The failure `orientations` removes. Every point voting into all 180 thetas means a
+    dense blob agrees about its own centroid whatever the lines are doing, and peaks
+    extracted from that ridge render as thirty lines through one point -- a starburst a
+    reader takes for a vanishing point."""
+    rng = np.random.default_rng(0)
+    blob = rng.normal([W / 2, H / 2], [40, 40], size=(3000, 2))
+    unoriented = hough(blob, (H, W))
+    # A structureless blob should not out-score a real grid. Without orientations it does.
+    assert concentration(unoriented) > concentration(hough(_grid(), (H, W)))
+
+
+def test_orientations_stop_the_blob_from_outscoring_a_real_grid():
+    rng = np.random.default_rng(0)
+    blob = rng.normal([W / 2, H / 2], [40, 40], size=(3000, 2))
+    blob_ang = rng.uniform(0, math.pi, len(blob))  # structureless gradients
+    pts, ang = _oriented_grid()
+    assert concentration(hough(pts, (H, W), orientations=ang)) > concentration(
+        hough(blob, (H, W), orientations=blob_ang)
+    )
+
+
+def test_a_point_does_not_vote_for_a_theta_its_gradient_disagrees_with():
+    pts, ang = _oriented_grid()
+    acc = hough(pts, (H, W), orientations=ang, spread_deg=12.0)
+    n_theta = acc.shape[0]
+    # 45 degrees is 90 bins of 180 across pi; no grid point's normal is within 12 of it.
+    diagonal = acc[n_theta // 4]
+    assert diagonal.sum() == 0
+    assert acc[0].sum() > 0 and acc[n_theta // 2].sum() > 0
+
+
+def test_omitting_orientations_is_the_old_behaviour_exactly():
+    """Existing callers and every test above must be untouched by the new argument."""
+    pts = _grid()
+    assert np.array_equal(hough(pts, (H, W)), hough(pts, (H, W), orientations=None))
+
+
+def test_mismatched_orientations_are_refused():
+    with pytest.raises(ValueError, match="orientations has"):
+        hough(_grid(), (H, W), orientations=np.zeros(3))
+
+
+def test_edge_points_can_return_their_gradient_direction():
+    grey = np.zeros((60, 80))
+    grey[:, ::8] = 1.0  # vertical lines -> gradient points across x, normal near 0 or pi
+    mask = np.ones((60, 80), bool)
+    pts, ang = floor_edge_points(grey, mask, return_orientation=True)
+    assert len(pts) == len(ang)
+    assert ((ang < 0.3) | (ang > math.pi - 0.3)).mean() > 0.9
+    assert np.array_equal(pts, floor_edge_points(grey, mask)), "default return unchanged"

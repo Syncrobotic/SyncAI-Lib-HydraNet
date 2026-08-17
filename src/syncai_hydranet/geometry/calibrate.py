@@ -73,8 +73,21 @@ class Pose:
         )
 
 
-def floor_edge_points(grey: np.ndarray, floor_mask: np.ndarray, quantile: float = 0.92):
+def floor_edge_points(
+    grey: np.ndarray,
+    floor_mask: np.ndarray,
+    quantile: float = 0.92,
+    return_orientation: bool = False,
+):
     """Edge points on the floor, as (x, y), for the distortion fit to work on.
+
+    With `return_orientation` it also returns each point's gradient direction on [0, pi),
+    which `hough` needs to vote by orientation rather than into all 180 bins. **Quantile is
+    a free parameter with no calibration behind it and the fitted k1 moves with it** --
+    measured on Taichung-cam01, 0.92 gives -0.255, 0.96 gives -0.150, and 0.98 and above
+    run to the search boundary where `is_interior_maximum` correctly refuses them. So a
+    caller reporting one k1 without the band it is stable over is reporting a choice as a
+    measurement.
 
     **Masked by the segmentation, not by a rectangular ROI**, and that detail cost a run.
     A box around the lower half of the frame catches counter edges, shelf bases and the
@@ -95,8 +108,14 @@ def floor_edge_points(grey: np.ndarray, floor_mask: np.ndarray, quantile: float 
     if not inside.any():
         return np.zeros((0, 2))
     thresh = float(np.quantile(mag[inside], quantile))
-    ys, xs = np.nonzero(inside & (mag > thresh))
-    return np.stack([xs, ys], axis=1).astype(float)
+    keep = inside & (mag > thresh)
+    ys, xs = np.nonzero(keep)
+    pts = np.stack([xs, ys], axis=1).astype(float)
+    if not return_orientation:
+        return pts
+    # The Hough normal direction, which is the gradient direction, folded onto [0, pi)
+    # because a line and its reverse are the same line.
+    return pts, np.mod(np.arctan2(gy[keep], gx[keep]), math.pi)
 
 
 def undistort_points(xy: np.ndarray, k1: float, centre, radius: float) -> np.ndarray:
@@ -131,12 +150,37 @@ def _renormalise(points: np.ndarray, centre, target_rms: float) -> np.ndarray:
     return centred * (target_rms / rms) + np.asarray(centre, float)
 
 
-def hough(points: np.ndarray, shape, n_theta: int = 180, n_rho: int = 256) -> np.ndarray:
+def hough(
+    points: np.ndarray,
+    shape,
+    n_theta: int = 180,
+    n_rho: int = 256,
+    orientations: np.ndarray | None = None,
+    spread_deg: float = 12.0,
+) -> np.ndarray:
     """Accumulator over (theta, rho) for a set of edge points.
 
     Written out rather than imported: this box has no cv2 and a Jetson need not have one
     either, and the transform is fifteen lines whose behaviour the objective below depends
     on precisely.
+
+    **`orientations` is not an optimisation, it is a correctness fix, and the failure it
+    removes is worth stating because it looks like a result.** Without it every point votes
+    into all 180 thetas, so a dense blob of edge pixels builds a ridge through its own
+    centroid -- the votes agree about the *centroid* whatever the lines are doing. Peaks
+    extracted from that ridge give thirty lines all passing near one point: a starburst,
+    rendered over the frame, that a reader takes for a vanishing point.
+
+    Given each point's gradient normal a point votes only near its own orientation, and the
+    ridge cannot form because no point contributes to a theta its gradient disagrees with.
+    Measured on Taichung-cam01: gradient orientations over 44,379 masked edge points are
+    strongly bimodal, two modes about 90 degrees apart at 3221 and 5849 votes against a
+    mid-range floor of 450-500. **The tile grid was in the data and the unoriented
+    accumulator was not using it.**
+
+    `spread_deg` is the half-width of that window: wide enough for gradient noise and the
+    perspective fan within one family, narrow enough that two families 90 degrees apart do
+    not bleed together.
     """
     h, w = shape
     if len(points) == 0:
@@ -148,9 +192,23 @@ def hough(points: np.ndarray, shape, n_theta: int = 180, n_rho: int = 256) -> np
         + points[:, 1, None] * np.sin(theta)[None, :]
     )
     bins = np.clip(((rho + rho_max) / (2 * rho_max) * n_rho).astype(int), 0, n_rho - 1)
+
+    weights = None
+    if orientations is not None:
+        if len(orientations) != len(points):
+            raise ValueError(
+                f"orientations has {len(orientations)} entries for {len(points)} points"
+            )
+        # Both angles live on a half circle, so the difference wraps at pi, not 2pi.
+        delta = np.abs(np.asarray(orientations, float)[:, None] - theta[None, :])
+        delta = np.minimum(delta, math.pi - delta)
+        weights = (delta <= math.radians(spread_deg)).astype(float)
+
     acc = np.zeros((n_theta, n_rho))
     for t in range(n_theta):
-        acc[t] = np.bincount(bins[:, t], minlength=n_rho)
+        acc[t] = np.bincount(
+            bins[:, t], weights=None if weights is None else weights[:, t], minlength=n_rho
+        )
     return acc
 
 
