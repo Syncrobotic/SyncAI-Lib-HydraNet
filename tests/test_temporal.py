@@ -26,7 +26,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from syncai_hydranet.utils.temporal import FixedCameraStabiliser
+from syncai_hydranet.utils.temporal import FixedCameraStabiliser, StabiliserSelfSealedError
 
 H, W = 20, 20
 FLOOR, PERSON = 100, 200  # grey levels, far enough apart to clear the default diff_thr
@@ -263,6 +263,14 @@ def test_the_drift_the_plate_can_follow_is_the_product_of_both_constants():
     has to be justified is the *product*: tuning `diff_thr` alone moves the illumination
     cliff and this drift tolerance together, which is not obvious from either signature.
     Neither constant is reachable from `--stabilise`, which passes only `window`.
+
+    **Turned around, as this docstring originally asked.** The earlier version asserted
+    that a ramp past the criterion returned a static share of exactly 0.0 -- the filter
+    off for good, reporting nothing. That behaviour was the complaint, not the
+    specification, so it is now a refusal. The *criterion itself is unchanged* and is
+    still what this test pins: half of it tracks, twice it seals. Only what happens after
+    it seals has changed, which is the distinction between pinning today's value and
+    pinning the mechanism.
     """
     stab = FixedCameraStabiliser(window=3, num_classes=3)
     critical = stab.diff_thr * stab.plate_alpha
@@ -270,8 +278,70 @@ def test_the_drift_the_plate_can_follow_is_the_product_of_both_constants():
     assert _ramp_then_probe(stab, critical * 0.5) == 1.0, "the plate should track a slow ramp"
 
     faster = FixedCameraStabiliser(window=3, num_classes=3)
-    assert _ramp_then_probe(faster, critical * 2.0) == 0.0, (
-        "a ramp past the criterion self-seals: every pixel gated, filter off for good"
+    with pytest.raises(StabiliserSelfSealedError, match="does not recover"):
+        _ramp_then_probe(faster, critical * 2.0)
+
+
+def test_a_brief_full_frame_occlusion_does_not_trip_the_refusal():
+    """The refusal has to separate "sealed" from "something crossed the whole view".
+
+    A delivery trolley passing a wall-mounted camera gates every pixel for a second or
+    two. Refusing on that would make the filter unusable on exactly the footage it is for,
+    so `seal_patience` is what distinguishes them -- and it is the reason the check counts
+    *consecutive* frames rather than a rate.
+    """
+    stab = FixedCameraStabiliser(window=3, num_classes=3, seal_patience=10)
+    _settle(stab, _frame(), _pred(GO), 5)
+    for _ in range(9):  # one short of the patience, then the scene comes back
+        stab(np.full((H, W, 3), FLOOR + 60, np.uint8), _pred(BLOCKED))
+    assert stab.sealed_share() == 0.0, "nothing has been shut long enough to be stuck"
+
+    stab(_frame(), _pred(GO))  # the trolley passes; the gate reopens
+    assert stab.diagnostics()["static_share"] == 1.0
+    assert stab.sealed_share() == 0.0, "the per-pixel counter resets rather than accruing"
+
+
+def test_the_refusal_names_the_mechanism_and_not_just_the_symptom():
+    """An operator who sees this needs to know it will not recover and what to do.
+
+    Pinned because the value of raising over coasting is entirely in the message: a bare
+    RuntimeError here would be the same no-op with an extra stack trace.
+    """
+    stab = FixedCameraStabiliser(window=3, num_classes=3, seal_patience=3)
+    _settle(stab, _frame(), _pred(GO), 5)
+    with pytest.raises(StabiliserSelfSealedError) as e:
+        for _ in range(3):
+            stab(np.full((H, W, 3), FLOOR + 60, np.uint8), _pred(BLOCKED))
+    msg = str(e.value)
+    assert "does not recover" in msg
+    assert "diff_thr" in msg and "plate_alpha" in msg, (
+        "both constants, since the product governs"
+    )
+    assert "confirmed empty" in msg, "the fix is a vouched plate, and the message should say so"
+
+
+def test_a_seed_time_occupant_who_leaves_is_reported_even_though_it_is_not_refused():
+    """The localised half of the self-sealing failure, which the global refusal must not
+    fire on and which the panel cannot show.
+
+    A person in frame 1 is baked into the plate; when they leave, that region disagrees
+    with a plate that still holds them, is non-static forever, and the plate cannot
+    recover. Three quarters of the frame still smooths normally, so `static_share` stays
+    high and nothing trips -- the panel looks *better* than it should, not worse.
+
+    `sealed_share` is the number that shows it, and it is why the measure counts
+    *consecutive shut frames per pixel* rather than "never static": at frame 1 the
+    occupant **is** the plate, so those pixels read static and any never-static measure
+    reports 0.0 for exactly this case. Checked, and it did.
+    """
+    stab = FixedCameraStabiliser(window=3, num_classes=3, seal_patience=10)
+    _settle(stab, _frame(person_rows=5), _pred(GO), 5)  # occupant present from frame 1
+    for _ in range(30):  # they leave; the vacated rows can never agree with the plate
+        stab(_frame(), _pred(GO))
+
+    assert stab.sealed_share() == pytest.approx(0.25, abs=0.01), "5 of 20 rows, stuck shut"
+    assert stab.diagnostics()["static_share"] == pytest.approx(0.75, abs=0.01), (
+        "the other three quarters smooth normally, which is why nothing looks wrong"
     )
 
 
