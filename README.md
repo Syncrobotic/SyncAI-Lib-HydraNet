@@ -32,24 +32,29 @@ says what to collect and in what order.
 
 ### The deployment that actually exists: fixed ceiling CCTV in a shop
 
-![all three heads and the floor raised into a scene](assets/scene3d_taichung-cam11.gif)
+![all three heads and the floor raised into a scene](assets/retail_cctv_scene.gif)
 
-Every head on one frame of `Taichung-cam11`: free space with detections top left, the
-seven-class terrain map bottom left, and the floor rebuilt as a scene
-on the right. The panel raises the edge of the free space into a wall and colours it by what
-the terrain head says is standing there — purple display fixtures, grey wall, pink people —
-which is the part a flat occupancy map cannot express: it marks the cell blocked and stops.
-Object boxes get their footprint from the two bottom corners projected onto the floor and
-their height from the top edge's ray, so those are derived rather than nominal.
+Every head on one frame of `Tao-Hsin-cam03`: free space with detections top left, the
+seven-class terrain map bottom left, and the floor rebuilt as a scene on the right. The
+panel raises the edge of the free space into a wall and colours it by what the terrain head
+says is standing there — purple display fixtures, grey wall, pink people — which is the
+part a flat occupancy map cannot express: it marks the cell blocked and stops. Object boxes
+get their footprint from the two bottom corners projected onto the floor and their height
+from the top edge's ray, so those are derived rather than nominal.
 
-**Two claims the previous version of this figure carried and this one does not.**
-`Taichung-cam11` is a **train** camera in `datasets/retail_objects_batch02`, not a held-out
-one, so nothing here is evidence of generalisation — it shows what the panel draws, not how
-well the model does it. And there is **no traversability head** in this config: the free
-space top left is derived from the terrain map through the taxonomy's own table, so it can
-be no better than the terrain classes it is read off. Both were true of the render, not of
-the caption, until the figure was replaced in `f9d4fcf` and the caption was checked against
-it rather than carried over.
+**`Tao-Hsin-cam03` is a held-out camera.** The split in `datasets/retail_objects_batch02`
+is by camera, not by frame, so no view of this room was trained on; the clip is also from
+a different hour than the two archives that were sampled. That is what makes the picture
+evidence of anything. It knows **26% of its window** and the rest is behind something,
+which is the number to carry rather than the geometry.
+
+**Two things it still does not show.** There is **no traversability head** in this config:
+the free space top left is derived from the terrain map through the taxonomy's own table,
+so it can be no better than the terrain classes it is read off. And every object label
+carries its score for a reason — the detection head's vocabulary is COCO's 80, which has no
+noun for a display case, so a demo counter comes back as `oven 0.20`. The boxes are in the
+right places; only the names are wrong. `hydranet-infer-image --vocab retail` reads them
+back as shop nouns, and `hydranet-scene` does not offer that yet.
 
 **Three things in this picture are weaker than they look.**
 The camera pose was recovered by fitting 287 detected people against a 1.70 m adult, and the
