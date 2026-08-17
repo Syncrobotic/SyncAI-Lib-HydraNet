@@ -362,7 +362,22 @@ def minority_sourced_terrain_classes(cfg: dict) -> dict[str, tuple[list, list]]:
     the instant a 5% site dataset was added -- which is exactly when it started to matter.
 
     Returns ``{class name: (producers, non_producers)}`` where each side is a list of
-    ``(dataset name, sample_ratio)``.
+    ``(dataset name, sample_ratio, from_identity_map)``.
+
+    **The producing side is a claim, and the flag is how far it can be trusted.** This
+    reasons from ``label_map``, so "can produce" means "the scheme can express this id",
+    which is not "the masks contain this class". An *identity* map -- ``retail_native``,
+    ``indoor_native``, ``retail_objects_native`` -- expresses every class in its taxonomy
+    by construction, so it claims all of them and evidences none.
+
+    That distinction cost a wrong conclusion on 2026-08-17 and the correction is worth
+    stating here rather than in a commit. This function reported `floor_metal`,
+    `wet_slippery` and `threshold_ramp` as merely outvoted in ``hydranet_retail_cctv``,
+    contradicting a months-old finding that they need annotation. Counting the pixels:
+    **zero, in 0 of 408 masks.** `site_cctv_pseudo` is an identity map over pseudo-labels
+    from a model that scores 0.000 on those three -- so it cannot contain them, and the
+    months-old finding was right. The *lacking* side is sound (an explicit map that never
+    emits an id genuinely cannot produce it); only the producing side needs the count.
 
     **What it deliberately does not compute: the step share.** `sample_ratio` is in the
     config; the number of images behind it is not, so a percentage derived from ratios
@@ -377,27 +392,44 @@ def minority_sourced_terrain_classes(cfg: dict) -> dict[str, tuple[list, list]]:
         for tid, name in enumerate(classes):
             if not tid:
                 continue
-            produces = [(n, r) for n, s, r in members if tid in s.mapping.values()]
-            lacks = [(n, r) for n, s, r in members if tid not in s.mapping.values()]
+            produces = [
+                (n, r, _is_identity(s)) for n, s, r in members if tid in s.mapping.values()
+            ]
+            lacks = [
+                (n, r, _is_identity(s)) for n, s, r in members if tid not in s.mapping.values()
+            ]
             if produces and lacks:
                 out[name] = (produces, lacks)
     return out
 
 
+def _is_identity(scheme: Any) -> bool:
+    """A scheme whose mapping is ``{id: id}`` claims every class and evidences none."""
+    return all(k == v for k, v in scheme.mapping.items() if v != 255)
+
+
 def _check_minority_sourced(rep: _Report, cfg: dict) -> None:
-    def _fmt(pairs: list) -> str:
-        return ", ".join(f"{n} (sample_ratio {r:g})" for n, r in pairs)
+    def _fmt(rows: list) -> str:
+        return ", ".join(f"{n} (sample_ratio {r:g})" for n, r, _i in rows)
 
     for name, (produces, lacks) in sorted(minority_sourced_terrain_classes(cfg).items()):
+        unconfirmed = all(ident for _n, _r, ident in produces)
+        caveat = (
+            " CONFIRM WITH A PIXEL COUNT FIRST: the only dataset claiming this class uses "
+            "an identity label map, which expresses every class in the taxonomy whether or "
+            "not a single pixel of it was ever drawn. This check reasons from the scheme, "
+            "not from the masks."
+            if unconfirmed
+            else ""
+        )
         rep.warnings.append(
             f"class {name!r} is produced only by {_fmt(produces)}; "
-            f"{_fmt(lacks)} supplies it as a negative in every batch. A class absent from "
-            f"the dominant dataset is suppressed, not merely unlearned -- `product` sat at "
-            f"IoU 0.000 for 22 epochs this way. Check the step share, which only the loader "
-            f"knows. If it needs correcting, prefer lowering the abundant dataset's "
-            f"sample_ratio: raising the scarce one reaches the same balance by showing the "
-            f"same few images many times an epoch, trading a suppressed channel for a "
-            f"memorised one."
+            f"{_fmt(lacks)} supplies it as a negative in every batch.{caveat} If the count "
+            f"confirms it, the class is suppressed rather than merely unlearned -- `product` "
+            f"sat at IoU 0.000 for 22 epochs this way -- and the fix is to lower the abundant "
+            f"dataset's sample_ratio rather than raise the scarce one, because raising the "
+            f"scarce one reaches the same balance by showing the same few images many times "
+            f"an epoch and trades a suppressed channel for a memorised one."
         )
 
 

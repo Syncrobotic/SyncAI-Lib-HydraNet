@@ -36,9 +36,13 @@ def _cfg():
 # the life of the run. They are recorded here so that they stay visible and so that a
 # *new* one fails this suite instead of joining them quietly.
 #
-# `hydranet_regnet800mf` and `hydranet_retail_cctv` are absent because they are clean,
-# and the second one shows what clean costs: it pairs ADE20K with site masks under a
-# native identity scheme, so annotation is what fills the channels ADE20K cannot.
+# `hydranet_regnet800mf` and `hydranet_retail_cctv` are absent because this check reports
+# them clean -- but read the second one with the caveat below rather than as a result. It
+# pairs ADE20K with site masks under a *native identity* scheme, and an identity scheme
+# expresses every class in the taxonomy whether or not a pixel of it was ever drawn. So it
+# silences this check by construction. It is silence, not evidence: those masks contain
+# 0 pixels of `floor_metal`, `wet_slippery`, `threshold_ramp`, `floor_soft`, `stairs` and
+# `glass`, counted over all 408 of them.
 KNOWN_UNSOURCED = {
     "eval_indoor25.yaml": ("floor_metal", "wet_slippery", "threshold_ramp"),
     "hydranet_indoor.yaml": ("floor_metal", "wet_slippery", "threshold_ramp"),
@@ -60,10 +64,22 @@ KNOWN_UNSOURCED = {
 # those pixels as a *negative*, which suppresses rather than merely dilutes. Pinned for
 # the same reason as the table above: a new one has to be noticed.
 #
-# `hydranet_retail_cctv` is the entry worth reading. `floor_metal`, `wet_slippery` and
-# `threshold_ramp` have been IoU 0.000 in this project since the beginning and were
-# assumed to be starved of data. They are not unsourced here -- `site_cctv_pseudo` draws
-# them. They are outvoted by ADE20K, which is a different problem with a different fix.
+# `hydranet_retail_cctv`'s three entries are FALSE POSITIVES and are pinned as such. An
+# earlier version of this comment claimed `site_cctv_pseudo` draws `floor_metal`,
+# `wet_slippery` and `threshold_ramp` and that ADE20K merely outvotes them -- i.e. that a
+# months-old finding was backwards. It is not. Counted over every mask in
+# `datasets/retail_cctv_pseudo`: **0 pixels in 0 of 408 masks**, for all three, and for
+# `floor_soft`, `stairs` and `glass` too.
+#
+# The check said otherwise because `retail_native` is an *identity* map, so it expresses
+# all 13 classes by construction and claims every one of them. Expressible is not present.
+# `site_cctv_pseudo` is pseudo-labels from a model scoring 0.000 on those three, so it
+# cannot contain them: the labels are that model's opinion and its opinion is that they do
+# not exist. The months-old conclusion -- they need site annotation -- stands.
+#
+# Kept rather than filtered out, because the warning now carries the identity-map caveat
+# and a reader who sees these needs to see why they are here. Found by `26251130`, who
+# counted the pixels instead of believing the label map.
 KNOWN_MINORITY_SOURCED = {
     "hydranet_regnet800mf.yaml": ("rock",),
     "hydranet_retail_cctv.yaml": ("floor_metal", "threshold_ramp", "wet_slippery"),
@@ -370,8 +386,8 @@ def test_a_class_only_the_small_dataset_can_produce_is_reported():
     found = minority_sourced_terrain_classes(_two_source_cfg())
     assert "product" in found
     produces, lacks = found["product"]
-    assert produces == [("site", 0.05)]
-    assert lacks == [("ade20k", 1.0)]
+    assert produces == [("site", 0.05, True)]  # identity map: a claim, not evidence
+    assert lacks == [("ade20k", 1.0, False)]
 
 
 def test_the_unsourced_gate_goes_quiet_on_exactly_this_case():
@@ -419,7 +435,7 @@ def test_the_advice_prefers_lowering_the_abundant_ratio():
     rep = _Report()
     _check_minority_sourced(rep, _two_source_cfg())
     assert len(rep.warnings) == 1
-    assert "prefer lowering the abundant" in rep.warnings[0]
+    assert "lower the abundant" in rep.warnings[0]
     assert "memorised" in rep.warnings[0]
     assert "ade20k (sample_ratio 1)" in rep.warnings[0]
 
@@ -433,4 +449,44 @@ def test_two_taxonomies_do_not_vouch_for_each_other():
     )
     found = minority_sourced_terrain_classes(cfg)
     assert "product" in found
-    assert [n for n, _ in found["product"][1]] == ["ade20k"], "rugd must not be listed"
+    assert [n for n, _r, _i in found["product"][1]] == ["ade20k"], "rugd must not be listed"
+
+
+def test_an_identity_only_producer_is_flagged_as_unconfirmed():
+    """The guard against the false positive this check shipped with on 2026-08-17.
+
+    An identity map expresses every class in its taxonomy, so it claims all of them and
+    evidences none. Reported as "merely outvoted", `floor_metal`/`wet_slippery`/
+    `threshold_ramp` contradicted a months-old finding that they need annotation -- and
+    the masks contain 0 pixels of all three, in 0 of 408. The warning has to say that the
+    producing side is a claim, or it reads as a measurement.
+    """
+    rep = _Report()
+    _check_minority_sourced(rep, _two_source_cfg())
+    assert len(rep.warnings) == 1
+    assert "CONFIRM WITH A PIXEL COUNT FIRST" in rep.warnings[0]
+    assert "identity label map" in rep.warnings[0]
+
+
+def test_a_real_producer_carries_no_such_caveat():
+    """`retail_objects_migrated` is an explicit map, so what it emits it genuinely emits.
+
+    Without this the caveat would be unconditional, which is the same failure one level
+    up: a warning that always hedges tells a reader nothing about which case they have.
+    """
+    rep = _Report()
+    _check_minority_sourced(rep, _two_source_cfg(second_map="retail_objects_migrated"))
+    assert rep.warnings, "an explicit map that emits ids the other lacks must still warn"
+    assert "CONFIRM WITH A PIXEL COUNT FIRST" not in rep.warnings[0]
+
+
+def test_the_lacking_side_is_trustworthy_even_when_the_producing_side_is_not():
+    """The asymmetry that makes the check worth keeping rather than reverting.
+
+    "cannot produce" is sound: an explicit map that never emits an id genuinely cannot.
+    Only "can produce" needs a pixel count. So the partition is half-evidence, and the
+    warning is shaped around which half.
+    """
+    found = minority_sourced_terrain_classes(_two_source_cfg())
+    _produces, lacks = found["product"]
+    assert lacks == [("ade20k", 1.0, False)], "ADE20K genuinely emits no product id"
