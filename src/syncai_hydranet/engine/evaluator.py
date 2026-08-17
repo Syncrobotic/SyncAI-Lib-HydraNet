@@ -59,6 +59,27 @@ class ConfusionMatrix:
         iou = np.where(union > 0, inter / np.maximum(union, 1), np.nan)
         return float(np.nanmean(iou)), iou
 
+    def support(self) -> np.ndarray:
+        """Ground-truth pixels per class: how much evidence each IoU above stands on.
+
+        An IoU is reported identically whether it was computed over 61% of the labelled
+        pixels or over 0.66% of them, and the second kind has cost this project a run.
+        Measured on the ADE20K splits the retail-objects config evaluates: `wall` covers
+        283 of 285 val images and 61.86% of labelled pixels, while `column` -- the class
+        that taxonomy was created to separate out of `wall` -- covers 22 images and
+        **0.66%**. It scored 0.40-0.51 there and then predicted 0.00% of pixels on four
+        daytime store cameras. Its whole ep25->ep60 decay of 0.510 to 0.400 is a swing
+        across 22 images.
+
+        Row sums rather than the IoU denominator on purpose: `union` mixes in the model's
+        false positives, so a class the model over-predicts would look better evidenced
+        than it is. What is wanted here is how much of the class was there to find, which
+        is a property of the data alone and therefore constant across epochs.
+        """
+        if self.mat is None:
+            return np.zeros(self.n, dtype=np.int64)
+        return self.mat.reshape(self.n, self.n).cpu().numpy().sum(1)
+
 
 def head_disagreement(trav_pred, terrain_pred, trav_map: dict, valid) -> tuple[int, int]:
     """Pixels where the traversability head contradicts the terrain head, and the total.
@@ -167,12 +188,24 @@ def _collect_detections(model, out, batch, ds, images, results_for_ds) -> None:
             )
 
 
+# Below this share of labelled ground-truth pixels, a per-class IoU is called out as
+# standing on too little to be a measurement. A tripwire, not a statistical threshold:
+# it is set where it separates the one class known to have failed this way from every
+# other sourced class in the same taxonomy. On the ADE20K val split the retail-objects
+# run evaluated, `column` sits at 0.66% (22 of 285 images) and scored 0.40-0.51 while
+# predicting 0.00% of pixels on store cameras; `person`, the next thinnest, is at 1.70%.
+# Anything under this wants site confirmation before the number is repeated.
+THIN_SUPPORT = 0.01
+
+
 def _seg_metrics(seg_cms, cfg, logger) -> dict:
-    """mIoU per head, plus every class separately.
+    """mIoU per head, plus every class separately, and what each class stands on.
 
     The per-class breakdown is not detail for its own sake: the safety-critical indoor
     classes (glass, stairs) are tiny, so a mean alone hides the fact that they never
-    converged.
+    converged. `support/` is the same argument one step further -- a tiny class does not
+    only converge badly, it also produces an IoU that looks exactly like a well-evidenced
+    one in the log and in metrics.jsonl.
     """
     trav_names = ("blocked", "caution", "go")
     terrain_names = tuple(cfg["data"].get("terrain_classes", []))
@@ -183,15 +216,33 @@ def _seg_metrics(seg_cms, cfg, logger) -> dict:
         # How many classes that mean covers. Without it, a run on richer data looks like
         # a regression when it is really averaging over more, harder classes.
         metrics[f"{head}_mIoU_classes"] = float(np.isfinite(per_class).sum())
+        support = cm.support()
+        total = float(support.sum()) or 1.0
         names = trav_names if head == "traversability" else terrain_names
+        thin = []
         for i, iou in enumerate(per_class):
-            if np.isfinite(iou):
-                cname = names[i] if i < len(names) else str(i)
-                metrics[f"IoU/{head}/{i:02d}_{cname}"] = float(iou)
+            if not np.isfinite(iou):
+                continue
+            cname = names[i] if i < len(names) else str(i)
+            share = float(support[i]) / total
+            metrics[f"IoU/{head}/{i:02d}_{cname}"] = float(iou)
+            # Constant across epochs -- it describes the split, not the model. Emitted
+            # every epoch anyway so that an archived metrics.jsonl stays readable once
+            # the dataset behind it is gone, which is the same reason runs fingerprint
+            # their splits rather than trusting the path to still mean something.
+            metrics[f"support/{head}/{i:02d}_{cname}"] = share
+            if share < THIN_SUPPORT:
+                thin.append(f"{cname} {iou:.3f} on {100 * share:.2f}%")
         logger.info(
             f"[val] {head} mIoU = {miou:.4f} | per-class IoU = "
             + " ".join(f"{x:.3f}" if np.isfinite(x) else "-" for x in per_class)
         )
+        if thin:
+            logger.warning(
+                f"[val] {head}: {', '.join(thin)} of labelled pixels. A per-class IoU "
+                f"over that little evidence is not a measurement of the class -- read it "
+                f"as 'not measured' and confirm on site before reporting it."
+            )
     return metrics
 
 
