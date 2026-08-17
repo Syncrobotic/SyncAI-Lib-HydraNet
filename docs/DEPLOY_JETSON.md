@@ -183,8 +183,20 @@ GB10, TRT 10.16, 512×640, single-thread, real decode, median of three, millisec
 | ` + CUDA graph` | 1.49 | 0.15 | 0 | 0.62 | **2.25** | **381–444** |
 
 Nothing above retrains anything or changes a weight. The last row needs no export change
-at all — `--useCudaGraph` in trtexec, or `cudaStreamBeginCapture` around
-`execute_async_v3` in a runtime.
+at all — `--useCudaGraph` in trtexec, or `scripts/live_view_orin.py --cuda-graph`, which
+saved a measured 0.87 ms/frame (30%) in the runtime.
+
+> **Read these absolutes as ±15%, and the ratios as solid.** That GPU is shared — the same
+> baseline engine measured 2.09 and 2.31 ms for `infer` on different runs. The ratios held
+> across three repeats and are what the table is for; the two decimal places are the
+> measurement's format, not its precision.
+
+The CUDA graph replay was checked for the failure that looks like success: four different
+real frames through the *replayed* graph give four different masks, each agreeing with its
+own PyTorch reference at 99.81% — the same figure as the eager path, so capture changes
+nothing numerically. A capture that replayed baked-in device memory would return a still
+image at an excellent frame rate, and neither "it started" nor "it captured" would catch
+that.
 
 > **Read the `infer` column before benchmarking this.** `--argmax-seg` makes the *engine*
 > slower, 2.09 → 2.71 ms. The work did not vanish; it moved onto the GPU, where it is
