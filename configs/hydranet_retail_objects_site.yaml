@@ -1,0 +1,106 @@
+# =============================================================================
+# The first run that can see a shop.
+#
+# `hydranet_retail_objects.yaml` trains on ADE20K plus COCO. Neither contains a retail
+# `product` -- ADE20K has zero pixels of it -- so that run's `product` channel is trained
+# on nothing and scores 0.000, which its own config says out loud before it starts.
+#
+# `datasets/retail_objects_batch01` is the answer to that and it has been on disk,
+# referenced by no config, while the argument for annotating went round again. SAM 3
+# pre-labelled 36 training clips and 12 held-out ones from the store cameras. Measured
+# over the masks themselves rather than assumed:
+#
+#     class      train px       share   in masks      test px      share
+#     column     13,986,777      7.14%   115/216     4,102,425      8.03%
+#     fixture   119,911,138     61.18%   216/216    31,977,294     62.61%
+#     product    37,789,475     19.28%   216/216     8,800,158     17.23%
+#     person     24,323,474     12.41%   201/216     6,195,022     12.13%
+#
+# **`product` is in every single mask.** So is `fixture`. `column`, which the whole
+# taxonomy exists to separate out of `wall`, is in 115 of 216 -- against ADE20K's 22 of
+# 285 val images at 0.66% of pixels, which is the evidence base
+# RETAIL_OBJECTS_SPLIT.md §R7 was written about.
+#
+# ---------------------------------------------------------------------------
+# What batch01 does NOT have, and why that makes it a second dataset rather than a
+# replacement
+#
+# `floor` and `wall` are **zero pixels**, and 56% of every mask is 255 (ignore). SAM 3 was
+# asked for the four hard classes and answered only those. A run on batch01 alone would
+# therefore train two channels on nothing -- the exact failure this file exists to fix,
+# moved to different classes.
+#
+# ADE20K supplies floor and wall and cannot supply product; batch01 supplies product and
+# column and does not claim floor or wall. They are complementary, and partial supervision
+# across datasets is the mechanism the trainer already has for exactly this. Keep both.
+#
+# ---------------------------------------------------------------------------
+# Two honest limits, stated before the numbers arrive rather than after
+#
+# **1. batch01's `test` split cannot serve RETAIL_OBJECTS_SPLIT.md §R3.** Those masks are
+# SAM 3's opinion, and R3 exists because a test set drawn by the same tool that drew the
+# training set measures whether the model reproduced SAM 3, not whether it is right. So it
+# is wired in as **val** -- selection, never reporting -- and this run has **no valid site
+# test split**. Human-corrected masks are still the missing piece, and nothing here
+# substitutes for them. What batch01/test does buy is a selection signal that can see
+# `product` at all, which ADE20K val cannot.
+#
+# **2. §R1, split by camera, is only partly verifiable here.** Four training clips and two
+# val clips carry a camera prefix and those six do not overlap. The other 32 training and
+# 10 val clips are named `archive_<timestamp>` with no camera in the name, so **whether
+# they are camera-disjoint cannot be read off the filenames**. That is a property of how
+# the batch was exported, not of this config, and it is the first thing to fix in batch02:
+# a clip that cannot be attributed to a camera cannot be split by camera, and a split that
+# cannot be checked is a split someone will assume held.
+# =============================================================================
+_base_: hydranet_retail_objects.yaml
+
+experiment: hydranet_retail_objects_site
+output_dir: runs/hydranet_retail_objects_site
+
+data:
+  datasets:
+    # The list replaces rather than merges (see config.py: lists replace), so the parent's
+    # ADE20K and COCO blocks are restated here. That is the documented behaviour and the
+    # safe one -- a merged list would have silently kept a dataset an author meant to drop.
+    - name: ade20k
+      type: seg_folder
+      root: datasets/ADE20K
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: ade20k_retail_objects
+      supervises: [terrain]
+      sample_ratio: 1.0
+
+    # The shop. Oversampled 3x because 216 masks against ADE20K's ~2,000 training images
+    # would otherwise contribute a few percent of the optimiser's attention to the only
+    # source of the two classes this taxonomy was created for.
+    - name: site_sam3
+      type: seg_folder
+      root: datasets/retail_objects_batch01
+      split_train: train
+      split_val: test
+      label_map: retail_objects_native
+      supervises: [terrain]
+      sample_ratio: 3.0
+
+    - name: coco
+      type: coco
+      root: datasets/coco
+      split_train: train2017
+      split_val: val2017
+      supervises: [detection]
+      sample_ratio: 0.1
+
+train:
+  # Selection has to be able to see the classes this run exists for. `terrain_mIoU` is
+  # averaged over ADE20K *and* site val, but ADE20K contributes 0.000 for `product` at
+  # every epoch -- a constant, which drags the mean down without ever moving, so the mean
+  # still ranks checkpoints by the classes ADE20K can see.
+  #
+  # Selecting on `product` directly is the honest choice for a run whose reason for
+  # existing is that class. It is also the risky one: it is a single class on 12 val clips
+  # of SAM 3's opinion, so it selects for agreement with SAM 3 on merchandise. Both facts
+  # belong in whatever reads `best.pt`.
+  primary_metric: IoU/terrain/05_product
