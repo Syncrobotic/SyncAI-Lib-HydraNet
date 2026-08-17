@@ -1,0 +1,69 @@
+# =============================================================================
+# The detection vocabulary as data: the same run as hydranet_retail_products, with the
+# class names moved out of the weights and into a matrix.
+#
+# WHAT THIS IS A CONTROL FOR
+#
+# `hydranet_retail_products.yaml` trains the same two classes on the same boxes with a
+# `linear` classifier -- one learned vector per class, class list frozen into the weights.
+# This config changes exactly one thing: `cls_head: text_embedding`, scoring the visual
+# embedding against CLIP text vectors for the class names. Same data, same schedule, same
+# trunk. So the comparison answers a question that has not been asked yet in this project:
+# **does an open-vocabulary classifier cost detection quality on merchandise?**
+#
+# If mAP holds, the vocabulary becomes a config for every later run -- per-store product
+# lists, and export narrowing as a row slice rather than a retrain. If it drops, that is
+# the price of the property, measured rather than assumed, and the number is what a
+# decision gets made on.
+#
+# ---------------------------------------------------------------------------
+# THE ORDERING THIS CONFIG EXISTS TO GET RIGHT
+#
+# `text_embeddings` is read at **model construction**, not at export. The head's buffer
+# ships as a random *orthogonal placeholder*, and `embed_pred` learns to align with
+# whatever occupies it while the gradient flows. Train against the placeholder and install
+# real embeddings afterwards, and the visual projection has spent its whole life aiming at
+# random directions -- confident boxes, meaningless names, no error anywhere.
+#
+# So the matrix is built before the run and named here. `models/hydranet.py` refuses a
+# `text_embeddings` path under a `linear` head rather than ignoring it, because being
+# ignored is exactly the run this is trying not to do.
+#
+# ---------------------------------------------------------------------------
+# REGENERATING THE MATRIX -- it is a build artefact, and `*.pt` is gitignored
+#
+#     python3 scripts/make_text_embeddings.py \
+#         --coco datasets/retail_objects_batch02/annotations/instances_train.json \
+#         --out weights/text/retail_products.pt
+#
+# Deterministic given the encoder, the templates and the names, all of which are in the
+# committed script and recorded inside the file it writes. `--coco` is not a convenience:
+# it takes the names in **head order** (sorted by category id, as `CocoDetDataset` does),
+# which is the one thing a hand-written list gets wrong invisibly.
+#
+# Measured when it was written, and worth knowing before reading any result here:
+# `boxed_stock` / `device` sit at cosine **0.8968**, against an unrelated-word floor of
+# **0.7369** for this encoder -- an excess of 0.61. That is elevated and legitimate (both
+# are merchandise), but it is not two well-separated directions, and if this run
+# underperforms the linear control that number is the first place to look.
+# =============================================================================
+
+_base_: hydranet_retail_products.yaml
+
+experiment: hydranet_retail_openvocab
+output_dir: runs/hydranet_retail_openvocab
+
+model:
+  heads:
+    detection:
+      num_classes: 2
+      cls_head: text_embedding
+      # CLIP ViT-B/32's text projection width. Not defaulted per encoder anywhere: a
+      # matrix whose width disagrees is refused at load rather than broadcast.
+      embed_dim: 512
+      text_embeddings: weights/text/retail_products.pt
+      # Checked against the `names` inside the matrix file, in this order. This is the
+      # only guard against a right-sized wrong-ordered matrix -- `load_text_embeddings`
+      # validates the shape, and a permutation has the correct shape while renaming every
+      # class. Same argument as `coco_subsets.head_order`, one level down.
+      classes: [boxed_stock, device]

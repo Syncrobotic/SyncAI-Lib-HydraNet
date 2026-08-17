@@ -98,6 +98,18 @@ KNOWN_MINORITY_SOURCED = {
     # 3.58% in 201/360 masks, which is the first real data for the class that predicted
     # 0.00% on store cameras.
     "hydranet_retail_products.yaml": ("product",),
+    # Inherited whole from the line above via `_base_`, and pinned per config rather than
+    # derived from the parent on purpose -- a derived config is free to add a dataset that
+    # changes this, so reading it off the parent would make the check weaker than the
+    # thing it checks. `hydranet_retail_openvocab.yaml` changes only the detection
+    # classifier (`linear` -> `text_embedding`); it touches no segmentation dataset, so
+    # the same 12.88% count stands and no separate verification was done or is owed.
+    "hydranet_retail_openvocab.yaml": ("product",),
+    # Seed replicates of `hydranet_retail_products.yaml`, differing only in `seed` and
+    # `output_dir`. They inherit the same segmentation datasets and therefore the same
+    # 12.88% count; a replicate that needed its own verification would not be a replicate.
+    "hydranet_retail_products_seed7.yaml": ("product",),
+    "hydranet_retail_products_seed13.yaml": ("product",),
     # Same dataset as the line above and the same count: 12.88% `product` in 360/360 masks
     # of `datasets/retail_objects_batch02`. This is the config that was training when the
     # entry was added, and the run confirms the warning was right about the *direction* --
