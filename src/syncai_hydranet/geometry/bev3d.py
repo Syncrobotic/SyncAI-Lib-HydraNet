@@ -42,13 +42,15 @@ How it is drawn, and why:
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
-from . import meshes
+from . import meshes, shading
 from .bev import IGNORE, BevGrid, ray_reach
+from .shading import View
 
 # Nominal heights, in metres, for the boundary ribbon. Drawing, not measurement -- see
 # the module docstring. Keyed by the retail/indoor terrain id, which share 0-11.
@@ -89,37 +91,50 @@ OBJECT_RGB = {
 
 @dataclass(frozen=True)
 class VirtualCam:
-    """The camera this panel is *drawn* from. Unrelated to the one that took the frame.
+    """Where this panel is *drawn* from, in terms a caller can reason about.
 
-    Sits behind and above the origin looking forward and down, which is the view that
-    makes a floor plan read as a floor. ``focal`` is in pixels of the output panel.
+    Unrelated to the camera that took the frame. The parameters are the ones that describe
+    a view of a floor -- how high the eye is, how far back it starts, how far it tilts down
+    and how far round it swings -- and `view()` turns them into the `shading.View` that
+    every other surface in this package is projected through, so the panel and
+    `scripts/mesh_preview.py` cannot end up with two different cameras again.
+
+    ``pitch_deg`` and ``orbit_deg`` are what make this read as a room rather than a plot.
+    Straight down a floor plan is a diagram; the pitch tilts it until surfaces have faces,
+    and the orbit swings the eye off the centreline so the two visible sides of a fixture
+    differ. At ``orbit_deg = 0`` the eye sits on the z axis and this reduces exactly to the
+    head-on view it had before, which is what the projection tests pin.
+
+    The swing is about the point on the floor the camera already looks at, not about the
+    ego, so raising the orbit rotates the scene in place instead of sliding it out of frame.
     """
 
     height_m: float = 8.5
     setback_m: float = 2.6
-    pitch_deg: float = 60.0
+    pitch_deg: float = 44.0
     focal_px: float = 620.0
     cx: float = 0.0
     cy: float = 0.0
+    orbit_deg: float = 26.0
+
+    def view(self) -> View:
+        t = np.radians(float(self.pitch_deg))
+        if not 1e-3 < t < np.pi / 2 - 1e-3:
+            raise ValueError(
+                f"pitch_deg must be within (0, 90) exclusive, got {self.pitch_deg}"
+            )
+        # The floor point the un-orbited camera aims at, and the horizontal distance back
+        # from it. Both follow from the pitch: a camera `height_m` up, tilted `t` down,
+        # meets y = 0 at `height_m / tan(t)` ahead of itself.
+        reach = self.height_m / np.tan(t)
+        pivot = np.array([0.0, 0.0, -self.setback_m + reach])
+        psi = np.radians(float(self.orbit_deg))
+        eye = pivot + np.array([reach * np.sin(psi), self.height_m, -reach * np.cos(psi)])
+        return View(eye, pivot, self.focal_px, self.cx, self.cy)
 
     def project(self, x, y, z):
         """World (x right, y up from floor, z forward) -> panel pixels, plus depth."""
-        x = np.asarray(x, dtype=float)
-        y = np.asarray(y, dtype=float)
-        z = np.asarray(z, dtype=float)
-        t = np.radians(self.pitch_deg)
-        # forward is tilted down by `t`; up stays orthogonal to it
-        fwd = np.array([0.0, -np.sin(t), np.cos(t)])
-        up = np.array([0.0, np.cos(t), np.sin(t)])
-        right = np.array([1.0, 0.0, 0.0])
-        px_ = x - 0.0
-        py_ = y - self.height_m
-        pz_ = z + self.setback_m
-        xc = px_ * right[0] + py_ * right[1] + pz_ * right[2]
-        yc = px_ * up[0] + py_ * up[1] + pz_ * up[2]
-        zc = px_ * fwd[0] + py_ * fwd[1] + pz_ * fwd[2]
-        zc = np.maximum(zc, 1e-3)
-        return self.cx + self.focal_px * xc / zc, self.cy - self.focal_px * yc / zc, zc
+        return self.view().project(x, y, z)
 
 
 def _perspective_coeffs(dst, src):
@@ -149,30 +164,37 @@ def boundary_rays(trav_bev: np.ndarray, grid: BevGrid, n_rays: int = 160):
     return angles, reach
 
 
-def _fit_cam(cam: VirtualCam, grid: BevGrid, size: tuple[int, int]) -> VirtualCam:
-    """Size the virtual camera so the mapped window fills the panel.
+def _fit_view(cam: VirtualCam, grid: BevGrid, size: tuple[int, int]) -> View:
+    """The camera's view, sized so the mapped window fills the panel.
 
     The window is set by ``--range`` at the call site, so a fixed focal length leaves the
     floor as a postage stamp the moment anyone changes it.
+
+    Fitting only ever changes the focal length and the principal point -- `with_intrinsics`
+    is the whole reason that method exists. If it could move the eye, the fit would be free
+    to answer "does it fit" by choosing a different view, and the picture would stop being
+    of the camera the caller asked for.
     """
     w, h = size
-    probe = VirtualCam(cam.height_m, cam.setback_m, cam.pitch_deg, 1.0, 0.0, 0.0)
+    probe = cam.view().with_intrinsics(1.0, 0.0, 0.0)
     top_m = max(CLASS_HEIGHT_M.values())
-    us, vs = [], []
-    for x in (grid.x_min, grid.x_max):
-        for z in (grid.z_min, grid.z_max):
-            for y in (0.0, top_m):
-                pu, pv, _ = probe.project(x, y, z)
-                us.append(float(pu))
-                vs.append(float(pv))
-    span_u = max(max(us) - min(us), 1e-6)
-    span_v = max(max(vs) - min(vs), 1e-6)
-    focal = min(w / span_u, h / span_v) * 0.94
-    mid_u = (max(us) + min(us)) / 2 * focal
-    mid_v = (max(vs) + min(vs)) / 2 * focal
-    return VirtualCam(
-        cam.height_m, cam.setback_m, cam.pitch_deg, focal, w / 2 - mid_u, h / 2 - mid_v
+    corners = np.array(
+        [
+            [x, y, z]
+            for x in (grid.x_min, grid.x_max)
+            for z in (grid.z_min, grid.z_max)
+            for y in (0.0, top_m)
+        ],
+        dtype=float,
     )
+    uv, _ = probe.project_points(corners)
+    us, vs = uv[:, 0], uv[:, 1]
+    span_u = max(float(us.max() - us.min()), 1e-6)
+    span_v = max(float(vs.max() - vs.min()), 1e-6)
+    focal = min(w / span_u, h / span_v) * 0.94
+    mid_u = float(us.max() + us.min()) / 2 * focal
+    mid_v = float(vs.max() + vs.min()) / 2 * focal
+    return probe.with_intrinsics(focal, w / 2 - mid_u, h / 2 - mid_v)
 
 
 def _font(px: int):
@@ -202,6 +224,81 @@ def _runs(values):
         if i == len(values) or values[i] != values[start]:
             out.append((start, i, values[start]))
             start = i
+    return out
+
+
+def _smooth_reach(reach: np.ndarray, median_w: int = 5, mean_w: int = 5) -> np.ndarray:
+    """Take the staircase out of the boundary polyline without moving where it is.
+
+    ``reach`` is quantised twice before it gets here: once by the BEV cell, which is
+    2.5 cm of floor, and once by the ray bin, which at 160 rays across the window is
+    coarser than the cell in the near field and finer than it in the far field. Neither
+    quantisation is information, and both of them land on the *cap line* -- the one bright
+    edge the eye follows along a wall -- where a half-cell step reads as a notch in the
+    wall rather than as a pixel grid.
+
+    **This does move the drawn boundary, and that is the cost.** `boundary_rays` is
+    deliberately the same reduction the flat map filters on so that the two cannot
+    disagree, and smoothing here reintroduces a disagreement of up to about half the
+    filter's width in range -- centimetres, and only in the drawing. The flat map keeps the
+    raw reach, and nothing downstream of a *decision* reads this function.
+
+    Median before mean, and both computed only over bearings that saw floor:
+
+    * The median kills single-ray spikes, which come from one stray cell voting a bearing
+      metres past its neighbours. A mean would smear such a spike across its whole window
+      instead of removing it.
+    * ``reach == 0`` means "no floor on this bearing at all", not "floor at zero metres".
+      Averaging a gap in would drag the wall on either side of a doorway across the
+      doorway, which is the one artefact here that a viewer would read as real geometry.
+    """
+    r = np.asarray(reach, dtype=float)
+    valid = r > 0
+    n = len(r)
+    if int(valid.sum()) < 3:
+        return r.copy()
+
+    def _filter(src: np.ndarray, width: int, fn) -> np.ndarray:
+        out = src.copy()
+        half = max(width // 2, 0)
+        for i in np.flatnonzero(valid):
+            lo, hi = max(int(i) - half, 0), min(int(i) + half + 1, n)
+            window = src[lo:hi][valid[lo:hi]]
+            if len(window):
+                out[i] = fn(window)
+        return out
+
+    # Not circular: the rays span the camera's angular window, not a full turn, so the
+    # first and last bearings are edges of the view and not neighbours of each other.
+    smoothed = _filter(_filter(r, median_w, np.median), mean_w, np.mean)
+    smoothed[~valid] = 0.0
+    return smoothed
+
+
+def _smooth_classes(classes: list, width: int = 7) -> list:
+    """A majority vote along the bearings, so one wall is one run.
+
+    The boundary is drawn as one polygon per run of equal class, which is what stopped it
+    drawing a seam down every wall. That only holds while the classes along a wall actually
+    *are* equal, and they are not: the class is read three cells past where the floor
+    ended, so a boundary that wanders by a couple of centimetres reads `wall`, `floor_hard`,
+    `wall` along a single flat surface. Each flip splits the run, every run under two rays
+    is dropped, and the wall comes out as a dashed line of panels with holes between them
+    -- which looks like measured structure and is not.
+
+    ``"gap"`` is held out of the vote and never voted onto a bearing. A gap is "no floor on
+    this bearing", so there is nothing to raise there; filling one in would draw a wall
+    across a doorway, and unlike a seam that would be a claim about the room.
+    """
+    out = list(classes)
+    half = max(width // 2, 0)
+    n = len(classes)
+    for i in range(n):
+        if classes[i] == "gap":
+            continue
+        window = [c for c in classes[max(i - half, 0) : min(i + half + 1, n)] if c != "gap"]
+        if window:
+            out[i] = Counter(window).most_common(1)[0][0]
     return out
 
 
@@ -296,7 +393,7 @@ def _draw_geometry(
     trav_bev, terrain_bev, grid, objects, size, cam, trav_colors, terrain_colors, bg
 ) -> Image.Image:
     w, h = size
-    cam = _fit_cam(cam, grid, size)
+    view = _fit_view(cam, grid, size)
     panel = Image.new("RGB", (w, h), bg)
 
     # --- the floor, warped ---------------------------------------------------
@@ -314,7 +411,7 @@ def _draw_geometry(
         (float(cols), 0.0),
         (0.0, 0.0),
     ]
-    scr = [tuple(map(float, cam.project(x, 0.0, z)[:2])) for x, z in corners_m]
+    scr = [tuple(map(float, view.project(x, 0.0, z)[:2])) for x, z in corners_m]
     coeffs = _perspective_coeffs(scr, corners_px)
     # NEAREST, not BILINEAR: this raster is a label map wearing colours, and interpolating
     # across a class edge invents a colour that belongs to no class. Supersampling is what
@@ -323,20 +420,29 @@ def _draw_geometry(
         (w, h), Image.Transform.PERSPECTIVE, coeffs, Image.Resampling.NEAREST, fillcolor=bg
     )
     hit = (np.asarray(ground) != np.array(bg)).any(-1)
-    mask = Image.fromarray((hit * 255).astype(np.uint8))
+    px = max(w // 380, 1)  # line weight that survives the downsample
+    # Feather the *outline* of the floor, and only the outline. The staircase along the
+    # edge is the 2.5 cm BEV cell magnified by the perspective warp, so it is a sampling
+    # artefact of the drawing and not a shape the map asserted -- while every edge *inside*
+    # the plate is a real class boundary, which is why the colours above stay NEAREST. A
+    # blur on the paste mask antialiases the silhouette without moving it and without
+    # mixing one class's colour into another's.
+    mask = Image.fromarray((hit * 255).astype(np.uint8)).filter(
+        ImageFilter.GaussianBlur(px * 1.2)
+    )
     panel.paste(ground, (0, 0), mask)
 
     d = ImageDraw.Draw(panel, "RGBA")
-    px = max(w // 380, 1)  # line weight that survives the downsample
 
     # --- distance rules, faint: the scene is the subject, not the graph paper ---
     for z in range(int(np.ceil(grid.z_min)), int(grid.z_max) + 1):
         xs = np.linspace(grid.x_min, grid.x_max, 40)
-        pts = [tuple(map(float, cam.project(x, 0.0, float(z))[:2])) for x in xs]
+        pts = [tuple(map(float, view.project(x, 0.0, float(z))[:2])) for x in xs]
         d.line(pts, fill=(120, 150, 190, 34), width=px)
 
     # --- the boundary, raised as one surface per class run ---------------------
     angles, reach = boundary_rays(trav_bev, grid)
+    reach = _smooth_reach(reach)
     classes = []
     for i in range(len(angles)):
         cls = None
@@ -348,6 +454,7 @@ def _draw_geometry(
                 v = int(terrain_bev[max(r - 3, 0), c])
                 cls = v if v != IGNORE else None
         classes.append(cls if reach[i] > 0 else "gap")
+    classes = _smooth_classes(classes)
 
     strips = []
     for a, b, cls in _runs(classes):
@@ -364,18 +471,53 @@ def _draw_geometry(
         pts = [
             (reach[i] * np.sin(angles[i]), reach[i] * np.cos(angles[i])) for i in range(a, b)
         ]
-        bpts = [tuple(map(float, cam.project(x, 0.0, z)[:2])) for x, z in pts]
-        depth = float(np.mean([cam.project(x, 0.0, z)[2] for x, z in pts]))
+        bpts = [tuple(map(float, view.project(x, 0.0, z)[:2])) for x, z in pts]
+        depth = float(np.mean([view.project(x, 0.0, z)[2] for x, z in pts]))
         # Three stacked bands instead of one flat quad: a wall lit evenly reads as a
         # cut-out, and the gradient is what makes it read as a standing surface.
         bands = []
         for k in range(3):
             y0, y1 = ht * k / 3, ht * (k + 1) / 3
-            lo = [tuple(map(float, cam.project(x, y0, z)[:2])) for x, z in pts]
-            hi = [tuple(map(float, cam.project(x, y1, z)[:2])) for x, z in pts]
+            lo = [tuple(map(float, view.project(x, y0, z)[:2])) for x, z in pts]
+            hi = [tuple(map(float, view.project(x, y1, z)[:2])) for x, z in pts]
             bands.append((lo + hi[::-1], 0.34 + 0.26 * k))
-        cap = [tuple(map(float, cam.project(x, ht, z)[:2])) for x, z in pts]
+        cap = [tuple(map(float, view.project(x, ht, z)[:2])) for x, z in pts]
         strips.append((depth, bands, cap, colour, bpts))
+
+    # --- what is standing on the floor, built before anything else is painted ---
+    # Gathered here rather than inside the drawing loop because the contact shadows are one
+    # blurred layer for all of them, and that layer has to go down *before* the boundary
+    # does. A shadow belongs on the floor; a shadow composited after the walls falls across
+    # a wall that stands in front of the thing casting it.
+    standing = []
+    for obj in sorted(objects, key=lambda o: -(o.get("z_m") or 0.0)):
+        x, z = obj.get("x_m"), obj.get("z_m")
+        if x is None or z is None:
+            continue
+        if not (grid.x_min <= x <= grid.x_max and grid.z_min <= z <= grid.z_max):
+            continue
+        # `meshes.for_object` owns the class-to-shape decision so this file does not grow a
+        # second opinion about it, and it returns None only when the payload carries no
+        # width or no height -- `bev.scene` leaves those None rather than filling them in.
+        # The box below is where those get invented, at the same 0.5 m / 1.7 m this panel
+        # has always used, and it asserts exactly what the flat map already did.
+        side = max(float(obj.get("width_m") or 0.5), 0.15)
+        mesh = meshes.for_object(obj) or meshes.box(
+            side, float(obj.get("height_m") or 1.7), side
+        )
+        standing.append(
+            (
+                meshes.place(mesh, meshes.Placement(x_m=float(x), z_m=float(z))),
+                OBJECT_RGB.get(str(obj.get("name", "")), OBJECT_RGB["_"]),
+                obj,
+            )
+        )
+
+    panel = Image.alpha_composite(
+        panel.convert("RGBA"),
+        shading.contact_shadows((w, h), view, [m for m, _, _ in standing], blur_px=px * 2.5),
+    ).convert("RGB")
+    d = ImageDraw.Draw(panel, "RGBA")
 
     for _, bands, cap, colour, _bp in sorted(strips, key=lambda q: -q[0]):  # far first
         for poly, f in bands:
@@ -385,19 +527,10 @@ def _draw_geometry(
         d.line(cap, fill=(*_shade(colour, 1.6), 255), width=px * 2, joint="curve")
 
     # --- objects, solid and standing on the floor ------------------------------
-    for obj in sorted(objects, key=lambda o: -(o.get("z_m") or 0.0)):
-        x, z = obj.get("x_m"), obj.get("z_m")
-        if x is None or z is None:
-            continue
-        if not (grid.x_min <= x <= grid.x_max and grid.z_min <= z <= grid.z_max):
-            continue
-        half = max(float(obj.get("width_m") or 0.5), 0.15) / 2
-        ht = float(obj.get("height_m") or 1.7)
-        col = OBJECT_RGB.get(str(obj.get("name", "")), OBJECT_RGB["_"])
-
-        # A shape where one is earned, the extrusion everywhere else. `meshes.for_object`
-        # owns that decision so this file does not grow a second opinion about it.
-        mesh = meshes.for_object(obj)
+    # Every disc before any figure. The discs are flat on the floor, so a near object's
+    # disc painted after a far object's body would lie on top of the body -- an uncertainty
+    # radius drawn over the thing it does not describe.
+    for _, _, obj in standing:
         sigma = obj.get("position_sigma_m")
         if sigma:
             # The uncertainty gets its own channel on the floor, in the same metres as
@@ -406,43 +539,12 @@ def _draw_geometry(
             # standing at a wrong position is the most convincing wrong number this
             # project can produce. Drawn only when the payload supplies it -- inventing a
             # radius would be the same failure wearing a warning's clothes.
-            _draw_ground_disc(d, cam, x, z, float(sigma))
-        if mesh is not None:
-            _draw_mesh(d, cam, mesh, x, z, col)
-            continue
+            _draw_ground_disc(d, view, float(obj["x_m"]), float(obj["z_m"]), float(sigma))
 
-        # contact shadow first, so the volume sits on the floor instead of hovering
-        sh = [
-            tuple(
-                map(
-                    float,
-                    cam.project(x + half * 1.5 * np.cos(t), 0.0, z + half * 1.5 * np.sin(t))[
-                        :2
-                    ],
-                )
-            )
-            for t in np.linspace(0, 2 * np.pi, 20, endpoint=False)
-        ]
-        d.polygon(sh, fill=(0, 0, 0, 120))
-
-        base = [
-            (x - half, z - half),
-            (x + half, z - half),
-            (x + half, z + half),
-            (x - half, z + half),
-        ]
-        bp = [tuple(map(float, cam.project(px_, 0.0, pz)[:2])) for px_, pz in base]
-        tp = [tuple(map(float, cam.project(px_, ht, pz)[:2])) for px_, pz in base]
-        # Solid, but deliberately a plain extrusion of the measured footprint and height --
-        # not a chair asset. It asserts exactly what the flat map and the box already did.
-        for i, f in ((0, 0.52), (1, 0.40), (3, 0.62)):  # skip the hidden rear face
-            j = (i + 1) % 4
-            d.polygon([bp[i], bp[j], tp[j], tp[i]], fill=(*_shade(col, f), 250))
-        d.polygon(tp, fill=(*_shade(col, 0.95), 255))
-        d.line([*tp, tp[0]], fill=(*_shade(col, 1.45), 255), width=px * 2, joint="curve")
+    shading.draw_scene(d, view, [(m, col, 250) for m, col, _ in standing], bg=bg)
 
     # --- ego -------------------------------------------------------------------
-    ex, ey = (float(v) for v in cam.project(0.0, 0.0, grid.z_min)[:2])
+    ex, ey = (float(v) for v in view.project(0.0, 0.0, grid.z_min)[:2])
     r = max(w // 60, 6)
     d.polygon(
         [
@@ -458,41 +560,18 @@ def _draw_geometry(
     return panel
 
 
-def _draw_ground_disc(d, cam, x: float, z: float, radius_m: float) -> None:
+def _draw_ground_disc(d, view: View, x: float, z: float, radius_m: float) -> None:
     """The position's error radius, on the floor, in metres."""
     ring = [
         tuple(
-            map(float, cam.project(x + radius_m * np.cos(t), 0.0, z + radius_m * np.sin(t))[:2])
+            map(
+                float,
+                view.project(x + radius_m * np.cos(t), 0.0, z + radius_m * np.sin(t))[:2],
+            )
         )
         for t in np.linspace(0, 2 * np.pi, 28, endpoint=False)
     ]
     d.polygon(ring, fill=(238, 172, 64, 90))
-
-
-def _draw_mesh(d, cam, mesh, x: float, z: float, col) -> None:
-    """Project a mesh through the panel's own virtual camera and paint it back to front.
-
-    The same `cam.project` the floor and the boxes use, so a mesh cannot drift from the
-    geometry around it. Painter's algorithm by face centroid depth: correct for a convex
-    figure standing alone, and wrong where two surfaces interpenetrate -- which is why
-    this draws *objects* and not the room.
-    """
-    verts, faces = mesh
-    world = verts + np.array([x, 0.0, z])
-    normals = meshes.smooth_normals(verts, faces)
-    projected = np.array(
-        [cam.project(float(vx), float(vy), float(vz))[:2] for vx, vy, vz in world], dtype=float
-    )
-    # Depth is the panel's, not the world's: the virtual camera looks down the -z axis of
-    # the map, so a larger z is further away and sorts first.
-    depth = world[faces][:, :, 2].mean(axis=1)
-    # Key light from above-front plus a floor bounce, so nothing goes flat black. The
-    # constants match `_shade`'s range rather than a physical model.
-    lift = 0.42 + 0.62 * np.maximum(normals @ np.array([0.35, 0.86, -0.37]), 0.0)
-    lift += 0.20 * np.maximum(normals @ np.array([-0.5, 0.3, 0.4]), 0.0)
-    for order in np.argsort(-depth):
-        tri = [tuple(projected[i]) for i in faces[order]]
-        d.polygon(tri, fill=(*_shade(col, float(lift[order])), 250))
 
 
 def _draw_annotations(
@@ -500,13 +579,13 @@ def _draw_annotations(
 ) -> None:
     """Text, at final resolution. Drawn after the downsample so it stays crisp."""
     w, h = panel.size
-    cam = _fit_cam(cam, grid, (w, h))
+    view = _fit_view(cam, grid, (w, h))
     d = ImageDraw.Draw(panel, "RGBA")
     f_small = _font(max(h // 75, 10))
     f_label = _font(max(h // 64, 11))
 
     for z in range(int(np.ceil(grid.z_min)), int(grid.z_max) + 1):
-        pu, pv = (float(v) for v in cam.project(grid.x_max, 0.0, float(z))[:2])
+        pu, pv = (float(v) for v in view.project(grid.x_max, 0.0, float(z))[:2])
         lx = min(max(pu + 7, 2), w - 40)
         d.text(
             (lx, min(max(pv - 7, 2), h - 16)),
@@ -524,8 +603,18 @@ def _draw_annotations(
         if not (grid.x_min <= x <= grid.x_max and grid.z_min <= z <= grid.z_max):
             continue
         ht = float(obj.get("height_m") or 1.7)
-        lu, lv = (float(v) for v in cam.project(x, ht, z)[:2])
+        lu, lv = (float(v) for v in view.project(x, ht, z)[:2])
+        # The score belongs here because the *shape* cannot carry it. `meshes.for_object`
+        # draws a chair from the name alone, correctly -- the name is what the detector
+        # committed to -- so a chair at 0.31 gets the same silhouette as a chair at 0.95,
+        # and a viewer discounts `chair 0.31` in a way they cannot discount a mesh. Without
+        # this number the panel is more confident than the run it came from, which is the
+        # one failure mode here a customer sees before a metric does. Same format as the 2D
+        # box labels in `cli/scene.py`, so the two panels read as one picture.
         txt = f"{obj.get('name', '?')}  {obj.get('range_m', 0):.1f} m"
+        score = obj.get("score")
+        if score is not None:
+            txt += f"  {float(score):.2f}"
         d.text(
             (lu, lv - h // 52),
             txt,
