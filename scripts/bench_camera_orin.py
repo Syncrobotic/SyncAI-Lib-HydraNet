@@ -34,8 +34,22 @@ MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 
+# Tried in this order, newest first, with the unversioned name last because it usually
+# only exists where the CUDA *development* package is installed -- which a deployment
+# board need not have.
+#
+# This list is here because the soname was hardcoded to `libcudart.so.12` and a GB10 with
+# CUDA 13 carries only `.so.13`. The failure is worse than it sounds: `Cudart()` is
+# constructed at the top of both scripts' main loops, so the OSError escapes before
+# anything else runs and **neither script starts at all** -- there is no degraded mode to
+# fall back to, and the error names a file rather than the reason.
+#
+# Add a major here when one ships. That is a smaller job than diagnosing it again.
+CUDART_SONAMES = ("libcudart.so.13", "libcudart.so.12", "libcudart.so.11", "libcudart.so")
+
+
 class Cudart:
-    """The four CUDA calls this benchmark needs, via ctypes.
+    """The CUDA calls these scripts need, via ctypes.
 
     pycuda is not packaged for this board and building it on ARM is slow and fragile, so
     rather than add a dependency to a machine that will run the deployed model, bind
@@ -44,7 +58,25 @@ class Cudart:
     """
 
     def __init__(self):
-        self.lib = ctypes.CDLL("libcudart.so.12")
+        attempts = []
+        for soname in CUDART_SONAMES:
+            try:
+                self.lib = ctypes.CDLL(soname)
+            except OSError as exc:
+                attempts.append(f"  {soname}: {exc}")
+                continue
+            self.soname = soname
+            break
+        else:
+            raise SystemExit(
+                "no CUDA runtime library could be loaded. Tried:\n"
+                + "\n".join(attempts)
+                + f"\nIf this board has a newer CUDA, add its soname to "
+                f"CUDART_SONAMES in {Path(__file__).name}."
+            )
+        # Printed rather than assumed. A board that binds a different CUDA major than the
+        # one TensorRT was built against fails later and less clearly than here.
+        print(f"cuda runtime: {self.soname}", flush=True)
         self.lib.cudaGetErrorString.restype = ctypes.c_char_p
 
     def _check(self, code, what):

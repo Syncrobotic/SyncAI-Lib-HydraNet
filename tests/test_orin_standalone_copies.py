@@ -110,3 +110,60 @@ def test_letterbox_produces_the_same_pixels(orin):
     assert pad.any(), "this fixture is meant to need padding"
     assert np.array_equal(np.all(board == 114, axis=-1), pad)
     assert np.abs(board[~pad].astype(int) - package[~pad].astype(int)).mean() < 8
+
+
+# --- binding the CUDA runtime ----------------------------------------------
+#
+# Not a package-vs-board equality check like the rest of this file, but the same
+# category of defect: a constant in a standalone copy that is right on one machine and
+# silently wrong on the next. `libcudart.so.12` was hardcoded, a GB10 carries only
+# `.so.13`, and `Cudart()` is built at the top of both main loops -- so neither script
+# started at all, and the error named a missing file rather than a CUDA version.
+
+
+def test_sonames_are_tried_newest_first_with_the_unversioned_one_last(orin):
+    """The unversioned name usually exists only where the CUDA *development* package is
+    installed, which a deployment board need not have -- so it is a fallback, not the
+    first guess."""
+    bench, _ = orin
+    majors = [s for s in bench.CUDART_SONAMES if s != "libcudart.so"]
+    assert bench.CUDART_SONAMES[-1] == "libcudart.so"
+    assert majors == sorted(majors, key=lambda s: -int(s.rsplit(".", 1)[1]))
+    assert "libcudart.so.13" in majors, "CUDA 13 boards exist; this list has to know"
+
+
+def test_a_newer_cuda_is_bound_in_preference_to_an_older_one(orin, monkeypatch):
+    bench, _ = orin
+    loaded = {}
+
+    class _Lib:
+        def __init__(self, name):
+            self.cudaGetErrorString = type("F", (), {"restype": None})()
+            loaded["name"] = name
+
+    def _cdll(name):
+        if name != "libcudart.so.12":
+            raise OSError(f"{name}: cannot open shared object file")
+        return _Lib(name)
+
+    monkeypatch.setattr(bench.ctypes, "CDLL", _cdll)
+    cuda = bench.Cudart()
+    assert cuda.soname == "libcudart.so.12"  # .13 was tried first and refused
+    assert loaded["name"] == "libcudart.so.12"
+
+
+def test_no_runtime_at_all_names_every_attempt_and_says_what_to_edit(orin, monkeypatch):
+    """The failure this replaces printed one filename. A board with an unknown CUDA major
+    needs to be told which names were tried and where to add its own."""
+    bench, _ = orin
+
+    def _cdll(name):
+        raise OSError(f"{name}: cannot open shared object file")
+
+    monkeypatch.setattr(bench.ctypes, "CDLL", _cdll)
+    with pytest.raises(SystemExit) as exc:
+        bench.Cudart()
+    message = str(exc.value)
+    for soname in bench.CUDART_SONAMES:
+        assert soname in message
+    assert "CUDART_SONAMES" in message
