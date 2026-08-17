@@ -66,6 +66,7 @@ class HydraNet(nn.Module):
                     ce_weight=lcfg.get("ce_weight", 1.0),
                     dice_weight=lcfg.get("dice_weight", 1.0),
                     ignore_index=lcfg.get("ignore_index", 255),
+                    class_weights=lcfg.get("class_weights"),
                 )
             elif hcfg["type"] == "fcos":
                 self.det_head_name = name

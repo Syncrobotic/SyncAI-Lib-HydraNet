@@ -17,6 +17,17 @@ class SegLoss(nn.Module):
     wall, cover most pixels while the classes that matter most for safety (stairs,
     water, glass) may be under 1%. Plain CE is dominated by the large classes; Dice
     optimises region overlap directly and is insensitive to class size.
+
+    **Dice alone did not settle it, which is why `class_weights` exists.** Measured on
+    the batch02 retail-objects run, as agreement with SAM 3 over six held-out cameras:
+    `fixture` reached 92.6% recall at 56.1% precision while every other class sat at
+    91-96% precision and 21-69% recall. One class absorbing and the rest under-firing is
+    the signature of frequency bias, and it survived `dice_weight` 1.5 against
+    `ce_weight` 1.0 -- Dice is `dice.mean()`, so it is already class-balanced, and the
+    unweighted CE beside it is what still pulls toward the common classes.
+
+    Off by default. Passing weights changes what a checkpoint means, so it is opt-in per
+    config rather than a default that silently reinterprets every previous run.
     """
 
     def __init__(
@@ -25,15 +36,39 @@ class SegLoss(nn.Module):
         ce_weight: float = 1.0,
         dice_weight: float = 1.0,
         ignore_index: int = 255,
+        class_weights: list[float] | None = None,
     ):
         super().__init__()
         self.num_classes = num_classes
         self.ce_weight = ce_weight
         self.dice_weight = dice_weight
         self.ignore_index = ignore_index
+        # A buffer so it follows `.to(device)` -- CE raises on a device mismatch and it
+        # would only fire once training reached the GPU. **`persistent=False`** so it
+        # stays out of `state_dict()`: these are a config value, not learned state, and
+        # a persistent buffer makes every checkpoint that predates this unloadable into a
+        # weighted model -- `Missing key(s): seg_losses.terrain.class_weights`, which is
+        # exactly the case of turning weights on and fine-tuning from an existing run.
+        # The `config.yaml` written beside every checkpoint already records that a run
+        # trained under weights, so nothing is lost by keeping them out.
+        if class_weights is None:
+            self.class_weights = None
+        else:
+            if len(class_weights) != num_classes:
+                raise ValueError(
+                    f"class_weights has {len(class_weights)} entries for {num_classes} "
+                    f"classes; a silent broadcast here would reweight the wrong classes"
+                )
+            self.register_buffer(
+                "class_weights",
+                torch.tensor(class_weights, dtype=torch.float),
+                persistent=False,
+            )
 
     def forward(self, logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        loss = self.ce_weight * F.cross_entropy(logits, target, ignore_index=self.ignore_index)
+        loss = self.ce_weight * F.cross_entropy(
+            logits, target, weight=self.class_weights, ignore_index=self.ignore_index
+        )
         if self.dice_weight > 0:
             loss = loss + self.dice_weight * self._dice(logits, target)
         return loss

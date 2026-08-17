@@ -101,6 +101,19 @@ LOSS_BY_TYPE = {
         "ce_weight": Spec(NUMBER),
         "dice_weight": Spec(NUMBER),
         "ignore_index": Spec((int,)),
+        # Per-class multipliers on the CE half, one per class in id order. Off unless
+        # given, because passing them changes what a checkpoint means and a default here
+        # would silently reinterpret every run that came before.
+        #
+        # What it is for, measured on batch02 as agreement with SAM 3 over six held-out
+        # cameras: `fixture` reached 92.6% recall at 56.1% precision while every other
+        # class sat at 91-96% precision and 21-69% recall. One class absorbing and the
+        # rest under-firing is frequency bias, and `dice_weight` 1.5 did not settle it --
+        # Dice is already class-balanced, and the unweighted CE beside it is what pulls.
+        #
+        # The length is checked against the head's num_classes rather than broadcast: a
+        # short list would reweight the wrong classes and still train.
+        "class_weights": Spec((list,)),
     },
     "fcos": {
         "cls_weight": Spec(NUMBER),
