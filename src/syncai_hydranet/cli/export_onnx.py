@@ -56,20 +56,29 @@ class ExportWrapper(nn.Module):
     to hand over pixels in the order and range the input name states.
 
     ``argmax_seg`` does the same thing at the other end of the graph, and is the larger
-    win of the two. Measured on a GB10 at 512x640, single-thread, real decode:
+    win of the two. Measured on a GB10 at 512x640, single-thread, real decode, median of
+    three, in milliseconds:
 
-        infer     2.09 ms  31.2%
-        d2h       0.37 ms   5.5%
-        terrain   2.53 ms  37.8%   <- host argmax over 7x512x640
-        detect    1.71 ms  25.5%
-        total     6.70 ms  -> 149 fps
+        build                    infer   d2h  terrain  detect  TOTAL     fps
+        shipped                   2.09  0.38     2.53    1.70   6.69  144-150
+        --argmax-seg              2.71  0.23     0       1.71   4.00  203-250
+        + --detection-classes     2.71  0.17     0       0.64   3.29  284-304
+        + CUDA graph              1.49  0.15     0       0.62   2.25  381-444
 
     **The host argmax was the largest single item in the frame, larger than the engine**,
     and it was on nobody's lever list -- DEPLOY_JETSON.md §4 lists four ways to make the
-    engine smaller and the engine is 31% of the problem. Folding it in measures 4.00 ms,
-    250 fps: a 40% frame reduction for an export flag, with no retraining and no change to
-    a single weight. The D2H transfer falls with it, from 9.2 MB of float logits to 0.33 MB
-    of uint8 class ids.
+    engine smaller and the engine was 31% of the problem. The D2H transfer falls with it,
+    from 9.18 MB of float logits to 0.33 MB of uint8 class ids.
+
+    **Read the `infer` column before benchmarking this.** Folding the argmax in makes the
+    *engine* slower -- 2.09 to 2.71 ms -- because the work did not vanish, it moved onto
+    the GPU where it is cheap. Anyone who measures with ``trtexec`` alone sees a 25%
+    latency regression and reverts the flag, correctly by their measurement and wrongly by
+    two milliseconds a frame. **This is a frame win measured end to end, and it cannot be
+    seen from the engine.** Quote it with the whole table or not at all.
+
+    What it costs beyond that is the logits: no confidence, no soft blend, no per-class
+    probability.
 
     What it costs is the logits. Anything wanting a confidence, a soft blend or a
     per-class probability has to export without this. That is why it is a flag and not the
@@ -336,9 +345,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="emit uint8 class maps for the segmentation heads instead of float logits, "
         "folding the host's argmax into the graph. Measured on a GB10 at 512x640: the "
         "host argmax was 2.53 ms of a 6.70 ms frame -- larger than the engine -- and "
-        "folding it in gives 4.00 ms, a 40% frame reduction with no retraining. Costs the "
-        "logits, so anything needing a confidence or a soft blend must export without it. "
-        "The bindings are renamed '<head>_argmax'",
+        "folding it in gives 4.00 ms, with --detection-classes 3.29 ms and with a CUDA "
+        "graph 2.25 ms (444 fps). WARNING: this makes the ENGINE slower, 2.09 to 2.71 ms; "
+        "it is a whole-frame win and trtexec alone shows it as a 25%% regression. Costs "
+        "the logits, so anything needing a confidence or a soft blend must export without "
+        "it. The bindings are renamed '<head>_argmax'",
     )
     ap.add_argument(
         "--detection-classes",

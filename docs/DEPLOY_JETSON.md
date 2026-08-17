@@ -105,6 +105,17 @@ trtexec --onnx=hydranet.onnx --saveEngine=hydranet_int8.engine \
 Recommendation: ship FP16 first. INT8 has a visible effect on segmentation edge quality and
 requires re-validating mIoU.
 
+> **INT8 was measured slower than FP16 on at least one board.** On a GB10 with TRT 10.16,
+> `--best` came back at 2.48 ms against FP16's 2.31 ms. Narrowing the neck to 64 channels
+> was also slower (2.45 ms), and `num_repeats: 1` and `regnet_x_400mf` were both inside
+> noise. The reason is the same for all four: `--useCudaGraph` alone takes 2.61 → 1.95 ms,
+> so **this graph is launch-bound, not compute-bound** — 416 kernel launches over tensors
+> as small as 4×5, where shrinking the arithmetic buys nothing.
+>
+> That has not been re-measured on the Orin rig this file documents, and it may well differ.
+> But INT8 is the first thing anyone reaches for, so it is worth knowing before the
+> calibration set is assembled that it is not free money on every board.
+
 ## 3. Output nodes and post-processing
 
 | Output | Shape | Post-processing |
@@ -154,6 +165,37 @@ hydranet-export-onnx --config configs/hydranet_retail_objects.yaml \
 | (none) | 80 | 545,600 | — |
 | `retail_analytics` | 32 | 218,240 | **2.5×** less |
 | `robot_8` | 8 | 54,560 | **10.0×** less |
+
+### Folding the segmentation argmax into the graph
+
+`--argmax-seg` emits uint8 class maps instead of float logits, so the host stops doing the
+argmax and the D2H transfer drops from 9.18 MB to 0.33 MB. It was worth more than either
+class-narrowing or any engine lever, and for a reason that had not been looked at: **the
+host argmax was the largest single item in the frame, larger than the engine itself.**
+
+GB10, TRT 10.16, 512×640, single-thread, real decode, median of three, milliseconds:
+
+| build | infer | d2h | terrain | detect | **total** | fps |
+|---|---|---|---|---|---|---|
+| shipped | 2.09 | 0.38 | 2.53 | 1.70 | **6.69** | 144–150 |
+| `--argmax-seg` | 2.71 | 0.23 | 0 | 1.71 | **4.00** | 203–250 |
+| ` + --detection-classes retail_analytics` | 2.71 | 0.17 | 0 | 0.64 | **3.29** | 284–304 |
+| ` + CUDA graph` | 1.49 | 0.15 | 0 | 0.62 | **2.25** | **381–444** |
+
+Nothing above retrains anything or changes a weight. The last row needs no export change
+at all — `--useCudaGraph` in trtexec, or `cudaStreamBeginCapture` around
+`execute_async_v3` in a runtime.
+
+> **Read the `infer` column before benchmarking this.** `--argmax-seg` makes the *engine*
+> slower, 2.09 → 2.71 ms. The work did not vanish; it moved onto the GPU, where it is
+> cheap. Measured with `trtexec` alone the flag looks like a 25% regression, and someone
+> will revert it on that basis — correctly by their measurement and wrongly by two
+> milliseconds a frame. **It is a whole-frame win and it cannot be seen from the engine.**
+
+Correctness on four real store frames, TensorRT FP16 against the FP32 PyTorch reference:
+terrain argmax agrees on **99.81%** of pixels, all disagreements on class boundaries. That
+is the FP16 build, not the fold — ONNX-vs-PyTorch on the folded graph is exact, zero
+disagreeing pixels, which the export's `--check-parity` reports.
 
 **There is a second, similar-looking knob, and reaching for it instead is a real mistake.**
 `data.datasets[].classes` also takes a list of COCO names, and it is the one someone
