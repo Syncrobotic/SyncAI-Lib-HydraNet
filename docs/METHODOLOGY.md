@@ -376,8 +376,15 @@ class. `runs/hydranet_retail_objects_site_balanced` is the control and the shape
 | `IoU/terrain/05_product/site_sam3` | **0.4821** | 0.0395 | 0.1030 | 0.0300 | 0.0677 | 0.0526 |
 
 **It spiked and collapsed.** If removing the negative evidence were sufficient, it should have
-held. Rebalancing *delayed* the collapse rather than preventing it, and `best.pt` at epoch 10
-captured 0.1030 on the way down — a value the mean liked, not a value the class reached.
+held. Rebalancing *delayed* the collapse rather than preventing it.
+
+Selection behaved correctly here, and it is worth reading why. That run's `primary_metric` is
+`IoU/terrain/05_product/site_sam3` — the class under investigation, not `terrain_mIoU` — so
+`best.pt` holds **epoch 2 at 0.4821**, the peak itself. The log records exactly two `new best`
+lines, both inside the first two minutes, and nothing across the remaining 37 epochs. **A
+checkpoint pinned at epoch 2 of 39 is not a selection failure; it is the finding.** It says
+the run's best answer for that class arrived before it had learned anything else, which is
+the same information the table shows and harder to miss.
 
 The competing account is that this is a *contradiction* rather than an absence:
 `ADE20K_ID_TO_RETAIL_OBJECTS` sends **15 source ids to `fixture` and 0 to `product`**, so a
