@@ -55,6 +55,50 @@ import torch.nn.functional as F
 DEFAULT_LOGIT_SCALE = 100.0
 
 
+def load_matrix_file(path, num_classes: int, expect_names: list[str] | None = None):
+    """Read a `make_text_embeddings.py` sidecar and return its matrix, name-checked.
+
+    The sidecar carries `names` beside `matrix` for one reason:
+    `load_text_embeddings` validates the **shape**, and the failure that costs a run is a
+    matrix of the right shape whose rows are in a different order. Every channel decodes,
+    every box gets a name, and the names are someone else's -- `coco_subsets.head_order`'s
+    sentence, one level down.
+
+    `expect_names` comes from the head's own `classes:` config key. It is optional because
+    not every config declares names, and checking is refused rather than skipped when it
+    can be done: passing names that disagree is an error, omitting them is a choice.
+    """
+    import torch
+
+    blob = torch.load(path, map_location="cpu", weights_only=True)
+    if not isinstance(blob, dict) or "matrix" not in blob:
+        raise ValueError(
+            f"{path} is not a text-embedding sidecar: expected a dict with a `matrix` key, "
+            f"as written by scripts/make_text_embeddings.py"
+        )
+    names = blob.get("names")
+    if expect_names is not None:
+        if names is None:
+            raise ValueError(
+                f"{path} carries no `names`, so the config's `classes:` cannot be checked "
+                f"against it. Regenerate it with scripts/make_text_embeddings.py, which "
+                f"always writes them -- an unchecked matrix is the wrong-order failure."
+            )
+        if list(names) != list(expect_names):
+            raise ValueError(
+                f"{path} is for classes {list(names)!r} but this head declares "
+                f"{list(expect_names)!r}. Order matters as much as membership: row k of "
+                f"the matrix is what channel k means, so a permutation renames every "
+                f"class while passing every shape check."
+            )
+    if len(blob["matrix"]) != num_classes:
+        raise ValueError(
+            f"{path} has {len(blob['matrix'])} rows and this head has {num_classes} "
+            f"classes. Names in the file: {names!r}"
+        )
+    return blob["matrix"]
+
+
 class TextEmbeddingClassifier(nn.Module):
     """Scores visual features against a frozen matrix of class-name embeddings.
 

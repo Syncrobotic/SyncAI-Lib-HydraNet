@@ -94,6 +94,20 @@ HEAD_BY_TYPE = {
         # defaulted per encoder: a matrix whose width disagrees with the head is refused at
         # load rather than broadcast, because a silent mismatch renames every class.
         "embed_dim": Spec((int,)),
+        # Path to the matrix `scripts/make_text_embeddings.py` writes.
+        #
+        # **This belongs to the training run, not to export.** The buffer ships as a random
+        # orthogonal placeholder and `embed_pred` learns to align with whatever matrix was
+        # installed while the gradient flowed. Train on the placeholder and install real
+        # embeddings afterwards and the visual projection is aimed at random directions --
+        # confident output, no error. So the config that trains the head is the config that
+        # names the matrix.
+        "text_embeddings": Spec((str,)),
+        # The class names this head's channels mean, in head order. Optional, and the only
+        # thing that can catch a right-sized wrong-ordered matrix: `load_text_embeddings`
+        # checks the shape, and a permuted matrix has the correct shape. Same argument as
+        # `coco_subsets.head_order`, one level down.
+        "classes": Spec((list,)),
     },
 }
 LOSS_BY_TYPE = {

@@ -20,6 +20,7 @@ from .backbone import build_backbone
 from .heads.detection import SCORE_THR_VIEW, FCOSHead, build_det_head
 from .heads.registry import DetectionHead, Head, SegmentationHead
 from .heads.segmentation import build_seg_head
+from .heads.text_classifier import TextEmbeddingClassifier, load_matrix_file
 from .losses import FCOSLoss, FixedWeighting, SegLoss, UncertaintyWeighting
 from .neck import build_neck
 
@@ -71,6 +72,7 @@ class HydraNet(nn.Module):
             elif hcfg["type"] == "fcos":
                 self.det_head_name = name
                 self.det_head = build_det_head(hcfg, ch)
+                _install_text_embeddings(self.det_head, hcfg, name)
                 lcfg = hcfg.get("loss", {})
                 self.det_loss = FCOSLoss(
                     hcfg["num_classes"],
@@ -194,6 +196,42 @@ class HydraNet(nn.Module):
                 img_size=images.shape[-2:],
             )
         return result
+
+
+def _install_text_embeddings(head: FCOSHead, hcfg: dict, name: str) -> None:
+    """Put a real class-name matrix into the head, at construction rather than at export.
+
+    Ordering, because it is the whole point and nothing else enforces it: the head's
+    `text_embeddings` buffer is a random *orthogonal placeholder*, and `embed_pred` learns
+    to align with whatever occupies that buffer while the gradient flows. Installing here
+    means training sees the real text space from step 0; installing at export means the
+    visual projection has spent its whole life aiming at random directions, and the result
+    is confident, meaningless boxes with no error anywhere.
+
+    A `text_embeddings` path under a `linear` head is refused rather than ignored. Ignoring
+    it produces exactly the run the operator thought they were avoiding, and the config
+    would still read as if the vocabulary were data.
+
+    The refusal tests the **built classifier** rather than the config string that asked for
+    it. Those can only disagree if `build_det_head` and this function read `cls_head`
+    differently, which is exactly the kind of drift worth catching at the object rather
+    than trusting twice -- and it is also what lets a type checker see that the call below
+    is valid, since `cls_pred` is a `Conv2d` on the other branch.
+    """
+    path = hcfg.get("text_embeddings")
+    if path is None:
+        return
+    classifier = head.cls_pred
+    if not isinstance(classifier, TextEmbeddingClassifier):
+        raise ValueError(
+            f"model.heads.{name}: `text_embeddings` is set but the head built a "
+            f"{type(classifier).__name__} (cls_head={hcfg.get('cls_head', 'linear')!r}). A "
+            f"linear classifier has no matrix to install, so this file would be silently "
+            f"unused and the run would train the frozen-vocabulary head the setting exists "
+            f"to avoid."
+        )
+    matrix = load_matrix_file(path, head.num_classes, hcfg.get("classes"))
+    classifier.load_text_embeddings(matrix)
 
 
 def build_model(cfg) -> HydraNet:
