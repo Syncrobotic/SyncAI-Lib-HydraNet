@@ -65,8 +65,25 @@ model:
       # localiser available: at score 0.05-0.15 it fires on boxed product as `book`
       # (914 hits over 40 frames on Taichung-cam01, 1,683 on Kaohsiung-cam08), on
       # accessories as `bottle`, and on demo units as `refrigerator` / `tv`. The boxes
-      # are in the right places and only the vocabulary is wrong, so the classes stay
-      # and data/product_vocab.py maps them to retail terms at inference.
+      # are in the right places and only the vocabulary is wrong.
+      #
+      # ⚠ The mitigation named here for months does not exist. `data/product_vocab.py`
+      # is not in the tree and is in no commit (`git log --all -- "*product_vocab*"` is
+      # empty), and nothing anywhere maps a COCO noun to a retail term. So the second
+      # half of the argument for keeping all 80 was never built, and what actually
+      # reaches a viewer is the raw noun: rendered on Taichung-cam11 the panel reports
+      # `oven` 0.18, `refrigerator` 0.20, `tv` 0.16 and `book` 0.16-0.19 in a phone shop.
+      # Every one of those is just over the 0.15 scene threshold, which is what they look
+      # like once the score is shown beside them and not before.
+      #
+      # The audit finding above is measured and stands. The conclusion drawn from it has
+      # since been answered a different way and by a run rather than a plan:
+      # `hydranet_retail_products.yaml` trains a real two-class head on the 10,517
+      # merchandise boxes that were already on disk, because a box needs a centre and an
+      # extent rather than a borrowed name. Anyone reviving the translation layer should
+      # say why it beats that, and should note that choosing which COCO noun means which
+      # retail term is exactly the kind of invented mapping this taxonomy keeps paying
+      # for -- `column` is sourced, passes every gate, and predicts 0.00% on site.
       num_classes: 80
 
 data:
