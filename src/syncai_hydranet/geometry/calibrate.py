@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import numpy as np
 
@@ -221,18 +222,48 @@ def is_interior_maximum(sweep: np.ndarray, margin: int = 2) -> bool:
     return margin <= i < sweep.shape[1] - margin
 
 
-def vanishing_point(lines: np.ndarray) -> np.ndarray:
+class VanishingPoint(NamedTuple):
+    """Where a family of lines meets, and how well it actually meets there.
+
+    The residual is the reason this is not a bare array. Grouping image lines into two
+    floor families is the step most likely to be subtly wrong, and a subtly wrong grouping
+    produces a **plausible focal length** rather than an error: `pose_from_vanishing_points`
+    only refuses the gross case, where the dot product comes out non-negative.
+
+    Under perspective a family of parallel floor lines does not share a theta -- the lines
+    fan toward their vanishing point -- so clustering by theta looks reasonable and is
+    wrong. The residual is what distinguishes "these lines meet at a point" from "these
+    lines were put in the same bucket".
+    """
+
+    point: np.ndarray
+    residual_px: float
+
+    def __array__(self, dtype=None, copy=None):
+        """So a caller that only wants the point can keep treating it as one."""
+        arr = np.asarray(self.point, dtype=dtype)
+        return arr.copy() if copy else arr
+
+
+def vanishing_point(lines: np.ndarray) -> VanishingPoint:
     """Least-squares intersection of a family of image lines given as (theta, rho).
 
     Parallel floor lines meet at a vanishing point under perspective; in homogeneous terms
     each line is `(cos t, sin t, -rho)` and the point is the null space of their stack.
+
+    The residual is the RMS perpendicular distance from the recovered point to each line,
+    in pixels, which is directly readable against the frame's own size -- a few pixels is a
+    family, a few hundred is a bucket.
     """
     a = np.stack([np.cos(lines[:, 0]), np.sin(lines[:, 0]), -lines[:, 1]], axis=1)
     _, _, vt = np.linalg.svd(a)
     v = vt[-1]
     if abs(v[2]) < 1e-12:
         raise ValueError("lines are parallel in the image: no finite vanishing point")
-    return v[:2] / v[2]
+    point = v[:2] / v[2]
+    normals = np.stack([np.cos(lines[:, 0]), np.sin(lines[:, 0])], axis=1)
+    residual = float(np.sqrt((((normals @ point) - lines[:, 1]) ** 2).mean()))
+    return VanishingPoint(point, residual)
 
 
 def pose_from_vanishing_points(v1, v2, shape) -> tuple[float, float]:

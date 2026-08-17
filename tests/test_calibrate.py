@@ -163,6 +163,26 @@ def test_barrel_correction_pushes_points_outward():
 # --- pose, and the acceptance test -----------------------------------------
 
 
+def test_a_bucket_of_lines_that_do_not_concur_reports_a_large_residual():
+    """The guard for the step most likely to be subtly wrong. A mis-grouping produces a
+    plausible focal length rather than an error, because `pose_from_vanishing_points` only
+    refuses the gross case. The residual is what separates "these lines meet at a point"
+    from "these lines were put in the same bucket"."""
+    concurrent = []
+    target = np.array([1500.0, 150.0])
+    for angle in (0.25, 0.55, 0.85, 1.15):
+        n = np.array([-math.sin(angle), math.cos(angle)])
+        concurrent.append([math.atan2(n[1], n[0]) % math.pi, float(n @ target)])
+    tight = vanishing_point(np.array(concurrent))
+
+    scattered = np.array(concurrent, float)
+    scattered[:, 1] += np.array([0.0, 140.0, -160.0, 190.0])  # same angles, shifted apart
+    loose = vanishing_point(scattered)
+
+    assert tight.residual_px < 1.0
+    assert loose.residual_px > 20.0
+
+
 def test_vanishing_point_of_converging_lines():
     """Three lines through (900, 200) must intersect there."""
     target = np.array([900.0, 200.0])
@@ -171,7 +191,10 @@ def test_vanishing_point_of_converging_lines():
         d = np.array([math.cos(angle), math.sin(angle)])
         n = np.array([-d[1], d[0]])
         lines.append([math.atan2(n[1], n[0]) % math.pi, float(n @ target)])
-    assert np.allclose(vanishing_point(np.array(lines)), target, atol=1e-6)
+    vp = vanishing_point(np.array(lines))
+    assert np.allclose(vp.point, target, atol=1e-6)
+    assert vp.residual_px < 1e-6, "lines that truly concur have no residual"
+    assert np.allclose(np.asarray(vp), target, atol=1e-6), "still usable as a bare point"
 
 
 def test_lines_that_stay_parallel_have_no_finite_vanishing_point():
