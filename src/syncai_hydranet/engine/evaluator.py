@@ -59,6 +59,17 @@ class ConfusionMatrix:
         iou = np.where(union > 0, inter / np.maximum(union, 1), np.nan)
         return float(np.nanmean(iou)), iou
 
+    def predicted(self) -> np.ndarray:
+        """Predicted pixels per class: the column sums, against `support`'s row sums.
+
+        Only interesting where the two disagree in kind. A class with zero support and
+        non-zero prediction in one val set is emitting pure false positives there, and
+        pooling carries them into a set where the class is real.
+        """
+        if self.mat is None:
+            return np.zeros(self.n, dtype=np.int64)
+        return self.mat.reshape(self.n, self.n).sum(0).cpu().numpy()
+
     def support(self) -> np.ndarray:
         """Ground-truth pixels per class: how much evidence each IoU above stands on.
 
@@ -130,8 +141,69 @@ def build_val_loaders(val_sets, cfg, device=None) -> list[tuple[str, DataLoader]
     ]
 
 
+def _seg_metrics_per_dataset(seg_cms_by_ds, cfg, logger) -> dict:
+    """The same segmentation metrics again, per validation dataset.
+
+    **The pooled numbers alone cost this project a day.** `evaluate` accumulates one
+    confusion matrix per head across every val set, so a class that cannot exist in one of
+    them still collects false positives there, and they land in the same denominator as
+    the true positives from the set where it can. Measured on
+    `runs/hydranet_retail_objects_site_balanced`: `product` scored **0.583 on the store's
+    own val frames and 0.000 on ADE20K's**, where its ground truth is necessarily zero and
+    every predicted pixel is a false positive with nothing to offset it. Pooled, that
+    reads as 0.05-0.35 and looks like a model failing to learn.
+
+    Detection already solved this -- see the suffix convention in `_det_metrics`, and the
+    comment there about a second dataset silently redefining the first one's number. This
+    is the same fix on the segmentation side, and it keeps the unqualified keys untouched
+    so every existing `metrics.jsonl` and `train.primary_metric` still means what it did.
+
+    A run whose reason for existing is one dataset should select on that dataset:
+
+        primary_metric: IoU/terrain/05_product/site_sam3
+    """
+    heads = {head for head, _ in seg_cms_by_ds}
+    trav_names = ("blocked", "caution", "go")
+    terrain_names = tuple(cfg["data"].get("terrain_classes", []))
+    metrics: dict[str, float] = {}
+    for head in sorted(heads):
+        datasets = sorted(ds for h, ds in seg_cms_by_ds if h == head)
+        if len(datasets) < 2:
+            # One dataset: the pooled number already is the per-dataset one, and emitting
+            # both would double every key for no information.
+            continue
+        names = trav_names if head == "traversability" else terrain_names
+        for ds_name in datasets:
+            cm = seg_cms_by_ds[(head, ds_name)]
+            miou, per_class = cm.miou()
+            metrics[f"{head}_mIoU/{ds_name}"] = miou
+            support, predicted = cm.support(), cm.predicted()
+            uncontested = []
+            for i, iou in enumerate(per_class):
+                cname = names[i] if i < len(names) else str(i)
+                if np.isfinite(iou):
+                    metrics[f"IoU/{head}/{i:02d}_{cname}/{ds_name}"] = float(iou)
+                # Ground truth cannot contain it, yet the model paints it here. Every one
+                # of those pixels is a false positive that no true positive in this set
+                # can offset, and pooling carries them into another set's IoU.
+                if support[i] == 0 and predicted[i] > 0:
+                    uncontested.append(f"{cname} {int(predicted[i]):,}px")
+            logger.info(f"[val] {head} mIoU on {ds_name} = {miou:.4f}")
+            if uncontested:
+                logger.warning(
+                    f"[val] {ds_name} has no ground truth for {', '.join(uncontested)} "
+                    f"but the model predicts them there. Those are false positives with "
+                    f"nothing in this set to offset them, and the pooled "
+                    f"IoU/{head}/... carries them into the set where the class does "
+                    f"exist. Select and report on the per-dataset key instead."
+                )
+    return metrics
+
+
 @torch.no_grad()
-def _update_seg_heads(model, out, batch, sup, device, seg_cms, samples, images) -> dict:
+def _update_seg_heads(
+    model, out, batch, sup, device, seg_cms, samples, images, seg_cms_by_ds=None, ds_name=""
+) -> dict:
     """Fold one batch into the per-head confusion matrices.
 
     Returns `{head: (pred, target)}` for the heads this batch supervised, which the
@@ -147,6 +219,11 @@ def _update_seg_heads(model, out, batch, sup, device, seg_cms, samples, images) 
         pred = out[head].argmax(dim=1)
         tgt = batch["targets"][head].to(device)
         seg_cms[head].update(pred, tgt)
+        if seg_cms_by_ds is not None:
+            key = (head, ds_name)
+            if key not in seg_cms_by_ds:
+                seg_cms_by_ds[key] = ConfusionMatrix(model.seg_heads[head].num_classes)
+            seg_cms_by_ds[key].update(pred, tgt)
         seg_preds[head] = (pred, tgt)
         if samples is not None and head not in samples:
             k = min(4, images.shape[0])
@@ -298,6 +375,10 @@ def evaluate(
     model.eval()
     metrics: dict[str, float] = {}
     seg_cms: dict[str, ConfusionMatrix] = {}
+    # The same matrices again, split by validation dataset. Pooling them is right for a
+    # headline number and wrong for a class that only one of the datasets can contain --
+    # see `_seg_metrics_per_dataset`, which is where that cost is written down.
+    seg_cms_by_ds: dict[tuple[str, str], ConfusionMatrix] = {}
     # Detections are kept per dataset. They used to share one list and one `coco_gt`
     # that each detection dataset overwrote, so with two of them every box was scored
     # against the last one's ground truth -- a wrong mAP, silently, and only when
@@ -327,7 +408,16 @@ def evaluate(
             out = model(images)
 
             seg_preds = _update_seg_heads(
-                model, out, batch, sup, device, seg_cms, samples, images
+                model,
+                out,
+                batch,
+                sup,
+                device,
+                seg_cms,
+                samples,
+                images,
+                seg_cms_by_ds=seg_cms_by_ds,
+                ds_name=name,
             )
 
             if trav_map and {"traversability", "terrain"} <= set(seg_preds):
@@ -346,6 +436,7 @@ def evaluate(
                 )
 
     metrics.update(_seg_metrics(seg_cms, cfg, logger))
+    metrics.update(_seg_metrics_per_dataset(seg_cms_by_ds, cfg, logger))
     metrics.update(_det_metrics(det_results, coco_gts, det_cat_ids, logger))
 
     if disagree_total:
