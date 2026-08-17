@@ -43,6 +43,7 @@ from PIL import Image, ImageDraw
 
 from ..config import load_config
 from ..data.coco_subsets import COCO_NAMES, head_order
+from ..data.label_maps import get_scheme, terrain_to_traversability
 from ..geometry import bev3d
 from ..geometry.bev import IGNORE, BevGrid, free_space_map, project_mask, scene
 from ..geometry.ground import Camera, GroundPlane
@@ -137,6 +138,7 @@ def compose(
     terrain_classes,
     plane: GroundPlane,
     grid: BevGrid,
+    trav_map: dict | None = None,
     det_names: tuple[str, ...] | None = None,
     stabiliser: FixedCameraStabiliser | None = None,
 ) -> tuple[Image.Image, SceneReport]:
@@ -151,7 +153,15 @@ def compose(
         out = model.predict(x.to(device), score_thr=args.score_thr)
     x0, y0, cw, ch = region
     base = canvas.crop((x0, y0, x0 + cw, y0 + ch))
-    trav = crop_box(out["traversability"][0].cpu().numpy(), region)
+    if "traversability" in out:
+        trav = crop_box(out["traversability"][0].cpu().numpy(), region)
+    else:
+        # Derived, not predicted. `trav_map` is the taxonomy's own terrain -> go/blocked
+        # table, and `main` refuses the run if the config's scheme does not ship one, so
+        # this is never a guess about which classes are walkable.
+        trav = terrain_to_traversability(
+            crop_box(out["terrain"][0].cpu().numpy(), region), trav_map
+        )
     if stabiliser is not None:
         trav = stabiliser(np.asarray(base), trav)
     view = overlay(base, trav, TRAV_COLORS)
@@ -394,6 +404,7 @@ def build_renderer(
     z_max: float,
     pitch_deg: float,
     camera_height: float,
+    trav_map: dict | None = None,
 ) -> Renderer:
     """Load the model and settle everything that does not change between frames."""
     device = pick_device(cfg.get("device"))
@@ -414,8 +425,29 @@ def build_renderer(
             "det_names": det_names,
             "plane": GroundPlane(height=camera_height, pitch=np.radians(pitch_deg)),
             "grid": BevGrid(z_max=z_max),
+            "trav_map": trav_map,
         },
     )
+
+
+def _trav_map_for(cfg: dict) -> dict | None:
+    """The terrain -> traversability table of whichever scheme supervises terrain.
+
+    Read off the config's datasets rather than hard-coded, so this follows the taxonomy
+    a run actually trained on. Every terrain-supervising dataset in one config shares a
+    taxonomy -- a run whose masks disagreed about what id 3 means would be broken long
+    before it reached here -- so the first table found is the table.
+    """
+    for ds in cfg.get("data", {}).get("datasets", []) or []:
+        if "terrain" not in (ds.get("supervises") or ()):
+            continue
+        name = ds.get("label_map")
+        if not name:
+            continue
+        trav = getattr(get_scheme(name), "trav", None)
+        if trav:
+            return dict(trav)
+    return None
 
 
 def render_still(in_path: Path, renderer: Renderer, args) -> int:
@@ -496,13 +528,26 @@ def main(argv: list[str] | None = None) -> int:
     # traversability head. Refuse here, naming the config key, rather than raising
     # KeyError on the first frame after the model and the video are both loaded --
     # configs/hydranet_retail_objects.yaml drops that head deliberately.
+    trav_map = None
     if "traversability" not in (cfg["model"]["heads"] or {}):
-        sys.exit(
-            f"{args.config} has no traversability head, and the scene panel is built "
-            "from free space: the floor polygon, the wall it raises at the boundary and "
-            "the ground projection of every box all start there. Use a config that "
-            "keeps model.heads.traversability, or hydranet-infer-video for a plain "
-            "terrain overlay."
+        # The object taxonomies drop the head because it is a lookup on terrain rather
+        # than a second signal. That lookup is exactly what the panel needs, so derive
+        # it rather than refusing -- `RETAIL_OBJECTS_TO_TRAV` exists for this and says
+        # so. Refuse only when the config's scheme ships no table, because inventing
+        # which classes are walkable is the one thing that must not be guessed here.
+        trav_map = _trav_map_for(cfg)
+        if not trav_map:
+            sys.exit(
+                f"{args.config} has no traversability head and its label_map ships no "
+                "terrain -> traversability table, so free space cannot be derived. The "
+                "scene panel is built from free space: the floor polygon, the wall it "
+                "raises at the boundary and the ground projection of every box all "
+                "start there. Use a config that keeps model.heads.traversability, or "
+                "hydranet-infer-video for a plain terrain overlay."
+            )
+        print(
+            "no traversability head: free space derived from terrain via the "
+            f"{len(trav_map)}-class table of this config's label_map"
         )
     renderer = build_renderer(
         cfg,
@@ -511,6 +556,7 @@ def main(argv: list[str] | None = None) -> int:
         z_max=args.range,
         pitch_deg=args.pitch,
         camera_height=args.camera_height,
+        trav_map=trav_map,
     )
     print(
         f"assumed camera: {args.camera_height:.2f} m high, {args.pitch:.0f} deg down, "
