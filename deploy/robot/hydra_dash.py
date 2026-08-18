@@ -314,9 +314,9 @@ def system_snapshot():
     return s
 
 
-# ---------------------------------------------------------------- control (guarded)
-# Only ESTOP-safe-stop is armed. Posture/movement codes for THIS factory program
-# (jy_exe) are not captured yet -> those return "pending" and send nothing.
+# ---------------------------------------------------------------- control (teleop)
+# Full command set from the beta comm spec V1.0.7. Movement streams axis commands while
+# armed; the robot's own 250 ms axis-timeout plus a UI-heartbeat deadman keep it safe.
 def _send_eth(code, value=0, typ=0):
     pkt = struct.pack("<III", code, value & 0xFFFFFFFF, typ)
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -344,17 +344,85 @@ def _burst(code, value=0, typ=0, n=6, interval=0.02):
         s.close()
 
 
+# Full teleop command set (beta comm spec V1.0.7). Discrete commands go through _burst;
+# continuous movement is streamed by move_streamer() at 50 Hz while armed.
+SIMPLE_CMDS = {
+    "stand_toggle": 0x21010202,  # 起立/趴下 toggle
+    "zero": 0x21010C05,  # 回零 (init joints)
+    "mode_move": 0x21010D06,  # 移动模式
+    "mode_inplace": 0x21010D05,  # 原地模式
+    "ctrl_manual": 0x21010C02,  # 手动模式 (responds to handheld/this host)
+    "ctrl_auto": 0x21010C03,  # 自主模式 (responds to perception host)
+    "gait_low": 0x21010300,
+    "gait_mid": 0x21010307,
+    "gait_high": 0x21010303,
+    "gait_grip": 0x21010402,  # 抓地越障
+    "gait_highstep": 0x21010407,  # 高踏步越障
+    "act_greet": 0x21010507,  # 打招呼
+    "act_twist": 0x21010204,  # 扭身体
+}
+AXIS_FWD, AXIS_LAT, AXIS_YAW = 0x21010130, 0x21010131, 0x21010135
+# conservative fractions of the +/-32767 axis range -- deliberately slow to start
+FWD_MAX, LAT_MAX, YAW_MAX = 9000, 7000, 8000
+_move = {"vx": 0.0, "vy": 0.0, "vyaw": 0.0, "armed": False, "last_hb": 0.0}
+_move_lock = threading.Lock()
+
+
+def _send_axis(sock, code, norm, mx):
+    v = int(max(-1.0, min(1.0, norm)) * mx)
+    sock.sendto(struct.pack("<III", code, v & 0xFFFFFFFF, 0), (CMD_IP, CMD_PORT))
+
+
+def move_streamer():
+    """Stream the three axis commands at 50 Hz while armed. The robot auto-stops after
+    250 ms with no axis command, so this loop is the deadman: a UI heartbeat older than
+    0.4 s zeroes velocity, and disarming stops the stream."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    while True:
+        with _move_lock:
+            m = dict(_move)
+        if m["armed"]:
+            active = (time.time() - m["last_hb"]) < 0.4
+            _send_axis(sock, AXIS_FWD, m["vx"] if active else 0.0, FWD_MAX)
+            _send_axis(sock, AXIS_LAT, m["vy"] if active else 0.0, LAT_MAX)
+            _send_axis(sock, AXIS_YAW, m["vyaw"] if active else 0.0, YAW_MAX)
+        time.sleep(0.02)
+
+
+def do_move(vx, vy, vyaw):
+    with _move_lock:
+        armed = _move["armed"]
+        if armed:
+            _move.update(vx=vx, vy=vy, vyaw=vyaw, last_hb=time.time())
+    return {"ok": True, "armed": armed}
+
+
 # Real command codes, captured from the physical controller and confirmed by the operator:
 #   0x21010202  stand-up / crouch-down TOGGLE
 #   0x21020C0E         soft emergency STOP (official spec)
 def do_control(action):
     try:
         if action == "estop":
+            with _move_lock:
+                _move["armed"] = False  # e-stop always disarms teleop
             _burst(0x21020C0E, 0, 0, n=8)
-            return {"ok": True, "armed": True, "msg": "軟急停已送出 (0x21020C0E)"}
+            return {"ok": True, "msg": "軟急停已送出 (0x21020C0E)，操控已停用"}
+        if action == "arm":
+            _burst(0x21010D06, 0, 0, n=3)  # movement mode
+            _burst(0x21010C02, 0, 0, n=3)  # manual mode
+            with _move_lock:
+                _move.update(armed=True, vx=0.0, vy=0.0, vyaw=0.0, last_hb=time.time())
+            return {"ok": True, "armed": True, "msg": "操控已啟用（移動＋手動模式）"}
+        if action == "disarm":
+            with _move_lock:
+                _move.update(armed=False, vx=0.0, vy=0.0, vyaw=0.0)
+            return {"ok": True, "armed": False, "msg": "操控已停用"}
         if action in ("toggle", "stand", "sit"):
             _burst(0x21010202, 0, 0)
-            return {"ok": True, "armed": True, "msg": "起立／蹲下切換已送出 (0x21010202)"}
+            return {"ok": True, "msg": "起立／蹲下切換 (0x21010202)"}
+        if action in SIMPLE_CMDS:
+            _burst(SIMPLE_CMDS[action], 0, 0)
+            return {"ok": True, "msg": f"{action} 已送出 ({SIMPLE_CMDS[action]:#010x})"}
         return {"ok": False, "msg": "unknown action"}
     except Exception as e:
         return {"ok": False, "msg": str(e)}
@@ -444,6 +512,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "path": "test",
                     },
                     "infer": _read_infer(),
+                    "teleop": {"armed": _move["armed"]},
                     "battery": {"available": True, "source": "0x0901 RobotStateUpload"},
                 }
             )
@@ -452,14 +521,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
-        if self.path.startswith("/api/control"):
+        if self.path.startswith("/api/control") or self.path.startswith("/api/move"):
             ln = int(self.headers.get("Content-Length", 0) or 0)
             body = self.rfile.read(ln) if ln else b"{}"
             try:
-                action = json.loads(body).get("action", "")
+                j = json.loads(body)
             except Exception:
-                action = ""
-            self._json(do_control(action))
+                j = {}
+            if self.path.startswith("/api/move"):
+                self._json(
+                    do_move(
+                        float(j.get("vx", 0)), float(j.get("vy", 0)), float(j.get("vyaw", 0))
+                    )
+                )
+            else:
+                self._json(do_control(j.get("action", "")))
         else:
             self.send_response(404)
             self.end_headers()
@@ -483,6 +559,7 @@ def main():
     PAGE = build_page()
     threading.Thread(target=telem_listener, daemon=True).start()
     threading.Thread(target=sys_sampler, daemon=True).start()
+    threading.Thread(target=move_streamer, daemon=True).start()
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print("HydraNet dashboard on :%d" % PORT)
     srv.serve_forever()
@@ -625,15 +702,36 @@ th{color:var(--dim);font-weight:500;font-size:11px;text-transform:uppercase;lett
 
   <!-- CONTROL -->
   <section class="card span5">
-    <h2>控制 <span class="tag warnc">謹慎操作</span></h2>
+    <h2>操控 <span class="tag warnc">會移動真機</span> <span class="tag" id="armtag">未啟用</span></h2>
     <div class="controls">
       <button class="estop" id="estop">■ 緊急停止 E-STOP</button>
-      <div class="posture" style="grid-template-columns:1fr">
-        <button class="btn" data-a="toggle" style="font-size:17px;padding:16px">🦿 起立 ⇄ 蹲下（切換）</button>
+      <button class="btn" id="armbtn" style="width:100%;font-size:16px;padding:14px;border-color:var(--warn)">🔓 啟用操控（移動＋手動模式）</button>
+      <div class="mini">移動（按住＝走、放開＝停；鍵盤 W/S 前後 · A/D 平移 · Q/E 轉向）</div>
+      <div class="dpad">
+        <span></span><button class="btn mv" data-vx="1">▲ 前</button><span></span>
+        <button class="btn mv" data-vy="-1">◀ 左移</button>
+        <button class="btn mv" data-vyaw="-1">↺ 左轉</button>
+        <button class="btn mv" data-vy="1">右移 ▶</button>
+        <button class="btn mv" data-vyaw="1">↻ 右轉</button>
+        <button class="btn mv" data-vx="-1">▼ 後</button>
+        <span></span>
       </div>
-      <div class="na" id="ctlnote">按鈕送的是<b>從實體控制器攔到、你本人確認</b>的真實指令碼：<br>
-      · 急停 = <code>0x21010C0E</code>　· 起立／蹲下切換 = <code>0x21010202</code><br>
-      皆直送 jy_exe:43893。<b>操作前請確保機器人周圍淨空</b>；實體硬體急停仍為最終保險。</div>
+      <div class="mini">姿態 · 步態 · 動作</div>
+      <div class="posture" style="grid-template-columns:1fr 1fr">
+        <button class="btn" data-a="toggle">🦿 起立⇄趴下</button>
+        <button class="btn" data-a="zero">↺ 回零</button>
+      </div>
+      <div class="posture" style="grid-template-columns:repeat(3,1fr)">
+        <button class="btn" data-a="gait_low">低速</button>
+        <button class="btn" data-a="gait_mid">中速</button>
+        <button class="btn" data-a="gait_high">高速</button>
+        <button class="btn" data-a="gait_grip">抓地越障</button>
+        <button class="btn" data-a="gait_highstep">高踏步</button>
+        <button class="btn" data-a="act_greet">打招呼</button>
+      </div>
+      <div class="na" id="ctlnote"><b>會移動真機——操作前確保周圍淨空、硬體急停待命。</b><br>
+      官方通訊接口 V1.0.7：急停 <code>0x21020C0E</code>；移動軸指令 @50Hz 串流，機器人 250ms
+      未收到即自停（deadman），放開即停；<code>0x2101013x</code> 前後/平移/轉向。</div>
     </div>
   </section>
 
@@ -723,6 +821,7 @@ async function tick(){
     }
     // camera
     if(!camSet){const h=location.hostname;$("camframe").src="/cam/";$("hlslink").href="/cam/";$("wrtclink").href="http://"+h+":8889/test/";camSet=true;}
+    if(j.teleop&&j.teleop.armed!==armed){armed=j.teleop.armed;updateArm();}
     if(j.infer){const q=j.infer;const tg=$("inftag");tg.textContent=q.online?"● live":"○ offline";tg.style.color=q.online?"var(--good)":"var(--dim)";
       $("inf_fps").textContent=(q.fps||0)+" FPS";$("inf_ms").textContent=(q.infer_ms||0)+" ms";$("inf_ndet").textContent=q.n_det||0;
       if(q.trav){$("inf_go").textContent=(q.trav.go*100).toFixed(0)+"%";$("inf_caution").textContent=(q.trav.caution*100).toFixed(0)+"%";$("inf_blocked").textContent=(q.trav.blocked*100).toFixed(0)+"%";}
@@ -751,11 +850,30 @@ async function tick(){
 }
 async function ctl(action){
   try{const r=await fetch("/api/control",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action})});
-    const j=await r.json();toast(j.msg||(j.ok?"ok":"failed"));}
-  catch(e){toast("送出失敗："+e)}
+    const j=await r.json();toast(j.msg||(j.ok?"ok":"failed"));return j;}
+  catch(e){toast("送出失敗："+e);return{}}
 }
-$("estop").onclick=()=>{ctl("estop")};
-document.querySelectorAll(".btn[data-a]").forEach(b=>b.onclick=()=>ctl(b.dataset.a));
+let armed=false;
+function updateArm(){$("armtag").textContent=armed?"● 已啟用":"未啟用";$("armtag").style.color=armed?"var(--good)":"var(--dim)";var b=$("armbtn");b.textContent=armed?"🔒 停用操控":"🔓 啟用操控（移動＋手動模式）";b.style.borderColor=armed?"var(--good)":"var(--warn)";}
+$("armbtn").onclick=async function(){const j=await ctl(armed?"disarm":"arm");if(j&&"armed"in j){armed=j.armed;}else{armed=!armed;}updateArm();};
+$("estop").onclick=function(){armed=false;updateArm();ctl("estop");};
+document.querySelectorAll(".btn[data-a]").forEach(function(b){b.onclick=function(){ctl(b.dataset.a);};});
+// --- movement: held buttons + WASDQE keys -> velocity vector, streamed while armed ---
+const mv={vx:0,vy:0,vyaw:0};const held=new Set();const keyHeld={};
+function clamp(x){return Math.max(-1,Math.min(1,x));}
+function recompute(){let vx=0,vy=0,vyaw=0;
+  held.forEach(function(b){vx+=+(b.dataset.vx||0);vy+=+(b.dataset.vy||0);vyaw+=+(b.dataset.vyaw||0);});
+  Object.values(keyHeld).forEach(function(k){vx+=k.vx||0;vy+=k.vy||0;vyaw+=k.vyaw||0;});
+  mv.vx=clamp(vx);mv.vy=clamp(vy);mv.vyaw=clamp(vyaw);}
+setInterval(function(){if(!armed)return;fetch("/api/move",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(mv)}).catch(function(){});},100);
+document.querySelectorAll(".mv").forEach(function(b){
+  const press=function(e){if(e)e.preventDefault();if(!armed){toast("請先啟用操控");return;}held.add(b);b.style.borderColor="var(--good)";recompute();};
+  const rel=function(){held.delete(b);b.style.borderColor="";recompute();};
+  b.addEventListener("mousedown",press);b.addEventListener("touchstart",press,{passive:false});
+  ["mouseup","mouseleave","touchend","touchcancel"].forEach(function(ev){b.addEventListener(ev,rel);});});
+const KEYMAP={KeyW:{vx:1},KeyS:{vx:-1},KeyA:{vy:-1},KeyD:{vy:1},KeyQ:{vyaw:-1},KeyE:{vyaw:1}};
+document.addEventListener("keydown",function(e){if(KEYMAP[e.code]&&armed&&!keyHeld[e.code]){keyHeld[e.code]=KEYMAP[e.code];recompute();}});
+document.addEventListener("keyup",function(e){if(KEYMAP[e.code]){delete keyHeld[e.code];recompute();}});
 setInterval(()=>{$("clock").textContent=new Date().toLocaleTimeString()},1000);
 setInterval(function(){var t=Date.now();var im=$("infimg");if(im)im.src="/infer/frame.jpg?t="+t;var bv=$("bevimg");if(bv)bv.src="/infer/bev.jpg?t="+t;},300);
 tick();setInterval(tick,500);
