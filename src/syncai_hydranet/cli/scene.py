@@ -42,7 +42,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from ..config import load_config
-from ..data.coco_subsets import COCO_NAMES, head_order
+from ..data.coco_subsets import COCO_NAMES, head_order, retail_box_label
 from ..data.label_maps import get_scheme, terrain_to_traversability
 from ..geometry import bev3d
 from ..geometry.bev import IGNORE, BevGrid, free_space_map, project_mask, scene
@@ -331,6 +331,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="replace the on-frame assumption line, e.g. when the pose came from a fit",
     )
+    ap.add_argument(
+        "--vocab",
+        choices=["coco", "retail"],
+        default="coco",
+        help="how to name a box. retail reads COCO's answer as a shop noun -- "
+        "fixture/oven, product/book -- which is a rename of the same head's same "
+        "output, not extra knowledge. Refused on a head that is not COCO's 80",
+    )
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
     return ap
 
@@ -380,6 +388,37 @@ def detection_class_names(cfg: dict) -> tuple[str, ...] | None:
     return None
 
 
+def apply_vocab(names: tuple[str, ...] | None, vocab: str) -> tuple[str, ...] | None:
+    """Read a COCO head's answers as shop nouns, or refuse to.
+
+    `hydranet-infer-image` has had `--vocab retail` since it was hard-coded out of the box
+    drawing; the panel this file renders never got it, so a shop's display cases came back
+    as `oven 0.18` and `refrigerator 0.20` -- the boxes in the right places and only the
+    vocabulary wrong. That is not extra knowledge and this is not a model change: it is the
+    same head's same output, renamed by `data/coco_subsets.RETAIL_OBJECT_GROUP`.
+
+    **It refuses on any head that is not COCO's 80.** The rename is index-addressed
+    through `COCO_NAMES`, so applying it to a two-class open-vocabulary head would put
+    `product/book` over a `boxed_stock` box -- the same failure `detection_class_names`
+    exists to stop, wearing a shop's clothes. Refusing loudly beats renaming quietly,
+    because a plausible wrong noun is the one nobody checks.
+
+    The group keeps the COCO word beside it -- `fixture/oven` -- because the COCO word is
+    the evidence for the grouping, and hiding it makes a wrong grouping unfalsifiable from
+    the frame. `geometry.meshes.detected_class` is what reads the class back out.
+    """
+    if vocab != "retail":
+        return names
+    if names is None or tuple(names) != tuple(COCO_NAMES):
+        raise ValueError(
+            "--vocab retail needs the COCO 80-class detection head it renames: this "
+            f"config's head resolves to {len(names) if names else 0} classes. The mapping "
+            "is addressed by COCO index, so applying it here would name channels after "
+            "classes they do not hold."
+        )
+    return tuple(retail_box_label(i) for i in range(len(names)))
+
+
 @dataclass(frozen=True)
 class Renderer:
     """The model and the per-run settings every frame needs, as one value.
@@ -405,6 +444,7 @@ def build_renderer(
     pitch_deg: float,
     camera_height: float,
     trav_map: dict | None = None,
+    vocab: str = "coco",
 ) -> Renderer:
     """Load the model and settle everything that does not change between frames."""
     device = pick_device(cfg.get("device"))
@@ -413,6 +453,10 @@ def build_renderer(
     model.load_state_dict(select_weights(ckpt, weights))
     terrain_classes = cfg["data"].get("terrain_classes")
     det_names = detection_class_names(cfg)
+    try:
+        det_names = apply_vocab(det_names, vocab)
+    except ValueError as exc:
+        raise SystemExit(f"hydranet-scene: {exc}") from exc
     n_terrain = cfg["model"]["heads"].get("terrain", {}).get("num_classes")
     return Renderer(
         model=model,
@@ -557,6 +601,7 @@ def main(argv: list[str] | None = None) -> int:
         pitch_deg=args.pitch,
         camera_height=args.camera_height,
         trav_map=trav_map,
+        vocab=args.vocab,
     )
     print(
         f"assumed camera: {args.camera_height:.2f} m high, {args.pitch:.0f} deg down, "

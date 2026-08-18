@@ -530,6 +530,20 @@ _SHAPE = {
 }
 
 
+def detected_class(name) -> str:
+    """The class out of a scene payload's ``name``, which may carry a grouping in front.
+
+    `hydranet-scene --vocab retail` labels a box ``fixture/oven``: the group is the reading
+    and the COCO word is the evidence for it, kept deliberately so a wrong grouping stays
+    falsifiable from the rendered frame (`data/coco_subsets.retail_box_label`). Everything
+    that keys off the class -- the shape table here, the colours in `bev3d` -- wants the
+    evidence half, or a renamed run silently loses every shape and every colour it had.
+
+    A name with no group is returned unchanged, which is every other caller.
+    """
+    return str(name).rsplit("/", 1)[-1]
+
+
 def for_object(obj: dict) -> Mesh | None:
     """The mesh a scene-payload object should be drawn as, or None to leave it alone.
 
@@ -551,7 +565,7 @@ def for_object(obj: dict) -> Mesh | None:
     score on the label beside the mesh for that reason; a renderer that drops it is
     laundering the detector's doubt.
     """
-    name = str(obj.get("name", ""))
+    name = detected_class(obj.get("name", ""))
     height = obj.get("height_m")
     width = obj.get("width_m")
     if name == "person":

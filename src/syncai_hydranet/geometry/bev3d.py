@@ -508,7 +508,10 @@ def _draw_geometry(
         standing.append(
             (
                 meshes.place(mesh, meshes.Placement(x_m=float(x), z_m=float(z))),
-                OBJECT_RGB.get(str(obj.get("name", "")), OBJECT_RGB["_"]),
+                # `detected_class` and not the raw name: a `--vocab retail` run labels
+                # a box `fixture/oven`, and keying the colour off that string paints
+                # every renamed object in the fallback grey.
+                OBJECT_RGB.get(meshes.detected_class(obj.get("name", "")), OBJECT_RGB["_"]),
                 obj,
             )
         )
