@@ -79,8 +79,16 @@ def test_the_shipped_retail_and_robot_configs_resolve_as_intended():
         "boxed_stock",
         "device",
     )
-    # Declares no names and is not COCO-width, so the panel shows indices rather than lying.
-    assert detection_class_names(load_config("configs/hydranet_retail_products.yaml")) is None
+    # It used to declare no names, and this asserted `is None` -- the panel showing indices
+    # rather than lying was the best available answer then. `5809d4f` gave the config the
+    # `classes: [boxed_stock, device]` it always meant, so the honest answer is now the
+    # names themselves. The assertion is updated rather than deleted: "resolves to
+    # something truthful" is the property under test, and indices were only ever the
+    # fallback for a config that had not said.
+    assert detection_class_names(load_config("configs/hydranet_retail_products.yaml")) == (
+        "boxed_stock",
+        "device",
+    )
     assert detection_class_names(load_config("configs/hydranet_indoor.yaml")) == tuple(
         COCO_NAMES
     )
