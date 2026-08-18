@@ -3,6 +3,11 @@
 Written because a session ran out of context, not because the work finished. Everything
 below is on disk; nothing is only in a transcript.
 
+**Revised 19:20 by the session that took the line over.** Section 3's restart cost and
+remaining time were wrong, and **two of section 4's three headline numbers are withdrawn**
+— re-derived from `metrics.jsonl` rather than re-run, so the corrections cost no GPU. Read
+section 4's "Corrected 19:20" block before quoting anything from this document.
+
 The line: **fixed store CCTV, retail analytics and security on one camera.** Not the robot
 platform — that is [ARCHITECTURE_REVIEW.md](../ARCHITECTURE_REVIEW.md), and a separate
 session spent today building its depth head.
@@ -38,8 +43,36 @@ complete pair exists after two rather than after four:
 
     b03_cw s42 (done) -> b03_cw_hires s42 -> b03_cw s7 -> b03_cw_hires s7 -> s13 -> s13
 
-Log: `/home/paul/hydranet-overnight/b03_seeds.log`. Resumes from `last.pt` on restart, so
-a kill costs at most one epoch. Roughly 2.5 h left at the time of writing.
+Log: `/home/paul/hydranet-overnight/b03_seeds.log`.
+
+**Corrected 19:20 — a restart does not resume, it re-runs.** This section said a kill costs
+at most one epoch. It does not. The driver has no completion marker, so a restart re-enters
+the loop at `S=42, CFG=b03_cw` and runs a *finished* run again from epoch 1, overwriting its
+`best.pt`, `metrics.jsonl` and `train.log`. That is what happened at 18:07: `b03_cw` had
+exited 0 at 17:57 and was re-run in full 18:08–18:48, and `b03_cw_hires` lost 12 epochs.
+`--resume last.pt` was passed and did not take effect. So interrupting now costs the current
+run's progress **plus every completed run of this queue**, not one epoch.
+
+`Restart=on-failure` with `StartLimitBurst=3` per hour: after three failures inside an hour
+systemd stops trying and the unit needs `systemctl --user reset-failed`.
+
+**Measured rates, and the real remaining time.** 35 s/epoch for `b03_cw`, 66 s/epoch for
+`b03_cw_hires`, 60 epochs each. At 19:20, with hires s42 at E22:
+
+    b03_cw_hires s42   E22/60 running    ~42 min
+    b03_cw       s7    60 ep             ~40 min
+    b03_cw_hires s7    60 ep             ~66 min
+    b03_cw       s13   60 ep             ~40 min
+    b03_cw_hires s13   60 ep             ~66 min
+                                         ~4.2 h, finishing about 23:25
+
+The "roughly 2.5 h" this section carried was an underestimate.
+
+**And the queue does not produce the control it is compared against.** It runs `b03_cw` and
+`b03_cw_hires` at three seeds each; `b03` exists at seed 42 only.
+`hydranet_retail_security_b03_seed7.yaml` and `_seed13.yaml` are on disk and in no queue.
+However this finishes, the class-weight question stays three-against-one and section 4's
+rule 4 is not satisfied for it.
 
 The other session's `hydranet-nyu-depth.service` shares the GPU at Nice=5 and ~4 GB. It is
 not in the way.
@@ -60,27 +93,74 @@ claim is the negative one: putting `person` and merchandise in one head cost the
 merchandise nothing, and it made a combination possible that previously could not run at
 all (two detection sources both emit label 0).
 
-**368 frames of new annotation bought +0.0153 site mIoU** (seed 42, `terrain_mIoU/site_seg`
-0.6511 -> 0.6664), with ADE20K unchanged at -0.0005. One seed; s7 and s13 are queued.
+### Corrected 19:20 — the annotation and class-weight numbers are withdrawn
 
-**Class weights were the highest-yield change of the day.** One config line, no new data.
-`site_confusion.py` on the same 36 images, seed 42:
+Every number in this section was re-derived from `metrics.jsonl` when the line was taken
+over. **The detection-vocabulary result above reproduces exactly** — surfaces 0.0704 /
+0.0901 / 0.0659 is `detection_mAP` on runs whose only detection val set is `site_boxes`, so
+it is the same quantity the security runs report per-set, and both sides select on a
+detection metric. It stands as written, caveat included.
 
-    class     b03     b03_cw    delta      what changed
-    column   0.094 -> 0.267    +0.173     86.2% of it was coming back as `wall`, now 66.0%
-    wall     0.566 -> 0.595    +0.029     stops eating neighbours, so its own IoU rises
-    person   0.830 -> 0.855    +0.024
-    floor    0.847 -> 0.859    +0.012
-    fixture  0.734 -> 0.742    +0.008
+The two claims that followed it do not. Neither survives, and they failed the same way,
+which is the way rule 5 predicts.
 
-Nothing got worse. The weights are `1/sqrt(share)` from batch03's own measured shares —
-a standard heuristic, not a fitted quantity; whether `1/sqrt` is the right exponent is
-unmeasured.
+**368 frames of new annotation: the +0.0153 could not be reproduced, and the effect is
+inside seed noise.** The claim was seed 42, `terrain_mIoU/site_seg` 0.6511 -> 0.6664. The
+0.6664 is right — b03's argmax on that metric, at E16. The **0.6511 is in no seed-42 file**;
+it is the final-epoch value of `hydranet_retail_security_seed13`, which is a different seed
+and not b03's paired control. Applying one procedure to both sides (argmax `site_seg`):
 
-**The order was wrong and that is the transferable lesson.** Data was added first and the
-confusion matrix read after. Reading it first would have shown `wall` eating 86% of
-`column` in ten minutes, and that is a one-line fix. *Look at what the model says before
-buying more labels.*
+    control seed 42   0.6623 @E34 (48 ep)     b03 seed 42   0.6664 @E16 (50 ep)   +0.0041
+    control seed  7   0.7013 @E24 (42 ep)
+    control seed 13   0.6857 @E12 (34 ep)
+    control family    mean 0.6831, range 0.0390, sd 0.0196
+
+**The control family's own spread is 9.5x the effect**, and b03 scores below two of the
+three controls. Worse, the two sides have **no common valid selection set**: `site_seg03` is
+batch03's val split, so the control never saw it and its argmax there lands at E1 with
+`site_seg` 0.2320. Argmax on the reported set is selection on the test set, which inflates
+both sides and is the only procedure available. So the annotation A/B is **not scorable from
+these runs at all**, in either direction — not adverse, undecided. ADE20K unchanged at
+-0.0005 stands; it was never the contested half.
+
+**Class weights: the +0.173 was the selection metric, not the loss.** The claim was "the
+highest-yield change of the day, one config line, no new data". `site_confusion.py` compares
+two `best.pt` files, and these two were chosen by **different metrics**: b03's is E41,
+selected on `detection_mAP/site_boxes`; `b03_cw`'s is E30, selected on
+`terrain_mIoU/site_seg03`. And the runs differ in **five config leaves, not one** —
+`class_weights`, `early_stop_patience` 10 -> 0, `primary_metric`, `detection_val_interval`
+1 -> 5, and `detection.classes` (which training never reads). b03 early-stopped at E50,
+`b03_cw` ran 60. That is precisely the comparison **rule 5 was written today to forbid**,
+and it was applied to everything except this document's own headline.
+
+Both runs logged `terrain_mIoU/site_seg03` whether or not they selected on it, so the
+selection can be aligned after the fact — each run's own argmax on it, reported on
+`site_seg`:
+
+    run       epoch   site_seg   floor   wall   column   fixture   person
+    b03        E16     0.6664    0.826  0.594   0.352     0.767     0.793
+    b03_cw     E30     0.6636    0.859  0.595   0.267     0.742     0.855
+
+Truncating `b03_cw` to E50 gives the same rows. The weights move site mIoU **-0.0028** and
+`column` **-0.085**.
+
+Read that lightly in both directions. `column` is **1.53% of val pixels over 36 images**
+(rule 1) — a quantity that moves on noise — and it is one seed a side. And b03's E16 exists
+only as a row in `metrics.jsonl`: no checkpoint on disk holds those weights, so trap 1 bit
+a second time, in the analysis rather than in the training.
+
+**The honest state: whether class weights help `column` is unmeasured.** Settling it needs a
+control that changes only `class_weights` — b03 re-run with `early_stop_patience: 0` and
+`primary_metric: terrain_mIoU/site_seg03` — at three seeds, about 2 h of GPU. The weights
+themselves are `1/sqrt(share)` from batch03's measured shares, a standard heuristic and not
+a fitted quantity; whether `1/sqrt` is the right exponent was never the first question.
+
+**The lesson survives, sharpened.** Reading the confusion matrix was still right and still
+cheap: `wall` really was taking 86.2% of `column`, and reading it before buying 368 frames
+would have cost ten minutes. What did not survive is the number attached to the fix.
+*Look at what the model says before buying more labels — and then measure the fix against a
+run that differs only by the fix.* A day that produced two headline numbers produced neither
+a valid control nor a common selection set for either of them.
 
 **Crop encoder** (`runs/crop_encoder01`, 8 epochs on PA-100K): Female recall 0.839 /
 precision 0.856 on 36,492 training crops; AgeLess18 0.639 / 0.919 on 4,152; **AgeOver60
@@ -137,11 +217,22 @@ Listed because every one will recur.
   check added this afternoon, and refusing to analyse it discards the only evidence.
 * **SAM 3 re-encoded the same image 44 times a frame** — 60% of each forward is the vision
   encoder, which does not depend on the text. `vision_features` caches it: 9.4 s -> 5.6 s.
+* **A systemd restart re-runs the runs that already finished.** `b03_seeds.sh` has no
+  completion marker, so restarting re-enters the loop at seed 42 and trains a completed
+  config again from epoch 1, overwriting its `best.pt` and `metrics.jsonl`. `--resume
+  last.pt` is passed and does not prevent it. Cost on 2026-08-18: one finished 40-minute
+  run plus 12 epochs of the next. A queue is not restart-safe because it says `--resume`.
 * **The clips are not 30 fps.** `probe` reads `r_frame_rate` (nominal 30); counted content
   is **3.0–8.0 fps**. Anything reading `probe`'s fps on this footage inherits the error.
 
 ## 7. What to do next
 
+0. **Re-measure what section 4 withdrew, before building on it.** Neither headline number
+   survived re-derivation, and the class-weight question needs a control that differs only
+   by `class_weights`: b03 at three seeds with `early_stop_patience: 0` and
+   `primary_metric: terrain_mIoU/site_seg03`, ~2 h of GPU. The annotation question needs a
+   selection set both sides can see, which no run currently provides. Left undone
+   deliberately — it costs GPU the running queue is using, and it is the user's call.
 1. **Finish the queue and report three paired seeds** for b03_cw and b03_cw_hires. One seed
    is suggestive; the family's between-seed spread is 0.0173.
 2. **Per-track attribute voting is built and unwired into anything but the renderer.**
