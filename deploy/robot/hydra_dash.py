@@ -407,6 +407,7 @@ _move = {
     "vyaw": 0.0,
     "pitch": 0.0,
     "roll": 0.0,
+    "height": 0.0,
     "armed": False,
     # Which axis family the streamer is allowed to send. Tracked here rather than read
     # back from telemetry because 0x0901's basic_state does not report it -- the value
@@ -464,6 +465,13 @@ def move_streamer():
             elif m["mode"] == "inplace":
                 _send_axis(sock, AXIS_PITCH, m["pitch"] if active else 0.0)
                 _send_axis(sock, AXIS_ROLL, m["roll"] if active else 0.0)
+            # Body height goes out in BOTH modes, and it is the only axis that can.
+            # 0x21010102 appears in the spec's posture table and has no counterpart in
+            # the movement table, so unlike pitch and roll it cannot be re-read as a
+            # drive command. Pitch shares its code with 前后平移 and roll with 左右平移,
+            # which is why those two stay behind the mode gate and this one does not.
+            if m["mode"] in ("move", "inplace"):
+                _send_axis(sock, AXIS_HEIGHT, m["height"] if active else 0.0)
             # mode == "switching": send nothing at all. See `set_mode`.
         time.sleep(0.02)
 
@@ -482,7 +490,9 @@ def set_mode(mode):
     if mode not in ("move", "inplace"):
         return {"ok": False, "msg": "unknown mode"}
     with _move_lock:
-        _move.update(mode="switching", vx=0.0, vy=0.0, vyaw=0.0, pitch=0.0, roll=0.0)
+        _move.update(
+            mode="switching", vx=0.0, vy=0.0, vyaw=0.0, pitch=0.0, roll=0.0, height=0.0
+        )
     _burst(0x21010D06 if mode == "move" else 0x21010D05, 0, 0, n=3)
     time.sleep(0.35)
     with _move_lock:
@@ -494,17 +504,26 @@ def set_mode(mode):
     }
 
 
-def do_move(vx, vy, vyaw, pitch=0.0, roll=0.0):
-    """One heartbeat carries both families; `mode` decides which is streamed.
+def do_move(vx, vy, vyaw, pitch=0.0, roll=0.0, height=0.0):
+    """One heartbeat carries every axis; `mode` decides which of them is streamed.
 
     The UI sends whichever set its live keys produced and zeroes the other, so a stale
     value cannot survive a mode switch and reappear as the wrong kind of command.
+    `height` is the exception and travels in both modes -- see `move_streamer`.
     """
     with _move_lock:
         armed = _move["armed"]
         mode = _move["mode"]
         if armed:
-            _move.update(vx=vx, vy=vy, vyaw=vyaw, pitch=pitch, roll=roll, last_hb=time.time())
+            _move.update(
+                vx=vx,
+                vy=vy,
+                vyaw=vyaw,
+                pitch=pitch,
+                roll=roll,
+                height=height,
+                last_hb=time.time(),
+            )
     return {"ok": True, "armed": armed, "mode": mode}
 
 
@@ -517,13 +536,17 @@ def do_control(action):
             with _move_lock:
                 # e-stop always disarms teleop, and zeroes both axis families so
                 # nothing is left to resume from
-                _move.update(armed=False, vx=0.0, vy=0.0, vyaw=0.0, pitch=0.0, roll=0.0)
+                _move.update(
+                    armed=False, vx=0.0, vy=0.0, vyaw=0.0, pitch=0.0, roll=0.0, height=0.0
+                )
             _burst(0x21020C0E, 0, 0, n=8)
             return {"ok": True, "msg": "軟急停已送出 (0x21020C0E)，操控已停用"}
         if action == "arm":
             _burst(0x21010C02, 0, 0, n=3)  # manual mode (responds to this host)
             with _move_lock:
-                _move.update(armed=True, vx=0.0, vy=0.0, vyaw=0.0, pitch=0.0, roll=0.0)
+                _move.update(
+                    armed=True, vx=0.0, vy=0.0, vyaw=0.0, pitch=0.0, roll=0.0, height=0.0
+                )
             # Arming lands in movement mode, as it always has. It goes through set_mode
             # rather than a bare burst so the streamer and the robot agree on which
             # family the axis codes mean -- the bare burst here is what would have made
@@ -537,7 +560,9 @@ def do_control(action):
             }
         if action == "disarm":
             with _move_lock:
-                _move.update(armed=False, vx=0.0, vy=0.0, vyaw=0.0, pitch=0.0, roll=0.0)
+                _move.update(
+                    armed=False, vx=0.0, vy=0.0, vyaw=0.0, pitch=0.0, roll=0.0, height=0.0
+                )
             return {"ok": True, "armed": False, "msg": "操控已停用"}
         if action in ("mode_move", "mode_inplace"):
             return set_mode("move" if action == "mode_move" else "inplace")
@@ -665,6 +690,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         float(j.get("vyaw", 0)),
                         float(j.get("pitch", 0)),
                         float(j.get("roll", 0)),
+                        float(j.get("height", 0)),
                     )
                 )
             else:
@@ -874,7 +900,9 @@ th{color:var(--dim);font-weight:500;font-size:11px;text-transform:uppercase;lett
       <b>軸指令碼在兩個模式下意義不同</b>：<code>0x21010130</code> 移動模式是前後平移、原地模式是俯仰；
       <code>0x21010131</code> 是左右平移／橫滾。所以同一時間只會串流其中一組。<br>
       移動模式 <code>WASD</code> 前後左右、<code>QE</code> 轉向；
-      原地模式 <code>↑↓</code> 抬頭低頭、<code>←→</code> 左右傾（規格：俯仰取正值時低頭）。</div>
+      原地模式 <code>↑↓</code> 抬頭低頭、<code>←→</code> 左右傾（規格：俯仰取正值時低頭）。<br>
+      <code>Shift+↑↓</code> 身體高度——<b>兩個模式都能用</b>，因為 <code>0x21010102</code> 在移動模式
+      沒有對應意義，是唯一不會被誤讀成行走的軸。</div>
     </div>
   </section>
 
@@ -1008,17 +1036,18 @@ document.querySelectorAll(".btn[data-a]").forEach(function(b){b.onclick=function
 // The two key sets are mutually exclusive because the robot's axis codes are:
 // 0x21010130 is forward/back in movement mode and pitch in posture mode, same bytes.
 // So `mode` gates which keys are even accepted, and the other family is sent as zero.
-const mv={vx:0,vy:0,vyaw:0,pitch:0,roll:0};const held=new Set();const keyHeld={};
+const mv={vx:0,vy:0,vyaw:0,pitch:0,roll:0,height:0};const held=new Set();const keyHeld={};
 let mode="move";
 function clamp(x){return Math.max(-1,Math.min(1,x));}
-function recompute(){let vx=0,vy=0,vyaw=0,pt=0,rl=0;
+function recompute(){let vx=0,vy=0,vyaw=0,pt=0,rl=0,ht=0;
   held.forEach(function(b){vx+=+(b.dataset.vx||0);vy+=+(b.dataset.vy||0);vyaw+=+(b.dataset.vyaw||0);});
-  Object.values(keyHeld).forEach(function(k){vx+=k.vx||0;vy+=k.vy||0;vyaw+=k.vyaw||0;pt+=k.pitch||0;rl+=k.roll||0;});
+  Object.values(keyHeld).forEach(function(k){vx+=k.vx||0;vy+=k.vy||0;vyaw+=k.vyaw||0;pt+=k.pitch||0;rl+=k.roll||0;ht+=k.height||0;});
   // Zero the family this mode is not streaming, so a key still held across a mode
-  // switch cannot resurface as the other kind of command.
+  // switch cannot resurface as the other kind of command. Height is exempt: its code
+  // has no movement-mode meaning, so it is the one axis that survives both.
   const moving=(mode==="move");
   mv.vx=moving?clamp(vx):0;mv.vy=moving?clamp(vy):0;mv.vyaw=moving?clamp(vyaw):0;
-  mv.pitch=moving?0:clamp(pt);mv.roll=moving?0:clamp(rl);}
+  mv.pitch=moving?0:clamp(pt);mv.roll=moving?0:clamp(rl);mv.height=clamp(ht);}
 setInterval(function(){if(!armed)return;fetch("/api/move",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(mv)}).catch(function(){});},100);
 document.querySelectorAll(".mv").forEach(function(b){
   const press=function(e){if(e)e.preventDefault();if(!armed){toast("請先啟用操控");return;}
@@ -1031,16 +1060,30 @@ document.querySelectorAll(".mv").forEach(function(b){
 // 横滚 取正值时向右翻滚 -- positive roll banks right.
 const MOVEKEYS={KeyW:{vx:1},KeyS:{vx:-1},KeyA:{vy:-1},KeyD:{vy:1},KeyQ:{vyaw:-1},KeyE:{vyaw:1}};
 const POSEKEYS={ArrowUp:{pitch:-1},ArrowDown:{pitch:1},ArrowLeft:{roll:-1},ArrowRight:{roll:1}};
+// Shift+up/down is body height, and it works while walking. 取正值时抬高身体, so shift-up
+// is positive. Held under its own synthetic key so it cannot collide with a plain arrow.
+const HEIGHTKEYS={ArrowUp:{height:1},ArrowDown:{height:-1}};
 function keymap(){return mode==="move"?MOVEKEYS:POSEKEYS;}
 document.addEventListener("keydown",function(e){
-  const km=keymap();
-  // Arrows scroll the page by default, and a dashboard that jumps while you are tilting
+  // Arrows scroll the page by default, and a dashboard that jumps while you are driving
   // a robot is its own hazard -- swallow them whenever they are a live binding.
   if(POSEKEYS[e.code]||MOVEKEYS[e.code])e.preventDefault();
-  if(km[e.code]&&armed&&!keyHeld[e.code]){keyHeld[e.code]=km[e.code];recompute();}
-  else if(!km[e.code]&&(POSEKEYS[e.code]||MOVEKEYS[e.code])&&armed){
-    toast(mode==="move"?"方向鍵是原地模式的姿態控制":"WASD 是移動模式的行走控制");}});
-document.addEventListener("keyup",function(e){if(keyHeld[e.code]){delete keyHeld[e.code];recompute();}});
+  if(!armed)return;
+  if(e.shiftKey&&HEIGHTKEYS[e.code]){
+    const id="Shift+"+e.code;
+    if(!keyHeld[id]){keyHeld[id]=HEIGHTKEYS[e.code];recompute();}
+    return;}
+  const km=keymap();
+  if(km[e.code]&&!keyHeld[e.code]){keyHeld[e.code]=km[e.code];recompute();}
+  else if(!km[e.code]&&(POSEKEYS[e.code]||MOVEKEYS[e.code])){
+    toast(mode==="move"?"方向鍵是原地模式的姿態控制（Shift+↑↓ 身高兩個模式都能用）":"WASD 是移動模式的行走控制");}});
+document.addEventListener("keyup",function(e){
+  var touched=false;
+  ["Shift+"+e.code,e.code].forEach(function(id){if(keyHeld[id]){delete keyHeld[id];touched=true;}});
+  // Releasing Shift itself leaves the arrow's synthetic key stranded, so drop any
+  // height binding whenever Shift comes up.
+  if(e.key==="Shift"){for(const k in keyHeld)if(k.indexOf("Shift+")===0){delete keyHeld[k];touched=true;}}
+  if(touched)recompute();});
 function setModeTag(m){mode=m;
   $("modetag").textContent="模式："+(m==="move"?"移動（WASD/QE 有效，方向鍵停用）":"原地（方向鍵有效，WASD 停用）");
   $("btnmove").style.borderColor=(m==="move")?"var(--good)":"";
