@@ -20,7 +20,7 @@ import torch.nn as nn
 
 from ..config import diff_config
 from ..config_schema import check_config
-from ..data.datasets import build_dataset
+from ..data.datasets import build_dataset, split_leaks
 from ..data.fingerprint import fingerprint_dataset
 from ..data.multitask import MultiTaskLoader
 from ..models.hydranet import build_model
@@ -232,6 +232,25 @@ class Trainer:
             self.logger.info(
                 f"trained on but not validated on: {', '.join(skipped)} "
                 "(no split_val, so they take no part in choosing best.pt)"
+            )
+        # Raised before the first step, because the alternative is a finished run whose
+        # numbers cannot be used. A supplementary dataset selected on a property of the
+        # footage -- "SAM 3 finds a column here" -- selects against whatever split those
+        # cameras already belong to, and the two configs are internally consistent either
+        # way. This has happened once, at a cost of three seeds.
+        leaks = split_leaks(cfg["data"]["datasets"])
+        if leaks:
+            detail = "\n".join(
+                f"  {a} trains on {len(cams)} camera(s) that {b} scores in {split}: "
+                f"{', '.join(cams)}"
+                for a, b, split, cams in leaks
+            )
+            raise ValueError(
+                f"train/eval camera overlap between datasets:\n{detail}\n"
+                "A split by camera means nothing if another dataset trains on those "
+                "cameras. Drop them from the training set, or move them out of the "
+                "evaluated split -- and prefer the first, because a split that shrinks "
+                "to fit the data it was meant to hold out is not a split."
             )
         # Built once: validation runs every epoch, and a DataLoader's worker pool is
         # expensive to create and pointless to throw away.

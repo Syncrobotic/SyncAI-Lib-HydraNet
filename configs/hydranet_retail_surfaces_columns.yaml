@@ -9,9 +9,9 @@
 # ADE20K id 43, atrium and lobby columns, not a shop's -- and its support in the training
 # data is **1.16% of labelled pixels**.
 #
-# `datasets/retail_objects_columns` is 168 frames from the 14 site cameras where SAM 3
-# returns a column at score >= 0.5, and `column` is **18.28% of its labelled pixels, on
-# 165 of its 168 images**. That is a factor of fifteen more support, in the domain the
+# `datasets/retail_objects_columns_clean` is 108 frames from the nine site cameras where
+# SAM 3 returns a column at score >= 0.5 **and which are in neither the val nor the test
+# split**, and `column` is **20.38% of its labelled pixels, on 105 of its 108 images**. That is a factor of fifteen more support, in the domain the
 # class is failing in.
 #
 # WHAT THIS RUN CAN AND CANNOT SETTLE
@@ -30,20 +30,46 @@
 # cameras and only 14 are here, so the other 7 are a held-out check that owes nothing to
 # SAM 3.
 #
-# THE BATCH IS UNREVIEWED, DELIBERATELY
+# THE BATCH IS UNREVIEWED, AND THAT LOOKS FINE
 #
-# Roughly half of it is right. Contact sheets over all 14 cameras: Taichung-cam11,
-# Kaohsiung-cam02/cam08 and Taichung-cam10 are genuine free-standing pillars;
-# Kaohsiung-cam12 is the wall piers either side of a stair opening, Kaohsiung-cam04 is
-# 0.3% of frame in 12.4 disconnected fragments, and Tao-Hsin-cam04 is a strip at the
-# frame edge. Raising `min_score` to 0.5 removed the adjacent-shopfront strips (border
-# pixels are now at most 1.6% of the class) and did not remove the wall piers.
+# An earlier version of this comment said "roughly half of it is right" and named
+# Kaohsiung-cam12 as wall piers, Tao-Hsin-cam04 as a frame-edge strip and Taichung-cam05
+# as a wall section. **That judgement was made from 640x360 thumbnails in a contact sheet
+# and it was wrong.** Re-checked at native 1920x1080: cam12 is an unmistakable
+# free-standing square column with both faces and its corner edge visible, standing on the
+# floor in front of the staircase; Tao-Hsin-cam04's is a floor-to-ceiling column in the
+# left aisle with a display counter passing behind it, nowhere near the frame edge;
+# cam05's is a clean vertical column mid-floor. The masks follow the silhouettes.
 #
-# It is left unreviewed on purpose: the question worth answering first is what the *free*
-# pipeline is worth, because a batch that needs a human pass before it helps has a
-# completely different cost. If this run moves `column` on the held-out cameras, a
-# reviewed batch is worth paying for; if it moves it backwards, the review was the
-# product all along.
+# The same comment cited the 0.26-0.37 drift onto adjacent shopfront strips as a residual
+# defect. It is not: that was measured during the threshold sweep at 0.25, and this batch
+# is produced at `min_score` 0.5, which is what the sweep raised it to.
+#
+# The lesson worth keeping is about the reviewing, not the labels: a downscaled tile is
+# enough to see *that* a prompt fired and not enough to see *what* it fired on, and the
+# two get confused because a contact sheet feels like looking.
+#
+# THE LEAK THIS CONFIG WAS FIRST WRITTEN WITH, AND WHY THE BATCH IS NOW `_clean`
+#
+# `retail_objects_batch02` splits **by camera**: val is Kaohsiung-cam06, Taichung-cam01
+# and Tao-Hsin-cam15; test is six more. The first version of this config pointed at
+# `datasets/retail_objects_columns`, which was built from the 14 cameras where SAM 3
+# returns a column at >= 0.5 -- chosen with no regard to that split. Two of the three val
+# cameras and three of the six test cameras were therefore trained on.
+#
+# So the `column`/site_seg 0.34 -> 0.84 that first run produced is contamination, not a
+# result: the model had seen two thirds of the cameras it was scored on. The test split
+# is the more expensive half of the damage -- `RETAIL_OBJECTS_SPLIT.md` exists because a
+# rare class has to be measured somewhere nothing in training has read.
+#
+# `datasets/retail_objects_columns_clean` is the nine cameras that appear in neither val
+# nor test: Kaohsiung-cam01/02/04/08, Taichung-cam04/05/10/11, Tao-Hsin-cam04. 108
+# frames, `column` 20.38% of labelled pixels on 105 of them.
+#
+# The general rule, since it cost a full three-seed run: a supplementary dataset built by
+# selecting cameras on a *property* -- "SAM 3 finds a column here" -- selects against
+# whatever split those cameras already belong to, and nothing in the config system
+# notices, because the two datasets are separate entries with separate roots.
 #
 # WHY IT DECLARES NO `split_val`
 #
@@ -92,7 +118,7 @@ data:
     # `minority_sourced_terrain_classes` argues for and the reason ade20k sits at 0.15.
     - name: site_columns
       type: seg_folder
-      root: datasets/retail_objects_columns
+      root: datasets/retail_objects_columns_clean
       split_train: train
       label_map: retail_surfaces_from_objects
       sample_ratio: 3.0

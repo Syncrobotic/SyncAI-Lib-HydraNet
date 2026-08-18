@@ -424,3 +424,58 @@ def build_dataset(
             det_vocab=dcfg.get("det_vocab"),
         )
     raise ValueError(f"unknown dataset type: {dcfg['type']}")
+
+
+def _session_cameras(root: Path, split: str) -> set[str]:
+    """Camera ids under one split of a `seg_folder` dataset, or empty if it has no sessions.
+
+    `seg_folder` allows both layouts: ADE20K puts images directly under
+    ``images/train/``, the site sets put them under ``images/train/<session>/``. Only the
+    second has cameras to compare, so the first returns nothing and drops out of the check
+    below rather than being special-cased at the call site.
+
+    A session directory is named ``<camera>__<clip>`` by the convention
+    ``sam3_prelabel.session_names`` recommends, and is a bare ``<camera>`` when the caller
+    passed one clip per camera. Splitting on ``__`` covers both.
+    """
+    d = root / "images" / split
+    if not d.is_dir():
+        return set()
+    return {p.name.split("__")[0] for p in d.iterdir() if p.is_dir()}
+
+
+def split_leaks(datasets: list[dict]) -> list[tuple[str, str, str, list[str]]]:
+    """Cameras one dataset trains on that another dataset scores on.
+
+    **The failure this exists for cost a full three-seed run.** `retail_objects_batch02`
+    splits by camera; a `column` supplement was then built by selecting the cameras where
+    SAM 3 returns a column at >= 0.5, which is a property of the footage and knows nothing
+    about that split. Two of the three val cameras and three of the six test cameras came
+    with it, so the model was trained on two thirds of what it was scored on and `column`
+    IoU on site went 0.34 -> 0.84. Every number from that run was contamination.
+
+    Nothing in the config could have caught it: the two datasets are separate entries with
+    separate roots, and each is internally consistent. The overlap only exists on disk,
+    which is also why this lives here and not in `config_schema` -- the same argument
+    `minority_sourced_terrain_classes` makes for `MultiTaskLoader` knowing the realised
+    step share that a config cannot.
+
+    Returns ``(train_dataset, eval_dataset, split, cameras)`` per overlap found.
+    """
+    out: list[tuple[str, str, str, list[str]]] = []
+    segs = [d for d in datasets if d.get("type") == "seg_folder" and d.get("root")]
+    for a in segs:
+        trained = _session_cameras(Path(a["root"]), a.get("split_train", "train"))
+        if not trained:
+            continue
+        for b in segs:
+            for split_key in ("split_val", "split_test"):
+                split = b.get(split_key)
+                if not split:
+                    continue
+                if a is b and a.get("split_train") == split:
+                    continue
+                shared = trained & _session_cameras(Path(b["root"]), split)
+                if shared:
+                    out.append((a["name"], b["name"], split_key[6:], sorted(shared)))
+    return out
