@@ -110,3 +110,67 @@ class NyuDepthDataset(Dataset[dict[str, Any]]):
             "targets": {self.head_name: torch.from_numpy(dep)},
             "supervises": self.supervises,
         }
+
+
+class RenderedDepthDataset(Dataset[dict[str, Any]]):
+    """Rendered RGB/depth pairs from `scripts/hm3d_render.py`.
+
+    Separate from `NyuDepthDataset` despite serving the same head, because the two differ
+    in the one place that matters: NYUv2's depth is a filled Kinect product with no
+    invalid pixels, while a raycast returns exactly 0 where a ray escaped the mesh through
+    a scan hole, and HM3D scans have holes at every window and doorway. Merging them would
+    mean one loader whose validity handling is right for one source and silently generous
+    for the other.
+
+    Depth is stored as 16-bit millimetre PNG rather than float32 `.npy`: lossless to 1 mm
+    across the range this needs, a third of the size, and readable by anything.
+    """
+
+    def __init__(
+        self,
+        root: str | Path,
+        folder: str,
+        input_size,
+        train: bool = False,
+        supervises=("depth",),
+        head_name: str = "depth",
+        max_depth: float = 10.0,
+    ):
+        self.files = sorted((Path(root) / folder).glob("*_rgb.png"))
+        if not self.files:
+            raise FileNotFoundError(f"no *_rgb.png under {Path(root) / folder}")
+        self.size = (int(input_size[0]), int(input_size[1]))
+        self.train = bool(train)
+        self.supervises = list(supervises)
+        self.head_name = head_name
+        self.max_depth = float(max_depth)
+
+    def __len__(self) -> int:
+        return len(self.files)
+
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        rgb_path = self.files[index]
+        dep_path = rgb_path.with_name(rgb_path.name.replace("_rgb.png", "_depth.png"))
+        h_out, w_out = self.size
+        img = (
+            Image.open(rgb_path)
+            .convert("RGB")
+            .resize((w_out, h_out), Image.Resampling.BILINEAR)
+        )
+        dep = np.array(
+            Image.open(dep_path).resize((w_out, h_out), Image.Resampling.NEAREST),
+            dtype=np.float32,
+        )
+        dep /= 1000.0  # millimetres as stored -> metres as trained
+
+        if self.train and bool(torch.rand(()) < 0.5):
+            img = img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+            dep = np.ascontiguousarray(dep[:, ::-1])
+
+        arr = (np.asarray(img, dtype=np.float32) / 255.0 - IMAGENET_MEAN) / IMAGENET_STD
+        dep[(dep <= 0) | (dep > self.max_depth) | ~np.isfinite(dep)] = 0.0
+        return {
+            "image": torch.from_numpy(arr.transpose(2, 0, 1)).contiguous(),
+            "targets": {self.head_name: torch.from_numpy(dep)},
+            "supervises": self.supervises,
+        }

@@ -424,6 +424,18 @@ def build_dataset(
             score_classes=dcfg.get("score_classes"),
             det_vocab=dcfg.get("det_vocab"),
         )
+    if dcfg["type"] == "rendered_depth":
+        from .nyu_depth import RenderedDepthDataset
+
+        return RenderedDepthDataset(
+            dcfg["root"],
+            folder,
+            input_size,
+            train,
+            supervises=sup,
+            head_name=dcfg.get("head_name", "depth"),
+            max_depth=dcfg.get("max_depth", 10.0),
+        )
     if dcfg["type"] == "nyu_depth":
         # Imported here rather than at module scope so `import ...data.datasets` stays
         # free of the h5py dependency for every run that is not NYUv2.

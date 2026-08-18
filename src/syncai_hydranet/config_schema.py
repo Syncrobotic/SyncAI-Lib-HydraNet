@@ -187,7 +187,9 @@ AUGMENT = {
 
 DATASET = {
     "name": Spec((str,), required=True),
-    "type": Spec((str,), required=True, choices=("seg_folder", "coco", "nyu_depth")),
+    "type": Spec(
+        (str,), required=True, choices=("seg_folder", "coco", "nyu_depth", "rendered_depth")
+    ),
     "root": Spec((str,), required=True),
     "split_train": Spec((str,), required=True),
     # Not required: a dataset may be trained on without joining checkpoint selection.
