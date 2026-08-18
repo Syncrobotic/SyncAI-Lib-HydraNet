@@ -169,3 +169,56 @@ moving `display_fixture` by −0.0096 on the target, and without a control the r
 have been read as a success.
 
 Judge domain adaptation on the target domain or not at all.
+
+## 2026-08-18 — val grew from 3 cameras to 8, and what that did not buy
+
+The rules above are about the **test** split. Val had been left at three cameras, and
+`scripts/val_sampling_error.py` measured what that costs. Resampling `b03_cw`'s val score
+over cameras rather than over images:
+
+    mIoU     sd 0.0324
+    column   sd 0.1572,  95% CI 0.000 .. 0.512
+
+The column interval reaches zero because **one of the three val cameras carries no column
+at all** (Kaohsiung-cam06, 0.00%), so a bootstrap draw can contain none. That interval
+contains every `column` result this project has argued about. R7 says a per-class number
+over fewer than two cameras is not reported; val was one camera away from failing its own
+rule, and nobody had checked because R7 was written about test.
+
+The sd over *cameras* is also larger than the 0.0196 between seeds that
+`ARCHITECTURE_DIRECTION.md` rule 4 was amended over. **The camera is the dominant term**,
+which means adding frames to the same three cameras would have attacked the smaller one.
+
+**So val is now eight cameras**, promoting Kaohsiung-cam05 and cam11, Taichung-cam07 and
+cam10, and Tao-Hsin-cam02 out of training — three per store from Kaohsiung and Taichung,
+two from Tao-Hsin. Train drops to nine selling-floor cameras.
+
+**R5 decided which five, and the cost is worth recording.** The set that minimises the L1
+distance between val's class pixel shares and the 23-camera selling-floor population scores
+0.0172 against the old 0.0791 — and it gets there by promoting Kaohsiung-cam08, which
+supplies **38.4% of train's `column` pixels**. R5 forbids that, and the same principle
+applied to today's counts protects Taichung-cam09 (`boxed_stock`, 1,452 boxes) and
+Tao-Hsin-cam04 (`device`, 435) as well as the three cameras this file already names. Under
+the full protection set, **representativeness cannot be improved at all**: L1 stays 0.0791
+for every legal choice. The chosen set keeps 87.2% of train's column pixels.
+
+State it plainly: this change bought **camera count and nothing else**. Val is no more
+representative than it was; it is merely no longer resting on three scenes.
+
+**And it invalidates every existing checkpoint as a val measurement.** Five of the eight
+new val cameras were in the training set of every run on disk. Scoring `b03_cw` on the new
+val makes the point better than an argument does:
+
+    cameras it trained on   mean mIoU 0.7782      column 0.86, 0.88
+    cameras it never saw    mean mIoU 0.6414      column 0.00, 0.11, 0.51
+    memorisation gap             +0.1368
+
+`column` is not being learned as a class so much as memorised per camera, and R1's claim
+that a frame-level split "measures memory" now has a number on it. Every
+`terrain_mIoU/site_seg` in `runs/*/metrics.jsonl` was computed against the old three-camera
+val and remains a valid historical record; **none of them is comparable to anything measured
+after this change**, and no checkpoint trained before it can be scored on this val at all.
+
+`datasets/` is gitignored, so the move itself is not in git. It was made by
+`scripts/resplit_selling_floor.py`, which moves a camera in every batch at once or refuses,
+and it records the cameras and the reason under `moves` in both `split.json` files.
