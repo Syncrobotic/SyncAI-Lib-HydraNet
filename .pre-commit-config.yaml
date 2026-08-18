@@ -8,7 +8,7 @@ repos:
         # Compose's !override tag is not plain YAML, and it is the only way to replace
         # a list from upstream's file rather than append to it. `docker compose config`
         # validates that file properly.
-        exclude: ^deploy/annotation/docker-compose\.override\.yml$
+        exclude: ^tools/annotation/docker-compose\.override\.yml$
       - id: check-toml
       - id: check-merge-conflict
       - id: check-added-large-files
