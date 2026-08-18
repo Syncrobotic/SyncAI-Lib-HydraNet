@@ -1,0 +1,108 @@
+# =============================================================================
+# `hydranet_retail_surfaces` plus 168 pre-labelled site frames aimed at one class.
+#
+# THE QUESTION
+#
+# `column` scores 0.39-0.47 on val and predicts **0.00% of pixels** on four real store
+# cameras; Taichung-cam11's clad free-standing pillar, dead centre of frame, comes back
+# `wall`. The cause was written down before the run started -- `column` is sourced from
+# ADE20K id 43, atrium and lobby columns, not a shop's -- and its support in the training
+# data is **1.16% of labelled pixels**.
+#
+# `datasets/retail_objects_columns` is 168 frames from the 14 site cameras where SAM 3
+# returns a column at score >= 0.5, and `column` is **18.28% of its labelled pixels, on
+# 165 of its 168 images**. That is a factor of fifteen more support, in the domain the
+# class is failing in.
+#
+# WHAT THIS RUN CAN AND CANNOT SETTLE
+#
+# It can settle whether an *externally* labelled batch moves the class. RETAIL_SCOPE.md
+# measured the self-training version of this question and got **-0.0096** on
+# `display_fixture`: labels drawn from the model can only harden what it already believes.
+# SAM 3 has never seen this model's mistakes, so the sign is genuinely unknown, and
+# looking at the masks harder cannot answer it. Only a run can.
+#
+# It cannot settle whether the class is *right*. `datasets/retail_objects_batch02`, which
+# supplies val, is itself SAM 3 output at upscale 3.0 with no human pass (see its
+# `sam3_batch.json`). A `column` IoU gain on that val is partly agreement between two
+# batches from the same labeller. **The non-circular read is the prediction rate on the
+# cameras this batch does not contain** -- RAM++ independently tags `pillar` on 21 of 48
+# cameras and only 14 are here, so the other 7 are a held-out check that owes nothing to
+# SAM 3.
+#
+# THE BATCH IS UNREVIEWED, DELIBERATELY
+#
+# Roughly half of it is right. Contact sheets over all 14 cameras: Taichung-cam11,
+# Kaohsiung-cam02/cam08 and Taichung-cam10 are genuine free-standing pillars;
+# Kaohsiung-cam12 is the wall piers either side of a stair opening, Kaohsiung-cam04 is
+# 0.3% of frame in 12.4 disconnected fragments, and Tao-Hsin-cam04 is a strip at the
+# frame edge. Raising `min_score` to 0.5 removed the adjacent-shopfront strips (border
+# pixels are now at most 1.6% of the class) and did not remove the wall piers.
+#
+# It is left unreviewed on purpose: the question worth answering first is what the *free*
+# pipeline is worth, because a batch that needs a human pass before it helps has a
+# completely different cost. If this run moves `column` on the held-out cameras, a
+# reviewed batch is worth paying for; if it moves it backwards, the review was the
+# product all along.
+#
+# WHY IT DECLARES NO `split_val`
+#
+# A split that selects the answer cannot also measure it. This batch trains and takes no
+# part in checkpoint selection or in any reported metric, so `hydranet_retail_surfaces`
+# and this config are scored on exactly the same val set and the difference is the data.
+#
+# The batch carries **no `floor` and no `wall`** -- both are `default_on=False` in the
+# object prompt table, so 57.56% of its pixels are 255 and neither class takes a gradient
+# from it. That is the intended shape: it is a column supplement, not a second site set.
+# =============================================================================
+
+_base_: hydranet_retail_surfaces.yaml
+
+experiment: hydranet_retail_surfaces_columns
+output_dir: runs/hydranet_retail_surfaces_columns
+
+data:
+  datasets:
+    - name: ade20k
+      type: seg_folder
+      root: datasets/ADE20K
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: ade20k_retail_surfaces
+      sample_ratio: 0.15
+      supervises: [terrain]
+
+    - name: site_seg
+      type: seg_folder
+      root: datasets/retail_objects_batch02
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: retail_surfaces_from_objects
+      sample_ratio: 3.0
+      supervises: [terrain]
+
+    # The new arm. Same label map as `site_seg` -- the batch was written under the object
+    # taxonomy, so it renumbers into the surfaces six the same way, `product` folding into
+    # `fixture`. sample_ratio matches `site_seg` so the two site sources carry equal
+    # weight: 168 images -> 5 batches x 3.0 = 15 seg steps per epoch, the same as
+    # batch02's 180 images. The store's share of segmentation steps goes from roughly
+    # half to roughly two thirds, which is the direction
+    # `minority_sourced_terrain_classes` argues for and the reason ade20k sits at 0.15.
+    - name: site_columns
+      type: seg_folder
+      root: datasets/retail_objects_columns
+      split_train: train
+      label_map: retail_surfaces_from_objects
+      sample_ratio: 3.0
+      supervises: [terrain]
+
+    - name: site_boxes
+      type: coco
+      root: datasets/retail_objects_batch02
+      split_train: train
+      split_val: val
+      split_test: test
+      sample_ratio: 1.0
+      supervises: [detection]

@@ -1,0 +1,8 @@
+# Seed 7 of the column-supplement arm. Paired with
+# `hydranet_retail_surfaces_seed7`, which is the same config without
+# `site_columns` -- three seeds because one run cannot separate a 0.01 move from noise,
+# and the baseline arm already exists at these seeds.
+_base_: hydranet_retail_surfaces_columns.yaml
+experiment: hydranet_retail_surfaces_columns_seed7
+output_dir: runs/hydranet_retail_surfaces_columns_seed7
+seed: 7
