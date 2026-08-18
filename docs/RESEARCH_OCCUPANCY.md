@@ -52,8 +52,8 @@ Turn "no 3D sensor" into "no hand-drawn 3D labels":
 robot video + odometry + ultrasound[2] + HydraNet semantics
   ├─ (A) monocular-depth teacher (Depth-Anything V2, offline)  → per-frame relative depth
   ├─ (B) temporal SfM / multi-view, odometry as the pose prior → metric geometry + scale
-  ├─ (C) odometry displacement (ultrasound only where a beam    → checks (A)'s metric
-  │       model explains the echo — measured, see E-prep below)    scale; does not set it
+  ├─ (C) odometry displacement (ultrasound only where a beam    → SETS (A)'s metric
+  │       model explains the echo — measured, see E-prep below)    scale; measured 15% out
   └─ (D) HydraNet terrain / detection                          → semantic labels for ①③④
         ↓ offline fusion
    pseudo-3D labels: occupancy voxels / ground-height / dynamic-static flow
@@ -149,10 +149,51 @@ first** (teleop, in a clear area, hardware e-stop in hand), confirm `pos_world` 
 and capture the drive-at-a-wall clip in the same session. E-prep's number comes out of that
 capture, not out of another standing one.
 
-One thing that did land, and it is not small: **Depth-Anything V2 Metric Indoor** is already
-cached locally and returns *metres*, not the relative depth this document assumed. Step (C)'s
-job changes from *supplying scale* to *checking* it — a weaker requirement, and a lucky one
-given the anchor turned out this fragile.
+**Depth-Anything V2 Metric Indoor** turned out to be already cached locally and to return
+*metres*, not the relative depth this document assumed. That looked like step (C) getting
+easier — supplying scale demoted to checking it. Measuring it says otherwise; see below.
+
+## The teacher's error bar, from public ground truth (2026-08-18)
+
+Since the robot could not supply the anchor, [`scripts/eprep_teacher_nyuv2.py`](../scripts/eprep_teacher_nyuv2.py)
+scored the teacher on **NYU Depth V2's 654-image official test split** — dense metric Kinect
+depth, standard Eigen crop, no robot involved. This checkpoint is the Hypersim-trained one, so
+NYUv2 is a *zero-shot* indoor domain for it, exactly as our corridor will be.
+
+| | as-is (metric) | after one global scale |
+|---|---|---|
+| AbsRel | 0.212 | 0.101 |
+| δ1 | 0.687 | 0.919 |
+| MAE | 0.55 m | 0.27 m |
+| median error | **+0.42 m** | 0.00 m |
+
+**The "Metric" in the model name does not survive a domain change.** A single factor of
+**0.847** — a flat 15% over-prediction — accounts for most of the error, and removing it
+lifts δ1 from 0.687 to 0.919. The geometry is sound; the metres are not. **So step (C) is
+back to *supplying* scale, not checking it**, and the earlier note in this document saying
+otherwise was wrong. An auto-labeller that trusts the teacher's absolute output builds every
+voxel 15% too far away.
+
+**It is worst exactly where a legged robot lives.** Accuracy falls off as things get closer,
+which is the opposite of what the use case needs:
+
+| GT band | share of pixels | δ1 as-is | δ1 scaled | AbsRel scaled |
+|---|---|---|---|---|
+| 0–1 m | 3.0% | 0.429 | 0.820 | 0.163 |
+| 1–2 m | 28.9% | 0.576 | 0.907 | 0.111 |
+| 2–4 m | 53.9% | 0.757 | 0.936 | 0.090 |
+| 4–10 m | 14.1% | 0.707 | 0.897 | 0.112 |
+
+And the near field cannot be measured here at all: Kinect returns start near 0.7 m, while the
+robot's forward cone put floor at **0.34 m**. The band that decides foothold planning is below
+this dataset's floor, so public data can bound the teacher but cannot clear it.
+
+**What this does to the gate.** Even granting perfect scale, 10% AbsRel is ~20 cm of error at
+2 m. That is tolerable for coarse occupancy ① and not tolerable for ⑤'s elevation map, where
+20 cm is the difference between a step and a wall. The depth-sensor question is therefore
+*more* live after this measurement, not less — and the remaining unknown is narrow and
+specific: **how the teacher behaves below 0.7 m on our own lens**, which only the robot can
+answer, and only once it walks.
 
 ## Preconditions carried in from the platform work (do not rediscover these)
 
