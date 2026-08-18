@@ -164,6 +164,37 @@ rather than a good day:
 4. **A detection comparison runs three seeds, or it reports nothing.** Measured below, and
    it is the most expensive rule here because it triples the GPU cost of an answer. It is
    also the one that would have saved the most wasted argument.
+
+   **Amended 2026-08-18: it says *detection* for a reason, and the reason was found by
+   generalising it anyway.** The rule is affordable only because seed-pairing works on
+   `detection_mAP` — paired sd **0.0034** against an unpaired **0.0098**, five times
+   tighter, which is what lets n=3 resolve anything at all. That structure is
+   metric-specific and it does **not** hold on `terrain_mIoU/site_seg`. Same three seeds,
+   the surfaces -> security contrast:
+
+       seed 42  0.7545 -> 0.6623   -0.0922        unpaired sd   0.0214 / 0.0196
+       seed  7  0.7228 -> 0.7013   -0.0216        paired sd     0.0373
+       seed 13  0.7637 -> 0.6857   -0.0780
+
+   **Pairing makes it worse**, so n=3 buys a minimum detectable effect of ~0.061 unpaired
+   and ~0.111 paired, against segmentation effects this project actually argues about of
+   0.003 to 0.085. Six 60-epoch runs were queued on 2026-08-18 under this rule and killed
+   once that was computed: at ~5 h of GPU they could not have resolved any of the three
+   questions they were asked.
+
+   The likely mechanism is worth naming because it is fixable and seeds are not: a run's
+   reported score is `max` over 60 epoch validations, which is an **order statistic**, and
+   the epoch it lands on differs per arm (E16, E30, E11 on three runs here). Whatever the
+   seed contributes in common mode is scattered by taking the max, so there is nothing left
+   for pairing to cancel. Detection pairs because both arms share most of their trajectory;
+   these two share neither dataset nor loss.
+
+   So the rule generalises as: **measure the metric's own noise floor, paired and unpaired,
+   before buying seeds to beat it.** Three seeds is not a standard, it is an answer that was
+   correct once for one metric. And when the floor turns out to be above the effect, seeds
+   are the wrong purchase — a larger val set, or a selection rule that is not an argmax over
+   epochs, changes what any future run can resolve; more seeds only re-measure the same
+   ceiling.
 5. **A run whose *length* is decided by a metric is not comparable to a run of the same
    config with a different selecting metric.** Measured 2026-08-18 and it cost a whole
    comparison. `early_stop_patience: 10` is set in `hydranet_retail_products.yaml` and
