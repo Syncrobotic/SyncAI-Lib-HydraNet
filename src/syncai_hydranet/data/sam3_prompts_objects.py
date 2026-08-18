@@ -104,15 +104,43 @@ CONCEPTS = (
     # `column` is the more specific of the two claims. On the ground layer with `wall`
     # every column would come back 255.
     #
-    # No coverage figure: these prompts have only ever run as two entries in the `wall`
-    # concept's list, where whatever they found was recorded as wall. What is known is
-    # that they fire -- RETAIL_SCOPE.md s5 tracked a column through 97.4% of frames of
-    # one camera, as a false `caution`.
+    # **Sweep C** (2026-08-18) is the coverage figure this entry used to lack: 96 frames,
+    # one daylight and one IR-night frame from each of 48 cameras, native 1920x1080 with
+    # no upscale. `N/48` below is cameras returning at least one instance, day / night:
+    #
+    #                       @0.25          @0.50        peak day / night
+    #   column             15 / 13        13 / 12        0.934 / 0.953
+    #   structural column  18 / 15        14 / 13        0.918 / 0.930
+    #   pillar             13 / 12        11 / 11        0.922 / 0.941
+    #   square pillar      11 / 12         4 / 12        0.887 / 0.930
+    #   union              18 / 15        14 / 13
+    #
+    # RAM++ returns its own `pillar` tag on 21 of the same 48 cameras, which is a second
+    # instrument agreeing rather than a restatement.
+    #
+    # **min_score 0.5, against the 0.40 default, and the reason is visible rather than
+    # statistical.** On Kaohsiung-cam01 the top instance (0.824) is the clad entrance
+    # column; the instances between 0.26 and 0.37 are the vertical wall strips of the
+    # adjacent shopfronts, which are not columns and would train the class to mean
+    # "narrow vertical thing". 0.5 removes them and keeps 14 of the 18 cameras.
+    #
+    # What this settles. `column` scored 0.40-0.51 on ADE20K val and predicted **0.00%**
+    # of pixels on four site cameras, and Taichung-cam11's free-standing clad pillar --
+    # dead centre of frame -- came back `wall`. SAM 3 returns that exact pillar at
+    # **0.828**. So the failure was never that the class is invisible in this footage;
+    # it is that no site mask has ever contained one. This prompt set supplies them.
+    #
+    # `round column` is untested: it was not in sweep C and stays for the reason the
+    # `product` note gives -- a forward pass is cheaper than retiring a vocabulary entry
+    # on one frame set. `square pillar` is the weak member by day (p90 0.356, 11 cameras
+    # at 0.25 collapsing to 4 at 0.4) and is level with the rest at night; the threshold
+    # already discards what makes it weak.
     _c(
         "column",
         ("column", "pillar", "structural column", "square pillar", "round column"),
         LAYER_THING,
-        note="promoted out of wall's prompt list; sits above wall so it is not erased",
+        min_score=0.5,
+        note="min_score 0.5, swept on 48 cameras; below 0.4 it drifts onto wall strips",
     ),
     # --- measured 2026-08-17, after the first batch ---------------------------------
     #
@@ -151,6 +179,32 @@ CONCEPTS = (
     # that SAM 3's vocabulary is web English rather than trade jargon (`gondola shelf`
     # scored 0/8 despite being the correct term): a generic noun, the packaging, and the
     # specific goods these stores sell.
+    #
+    # The last two are sweep C (2026-08-18, 48 cameras, day / night at 0.25, and the peak
+    # over both), and they were chosen the way that register lesson says to: RAM++ was
+    # asked what is in this footage without being told what to look for, and these are
+    # nouns it returned that no prompt here already named.
+    #
+    #   speaker            29 / 25   peak 0.934   collapses to 19 cameras at 0.40
+    #   computer monitor   27 / 22   peak 0.930   holds 22 cameras at 0.50
+    #
+    # Against `merchandise on a shelf` at 26/48, so naming the goods reaches more of the
+    # estate than describing their arrangement does.
+    #
+    # **Two more were swept, added, and then removed after being looked at**, which is
+    # the only reason this note is worth its length. Both had a respectable firing rate
+    # and neither was on merchandise:
+    #
+    #   charger            26/48 at 0.25, peak 0.559 -- masks **cables**. Half the
+    #                      cameras it reaches are back-of-house rooms, not shop floor.
+    #   desktop computer   16/48 at 0.25, peak 0.789 -- masks the upright **price cards
+    #                      and point-of-sale signage** standing on the podiums. There is
+    #                      no desktop computer in most of the frames it fired on.
+    #
+    # A firing rate is not a correctness, and this file's own numbers cannot tell the
+    # two apart -- six contact sheets could, in about a minute of looking. `charger` in
+    # particular fits the small-dense-object profile that argues for min_score 0.25 so
+    # neatly that its rate reads as confirmation. It is not.
     _c(
         "product",
         (
@@ -162,6 +216,8 @@ CONCEPTS = (
             "laptop on a table",
             "tablet on display",
             "headphones box",
+            "speaker",  # 29/48, 0.934 -- the small round goods on the podiums
+            "computer monitor",  # 27/48, 0.930 -- laptops and iMacs on the display tables
         ),
         LAYER_PRODUCT,
         min_score=0.25,
