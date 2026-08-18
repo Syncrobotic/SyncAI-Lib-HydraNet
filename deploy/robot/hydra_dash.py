@@ -60,6 +60,17 @@ _robot = {
 _robot_lock = threading.Lock()
 
 
+def _write_state(st):
+    try:
+        os.makedirs("/dev/shm/hydra", exist_ok=True)
+        tmp = "/dev/shm/hydra/.robot_state.json"
+        with open(tmp, "w") as fh:
+            json.dump(st, fh)
+        os.replace(tmp, "/dev/shm/hydra/robot_state.json")
+    except Exception:
+        pass
+
+
 def telem_listener():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -74,6 +85,7 @@ def telem_listener():
     cnt = 0
     rate_t = time.time()
     hz = 0.0
+    last_state_write = 0.0
     while True:
         try:
             d, _ = s.recvfrom(2048)
@@ -82,48 +94,69 @@ def telem_listener():
                 if time.time() - _robot["last"] > 2.0:
                     _robot["online"] = False
             continue
-        if len(d) != 380:
+        if len(d) < 12:
             continue
         code = struct.unpack_from("<I", d, 0)[0]
-        if code != 0x0906:
-            continue
-        tick = struct.unpack_from("<I", d, 12)[0]
-        imu = struct.unpack_from("<9f", d, 20)
-        joints = [struct.unpack_from("<4f", d, 56 + 16 * i) for i in range(12)]
-        cnt += 1
         now = time.time()
-        if now - rate_t >= 0.5:
-            hz = cnt / (now - rate_t)
-            cnt = 0
-            rate_t = now
-        with _robot_lock:
-            _robot.update(
-                online=True,
-                tick=tick,
-                last=now,
-                hz=round(hz, 1),
-                imu={
-                    "roll": imu[0],
-                    "pitch": imu[1],
-                    "yaw": imu[2],
-                    "wroll": imu[3],
-                    "wpitch": imu[4],
-                    "wyaw": imu[5],
-                    "ax": imu[6],
-                    "ay": imu[7],
-                    "az": imu[8],
-                },
-                joints=[
-                    {
-                        "name": JOINT_NAMES[i],
-                        "pos": joints[i][0],
-                        "vel": joints[i][1],
-                        "tau": joints[i][2],
-                        "temp": joints[i][3],
-                    }
-                    for i in range(12)
-                ],
-            )
+        if code == 0x0906 and len(d) == 380:
+            tick = struct.unpack_from("<I", d, 12)[0]
+            imu = struct.unpack_from("<9f", d, 20)
+            joints = [struct.unpack_from("<4f", d, 56 + 16 * i) for i in range(12)]
+            cnt += 1
+            if now - rate_t >= 0.5:
+                hz = cnt / (now - rate_t)
+                cnt = 0
+                rate_t = now
+            with _robot_lock:
+                _robot.update(
+                    online=True,
+                    tick=tick,
+                    last=now,
+                    hz=round(hz, 1),
+                    imu={
+                        "roll": imu[0],
+                        "pitch": imu[1],
+                        "yaw": imu[2],
+                        "wroll": imu[3],
+                        "wpitch": imu[4],
+                        "wyaw": imu[5],
+                        "ax": imu[6],
+                        "ay": imu[7],
+                        "az": imu[8],
+                    },
+                    joints=[
+                        {
+                            "name": JOINT_NAMES[i],
+                            "pos": joints[i][0],
+                            "vel": joints[i][1],
+                            "tau": joints[i][2],
+                            "temp": joints[i][3],
+                        }
+                        for i in range(12)
+                    ],
+                )
+            # publish body attitude (deg) for hydra_infer's per-frame BEV ground plane
+            if now - last_state_write >= 0.1:
+                last_state_write = now
+                _write_state({"roll": imu[0], "pitch": imu[1], "yaw": imu[2], "ts": now})
+        elif code == 0x0901 and len(d) >= 212:
+            # RobotStateUpload (official 0x0901 @50Hz): battery, ultrasound, odometry
+            p = 12
+            basic = struct.unpack_from("<i", d, p)[0]
+            pos_world = struct.unpack_from("<3d", d, p + 80)
+            vel_body = struct.unpack_from("<3d", d, p + 128)
+            batt = struct.unpack_from("<d", d, p + 168)[0]
+            ultra = struct.unpack_from("<2d", d, p + 184)
+            with _robot_lock:
+                _robot.update(
+                    online=True,
+                    last=now,
+                    battery=round(batt, 1),
+                    basic_state=basic,
+                    ultrasound=[round(ultra[0], 3), round(ultra[1], 3)],
+                    pos_world=[round(x, 3) for x in pos_world],
+                    vel_body=[round(x, 3) for x in vel_body],
+                )
 
 
 def robot_snapshot():
@@ -313,12 +346,12 @@ def _burst(code, value=0, typ=0, n=6, interval=0.02):
 
 # Real command codes, captured from the physical controller and confirmed by the operator:
 #   0x21010202  stand-up / crouch-down TOGGLE
-#   0x21010C0E value=2  emergency STOP
+#   0x21020C0E         soft emergency STOP (official spec)
 def do_control(action):
     try:
         if action == "estop":
-            _burst(0x21010C0E, 2, 0, n=8)
-            return {"ok": True, "armed": True, "msg": "急停已送出 (0x21010C0E)"}
+            _burst(0x21020C0E, 0, 0, n=8)
+            return {"ok": True, "armed": True, "msg": "軟急停已送出 (0x21020C0E)"}
         if action in ("toggle", "stand", "sit"):
             _burst(0x21010202, 0, 0)
             return {"ok": True, "armed": True, "msg": "起立／蹲下切換已送出 (0x21010202)"}
@@ -411,10 +444,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "path": "test",
                     },
                     "infer": _read_infer(),
-                    "battery": {
-                        "available": False,
-                        "note": "Lite3 電量走 CAN/BMS 私有通道，未在 SDK 遙測(0x0906)內；不顯示猜測值。",
-                    },
+                    "battery": {"available": True, "source": "0x0901 RobotStateUpload"},
                 }
             )
         else:
@@ -607,11 +637,15 @@ th{color:var(--dim);font-weight:500;font-size:11px;text-transform:uppercase;lett
     </div>
   </section>
 
-  <!-- BATTERY + BOARD -->
+  <!-- BATTERY + SENSORS (0x0901) -->
   <section class="card span3">
-    <h2>電量 · 電源</h2>
-    <div class="big warnc" id="battbig">N/A</div>
-    <div class="na" style="margin-top:8px" id="battnote">查詢中…</div>
+    <h2>電量 · 感測 (0x0901)</h2>
+    <div class="big" id="battbig">—</div>
+    <div class="bar"><i id="battbar" style="width:0"></i></div>
+    <div class="row" style="margin-top:8px"><span class="k">超音波 L / R</span><span id="ultra">—</span></div>
+    <div class="row"><span class="k">位姿 x/y/z (m)</span><span id="posw">—</span></div>
+    <div class="row"><span class="k">body 速度 (m/s)</span><span id="velb">—</span></div>
+    <div class="mini" style="margin-top:6px" id="battnote">RobotStateUpload @50Hz · 官方遙測</div>
   </section>
 
   <section class="card span4">
@@ -693,8 +727,12 @@ async function tick(){
       $("inf_fps").textContent=(q.fps||0)+" FPS";$("inf_ms").textContent=(q.infer_ms||0)+" ms";$("inf_ndet").textContent=q.n_det||0;
       if(q.trav){$("inf_go").textContent=(q.trav.go*100).toFixed(0)+"%";$("inf_caution").textContent=(q.trav.caution*100).toFixed(0)+"%";$("inf_blocked").textContent=(q.trav.blocked*100).toFixed(0)+"%";}
       $("inf_counts").textContent=Object.entries(q.det_counts||{}).map(function(e){return e[0]+"×"+e[1]}).join("   ");}
-    // battery
-    if(j.battery){$("battbig").textContent=j.battery.available?j.battery.soc+"%":"N/A";$("battnote").textContent=j.battery.note;}
+    // battery + sensors (0x0901)
+    const rb2=j.robot||{};
+    if(rb2.battery!=null){const b=rb2.battery;$("battbig").innerHTML=b.toFixed(0)+'<span class="unit">%</span>';$("battbig").style.color=b>50?"var(--good)":b>20?"var(--warn)":"var(--bad)";if($("battbar"))$("battbar").style.width=Math.max(0,Math.min(100,b))+"%";}
+    if(rb2.ultrasound){$("ultra").textContent=rb2.ultrasound.map(function(x){return x.toFixed(2)+"m"}).join(" / ");}
+    if(rb2.pos_world){$("posw").textContent=rb2.pos_world.map(function(x){return x.toFixed(2)}).join(", ");}
+    if(rb2.vel_body){$("velb").textContent=rb2.vel_body.map(function(x){return x.toFixed(2)}).join(", ");}
     // system
     const s=j.system;
     if(s.static){$("board").textContent=s.static.model;$("hn").textContent=s.static.hostname;$("kern").textContent=s.static.kernel;$("hostline").textContent=s.static.model+" · "+s.static.hostname;}

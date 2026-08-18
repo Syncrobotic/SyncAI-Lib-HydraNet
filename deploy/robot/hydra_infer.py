@@ -246,7 +246,22 @@ def make_bev(trav, terr, dets):
     Mono ground-plane -> scale is an assumption (a depth camera makes it metric-exact,
     see geometry/depth_scene.py). Camera params are env-tunable."""
     cam = Camera.from_vfov(trav.shape[0], trav.shape[1], VFOV)
-    plane = GroundPlane(height=CAM_HEIGHT, pitch=math.radians(PITCH_DEG))
+    # Per-frame ground plane: PITCH_DEG is the fixed camera-mount tilt; the robot's live
+    # body attitude (IMU roll/pitch, deg, published by hydra_dash from 0x0901/0x0906) is
+    # added on top so the BEV tracks the gait instead of asserting the robot never banks.
+    b_pitch, b_roll = 0.0, 0.0
+    try:
+        with open("/dev/shm/hydra/robot_state.json") as _fh:
+            _st = json.load(_fh)
+        if time.time() - _st.get("ts", 0) < 1.0:
+            b_pitch, b_roll = float(_st.get("pitch", 0.0)), float(_st.get("roll", 0.0))
+    except Exception:
+        pass
+    plane = GroundPlane(
+        height=CAM_HEIGHT,
+        pitch=math.radians(PITCH_DEG + b_pitch),
+        roll=math.radians(b_roll),
+    )
     boxes = labels = scores = None
     if dets:
         boxes = np.array([d[0] for d in dets], dtype=np.float32)
