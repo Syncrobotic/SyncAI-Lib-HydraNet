@@ -216,6 +216,15 @@ class Trainer:
             seed=seed,
             pin_memory=supports_pinned_memory(self.device),
         )
+        # Counted from the schedule, not read off sample_ratio. A shared detection
+        # vocabulary makes it possible for one class to be trained on a small minority of
+        # steps while the config looks balanced, and this is the only place both halves
+        # of that number exist.
+        for cls, (steps, total) in sorted(self.train_loader.detection_class_steps().items()):
+            self.logger.info(
+                f"detection class {cls}: supervised on {steps}/{total} detection steps "
+                f"({steps / total:.0%}); the rest are masked, not negative"
+            )
         self.val_sets = list(zip(val_names, val_sets, strict=True))
         val_size = {n: len(v) for n, v in self.val_sets}
         skipped = [n for n in names if n not in val_size]

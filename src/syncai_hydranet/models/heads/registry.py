@@ -116,6 +116,12 @@ class DetectionHead:
             out["det_ctr"],
             targets["boxes"],
             targets["labels"],
+            # Absent unless the dataset was built with a `det_vocab`, and absent means
+            # "supervise every channel" -- which is right for a single-source run and
+            # wrong the moment two sources share this head. `.get` rather than `[]`
+            # deliberately: every checkpoint trained before the vocabulary existed loads
+            # and trains unchanged.
+            class_mask=targets.get("det_class_mask"),
         )
 
     def supervised_by(self, _targets: dict) -> bool:

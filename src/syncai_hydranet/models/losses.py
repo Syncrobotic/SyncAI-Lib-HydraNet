@@ -90,13 +90,24 @@ class SegLoss(nn.Module):
 # ---------------------------- detection ----------------------------
 
 
-def sigmoid_focal_loss(logits, targets_onehot, alpha=0.25, gamma=2.0):
+def sigmoid_focal_loss(logits, targets_onehot, alpha=0.25, gamma=2.0, channel_mask=None):
+    """``channel_mask`` broadcasts over the class axis and zeroes whole channels.
+
+    Not a class weight. A weight of zero and a mask of zero are the same arithmetic and
+    a different claim: a weight says this class matters less, a mask says *this dataset
+    cannot answer for this class*, so its images are neither evidence for it nor against
+    it. `label_maps_retail_security` has the measurement that makes the distinction worth
+    the parameter -- an unlabelled shopper in a site frame, taken as a negative, is what
+    held `product` at IoU 0.000 for 22 epochs in the segmentation case.
+    """
     p = logits.sigmoid()
     ce = F.binary_cross_entropy_with_logits(logits, targets_onehot, reduction="none")
     p_t = p * targets_onehot + (1 - p) * (1 - targets_onehot)
     loss = ce * ((1 - p_t) ** gamma)
     if alpha >= 0:
         loss = loss * (alpha * targets_onehot + (1 - alpha) * (1 - targets_onehot))
+    if channel_mask is not None:
+        loss = loss * channel_mask
     return loss.sum()
 
 
@@ -124,7 +135,14 @@ class FCOSLoss(nn.Module):
         self.num_classes = num_classes
         self.w = (cls_weight, reg_weight, centerness_weight)
 
-    def forward(self, head, cls_out, reg_out, ctr_out, boxes_list, labels_list):
+    def forward(
+        self, head, cls_out, reg_out, ctr_out, boxes_list, labels_list, class_mask=None
+    ):
+        """``class_mask`` is [B, C] or [C]: which channels this batch's dataset can label.
+
+        None means "all of them", which is the single-source case and every run before
+        the retail+security vocabulary existed.
+        """
         device = cls_out[0].device
         shapes = [c.shape[-2:] for c in cls_out]
         _, cls_t, reg_t, ctr_t = head.get_targets(shapes, boxes_list, labels_list, device)
@@ -148,7 +166,13 @@ class FCOSLoss(nn.Module):
         # only fires when the detection head is actually supervised on CUDA, which
         # is why it survived every seg-only run.
         onehot[pos] = F.one_hot(cls_t[pos], self.num_classes).to(onehot.dtype)
-        cls_loss = sigmoid_focal_loss(flat_cls, onehot) / num_pos
+        if class_mask is not None:
+            # [B, C] -> [B, 1, C] against flat_cls's [B, points, C]; a [C] mask
+            # broadcasts as it is. Cast rather than assume: under autocast flat_cls is
+            # bf16/fp16 and the mask arrives from the collate as float32.
+            mask = class_mask.to(flat_cls.dtype)
+            class_mask = mask[:, None, :] if mask.dim() == 2 else mask
+        cls_loss = sigmoid_focal_loss(flat_cls, onehot, channel_mask=class_mask) / num_pos
         if pos.any():
             reg_loss = giou_loss(flat_reg[pos], reg_t[pos]) / num_pos
             ctr_loss = (

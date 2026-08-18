@@ -13,10 +13,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import torch
 from PIL import Image
 from torch.utils.data import Dataset
 
 from . import label_maps
+from .label_maps_retail_security import get_det_vocab
 from .transforms import GEOM_IDENTITY, Sample, build_transforms
 
 IMG_EXTS = {".png", ".jpg", ".jpeg", ".bmp"}
@@ -178,6 +180,7 @@ class CocoDetDataset(Dataset):
         augment: dict | None = None,
         classes: list[str] | None = None,
         score_classes: list[str] | None = None,
+        det_vocab: str | None = None,
     ):
         from pycocotools.coco import COCO
 
@@ -200,9 +203,25 @@ class CocoDetDataset(Dataset):
                 raise ValueError(f"not COCO category names: {', '.join(sorted(missing))}")
         else:
             cat_ids = sorted(self.coco.getCatIds())
-        self.cat_ids = cat_ids
-        self.cat_to_label = {c: i for i, c in enumerate(cat_ids)}  # contiguous, 0-based
-        self.label_to_cat = {i: c for c, i in self.cat_to_label.items()}
+        # Two numbering regimes, and which one is in force is the difference between a
+        # head that can hold both questions and one that cannot.
+        #
+        # Without `det_vocab`: contiguous and 0-based *per dataset*, which is correct for
+        # a single-source run and is exactly what stops two of them sharing a head --
+        # COCO's `person` and the site's `boxed_stock` both become label 0.
+        #
+        # With it: the vocabulary assigns the id, by category *name*, so both files agree
+        # before either is opened. See `label_maps_retail_security` for the ids and for
+        # the half of the problem this does not solve.
+        self.vocab = get_det_vocab(det_vocab) if det_vocab else None
+        if self.vocab is None:
+            self.cat_ids = cat_ids
+            self.cat_to_label = {c: i for i, c in enumerate(cat_ids)}  # contiguous, 0-based
+            self.label_to_cat = {i: c for c, i in self.cat_to_label.items()}
+        else:
+            cat_ids, mapped = self._map_to_vocab(cat_ids)
+            self.cat_ids = cat_ids
+            self.cat_to_label = mapped
 
         # Scoring can be narrowed without touching the head. This is how an 80-class
         # checkpoint is compared against a narrower one: both are scored over the same
@@ -223,7 +242,7 @@ class CocoDetDataset(Dataset):
 
         # Images whose only annotations were dropped carry no signal for this subset, and
         # would train the head that everything in them is background.
-        keep = set(cat_ids)
+        keep = set(self.cat_to_label)
         self.ids = [
             i
             for i in sorted(self.coco.imgs.keys())
@@ -232,10 +251,83 @@ class CocoDetDataset(Dataset):
                 for a in self.coco.loadAnns(self.coco.getAnnIds(imgIds=i, iscrowd=False))
             )
         ]
+        # After the image filter, because the filter reads the annotation file's own ids
+        # and this rewrites them. Merging is what lets `backpack`, `handbag` and
+        # `suitcase` be one `bag` channel and still be scored as one category.
+        if self.vocab is not None:
+            self._merge_categories()
+
+        # The classes this dataset can actually put a box on, which is not the same as
+        # the classes the head has. `FCOSLoss` reads it as a channel mask so that a
+        # shopper nobody drew a box around is *no gradient* for `person` rather than a
+        # labelled negative for it. See label_maps_retail_security's second section.
+        self.supplied_labels = tuple(sorted(set(self.cat_to_label.values())))
+        self.class_mask = (
+            self.vocab.class_mask(self.supplied_labels) if self.vocab is not None else None
+        )
+
         self.transform = build_transforms(
             input_size, train, letterbox=letterbox, augment=augment
         )
         self.supervises = list(supervises)
+
+    def _map_to_vocab(self, cat_ids: list[int]) -> tuple[list[int], dict[int, int]]:
+        """Source category ids -> vocabulary labels, dropping what the vocabulary omits.
+
+        A dropped category is not an error: COCO carries 80 and this vocabulary wants
+        four of them. A dataset where *nothing* maps is an error, and a loud one -- it
+        would otherwise train on an empty image list, which reads as a dataset that is
+        simply small.
+        """
+        assert self.vocab is not None
+        cats = {c["id"]: c["name"] for c in self.coco.loadCats(cat_ids)}
+        mapped = {}
+        for cid in cat_ids:
+            label = self.vocab.label_of(cats[cid])
+            if label is not None:
+                mapped[cid] = label
+        if not mapped:
+            raise ValueError(
+                f"det_vocab {self.vocab.name!r} maps none of this dataset's categories "
+                f"({', '.join(sorted(cats.values()))}). Its vocabulary is "
+                f"{', '.join(self.vocab.classes)}; add an alias in "
+                f"label_maps_retail_security.DET_ALIASES, or point this dataset at a "
+                f"vocabulary that covers it."
+            )
+        return sorted(mapped), mapped
+
+    def _merge_categories(self) -> None:
+        """Rewrite this dataset's in-memory COCO ground truth into vocabulary categories.
+
+        **In memory only** -- nothing on disk changes, and a second dataset built from
+        the same annotation file gets its own untouched handle.
+
+        Why rewrite the ground truth rather than only the labels: the evaluator scores
+        each detection dataset against `ds.coco` and maps a prediction back through
+        `ds.label_to_cat`. With three source categories behind one channel there is no
+        honest single id to map `bag` to -- pick `backpack` and every `handbag` box in
+        the ground truth becomes an unmatchable category, and mAP drops for a reason that
+        has nothing to do with the model. Merging the ground truth the same way the
+        labels were merged is what makes the two agree.
+        """
+        assert self.vocab is not None
+        rep: dict[int, int] = {}
+        for cid, label in sorted(self.cat_to_label.items()):
+            rep.setdefault(label, cid)
+        to_rep = {cid: rep[label] for cid, label in self.cat_to_label.items()}
+        data = self.coco.dataset
+        for ann in data["annotations"]:
+            if ann["category_id"] in to_rep:
+                ann["category_id"] = to_rep[ann["category_id"]]
+        data["categories"] = [
+            {"id": cid, "name": self.vocab.classes[label], "supercategory": self.vocab.name}
+            for label, cid in sorted(rep.items())
+        ]
+        self.coco.createIndex()
+        self.cat_ids = sorted(rep.values())
+        self.cat_to_label = {cid: label for label, cid in rep.items()}
+        self.label_to_cat = dict(rep)
+        self.score_cat_ids = sorted({to_rep[c] for c in self.score_cat_ids if c in to_rep})
 
     def __len__(self):
         return len(self.ids)
@@ -261,9 +353,15 @@ class CocoDetDataset(Dataset):
             labels=np.asarray(labels, dtype=np.int64),
         )
         s = self.transform(s)
+        targets = {"boxes": s["boxes"], "labels": s["labels"]}
+        if self.class_mask is not None:
+            # Per sample rather than per dataset, because that is the only channel the
+            # collate has: every sample in a batch comes from one dataset, so the stacked
+            # [B, C] is C repeated B times and broadcasts over the loss unchanged.
+            targets["det_class_mask"] = torch.from_numpy(self.class_mask)
         return {
             "image": s["image"],
-            "targets": {"boxes": s["boxes"], "labels": s["labels"]},
+            "targets": targets,
             "supervises": self.supervises,
             "image_id": img_id,
             # How this image was scaled and padded, so COCOeval gets boxes in original
@@ -323,5 +421,6 @@ def build_dataset(
             augment=augment,
             classes=dcfg.get("classes"),
             score_classes=dcfg.get("score_classes"),
+            det_vocab=dcfg.get("det_vocab"),
         )
     raise ValueError(f"unknown dataset type: {dcfg['type']}")

@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .data.label_maps import SCHEMES
+from .data.label_maps_retail_security import get_det_vocab
 
 NUMBER = (int, float)
 
@@ -179,6 +180,11 @@ DATASET = {
     # The head's num_classes must match the length, and the check below enforces it --
     # a mismatch trains every box against the wrong channel and still converges.
     "classes": Spec((list,)),
+    # COCO only: share one head with another detection dataset by mapping both files'
+    # category *names* into one vocabulary, instead of numbering each file's categories
+    # from zero. Without it two detection sources both emit label 0 and one head is asked
+    # to mean `person` and `boxed_stock` at once. See data/label_maps_retail_security.py.
+    "det_vocab": Spec((str,)),
     # COCO only, evaluation: score mAP over these categories while leaving the head and
     # the label mapping alone. Separate from `classes` because they are different jobs:
     # narrowing what a head learns changes its output space, narrowing what is scored
@@ -637,6 +643,11 @@ def _check_detection_subset(rep: _Report, cfg: dict) -> None:
         if not isinstance(ds, dict) or ds.get("type") != "coco":
             continue
         subset = ds.get("classes")
+        if ds.get("det_vocab"):
+            # Under a vocabulary `classes` selects which *source* categories to read, and
+            # several of them can share a channel -- `backpack`, `handbag` and `suitcase`
+            # are one `bag`. The head's width is the vocabulary's, checked below.
+            continue
         if isinstance(subset, list) and len(subset) != head["num_classes"]:
             rep.errors.append(
                 f"dataset {ds.get('name')!r} lists {len(subset)} classes but "
@@ -644,6 +655,61 @@ def _check_detection_subset(rep: _Report, cfg: dict) -> None:
             )
         if isinstance(subset, list) and len(subset) != len(set(subset)):
             rep.errors.append(f"dataset {ds.get('name')!r}: duplicate entries in classes")
+
+
+def _check_detection_vocab(rep: _Report, cfg: dict) -> None:
+    """Two detection sources in one config, and the three ways that goes silently wrong.
+
+    1. **No vocabulary at all.** `CocoDetDataset` numbers each file's categories from
+       zero, so COCO's `person` and the site's `boxed_stock` both train channel 0. The
+       loss falls, the run completes, and the head means two things. This is the failure
+       `hydranet_retail_products.yaml` avoided by refusing to train COCO alongside the
+       site boxes; a config that puts them together without `det_vocab` is asking for it.
+    2. **Two different vocabularies.** Same collision, one layer up.
+    3. **A head whose width is not the vocabulary's.** Every box then trains against
+       whichever channel its id happens to land on, exactly as `_check_detection_subset`
+       describes for a COCO subset.
+    """
+    heads = cfg.get("model", {}).get("heads", {})
+    head = heads.get("detection") if isinstance(heads, dict) else None
+    det_sets = [
+        ds
+        for ds in cfg.get("data", {}).get("datasets") or []
+        if isinstance(ds, dict) and "detection" in (ds.get("supervises") or [])
+    ]
+    vocabs = {ds.get("det_vocab") for ds in det_sets}
+    if len(det_sets) > 1 and None in vocabs:
+        unnamed = ", ".join(
+            sorted(str(ds.get("name")) for ds in det_sets if not ds.get("det_vocab"))
+        )
+        rep.errors.append(
+            f"{len(det_sets)} datasets supervise `detection` and {unnamed} declare no "
+            "`det_vocab`: each numbers its own categories from zero, so both train "
+            "channel 0 with different meanings. Give every detection dataset the same "
+            "det_vocab, or train them in separate runs."
+        )
+    named = {v for v in vocabs if v}
+    if len(named) > 1:
+        rep.errors.append(
+            f"detection datasets declare more than one det_vocab ({', '.join(sorted(named))}); "
+            "one head holds one vocabulary."
+        )
+    for name in sorted(named):
+        try:
+            vocab = get_det_vocab(name)
+        except ValueError as exc:
+            rep.errors.append(str(exc))
+            continue
+        if (
+            isinstance(head, dict)
+            and isinstance(head.get("num_classes"), int)
+            and head["num_classes"] != len(vocab.classes)
+        ):
+            rep.errors.append(
+                f"det_vocab {name!r} has {len(vocab.classes)} classes "
+                f"({', '.join(vocab.classes)}) but model.heads.detection.num_classes "
+                f"is {head['num_classes']}"
+            )
 
 
 def _check_channels_last(rep: _Report, cfg: dict) -> None:
@@ -698,6 +764,7 @@ def check_config(cfg: dict) -> list[str]:
 
     _check_class_counts(rep, cfg)
     _check_detection_subset(rep, cfg)
+    _check_detection_vocab(rep, cfg)
     _check_channels_last(rep, cfg)
     _check_fixed_weights(rep, cfg)
     _check_unsourced_classes(rep, cfg)

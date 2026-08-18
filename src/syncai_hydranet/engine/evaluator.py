@@ -250,10 +250,23 @@ def _collect_detections(model, out, batch, ds, images, results_for_ds) -> None:
         for box, score, label in zip(
             boxes, det["scores"].cpu().numpy(), det["labels"].cpu().numpy(), strict=True
         ):
+            # A shared `det_vocab` gives the head channels this dataset's ground truth
+            # has no category for -- `person` predicted on a site frame whose annotation
+            # file holds only merchandise. `.get` drops those, and dropping is exactly
+            # what COCOeval would do with them anyway, since `params.catIds` is already
+            # restricted to `score_cat_ids`. The number is unchanged; the KeyError is not.
+            #
+            # What it means is worth carrying: with two sources, each class's mAP is
+            # measured on the one dataset that labels it, so `person` is scored on COCO
+            # and never on the store cameras it will be deployed against. Site person
+            # boxes are the only thing that changes that.
+            cat_id = ds.label_to_cat.get(int(label))
+            if cat_id is None:
+                continue
             results_for_ds.append(
                 {
                     "image_id": int(img_id),
-                    "category_id": ds.label_to_cat[int(label)],
+                    "category_id": cat_id,
                     "bbox": [
                         float(box[0]),
                         float(box[1]),

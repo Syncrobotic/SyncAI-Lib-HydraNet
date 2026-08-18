@@ -56,6 +56,10 @@ class MultiTaskLoader:
         pin_memory: bool = True,
     ):
         self.names = names
+        # Kept, not merely iterated: `detection_class_steps` below is the only place the
+        # step share can be computed at all, because it needs both the schedule (here)
+        # and what each dataset can label (there).
+        self.datasets = list(datasets)
         self.loaders = [
             DataLoader(
                 ds,
@@ -98,6 +102,45 @@ class MultiTaskLoader:
                 "supervises are unsupervised, and export will refuse the model."
             )
         self.steps_per_epoch = sum(self.steps)
+
+    def detection_class_steps(self) -> dict[str, tuple[int, int]]:
+        """Per detection class: ``(steps that supervise it, total detection steps)``.
+
+        The measurement `config_schema.minority_sourced_terrain_classes` says belongs
+        here rather than in a config check, and says why: `sample_ratio` is in the config
+        and the number of images behind it is not, so a share derived from ratios alone
+        is an invented figure with a confident shape. Here both are known -- `self.steps`
+        *is* the schedule -- so the number is counted rather than estimated.
+
+        Empty unless some dataset carries a `det_vocab`. Without one there is a single
+        detection source by construction (two would collide on label 0), so every class
+        is at 100% and the table would say nothing.
+
+        It reports the *supervised* share and not a negative share, and that is a
+        consequence of the class mask rather than an omission: a dataset that cannot
+        label a class now contributes no gradient to it instead of contributing a false
+        negative. What remains worth reading is how thin a channel's supervision is --
+        `person` trained on 10% of steps is a bootstrap, and the log line is where that
+        becomes visible before the run rather than after it.
+        """
+        out: dict[str, tuple[int, int]] = {}
+        det = [
+            (ds, n)
+            for ds, n in zip(self.datasets, self.steps, strict=True)
+            if getattr(ds, "vocab", None) is not None
+            and "detection" in getattr(ds, "supervises", [])
+        ]
+        total = sum(n for _ds, n in det)
+        if not total:
+            return out
+        for ds, _n in det:
+            for name in ds.vocab.classes:
+                out.setdefault(name, (0, total))
+        for ds, n in det:
+            for label in ds.supplied_labels:
+                name = ds.vocab.classes[label]
+                out[name] = (out[name][0] + n, total)
+        return out
 
     def __len__(self) -> int:
         return self.steps_per_epoch

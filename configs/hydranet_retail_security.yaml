@@ -1,0 +1,166 @@
+# =============================================================================
+# 零售 + 安防: one store camera, one trunk, one detection head that holds both questions.
+#
+# `hydranet_retail_surfaces.yaml` is this config's parent and answers the retail half:
+# six terrain classes and a two-class merchandise detector. What it cannot do is the
+# security half, and the reason is one sentence in `hydranet_retail_products.yaml`:
+#
+#     Two detection datasets in one config both produce a label `0` -- `person` in
+#     COCO's numbering and `boxed_stock` in this one -- and one head cannot hold both
+#     meanings.
+#
+# Every security event this deployment wants -- zone intrusion, occupancy, loitering, an
+# object left behind -- is keyed on `person` boxes. So the numbering had to stop being
+# per-dataset, and `data/label_maps_retail_security.py` is where it stopped: a
+# vocabulary assigns the ids once and both annotation files map their category *names*
+# into it. `det_vocab: retail_security` below is that, and it is the only structural
+# change here.
+#
+# ---------------------------------------------------------------------------
+# THE HALF THE VOCABULARY DOES NOT FIX
+#
+# Sharing a head is not sharing supervision. A site frame full of shoppers carries no
+# person boxes, so without help every point on every shopper is a labelled *negative*
+# for channel 0. That is the mechanism that held `product` at IoU 0.000 for 22 epochs in
+# the segmentation case (`config_schema.minority_sourced_terrain_classes`), and it does
+# not care that this is a different head.
+#
+# `FCOSLoss` therefore takes a class mask, and each dataset supplies its own: a COCO
+# batch trains channels 0-1 and leaves 2-3 untouched, a site batch does the reverse.
+# Untouched is not "weighted down", it is no gradient at all.
+#
+# What that buys and what it does not:
+#   * a minority source is now slow, not suppressed -- which is why the COCO ratio below
+#     can be set on throughput grounds rather than defensively;
+#   * `person` is still trained on COCO alone: web photography, eye level, uncompressed,
+#     against 24 overhead h.264 store cameras. RETAIL_SCOPE.md measured what that gap did
+#     to `column`, a class ADE20K *did* supply -- 0.40-0.51 on val, 0.00% of pixels on
+#     site. Person detection here is a bootstrap until site person boxes exist, and every
+#     number downstream of it (tracks, dwell, occupancy, every event in
+#     `analytics/events.py`) inherits that.
+#   * `person` mAP is measured on COCO val and nowhere else, because the site annotation
+#     file has no person category to score against. A good number here is not evidence
+#     about a store.
+#
+# ---------------------------------------------------------------------------
+# THE STEP ARITHMETIC, COUNTED RATHER THAN CHOSEN
+#
+# At batch 32, per epoch, with drop_last:
+#
+#   ade20k      5,998 imgs -> 187 batches x 0.15 =  28 seg steps
+#   site_seg      180 imgs ->   5 batches x 3.0  =  15 seg steps
+#   site_boxes    180 imgs ->   5 batches x 3.0  =  15 det steps
+#   coco_person 65,744 imgs -> 2,054 batches x 0.05 = 102 det steps
+#
+# So COCO is 64% of all steps. That sounds high against the "keep COCO at 0.1" rule in
+# RETAIL_SCOPE.md until the same arithmetic is applied to the config that measured it:
+# there, 0.1 of full COCO against ADE20K at 1.0 was already about two thirds of steps.
+# The rule was written in ratios and the ratio is not the share. `MultiTaskLoader.
+# detection_class_steps` prints the realised share at startup so this stops being an
+# estimate.
+#
+# It is still the first thing to sweep, and the sweep costs three seeds or it reports
+# nothing: `detection_mAP/site_boxes` has a measured seed spread of 0.0173 on this
+# family (ARCHITECTURE_DIRECTION.md section 4), so a single-run comparison of two ratios
+# decides nothing at all.
+#
+# ---------------------------------------------------------------------------
+# WHAT IS NOT IN THIS CONFIG, DELIBERATELY
+#
+# `trolley`, `basket`, `staff` -- asked for, unsourced, and an unsourced channel is
+# trained on nothing while the run looks normal. They are named in
+# `label_maps_retail_security.UNSOURCED_CANDIDATES` with what each would need.
+#
+# Fall, fight, abandoned object, line crossing, occupancy: none of them is a model output
+# here. They are events over tracks and the ground plane, they live in
+# `analytics/events.py`, and `docs/RETAIL_SECURITY.md` argues why putting any of them in
+# the exported graph would be the "within 5 m is not a class" mistake repeated.
+# =============================================================================
+
+_base_: hydranet_retail_surfaces.yaml
+
+experiment: hydranet_retail_security
+output_dir: runs/hydranet_retail_security
+
+model:
+  heads:
+    terrain:
+      # Unchanged from the parent: void, floor, wall, column, fixture, person. `person`
+      # stays in segmentation for the reason the parent's header gives -- free space is
+      # derived from terrain here, and a person's pixels would otherwise fall back to
+      # `floor` and become a person-shaped hole of walkable ground.
+      num_classes: 6
+    detection:
+      # person, bag, boxed_stock, device -- data/label_maps_retail_security.py.
+      # The width is the vocabulary's and `_check_detection_vocab` refuses a mismatch,
+      # because a head one channel narrow trains every box against the wrong class and
+      # still converges.
+      num_classes: 4
+
+data:
+  terrain_classes: [void, floor, wall, column, fixture, person]
+  datasets:
+    - name: ade20k
+      type: seg_folder
+      root: datasets/ADE20K
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: ade20k_retail_surfaces
+      sample_ratio: 0.15
+      supervises: [terrain]
+
+    - name: site_seg
+      type: seg_folder
+      root: datasets/retail_objects_batch02
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: retail_surfaces_from_objects
+      sample_ratio: 3.0
+      supervises: [terrain]
+
+    - name: site_boxes
+      type: coco
+      root: datasets/retail_objects_batch02
+      split_train: train
+      split_val: val
+      split_test: test
+      det_vocab: retail_security
+      sample_ratio: 3.0
+      supervises: [detection]
+
+    # The security half's only source. `classes` selects the four COCO categories worth
+    # reading and the vocabulary decides what they become: `person` -> 0, and
+    # `backpack`/`handbag`/`suitcase` all -> `bag`, one channel, because nothing
+    # downstream asks which of the three it was and three thin channels learn worse than
+    # one thick one.
+    #
+    # Counted in the annotation file: 64,115 person images / 257,253 boxes, 11,989 bag
+    # images / 27,168 boxes, 65,744 images in the union.
+    #
+    # `bag` is here for the security question rather than for completeness -- an object
+    # left behind in a shop is overwhelmingly a bag, and it is the one class of the four
+    # that COCO supplies and the store cameras will actually meet.
+    - name: coco_person
+      type: coco
+      root: datasets/coco
+      split_train: train2017
+      split_val: val2017
+      classes: [person, backpack, handbag, suitcase]
+      det_vocab: retail_security
+      sample_ratio: 0.05
+      supervises: [detection]
+
+train:
+  # `detection_mAP/site_boxes`, not bare `detection_mAP`: with two detection datasets the
+  # evaluator keys the metric per dataset, and a config selecting on a key that no longer
+  # exists silently falls back. Selecting on the site number is the deliberate half --
+  # COCO person mAP would be selected on 2,693 val images of web photography and would
+  # pick the checkpoint that is best at something this deployment does not do.
+  #
+  # 36 site val images and 1,364 boxes stand behind it. That is enough to select on and
+  # not enough to report: rare-class numbers go on `test` (72 images, 1,130 boxes), and
+  # read `split.json`'s `test_provenance` first -- the human pass was never completed, so
+  # those are agreement with SAM 3, not accuracy.
+  primary_metric: detection_mAP/site_boxes
