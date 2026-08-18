@@ -39,7 +39,8 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
-from syncai_hydranet.config import load_config  # noqa: E402
+import yaml  # noqa: E402
+
 from syncai_hydranet.data.label_maps import get_scheme  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
@@ -60,8 +61,22 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def run_config(run: Path) -> dict:
+    """Read a finished run's config as a record, without today's validator.
+
+    `load_config` calls `check_config`, which is right for launching a run and wrong for
+    reading one: a run from this morning cannot be expected to satisfy a check added this
+    afternoon, and refusing to *analyse* it because of that loses the only evidence about
+    what it did. `runs/hydranet_retail_security_b03/config.yaml` is exactly that case --
+    it carries the two-name `classes` list whose check landed hours after it started.
+
+    A saved run config is already fully merged, so no `_base_` resolution is needed.
+    """
+    return yaml.safe_load((run / "config.yaml").read_text())
+
+
 def confusion(run: Path, args, device) -> tuple[np.ndarray, list[str]]:
-    cfg = load_config(str(run / "config.yaml"))
+    cfg = run_config(run)
     model = build_model(cfg).to(device).eval()
     model.load_state_dict(
         select_weights(load_checkpoint(str(run / args.checkpoint)), args.weights)
