@@ -899,8 +899,10 @@ th{color:var(--dim);font-weight:500;font-size:11px;text-transform:uppercase;lett
       未收到即自停（deadman），放開即停。<br>
       <b>軸指令碼在兩個模式下意義不同</b>：<code>0x21010130</code> 移動模式是前後平移、原地模式是俯仰；
       <code>0x21010131</code> 是左右平移／橫滾。所以同一時間只會串流其中一組。<br>
-      移動模式 <code>WASD</code> 前後左右、<code>QE</code> 轉向；
+      移動模式 <code>WASD</code> 前後左右、<code>QE</code>／<code>←→</code> 轉向、<code>↑↓</code> 前後；
       原地模式 <code>↑↓</code> 抬頭低頭、<code>←→</code> 左右傾（規格：俯仰取正值時低頭）。<br>
+      方向鍵兩個模式都有作用——走路時轉向、站立時調姿態。移動模式沒有俯仰／橫滾可用，
+      那兩個碼在該模式是平移。<br>
       <code>Shift+↑↓</code> 身體高度——<b>兩個模式都能用</b>，因為 <code>0x21010102</code> 在移動模式
       沒有對應意義，是唯一不會被誤讀成行走的軸。</div>
     </div>
@@ -1058,7 +1060,12 @@ document.querySelectorAll(".mv").forEach(function(b){
   ["mouseup","mouseleave","touchend","touchcancel"].forEach(function(ev){b.addEventListener(ev,rel);});});
 // Spec 1.2.3.1: 俯仰 取正值时低头 -- positive pitch is nose DOWN, so ArrowUp is negative.
 // 横滚 取正值时向右翻滚 -- positive roll banks right.
-const MOVEKEYS={KeyW:{vx:1},KeyS:{vx:-1},KeyA:{vy:-1},KeyD:{vy:1},KeyQ:{vyaw:-1},KeyE:{vyaw:1}};
+// Arrows are bound in BOTH modes and mean "the obvious thing here": steer while walking,
+// tilt while standing. In movement mode left/right is YAW rather than lateral -- turning
+// is what an arrow key means on a vehicle, strafing is already A/D, and yaw is the only
+// rotational axis that exists in this mode (pitch and roll's codes are translations here).
+const MOVEKEYS={KeyW:{vx:1},KeyS:{vx:-1},KeyA:{vy:-1},KeyD:{vy:1},KeyQ:{vyaw:-1},KeyE:{vyaw:1},
+  ArrowUp:{vx:1},ArrowDown:{vx:-1},ArrowLeft:{vyaw:-1},ArrowRight:{vyaw:1}};
 const POSEKEYS={ArrowUp:{pitch:-1},ArrowDown:{pitch:1},ArrowLeft:{roll:-1},ArrowRight:{roll:1}};
 // Shift+up/down is body height, and it works while walking. 取正值时抬高身体, so shift-up
 // is positive. Held under its own synthetic key so it cannot collide with a plain arrow.
@@ -1076,7 +1083,7 @@ document.addEventListener("keydown",function(e){
   const km=keymap();
   if(km[e.code]&&!keyHeld[e.code]){keyHeld[e.code]=km[e.code];recompute();}
   else if(!km[e.code]&&(POSEKEYS[e.code]||MOVEKEYS[e.code])){
-    toast(mode==="move"?"方向鍵是原地模式的姿態控制（Shift+↑↓ 身高兩個模式都能用）":"WASD 是移動模式的行走控制");}});
+    toast("WASD/QE 是移動模式的行走控制，目前是原地模式");}});
 document.addEventListener("keyup",function(e){
   var touched=false;
   ["Shift+"+e.code,e.code].forEach(function(id){if(keyHeld[id]){delete keyHeld[id];touched=true;}});
@@ -1085,7 +1092,7 @@ document.addEventListener("keyup",function(e){
   if(e.key==="Shift"){for(const k in keyHeld)if(k.indexOf("Shift+")===0){delete keyHeld[k];touched=true;}}
   if(touched)recompute();});
 function setModeTag(m){mode=m;
-  $("modetag").textContent="模式："+(m==="move"?"移動（WASD/QE 有效，方向鍵停用）":"原地（方向鍵有效，WASD 停用）");
+  $("modetag").textContent="模式："+(m==="move"?"移動（WASD/QE＋方向鍵轉向）":"原地（方向鍵姿態，WASD 停用）");
   $("btnmove").style.borderColor=(m==="move")?"var(--good)":"";
   $("btninplace").style.borderColor=(m==="inplace")?"var(--good)":"";
   for(const k in keyHeld)delete keyHeld[k];held.clear();recompute();}
