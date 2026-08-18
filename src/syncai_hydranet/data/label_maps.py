@@ -213,6 +213,37 @@ SCHEMES: dict[str, LabelScheme] = {
         _obj.RETAIL_OBJECTS_TO_TRAV,
         _obj.RETAIL_OBJECTS,
     ),
+    # The same taxonomy with `product` taken out of segmentation and left to the
+    # detection head, which is the instrument that can actually resolve it: merchandise
+    # is 2-3 feature cells across at stride 8, and a dense head has too few cells to put
+    # an edge in. `person` stays, because unlike `product` its pixels would fall back to
+    # `floor` and open walkable space where a shopper is standing. See
+    # label_maps_retail_objects.py for the asymmetry, which is the whole argument.
+    #
+    # `retail_surfaces_from_objects` reads the site masks already on disk -- which carry
+    # `RETAIL_OBJECTS` ids -- so dropping the class costs no re-annotation. It is a
+    # renumbering as well as a merge: `person` is 6 there and 5 here.
+    "ade20k_retail_surfaces": _scheme(
+        "ade20k_retail_surfaces",
+        "id",
+        _obj.ADE20K_ID_TO_RETAIL_SURFACES,
+        _obj.RETAIL_SURFACES_TO_TRAV,
+        _obj.RETAIL_SURFACES,
+    ),
+    "retail_surfaces_native": _scheme(
+        "retail_surfaces_native",
+        "id",
+        _obj.RETAIL_SURFACES_NATIVE_ID,
+        _obj.RETAIL_SURFACES_TO_TRAV,
+        _obj.RETAIL_SURFACES,
+    ),
+    "retail_surfaces_from_objects": _scheme(
+        "retail_surfaces_from_objects",
+        "id",
+        _obj.RETAIL_OBJECTS_ID_TO_SURFACES,
+        _obj.RETAIL_SURFACES_TO_TRAV,
+        _obj.RETAIL_SURFACES,
+    ),
     # Reads the retail-13 site masks already collected (SAM 3 consensus, pilot) under
     # the object taxonomy, so that work carries over. `column` does not survive the
     # trip -- get_scheme() says so out loud rather than leaving it to an IoU of 0.000.

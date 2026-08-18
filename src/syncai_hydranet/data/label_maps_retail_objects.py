@@ -225,6 +225,10 @@ def _build_ade20k_map() -> dict[int, int]:
 
 ADE20K_ID_TO_RETAIL_OBJECTS = _build_ade20k_map()
 
+# Reverse lookup, used by the surfaces map below. Built here rather than inline because
+# the object ids are unique by construction and a reader should be able to see that.
+_OBJ_NAME = {tid: name for name, tid in RETAIL_OBJECTS.items()}
+
 
 # Which ADE20K ids the robot scheme uses and this one drops, and why. Kept as data
 # rather than prose because tests/test_retail_objects_scheme.py asserts against it: a
@@ -257,9 +261,77 @@ def unsourced_classes(*mappings: dict[int, int]) -> tuple[str, ...]:
     return tuple(name for name, tid in RETAIL_OBJECTS.items() if tid and tid not in produced)
 
 
+# ---------------------------------------------------------------------------
+# The surfaces taxonomy: the same classes with `product` taken out of segmentation.
+#
+# **`product` is a detection question, and that was measured rather than argued.**
+# `configs/hydranet_retail_products.yaml` records it: at the model's own input scale the
+# merchandise boxes are a median 17.7 x 28.7 px, which at stride 8 is **two or three
+# feature cells across**. A dense head cannot draw an outline with too few cells to put an
+# edge in, which is why `product` IoU sits near 0.1 while `fixture`, large and
+# clean-edged, reaches 0.72 on the same frames. FCOS regresses a centre and an extent and
+# needs no cells at all.
+#
+# **Why `product` may leave and `person` may not.** The test is not which head draws the
+# class better; it is *what free space becomes if the channel disappears*. `cli/scene.py`
+# derives traversability from terrain through `RETAIL_SURFACES_TO_TRAV`, because these
+# configs drop the traversability head, so every terrain class is load-bearing for the
+# floor polygon:
+#
+#     product -> its pixels fall back to `fixture`, which merchandise sits on. Blocked
+#                either way, so free space is bit-for-bit unchanged. Safe to remove.
+#     person  -> its pixels would fall back to `floor`, which is `go`. That is a
+#                person-shaped hole of walkable floor, drawn confidently, in metres, with
+#                no error anywhere. `person` stays.
+#
+# The asymmetry is a property of what each class stands *on*, and it is the whole reason
+# this taxonomy is a six-class edit rather than a two-class one.
+#
+# Derived from `RETAIL_OBJECTS` rather than written out, so the two cannot drift: adding a
+# class above and forgetting it here would otherwise produce a silently narrower scheme.
+RETAIL_SURFACES = {
+    name: i for i, name in enumerate(n for n in RETAIL_OBJECTS if n != "product")
+}
+
+RETAIL_SURFACES_NATIVE_ID = {0: 255, **{v: v for v in RETAIL_SURFACES.values() if v}}
+
+RETAIL_SURFACES_TO_TRAV = {
+    RETAIL_SURFACES["void"]: 255,
+    RETAIL_SURFACES["floor"]: 2,
+    RETAIL_SURFACES["wall"]: 0,
+    RETAIL_SURFACES["column"]: 0,
+    RETAIL_SURFACES["fixture"]: 0,
+    RETAIL_SURFACES["person"]: 0,
+}
+
+# Reads the site masks already on disk -- which are `RETAIL_OBJECTS` ids -- under this
+# taxonomy, so removing the class costs no re-annotation. `person` is 6 there and 5 here,
+# so this is a renumbering and not only a merge; taking the masks verbatim would relabel
+# every shopper as `fixture`.
+RETAIL_OBJECTS_ID_TO_SURFACES = {
+    0: 255,  # unlabelled background, as in RETAIL_OBJECTS_NATIVE_ID
+    **{
+        RETAIL_OBJECTS[name]: RETAIL_SURFACES["fixture" if name == "product" else name]
+        for name in RETAIL_OBJECTS
+        if name != "void"
+    },
+}
+
+ADE20K_ID_TO_RETAIL_SURFACES = {
+    ade: RETAIL_SURFACES["fixture" if obj == RETAIL_OBJECTS["product"] else _OBJ_NAME[obj]]
+    for ade, obj in ADE20K_ID_TO_RETAIL_OBJECTS.items()
+}
+
+
 # Sanity: the object taxonomy must not accidentally re-derive the indoor one. If a
 # future edit makes these equal, the migration table above is silently an identity map.
 assert set(RETAIL_OBJECTS) != set(INDOOR_TERRAIN)
+# `product` is the only class this taxonomy drops, and the merge target must stay blocked
+# -- if `fixture` ever became walkable, removing `product` would open free space where
+# merchandise is, which is exactly the failure the header argues cannot happen.
+assert set(RETAIL_OBJECTS) - set(RETAIL_SURFACES) == {"product"}
+assert RETAIL_SURFACES_TO_TRAV[RETAIL_SURFACES["fixture"]] == 0
+assert RETAIL_OBJECTS_ID_TO_SURFACES[RETAIL_OBJECTS["product"]] == RETAIL_SURFACES["fixture"]
 assert set(ADE20K_ID_TO_RETAIL_OBJECTS) <= set(ADE20K_ID_TO_INDOOR), (
     "every ADE20K id used here must exist in the verified indoor table; a new id has "
     "not been checked against objectInfo150.txt"

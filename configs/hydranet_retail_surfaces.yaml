@@ -1,0 +1,103 @@
+# =============================================================================
+# Phase 1 of docs/ARCHITECTURE_DIRECTION.md: split the taxonomy by instrument.
+#
+# `hydranet_retail_products.yaml` with `product` taken out of the segmentation head and
+# left to the detection head, which is the instrument that can resolve it. That config's
+# own header carries the measurement: merchandise is a median 17.7 x 28.7 px at the
+# model's input scale, so at stride 8 it is **two or three feature cells across** and a
+# dense head has too few cells to put an edge in. `product` IoU sits near 0.1 while
+# `fixture`, large and clean-edged, reaches 0.72 on the same frames.
+#
+# ---------------------------------------------------------------------------
+# WHY `product` MAY LEAVE AND `person` MAY NOT
+#
+# The first draft of the direction document said to move both, on the grounds that the
+# detection head already finds people. That was wrong in the direction that hurts, and it
+# was caught by checking the consumer rather than by reasoning about the head.
+#
+# These configs drop the traversability head, so `cli/scene.py` **derives** free space
+# from the terrain map. Every terrain class is therefore load-bearing for the floor
+# polygon, and the question is not which head draws a class better but *what free space
+# becomes where that class used to be*:
+#
+#     product  -> its pixels fall back to `fixture`, which merchandise sits on. Blocked
+#                 either way, so free space is bit-for-bit unchanged.
+#     person   -> its pixels would fall back to `floor`, which is `go`. That is a
+#                 person-shaped hole of walkable floor, drawn in metres, with no error.
+#
+# `tests/test_retail_surfaces_scheme.py` checks the first line class by class rather than
+# taking this comment's word for it.
+#
+# ---------------------------------------------------------------------------
+# NO RE-ANNOTATION
+#
+# `retail_surfaces_from_objects` reads the masks already on disk -- which carry
+# `RETAIL_OBJECTS` ids -- under the six-class taxonomy. It is a **renumbering as well as
+# a merge**: `person` is 6 there and 5 here, so reading the masks verbatim would label
+# every shopper `fixture`. ADE20K goes through `ade20k_retail_surfaces` for the same
+# reason.
+#
+# ---------------------------------------------------------------------------
+# HOW TO READ ITS RESULT, GIVEN WHAT WAS MEASURED TODAY
+#
+# Three seed replicates of the parent config scored `detection_mAP` 0.0655 / 0.0821 /
+# 0.0648 -- a spread of **0.0173** on a config where nothing changed but the seed. A
+# single run of this config against a single run of the parent decides nothing. Three
+# seeds or no claim; see ARCHITECTURE_DIRECTION.md section 4.
+#
+# What this config *can* answer on one run is narrower and still worth having: whether
+# `fixture` improves once it stops competing with `product` for the same pixels. That is
+# a within-run comparison against this run's own `product`-free `fixture`, not a
+# cross-run mAP difference.
+# =============================================================================
+
+_base_: hydranet_retail_products.yaml
+
+experiment: hydranet_retail_surfaces
+output_dir: runs/hydranet_retail_surfaces
+
+model:
+  heads:
+    terrain:
+      # void, floor, wall, column, fixture, person. One fewer than the parent.
+      num_classes: 6
+      loss:
+        dice_weight: 1.5
+    detection:
+      # Unchanged: boxed_stock, device. This is where `product` went, and it was already
+      # here -- the change is that segmentation stops answering the same question badly.
+      num_classes: 2
+
+data:
+  terrain_classes: [void, floor, wall, column, fixture, person]
+  datasets:
+    - name: ade20k
+      type: seg_folder
+      root: datasets/ADE20K
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: ade20k_retail_surfaces
+      sample_ratio: 0.15
+      supervises: [terrain]
+
+    - name: site_seg
+      type: seg_folder
+      root: datasets/retail_objects_batch02
+      split_train: train
+      split_val: val
+      split_test: test
+      # Reads the existing 7-class masks as 6 classes. See the header: this is the
+      # renumbering, not an identity map.
+      label_map: retail_surfaces_from_objects
+      sample_ratio: 3.0
+      supervises: [terrain]
+
+    - name: site_boxes
+      type: coco
+      root: datasets/retail_objects_batch02
+      split_train: train
+      split_val: val
+      split_test: test
+      sample_ratio: 1.0
+      supervises: [detection]
