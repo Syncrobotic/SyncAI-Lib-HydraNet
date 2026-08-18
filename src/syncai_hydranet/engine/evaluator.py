@@ -57,6 +57,13 @@ class ConfusionMatrix:
         inter = np.diag(mat).astype(np.float64)
         union = mat.sum(1) + mat.sum(0) - inter
         iou = np.where(union > 0, inter / np.maximum(union, 1), np.nan)
+        # Every class NaN -- a batch that was entirely `ignore`, which the loss also
+        # skips -- is a real state, not an error, so it returns NaN rather than warning
+        # about it. `np.nanmean` of an all-NaN slice emits a RuntimeWarning and returns
+        # the same NaN; taking the branch explicitly means the suite can run with
+        # `-W error` and this stays a value rather than becoming a failure.
+        if not np.isfinite(iou).any():
+            return float("nan"), iou
         return float(np.nanmean(iou)), iou
 
     def predicted(self) -> np.ndarray:
