@@ -4,21 +4,40 @@
 runtime assumptions someone else's problem rather than only ours. As of 2026-08-18 a copy
 runs on a Lite3 quadruped, rendering `bev3d.render` panels live from the NPU's output.
 That robot's Python is **3.8** and its Pillow was **7.0**; this package targets the
-`requires-python = ">=3.10"` the project declares, so five things here need patching on
-the way over and were patched in the robot's copy, not here:
+`requires-python = ">=3.10"` the project declares. Four of the five patches the copy
+needs are pure re-spellings with identical behaviour:
 
-    scene_types.py:143   `Scene = PlaneScene | DepthScene`   runtime alias, 3.10+
-    meshes.py:39         `Mesh = tuple[np.ndarray, ...]`     runtime subscript, 3.9+
-    bev.py, shading.py, bev3d.py   `zip(..., strict=True)`   3.10+
-    bev3d.py:387,420     `Image.Resampling` / `Image.Transform`   Pillow 9.1+
-    bev3d.py:639         `rounded_rectangle`                 Pillow 8.2+
+    scene_types.py:143   `Scene = PlaneScene | DepthScene`  -> Union      runtime alias
+    meshes.py:39         `Mesh = tuple[np.ndarray, ...]`    -> Tuple      runtime subscript
+    bev3d.py:387,420     `Image.Resampling`/`Image.Transform` -> the flat constants
+    bev3d.py:639         `rounded_rectangle`                 -> needs Pillow >= 8.2
 
-Nothing above is a defect: 3.10 is the floor this project supports and these are the
-idioms that floor buys. It is written down because the divergence is now real and
-undocumented divergence is how two copies stop being the same code -- the failure
-`test_orin_standalone_copies.py` exists to prevent for the Orin's standalone bench
-script. If the robot copy is ever meant to track this one, that test is the pattern to
-follow; if it is not, this note is what tells the next reader why the two differ.
+The fifth is not, and it is the one to carry forward. **Dropping `strict=True` from
+`zip` does not re-spell the call, it deletes a guard**: 3.10 raises on ragged inputs and
+3.8 silently truncates to the shortest. What each of the three sites is holding together:
+
+    bev.py:196       positions, extents, labels and scores, one per detection. A short
+                     `labels` or `scores` silently drops detections off the end of the
+                     floor map, and every object that survives keeps its own label -- so
+                     the panel is missing boxes and looks entirely correct.
+    bev3d.py:144     the four panel corners against the four raster corners of the
+                     perspective transform. Fewer pairs is a homography fitted to fewer
+                     correspondences: the floor warps wrongly rather than failing.
+    shading.py:185   faces, depths and colours, all three derived from `faces` two lines
+                     above, so a mismatch here is not reachable from outside.
+
+None of this is a defect here: 3.10 is the floor this project supports and these are the
+idioms that floor buys. It is written down because the divergence is real, and an
+undocumented one is how two copies stop being the same code -- the failure
+`test_orin_standalone_copies.py` exists to prevent for the Orin's bench script. The robot
+copy's own report is that its zipped sequences are always equal-length and no logic was
+changed beyond these five, camera parameters being passed in by its caller rather than
+patched in. If that copy is ever meant to track this one, that test is the pattern; if it
+is not, this note is what tells the next reader why they differ and which difference can
+bite silently.
+
+The Pillow bump is part of the cost and not a source patch: 7.0 -> 10.4 on the robot,
+required by `rounded_rectangle` alone.
 """
 
 from .bev import (
