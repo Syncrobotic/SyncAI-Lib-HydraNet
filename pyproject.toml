@@ -59,6 +59,7 @@ dependencies = [
     "pycocotools>=2.0.7",
     "tqdm>=4.66",
     "tensorboard>=2.15",
+    "pyarrow>=25.0.1",
 ]
 
 [project.optional-dependencies]
@@ -229,9 +230,32 @@ root = ["./src"]
 minversion = "8.0"
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+# `error` first: a warning is a failure unless something below says otherwise, and each
+# exception names what it is and why it is allowed. The list this replaced was two broad
+# ignores -- `ignore::DeprecationWarning:torch.onnx` and `ignore::UserWarning:torch` --
+# and the second is the one that mattered: it silenced *every* UserWarning torch raises,
+# including the ones that mean this code is calling a deprecated API. A suppression wide
+# enough to hide a future bug is not a suppression, it is a blind spot.
+#
+# Everything the repo's own code raised was fixed rather than listed: two unclosed-file
+# leaks in `cli/annotation.py` (one on the path a dataset of RGB masks takes on *every*
+# file), an all-NaN `nanmean` in `engine/evaluator.py`, a `requires_grad` tensor cast to
+# float in a test, and a `Recorder` left open by five tests -- which is why `Recorder`
+# is now a context manager. What is left below is not this repo's to fix.
 filterwarnings = [
-    "ignore::DeprecationWarning:torch.onnx",
-    "ignore::UserWarning:torch",
+    "error",
+    # The ONNX exporter, and a decision rather than an oversight. Torch 2.9 made the
+    # torch.export-based exporter the default and deprecated the TorchScript one;
+    # `cli/export_onnx.py` still asks for the legacy path because the Orin's TensorRT
+    # build is validated against what it produces. Revisit when that is re-validated,
+    # not before -- and the warning stays visible in the run log either way.
+    "ignore:.*legacy TorchScript-based ONNX export.*:DeprecationWarning",
+    "ignore:The feature will be removed.*:DeprecationWarning",
+    # `models/heads/segmentation.py` branches on a tensor's shape during tracing, so the
+    # trace fixes the input size -- which is exactly what the exported graph is for: the
+    # Orin runs one fixed 512x640 input. A dynamic-shape export would need this branch
+    # removed and would buy nothing the deployment uses.
+    "ignore::torch.jit.TracerWarning",
 ]
 markers = [
     "slow: tests that train or download data (deselect with '-m \"not slow\"')",
