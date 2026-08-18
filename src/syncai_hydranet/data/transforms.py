@@ -248,6 +248,22 @@ class ToTensor:
         img = (img - IMAGENET_MEAN) / IMAGENET_STD
         s["image"] = torch.from_numpy(img.transpose(2, 0, 1)).contiguous()
         if "masks" in s:
+            # **`masks` means class ids, and this cast is the contract rather than a
+            # convenience.** Anything routed through here is truncated to integers, so a
+            # continuous target put in this dict does not fail -- it quantises.
+            #
+            # The depth head found this the day it was written (2026-08-18) and stayed
+            # out: 2.73 m would arrive as 2 and 0.34 m as 0, and since 0.0 is NYUv2's
+            # no-return sentinel the near field would be deleted and then masked out as
+            # invalid. The loss falls, the run looks healthy, and the head learns a
+            # staircase. `data/nyu_depth.py` does its own preprocessing for that reason.
+            #
+            # Widening this to preserve float dtype would be a two-line change and the
+            # wrong one: it would invite continuous targets into a pipeline whose other
+            # stages are also written for class ids -- nearest-neighbour resampling is
+            # right for a label map and lossy for metres, and the photometric jitter above
+            # must never touch a target that is not an image. A float target wants its own
+            # path, which is what it has.
             s["masks"] = {
                 k: torch.from_numpy(m.astype(np.int64)) for k, m in s["masks"].items()
             }
