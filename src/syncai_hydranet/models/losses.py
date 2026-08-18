@@ -7,6 +7,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from ..labels import IGNORE
+
 # ---------------------------- segmentation ----------------------------
 
 
@@ -35,7 +37,7 @@ class SegLoss(nn.Module):
         num_classes: int,
         ce_weight: float = 1.0,
         dice_weight: float = 1.0,
-        ignore_index: int = 255,
+        ignore_index: int = IGNORE,
         class_weights: list[float] | None = None,
     ):
         super().__init__()

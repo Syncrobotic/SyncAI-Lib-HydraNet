@@ -10,10 +10,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ..labels import IGNORE
 from .ground import Camera, GroundPlane, pixel_to_ground
 from .scene_types import PlaneObject, PlaneScene
-
-IGNORE = 255
 
 
 @dataclass(frozen=True)

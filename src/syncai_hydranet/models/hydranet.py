@@ -16,6 +16,7 @@ from typing import NamedTuple
 import torch
 import torch.nn as nn
 
+from ..labels import IGNORE
 from .backbone import build_backbone
 from .heads.detection import SCORE_THR_VIEW, FCOSHead, build_det_head
 from .heads.registry import DetectionHead, Head, SegmentationHead
@@ -66,7 +67,7 @@ class HydraNet(nn.Module):
                     hcfg["num_classes"],
                     ce_weight=lcfg.get("ce_weight", 1.0),
                     dice_weight=lcfg.get("dice_weight", 1.0),
-                    ignore_index=lcfg.get("ignore_index", 255),
+                    ignore_index=lcfg.get("ignore_index", IGNORE),
                     class_weights=lcfg.get("class_weights"),
                 )
             elif hcfg["type"] == "fcos":

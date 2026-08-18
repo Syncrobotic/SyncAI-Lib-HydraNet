@@ -48,9 +48,9 @@ from ..data.label_maps_retail_objects import (
     RETAIL_OBJECTS_NATIVE_ID,
     RETAIL_OBJECTS_TO_TRAV,
 )
+from ..labels import IGNORE
 from ..utils.visualize import terrain_palette
 
-IGNORE = 255
 TRAV_NAMES = {0: "blocked", 1: "caution", 2: "go", IGNORE: "ignore"}
 
 # Annotation priority, from ANNOTATION_SETUP.md: rank by danger x how blind LiDAR is.

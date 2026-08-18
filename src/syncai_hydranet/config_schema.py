@@ -18,6 +18,7 @@ from typing import Any
 
 from .data.label_maps import SCHEMES
 from .data.label_maps_retail_security import get_det_vocab
+from .labels import IGNORE
 
 NUMBER = (int, float)
 
@@ -775,6 +776,37 @@ def _check_channels_last(rep: _Report, cfg: dict) -> None:
         )
 
 
+def _check_ignore_index(rep: _Report, cfg: dict) -> None:
+    """Every head's `ignore_index` must be the mask-file contract, and this raises.
+
+    `labels.IGNORE` is what an annotation PNG carries where the class is unknown, and
+    `hydranet-annotation check` refuses a dataset that writes anything else. A loss told
+    a different number does not fail: it treats every unlabelled pixel as a trainable
+    class, the loss still falls, and the per-class IoUs stay plausible -- the same shape
+    of silent failure the annotation gate exists to prevent, one layer further in.
+
+    An error rather than a warning, because there is no legitimate reason to disagree.
+    The value is fixed by the file format (single-channel 8-bit PNG) rather than chosen,
+    so a config that names another one is a typo or a misunderstanding, and both are
+    cheaper to fix here than after a run.
+    """
+    heads = (cfg.get("model") or {}).get("heads")
+    if not isinstance(heads, dict):
+        return
+    for name, head in heads.items():
+        loss = head.get("loss") if isinstance(head, dict) else None
+        if not isinstance(loss, dict) or "ignore_index" not in loss:
+            continue
+        got = loss["ignore_index"]
+        if got != IGNORE:
+            rep.errors.append(
+                f"model.heads.{name}.loss.ignore_index is {got!r}, not {IGNORE}. That is "
+                "the value an annotation PNG carries where the class is unknown "
+                "(`labels.IGNORE`); a loss told anything else trains on void as if it "
+                "were a class and nothing downstream says so."
+            )
+
+
 def check_config(cfg: dict) -> list[str]:
     """Validate a config. Returns non-fatal warnings; raises ConfigError otherwise."""
     rep = _Report()
@@ -813,6 +845,7 @@ def check_config(cfg: dict) -> list[str]:
     _check_fixed_weights(rep, cfg)
     _check_unsourced_classes(rep, cfg)
     _check_minority_sourced(rep, cfg)
+    _check_ignore_index(rep, cfg)
 
     if rep.errors:
         listing = "\n".join(f"  - {e}" for e in rep.errors)
