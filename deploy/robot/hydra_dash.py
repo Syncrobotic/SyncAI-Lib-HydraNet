@@ -584,6 +584,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(b)))
+            # The page is built once at start-up, so a redeploy only reaches a browser
+            # that asks again. Without this the arrow-key change shipped, the service
+            # restarted, every endpoint returned 200 -- and the operator kept using the
+            # cached previous page, with nothing anywhere reporting a stale copy.
+            self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(b)
         elif self.path.startswith("/infer/") and ".jpg" in self.path:
