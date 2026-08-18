@@ -147,7 +147,7 @@ def main() -> None:
 
     draw_scene(draw, view, [(m, PALETTE[k], a) for m, k, a, _ in items], bg=BG)
 
-    img = img.resize((W, H), Image.LANCZOS)
+    img = img.resize((W, H), Image.Resampling.LANCZOS)
     text = ImageDraw.Draw(img)
     text.text((18, 16), "geometry/meshes.py  ·  wall / column / cabinet / table / human",
               fill=(216, 224, 236))  # fmt: skip

@@ -99,7 +99,9 @@ def fixture_region(seg, cfg, device, frame: np.ndarray) -> np.ndarray:
     x0, y0, cw, ch = region
     terrain = terrain[y0 : y0 + ch, x0 : x0 + cw]
     terrain = np.asarray(
-        Image.fromarray(terrain).resize((frame.shape[1], frame.shape[0]), Image.NEAREST)
+        Image.fromarray(terrain).resize(
+            (frame.shape[1], frame.shape[0]), Image.Resampling.NEAREST
+        )
     )
     return terrain == fid
 

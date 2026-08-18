@@ -77,7 +77,10 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked --group dev
-      - run: ./scripts/ty_ratchet.sh
+      - run: ./scripts/ty_ratchet.sh src/
+      # scripts/ has its own baseline rather than joining src/'s: one number would
+      # let what ships regress behind a dev-side improvement.
+      - run: ./scripts/ty_ratchet.sh scripts/
 
   # No dataset needed: the model runs on random tensors, the dataset tests build a
   # fixture in tmp_path, and test_overfit.py memorises one synthetic batch on CPU.

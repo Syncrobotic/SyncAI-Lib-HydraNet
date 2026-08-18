@@ -65,8 +65,10 @@ jobs:
       # and its caller on another is a cross-file failure that neither branch's own CI
       # run could have seen. Same script and same baseline as ci.yml, so the two tiers
       # cannot disagree about what the number is.
-      - name: Type ratchet
-        run: ./scripts/ty_ratchet.sh
+      - name: Type ratchet (src/)
+        run: ./scripts/ty_ratchet.sh src/
+      - name: Type ratchet (scripts/)
+        run: ./scripts/ty_ratchet.sh scripts/
       # Coverage threshold included: a promotion that drops the floor is exactly the
       # kind of thing that only shows up once branches are combined.
       - name: Tests on the combined state

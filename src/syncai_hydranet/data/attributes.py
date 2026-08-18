@@ -137,7 +137,7 @@ class PA100K(Dataset):
 
         rec = self.images[i].as_py()
         img = Image.open(io.BytesIO(rec["bytes"] if isinstance(rec, dict) else rec))
-        img = img.convert("RGB").resize((self.size[1], self.size[0]), Image.BILINEAR)
+        img = img.convert("RGB").resize((self.size[1], self.size[0]), Image.Resampling.BILINEAR)
         x = np.asarray(img, dtype=np.float32) / 255.0
         if self.train and np.random.rand() < 0.5:
             # Horizontal flip only. Not vertical, and not rotation: `Front`/`Side`/`Back`

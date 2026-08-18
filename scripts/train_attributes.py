@@ -187,7 +187,7 @@ def market_embeddings(model, items, device, batch_size: int = 256):
         chunk = items[start : start + batch_size]
         arr = []
         for p, _pid, _cam in chunk:
-            img = Image.open(p).convert("RGB").resize((128, 256), Image.BILINEAR)
+            img = Image.open(p).convert("RGB").resize((128, 256), Image.Resampling.BILINEAR)
             x = (np.asarray(img, dtype=np.float32) / 255.0 - mean) / std
             arr.append(x.transpose(2, 0, 1))
         batch = torch.from_numpy(np.stack(arr)).to(device)
