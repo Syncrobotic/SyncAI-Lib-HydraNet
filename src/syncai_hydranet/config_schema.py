@@ -74,14 +74,28 @@ MODEL = {
 }
 
 HEAD_COMMON = {
-    "type": Spec((str,), required=True, choices=("semantic_fpn", "fcos")),
+    "type": Spec((str,), required=True, choices=("semantic_fpn", "fcos", "depth_fpn")),
     "num_classes": Spec((int,), required=True),
     "in_levels": Spec((list,)),
     "channels": Spec((int,)),
     "loss": Spec((dict,)),
 }
+# `num_classes` is required in HEAD_COMMON because both original head families are
+# classifiers. Depth is a regressor with exactly one output channel, so requiring it would
+# force every depth config to carry a `num_classes: 1` that means nothing and that
+# `_check_class_counts`-style checks would then have to learn to ignore. Dropped rather
+# than defaulted, so a config that sets it is told it is meaningless instead of obeyed.
+HEAD_DEPTH_COMMON = {k: v for k, v in HEAD_COMMON.items() if k != "num_classes"}
 HEAD_BY_TYPE = {
     "semantic_fpn": {**HEAD_COMMON, "dropout": Spec(NUMBER)},
+    "depth_fpn": {
+        **HEAD_DEPTH_COMMON,
+        "dropout": Spec(NUMBER),
+        # The ceiling in metres, on both the head's output clamp and the loss's validity
+        # predicate. Indoor default 10.0 matches NYUv2's evaluation cap, so a run's
+        # numbers are comparable to published ones without a footnote.
+        "max_depth": Spec(NUMBER),
+    },
     "fcos": {
         **HEAD_COMMON,
         "num_convs": Spec((int,)),
@@ -136,6 +150,18 @@ LOSS_BY_TYPE = {
         "reg_weight": Spec(NUMBER),
         "centerness_weight": Spec(NUMBER),
     },
+    "depth_fpn": {
+        # SILog's scale-invariance dial. 1.0 makes the loss blind to absolute scale, which
+        # is exactly the failure measured in the public teacher (a flat 15% over-prediction
+        # with sound geometry), so the default sits at 0.85 and a config that raises it to
+        # 1.0 is opting out of metric supervision on purpose.
+        "lam": Spec(NUMBER),
+        "alpha": Spec(NUMBER),
+        # Deliberately no `ignore_index`. `_check_ignore_index` requires 255 wherever the
+        # key appears, and 255 is the 8-bit mask-file contract for a class id. Depth is
+        # continuous metres and its no-return is 0.0, which validity handles as a
+        # predicate; a sentinel here would be the same number meaning something else.
+    },
 }
 
 DATA = {
@@ -161,7 +187,7 @@ AUGMENT = {
 
 DATASET = {
     "name": Spec((str,), required=True),
-    "type": Spec((str,), required=True, choices=("seg_folder", "coco")),
+    "type": Spec((str,), required=True, choices=("seg_folder", "coco", "nyu_depth")),
     "root": Spec((str,), required=True),
     "split_train": Spec((str,), required=True),
     # Not required: a dataset may be trained on without joining checkpoint selection.
@@ -169,6 +195,14 @@ DATASET = {
     # listing a second domain here puts it into the number that picks best.pt -- and a
     # split that selects the answer cannot also measure it. Trainer raises if *no*
     # dataset declares one.
+    # nyu_depth only: which head this dataset's depth target is addressed to. The target
+    # dict is keyed by head name, so a config that renames the head must say so here or
+    # the head is declared supervised and receives nothing.
+    "head_name": Spec((str,)),
+    # nyu_depth only: returns beyond this are zeroed as invalid rather than clipped.
+    # Must match the head's `max_depth` or the dataset masks away depths the head is
+    # still being asked to predict.
+    "max_depth": Spec(NUMBER),
     "split_val": Spec((str,)),
     # Optional and unset by default: a held-out split only means anything if
     # nothing in training reads it, so it must be created deliberately.

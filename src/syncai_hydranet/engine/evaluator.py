@@ -398,6 +398,77 @@ def _det_metrics(det_results, coco_gts: dict[str, Any], det_cat_ids, logger) -> 
     return metrics
 
 
+class DepthAccumulator:
+    """Running depth error, kept as sums rather than stored predictions.
+
+    A confusion matrix works for segmentation because the label space is small and
+    integer. Depth is continuous, and holding every predicted pixel to compute an error
+    at the end would be ~150 M float64 per validation pass on NYUv2 alone. All three
+    published metrics decompose into sums over valid pixels, so they are accumulated
+    that way and divided once.
+
+    Validity is a predicate, not a sentinel: a depth of 0.0 means "the sensor returned
+    nothing", which is a legitimate float and cannot be spotted by comparing against an
+    ignore index the way a class map can.
+    """
+
+    def __init__(self, max_depth: float = 10.0):
+        self.max_depth = float(max_depth)
+        self.n = 0
+        self.abs_rel = 0.0
+        self.sq_err = 0.0
+        self.d1 = 0
+
+    def update(self, pred: torch.Tensor, target: torch.Tensor) -> None:
+        if pred.dim() == 4 and pred.shape[1] == 1:
+            pred = pred.squeeze(1)
+        valid = (target > 0) & (target <= self.max_depth) & torch.isfinite(target)
+        if not bool(valid.any()):
+            return
+        p = pred[valid].double().clamp(min=1e-3)
+        g = target[valid].double()
+        self.n += int(g.numel())
+        self.abs_rel += float(((p - g).abs() / g).sum())
+        self.sq_err += float(((p - g) ** 2).sum())
+        self.d1 += int((torch.maximum(g / p, p / g) < 1.25).sum())
+
+    def metrics(self) -> dict[str, float]:
+        if not self.n:
+            return {}
+        return {
+            # delta1 leads because it is what the depth literature reports and what makes
+            # this run comparable to the teacher's 0.687 measured in the same units.
+            "delta1": self.d1 / self.n,
+            "absrel": self.abs_rel / self.n,
+            "rmse": (self.sq_err / self.n) ** 0.5,
+        }
+
+
+def _update_depth_heads(model, out: dict, batch: dict, sup, device, accs: dict) -> None:
+    """Fold one batch into the per-head depth accumulators."""
+    for head in getattr(model, "depth_heads", {}):
+        if head not in sup or head not in batch["targets"]:
+            continue
+        if head not in accs:
+            accs[head] = DepthAccumulator(getattr(model.depth_heads[head], "max_depth", 10.0))
+        accs[head].update(out[head].detach(), batch["targets"][head].to(device))
+
+
+def _depth_metrics(accs: dict, logger) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    for head, acc in accs.items():
+        m = acc.metrics()
+        if not m:
+            continue
+        for k, v in m.items():
+            metrics[f"{head}_{k}"] = float(v)
+        logger.info(
+            f"[val] {head} delta1 = {m['delta1']:.4f} | AbsRel = {m['absrel']:.4f} "
+            f"| RMSE = {m['rmse']:.4f} m  ({acc.n:,} valid px)"
+        )
+    return metrics
+
+
 def evaluate(
     model, val_sets, cfg, device, logger, samples: dict | None = None, loaders=None
 ) -> dict:
@@ -433,6 +504,7 @@ def evaluate(
     # The categories each dataset actually trains on, so mAP is scored over those and
     # not over all 80 with the untrained ones counted as misses.
     det_cat_ids: dict[str, list] = {}
+    depth_accs: dict[str, DepthAccumulator] = {}
     disagree = disagree_total = 0
     if loaders is None:
         loaders = build_val_loaders(val_sets, cfg, device)
@@ -470,6 +542,8 @@ def evaluate(
                 disagree += d
                 disagree_total += n
 
+            _update_depth_heads(model, out, batch, sup, device, depth_accs)
+
             if model.det_head is not None and model.det_head_name in sup:
                 coco_gts[name] = ds.coco
                 det_cat_ids[name] = list(getattr(ds, "score_cat_ids", None) or [])
@@ -480,6 +554,7 @@ def evaluate(
     metrics.update(_seg_metrics(seg_cms, cfg, logger))
     metrics.update(_seg_metrics_per_dataset(seg_cms_by_ds, cfg, logger))
     metrics.update(_det_metrics(det_results, coco_gts, det_cat_ids, logger))
+    metrics.update(_depth_metrics(depth_accs, logger))
 
     if disagree_total:
         frac = disagree / disagree_total

@@ -128,7 +128,11 @@ def append_metrics(out_dir: Path, record: dict) -> None:
 # aggregates only: per-class IoUs are far noisier epoch to epoch -- a class present in 22
 # of 285 val images swings on a handful of frames -- and warning on each would train
 # people to skim past the whole block.
-HEAD_METRICS = ("terrain_mIoU", "traversability_mIoU", "detection_mAP")
+# `depth_delta1` joins these because a depth head is otherwise invisible to the
+# selection report: a checkpoint chosen on segmentation could have given up half its
+# depth accuracy and nothing would say so. Scaled like mIoU (0-1, higher better), so the
+# report's 0.02 regression threshold means the same thing for it.
+HEAD_METRICS = ("terrain_mIoU", "traversability_mIoU", "detection_mAP", "depth_delta1")
 
 
 def selection_report(rows: list[dict], primary_metric: str) -> tuple[dict, list[str]]:

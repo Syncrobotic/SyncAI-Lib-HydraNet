@@ -18,8 +18,9 @@ import torch.nn as nn
 
 from ..labels import IGNORE
 from .backbone import build_backbone
+from .heads.depth import SILogLoss, build_depth_head
 from .heads.detection import SCORE_THR_VIEW, FCOSHead, build_det_head
-from .heads.registry import DetectionHead, Head, SegmentationHead
+from .heads.registry import DepthHead, DetectionHead, Head, SegmentationHead
 from .heads.segmentation import build_seg_head
 from .heads.text_classifier import TextEmbeddingClassifier, load_matrix_file
 from .losses import FCOSLoss, FixedWeighting, SegLoss, UncertaintyWeighting
@@ -50,6 +51,13 @@ class HydraNet(nn.Module):
 
         self.seg_heads = nn.ModuleDict()
         self.seg_losses = nn.ModuleDict()
+        # Depth gets its own pair rather than joining `seg_heads`: both are dense maps,
+        # but a checkpoint's state_dict keys are the contract with every exporter and
+        # deployment script in this repo, and `seg_heads.depth.*` would claim depth is a
+        # segmentation head to anything that inspects the keys -- including the RKNN and
+        # TensorRT conversions, which decide output handling from exactly that.
+        self.depth_heads = nn.ModuleDict()
+        self.depth_losses = nn.ModuleDict()
         # Three attributes rather than one bundled object, because PyTorch registers
         # submodules by attribute assignment: a head parked inside a tuple or dataclass
         # would never reach `.parameters()`, `.to()` or the state_dict. What binds them
@@ -81,6 +89,17 @@ class HydraNet(nn.Module):
                     reg_weight=lcfg.get("reg_weight", 1.0),
                     centerness_weight=lcfg.get("centerness_weight", 1.0),
                 )
+            elif hcfg["type"] == "depth_fpn":
+                self.depth_heads[name] = build_depth_head(hcfg, ch)
+                lcfg = hcfg.get("loss", {})
+                self.depth_losses[name] = SILogLoss(
+                    lam=lcfg.get("lam", 0.85),
+                    alpha=lcfg.get("alpha", 10.0),
+                    # Read from the head, not the loss: a ceiling that disagreed between
+                    # the two would train the model to predict depths the loss then
+                    # masks away as invalid, and nothing would report it.
+                    max_depth=hcfg.get("max_depth", 10.0),
+                )
             else:
                 raise ValueError(f"unknown head type: {hcfg['type']}")
 
@@ -111,6 +130,10 @@ class HydraNet(nn.Module):
         heads: list[Head] = [
             SegmentationHead(name, self.seg_heads[name], self.seg_losses[name])
             for name in self.seg_heads
+        ]
+        heads += [
+            DepthHead(name, self.depth_heads[name], self.depth_losses[name])
+            for name in self.depth_heads
         ]
         det = self._detection()
         if det is not None:

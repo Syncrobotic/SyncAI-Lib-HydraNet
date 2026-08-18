@@ -86,6 +86,34 @@ class SegmentationHead:
 
 
 @dataclass(frozen=True)
+class DepthHead:
+    """A dense regression head: one metric-depth map in, the same map out.
+
+    Structurally the segmentation head's twin -- same trunk, same `(pred, target)` loss
+    signature -- and deliberately a separate adapter anyway. What differs is `decode_into`:
+    a segmentation head answers with `argmax`, which for a one-channel output is the
+    constant 0. Sharing the adapter would produce a head that trains correctly, exports
+    correctly, and returns zeros at inference, which is the quietest possible failure.
+    """
+
+    name: str
+    module: torch.nn.Module
+    loss_fn: torch.nn.Module
+
+    def forward_into(self, out: dict, feats: list[torch.Tensor], size) -> None:
+        out[self.name] = self.module(feats, size)  # [B, 1, H, W] metres
+
+    def loss(self, out: dict, targets: dict) -> tuple[torch.Tensor, dict]:
+        return self.loss_fn(out[self.name], targets[self.name]), {}
+
+    def supervised_by(self, targets: dict) -> bool:
+        return self.name in targets
+
+    def decode_into(self, result: dict, out: dict, **_kw) -> None:
+        result[self.name] = out[self.name].squeeze(1)  # [B, H, W] metres
+
+
+@dataclass(frozen=True)
 class DetectionHead:
     """FCOS: three pyramid outputs, and a loss that needs the head back.
 

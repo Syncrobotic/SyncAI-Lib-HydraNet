@@ -1,0 +1,90 @@
+# =============================================================================
+# The first depth run: one head, real metric ground truth, nothing else.
+#
+# Why this exists, from docs/RESEARCH_OCCUPANCY.md: heads (1) occupancy and (5) ground
+# height both need depth before anything else, and the public teacher we measured does
+# not hand it over. Scored zero-shot on this very split, Depth-Anything V2 Metric Indoor
+# over-predicts by a flat 15% -- delta1 0.687 as-is, 0.919 once one global factor is
+# removed (scripts/eprep_teacher_nyuv2.py). Its geometry transferred; its metres did not.
+# So **0.687 is the number this run has to beat**, on the same 654 images, to be worth
+# more than the thing we could have downloaded.
+#
+# ---------------------------------------------------------------------------
+# ONE HEAD, ON PURPOSE
+#
+# The other three are set to null. NYUv2 supervises none of them, and a head that no
+# dataset supervises still costs parameters, still exports, and still emits confident
+# numbers at inference -- `unsupervised_heads` in config_schema.py exists because that
+# combination has bitten this repo before. This run is answering "does a depth head learn
+# at all on our trunk", and mixing in three heads with no gradient answers it less
+# clearly, not more.
+#
+# The multi-head version is the *next* config, and it is not a formality: the whole point
+# of HydraNet is one trunk serving several heads, and depth joining terrain and detection
+# is where head (5) starts earning its place.
+#
+# ---------------------------------------------------------------------------
+# WHAT THIS DOES NOT SETTLE, SAID HERE SO NO ONE READS IT OFF THE METRICS
+#
+# NYUv2 is a Kinect at roughly head height in furnished rooms. The Lite3's camera sits
+# about 25 cm off the floor under a wide lens. Kinect returns start near 0.7 m; the first
+# robot capture put floor in the forward cone at 0.34 m. A good delta1 here is evidence
+# the head and the loss work -- it is not evidence about the robot, and the band that
+# decides foothold planning is below this dataset's floor entirely.
+# =============================================================================
+
+_base_: _base/hydranet.yaml
+
+experiment: hydranet_nyu_depth
+output_dir: runs/hydranet_nyu_depth
+
+model:
+  heads:
+    traversability: null
+    terrain: null
+    detection: null
+    depth:
+      type: depth_fpn
+      in_levels: [0, 1, 2]        # P3, P4, P5 -- same fusion as the seg heads
+      channels: 64
+      dropout: 0.1
+      # 10.0 matches NYUv2's evaluation cap, so delta1 here is the same quantity the
+      # teacher was scored on. Must equal the dataset's max_depth below.
+      max_depth: 10.0
+      # lam < 1 keeps 15% of the objective anchored to absolute scale. At 1.0 SILog is
+      # fully scale-invariant and would happily reproduce the teacher's exact failure.
+      loss: { lam: 0.85, alpha: 10.0 }
+  # Balancing is left at the base's `uncertainty`, which is what every config that drops
+  # heads does (hydranet_retail_objects.yaml likewise states neither key). Switching to
+  # `fixed` here would inherit the base's three weights naming heads this run does not
+  # have, and `_check_fixed_weights` refuses that -- correctly, since only
+  # `model.heads.<name>: null` removes an inherited key, not `fixed_weights.<name>`.
+  #
+  # With one head uncertainty weighting is `exp(-s)*L + s` over a single term: a learned
+  # reparameterisation of the loss scale rather than a balance between anything. Harmless,
+  # and honest to note that it is doing nothing useful until the multi-head config.
+
+data:
+  input_size: [480, 640]          # NYUv2's native size; no resampling of the GT at all
+  workers: 8
+  datasets:
+    - name: nyuv2
+      type: nyu_depth
+      root: datasets/nyu_depth_v2/extracted
+      split_train: train          # 47,584 frames, 281 scenes
+      split_val: val              # the 654-image official test split
+      supervises: [depth]
+      head_name: depth
+      max_depth: 10.0
+      sample_ratio: 1.0
+
+train:
+  # 47,584 frames at batch 16 is ~2,974 steps an epoch, so 12 epochs is already ~36k
+  # steps -- more than any run in this repo. Short first, then extend if the curve is
+  # still moving; a 60-epoch first attempt is how a bug costs three days instead of one.
+  epochs: 12
+  batch_size: 16
+  # Every run in this repo sits on lr = batch_size x 1.25e-5 and
+  # tests/test_config_defaults.py checks the shipped configs still do.
+  lr: 2.0e-4
+  primary_metric: depth_delta1
