@@ -7,8 +7,10 @@
     hydranet-scene --config ... --checkpoint ... --input frame.jpg --json scene.json
 
 For footage with **no depth and no calibration** -- an archived site clip, a phone video.
-The depth path (`scripts/bev_scene.py`) cannot run on these, so the floor comes from
-geometry instead: assume a vertical field of view, a camera height and a down-pitch, and
+The depth path (`geometry/depth_scene.build_scene`, driven on the robot by
+`live/render.py` and reviewable without one through `scripts/bev_demo.py`) cannot run on
+these, so the floor comes from geometry instead: assume a vertical field of view, a
+camera height and a down-pitch, and
 every walkable pixel has exactly one place it can be on that plane.
 
 That makes the metric scale an *assumption*, and the panel says so rather than implying a
