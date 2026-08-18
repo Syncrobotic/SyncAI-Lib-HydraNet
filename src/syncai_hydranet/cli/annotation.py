@@ -208,10 +208,14 @@ def _read_mask(path: Path) -> np.ndarray | None:
     is fine (the palette indices *are* the ids), mode RGB is not -- training would read
     the red channel and call it a class.
     """
-    ann = Image.open(path)
-    if ann.mode not in ("L", "P", "I", "I;16"):
-        return None
-    return np.asarray(ann)
+    # `with`, and `asarray` *inside* it: PIL opens lazily, so the array has to be
+    # materialised before the handle closes. The refusal path is the one that leaked --
+    # a dataset of RGB masks is exactly the case that hits it on every file, and this
+    # function is called once per mask across a whole split.
+    with Image.open(path) as ann:
+        if ann.mode not in ("L", "P", "I", "I;16"):
+            return None
+        return np.asarray(ann)
 
 
 def check_split(root: Path, split: str, rep: Report, allow_void: bool, scheme: Scheme) -> dict:
@@ -274,8 +278,14 @@ def _check_one_mask(img_path: Path, ann_path: Path, allowed: set, scheme: Scheme
     """
     mask = _read_mask(ann_path)
     if mask is None:
+        # `with`, because this is the error path of a checker that walks whole datasets:
+        # a leaked handle per bad mask is a file-descriptor exhaustion on exactly the run
+        # that has the most of them. PIL opens lazily, so `.mode` inside the block is
+        # enough to read the header without decoding the image.
+        with Image.open(ann_path) as im:
+            mode = im.mode
         rep.error(
-            f"{ann_path.name}: {Image.open(ann_path).mode} mode, not single channel. "
+            f"{ann_path.name}: {mode} mode, not single channel. "
             "Export the mask as a single-channel PNG whose pixel value is the class id."
         )
         return None
