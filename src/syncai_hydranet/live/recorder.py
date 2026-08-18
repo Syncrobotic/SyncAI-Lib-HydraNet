@@ -122,3 +122,15 @@ class Recorder:
         if self.writer is not None:
             self.writer.release()
         self.stats.close()
+
+    # A context manager because `close()` is the part that makes a session readable --
+    # it releases the video writer and closes the stats handle -- and every caller that
+    # reached it through a straight-line `finally`-less path lost both when the loop
+    # above it raised. The stats file is opened line-buffered so its content survives
+    # regardless; the file *descriptor* does not, and a robot process that restarts its
+    # session loop leaks one per restart.
+    def __enter__(self) -> Recorder:
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()

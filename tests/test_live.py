@@ -179,43 +179,43 @@ def test_calibration_can_be_written_without_opencv(tmp_path):
     """The import moved out of __init__ for this: a session recording its own intrinsics
     is writing JSON, and needing OpenCV installed to do it made the whole thing
     unreachable on any machine that runs the tests."""
-    rec = Recorder(tmp_path, "s1", keyframe_hz=0)
-    rec.write_calibration(_Info(), _Info(), stride=1)
-    assert json.loads(rec.calib_path.read_text())["color"]["K"][0] == 600.0
+    with Recorder(tmp_path, "s1", keyframe_hz=0) as rec:
+        rec.write_calibration(_Info(), _Info(), stride=1)
+        assert json.loads(rec.calib_path.read_text())["color"]["K"][0] == 600.0
 
 
 def test_the_stride_scales_the_intrinsics_that_get_written(tmp_path):
     """What is recorded is the calibration of the frames on disk, not of the topic. Off
     by the stride is off by exactly that factor in every metre measured later, and
     nothing complains."""
-    rec = Recorder(tmp_path, "s1", keyframe_hz=0)
-    rec.write_calibration(_Info(), None, stride=2)
-    k = json.loads(rec.calib_path.read_text())["color"]["K"]
-    assert [k[0], k[2], k[4], k[5]] == [300.0, 160.0, 300.0, 120.0]
-    assert k[8] == 1.0  # the homogeneous row is not a length and must not be scaled
+    with Recorder(tmp_path, "s1", keyframe_hz=0) as rec:
+        rec.write_calibration(_Info(), None, stride=2)
+        k = json.loads(rec.calib_path.read_text())["color"]["K"]
+        assert [k[0], k[2], k[4], k[5]] == [300.0, 160.0, 300.0, 120.0]
+        assert k[8] == 1.0  # the homogeneous row is not a length and must not be scaled
 
 
 def test_calibration_is_written_once_and_not_overwritten(tmp_path):
     """Intrinsics do not change during a session; a second write would only ever be a
     later, worse guess."""
-    rec = Recorder(tmp_path, "s1", keyframe_hz=0)
-    rec.write_calibration(_Info(), None, stride=1)
-    rec.write_calibration(None, None, stride=8)
-    assert json.loads(rec.calib_path.read_text())["subsample_stride"] == 1
+    with Recorder(tmp_path, "s1", keyframe_hz=0) as rec:
+        rec.write_calibration(_Info(), None, stride=1)
+        rec.write_calibration(None, None, stride=8)
+        assert json.loads(rec.calib_path.read_text())["subsample_stride"] == 1
 
 
 def test_a_missing_camera_info_is_recorded_as_null_not_omitted(tmp_path):
     """Absent and unwritten are different facts, and the reader cannot tell them apart
     from a missing key."""
-    rec = Recorder(tmp_path, "s1", keyframe_hz=0)
-    rec.write_calibration(_Info(), None, stride=1)
-    payload = json.loads(rec.calib_path.read_text())
-    assert "depth_aligned_to_color" in payload
-    assert payload["depth_aligned_to_color"] is None
+    with Recorder(tmp_path, "s1", keyframe_hz=0) as rec:
+        rec.write_calibration(_Info(), None, stride=1)
+        payload = json.loads(rec.calib_path.read_text())
+        assert "depth_aligned_to_color" in payload
+        assert payload["depth_aligned_to_color"] is None
 
 
 @pytest.mark.parametrize("hz", [0, 2])
 def test_keyframe_directories_exist_only_when_keyframes_are_wanted(tmp_path, hz):
-    rec = Recorder(tmp_path, "s1", keyframe_hz=hz)
-    assert rec.img_dir.is_dir() == (hz > 0)
-    rec.close()
+    with Recorder(tmp_path, "s1", keyframe_hz=hz) as rec:
+        assert rec.img_dir.is_dir() == (hz > 0)
+        rec.close()
