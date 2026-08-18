@@ -1,0 +1,23 @@
+[Unit]
+Description=HydraNet live NPU inference + traversability/detection overlay + bev3d BEV
+After=network-online.target
+
+[Service]
+Type=simple
+User=paul
+WorkingDirectory=/home/paul/playground
+Environment=HYDRA_VIEW=trav
+Environment=HYDRA_MODEL=/home/paul/playground/model/hydranet_joint_coco10_384_int8.rknn
+Environment=HYDRA_W=512
+Environment=HYDRA_H=384
+# BEV camera assumptions (mono ground-plane; replace with calibrated intrinsics / depth):
+Environment=HYDRA_VFOV=60
+Environment=HYDRA_CAMH=0.35
+Environment=HYDRA_PITCH=18
+Environment=HYDRA_BEV_EVERY=3
+ExecStart=/usr/bin/python3 -u /home/paul/playground/hydra_infer.py
+Restart=always
+RestartSec=4
+
+[Install]
+WantedBy=multi-user.target

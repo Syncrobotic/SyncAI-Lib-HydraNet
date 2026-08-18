@@ -1,0 +1,19 @@
+# Lint profile for the two on-robot runtime scripts, extending the repo's root config.
+#
+# hydra_infer.py and hydra_dash.py are committed *byte-identical to what runs on the Lite3*
+# (Python 3.8) -- that identity is the point of version-controlling the deployment, so the
+# committed artifact is exactly the running one. Refactoring them for lint would fork the
+# repo copy from the robot copy, the drift this directory exists to prevent. So they carry
+# an ops-script exception rather than being rewritten:
+#
+#   E501    long lines are the embedded HTML dashboard template
+#   RUF001  "ambiguous unicode" is the Traditional-Chinese UI, which is intentional
+#   PTH/UP031/SIM115/N806  os-based file I/O and %-format on an embedded target, left as-is
+#
+# Everything else here (the workstation-side convert_*.py and hydra_forward.py) is held to
+# the full repo standard and is not listed.
+extend = "../../pyproject.toml"
+
+[lint.per-file-ignores]
+"hydra_infer.py" = ["E501", "RUF001", "PTH", "UP031", "SIM115", "N806"]
+"hydra_dash.py" = ["E501", "RUF001", "PTH", "UP031", "SIM115", "N806"]
