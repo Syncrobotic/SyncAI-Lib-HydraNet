@@ -82,8 +82,18 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--min-score", type=float, default=0.50)
     # Daylight gate. Both are properties of the pixels: an IR frame is monochrome by
     # construction, so its per-pixel channel spread collapses.
+    #
+    # **1.0 is measured, not chosen**, and the first version used 6.0 chosen out of the
+    # air -- which rejected Kaohsiung-cam08 outright, a bright white-walled store at luma
+    # 108 whose chroma is only 3.90 because the store itself is grey and white. Sampled
+    # over all 48 cameras at two time slots: 21 of 96 frames sit at **exactly 0.00**
+    # (monochrome by construction) and every colour frame is **>= 2.13**. The two
+    # populations do not overlap and there is nothing between them, so the threshold
+    # belongs in that gap. ARCHITECTURE_DIRECTION.md rule 2 -- any threshold is relative
+    # to a measured baseline, never an absolute -- and this is the second time this
+    # project has paid for ignoring it.
     ap.add_argument("--min-luma", type=float, default=40.0)
-    ap.add_argument("--min-chroma", type=float, default=6.0)
+    ap.add_argument("--min-chroma", type=float, default=1.0)
     # Static gate. A box recurring at IoU >= 0.7 in this share of frames is furniture.
     ap.add_argument("--static-iou", type=float, default=0.7)
     # 0 disables. Off by default -- see the docstring: it was measured removing people.
