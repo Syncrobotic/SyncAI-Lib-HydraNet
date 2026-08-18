@@ -75,7 +75,14 @@ def run_config(run: Path) -> dict:
     return yaml.safe_load((run / "config.yaml").read_text())
 
 
-def confusion(run: Path, args, device) -> tuple[np.ndarray, list[str]]:
+def per_image_confusions(run: Path, args, device) -> tuple[np.ndarray, list[str], list[Path]]:
+    """One confusion matrix per image, un-summed.
+
+    Split out from `confusion` because the sum discards what a val set's own sampling error
+    is made of. Anything that asks "how much would this number move on a different draw of
+    images" -- `val_sampling_error.py` -- needs the per-image terms, and the alternative was
+    to copy this loop, whose upsample-before-argmax step is easy to get quietly wrong.
+    """
     cfg = run_config(run)
     model = build_model(cfg).to(device).eval()
     model.load_state_dict(
@@ -86,7 +93,8 @@ def confusion(run: Path, args, device) -> tuple[np.ndarray, list[str]]:
     imgs = sorted((Path(args.dataset) / "images" / args.split).rglob("*.jpg"))
     if not imgs:
         raise SystemExit(f"no images under {args.dataset}/images/{args.split}")
-    c = np.zeros((len(classes), len(classes)), dtype=np.int64)
+    mats: list[np.ndarray] = []
+    kept: list[Path] = []
     for jpg in imgs:
         png = Path(str(jpg).replace("/images/", "/annotations/")).with_suffix(".png")
         if not png.exists():
@@ -114,9 +122,17 @@ def confusion(run: Path, args, device) -> tuple[np.ndarray, list[str]]:
             .numpy()
             .astype(np.uint8)
         )
+        c = np.zeros((len(classes), len(classes)), dtype=np.int64)
         ok = gt != 255
         np.add.at(c, (gt[ok], pred[ok]), 1)
-    return c, classes
+        mats.append(c)
+        kept.append(jpg)
+    return np.stack(mats), classes, kept
+
+
+def confusion(run: Path, args, device) -> tuple[np.ndarray, list[str]]:
+    mats, classes, _ = per_image_confusions(run, args, device)
+    return mats.sum(0), classes
 
 
 def iou(c: np.ndarray, i: int) -> float:
