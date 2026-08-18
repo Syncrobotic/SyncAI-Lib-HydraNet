@@ -12,14 +12,20 @@ all of the compute, while the task heads stay tiny and mutually independent.
 Written in PyTorch, trained on a CUDA box or an Apple Silicon Mac, exported to ONNX and
 run with TensorRT on a Jetson Orin.
 
-![traversability segmentation and object detection projected onto the floor in metres, from a quadruped robot camera](assets/bev_ground_projection.gif)
+![traversability and terrain from one forward pass, on office corridor footage](assets/hydranet_demo.gif)
 
-Left, traversability with detections: green is walkable, red is blocked. Right, the same
-answer projected onto the floor in metres, each detected object placed where its box meets
-the ground — the one range a single camera can recover. Handheld footage of a building
-lobby, run through the 60-epoch multi-task checkpoint. The camera height and pitch there
-are assumed, not measured; on the robot the ground plane is fitted to the depth return
-each frame, which also tracks the pitch and roll of a walking quadruped.
+Left, traversability: green is walkable, red is blocked, with a detection boxed on the
+fire extinguisher against the left wall — the box is in the right place and the label is
+not readable at this size, which is the honest version of a head whose vocabulary is
+COCO's 80 and has no noun for one. Right, the terrain classes the same forward pass
+produced. One image in, both masks out, through the 60-epoch multi-task checkpoint.
+
+Turning either of those into metres is geometry rather than learning, and the panel that
+does it is in the shop clip below — see [docs/GROUND_PROJECTION.md](docs/GROUND_PROJECTION.md)
+for why the projection maps backwards from floor cell to pixel, and for the part that is
+designed but not running: the pose is assumed here, while on the robot the ground plane is
+meant to be fitted to the depth return each frame, which is what tracks the pitch and roll
+of a walking quadruped.
 
 **Read it for what it is.** The floor, the walls and the partitions are solid, and the two
 heads agree with each other — the trunk is doing its job. What this clip cannot show is the

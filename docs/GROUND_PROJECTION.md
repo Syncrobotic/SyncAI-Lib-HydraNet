@@ -4,8 +4,14 @@ A traversability mask answers "is this pixel walkable". A navigation stack asks 
 else: "is there a path three metres ahead". Those are the same information in different
 coordinates, and the conversion is geometry, not learning.
 
-`assets/bev_ground_projection.gif` shows the pair — the mask, and the mask projected onto
-the floor in metres.
+The right-hand panel of `assets/retail_cctv_scene.gif` shows the result — the free space
+and the detections placed on the floor in metres, drawn as a room rather than as a plot.
+
+There used to be a second figure here, `assets/bev_ground_projection.gif`, showing the
+flat top-down version of the same projection. That renderer was removed once `bev3d`
+became the default panel, so the figure showed output the code can no longer produce and
+went with it. The source footage for it — a handheld pass through a building lobby — was
+never in the repository, so it could not be re-rendered.
 
 ## How it works
 
