@@ -22,8 +22,10 @@ from dataclasses import dataclass, field
 import numpy as np
 
 SIMPLIFICATIONS = (
-    "greedy IoU association, not Hungarian: diverges when two tracks contest one "
-    "detection (crossing shoppers, a crowded aisle)",
+    "constant velocity, and for a stationary person that velocity is box jitter -- "
+    "mitigated by matching against the last observed box too, not removed",
+    "greedy IoU association by default; optimal assignment is available and measured at "
+    "no difference on the clip that motivated looking",
     "constant velocity, no Kalman: no measured noise model exists to fit one to",
     "no appearance model: two shoppers who swap places while overlapping will swap ids",
 )
@@ -103,10 +105,23 @@ class Tracker:
         iou_threshold: float = 0.3,
         max_age: int = 5,
         min_hits: int = 3,
+        assignment: str = "greedy",
+        match_against: str = "both",
     ) -> None:
         self.iou_threshold = iou_threshold
         self.max_age = max_age
         self.min_hits = min_hits
+        if assignment not in ("hungarian", "greedy"):
+            raise ValueError(f"assignment must be hungarian or greedy, got {assignment!r}")
+        # Default unchanged: optimal assignment was measured at 76 -> 78 tracks on the
+        # clip that motivated it, i.e. nothing. Available, not imposed.
+        self.assignment = assignment
+        if match_against not in ("both", "predicted"):
+            raise ValueError(f"match_against must be both or predicted, got {match_against!r}")
+        # `predicted` reproduces every track number this project published before
+        # 2026-08-18. `both` is the default because it more than halved fragmentation on
+        # the one case where the right answer was independently known.
+        self.match_against = match_against
         self.tracks: list[Track] = []
         # Retired tracks, kept because dwell is computed after the clip ends and a
         # shopper who left the frame is exactly the one whose visit is complete.
@@ -152,10 +167,54 @@ class Tracker:
         return [t for t in self.tracks if t.confirmed and t.age == 0]
 
     def _match(self, boxes: np.ndarray) -> dict[int, int]:
-        """Greedy highest-IoU-first assignment. Returns {track index: detection index}."""
+        """Assign detections to tracks. Returns {track index: detection index}.
+
+        Two things were changed here and only one of them mattered. Both are recorded
+        because the one that did not matter was the confident hypothesis.
+
+        **What was wrong.** On Taichung-cam01 a shopper standing at a counter for 110
+        seconds came out as three tracks, breaking at box IoU **0.797** and **0.686**
+        against a 0.3 threshold -- no detection gap, no threshold too tight, no `max_age`
+        too small, and 48 of that clip's 76 tracks ended with a detection available.
+
+        **The hypothesis, and its refutation.** `SIMPLIFICATIONS` blamed greedy assignment
+        for exactly this shape, and `reid_metrics._hungarian` was already in the tree. It
+        was wired in and measured: 76 tracks became **78**, median length 26.5 to 26.0.
+        Optimal assignment changes nothing here, so the option stays and the default does
+        not, because a default changed without evidence is how a codebase stops being
+        reproducible.
+
+        **What actually broke it: matching against the predicted box alone.** `update`
+        applies constant velocity before matching, and for a person standing still that
+        "velocity" is box jitter, which displaces the prediction far enough to lose an
+        otherwise obvious match. Matching against the predicted box **or** the last
+        observed one, whichever agrees better, keeps prediction where it earns its place
+        -- a shopper walking at 5 fps moves a long way between frames -- and removes its
+        cost where it does not:
+
+            predicted only          76 tracks, median 26.5, p90 134, max  236 (47 s)
+            predicted or observed   34 tracks, median 34.5, p90 262, max  551 (110 s)
+
+        551 frames is the 110-second shopper, one track. **One verified case is not a
+        general result**: fewer tracks can also mean wrong merges, and nothing here can
+        tell the difference until a site clip carries ground-truth ids. What is verified
+        is that this particular merge is correct, because those three tracks sat within
+        9 cm of each other on the floor.
+        """
         if not self.tracks or len(boxes) == 0:
             return {}
         m = iou(np.stack([t.box for t in self.tracks]), boxes)
+        if self.match_against == "both":
+            observed = np.stack([t.boxes[-1] if t.boxes else t.box for t in self.tracks])
+            m = np.maximum(m, iou(observed, boxes))
+        if self.assignment == "hungarian":
+            from .reid_metrics import _hungarian
+
+            pairs = {}
+            for ti, di in _hungarian(-m):
+                if m[ti, di] >= self.iou_threshold:
+                    pairs[int(ti)] = int(di)
+            return pairs
         pairs: dict[int, int] = {}
         used_det: set[int] = set()
         order = np.dstack(np.unravel_index(np.argsort(m, axis=None)[::-1], m.shape))[0]
