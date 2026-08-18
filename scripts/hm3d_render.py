@@ -60,12 +60,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
 import trimesh
 from PIL import Image
+
+from syncai_hydranet.geometry.ground import Camera, fit_ground_plane
 
 UNLABELED = 0
 SNAP_MAX = 12.0  # RGB L2 distance; beyond this a sampled colour is a seam, not a label
@@ -245,13 +248,19 @@ def render(
     }
 
 
-def floor_points(rgb: TexturedScene, up: int, n: int, rng) -> np.ndarray:
+def floor_points(rgb: TexturedScene, up: int, n: int, rng, need_clear: float = 0.0):
     """Candidate standing positions: centres of near-horizontal faces low in the scene.
 
     A stand-in for habitat's navmesh, which is a Recast binary this cannot read. It is
     weaker -- it does not know a surface is reachable, only that it is flat and low -- so
     it will occasionally pick a table top. Rendered frames are cheap and a bad one is
     visible; a wrong navmesh would not be.
+
+    **`need_clear` exists because HM3D is houses and the CCTV preset is a shop.** A store
+    camera sits at 2.38 m, which in a residential scan is the ceiling: dropping the eye
+    that far above a floor point buries it in the ceiling void, and the frame comes back
+    as a close-up of joists. One ray straight up per candidate measures the real headroom
+    and rejects those points, which is far cheaper than rendering them and discovering it.
     """
     n_faces = rgb.mesh.face_normals
     horizontal = np.abs(n_faces[:, up]) > 0.95
@@ -262,70 +271,156 @@ def floor_points(rgb: TexturedScene, up: int, n: int, rng) -> np.ndarray:
     floor = centres[centres[:, up] < lo + 0.3]
     if not len(floor):
         floor = centres
+
+    if need_clear > 0 and len(floor):
+        origin = floor + np.eye(3)[up] * 0.05  # lift off the surface so it is not self-hit
+        direction = np.tile(np.eye(3)[up], (len(floor), 1))
+        _tri, idx_ray, locs = rgb.mesh.ray.intersects_id(
+            origin, direction, multiple_hits=False, return_locations=True
+        )
+        headroom = np.zeros(len(floor))
+        headroom[idx_ray] = locs[:, up] - origin[idx_ray, up]
+        # No hit at all means open sky above (a scan boundary), which is fine to shoot from.
+        headroom[headroom == 0] = np.inf
+        floor = floor[headroom > need_clear]
+        if not len(floor):
+            return np.empty((0, 3))
+
     pick = rng.choice(len(floor), size=min(n, len(floor)), replace=False)
     return floor[pick]
 
 
+def floor_label(depth: np.ndarray, cfg: Pose) -> tuple[float, float, float] | None:
+    """The frame's true pose relative to the floor, measured from its own ground truth.
+
+    **Not the same as the pose it was rendered at, and that difference was a real bug.**
+    `floor_points` places the eye a fixed height above whatever flat surface it sampled,
+    and some of those surfaces are counters, steps and platforms rather than the floor:
+    across eight test frames, three sat 0.48-0.65 m up, and for every one of them RANSAC
+    on the ground-truth depth returned exactly `placed height + platform height`. The fit
+    was right and the nominal label was wrong, by half a metre, on 3 frames in 8.
+
+    Training on the nominal number would have taught a systematic error to a third of the
+    set. So the label is whatever the geometry says, computed from GT depth with the same
+    function that will later be run on predicted depth -- which also means the two are
+    comparable by construction rather than by assumption.
+    """
+    d = depth.astype(np.float64).copy()
+    d[d <= 0] = np.nan
+    h, w = d.shape
+    plane, _ = fit_ground_plane(d, Camera.from_vfov(h, w, cfg.vfov))
+    if plane is None:
+        return None
+    return plane.height, math.degrees(plane.pitch), math.degrees(plane.roll)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--scene", type=Path, required=True, help="an HM3D scene directory")
+    ap.add_argument("--scene", type=Path, help="one HM3D scene directory")
+    ap.add_argument("--scenes", type=Path, help="a root of HM3D scene directories")
+    # Pose jitter, and it is not decoration. Rendering every frame at the preset's exact
+    # height and pitch makes the pose a constant of the dataset, and a model that ignores
+    # the image entirely then "recovers" it perfectly. Varying it is what turns pose
+    # recovery into something the picture has to answer.
+    ap.add_argument("--jitter-height", type=float, default=0.0, help="+/- metres")
+    ap.add_argument("--jitter-pitch", type=float, default=0.0, help="+/- degrees")
+    ap.add_argument("--jitter-vfov", type=float, default=0.0, help="+/- degrees")
+    # A frame with no floor in it cannot teach floor recovery. Two of eight test frames
+    # came back with 0.0% floor pixels -- the camera boxed in facing a wall -- and RANSAC
+    # duly fitted that wall at 0.19 m and -32 degrees.
+    ap.add_argument(
+        "--min-floor-frac",
+        type=float,
+        default=0.05,
+        help="drop frames whose semantic floor covers less than this fraction",
+    )
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--preset", choices=sorted(PRESETS), default="cctv")
     ap.add_argument("--n", type=int, default=4, help="frames to render")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
-    stem = args.scene.name.split("-", 1)[1]
-    cfg = PRESETS[args.preset]
+    base = PRESETS[args.preset]
     args.out.mkdir(parents=True, exist_ok=True)
-
-    rgb = TexturedScene(args.scene / f"{stem}.glb")
-    sem = TexturedScene(args.scene / f"{stem}.semantic.glb")
-    table, names = load_label_table(args.scene / f"{stem}.semantic.txt")
-    up = up_axis(rgb.mesh)
-    print(f"{stem}: {len(rgb.faces):,} faces, up-axis={'xyz'[up]}, {len(names)} labels")
+    if args.scenes:
+        scenes = sorted(d for d in args.scenes.iterdir() if d.is_dir() and "-" in d.name)
+    elif args.scene:
+        scenes = [args.scene]
+    else:
+        raise SystemExit("give --scene or --scenes")
 
     rng = np.random.default_rng(args.seed)
-    spots = floor_points(rgb, up, args.n, rng)
-    manifest = []
-    for i, spot in enumerate(spots):
-        eye = spot.copy()
-        eye[up] += cfg.height
-        yaw = float(rng.uniform(0, 360))
-        r = render(rgb, sem, table, eye, yaw, cfg, up)
-        Image.fromarray(r["rgb"]).save(args.out / f"{i:03d}_rgb.png")
-        # Depth as 16-bit millimetres: lossless to 1 mm over the 0-65 m this needs, and
-        # readable by anything, where a float32 .npy is neither.
-        Image.fromarray((r["depth"] * 1000).clip(0, 65535).astype(np.uint16)).save(
-            args.out / f"{i:03d}_depth.png"
+    manifest: list[dict] = []
+    names: list[str] = []
+    i = 0
+    dropped = 0
+    for scene in scenes:
+        stem = scene.name.split("-", 1)[1]
+        if not (scene / f"{stem}.glb").exists():
+            continue
+        rgb = TexturedScene(scene / f"{stem}.glb")
+        sem = TexturedScene(scene / f"{stem}.semantic.glb")
+        table, names = load_label_table(scene / f"{stem}.semantic.txt")
+        up = up_axis(rgb.mesh)
+        print(f"{stem}: {len(rgb.faces):,} faces, up-axis={'xyz'[up]}, {len(names)} labels")
+        # Headroom for the tallest jittered eye, plus a little, so a frame is not
+        # rejected for a placement the jitter happened to push into the ceiling.
+        spots = floor_points(
+            rgb, up, args.n, rng, need_clear=base.height + args.jitter_height + 0.15
         )
-        Image.fromarray(r["semantic"]).save(args.out / f"{i:03d}_semantic.png")
-        seen = np.unique(r["semantic"])
-        d = r["depth"][r["depth"] > 0]
-        manifest.append(
-            {
-                "frame": i,
-                "scene": stem,
-                "preset": args.preset,
-                "eye": eye.tolist(),
-                "yaw_deg": yaw,
-                "height": cfg.height,
-                "pitch": cfg.pitch,
-                "vfov": cfg.vfov,
-                "size": list(cfg.size),
-                "hit_frac": round(r["hit_frac"], 4),
-                "depth_m": [round(float(d.min()), 3), round(float(d.max()), 3)]
-                if len(d)
-                else None,
-                "labels": [names[j] for j in seen[:12]],
-            }
-        )
-        print(
-            f"  {i:03d} hit={r['hit_frac']:.3f} "
-            f"depth={d.min():.2f}-{d.max():.2f}m labels={len(seen)}"
-            if len(d)
-            else f"  {i:03d} EMPTY"
-        )
+        for spot in spots:
+            cfg = Pose(
+                height=base.height + float(rng.uniform(-1, 1)) * args.jitter_height,
+                pitch=base.pitch + float(rng.uniform(-1, 1)) * args.jitter_pitch,
+                vfov=base.vfov + float(rng.uniform(-1, 1)) * args.jitter_vfov,
+                size=base.size,
+            )
+            eye = spot.copy()
+            eye[up] += cfg.height
+            yaw = float(rng.uniform(0, 360))
+            r = render(rgb, sem, table, eye, yaw, cfg, up)
+            floor_ids = [j for j, n in enumerate(names) if n == "floor"]
+            floor_frac = float(np.isin(r["semantic"], floor_ids).mean())
+            label = floor_label(r["depth"], cfg) if floor_frac >= args.min_floor_frac else None
+            if label is None:
+                dropped += 1
+                continue
+            Image.fromarray(r["rgb"]).save(args.out / f"{i:05d}_rgb.png")
+            # Depth as 16-bit millimetres: lossless to 1 mm over the 0-65 m this needs,
+            # and readable by anything, where a float32 .npy is neither.
+            Image.fromarray((r["depth"] * 1000).clip(0, 65535).astype(np.uint16)).save(
+                args.out / f"{i:05d}_depth.png"
+            )
+            Image.fromarray(r["semantic"]).save(args.out / f"{i:05d}_semantic.png")
+            seen = np.unique(r["semantic"])
+            d = r["depth"][r["depth"] > 0]
+            manifest.append(
+                {
+                    "frame": i,
+                    "scene": stem,
+                    "preset": args.preset,
+                    "eye": eye.tolist(),
+                    "yaw_deg": yaw,
+                    # The measured pose, which is the label. `*_nominal` is where the eye
+                    # was put, kept only so a surprising gap between them is visible.
+                    "height": round(label[0], 4),
+                    "pitch": round(label[1], 3),
+                    "roll": round(label[2], 3),
+                    "height_nominal": round(cfg.height, 4),
+                    "pitch_nominal": round(cfg.pitch, 3),
+                    "floor_frac": round(floor_frac, 4),
+                    "vfov": cfg.vfov,
+                    "size": list(cfg.size),
+                    "hit_frac": round(r["hit_frac"], 4),
+                    "depth_m": [round(float(d.min()), 3), round(float(d.max()), 3)]
+                    if len(d)
+                    else None,
+                    "labels": [names[j] for j in seen[:12]],
+                }
+            )
+            i += 1
+        print(f"  -> {i} kept, {dropped} dropped so far")
+
     (args.out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     (args.out / "labels.json").write_text(json.dumps(names, indent=2) + "\n")
     return 0
