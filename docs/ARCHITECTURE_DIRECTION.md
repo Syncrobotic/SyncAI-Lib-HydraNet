@@ -164,6 +164,27 @@ rather than a good day:
 4. **A detection comparison runs three seeds, or it reports nothing.** Measured below, and
    it is the most expensive rule here because it triples the GPU cost of an answer. It is
    also the one that would have saved the most wasted argument.
+5. **A run whose *length* is decided by a metric is not comparable to a run of the same
+   config with a different selecting metric.** Measured 2026-08-18 and it cost a whole
+   comparison. `early_stop_patience: 10` is set in `hydranet_retail_products.yaml` and
+   inherits down the entire retail chain, so it applies to configs written months later
+   by people not reading that file. Under `primary_metric: detection_mAP/site_boxes` the
+   control runs stopped at **E48** and **E50**; changing selection to
+   `terrain_mIoU/site_seg03` -- a 48-image val set, where ten non-improving validations is
+   a low bar -- stopped the very next run at **E19** of 60. Two runs trained to different
+   lengths, and nothing in either log says the lengths differ for a reason unrelated to
+   the thing being compared.
+
+   The general shape is worse than early stopping, which is only its most visible
+   instance: **any mechanism that reads the selection metric can silently change what a
+   run *is*.** Selection decides which checkpoint survives, which is intended; it must not
+   also decide how long the run trains, which epochs get validated, or which val sets are
+   scored. `_check_detection_val_interval` refuses one such coupling -- thinning detection
+   validation while selecting on a detection metric kills the run at the end of epoch 1 --
+   and that check exists because the coupling was found the expensive way.
+
+   The rule for a comparison: fix the length in the config, disable early stopping, and
+   let selection choose only the checkpoint.
 
 ### The variance nobody had measured, and what it invalidates
 
