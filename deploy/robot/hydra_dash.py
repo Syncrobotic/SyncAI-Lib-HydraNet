@@ -361,40 +361,151 @@ SIMPLE_CMDS = {
     "act_greet": 0x21010507,  # 打招呼
     "act_twist": 0x21010204,  # 扭身体
 }
+# ---------------------------------------------------------------------------
+# AXIS COMMANDS. The same three codes mean different things in different modes, and
+# the wire bytes are identical -- only the robot's current mode disambiguates them.
+# Spec 1.2.3.1 (原地模式, posture) against 1.2.3.2 (移动模式, movement):
+#
+#   0x21010130   posture: 调整俯仰角 pitch     movement: 前后平移 forward/back
+#   0x21010131   posture: 调整横滚角 roll      movement: 左右平移 lateral
+#   0x21010135   posture: 调整偏航角 yaw       movement: 左右转弯 turn
+#   0x21010102   posture: 调整身体高度 height  movement: (absent)
+#
+# So a posture command sent while the robot is in movement mode does not tilt it, it
+# DRIVES it. `move_streamer` streams one set or the other, never both.
 AXIS_FWD, AXIS_LAT, AXIS_YAW = 0x21010130, 0x21010131, 0x21010135
-# conservative fractions of the +/-32767 axis range -- deliberately slow to start
-FWD_MAX, LAT_MAX, YAW_MAX = 9000, 7000, 8000
-_move = {"vx": 0.0, "vy": 0.0, "vyaw": 0.0, "armed": False, "last_hb": 0.0}
+AXIS_PITCH, AXIS_ROLL, AXIS_HEIGHT = 0x21010130, 0x21010131, 0x21010102
+
+# Per-axis DEADZONE, from the spec's 死区 column. Both axis sections state it outright:
+# an axis value falling inside this range is treated as 0 by the robot. Axis commands are
+# a physical stick's raw x/y output over [-32767, 32767], so these are a stick's centre
+# dead region -- and they are large. Roll's is 38% of full travel.
+#
+# **This column was not consulted when the movement scaling was first written.** That
+# code read `FWD_MAX, LAT_MAX, YAW_MAX = 9000, 7000, 8000` under a comment calling them
+# "conservative fractions of the +/-32767 axis range", which is where the numbers came
+# from: a fraction of the global range, with no per-axis floor. Against the deadzones,
+# lateral 7000 < 12553 and yaw 8000 < 9553 both fall INSIDE and are zeroed by the robot,
+# so strafe and turn sent nothing at all, and forward's 9000 cleared its 6553 by 2447 of
+# the 26214 counts above it -- 9% of available speed. Teleop has never been driven on the
+# real robot, so nothing had contradicted it.
+DEADZONE = {
+    AXIS_FWD: 6553,  # == AXIS_PITCH
+    AXIS_LAT: 12553,  # == AXIS_ROLL
+    AXIS_YAW: 9553,
+    AXIS_HEIGHT: 20000,
+}
+# A quarter of the travel that exists ABOVE each deadzone. Still deliberately slow for a
+# first drive, but "slow" now means a fraction of what the axis can actually deliver
+# rather than a fraction of a range most of which the robot discards.
+AXIS_FRACTION = 0.25
+AXIS_FULL = 32767
+
+_move = {
+    "vx": 0.0,
+    "vy": 0.0,
+    "vyaw": 0.0,
+    "pitch": 0.0,
+    "roll": 0.0,
+    "armed": False,
+    # Which axis family the streamer is allowed to send. Tracked here rather than read
+    # back from telemetry because 0x0901's basic_state does not report it -- the value
+    # observed on this robot (98) is not in the spec's state table at all. So this
+    # mirrors what the operator last selected in the UI, and it is an assumption: a mode
+    # changed from the physical handset will not be seen here.
+    "mode": "move",
+    "last_hb": 0.0,
+}
 _move_lock = threading.Lock()
 
 
-def _send_axis(sock, code, norm, mx):
-    v = int(max(-1.0, min(1.0, norm)) * mx)
+def _axis_value(code, norm):
+    """Map a [-1, 1] stick position onto the counts the robot will actually act on.
+
+    Zero stays zero. Anything else starts just past the deadzone rather than at 0, so
+    the first perceptible nudge of a key produces motion instead of a value the robot
+    silently discards.
+    """
+    norm = max(-1.0, min(1.0, norm))
+    if abs(norm) < 1e-3:
+        return 0
+    dead = DEADZONE[code]
+    span = (AXIS_FULL - dead) * AXIS_FRACTION
+    mag = dead + 1 + abs(norm) * span
+    return int(mag if norm > 0 else -mag)
+
+
+def _send_axis(sock, code, norm):
+    v = _axis_value(code, norm)
     sock.sendto(struct.pack("<III", code, v & 0xFFFFFFFF, 0), (CMD_IP, CMD_PORT))
 
 
 def move_streamer():
-    """Stream the three axis commands at 50 Hz while armed. The robot auto-stops after
-    250 ms with no axis command, so this loop is the deadman: a UI heartbeat older than
-    0.4 s zeroes velocity, and disarming stops the stream."""
+    """Stream one axis family at 50 Hz while armed. The robot auto-stops after 250 ms
+    with no axis command, so this loop is the deadman: a UI heartbeat older than 0.4 s
+    zeroes the axes, and disarming stops the stream.
+
+    **One family, never both.** The movement and posture axes share command codes, so a
+    packet is only a tilt or a drive by virtue of the mode the robot is in. Streaming
+    both sets would mean sending the same code twice per tick with different values and
+    letting the robot decide -- so `mode` gates which set is sent, and during a mode
+    switch neither is.
+    """
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     while True:
         with _move_lock:
             m = dict(_move)
         if m["armed"]:
             active = (time.time() - m["last_hb"]) < 0.4
-            _send_axis(sock, AXIS_FWD, m["vx"] if active else 0.0, FWD_MAX)
-            _send_axis(sock, AXIS_LAT, m["vy"] if active else 0.0, LAT_MAX)
-            _send_axis(sock, AXIS_YAW, m["vyaw"] if active else 0.0, YAW_MAX)
+            if m["mode"] == "move":
+                _send_axis(sock, AXIS_FWD, m["vx"] if active else 0.0)
+                _send_axis(sock, AXIS_LAT, m["vy"] if active else 0.0)
+                _send_axis(sock, AXIS_YAW, m["vyaw"] if active else 0.0)
+            elif m["mode"] == "inplace":
+                _send_axis(sock, AXIS_PITCH, m["pitch"] if active else 0.0)
+                _send_axis(sock, AXIS_ROLL, m["roll"] if active else 0.0)
+            # mode == "switching": send nothing at all. See `set_mode`.
         time.sleep(0.02)
 
 
-def do_move(vx, vy, vyaw):
+def set_mode(mode):
+    """Switch the robot between 移动模式 and 原地模式, and the streamer with it.
+
+    The order matters and there is a window to close. The streamer is already sending at
+    50 Hz, and the axis codes do not change across the switch -- so a packet emitted
+    between "mode command sent" and "robot has acted on it" is a drive command that the
+    UI believes is a tilt. So the axes are zeroed and the streamer is parked in
+    `switching` first, the mode command goes out, and only then does the new family
+    become live. The pause is longer than the 250 ms auto-stop, which means the robot has
+    provably stopped before the meaning of the codes changes under it.
+    """
+    if mode not in ("move", "inplace"):
+        return {"ok": False, "msg": "unknown mode"}
+    with _move_lock:
+        _move.update(mode="switching", vx=0.0, vy=0.0, vyaw=0.0, pitch=0.0, roll=0.0)
+    _burst(0x21010D06 if mode == "move" else 0x21010D05, 0, 0, n=3)
+    time.sleep(0.35)
+    with _move_lock:
+        _move.update(mode=mode, last_hb=time.time())
+    return {
+        "ok": True,
+        "mode": mode,
+        "msg": "移動模式（WASD/QE）" if mode == "move" else "原地模式（方向鍵姿態）",
+    }
+
+
+def do_move(vx, vy, vyaw, pitch=0.0, roll=0.0):
+    """One heartbeat carries both families; `mode` decides which is streamed.
+
+    The UI sends whichever set its live keys produced and zeroes the other, so a stale
+    value cannot survive a mode switch and reappear as the wrong kind of command.
+    """
     with _move_lock:
         armed = _move["armed"]
+        mode = _move["mode"]
         if armed:
-            _move.update(vx=vx, vy=vy, vyaw=vyaw, last_hb=time.time())
-    return {"ok": True, "armed": armed}
+            _move.update(vx=vx, vy=vy, vyaw=vyaw, pitch=pitch, roll=roll, last_hb=time.time())
+    return {"ok": True, "armed": armed, "mode": mode}
 
 
 # Real command codes, captured from the physical controller and confirmed by the operator:
@@ -404,19 +515,32 @@ def do_control(action):
     try:
         if action == "estop":
             with _move_lock:
-                _move["armed"] = False  # e-stop always disarms teleop
+                # e-stop always disarms teleop, and zeroes both axis families so
+                # nothing is left to resume from
+                _move.update(armed=False, vx=0.0, vy=0.0, vyaw=0.0, pitch=0.0, roll=0.0)
             _burst(0x21020C0E, 0, 0, n=8)
             return {"ok": True, "msg": "軟急停已送出 (0x21020C0E)，操控已停用"}
         if action == "arm":
-            _burst(0x21010D06, 0, 0, n=3)  # movement mode
-            _burst(0x21010C02, 0, 0, n=3)  # manual mode
+            _burst(0x21010C02, 0, 0, n=3)  # manual mode (responds to this host)
             with _move_lock:
-                _move.update(armed=True, vx=0.0, vy=0.0, vyaw=0.0, last_hb=time.time())
-            return {"ok": True, "armed": True, "msg": "操控已啟用（移動＋手動模式）"}
+                _move.update(armed=True, vx=0.0, vy=0.0, vyaw=0.0, pitch=0.0, roll=0.0)
+            # Arming lands in movement mode, as it always has. It goes through set_mode
+            # rather than a bare burst so the streamer and the robot agree on which
+            # family the axis codes mean -- the bare burst here is what would have made
+            # an arrow key drive the robot instead of tilting it.
+            set_mode("move")
+            return {
+                "ok": True,
+                "armed": True,
+                "mode": "move",
+                "msg": "操控已啟用（移動＋手動模式）",
+            }
         if action == "disarm":
             with _move_lock:
-                _move.update(armed=False, vx=0.0, vy=0.0, vyaw=0.0)
+                _move.update(armed=False, vx=0.0, vy=0.0, vyaw=0.0, pitch=0.0, roll=0.0)
             return {"ok": True, "armed": False, "msg": "操控已停用"}
+        if action in ("mode_move", "mode_inplace"):
+            return set_mode("move" if action == "mode_move" else "inplace")
         if action in ("toggle", "stand", "sit"):
             _burst(0x21010202, 0, 0)
             return {"ok": True, "msg": "起立／蹲下切換 (0x21010202)"}
@@ -512,7 +636,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         "path": "test",
                     },
                     "infer": _read_infer(),
-                    "teleop": {"armed": _move["armed"]},
+                    "teleop": {"armed": _move["armed"], "mode": _move["mode"]},
                     "battery": {"available": True, "source": "0x0901 RobotStateUpload"},
                 }
             )
@@ -531,7 +655,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if self.path.startswith("/api/move"):
                 self._json(
                     do_move(
-                        float(j.get("vx", 0)), float(j.get("vy", 0)), float(j.get("vyaw", 0))
+                        float(j.get("vx", 0)),
+                        float(j.get("vy", 0)),
+                        float(j.get("vyaw", 0)),
+                        float(j.get("pitch", 0)),
+                        float(j.get("roll", 0)),
                     )
                 )
             else:
@@ -716,6 +844,12 @@ th{color:var(--dim);font-weight:500;font-size:11px;text-transform:uppercase;lett
         <button class="btn mv" data-vx="-1">▼ 後</button>
         <span></span>
       </div>
+      <div class="mini">模式（決定 WASD 與方向鍵哪一組有效）</div>
+      <div class="posture" style="grid-template-columns:1fr 1fr">
+        <button class="btn" id="btnmove">🚶 移動模式 · WASD/QE</button>
+        <button class="btn" id="btninplace">🧍 原地模式 · 方向鍵姿態</button>
+      </div>
+      <div class="mini" id="modetag">模式：—</div>
       <div class="mini">姿態 · 步態 · 動作</div>
       <div class="posture" style="grid-template-columns:1fr 1fr">
         <button class="btn" data-a="toggle">🦿 起立⇄趴下</button>
@@ -730,8 +864,12 @@ th{color:var(--dim);font-weight:500;font-size:11px;text-transform:uppercase;lett
         <button class="btn" data-a="act_greet">打招呼</button>
       </div>
       <div class="na" id="ctlnote"><b>會移動真機——操作前確保周圍淨空、硬體急停待命。</b><br>
-      官方通訊接口 V1.0.7：急停 <code>0x21020C0E</code>；移動軸指令 @50Hz 串流，機器人 250ms
-      未收到即自停（deadman），放開即停；<code>0x2101013x</code> 前後/平移/轉向。</div>
+      官方通訊接口 V1.0.7：急停 <code>0x21020C0E</code>；軸指令 @50Hz 串流，機器人 250ms
+      未收到即自停（deadman），放開即停。<br>
+      <b>軸指令碼在兩個模式下意義不同</b>：<code>0x21010130</code> 移動模式是前後平移、原地模式是俯仰；
+      <code>0x21010131</code> 是左右平移／橫滾。所以同一時間只會串流其中一組。<br>
+      移動模式 <code>WASD</code> 前後左右、<code>QE</code> 轉向；
+      原地模式 <code>↑↓</code> 抬頭低頭、<code>←→</code> 左右傾（規格：俯仰取正值時低頭）。</div>
     </div>
   </section>
 
@@ -822,6 +960,9 @@ async function tick(){
     // camera
     if(!camSet){const h=location.hostname;$("camframe").src="/cam/";$("hlslink").href="/cam/";$("wrtclink").href="http://"+h+":8889/test/";camSet=true;}
     if(j.teleop&&j.teleop.armed!==armed){armed=j.teleop.armed;updateArm();}
+    // Re-sync the mode from the robot side: a page reload, or a second browser, must
+    // not be left believing WASD is live while the streamer is sending posture axes.
+    if(j.teleop&&j.teleop.mode&&j.teleop.mode!=="switching"&&j.teleop.mode!==mode)setModeTag(j.teleop.mode);
     if(j.infer){const q=j.infer;const tg=$("inftag");tg.textContent=q.online?"● live":"○ offline";tg.style.color=q.online?"var(--good)":"var(--dim)";
       $("inf_fps").textContent=(q.fps||0)+" FPS";$("inf_ms").textContent=(q.infer_ms||0)+" ms";$("inf_ndet").textContent=q.n_det||0;
       if(q.trav){$("inf_go").textContent=(q.trav.go*100).toFixed(0)+"%";$("inf_caution").textContent=(q.trav.caution*100).toFixed(0)+"%";$("inf_blocked").textContent=(q.trav.blocked*100).toFixed(0)+"%";}
@@ -858,22 +999,55 @@ function updateArm(){$("armtag").textContent=armed?"● 已啟用":"未啟用";$
 $("armbtn").onclick=async function(){const j=await ctl(armed?"disarm":"arm");if(j&&"armed"in j){armed=j.armed;}else{armed=!armed;}updateArm();};
 $("estop").onclick=function(){armed=false;updateArm();ctl("estop");};
 document.querySelectorAll(".btn[data-a]").forEach(function(b){b.onclick=function(){ctl(b.dataset.a);};});
-// --- movement: held buttons + WASDQE keys -> velocity vector, streamed while armed ---
-const mv={vx:0,vy:0,vyaw:0};const held=new Set();const keyHeld={};
+// --- teleop: WASD/QE drive in 移動模式, arrows tilt in 原地模式 ---------------------
+// The two key sets are mutually exclusive because the robot's axis codes are:
+// 0x21010130 is forward/back in movement mode and pitch in posture mode, same bytes.
+// So `mode` gates which keys are even accepted, and the other family is sent as zero.
+const mv={vx:0,vy:0,vyaw:0,pitch:0,roll:0};const held=new Set();const keyHeld={};
+let mode="move";
 function clamp(x){return Math.max(-1,Math.min(1,x));}
-function recompute(){let vx=0,vy=0,vyaw=0;
+function recompute(){let vx=0,vy=0,vyaw=0,pt=0,rl=0;
   held.forEach(function(b){vx+=+(b.dataset.vx||0);vy+=+(b.dataset.vy||0);vyaw+=+(b.dataset.vyaw||0);});
-  Object.values(keyHeld).forEach(function(k){vx+=k.vx||0;vy+=k.vy||0;vyaw+=k.vyaw||0;});
-  mv.vx=clamp(vx);mv.vy=clamp(vy);mv.vyaw=clamp(vyaw);}
+  Object.values(keyHeld).forEach(function(k){vx+=k.vx||0;vy+=k.vy||0;vyaw+=k.vyaw||0;pt+=k.pitch||0;rl+=k.roll||0;});
+  // Zero the family this mode is not streaming, so a key still held across a mode
+  // switch cannot resurface as the other kind of command.
+  const moving=(mode==="move");
+  mv.vx=moving?clamp(vx):0;mv.vy=moving?clamp(vy):0;mv.vyaw=moving?clamp(vyaw):0;
+  mv.pitch=moving?0:clamp(pt);mv.roll=moving?0:clamp(rl);}
 setInterval(function(){if(!armed)return;fetch("/api/move",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(mv)}).catch(function(){});},100);
 document.querySelectorAll(".mv").forEach(function(b){
-  const press=function(e){if(e)e.preventDefault();if(!armed){toast("請先啟用操控");return;}held.add(b);b.style.borderColor="var(--good)";recompute();};
+  const press=function(e){if(e)e.preventDefault();if(!armed){toast("請先啟用操控");return;}
+    if(mode!=="move"){toast("目前是原地模式，先切回移動模式");return;}
+    held.add(b);b.style.borderColor="var(--good)";recompute();};
   const rel=function(){held.delete(b);b.style.borderColor="";recompute();};
   b.addEventListener("mousedown",press);b.addEventListener("touchstart",press,{passive:false});
   ["mouseup","mouseleave","touchend","touchcancel"].forEach(function(ev){b.addEventListener(ev,rel);});});
-const KEYMAP={KeyW:{vx:1},KeyS:{vx:-1},KeyA:{vy:-1},KeyD:{vy:1},KeyQ:{vyaw:-1},KeyE:{vyaw:1}};
-document.addEventListener("keydown",function(e){if(KEYMAP[e.code]&&armed&&!keyHeld[e.code]){keyHeld[e.code]=KEYMAP[e.code];recompute();}});
-document.addEventListener("keyup",function(e){if(KEYMAP[e.code]){delete keyHeld[e.code];recompute();}});
+// Spec 1.2.3.1: 俯仰 取正值时低头 -- positive pitch is nose DOWN, so ArrowUp is negative.
+// 横滚 取正值时向右翻滚 -- positive roll banks right.
+const MOVEKEYS={KeyW:{vx:1},KeyS:{vx:-1},KeyA:{vy:-1},KeyD:{vy:1},KeyQ:{vyaw:-1},KeyE:{vyaw:1}};
+const POSEKEYS={ArrowUp:{pitch:-1},ArrowDown:{pitch:1},ArrowLeft:{roll:-1},ArrowRight:{roll:1}};
+function keymap(){return mode==="move"?MOVEKEYS:POSEKEYS;}
+document.addEventListener("keydown",function(e){
+  const km=keymap();
+  // Arrows scroll the page by default, and a dashboard that jumps while you are tilting
+  // a robot is its own hazard -- swallow them whenever they are a live binding.
+  if(POSEKEYS[e.code]||MOVEKEYS[e.code])e.preventDefault();
+  if(km[e.code]&&armed&&!keyHeld[e.code]){keyHeld[e.code]=km[e.code];recompute();}
+  else if(!km[e.code]&&(POSEKEYS[e.code]||MOVEKEYS[e.code])&&armed){
+    toast(mode==="move"?"方向鍵是原地模式的姿態控制":"WASD 是移動模式的行走控制");}});
+document.addEventListener("keyup",function(e){if(keyHeld[e.code]){delete keyHeld[e.code];recompute();}});
+function setModeTag(m){mode=m;
+  $("modetag").textContent="模式："+(m==="move"?"移動（WASD/QE 有效，方向鍵停用）":"原地（方向鍵有效，WASD 停用）");
+  $("btnmove").style.borderColor=(m==="move")?"var(--good)":"";
+  $("btninplace").style.borderColor=(m==="inplace")?"var(--good)":"";
+  for(const k in keyHeld)delete keyHeld[k];held.clear();recompute();}
+async function switchMode(m){
+  if(!armed){toast("請先啟用操控");return;}
+  const j=await ctl(m==="move"?"mode_move":"mode_inplace");
+  if(j&&j.mode)setModeTag(j.mode);}
+$("btnmove").onclick=function(){switchMode("move");};
+$("btninplace").onclick=function(){switchMode("inplace");};
+setModeTag("move");
 setInterval(()=>{$("clock").textContent=new Date().toLocaleTimeString()},1000);
 setInterval(function(){var t=Date.now();var im=$("infimg");if(im)im.src="/infer/frame.jpg?t="+t;var bv=$("bevimg");if(bv)bv.src="/infer/bev.jpg?t="+t;},300);
 tick();setInterval(tick,500);
