@@ -164,6 +164,7 @@ uv run hydranet-eval  --config configs/hydranet_indoor.yaml \
 | deploying | [docs/DEPLOY_JETSON.md](docs/DEPLOY_JETSON.md), then [docs/ORIN_BRINGUP.md](docs/ORIN_BRINGUP.md) for a board from scratch |
 | shipping a version | [docs/RELEASE.md](docs/RELEASE.md) — `dev → stage → main`, and separately how a *model* gets a version |
 | scoping a retail robot | [docs/RETAIL_SCOPE.md](docs/RETAIL_SCOPE.md) — what to build and what to keep out of the network |
+| retail + security on one camera | [docs/RETAIL_SECURITY.md](docs/RETAIL_SECURITY.md) — the three output layers, the shared detection vocabulary, and which behaviour questions have an instrument |
 | turning a mask into metres | [docs/GROUND_PROJECTION.md](docs/GROUND_PROJECTION.md) — the projection above, and why the camera pose is fitted per frame |
 | on a Mac | [docs/TRAIN_MACOS.md](docs/TRAIN_MACOS.md) |
 
