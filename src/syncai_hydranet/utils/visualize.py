@@ -100,6 +100,23 @@ TERRAIN_COLORS_RETAIL_OBJECTS = np.array(
     dtype=np.uint8,
 )
 
+# `retail_surfaces` is `retail_objects` with `product` taken out of the dense head and
+# left to detection, so the ids below 5 are unchanged and `person` moves 6 -> 5. The
+# colours are **deliberately copied rather than re-picked**: the two taxonomies will be
+# read side by side in exactly the comparison the split was made to settle, and a class
+# that changed colour between them would look like a class that changed behaviour.
+TERRAIN_COLORS_RETAIL_SURFACES = np.array(
+    [
+        [0, 0, 0],  # void
+        [139, 90, 43],  # floor     -- as retail_objects
+        [130, 130, 130],  # wall    -- as retail_objects
+        [70, 90, 150],  # column    -- as retail_objects
+        [120, 80, 200],  # fixture  -- as retail_objects
+        [255, 100, 180],  # person  -- as retail_objects, moved down one id
+    ],
+    dtype=np.uint8,
+)
+
 # Most specific first, and the order is load-bearing: retail is indoor plus one class,
 # so it contains every indoor marker and would match `floor_hard` if that came first.
 # Selection is by name rather than by length because indoor and off-road are both
@@ -109,8 +126,17 @@ TERRAIN_COLORS_RETAIL_OBJECTS = np.array(
 # The object taxonomy is matched on `product`, which no other taxonomy contains. Its
 # own class names are otherwise a subset of words the others use (`wall`, `person`),
 # so a less distinctive marker would be a live collision rather than a theoretical one.
+#
+# `retail_surfaces` has **no word of its own** -- it is `retail_objects` minus `product`,
+# so every name it carries appears there too. It is therefore matched on `fixture` and
+# placed *after* the `product` entry, and that order is the whole distinction: a
+# taxonomy holding `product` is the object one, and one holding `fixture` without it is
+# the surfaces one. Moving these two lines past each other paints every surfaces run in
+# the object palette, which is off by one from `person` onwards -- a wrong colour, which
+# `overlay` exists to say is indistinguishable from a wrong prediction.
 _TERRAIN_PALETTES = (
     ("product", TERRAIN_COLORS_RETAIL_OBJECTS),
+    ("fixture", TERRAIN_COLORS_RETAIL_SURFACES),
     ("display_fixture", TERRAIN_COLORS_RETAIL),
     ("floor_hard", TERRAIN_COLORS_INDOOR),
     ("dirt", TERRAIN_COLORS_OFFROAD),
