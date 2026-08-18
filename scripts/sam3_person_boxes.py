@@ -68,7 +68,7 @@ sys.path.insert(0, str(HERE))
 from sam3_prelabel import load_sam3, segment  # noqa: E402
 
 from syncai_hydranet.analytics.tracker import iou  # noqa: E402
-from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402
+from syncai_hydranet.data.video import frames, probe  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:

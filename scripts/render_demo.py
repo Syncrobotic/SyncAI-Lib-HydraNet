@@ -48,9 +48,9 @@ from retail_flow import PERSON, to_source_pixels  # noqa: E402
 
 from syncai_hydranet.analytics import events as ev  # noqa: E402
 from syncai_hydranet.analytics.tracker import Tracker  # noqa: E402
-from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402
 from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.attributes import ATTRIBUTES  # noqa: E402
+from syncai_hydranet.data.video import frames, probe  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera, GroundPlane, ground_to_pixel  # noqa: E402
 from syncai_hydranet.models.crop_encoder import CropEncoder  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402

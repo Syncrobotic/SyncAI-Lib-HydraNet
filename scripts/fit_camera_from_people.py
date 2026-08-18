@@ -96,7 +96,7 @@ for candidate in (HERE.parent / "src", HERE / "src"):
         sys.path.insert(0, str(candidate))
 
 
-from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402  # isort: skip
+from syncai_hydranet.data.video import frames, probe  # noqa: E402  # isort: skip
 from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.coco_subsets import COCO_NAMES  # noqa: E402
 from syncai_hydranet.geometry.bev import box_extents  # noqa: E402

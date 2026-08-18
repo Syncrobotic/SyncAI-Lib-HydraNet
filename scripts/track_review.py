@@ -67,10 +67,10 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from syncai_hydranet.analytics import Tracker
-from syncai_hydranet.cli.infer_video import frames, probe
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.coco_subsets import COCO_NAMES
 from syncai_hydranet.data.transforms import invert_geom
+from syncai_hydranet.data.video import frames, probe
 from syncai_hydranet.models.hydranet import build_model
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
 from syncai_hydranet.utils.device import pick_device

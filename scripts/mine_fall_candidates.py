@@ -50,8 +50,8 @@ from retail_flow import PERSON, to_source_pixels  # noqa: E402
 
 from syncai_hydranet.analytics.events import fall_candidates  # noqa: E402
 from syncai_hydranet.analytics.tracker import Tracker  # noqa: E402
-from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402
 from syncai_hydranet.config import load_config  # noqa: E402
+from syncai_hydranet.data.video import frames, probe  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402

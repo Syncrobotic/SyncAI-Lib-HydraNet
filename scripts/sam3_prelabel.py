@@ -77,11 +77,11 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
-from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402
 from syncai_hydranet.data import sam3_prompts as _retail_prompts  # noqa: E402
 from syncai_hydranet.data import sam3_prompts_objects as _object_prompts  # noqa: E402
 from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
 from syncai_hydranet.data.sam3_prompts import DEFAULT_MIN_SCORE  # noqa: E402
+from syncai_hydranet.data.video import frames, probe  # noqa: E402
 
 # Two taxonomies, two prompt tables, and the pairing is not interchangeable: a concept
 # resolves its class id against the taxonomy it belongs to, so running the retail table

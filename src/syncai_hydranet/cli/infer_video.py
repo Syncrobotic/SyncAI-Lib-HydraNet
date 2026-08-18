@@ -12,7 +12,6 @@ matches the training aspect ratio, and stretching distorts the frame badly.
 from __future__ import annotations
 
 import argparse
-import json
 import shutil
 import subprocess
 import sys
@@ -24,6 +23,10 @@ from PIL import Image, ImageDraw
 
 from ..config import load_config
 from ..data.coco_subsets import COCO_NAMES, retail_box_label
+
+# Re-exported: seven scripts import these from here, and the move is not
+# theirs to absorb. `data/video.py` is where they live now.
+from ..data.video import frames, probe
 from ..models.heads.detection import SCORE_THR_VIEW
 from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint, select_weights
@@ -35,81 +38,6 @@ from ..utils.visualize import (
     preprocess,
     terrain_palette,
 )
-
-
-def probe(path: str) -> tuple[int, int, float]:
-    """Return display width, height and fps, accounting for rotation metadata."""
-    # `-show_streams` rather than `-show_entries`, because the section holding rotation
-    # has been spelled three ways across the ffmpeg versions this has to run on:
-    # `stream_side_data_list` on 4.x, `stream_side_data` on 7.x, and naming the wrong
-    # one is not a missing field but a hard `Invalid argument` exit -- ffprobe refuses
-    # the whole invocation, so every video path in the project dies on the ffmpeg the
-    # distro happens to ship (Ubuntu 22.04 carries 4.4). `-show_streams` needs no
-    # section name, emits `side_data_list` on both, and the parsing below is unchanged.
-    out = subprocess.run(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-select_streams",
-            "v:0",
-            "-show_streams",
-            "-of",
-            "json",
-            path,
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-    st = json.loads(out)["streams"][0]
-    w, h = int(st["width"]), int(st["height"])
-    num, _, den = st.get("r_frame_rate", "30/1").partition("/")
-    fps = float(num) / float(den or 1)
-    rot = 0
-    for sd in st.get("side_data_list", []):
-        if "rotation" in sd:
-            rot = int(sd["rotation"])
-    if abs(rot) % 180 == 90:  # ffmpeg autorotates on decode, swapping the axes
-        w, h = h, w
-    return w, h, fps
-
-
-def frames(path: str, w: int, h: int, stride_fps: float | None):
-    """Yield RGB frames from a rawvideo pipe."""
-    vf = f"fps={stride_fps}" if stride_fps else "null"
-    proc = subprocess.Popen(
-        [
-            "ffmpeg",
-            "-v",
-            "error",
-            "-i",
-            path,
-            "-vf",
-            vf,
-            "-f",
-            "rawvideo",
-            "-pix_fmt",
-            "rgb24",
-            "-",
-        ],
-        stdout=subprocess.PIPE,
-    )
-    # `Popen.stdout` is Optional because it is None unless `stdout=PIPE` was asked for.
-    # It was, one line up. Bind it once so the fact is stated where it is true instead
-    # of being re-derived at every read.
-    stdout = proc.stdout
-    assert stdout is not None
-    n = w * h * 3
-    try:
-        while True:
-            buf = stdout.read(n)
-            if len(buf) < n:
-                break
-            yield np.frombuffer(buf, np.uint8).reshape(h, w, 3)
-    finally:
-        stdout.close()
-        proc.wait()
 
 
 def build_parser() -> argparse.ArgumentParser:

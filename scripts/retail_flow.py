@@ -52,10 +52,10 @@ for candidate in (HERE.parent / "src", HERE / "src"):
 from syncai_hydranet.analytics import Tracker, dwell_table, track_ground_path  # noqa: E402
 from syncai_hydranet.analytics.dwell import ground_map  # noqa: E402
 from syncai_hydranet.analytics.tracker import SIMPLIFICATIONS  # noqa: E402
-from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402
 from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.coco_subsets import COCO_NAMES  # noqa: E402
 from syncai_hydranet.data.transforms import invert_geom  # noqa: E402
+from syncai_hydranet.data.video import frames, probe  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera, GroundPlane  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
