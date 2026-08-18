@@ -712,6 +712,49 @@ def _check_detection_vocab(rep: _Report, cfg: dict) -> None:
             )
 
 
+def _check_detection_val_interval(rep: _Report, cfg: dict) -> None:
+    """A detection `primary_metric` and a `detection_val_interval` above 1 kill the run.
+
+    `Trainer.val_subset` drops every val set whose only supervised head is detection on
+    the epochs between detection validations, so the metric that selects `best.pt` is not
+    produced -- and `select_metric` raises `KeyError` rather than guessing. The run dies at
+    the end of epoch 1, after the data is loaded and the GPU is warm, which is the most
+    expensive moment to discover a config problem short of finishing.
+
+    It is caught here rather than fixed there because both behaviours are right on their
+    own: skipping detection validation is what the interval is *for*, and refusing an
+    absent selection metric is what stops a run selecting on the wrong number. Only the
+    combination is wrong, and a config is where a combination lives.
+
+    Narrow on purpose. A detection metric whose dataset also supervises a segmentation
+    head survives the subset, so this only fires when the metric's source is
+    detection-only -- which is the case for every retail config that scores merchandise
+    against a boxes-only export.
+    """
+    train = cfg.get("train")
+    if not isinstance(train, dict):
+        return
+    metric = str(train.get("primary_metric", ""))
+    interval = train.get("detection_val_interval", 1)
+    if not metric.startswith("detection_") or not isinstance(interval, int) or interval <= 1:
+        return
+    _, _, source = metric.partition("/")
+    for ds in (cfg.get("data") or {}).get("datasets") or []:
+        if not isinstance(ds, dict) or (source and ds.get("name") != source):
+            continue
+        sup = set(ds.get("supervises") or [])
+        if sup and sup <= {"detection"} and ds.get("split_val"):
+            rep.errors.append(
+                f"train.primary_metric={metric!r} is produced by dataset "
+                f"{ds.get('name')!r}, which supervises detection only, while "
+                f"train.detection_val_interval={interval}. Trainer.val_subset drops that "
+                f"val set on the {interval - 1} epochs out of {interval} that skip "
+                f"detection validation, so the selection metric is absent and the run "
+                f"raises KeyError at the end of epoch 1. Set detection_val_interval to 1, "
+                f"or select on a metric that is produced every epoch."
+            )
+
+
 def _check_channels_last(rep: _Report, cfg: dict) -> None:
     """NHWC pays only under autocast.
 
@@ -765,6 +808,7 @@ def check_config(cfg: dict) -> list[str]:
     _check_class_counts(rep, cfg)
     _check_detection_subset(rep, cfg)
     _check_detection_vocab(rep, cfg)
+    _check_detection_val_interval(rep, cfg)
     _check_channels_last(rep, cfg)
     _check_fixed_weights(rep, cfg)
     _check_unsourced_classes(rep, cfg)
