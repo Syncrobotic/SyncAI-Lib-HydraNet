@@ -1,0 +1,115 @@
+# =============================================================================
+# The same model as hydranet_retail_security.yaml with one thing added: a second site
+# segmentation source, 416 training frames prelabelled by SAM 3 on 2026-08-13.
+#
+# **This config exists to isolate the data.** Its sibling
+# `hydranet_retail_security_b03_hires.yaml` adds an input-resolution change on top, and
+# running only that one would confound two edits in a single number -- which is the
+# mistake ARCHITECTURE_DIRECTION.md section 4 spends a page on. Three seeds each, matched
+# to the parent's, so every comparison is paired.
+#
+# ---------------------------------------------------------------------------
+# WHAT batch03 IS, AND WHAT IT IS NOT
+#
+# 84 clips over 42 cameras, pulled from gs://studioa-recording for a day the existing data
+# does not cover -- everything in `studioa_clips` is 2026-08-16, so the axis with new
+# information in it was the date and not the camera. Two store-local times, 12:30 and
+# 18:00: `pull_studioa.py` argues the split, since the static classes are best drawn when
+# fewest people stand in front of them and `person` wants the opposite.
+#
+# Six cameras are excluded because they emit nothing at all -- mean luma 1.1 across all
+# four time slots, measured over all 48.
+#
+# **It is SAM 3's opinion, not ground truth**, exactly as batch02's `test_provenance`
+# says of its own boxes. No human has corrected a pixel of it.
+#
+# `batch03/split.json` inherits batch02's camera assignment, so no camera lands on two
+# sides of a split. The 18 cameras batch02 never covered are assigned in the same
+# proportions. A camera in train and test at once is a test set measuring itself.
+#
+# ---------------------------------------------------------------------------
+# THE STEP ARITHMETIC, WHICH IS WHY THE RATIOS MOVED
+#
+# At batch 32, per epoch:
+#
+#   ade20k       5,998 imgs -> 187 batches x 0.15 = 28 seg steps
+#   site_seg02     180 imgs ->   5 batches x 2.0  = 10 seg steps
+#   site_seg03     416 imgs ->  13 batches x 2.0  = 26 seg steps
+#
+# Site supervision goes from 15 of 43 segmentation steps to 36 of 64 -- a minority
+# becomes the majority, which is the point. The ratio drops from 3.0 because 3.0 on
+# 13 batches would put ADE20K at 26% and this is not the run to also change that.
+# =============================================================================
+
+_base_: hydranet_retail_security.yaml
+
+experiment: hydranet_retail_security_b03
+output_dir: runs/hydranet_retail_security_b03
+
+data:
+  datasets:
+    - name: ade20k
+      type: seg_folder
+      root: datasets/ADE20K
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: ade20k_retail_surfaces
+      sample_ratio: 0.15
+      supervises: [terrain]
+
+    - name: site_seg
+      type: seg_folder
+      root: datasets/retail_objects_batch02
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: retail_surfaces_from_objects
+      sample_ratio: 2.0
+      supervises: [terrain]
+
+    - name: site_seg03
+      type: seg_folder
+      root: datasets/retail_objects_batch03
+      split_train: train
+      split_val: val
+      split_test: test
+      # Same taxonomy as batch02, so the same renumbering map reads it.
+      label_map: retail_surfaces_from_objects
+      sample_ratio: 2.0
+      supervises: [terrain]
+
+    - name: site_boxes
+      type: coco
+      root: datasets/retail_objects_batch02
+      split_train: train
+      split_val: val
+      split_test: test
+      det_vocab: retail_security
+      sample_ratio: 3.0
+      supervises: [detection]
+
+    - name: site_boxes03
+      type: coco
+      root: datasets/retail_objects_batch03
+      split_train: train
+      split_val: val
+      split_test: test
+      det_vocab: retail_security
+      sample_ratio: 1.0
+      supervises: [detection]
+
+    - name: coco_person
+      type: coco
+      root: datasets/coco
+      split_train: train2017
+      split_val: val2017
+      classes: [person, backpack, handbag, suitcase]
+      det_vocab: retail_security
+      sample_ratio: 0.05
+      supervises: [detection]
+
+train:
+  # Unchanged from the parent, and deliberately: selection on the site merchandise mAP is
+  # what makes this run comparable to the three seeds it is being compared against.
+  primary_metric: detection_mAP/site_boxes

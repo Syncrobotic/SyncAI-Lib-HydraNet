@@ -713,6 +713,35 @@ def _check_detection_vocab(rep: _Report, cfg: dict) -> None:
             )
 
 
+def _check_detection_head_classes(rep: _Report, cfg: dict) -> None:
+    """A detection head's `classes` list has to be as long as the head is wide.
+
+    Caught the day it was introduced, by a renderer refusing rather than by anything in
+    training. `hydranet_retail_surfaces.yaml` gained `classes: [boxed_stock, device]` so
+    its panels would stop naming boxes from COCO's table; `hydranet_retail_security.yaml`
+    inherits from it and widened the head to four without restating the list, and `_base_`
+    merges keys rather than replacing the block. So a four-channel head carried two names.
+
+    Training never reads `classes` unless a text-embedding matrix is installed, which is
+    what made it invisible: the run converges, the checkpoint is fine, and only the panel
+    is wrong -- naming a `person` box `boxed_stock`, which is the shape of error
+    `detection_class_names` was written to prevent.
+    """
+    heads = (cfg.get("model") or {}).get("heads") or {}
+    for name, head in heads.items():
+        if not isinstance(head, dict) or head.get("type") != "fcos":
+            continue
+        declared = head.get("classes")
+        width = head.get("num_classes")
+        if isinstance(declared, list) and isinstance(width, int) and len(declared) != width:
+            rep.errors.append(
+                f"model.heads.{name}.classes has {len(declared)} names "
+                f"({', '.join(map(str, declared))}) for a {width}-channel head. `_base_` "
+                f"merges, so a widened head keeps its parent's shorter list and every "
+                f"rendered box is named from it."
+            )
+
+
 def _check_detection_val_interval(rep: _Report, cfg: dict) -> None:
     """A detection `primary_metric` and a `detection_val_interval` above 1 kill the run.
 
@@ -841,6 +870,7 @@ def check_config(cfg: dict) -> list[str]:
     _check_detection_subset(rep, cfg)
     _check_detection_vocab(rep, cfg)
     _check_detection_val_interval(rep, cfg)
+    _check_detection_head_classes(rep, cfg)
     _check_channels_last(rep, cfg)
     _check_fixed_weights(rep, cfg)
     _check_unsourced_classes(rep, cfg)

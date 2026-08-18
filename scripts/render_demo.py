@@ -44,7 +44,7 @@ for candidate in (HERE.parent / "src", HERE / "src"):
         sys.path.insert(0, str(candidate))
 sys.path.insert(0, str(HERE))
 
-from retail_flow import PERSON, to_source_pixels  # noqa: E402
+from retail_flow import to_source_pixels  # noqa: E402
 
 from syncai_hydranet.analytics import events as ev  # noqa: E402
 from syncai_hydranet.analytics.track_attributes import (  # noqa: E402
@@ -53,8 +53,10 @@ from syncai_hydranet.analytics.track_attributes import (  # noqa: E402
     usable_crops,
 )
 from syncai_hydranet.analytics.tracker import Tracker  # noqa: E402
+from syncai_hydranet.cli.scene import detection_class_names  # noqa: E402
 from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.attributes import ATTRIBUTES  # noqa: E402
+from syncai_hydranet.data.coco_subsets import COCO_NAMES  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera, GroundPlane, ground_to_pixel  # noqa: E402
 from syncai_hydranet.models.crop_encoder import CropEncoder  # noqa: E402
@@ -80,6 +82,23 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--encoder", default="runs/crop_encoder01/last.pt")
     ap.add_argument("--fps", type=float, default=5.0)
     ap.add_argument("--max-frames", type=int, default=0)
+    # Output size and quality. The first render was 1080p at crf 23 and came out 39 MB for
+    # five minutes -- a file people cannot open rather than a video they can watch. The
+    # overlay is drawn at full resolution and scaled on the way out, so nothing measured
+    # changes; only the picture is smaller.
+    # Segmentation input size, overriding the checkpoint's own. Looked at rather than
+    # reasoned about: at the trained 512x640 a 16:9 frame becomes 640x360 of content, and
+    # a person's mask bleeds a halo of `person` onto the floor around their feet. At
+    # 768x1344 the same checkpoint tracks the trouser silhouette and the shoes separate.
+    # Boundary pixels go 15,345 -> 21,728 while the class shares barely move (floor 24.6%
+    # -> 24.5%), which is detail being resolved rather than noise being added.
+    #
+    # It is inference at a size the model was not trained at -- legitimate for a fully
+    # convolutional net, out of distribution all the same, and 4.4x the pixels. The real
+    # fix is to train at this size; this makes the gap visible before paying for it.
+    ap.add_argument("--seg-size", type=int, nargs=2, default=None, metavar=("H", "W"))
+    ap.add_argument("--out-height", type=int, default=720, metavar="PX")
+    ap.add_argument("--crf", type=int, default=28)
     ap.add_argument("--score-thr", type=float, default=0.25)
     ap.add_argument("--person-thr", type=float, default=0.20)
     # Taichung-cam01's tile-grid fit; an assumption on any other camera.
@@ -145,9 +164,20 @@ def main(argv: list[str] | None = None) -> int:
     enc = CropEncoder(len(ATTRIBUTES)).to(device).eval()
     enc.load_state_dict(torch.load(args.encoder, map_location="cpu")["model"])
 
+    if args.seg_size:
+        seg_cfg["data"]["input_size"] = list(args.seg_size)
     classes = seg_cfg["data"].get("terrain_classes")
     palette = terrain_palette(classes)
-    fixture_names = ("boxed_stock", "device")
+    # Both vocabularies resolved from their configs. `person` happens to be channel 0 in
+    # `retail_security` as in COCO, and relying on that coincidence is how a rename
+    # becomes a silent relabel of every box. The merchandise head is two classes in the
+    # surfaces line and four here, so the hardcoded pair raised IndexError on this
+    # checkpoint -- which is the better of its two possible failures.
+    det_names = detection_class_names(det_cfg) or tuple(COCO_NAMES)
+    if "person" not in det_names:
+        raise SystemExit(f"the detection head has no `person` channel: {det_names}")
+    person_idx = det_names.index("person")
+    seg_det_names = detection_class_names(seg_cfg) or tuple(COCO_NAMES)
     w, h, _ = probe(args.clip)
     cam = Camera.from_vfov(h, w, args.vfov)
     plane = GroundPlane(height=args.camera_height, pitch=math.radians(args.pitch))
@@ -178,13 +208,27 @@ def main(argv: list[str] | None = None) -> int:
         xs, _, region_s = preprocess(img, seg_cfg["data"]["input_size"])
         xd, _, region_d = preprocess(img, det_cfg["data"]["input_size"])
         with torch.no_grad():
+            sraw = seg(xs.to(device))["terrain"]
             sres = seg.predict(xs.to(device), score_thr=args.score_thr)
             dres = det.predict(xd.to(device), score_thr=args.person_thr)
 
-        terrain = sres["terrain"][0].cpu().numpy().astype(np.uint8)
+        # Upsample the logits and argmax after, not the other way round. Measured at only
+        # 0.43% of pixels different from nearest-neighbour on the class map, so this is
+        # correctness rather than the fix it was hoped to be -- interpolating class *ids*
+        # is meaningless arithmetic even when it happens to look the same.
         x0, y0, cw, ch = region_s
-        terrain = terrain[y0 : y0 + ch, x0 : x0 + cw]
-        terrain = np.asarray(Image.fromarray(terrain).resize((w, h), Image.NEAREST))
+        terrain = (
+            torch.nn.functional.interpolate(
+                sraw[:, :, y0 : y0 + ch, x0 : x0 + cw],
+                size=(h, w),
+                mode="bilinear",
+                align_corners=False,
+            )
+            .argmax(1)[0]
+            .cpu()
+            .numpy()
+            .astype(np.uint8)
+        )
         canvas = overlay(img, terrain, palette, alpha=0.45)
         d = ImageDraw.Draw(canvas)
         d.polygon(zone_px, outline=(255, 220, 0))
@@ -203,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
                 d.rectangle(list(b), outline=(120, 200, 255))
                 d.text(
                     (b[0], b[1] - 11),
-                    f"{fixture_names[int(lab)]} {sc:.2f}",
+                    f"{seg_det_names[int(lab)]} {sc:.2f}",
                     fill=(120, 200, 255),
                 )
 
@@ -212,7 +256,7 @@ def main(argv: list[str] | None = None) -> int:
         if len(ddet.get("labels", [])):
             lab = ddet["labels"].cpu().numpy()
             pboxes = to_source_pixels(
-                ddet["boxes"].cpu().numpy()[lab == PERSON], region_d, w, h
+                ddet["boxes"].cpu().numpy()[lab == person_idx], region_d, w, h
             )
         live = tracker.update(pboxes, n)
         banner = []
@@ -276,10 +320,17 @@ def main(argv: list[str] | None = None) -> int:
                     "-an",
                     "-vcodec",
                     "libx264",
+                    "-vf",
+                    f"scale={int(round(w * (args.out_height or h) / h / 2) * 2)}:"
+                    f"{args.out_height or h}",
+                    "-preset",
+                    "slow",
                     "-pix_fmt",
                     "yuv420p",
                     "-crf",
-                    "23",
+                    str(args.crf),
+                    "-movflags",
+                    "+faststart",
                     args.out,
                 ],
                 stdin=subprocess.PIPE,

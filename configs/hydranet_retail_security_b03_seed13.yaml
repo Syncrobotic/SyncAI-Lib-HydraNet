@@ -1,0 +1,9 @@
+# Seed replicate. Seeds 42, 7 and 13 match every other run in this family, so each
+# comparison is paired: the same data order and the same init, differing only in the one
+# thing the parent config changes. Paired sd on this family is 0.0034 against a
+# between-seed spread of 0.0173.
+_base_: hydranet_retail_security_b03.yaml
+
+experiment: hydranet_retail_security_b03_seed13
+output_dir: runs/hydranet_retail_security_b03_seed13
+seed: 13

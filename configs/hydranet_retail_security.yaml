@@ -96,6 +96,12 @@ model:
       # because a head one channel narrow trains every box against the wrong class and
       # still converges.
       num_classes: 4
+      # Stated because the parent states its own two, and `_base_` merges rather than
+      # replaces: without this line a four-channel head inherits `[boxed_stock, device]`
+      # and `cli/scene.detection_class_names` -- which exists to stop exactly this --
+      # hands a renderer two names for four channels. It does not touch training, so the
+      # symptom is a video that labels people `boxed_stock` and nothing else.
+      classes: [person, bag, boxed_stock, device]
 
 data:
   terrain_classes: [void, floor, wall, column, fixture, person]
