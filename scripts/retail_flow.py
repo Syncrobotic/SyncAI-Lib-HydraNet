@@ -110,7 +110,14 @@ def build_parser() -> argparse.ArgumentParser:
     # docs/journal/2026-08-14 -- right for that camera and an assumption for any other.
     ap.add_argument("--camera-height", type=float, default=2.38, metavar="M")
     ap.add_argument("--pitch", type=float, default=50.2, metavar="DEG")
-    ap.add_argument("--vfov", type=float, default=55.0, metavar="DEG")
+    # 70.4, not 55. The comment above says these defaults are Taichung-cam01's corrected
+    # fit and two of the three were: the tile-grid fit in
+    # `fit_camera_from_people.py`'s docstring reads "70.4 deg vfov and 50.2 deg pitch",
+    # and quotes `f 766` for the result. 55 deg on a 1080-row frame is f 1037 -- 35%
+    # longer -- so every metre this script printed under its own defaults was wrong by
+    # that factor, with nothing in the output looking wrong. The stale value is the one
+    # the fit replaced, left behind when the other two were updated.
+    ap.add_argument("--vfov", type=float, default=70.4, metavar="DEG")
     ap.add_argument("--cell", type=float, default=0.25, metavar="M")
     return ap
 

@@ -44,6 +44,7 @@ from PIL import Image, ImageDraw
 from ..config import load_config
 from ..data.coco_subsets import COCO_NAMES, head_order, retail_box_label
 from ..data.label_maps import get_scheme, terrain_to_traversability
+from ..data.label_maps_retail_security import get_det_vocab
 from ..geometry import bev3d
 from ..geometry.bev import IGNORE, BevGrid, free_space_map, project_mask, scene
 from ..geometry.ground import Camera, GroundPlane
@@ -367,9 +368,20 @@ def detection_class_names(cfg: dict) -> tuple[str, ...] | None:
 
     1. the head's own ``classes:`` -- declared in head order, and already checked against
        the text-embedding matrix's names when there is one;
-    2. a COCO dataset's ``classes:`` narrowing list, put through ``head_order`` because
+    2. a dataset's ``det_vocab:`` -- authoritative when present, because the vocabulary
+       *is* the channel order and every source maps its category names into it;
+    3. a COCO dataset's ``classes:`` narrowing list, put through ``head_order`` because
        ``CocoDetDataset`` sorts by category id and a config's writing order is not that;
-    3. ``COCO_NAMES`` only if the channel count agrees with it exactly.
+    4. ``COCO_NAMES`` only if the channel count agrees with it exactly.
+
+    Rule 2 goes **above** rule 3 and the ordering is load-bearing rather than tidy.
+    `hydranet_retail_security.yaml` narrows COCO to `[person, backpack, handbag,
+    suitcase]` -- four names, against a four-channel head -- so rule 3 would find a count
+    that agrees and return `person, backpack, handbag, suitcase`. The head's channels are
+    `person, bag, boxed_stock, device`: three of the four names would be wrong, the count
+    check would pass, and two of the wrong names would be plausible on a shop frame. This
+    function exists to stop exactly that, and it took a new vocabulary two hours old to
+    re-open the hole.
     """
     heads = (cfg.get("model") or {}).get("heads") or {}
     det = next(
@@ -380,6 +392,9 @@ def detection_class_names(cfg: dict) -> tuple[str, ...] | None:
     declared = det.get("classes")
     if declared:
         return tuple(str(c) for c in declared)
+    for ds in (cfg.get("data") or {}).get("datasets") or []:
+        if isinstance(ds, dict) and ds.get("det_vocab"):
+            return get_det_vocab(str(ds["det_vocab"])).classes
     for ds in (cfg.get("data") or {}).get("datasets") or []:
         if isinstance(ds, dict) and ds.get("type") == "coco" and ds.get("classes"):
             return tuple(head_order(ds["classes"]))

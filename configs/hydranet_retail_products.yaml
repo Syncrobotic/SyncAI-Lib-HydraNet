@@ -54,6 +54,12 @@ model:
       # boxed_stock, device. Not 80: an untrained channel is not free, it is a channel
       # spending gradient learning to say no, and this run has two things to find.
       num_classes: 2
+      # Stated rather than left to the comment above. `cli/scene.detection_class_names`
+      # reads this first, and without it a panel drawn from this checkpoint falls back to
+      # the bare channel index -- or, before that resolver reached
+      # `hydranet-infer-image`, to COCO's names, which drew a wall of hanging accessory
+      # packets as ten `person` boxes at 0.30-0.37.
+      classes: [boxed_stock, device]
 
 data:
   terrain_classes: [void, floor, wall, column, fixture, product, person]

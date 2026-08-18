@@ -16,7 +16,6 @@ import torch
 from PIL import Image, ImageDraw
 
 from ..config import load_config
-from ..data.coco_subsets import COCO_NAMES, retail_box_label
 from ..models.heads.detection import SCORE_THR_VIEW
 from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint, select_weights
@@ -28,6 +27,7 @@ from ..utils.visualize import (
     preprocess,
     terrain_palette,
 )
+from .scene import apply_vocab, detection_class_names
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp"}
 
@@ -85,11 +85,18 @@ def main(argv: list[str] | None = None) -> None:
     terrain_colors = terrain_palette(cfg["data"].get("terrain_classes"))
     # Boxes used to be drawn as `73:0.42`. The id is the least useful of the three
     # things known about a detection, and scene.py already resolved it to a name.
-    name_of = (
-        retail_box_label
-        if args.vocab == "retail"
-        else (lambda i: COCO_NAMES[i] if i < len(COCO_NAMES) else str(i))
-    )
+    # Resolved from the config rather than assumed to be COCO's 80. Rendered against
+    # `hydranet_retail_surfaces.yaml` -- a two-class head of `boxed_stock` and `device` --
+    # the old line drew channel 0 as `person` and channel 1 as `bicycle`, so a wall of
+    # hanging accessory packets came back as ten people at 0.30-0.37. `scene.py` fixed
+    # this for its own panel and this CLI never got it; the resolver is imported rather
+    # than reimplemented, because two copies would be two answers.
+    #
+    # A head whose names cannot be established falls back to the bare channel index,
+    # which is deliberately harder to read: `0` tells a viewer to go and look up what
+    # channel 0 is, and `person` tells them not to.
+    names = apply_vocab(detection_class_names(cfg), args.vocab)
+    name_of = (lambda i: names[i] if i < len(names) else str(i)) if names else str
 
     for p in paths:
         if p.suffix.lower() not in IMG_EXTS:
