@@ -47,6 +47,11 @@ sys.path.insert(0, str(HERE))
 from retail_flow import PERSON, to_source_pixels  # noqa: E402
 
 from syncai_hydranet.analytics import events as ev  # noqa: E402
+from syncai_hydranet.analytics.track_attributes import (  # noqa: E402
+    age_band,
+    track_attributes,
+    usable_crops,
+)
 from syncai_hydranet.analytics.tracker import Tracker  # noqa: E402
 from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.attributes import ATTRIBUTES  # noqa: E402
@@ -94,24 +99,42 @@ def load(cfg_path: str, ckpt: str, device):
     return cfg, model
 
 
-def attribute_text(enc, device, frame: np.ndarray, box) -> str:
+def crop_logits(enc, device, frame: np.ndarray, box) -> np.ndarray | None:
+    """One frame's attribute logits for one box, or None if there is nothing to read."""
     x0, y0, x1, y1 = (int(v) for v in box)
     if x1 - x0 < 24 or y1 - y0 < 48:
-        return ""
+        return None
     crop = Image.fromarray(frame[max(y0, 0) : y1, max(x0, 0) : x1]).resize((128, 256))
     x = ((np.asarray(crop, dtype=np.float32) / 255.0 - MEAN) / STD).transpose(2, 0, 1)
     with torch.no_grad():
         _, logits = enc(torch.from_numpy(x[None]).to(device))
-    p = torch.sigmoid(logits)[0].cpu().numpy()
-    idx = {a: i for i, a in enumerate(ATTRIBUTES)}
-    sex = "F" if p[idx["Female"]] > 0.5 else "M"
-    if p[idx["AgeLess18"]] > 0.5:
-        age = "<18"
-    elif p[idx["AgeOver60"]] > 0.5:
-        age = ">60"
-    else:
-        age = "18-60"
-    return f"{sex} {age}"
+    return logits[0].float().cpu().numpy()
+
+
+BAND_TEXT = {"AgeLess18": "<18", "Age18-60": "18-60", "AgeOver60": ">60", "unknown": "?"}
+
+
+def attribute_text(history: dict, track_id: int, w: int, h: int) -> str:
+    """The track's pooled answer with its agreement, not this frame's guess.
+
+    Per frame the gender decision flips on 16.2% of consecutive frame pairs on
+    Kaohsiung-cam04, which is what makes the same staff member `F` and `M` in adjacent
+    frames of the first render. Pooling removes that by construction; the agreement is
+    printed because removing the flicker does not make the answer true, and roughly a
+    third of tracks pool to something close to a coin flip.
+    """
+    rec = history.get(track_id)
+    if rec is None or len(rec["logits"]) < 3:
+        return ""
+    lg = np.stack(rec["logits"])
+    use = usable_crops(np.stack(rec["boxes"]), w, h)
+    attrs = track_attributes(lg, ATTRIBUTES, use)
+    if not attrs:
+        return ""
+    sex = attrs["Female"]
+    band, _p = age_band(attrs)
+    letter = "F" if sex.value else "M"
+    return f"{letter} {sex.agreement:.0%} {BAND_TEXT.get(band, band)}"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -146,6 +169,9 @@ def main(argv: list[str] | None = None) -> int:
     writer = None
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     inside_since: dict[int, int] = {}
+    # Per-track attribute evidence, accumulated as the clip plays. A live renderer pools
+    # what it has seen so far, which is why the label firms up rather than flickering.
+    history: dict[int, dict] = {}
     n = 0
     for frame in frames(args.clip, w, h, args.fps):
         img = Image.fromarray(frame)
@@ -199,7 +225,12 @@ def main(argv: list[str] | None = None) -> int:
                 outline=(255, 90, 90),
                 width=2,
             )
-            label = f"#{t.track_id} " + attribute_text(enc, device, frame, b)
+            lg = crop_logits(enc, device, frame, b)
+            if lg is not None:
+                rec = history.setdefault(t.track_id, {"logits": [], "boxes": []})
+                rec["logits"].append(lg)
+                rec["boxes"].append(np.asarray(b, dtype=float))
+            label = f"#{t.track_id} " + attribute_text(history, t.track_id, w, h)
             d.text((float(b[0]), float(b[1]) - 12), label, fill=(255, 200, 200))
             foot = np.array([[(b[0] + b[2]) / 2, b[3]]])
             from syncai_hydranet.geometry.ground import pixel_to_ground
