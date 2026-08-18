@@ -335,7 +335,21 @@ def _det_metrics(det_results, coco_gts: dict[str, Any], det_cat_ids, logger) -> 
     """COCO mAP per detection dataset."""
     metrics: dict[str, float] = {}
     for ds_name, results in det_results.items():
+        suffix = "" if len(det_results) == 1 else f"/{ds_name}"
         if not results:
+            # A detector that predicted nothing has an mAP, and it is zero. Skipping the
+            # key instead says "not measured", and the difference is not cosmetic: it
+            # killed `hydranet_retail_surfaces_seed7` at epoch 1 with
+            # `primary_metric='detection_mAP' was not produced by validation`, because an
+            # untrained head happened to clear no boxes on that seed while seed 42's
+            # cleared six. A seed-variance experiment must not be destroyed by seed
+            # variance in a quantity it is not measuring.
+            metrics[f"detection_mAP{suffix}"] = 0.0
+            metrics[f"detection_mAP50{suffix}"] = 0.0
+            logger.info(
+                f"[val] {ds_name} detection mAP = 0.0000 -- the model returned no boxes "
+                f"at all on this set, which is a score rather than a missing measurement"
+            )
             continue
         from pycocotools.cocoeval import COCOeval
 
@@ -352,10 +366,10 @@ def _det_metrics(det_results, coco_gts: dict[str, Any], det_cat_ids, logger) -> 
         ev.evaluate()
         ev.accumulate()
         ev.summarize()
-        # One detection dataset keeps the unqualified key, which is what
-        # train.primary_metric and every existing metrics.jsonl refer to. A second one
-        # gets its own suffixed keys rather than quietly redefining that number.
-        suffix = "" if len(det_results) == 1 else f"/{ds_name}"
+        # `suffix` is set at the top of the loop: one detection dataset keeps the
+        # unqualified key, which is what train.primary_metric and every existing
+        # metrics.jsonl refer to. A second one gets its own suffixed keys rather than
+        # quietly redefining that number.
         metrics[f"detection_mAP{suffix}"] = float(ev.stats[0])
         metrics[f"detection_mAP50{suffix}"] = float(ev.stats[1])
         logger.info(

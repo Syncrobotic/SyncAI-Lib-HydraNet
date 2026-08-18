@@ -122,3 +122,53 @@ def test_evaluate_restores_the_callers_model_mode():
     model.train()
     evaluate(model, [], cfg, "cpu", logger)
     assert model.training is True
+
+
+# ------------------------------------------- an empty detector still has a score
+
+
+class _Logger:
+    """Collects the lines `_det_metrics` writes, so the message can be asserted on."""
+
+    def __init__(self):
+        self.lines: list[str] = []
+
+    def info(self, msg):
+        self.lines.append(str(msg))
+
+
+def test_a_detector_that_returned_nothing_scores_zero_rather_than_vanishing():
+    """It killed `hydranet_retail_surfaces_seed7` at epoch 1.
+
+    An untrained head cleared no boxes on that seed while seed 42's cleared six, the
+    `detection_mAP` key was simply absent from the metrics dict, and `select_metric` then
+    raised `primary_metric='detection_mAP' was not produced by validation` and ended the
+    run. A seed-variance experiment must not be destroyed by seed variance in a quantity
+    it is not measuring -- and "the model predicted nothing" is a measurement whose answer
+    is zero, not an absence of one.
+    """
+    from syncai_hydranet.engine.evaluator import _det_metrics
+
+    log = _Logger()
+    metrics = _det_metrics({"site_boxes": []}, {}, {}, log)
+    assert metrics == {"detection_mAP": 0.0, "detection_mAP50": 0.0}
+    assert select_metric(metrics, "detection_mAP") == 0.0
+    assert any("no boxes" in line for line in log.lines), (
+        "a zero that is never explained reads as a broken evaluator the first time "
+        "someone sees it in a log"
+    )
+
+
+def test_an_empty_set_keeps_the_suffix_rule_the_scored_path_uses():
+    """Two detection datasets get suffixed keys so neither redefines the unqualified one.
+    The empty branch has to agree, or a run with two sets silently gains a bare
+    `detection_mAP` the moment one of them returns nothing."""
+    from syncai_hydranet.engine.evaluator import _det_metrics
+
+    metrics = _det_metrics({"site_boxes": [], "coco": []}, {}, {}, _Logger())
+    assert set(metrics) == {
+        "detection_mAP/site_boxes",
+        "detection_mAP50/site_boxes",
+        "detection_mAP/coco",
+        "detection_mAP50/coco",
+    }
