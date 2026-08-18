@@ -12,6 +12,7 @@ splitting that further would move the coupling into signatures rather than remov
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -32,7 +33,12 @@ from ..utils.device import (
     supports_pinned_memory,
 )
 from ..utils.logger import get_logger
-from ..utils.runmeta import append_metrics, resolve_out_dir, write_run_meta
+from ..utils.runmeta import (
+    append_metrics,
+    resolve_out_dir,
+    selection_report,
+    write_run_meta,
+)
 from ..utils.seeding import (
     apply_channels_last,
     configure_backends,
@@ -391,7 +397,30 @@ class Trainer:
                     f"best {self.best_metric:.4f}, stopping at epoch {epoch} of {self.epochs}"
                 )
                 break
+        self._report_selection()
         self.logger.info("training complete")
+
+    def _report_selection(self) -> None:
+        """Say what `best.pt` gave up on the heads it was not selected for.
+
+        At the end rather than per-epoch: the question is about the finished trajectory,
+        and a warning that fires every validation is a warning nobody reads. Written to
+        `selection.json` beside the checkpoints so it survives the terminal.
+        """
+        path = self.out_dir / "metrics.jsonl"
+        if not path.exists():
+            return
+        lines = path.read_text(encoding="utf-8").splitlines()
+        rows = [json.loads(line) for line in lines if line]
+        summary, warnings = selection_report(rows, self.primary_metric)
+        if not summary:
+            return
+        (self.out_dir / "selection.json").write_text(
+            json.dumps({"primary_metric": self.primary_metric, "heads": summary}, indent=1),
+            encoding="utf-8",
+        )
+        for w in warnings:
+            self.logger.warning(f"checkpoint selection: {w}")
 
     def record_epoch(self, epoch: int, metrics: dict) -> bool:
         """Update the best score, then write the checkpoints. Returns True on a new best.

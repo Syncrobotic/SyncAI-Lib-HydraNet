@@ -122,3 +122,71 @@ def append_metrics(out_dir: Path, record: dict) -> None:
     line = json.dumps(record, ensure_ascii=False, default=float)
     with (Path(out_dir) / "metrics.jsonl").open("a", encoding="utf-8") as f:
         f.write(line + "\n")
+
+
+# The metrics a multi-head run could reasonably have been selected on. Head-level
+# aggregates only: per-class IoUs are far noisier epoch to epoch -- a class present in 22
+# of 285 val images swings on a handful of frames -- and warning on each would train
+# people to skim past the whole block.
+HEAD_METRICS = ("terrain_mIoU", "traversability_mIoU", "detection_mAP")
+
+
+def selection_report(rows: list[dict], primary_metric: str) -> tuple[dict, list[str]]:
+    """What the chosen checkpoint gave up on the heads nobody was selecting for.
+
+    `best.pt` is picked by one scalar. A three-head model therefore has two heads whose
+    quality nothing checks, and the cost is not hypothetical: measured across this
+    project's own runs, selecting on `detection_mAP` gives away 0.01-0.08 terrain mIoU,
+    and selecting on a segmentation metric has produced checkpoints whose detection mAP
+    is 0.0024 against the 0.2007 the same run reached later.
+
+    The worst case found was `hydranet_retail_objects_site_balanced`, whose
+    `primary_metric` was a single rare class's IoU. It peaked at **epoch 2** on noise, so
+    `best.pt` is an epoch-2 checkpoint of a 39-epoch run -- terrain and detection both
+    near their starting values -- and nothing said so.
+
+    Returns `(per-metric summary, warnings)`. It does not change the selection: which
+    metric should pick a checkpoint is a research decision, and a silent change would
+    invalidate comparison with every run already on disk. It makes the cost visible.
+    """
+    scored = [r for r in rows if primary_metric in r]
+    if not scored:
+        return {}, []
+    chosen = max(scored, key=lambda r: r[primary_metric])
+    summary: dict[str, dict] = {}
+    warnings: list[str] = []
+
+    for m in HEAD_METRICS:
+        have = [r for r in rows if m in r]
+        if not have:
+            continue
+        top = max(have, key=lambda r: r[m])
+        at_sel = chosen.get(m)
+        summary[m] = {
+            "best": float(top[m]),
+            "best_epoch": int(top["epoch"]),
+            "at_selected": None if at_sel is None else float(at_sel),
+            "selected_epoch": int(chosen["epoch"]),
+        }
+        if m == primary_metric or at_sel is None:
+            continue
+        gap = float(top[m]) - float(at_sel)
+        if gap > 0.02:
+            warnings.append(
+                f"{m} is {at_sel:.4f} in the selected checkpoint (epoch "
+                f"{chosen['epoch']}) but reached {top[m]:.4f} at epoch {top['epoch']}: "
+                f"selecting on {primary_metric} gave up {gap:.4f} on this head"
+            )
+
+    # A best epoch near the start of a long run is the signature of selection latching
+    # onto early noise, which is what a low-support per-class primary metric produces.
+    if len(scored) >= 10:
+        rank = sorted(r["epoch"] for r in scored).index(chosen["epoch"])
+        if rank < 0.2 * len(scored):
+            warnings.append(
+                f"the selected checkpoint is epoch {chosen['epoch']}, in the first fifth "
+                f"of {len(scored)} validations. A {primary_metric} that peaks that early "
+                "is usually noise rather than a model, and best.pt then holds weights "
+                "from before the other heads had trained"
+            )
+    return summary, warnings
