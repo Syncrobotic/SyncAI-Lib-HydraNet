@@ -41,23 +41,14 @@ from itertools import pairwise
 
 import numpy as np
 
+# The tracker's own IoU, not a second one. This module used to carry a private
+# `_iou_matrix` that was the same function under different local names -- and a metric
+# that measures a tracker must agree with the tracker about what an overlap *is*, or a
+# drift in one silently becomes a change in the score of the other. Importing it makes
+# that agreement structural rather than a coincidence maintained by hand.
+from .tracker import iou
+
 # --------------------------------------------------------------- tracking identity
-
-
-def _iou_matrix(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """Pairwise IoU between two sets of xyxy boxes."""
-    if len(a) == 0 or len(b) == 0:
-        return np.zeros((len(a), len(b)))
-    x0 = np.maximum(a[:, None, 0], b[None, :, 0])
-    y0 = np.maximum(a[:, None, 1], b[None, :, 1])
-    x1 = np.minimum(a[:, None, 2], b[None, :, 2])
-    y1 = np.minimum(a[:, None, 3], b[None, :, 3])
-    inter = np.clip(x1 - x0, 0, None) * np.clip(y1 - y0, 0, None)
-    ar_a = np.clip(a[:, 2] - a[:, 0], 0, None) * np.clip(a[:, 3] - a[:, 1], 0, None)
-    ar_b = np.clip(b[:, 2] - b[:, 0], 0, None) * np.clip(b[:, 3] - b[:, 1], 0, None)
-    union = ar_a[:, None] + ar_b[None, :] - inter
-    with np.errstate(divide="ignore", invalid="ignore"):
-        return np.where(union > 0, inter / union, 0.0)
 
 
 def _hungarian(cost: np.ndarray) -> list[tuple[int, int]]:
@@ -148,7 +139,7 @@ def idf1(
             for f in shared:
                 a = np.asarray(gframes[f], float)[None]
                 b = np.asarray(pframes[f], float)[None]
-                if _iou_matrix(a, b)[0, 0] >= iou_threshold:
+                if iou(a, b)[0, 0] >= iou_threshold:
                     hits += 1
             tp[i, j] = hits
             cost[i, j] = (len(gframes) - hits) + (len(pframes) - hits)
@@ -200,7 +191,7 @@ def id_switches(
             for p, pframes in pred.items():
                 if f not in pframes:
                     continue
-                v = _iou_matrix(box, np.asarray(pframes[f], float)[None])[0, 0]
+                v = iou(box, np.asarray(pframes[f], float)[None])[0, 0]
                 if v >= best_iou:
                     best, best_iou = p, v
             assigned[f] = best
