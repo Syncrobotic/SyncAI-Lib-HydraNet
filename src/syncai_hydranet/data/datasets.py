@@ -11,6 +11,7 @@ multi-task loader uses that to compute only the relevant losses per step.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import torch
@@ -56,7 +57,7 @@ def _index_pairs(img_dir: Path, ann_dir: Path) -> list[tuple[Path, Path]]:
     return [(p, anns_by_stem[p.stem]) for p in images if p.stem in anns_by_stem]
 
 
-class SegFolderDataset(Dataset):
+class SegFolderDataset(Dataset[dict[str, Any]]):
     """Layout::
 
         root/images/<split>/**/*.png
@@ -148,8 +149,8 @@ class SegFolderDataset(Dataset):
             self._id_lut = lut
         return self._id_lut[np.clip(raw, 0, len(self._id_lut) - 1)]
 
-    def __getitem__(self, idx: int):
-        img_path, ann_path = self.pairs[idx]
+    def __getitem__(self, index: int):
+        img_path, ann_path = self.pairs[index]
         terrain = self._decode_ann(ann_path)
         masks = {"terrain": terrain}
         # Only build the traversability target if some head is going to read it. It is a
@@ -166,7 +167,7 @@ class SegFolderDataset(Dataset):
         return {"image": s["image"], "targets": dict(s["masks"]), "supervises": self.supervises}
 
 
-class CocoDetDataset(Dataset):
+class CocoDetDataset(Dataset[dict[str, Any]]):
     """COCO detection: ``root/{split}/`` images, ``root/annotations/instances_{split}.json``."""
 
     def __init__(
@@ -332,8 +333,8 @@ class CocoDetDataset(Dataset):
     def __len__(self):
         return len(self.ids)
 
-    def __getitem__(self, idx: int):
-        img_id = self.ids[idx]
+    def __getitem__(self, index: int):
+        img_id = self.ids[index]
         info = self.coco.loadImgs(img_id)[0]
         img = Image.open(self.img_dir / info["file_name"]).convert("RGB")
         anns = self.coco.loadAnns(self.coco.getAnnIds(imgIds=img_id, iscrowd=False))

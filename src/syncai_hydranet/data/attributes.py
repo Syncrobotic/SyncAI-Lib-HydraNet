@@ -41,6 +41,7 @@ the other and the one that fragments tracks, is in neither PA-100K nor PETA.
 from __future__ import annotations
 
 import io
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -100,7 +101,7 @@ SUPPORT = {
 AGE_BANDS = ("AgeLess18", "Age18-60", "AgeOver60")
 
 
-class PA100K(Dataset):
+class PA100K(Dataset[dict[str, Any]]):
     """One split of PA-100K, read from the HuggingFace parquet already on disk.
 
     The images live in the parquet as JPEG bytes, so nothing is unpacked to a directory:
@@ -132,10 +133,10 @@ class PA100K(Dataset):
     def __len__(self) -> int:
         return self.table.num_rows
 
-    def __getitem__(self, i: int):
+    def __getitem__(self, index: int):
         import torch
 
-        rec = self.images[i].as_py()
+        rec = self.images[index].as_py()
         img = Image.open(io.BytesIO(rec["bytes"] if isinstance(rec, dict) else rec))
         img = img.convert("RGB").resize((self.size[1], self.size[0]), Image.Resampling.BILINEAR)
         x = np.asarray(img, dtype=np.float32) / 255.0
@@ -148,4 +149,4 @@ class PA100K(Dataset):
         mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
         x = ((x - mean) / std).transpose(2, 0, 1)
-        return {"image": torch.from_numpy(x), "labels": torch.from_numpy(self.labels[i])}
+        return {"image": torch.from_numpy(x), "labels": torch.from_numpy(self.labels[index])}

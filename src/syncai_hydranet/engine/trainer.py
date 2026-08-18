@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
+from typing import cast
 
 import torch
 import torch.nn as nn
@@ -24,6 +25,7 @@ from ..config_schema import check_config
 from ..data.datasets import build_dataset, split_leaks
 from ..data.fingerprint import fingerprint_dataset
 from ..data.multitask import MultiTaskLoader
+from ..models.heads.segmentation import SemanticFPNHead
 from ..models.hydranet import build_model
 from ..utils.checkpoint import CKPT_FORMAT, load_checkpoint
 from ..utils.device import (
@@ -587,7 +589,16 @@ class Trainer:
             else:
                 # n_classes is the fallback for a config that names no classes; a config
                 # that does name them gets the palette built for that taxonomy.
-                palette = terrain_palette(classes, self.model.seg_heads[head].num_classes)
+                # `cast` rather than a bare attribute read: `ModuleDict.__getitem__` is
+                # typed to return `Module`, so `.num_classes` widens to `Tensor | Module`
+                # and the palette silently takes something that is not a count.
+                #
+                # To `SemanticFPNHead`, not to `SegmentationHead`: the latter is the frozen
+                # dataclass adapter that *holds* a module, and `seg_heads` stores the module
+                # itself -- its own docstring says so. Casting to the adapter type would have
+                # silenced the checker with a claim that is not true of this object.
+                seg = cast("SemanticFPNHead", self.model.seg_heads[head])
+                palette = terrain_palette(classes, seg.num_classes)
             grid = prediction_grid(imgs, preds, gts, palette)
             self.tb.add_image(f"val_pred/{head}", grid, self.global_step, dataformats="HWC")
 

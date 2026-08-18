@@ -44,23 +44,34 @@ TARGET="${1:-src/}"
 # Lower these when you fix things. Raising one needs a reason, and the reason goes here
 # rather than only in a PR body, because this file is what the next person reads.
 #
-# src/ 13. It was 11 -- 5 in `data/datasets.py` and one each in export_onnx, seeding,
-# detection, backbone, bev and trainer -- and rose to 14 with the crop encoder in
-# `e79421d`. One of those three was `Image.BILINEAR`, a Pillow alias the stubs no longer
-# declare, and it is fixed rather than absorbed (four sites across src/ and scripts/, now
-# `Image.Resampling.*`). The other two are named because a baseline that rises without
-# names is just a ceiling: `data/attributes.py` overrides `Dataset.__getitem__`
-# incompatibly, which is the same shape as the two already accepted in `data/datasets.py`,
-# and `models/crop_encoder.py` passes a `Tensor | Module` where a `Tensor` is wanted,
-# which is the same shape as the one already accepted in `trainer.py`. Both are instances
-# of categories in the baseline, not new kinds of debt.
+# src/ 8, down from 11. It rose to 14 with the crop encoder in `e79421d` and was paid
+# back past where it started rather than absorbed. What was fixed, by category:
+#
+#   Image.BILINEAR              the Pillow stubs no longer declare it; four sites across
+#                               src/ and scripts/ moved to `Image.Resampling.*`. Still
+#                               resolves at runtime on Pillow 12, so this was lint-level
+#                               today -- and it is the deprecated family, and the Lite3
+#                               copy of geometry/ already had to move to Pillow 10.4.
+#   __getitem__ override x3     `PA100K`, `SegFolderDataset`, `CocoDetDataset`. Not a
+#                               torch stub gap: `Dataset.__getitem__` names its parameter
+#                               `index` and can be called with it as a keyword, so `i` and
+#                               `idx` were genuine Liskov violations. Renamed.
+#   Tensor | Module x2          `register_buffer` and `ModuleDict.__getitem__` both read
+#                               back wider than what they hold. Fixed with a class-level
+#                               annotation and a `cast` respectively.
+#
+# The remaining 8 are older and in files this change did not otherwise touch -- 3 in
+# `data/datasets.py`, one each in seeding, detection, backbone, bev and export_onnx. They
+# are left alone on the principle in the header: debt is paid down as those files are
+# touched, and editing six unrelated modules to chase a number is how a fix becomes a
+# regression.
 #
 # scripts/ 19, measured on the day the gate was extended. No breakdown here on purpose:
 # unlike src/'s, this number has never been paid down, so naming its members would imply
 # a review that has not happened.
 case "$TARGET" in
   scripts/|scripts) DEFAULT_BASELINE=19 ;;
-  *)                DEFAULT_BASELINE=13 ;;
+  *)                DEFAULT_BASELINE=8 ;;
 esac
 BASELINE="${TY_BASELINE:-$DEFAULT_BASELINE}"
 RUNNER=(uv run ty check "$TARGET" --output-format=concise)

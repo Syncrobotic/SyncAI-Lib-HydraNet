@@ -84,6 +84,11 @@ class AttributeLoss(nn.Module):
     of a balanced attribute and dominate a 26-way head on the strength of 404 crops.
     """
 
+    # Annotated at class level as well as registered: `nn.Module.__getattr__` is typed
+    # `Tensor | Module`, so without this every read of the buffer is ambiguous to the
+    # checker even though `register_buffer` is what puts it there.
+    pos_weight: torch.Tensor
+
     def __init__(self, pos_rate: torch.Tensor, max_weight: float = 20.0):
         super().__init__()
         w = (1.0 - pos_rate) / pos_rate.clamp(min=1e-6)
