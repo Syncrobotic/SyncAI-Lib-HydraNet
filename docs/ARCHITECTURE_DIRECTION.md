@@ -161,6 +161,80 @@ rather than a good day:
    0.24.
 3. **Any site claim names the camera count it was measured over.** A partial sweep reads
    exactly like a complete one.
+4. **A detection comparison runs three seeds, or it reports nothing.** Measured below, and
+   it is the most expensive rule here because it triples the GPU cost of an answer. It is
+   also the one that would have saved the most wasted argument.
+
+### The variance nobody had measured, and what it invalidates
+
+`configs/hydranet_retail_products.yaml`, three runs, **identical in every respect except
+`seed`**:
+
+| seed | best `detection_mAP` |
+|---|---|
+| 42 | 0.0655 |
+| 7 | **0.0821** |
+| 13 | 0.0648 |
+
+mean **0.0708**, range **0.0648–0.0821**, spread **0.0173**, sd 0.0098.
+
+**Two numbers describe this and they are not the same number.** Relative standard deviation
+is `0.0098 / 0.0708` = **14%**; range over minimum is `0.0173 / 0.0648` = **27%**. Both are
+correct and other documents quote the second. Named here because a reader meeting 14% in
+one file and 27% in another will reasonably suspect one of them is wrong, and the cheapest
+way to lose a measurement is to make it look contested. Use the sd for "how much does a run
+wobble" and the range for "how far apart can two runs land", which is the question a
+single-run comparison is actually asking.
+
+**What it was run to settle, and did.** The open-vocabulary control scored 0.0572 against
+the linear head's 0.0655, and that 0.0083 gap was reported here as a ~13% cost. The
+control's own seed spread is **1.3× that gap**. The comparison is therefore *undecided*,
+not adverse, and the earlier reading is withdrawn. Deciding it needs three seeds on the
+open-vocabulary side too.
+
+**What it invalidates is much wider than one comparison.** Every detection number this
+project has produced is a single run — the towers-at-half-depth control, the export
+narrowing evaluation, every "which checkpoint is better" choice. **All of them now have to
+be read against ±0.017**, and a difference under about a tenth of the mean is not readable
+at all.
+
+The uncomfortable part is that this was cheap. Two extra runs, 26 minutes, on a GPU that
+was idle. The reason it had never been done is not cost; it is that a single run produces a
+number, and a number does not look like it is missing anything.
+
+### The rule's first use, and it changed the claim
+
+Section 3's taxonomy split was measured this way rather than on one run — seeds **matched**
+to the control's, so the same data order and init apply and the taxonomy is the only
+difference:
+
+| seed | products | surfaces | Δ |
+|---|---|---|---|
+| 42 | 0.0655 | 0.0704 | +0.0050 |
+| 7 | 0.0821 | 0.0901 | +0.0080 |
+| 13 | 0.0648 | 0.0659 | +0.0011 |
+
+Paired mean **+0.0047**, paired sd 0.0034, **95% CI −0.0038 .. +0.0132** on 2 df. All three
+deltas are positive, which is suggestive and is not a result: the interval includes zero.
+
+**The supportable claim is the negative one — removing `product` from the dense head did
+not cost detection mAP.** That is enough to justify the split, because the split was never
+argued from mAP; it was argued from `product` being unrenderable at stride 8 and from free
+space being unchanged. What the seeds do is remove the objection that it might have cost
+something elsewhere.
+
+Note also what pairing bought. The between-seed spread is 0.0173 and the paired sd is
+**0.0034** — five times tighter, because matching the seed cancels the run-to-run term
+instead of averaging over it. Three paired runs answer a question three unpaired runs
+cannot.
+
+**And one measurement that looked like the strongest evidence and is not.** `fixture` IoU
+rose about +0.20. It is unusable: the migration merges `product` into `fixture`, making it
+a **1.37× larger class**, so most of that is definitional rather than a better model. An
+earlier version of this section promised `fixture` as the within-run comparison that would
+be readable from a single run. It is not readable at all without a class-size correction,
+and the size change is the first thing to check whenever a taxonomy edit is followed by a
+per-class improvement.
 
 ---
 
@@ -243,6 +317,20 @@ regression that was a file growing mid-run.
 happened. Moving a session *mid-flight* is itself risky — untracked work has to move with
 it — so the practical rule is: **each new session starts in its own worktree**, and the
 shared tree is for whoever holds the branch.
+
+**And one mechanism that makes the authorship problem worse than it looks: mtime in this
+tree is a record of the last commit that ran, not of who wrote what.** The pre-commit hook
+stashes unstaged work and restores it a second later, and the restore rewrites the
+modification time. So *every commit by anyone re-stamps everything anyone else has in
+flight*, and two files edited fourteen hours apart can carry mtimes one second apart.
+
+This nearly produced a fifth authorship error: `label_maps.py` carried a 09:32:42 mtime
+against its author's own configs at 20:09, which reads as a different session's work. 09:32:41
+was another session's commit, and the pre-commit patch files hold exactly those two files.
+
+The board's standard already said an mtime is not evidence. This is *why*, and the why
+matters because "not evidence" invites a reader to weigh it a little anyway. It carries no
+information about authorship at all.
 
 ---
 
