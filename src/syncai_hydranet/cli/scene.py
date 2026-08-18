@@ -47,6 +47,7 @@ from ..config import load_config
 from ..data.coco_subsets import COCO_NAMES, head_order, retail_box_label
 from ..data.label_maps import get_scheme, terrain_to_traversability
 from ..data.label_maps_retail_security import get_det_vocab
+from ..data.video import frames, probe
 from ..geometry import bev3d
 from ..geometry.bev import IGNORE, BevGrid, free_space_map, project_mask, scene
 from ..geometry.ground import Camera, GroundPlane
@@ -62,45 +63,13 @@ from ..utils.visualize import (
     preprocess,
     terrain_palette,
 )
-from .infer_video import frames, probe
 
-CELL_RGB = {0: (224, 72, 60), 1: (250, 200, 40), 2: (40, 220, 90)}
 PANEL_BG = (14, 18, 24)
 VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
 # Lower than SCORE_THR_VIEW on purpose: a box that is only worth drawing is a different
 # question from a box that is worth placing on a floor map, and the archived site clips
 # were rendered at this threshold.
 SCORE_THR_SCENE = 0.15
-
-
-def render_bev(bev: np.ndarray, grid: BevGrid, objects, height: int) -> Image.Image:
-    """The top-down panel: floor cells, distance rules, and objects where they stand."""
-    rgb = np.full((*bev.shape, 3), PANEL_BG, dtype=np.uint8)
-    for value, colour in CELL_RGB.items():
-        rgb[bev == value] = colour
-    # Even width: libx264 with yuv420p rejects odd dimensions, and the panel's aspect
-    # follows the --range window, so this is not a constant.
-    width = max(int(bev.shape[1] * height / bev.shape[0]) // 2 * 2, 2)
-    panel = Image.fromarray(rgb).resize((width, height), Image.Resampling.NEAREST)
-    draw = ImageDraw.Draw(panel)
-    px_per_m = panel.height / (grid.z_max - grid.z_min)
-
-    for z in range(int(grid.z_min) + 1, int(grid.z_max) + 1):
-        y = panel.height - (z - grid.z_min) * px_per_m
-        draw.line([(0, y), (panel.width, y)], fill=(70, 82, 96), width=1)
-        draw.text((6, y - 13), f"{z} m", fill=(120, 136, 156))
-
-    for obj in objects:
-        x_px = (obj["x_m"] - grid.x_min) / (grid.x_max - grid.x_min) * panel.width
-        y_px = panel.height - (obj["z_m"] - grid.z_min) * px_per_m
-        if not (0 <= x_px < panel.width and 0 <= y_px < panel.height):
-            continue
-        r = 6
-        draw.ellipse([x_px - r, y_px - r, x_px + r, y_px + r], outline=(235, 240, 250), width=2)
-        draw.text(
-            (x_px + 9, y_px - 7), f"{obj['name']} {obj['range_m']:.1f}m", fill=(235, 240, 250)
-        )
-    return panel
 
 
 class SceneReport(PlaneScene):
@@ -215,43 +184,34 @@ def compose(
                 fill=(210, 240, 255),
             )
 
-    if args.flat_bev:
-        panel = render_bev(bev, grid, payload["objects"], view.height)
-        out_w = (view.width + panel.width + 8) // 2 * 2
-        out_h = view.height // 2 * 2
-        out_img = Image.new("RGB", (out_w, out_h), PANEL_BG)
-        out_img.paste(view, (0, 0))
-        out_img.paste(panel, (view.width + 8, 0))
-    else:
-        terrain_bev = project_mask(terrain, cam, plane, grid) if terrain is not None else None
-        col_h = view.height * 2 + 8
-        pw = max(int(col_h * 0.78) // 2 * 2, 2)
-        panel = bev3d.render(
-            bev,
-            terrain_bev,
-            grid,
-            payload["objects"],
-            (pw, col_h),
-            trav_colors=TRAV_COLORS,
-            terrain_colors=palette,
-            bg=PANEL_BG,
-            class_names=terrain_classes,
-        )
-        out_w = (view.width + pw + 8) // 2 * 2
-        out_h = col_h // 2 * 2
-        out_img = Image.new("RGB", (out_w, out_h), PANEL_BG)
-        out_img.paste(view, (0, 0))
-        out_img.paste(terrain_view, (0, view.height + 8))
-        out_img.paste(panel, (view.width + 8, 0))
+    terrain_bev = project_mask(terrain, cam, plane, grid) if terrain is not None else None
+    col_h = view.height * 2 + 8
+    pw = max(int(col_h * 0.78) // 2 * 2, 2)
+    panel = bev3d.render(
+        bev,
+        terrain_bev,
+        grid,
+        payload["objects"],
+        (pw, col_h),
+        trav_colors=TRAV_COLORS,
+        terrain_colors=palette,
+        bg=PANEL_BG,
+        class_names=terrain_classes,
+    )
+    out_w = (view.width + pw + 8) // 2 * 2
+    out_h = col_h // 2 * 2
+    out_img = Image.new("RGB", (out_w, out_h), PANEL_BG)
+    out_img.paste(view, (0, 0))
+    out_img.paste(terrain_view, (0, view.height + 8))
+    out_img.paste(panel, (view.width + 8, 0))
 
     d = ImageDraw.Draw(out_img)
-    if not args.flat_bev:
-        # A strip behind the caption: the source clips have their own burnt-in camera
-        # name in the same corner, and two texts on top of each other are unreadable in
-        # exactly the frames someone screenshots.
-        for label, top in (("traversability + detections", 0), ("terrain", view.height + 8)):
-            d.rectangle([0, top, 250, top + 18], fill=(0, 0, 0))
-            d.text((6, top + 3), label, fill=(205, 220, 240))
+    # A strip behind the caption: the source clips have their own burnt-in camera
+    # name in the same corner, and two texts on top of each other are unreadable in
+    # exactly the frames someone screenshots.
+    for label, top in (("traversability + detections", 0), ("terrain", view.height + 8)):
+        d.rectangle([0, top, 250, top + 18], fill=(0, 0, 0))
+        d.text((6, top + 3), label, fill=(205, 220, 240))
     known = float((bev != IGNORE).mean())
     note = args.pose_note or (
         f"assumed {args.camera_height:.1f} m / {args.pitch:.0f}deg down / "
@@ -316,11 +276,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ap.add_argument("--vfov", type=float, default=55.0, metavar="DEG")
     ap.add_argument("--range", type=float, default=9.0, metavar="M")
-    ap.add_argument(
-        "--flat-bev",
-        action="store_true",
-        help="the original top-down panel instead of the perspective one",
-    )
     ap.add_argument(
         "--stabilise",
         type=int,

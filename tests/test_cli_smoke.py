@@ -389,7 +389,6 @@ def test_scene_over_a_clip_writes_one_payload_per_frame(config, trained, tmp_pat
             str(out),
             "--json",
             str(doc),
-            "--flat-bev",
             "--max-frames",
             "3",
         ]

@@ -221,8 +221,7 @@ Camera view on the left, the floor rebuilt in metres on the right, with each det
 placed where its box meets the ground. It needs a camera pose and does not have one, so it
 takes `--camera-height` (1.5 m), `--pitch` (15° down) and `--vfov` (55°) and **prints them
 on every frame**: get any of them wrong and every distance is off by a smooth factor that
-looks entirely plausible. `--range` sets how far out to map, `--flat-bev` gives the plain
-top-down panel instead of the perspective one.
+looks entirely plausible. `--range` sets how far out to map.
 
 Those three numbers are assumptions for archived footage and a phone video. On a fixed
 camera, `scripts/fit_camera_from_people.py` recovers height and pitch by fitting detected
