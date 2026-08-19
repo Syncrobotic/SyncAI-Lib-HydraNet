@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import tempfile
 
 import numpy as np
 
@@ -105,38 +106,85 @@ def probe(path: str) -> tuple[int, int, float]:
     return w, h, fps
 
 
+class DecodeError(RuntimeError):
+    """ffmpeg stopped before the stream did. Raised by `frames()`; never returned."""
+
+
 def frames(path: str, w: int, h: int, stride_fps: float | None):
-    """Yield RGB frames from a rawvideo pipe."""
+    """Yield RGB frames from a rawvideo pipe. Raises `DecodeError` on a short decode.
+
+    **The raise is the point.** This loop reads fixed-size frames until a read comes
+    back short, and a short read is how a finished video ends *and* how a truncated one
+    ends. Nothing looked at ffmpeg's exit status, so the two were the same event: a clip
+    that died a third of the way through produced a generator that stopped cleanly, and
+    every one of the fifteen call sites recorded a successful pass over a third of the
+    footage. `site_events` wrote its `events.json`, `sam3_prelabel` wrote its pre-labels,
+    and neither the file nor the console said which frames never existed. Silent
+    truncation of customer footage is the failure this project is least able to audit
+    after the fact, because there is no artefact of it.
+
+    An early `break` by the caller is a different thing and is not an error. `--max-frames`
+    and the `if i >= n` in half the scripts are deliberate, so the exit status is only
+    consulted when *this* loop reached the end of the stream. When the caller stops first,
+    ffmpeg is terminated rather than waited on -- it still has frames to write and would
+    otherwise sit in a blocked write until SIGPIPE reached it.
+
+    ffmpeg's stderr goes to a temporary file rather than a pipe. Its message is what makes
+    the raise actionable ("moov atom not found" and "Invalid NAL unit size" are different
+    problems), and a pipe nobody drains until the process exits is a deadlock whenever the
+    error is per-frame rather than per-file.
+    """
     vf = f"fps={stride_fps}" if stride_fps else "null"
-    proc = subprocess.Popen(
-        [
-            "ffmpeg",
-            "-v",
-            "error",
-            "-i",
-            path,
-            "-vf",
-            vf,
-            "-f",
-            "rawvideo",
-            "-pix_fmt",
-            "rgb24",
-            "-",
-        ],
-        stdout=subprocess.PIPE,
-    )
-    # `Popen.stdout` is Optional because it is None unless `stdout=PIPE` was asked for.
-    # It was, one line up. Bind it once so the fact is stated where it is true instead
-    # of being re-derived at every read.
-    stdout = proc.stdout
-    assert stdout is not None
-    n = w * h * 3
-    try:
-        while True:
-            buf = stdout.read(n)
-            if len(buf) < n:
-                break
-            yield np.frombuffer(buf, np.uint8).reshape(h, w, 3)
-    finally:
-        stdout.close()
-        proc.wait()
+    with tempfile.TemporaryFile() as errors:
+        proc = subprocess.Popen(
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-i",
+                path,
+                "-vf",
+                vf,
+                "-f",
+                "rawvideo",
+                "-pix_fmt",
+                "rgb24",
+                "-",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=errors,
+        )
+        # `Popen.stdout` is Optional because it is None unless `stdout=PIPE` was asked
+        # for. It was, one line up. Bind it once so the fact is stated where it is true
+        # instead of being re-derived at every read.
+        stdout = proc.stdout
+        assert stdout is not None
+        n = w * h * 3
+        n_read = 0
+        tail = -1  # bytes of the final short read; -1 while the loop is still running
+        try:
+            while True:
+                buf = stdout.read(n)
+                if len(buf) < n:
+                    tail = len(buf)
+                    break
+                n_read += 1
+                yield np.frombuffer(buf, np.uint8).reshape(h, w, 3)
+        finally:
+            stdout.close()
+            if tail < 0:
+                # The caller stopped early, so ffmpeg is still producing. Terminating
+                # beats waiting: it has a full pipe buffer to drain into a reader that
+                # has gone.
+                proc.terminate()
+            code = proc.wait()
+            errors.seek(0)
+            message = errors.read().decode("utf-8", "replace").strip()
+            if tail >= 0 and (code != 0 or tail > 0):
+                partial = f", {tail} trailing bytes of an incomplete frame" if tail else ""
+                raise DecodeError(
+                    f"ffmpeg stopped after {n_read} whole frames of {path} "
+                    f"(exit {code}{partial}). The frames it did emit are a prefix of "
+                    f"the clip, not the clip.\n"
+                    + (message or "ffmpeg said nothing; re-run without `-v error`.")
+                )

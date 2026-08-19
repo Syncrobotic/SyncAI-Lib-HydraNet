@@ -440,6 +440,30 @@ first training run on new labels, and again whenever a batch lands.
   directory is what carries session identity into the split, and `check` uses it to prove
   no session appears in two splits.
 
+### A clip that half-decodes now stops the run
+
+Every script that reads video goes through `data/video.frames()`, which reads fixed-size
+frames off a rawvideo pipe until a read comes back short. A finished clip ends that way.
+So does a truncated one — and until 2026-08-19 nothing looked at ffmpeg's exit status, so
+the two were the same event.
+
+The consequence was one class of silent wrong, spread over fifteen call sites: a clip that
+died a third of the way through produced a generator that stopped cleanly. `site_events`
+wrote its `events.json`, `sam3_prelabel` wrote its pre-labels, `annotation_batch` wrote its
+batch — each over a third of the footage, each reporting success, and none leaving any
+artefact recording which frames never existed. On a 3 TB bucket pulled over the network,
+that is not a hypothetical.
+
+`frames()` now raises `DecodeError` when *it* reached the end of the stream and ffmpeg had
+exited non-zero, or when the last read was a partial frame. The message carries the whole-frame
+count, the exit status, and ffmpeg's own stderr, because "moov atom not found" and "Invalid
+NAL unit size" call for different actions.
+
+A caller stopping early — `--max-frames`, or the `if i >= n` in half the scripts — is
+deliberate and stays silent; ffmpeg is terminated rather than waited on. If a run stops with
+`DecodeError`, re-pull the clip before re-running: the frames already written are a prefix,
+and appending to them is how a partial pull becomes a permanent hole in a dataset.
+
 ### Pre-labelling the missing classes with SAM 3
 
 ```bash
