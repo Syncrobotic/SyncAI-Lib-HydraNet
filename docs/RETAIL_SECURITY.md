@@ -98,11 +98,17 @@ What it does not buy, and this is the sentence to carry out of this section:
 > COCO val and *nowhere else*, because the site annotation file has no person category to
 > score against. A good number there is not evidence about a store.
 
-**Started 2026-08-18.** `datasets/retail_person_batch01` holds **146 site person boxes**,
-daylight-gated, produced by `scripts/sam3_person_boxes.py`. That is a bootstrap, not the
-answer: it is SAM 3's opinion under R3, and the gate that makes it usable — an IR frame is
-monochrome by construction, so it is rejected on chroma — also means **night is not covered
-at all**, which is when a store camera is most often asked a security question.
+**Started 2026-08-18, teacher replaced 2026-08-19.** `datasets/retail_person_batch01`
+(146 boxes, 4 cameras, daylight-gated SAM 3) was the bootstrap; its gate existed because
+SAM 3 returns hanging packets as people on IR night frames, which also meant **night was
+not covered at all**. Measured on the same frames, **Grounding DINO at 0.35 separates the
+two populations outright** — 0 boxes on the empty night IR clip against SAM 3's 229, with
+the night score maximum at 0.326, so the threshold sits in a measured gap and needs no
+daylight gate. The site person source is now `datasets/retail_person_gdino01`: 23
+selling-floor cameras × 3 open-store slots, **1,141 boxes** at 0.35+NMS, no camera empty.
+Numbers, cross-checks and the one-night-clip caveat:
+[journal/2026-08-19-security-retail-teachers-and-methodology.md](journal/2026-08-19-security-retail-teachers-and-methodology.md).
+Still a teacher's opinion, not ground truth — two teachers agreeing is not accuracy.
 
 `column` is the precedent and it is not a mild one: sourced from ADE20K, passing every
 config gate, scoring 0.40–0.51 on val, and predicting **0.00% of pixels** across four
@@ -222,8 +228,8 @@ its fps on this footage inherits the same error.
 
 | # | data | for | state |
 |---|---|---|---|
-| 1 | **site person boxes**, same 288 frames, same 24 batch02 cameras | `person` in domain | **started 2026-08-18** — `retail_person_batch01`, 146 boxes, daylight-gated, SAM 3 pre-labels with no human pass. Still the critical path |
-| 2 | **one labelled site clip** (person tracks) | `idf1` / `id_switches`, which do not exist today | **not started — blocks all of tier 3** |
+| 1 | **site person boxes** | `person` in domain | **teacher swapped 2026-08-19** — `retail_person_gdino01`: Grounding DINO at 0.35 (measured gap), 23 selling-floor cameras, 1,141 boxes, no daylight gate needed. Next: a `site_person` entry (person-only `class_mask`) in a b03 retrain variant. No human pass yet — still the critical path |
+| 2 | **one labelled site clip** (person tracks) | `idf1` / `id_switches`, which do not exist today | **one human step from done (2026-08-19)** — `scripts/offline_tracks.py` cut cam11 to 2 fragments / 0 switches against its 2-identity GT; applying `runs/offline_tracks01/cam11` needs **zero merge decisions**. cam04 follows at ~4–6 merges |
 | 3 | COCO `person`+`bag` | bootstrap for channels 0–1 | on disk, wired in `hydranet_retail_security.yaml` |
 | 4 | COCO keypoints | tier-2 pose bootstrap | **on disk, nothing reads it yet** |
 | 5 | CrowdHuman | occlusion and density, which is what fragments tracks | not downloaded; research licence |
