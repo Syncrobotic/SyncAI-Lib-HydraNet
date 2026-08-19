@@ -273,3 +273,19 @@ window, each verified by eye on terrain overlays. cam11 stays at zero under a fu
 parameter scan. The terrain map's pixel-space contract is now explicit (wrong size
 raises, message names the fix), and the stale function name in the keypoints contract
 is corrected. Still open from the pilot: `fall_angle_deg`'s viewpoint semantics.
+
+**The stabilisation ablation (runs/stable01, scripts/stable_infer.py at d8542fd), same
+ruler as everything above.** Per-pixel logit EMA (alpha 0.35) is the unconditional win:
+static flips 1.50%→0.67%, phantom-person flips −54%, every metric improves and nothing
+regresses — it enters the main inference path. Track-based rendering replaces raw
+detections for display and events: 949 tracks → 145, one-frame boxes 40%→11.7%, median
+life 2→18 frames (count people at the birth threshold 0.35, not the 0.20 sustain).
+Static composite stays a demo/serving lever for now: its unique win is the fixture
+boundary band (8.9%→2.2%) but EMA already buys most of the flip reduction, and it costs
+per-camera/slot plate artefacts plus a dirty-plate check — this clip's plate carries
+8.6% person pixels from median-resident counter staff, and the design treats those
+regions as never-trusted (worst case = baseline, immune to the old stabiliser's
+self-sealing). Its real case is serving capacity (taken-over pixels need no compute or
+transfer), to be measured on the TensorRT path. Full stack: static flips 0.67%,
+oscillation share 81.6%→65.1%, verified by eye across moving-person frames (no smearing;
+EMA ghost 1–2 frames; boxes coast ≤5). Caveat: one camera, one slot, one clip.
