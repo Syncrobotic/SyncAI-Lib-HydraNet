@@ -96,7 +96,12 @@ BASELINE="${TY_BASELINE:-$DEFAULT_BASELINE}"
 # what the test matrix's upper row uses, so the gate measures the environment contributors
 # actually get. Override for a one-off with TY_PYTHON=3.10.
 TY_PYTHON="${TY_PYTHON:-3.12}"
-RUNNER=(uv run --python "$TY_PYTHON" ty check "$TARGET" --output-format=concise)
+# `--isolated` so the gate never mutates the caller's `.venv`. Without it, `uv run
+# --python 3.12` re-syncs the project environment to 3.12 -- it silently switched this
+# repo's venv from 3.10 and dropped the `export` extra the first time it ran, on a
+# checkout several people share. A checker that edits your environment to measure it is
+# not a checker you run twice.
+RUNNER=(uv run --isolated --python "$TY_PYTHON" ty check "$TARGET" --output-format=concise)
 
 # ty exits 0 clean, 1 with diagnostics, 2 when it could not run at all -- a broken
 # [tool.ty] table, an unreadable tree. Only 0 and 1 mean the count below is real, so 2
