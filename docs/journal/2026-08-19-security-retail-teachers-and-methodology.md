@@ -179,3 +179,14 @@ is being estimated from standard-dimension priors (door widths, tile pitch, A4 s
 read off the plates, cross-checked against the person-height scale and the Taichung-cam01
 anchor — `runs/calib02_priors` when it lands. Metre-space event thresholds tolerate
 5–10% scale error; occupancy density is the consumer that does not.
+
+**Both labelled clips landed the same afternoon.** cam11: the user's crop-sheet read
+("both rows are one person") was answered by physics — the two tracks coexist in 234
+frames, and the rendered frame shows both bodies; ground truth applied with zero merges
+(2 identities). cam04: the constraint map (pairwise coexistence + sustained same-frame
+IoU) reduced 55 possible pairings to three duplicate-track merges ({2,3}, {6,7}, {9,10})
+plus one appearance question — which staffer returns as #8 and #11 — settled by a
+four-crop lineup (shoes, watch, lanyard, hair): {1,8} female staffer, {6,7,11} male.
+11 fragments → 6 identities. The lesson worth keeping: **crop-sheet resemblance misled
+both a human and an agent on identical uniforms; frame coexistence and sustained IoU are
+the evidence that cannot lie, so the review tool should surface them first.**
