@@ -85,3 +85,21 @@ def test_rotation_still_swaps_the_axes(monkeypatch):
         {**BASE, "avg_frame_rate": "8/1", "side_data_list": [{"rotation": -90}]},
     )
     assert (w, h) == (1080, 1920)
+
+
+def test_probe_does_not_wait_forever(monkeypatch):
+    """A batch runs over 48 cameras; one unreadable path must not stall the rest.
+
+    ffprobe with no timeout sits indefinitely on a half-downloaded object or a path that
+    turns out to be a fifo, and the symptom is a pipeline that looks busy and is not.
+    """
+    seen = {}
+
+    def _run(*_args, **kwargs):
+        seen.update(kwargs)
+        raise AssertionError("not reached")
+
+    monkeypatch.setattr(video.subprocess, "run", _run)
+    with pytest.raises(AssertionError):
+        video.probe("clip.mp4")
+    assert seen.get("timeout") == video.PROBE_TIMEOUT_S

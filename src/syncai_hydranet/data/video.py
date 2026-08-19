@@ -22,6 +22,7 @@ import tempfile
 import numpy as np
 
 FALLBACK_FPS = 30.0
+PROBE_TIMEOUT_S = 60
 
 
 def _rate(spec: object) -> float | None:
@@ -100,6 +101,11 @@ def probe(path: str) -> tuple[int, int, float]:
         capture_output=True,
         text=True,
         check=True,
+        # A batch runs over 48 cameras. ffprobe with no timeout will sit forever on a
+        # half-downloaded object or a path that turns out to be a fifo, and the symptom
+        # is a pipeline that looks busy and is not. 60 s is far past what a local seek
+        # costs and far short of a working session.
+        timeout=PROBE_TIMEOUT_S,
     ).stdout
     st = json.loads(out)["streams"][0]
     w, h = int(st["width"]), int(st["height"])
