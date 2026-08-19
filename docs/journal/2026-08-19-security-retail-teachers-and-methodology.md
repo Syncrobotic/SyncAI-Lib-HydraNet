@@ -199,3 +199,17 @@ tile and door cross-cut within 1.3%. The rule that carries it: menu-free referen
 alone has a size menu (45/50/60/80) that residuals cannot break. Good enough for
 line-cross/social-distance; occupancy density squares the error, so a measured length
 per store stays the upgrade path there. Details now in GROUND_PROJECTION.md.
+
+**Production serving target set by the user: 96 streams x 15 fps (= 1,440 frames/s) on
+the RTX PRO 6000 Blackwell Max-Q that trains today.** Feasibility arithmetic: ~20-25
+GFLOPs/frame at 640x1120 puts the compute need near 30-36 TFLOPS -- well inside the
+card -- so the risks are everything except FLOPs: host-side decode (96 h.264 streams
+need NVDEC; the system ffmpeg has no cuvid build), PCIe traffic (in-graph argmax cuts
+D2H 17 MB -> 0.7 MB per frame; at target rate that is 25 GB/s vs 1 GB/s), per-stream
+postprocessing, and Python in the loop. Fixed-batch engines + CUDA graphs are the
+serving shape; the static-composite direction is a capacity multiplier on top, and the
+fleet's real cameras emit 3-8 fps today, so 96x15 is the design ceiling, not the
+current load. ONNX exported at batch 1/16/32/64 with embedded preprocessing and
+in-graph argmax (`exports/pro6000/`); `scripts/bench_pro6000.sh` sweeps
+fp16/best-precision TensorRT engines -- to be run ONLY on the idle GPU after the seed
+chain finishes, because a throughput number taken on a shared card is not a measurement.
