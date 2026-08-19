@@ -98,7 +98,7 @@ EVENT_TYPES = (
     # --- pose: 17 keypoints per person per frame, from a second-stage crop model.
     "fall",  # torso angle and hip collapse, sustained
     "crouch",  # the thing a box-shape proxy cannot tell a fall from
-    "reach_to_shelf",  # a wrist inside the terrain head's `fixture` region
+    "reach_to_shelf",  # a wrist over the terrain head's `fixture` region
     # --- temporal model over a whole track. Unbuilt; see UNBUILT.
     "fight",
 )
@@ -1213,16 +1213,85 @@ def _posture_event(
     ]
 
 
+def _require_terrain_in_image_space(
+    terrain: np.ndarray, image_hw: tuple[int, int], frame_index: int
+) -> None:
+    """Refuse a terrain map that does not live in the keypoints' pixel space.
+
+    The wrist test indexes `terrain[yi, xi]` with coordinates in **image pixels**, so a
+    map at the model's canvas resolution (512x896 against a 1920x1080 source) puts almost
+    every wrist off the map's edge -- and the old code skipped out-of-bounds wrists,
+    which turned a unit mismatch into zero events that read as "nobody reached". The
+    pose pilot (runs/pose_pilot01/REPORT.md section 4-2) hit exactly this and had to
+    discover the contract by reading the source.
+
+    **The caller owns the resize**, because only the caller knows which space the
+    keypoints were measured in: upsample the terrain map back to the image resolution
+    before building the frame payloads -- nearest-neighbour, since these are class ids
+    and interpolating them invents classes. `scripts/pose_pilot.py` shows the two lines.
+    """
+    th, tw = (int(s) for s in terrain.shape[-2:])
+    ih, iw = (int(s) for s in image_hw)
+    if (th, tw) != (ih, iw):
+        raise ValueError(
+            f"frame {frame_index}: terrain map is {tw}x{th} but the keypoints are in "
+            f"{iw}x{ih} image pixels. Wrists indexed into the wrong pixel space fall "
+            "off the map and produce zero events that read as 'nobody reached'. The "
+            "caller must upsample the terrain map back to the image resolution "
+            "(nearest-neighbour -- class ids, so interpolation invents classes) before "
+            "building the frame payloads; events.py cannot do it because it cannot "
+            "know which of the two spaces the keypoints were measured in."
+        )
+
+
+def _wrist_contact(
+    terrain: np.ndarray,
+    x: float,
+    y: float,
+    radius_px: float,
+    fixture_id: int,
+    person_id: int | None,
+) -> float:
+    """Fixture fraction of the non-person terrain within ``radius_px`` of a wrist.
+
+    The wrist pixel itself is not consulted, and that is the entire mechanism: when the
+    pose is right and the segmentation is right, that pixel is the person's own hand and
+    is labelled person, never fixture. So the question is what the hand is *over* --
+    fixture pixels in the disk around the wrist, with the person's own silhouette
+    removed from the denominator so a hand that covers most of the disk cannot dilute
+    the answer. Returns 0.0 when the disk holds nothing but person (or nothing at all):
+    a neighbourhood the segmentation cannot resolve is not evidence of contact.
+    """
+    h, w = (int(s) for s in terrain.shape[-2:])
+    r = float(radius_px)
+    x0, x1 = max(int(np.floor(x - r)), 0), min(int(np.ceil(x + r)) + 1, w)
+    y0, y1 = max(int(np.floor(y - r)), 0), min(int(np.ceil(y + r)) + 1, h)
+    if x0 >= x1 or y0 >= y1:
+        return 0.0
+    yy, xx = np.mgrid[y0:y1, x0:x1]
+    disk = (xx - x) ** 2 + (yy - y) ** 2 <= r * r
+    patch = np.asarray(terrain[y0:y1, x0:x1])[disk]
+    if person_id is not None:
+        patch = patch[patch != person_id]
+    if patch.size == 0:
+        return 0.0
+    return float((patch == fixture_id).mean())
+
+
 def reach_to_shelf_events(
     tracks: list[Track],
     frames: list[dict],
     fps: float,
     camera: str,
     fixture_id: int,
+    person_id: int | None = None,
+    radius_px: float = 25.0,
+    contact_ratio: float = 0.35,
     min_seconds: float = 0.6,
     score_thr: float = 0.3,
+    image_size: tuple[int, int] | None = None,
 ) -> list[SecurityEvent]:
-    """A wrist inside the terrain head's `fixture` region, sustained.
+    """A wrist over the terrain head's `fixture` region, sustained.
 
     **This is the one output where the retail model and the security model are the same
     model**, and it is worth saying because "shared trunk" is usually a claim about
@@ -1230,10 +1299,46 @@ def reach_to_shelf_events(
     and the second stage's wrist keypoint are both required to produce one row: neither
     the terrain map nor the pose model can emit it alone.
 
+    **Why the neighbourhood and not the wrist pixel.** The first version tested
+    `terrain[wrist] == fixture_id`, and the pose pilot measured what that means in
+    practice (runs/pose_pilot01/REPORT.md section 3): the wrist pixel is covered by the
+    person's own hand, so a correct pose over a correct segmentation reads `person`
+    there -- structurally, every time. The single-pixel rule could only fire when the
+    hand was *occluded by* the fixture or the pose was wrong, which is the opposite of
+    the design intent. So the test is now "what is the hand over": the fixture fraction
+    of the disk of ``radius_px`` around the wrist, with the person's own pixels removed
+    from the denominator (``person_id``; pass None only for a taxonomy that has no
+    person class, and know that the hand then dilutes the ratio).
+
+    The two defaults, derived from the pilot's measurements rather than chosen:
+
+    * ``radius_px=25``: person boxes are a median 244-336 px tall on the ground-truthed
+      clips, a hand is roughly a tenth of standing height, so the hand's silhouette
+      extends ~12-17 px from the wrist point and ViTPose on true boxes adds a few px of
+      localisation error. 25 px is one hand-length: the smallest disk that reliably
+      reaches *past* the hand's own person-labelled pixels to what it is over. A deep
+      bend can still cover ~98% of the disk with the person's own body (measured at the
+      pilot's probe frame cam04 t2 f114) -- the sliver beyond the fingertips then
+      decides alone, deliberately, because demanding a larger denominator would
+      re-create the structural miss this rule replaced.
+    * ``contact_ratio=0.35``: on the pilot's clips, frames where the hand is visibly at
+      a fixture measured 0.55-1.0 (merchandise stacked on the table is its own terrain
+      class and dilutes the disk, hence the low end); non-contact wrists peaked at 0.41
+      and only for a frame or two, which ``min_seconds`` removes. 0.35 sits under the
+      weakest measured contact; the margin against non-contact is temporal as much as
+      spatial.
+
     `fixture_id` is passed rather than imported because the id is a property of the
-    taxonomy a config chose -- 4 under `RETAIL_OBJECTS`, 4 under the six-class surfaces
-    scheme, and a hard-coded 4 would be wrong the first time a config reorders its
-    classes. `data.terrain_classes.index("fixture")` is where a caller gets it.
+    taxonomy a config chose -- 4 under `RETAIL_OBJECTS`, 12 under the retail terrain
+    scheme, and a hard-coded number would be wrong the first time a config reorders its
+    classes. `data.terrain_classes.index("display_fixture")` is where a caller gets it,
+    and `person_id` the same way.
+
+    The terrain map must live in the same pixel space as the keypoints, and that
+    contract is now checked rather than implied: a frame payload that carries `image`
+    (`stage.StageFrame` requires it) is checked against it, and a slimmer payload can
+    state the space with ``image_size`` (height, width). A mismatch raises naming who
+    resizes -- see `_require_terrain_in_image_space`.
 
     What it is not: a purchase, a pick-up, or an interaction with a specific product. It
     is a wrist over a shelf. MERL Shopping's "reach to shelf" is the nearest labelled
@@ -1251,25 +1356,30 @@ def reach_to_shelf_events(
             "fixture region. A detection-only config has no terrain head; this event "
             "needs one."
         )
+    for f in frames:
+        if f.get("terrain") is None:
+            continue
+        hw = image_size if image_size is not None else _image_hw(f)
+        if hw is not None:
+            _require_terrain_in_image_space(f["terrain"], hw, int(f["frame_index"]))
     events: list[SecurityEvent] = []
     for track in tracks:
         idx = np.asarray(track.frames)
-        touching = np.zeros(len(idx), dtype=bool)
+        contact = np.zeros(len(idx), dtype=float)
         for i, (frame, kps) in enumerate(zip(track.frames, track.keypoints, strict=True)):
             terrain = terrain_by_frame.get(int(frame))
             if terrain is None:
                 continue
-            h, w = terrain.shape[-2:]
             kps = np.asarray(kps, dtype=float)
             for wrist in ("left_wrist", "right_wrist"):
                 x, y, score = kps[KP[wrist]]
                 if score < score_thr:
                     continue
-                xi, yi = round(x), round(y)
-                if 0 <= xi < w and 0 <= yi < h and int(terrain[yi, xi]) == fixture_id:
-                    touching[i] = True
-                    break
-        for i0, i1 in _runs(touching):
+                contact[i] = max(
+                    contact[i],
+                    _wrist_contact(terrain, x, y, radius_px, fixture_id, person_id),
+                )
+        for i0, i1 in _runs(contact >= contact_ratio):
             seconds = (idx[i1] - idx[i0] + 1) / fps
             if seconds < min_seconds:
                 continue
@@ -1281,9 +1391,30 @@ def reach_to_shelf_events(
                     frame_end=int(idx[i1]),
                     fps=fps,
                     track_ids=(track.track_id,),
-                    value=seconds,
-                    threshold=min_seconds,
-                    basis="wrist keypoint inside the terrain head's fixture region",
+                    value=float(contact[i0 : i1 + 1].max()),
+                    threshold=contact_ratio,
+                    basis=(
+                        f"fixture fraction of the non-person terrain within "
+                        f"{radius_px:g} px of a wrist keypoint, sustained "
+                        f"{min_seconds:g}s"
+                    ),
+                    extra={"radius_px": float(radius_px)},
                 )
             )
     return events
+
+
+def _image_hw(frame: dict) -> tuple[int, int] | None:
+    """(height, width) of the image a frame payload carries, or None if it carries none.
+
+    `stage.StageFrame` makes `image` required, so the production payload always states
+    its own pixel space; a slimmer dict (tests, offline reruns from saved arrays) states
+    it via `reach_to_shelf_events`' ``image_size`` instead, or -- carrying neither --
+    goes unchecked, which is the caller declining the check rather than the check
+    silently passing a mismatch.
+    """
+    image = frame.get("image")
+    if image is None:
+        return None
+    h, w = image.shape[:2]
+    return int(h), int(w)

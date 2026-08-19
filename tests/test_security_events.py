@@ -211,9 +211,121 @@ def test_reach_to_shelf_needs_both_heads_and_refuses_a_frame_with_no_terrain():
     ]
     got = ev.reach_to_shelf_events([track], frames, FPS, "cam01", fixture_id=fixture_id)
     assert [e.type for e in got] == ["reach_to_shelf"]
+    assert got[0].value == pytest.approx(1.0), "the whole disk is fixture here"
     bare = [{"frame_index": i, "terrain": None} for i in range(6)]
     with pytest.raises(ValueError, match="no frame carries a `terrain` map"):
         ev.reach_to_shelf_events([track], bare, FPS, "cam01", fixture_id=fixture_id)
+
+
+# --------------------------------------------------------------------------
+# The wrist-self-occlusion fix, pinned against the shapes the pose pilot measured.
+#
+# runs/pose_pilot01/REPORT.md section 3: the original rule tested the wrist *pixel*
+# against fixture, and that pixel is covered by the person's own hand whenever the pose
+# and the segmentation are both right -- so the rule could only fire on occlusion or
+# pose error, the opposite of "touching the shelf". Rerun on the pilot's own data
+# (keypoints.npz + the same checkpoint's terrain, display_fixture id 12, person id 11,
+# defaults radius_px=25 / contact_ratio=0.35), old rule vs this one:
+#
+#   cam04 old: 9 spans, all track 4 (f22-107) -- the child whose hand the display
+#     *occludes*. The bending adult (track 2), wrists at conf 0.89-0.97 visibly on the
+#     table, produced zero spans: their wrist pixels read `person` (98-100% of the
+#     25 px disk at the probe frames f114/f150).
+#   cam04 new: track 4 still fires across f22-107 (same spans within a frame or two,
+#     plus f92-94), and track 2 now fires exactly where it bends over the table
+#     (f10-12, 104-110, 119-122, 126-128, 162-168, 181-187, 203-206), plus the clerk
+#     and two children with hands at the display edge (tracks 5, 6, 9) -- each checked
+#     against terrain-overlay renders: every firing wrist sits at a fixture region.
+#   cam11 old and new: zero events at every radius/ratio swept (r 15-40, ratio
+#     0.15-0.5). Nobody in that clip reaches, and the fix does not invent it.
+
+
+def _shelf_scene(ring_class: int, fixture_id: int = 4, person_id: int = 7):
+    """A hand covering its own wrist: person out to r=24, ``ring_class`` beyond.
+
+    The geometry of the pilot's probe frame cam04 t2 f114 -- 98% of the wrist disk is
+    the person's own body -- so the single-pixel rule reads `person` and stays silent
+    no matter what the hand is over. Only the sliver past the fingertips says.
+    """
+    wrist = np.array([560.0, 640.0])
+    terrain = np.zeros((720, 1280), dtype=np.int64)
+    yy, xx = np.mgrid[0:720, 0:1280]
+    d2 = (xx - wrist[0]) ** 2 + (yy - wrist[1]) ** 2
+    terrain[d2 <= 27.0**2] = ring_class
+    terrain[d2 <= 24.0**2] = person_id
+    poses = [keypoints(5.0, 200.0)] * 6
+    for kps in poses:
+        kps[ev.KP["left_wrist"], :2] = wrist
+        kps[ev.KP["right_wrist"], :2] = wrist
+    frames = [{"frame_index": i, "terrain": terrain} for i in range(6)]
+    return posed(1, poses), frames, fixture_id, person_id
+
+
+def test_a_wrist_covered_by_its_own_hand_still_reads_what_the_hand_is_over():
+    """The pilot's structural miss: pose right + segmentation right = wrist pixel is
+    `person`, and the old rule could never fire. The neighbourhood rule must."""
+    track, frames, fixture_id, person_id = _shelf_scene(ring_class=4)
+    got = ev.reach_to_shelf_events(
+        [track], frames, FPS, "cam01", fixture_id=fixture_id, person_id=person_id
+    )
+    assert [e.type for e in got] == ["reach_to_shelf"]
+    assert got[0].value == pytest.approx(1.0), "every resolvable pixel is fixture"
+    assert "non-person" in got[0].basis
+
+
+def test_excluding_the_persons_own_pixels_is_the_mechanism_not_a_detail():
+    """Same scene, person exclusion off: the hand dilutes the ratio below threshold.
+
+    This is the difference between "what is the hand over" and "how much of the disk is
+    shelf", and only the first is the event.
+    """
+    track, frames, fixture_id, _person_id = _shelf_scene(ring_class=4)
+    got = ev.reach_to_shelf_events(
+        [track], frames, FPS, "cam01", fixture_id=fixture_id, person_id=None
+    )
+    assert got == []
+
+
+def test_a_hand_over_the_floor_beside_a_shelf_is_not_reaching():
+    """The ring past the fingertips is floor, not fixture: no event, whatever the old
+    single-pixel rule would have said about occlusion."""
+    track, frames, fixture_id, person_id = _shelf_scene(ring_class=0)
+    got = ev.reach_to_shelf_events(
+        [track], frames, FPS, "cam01", fixture_id=fixture_id, person_id=person_id
+    )
+    assert got == []
+
+
+def test_a_terrain_map_in_the_wrong_pixel_space_is_refused_not_silently_empty():
+    """The pilot's section 4-2 failure: a canvas-resolution map (512x896) against
+    1920x1080 keypoints put every wrist off the map's edge, and the old code skipped
+    them -- zero events that read as "nobody reached". Now it raises, naming who
+    resizes: the caller, nearest-neighbour, back to image resolution.
+    """
+    track, frames, fixture_id, person_id = _shelf_scene(ring_class=4)
+    small = [
+        {"frame_index": f["frame_index"], "terrain": f["terrain"][::2, ::2]} for f in frames
+    ]
+    with pytest.raises(ValueError, match="caller must upsample"):
+        ev.reach_to_shelf_events(
+            [track], small, FPS, "cam01", fixture_id=fixture_id, person_id=person_id,
+            image_size=(720, 1280),
+        )  # fmt: skip
+    # A StageFrame-shaped payload carries `image`, so it is checked with no extra arg.
+    with_image = [
+        {**f, "terrain": f["terrain"][::2, ::2], "image": np.zeros((720, 1280, 3), np.uint8)}
+        for f in frames
+    ]
+    with pytest.raises(ValueError, match="nearest-neighbour"):
+        ev.reach_to_shelf_events(
+            [track], with_image, FPS, "cam01", fixture_id=fixture_id, person_id=person_id
+        )
+    # And the matching size passes the same gate rather than being exempt from it.
+    ok = ev.reach_to_shelf_events(
+        [track], frames, FPS, "cam01", fixture_id=fixture_id, person_id=person_id,
+        image_size=(720, 1280),
+    )  # fmt: skip
+    assert [e.type for e in ok] == ["reach_to_shelf"]
 
 
 def test_stock_removed_ignores_a_shopper_standing_in_front_of_the_shelf():
