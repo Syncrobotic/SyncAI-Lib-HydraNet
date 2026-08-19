@@ -424,3 +424,17 @@ static gate was turned off for. **What discriminates is static share, bidirectio
 person supply becomes a per-camera decision: 28 cameras usable at 0.35 directly, 11
 named cameras require the static-share veto or exclusion, and no single fleet-wide
 threshold exists (0.594 false sits above scores real daytime people still need).
+
+**Correction to the amendment above, from the veto build-out (359f2dc/95e9be1/7c01da9):
+counter-examples are 13, not 11, and static share is one-directional.** Pinning the
+acceptance set by eye reclassified two "real person" cameras (parked scooters; hanging
+accessories under a noisy IR reference) — high static share proves not-a-person; low
+static share proves nothing when the reference itself is noisy (outdoor street light,
+dark near-nadir). The same error shape this repo keeps cataloguing: a number valid in
+one direction, invented in the other. The night veto shipped and passed fleet
+acceptance: threshold is a 0.45-wide plateau (0.30–0.75 all remove 62/72 false boxes
+with zero real-person loss; DROP_ABOVE=0.50 is its centre), 12/12 real boxes survive,
+0 clean-camera kills, 72/72 false removed with two cameras excluded by name because no
+threshold separates them. Residual risk on record: a person who never moves is furniture
+to this veto — an alert-layer human-review reason, not a labelling-layer fix; and the
+margin rests on one camera's 12 boxes until the night tranche re-measures it.
