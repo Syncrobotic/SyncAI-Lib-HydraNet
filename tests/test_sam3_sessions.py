@@ -16,6 +16,10 @@ These tests pin the refusal, its message, and its ordering. The ordering is not 
 detecting the collision on the way past would leave the half-written dataset the refusal
 exists to prevent.
 
+Both refusals now live in `data/video.py` -- they are about a list of paths, which every
+caller that decodes a list of clips asks about. The `prelabel` fixture stays for the
+tests that drive the script's `main`, which is where the ordering is decided.
+
 pytest tests/test_sam3_sessions.py -v
 """
 
@@ -24,6 +28,8 @@ import sys
 from pathlib import Path
 
 import pytest
+
+from syncai_hydranet.data.video import session_names, validate_inputs
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
@@ -51,18 +57,18 @@ def two_cameras(tmp_path):
     return clips
 
 
-def test_distinct_names_pass_through_in_order(prelabel, tmp_path):
+def test_distinct_names_pass_through_in_order(tmp_path):
     clips = [str(tmp_path / f"cam{i}.mp4") for i in range(3)]
-    assert prelabel.session_names(clips) == ["cam0", "cam1", "cam2"]
+    assert session_names(clips) == ["cam0", "cam1", "cam2"]
 
 
-def test_two_cameras_one_clip_name_is_refused(prelabel, two_cameras):
+def test_two_cameras_one_clip_name_is_refused(two_cameras):
     with pytest.raises(SystemExit) as exc:
-        prelabel.session_names(two_cameras)
+        session_names(two_cameras)
     assert "refusing before writing anything" in str(exc.value)
 
 
-def test_the_message_names_both_input_paths_not_the_shared_key(prelabel, two_cameras):
+def test_the_message_names_both_input_paths_not_the_shared_key(two_cameras):
     """The key is what the script computed; the paths are what the operator must go look at.
 
     A message naming only the shared basename sends someone to the wrong place -- today's
@@ -70,14 +76,14 @@ def test_the_message_names_both_input_paths_not_the_shared_key(prelabel, two_cam
     throws away.
     """
     with pytest.raises(SystemExit) as exc:
-        prelabel.session_names(two_cameras)
+        session_names(two_cameras)
     message = str(exc.value)
     for path in two_cameras:
         assert path in message
     assert "Kaohsiung-cam07" in message and "Taichung-cam08" in message
 
 
-def test_a_missing_input_is_refused_before_anything_runs(prelabel, tmp_path):
+def test_a_missing_input_is_refused_before_anything_runs(tmp_path):
     """The defect this replaces aborted the batch mid-way, after paying for the model load.
 
     A path that does not exist used to reach `probe()`, whose ffprobe call raises
@@ -89,28 +95,28 @@ def test_a_missing_input_is_refused_before_anything_runs(prelabel, tmp_path):
     real = tmp_path / "there.mp4"
     real.write_bytes(b"")
     with pytest.raises(SystemExit) as exc:
-        prelabel.validate_inputs([str(real), str(tmp_path / "gone.mp4")])
+        validate_inputs([str(real), str(tmp_path / "gone.mp4")])
     message = str(exc.value)
     assert "1 of 2 input(s) do not exist" in message
     assert "gone.mp4" in message
     assert "there.mp4" not in message, "naming a valid input as missing sends the wrong way"
 
 
-def test_every_missing_input_is_named_not_just_the_first(prelabel, tmp_path):
+def test_every_missing_input_is_named_not_just_the_first(tmp_path):
     """Refusing on the first one would make a bad glob a three-round guessing game."""
     missing = [str(tmp_path / f"gone{i}.mp4") for i in range(3)]
     with pytest.raises(SystemExit) as exc:
-        prelabel.validate_inputs(missing)
+        validate_inputs(missing)
     for path in missing:
         assert path in str(exc.value)
 
 
-def test_existing_inputs_pass_silently(prelabel, tmp_path):
+def test_existing_inputs_pass_silently(tmp_path):
     clip = tmp_path / "here.mp4"
     clip.write_bytes(b"")
     stills = tmp_path / "camera_of_stills"
     stills.mkdir()
-    assert prelabel.validate_inputs([str(clip), str(stills)]) is None
+    assert validate_inputs([str(clip), str(stills)]) is None
 
 
 def test_existence_is_checked_before_the_model_loads(prelabel, tmp_path, monkeypatch):
@@ -127,7 +133,7 @@ def test_existence_is_checked_before_the_model_loads(prelabel, tmp_path, monkeyp
     assert not out.exists(), "the refused run left a dataset directory behind"
 
 
-def test_the_same_path_twice_is_told_to_deduplicate_not_to_symlink(prelabel, two_cameras):
+def test_the_same_path_twice_is_told_to_deduplicate_not_to_symlink(two_cameras):
     """Same refusal, different cause, and the remedies are not interchangeable.
 
     A doubled glob or a manifest with a repeated entry produces one path printed twice.
@@ -136,27 +142,25 @@ def test_the_same_path_twice_is_told_to_deduplicate_not_to_symlink(prelabel, two
     thing they can do.
     """
     with pytest.raises(SystemExit) as exc:
-        prelabel.session_names([two_cameras[0], two_cameras[0]])
+        session_names([two_cameras[0], two_cameras[0]])
     message = str(exc.value)
     assert "listed more than once" in message
     assert "symlink" not in message.lower()
 
 
-def test_distinct_paths_are_still_told_to_symlink(prelabel, two_cameras):
+def test_distinct_paths_are_still_told_to_symlink(two_cameras):
     with pytest.raises(SystemExit) as exc:
-        prelabel.session_names(two_cameras)
+        session_names(two_cameras)
     assert "symlinks whose names differ" in str(exc.value)
 
 
-def test_a_third_colliding_input_is_reported_with_the_other_two(
-    prelabel, two_cameras, tmp_path
-):
+def test_a_third_colliding_input_is_reported_with_the_other_two(two_cameras, tmp_path):
     d = tmp_path / "Tao-Hsin-cam01"
     d.mkdir()
     third = d / Path(two_cameras[0]).name
     third.write_bytes(b"")
     with pytest.raises(SystemExit) as exc:
-        prelabel.session_names([*two_cameras, str(third)])
+        session_names([*two_cameras, str(third)])
     assert str(third) in str(exc.value)
 
 
