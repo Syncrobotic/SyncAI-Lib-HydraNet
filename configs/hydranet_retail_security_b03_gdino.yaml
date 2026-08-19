@@ -1,0 +1,102 @@
+# b03_cw_xl + in-domain `person` supervision from the Grounding DINO site batch.
+#
+# What changed and why (journal/2026-08-19-security-retail-teachers-and-methodology.md):
+# until this config, site `person` gradient came only from coco_person at 0.05 --
+# web photography against 23 overhead h.264 cameras. `site_person` adds
+# datasets/retail_person_gdino01: Grounding DINO at 0.35, a threshold sitting in the
+# measured day/night gap (night IR hallucinations top out at 0.326; SAM 3 returned 229
+# false persons on the same night frames). 1,141 boxes / 552 frames / 23 selling-floor
+# cameras, split by the batch03 camera assignment so no camera trains here and
+# validates elsewhere.
+#
+# The annotation file carries only `person`, so DetVocab.class_mask stops this dataset
+# from supplying negatives for bag/boxed_stock/device -- no gradient, not a zero.
+#
+# sample_ratio 1.0 is a first setting, not a measured optimum; read the realised
+# per-class share from MultiTaskLoader.detection_class_steps() in the log, per the rule
+# that the ratio is not the share. Val `person` numbers on site_person are agreement
+# with GDINO, not accuracy -- same provenance caveat as every site metric.
+#
+# NOTE: `data.datasets` is a LIST -- _base_ merge replaces lists wholesale, so the six
+# base entries are repeated here verbatim from hydranet_retail_security_b03_cw_xl.yaml.
+
+_base_: hydranet_retail_security_b03_cw_xl.yaml
+
+experiment: hydranet_retail_security_b03_gdino
+
+data:
+  datasets:
+  - name: ade20k
+    type: seg_folder
+    root: datasets/ADE20K
+    split_train: train
+    split_val: val
+    split_test: test
+    label_map: ade20k_retail_surfaces
+    sample_ratio: 0.15
+    supervises:
+    - terrain
+  - name: site_seg
+    type: seg_folder
+    root: datasets/retail_objects_batch02
+    split_train: train
+    split_val: val
+    split_test: test
+    label_map: retail_surfaces_from_objects
+    sample_ratio: 2.0
+    supervises:
+    - terrain
+  - name: site_seg03
+    type: seg_folder
+    root: datasets/retail_objects_batch03
+    split_train: train
+    split_val: val
+    split_test: test
+    label_map: retail_surfaces_from_objects
+    sample_ratio: 2.0
+    supervises:
+    - terrain
+  - name: site_boxes
+    type: coco
+    root: datasets/retail_objects_batch02
+    split_train: train
+    split_val: val
+    split_test: test
+    det_vocab: retail_security
+    sample_ratio: 3.0
+    supervises:
+    - detection
+  - name: site_boxes03
+    type: coco
+    root: datasets/retail_objects_batch03
+    split_train: train
+    split_val: val
+    split_test: test
+    det_vocab: retail_security
+    sample_ratio: 1.0
+    supervises:
+    - detection
+  - name: site_person
+    type: coco
+    root: datasets/retail_person_gdino01
+    split_train: train
+    split_val: val
+    split_test: test
+    det_vocab: retail_security
+    sample_ratio: 1.0
+    supervises:
+    - detection
+  - name: coco_person
+    type: coco
+    root: datasets/coco
+    split_train: train2017
+    split_val: val2017
+    classes:
+    - person
+    - backpack
+    - handbag
+    - suitcase
+    det_vocab: retail_security
+    sample_ratio: 0.05
+    supervises:
+    - detection
