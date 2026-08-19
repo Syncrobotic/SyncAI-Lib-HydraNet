@@ -63,7 +63,7 @@ class Track:
     # or empty, which is the state of every track this tracker produces today.
     #
     # It is a field rather than a parallel structure because the alignment with `frames`
-    # and `boxes` is the whole contract: `events.pose_fall_events` reads keypoints[i]
+    # and `boxes` is the whole contract: `events.pose_posture_events` reads keypoints[i]
     # against frames[i], and two containers that have to stay index-aligned across a
     # module boundary drift the first time one of them is filtered.
     #
