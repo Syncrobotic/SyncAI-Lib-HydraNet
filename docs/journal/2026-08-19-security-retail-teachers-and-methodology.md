@@ -319,3 +319,17 @@ over target — confirming the data path, not the model, as the engineering fron
 Three known recoveries, none exotic: uint8 input binding (4x less to copy), pinned
 memory with dual-stream overlap, and the static-composite's taken-over pixels needing
 no transfer at all. Engine builds are ~30 s each, so rebuild-per-release is trivial.
+
+**The fleet calibration sweep (runs/onboard01): plug-in-to-orientation is 83%
+automatic, and the failures are all mount types, not math.** 19/23 cameras get
+orientation from one plate inference (regression check: Taichung-cam01 reproduces
+calib01 bit-for-bit); 9 get scale automatically from person-height (median 0.665, one
+self-contradicting outlier flagged); 14 wait on a visual reference — mostly person-box
+famine at the 0.5 gate, not geometry. The four failures diagnose cleanly: one sideways
+~90° mount (Kaohsiung-cam05 — the long-suspected one, now measured), one near-nadir
+desk view, one glass storefront (depth through glass is not trustable), one camera with
+no plate at all. First fleet-wide roll census: 4 tilted mounts (−8.3°..−12.9°) plus the
+sideways one — the VLM pilot's "at least three" is now "four plus one". SOP gaps named
+for the install checklist: a mount-type pre-check (sideways is auto-fixable by
+rotation), one tile-grid shot per store per camera model to pin vfov/k1, and reading a
+door frame's two endpoints as an install-day action, which zeroes the 14 unmeasured.
