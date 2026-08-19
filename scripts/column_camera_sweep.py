@@ -113,7 +113,12 @@ def _prelabel():
     a third caller wants `segment`, that is the signal to move it into
     `src/syncai_hydranet` rather than to add another of these.
     """
-    spec = importlib.util.spec_from_file_location("_sam3_prelabel", HERE / "sam3_prelabel.py")
+    path = HERE / "sam3_prelabel.py"
+    spec = importlib.util.spec_from_file_location("_sam3_prelabel", path)
+    if spec is None or spec.loader is None:
+        # Unreachable for an existing .py file; the guard is what makes the None-typed
+        # returns above checkable rather than silently narrowed.
+        raise ImportError(f"cannot build an import spec for {path}")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
