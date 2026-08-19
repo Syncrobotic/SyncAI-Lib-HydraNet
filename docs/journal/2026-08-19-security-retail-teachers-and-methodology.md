@@ -388,3 +388,11 @@ incremental torch op with a bit-equivalence test; the tracker's pure-Python Hung
 already eat ~30% CPU; 96 will not fit), post scaling (EMA on-GPU, sharding, native
 assoc), the static-composite skip measured on the TRT path, per-checkpoint threshold
 sweeps, and engine provenance metadata.
+
+**User ruling, detection taxonomy for the campaign: merchandise boxes are `laptop` /
+`tablet` / `phone` / `boxed_stock`** — the old catch-all `device` splits into three
+category nouns, exactly where the prompt-sweep evidence already pointed ("brand names do
+not work, category nouns do": laptop 0.800 vs macbook 0.478). Boundary rule recorded: a
+boxed phone is `boxed_stock`, a demo unit is its category. Thresholds per class from
+score-distribution sweeps on the pilot plus the three near-nadir closeup cameras, gaps
+first, per rule 2. Floor-first sequencing unchanged — this lands in Phase 3.
