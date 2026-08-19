@@ -2,7 +2,7 @@
 
 How a team picks this project up and runs it: who owns what, what data has to be collected,
 how models are trained, and how they are evaluated and tested before anything reaches a
-robot.
+store.
 
 This is the *process* document. For the concepts behind multi-head training, read
 [TRAINING_GUIDE.md](TRAINING_GUIDE.md) first — it is the shorter of the two and this one
@@ -26,12 +26,15 @@ limits the system today is not the network:
 
 | Constraint | Status |
 |---|---|
-| `caution` is capped by its sourcing, not by tuning | 3 of the 4 terrain classes that map to it have **zero** training examples. It scores **0.33 on the held-out test split** — the ~0.20 figure this row used to quote was a val number, and val also selected the checkpoint |
-| Terrain metrics are not stable across dataset changes | `terrain_mIoU` averages over the classes *present*, currently 8 of 12 |
+| **No site number is an accuracy** | The binding constraint, and it outranks every class-level problem below. See the next row |
 | A *field* number exists and is an **agreement**, not an accuracy | Site splits are built and reserved by camera ([RETAIL_DATA.md](RETAIL_DATA.md)), but every mask in them is SAM 3 output with no human pass, so a model trained on SAM 3 and scored against SAM 3 shares its errors. `split.json`'s `test_provenance` says so with the data |
 | Detection is trained, and the number depends entirely on which set | `releases/v1` scores **mAP 0.335 on COCO val2017** (0.3246 on the 25 indoor categories). The retail line, which is the only one scored on site boxes at all, gets **0.07–0.11 on `site_boxes`** from a different family of runs. A web number is not evidence about a store, and the two are not comparable. Export refuses any head no dataset supervises |
 | The COCO share is a monotonic trade, not a collapse | Swept at four ratios and scored on **test** (`journal/2026-08-14-experiments-and-geometry.md`): at `sample_ratio: 0.1` every segmentation metric matches or beats the segmentation-only baseline and detection arrives free; above it, segmentation falls monotonically. There is no sweet spot to find and no blocker here — only an exchange rate that gets worse as you climb |
 | Real-world accuracy is still unmeasured | Site footage is now in training (`retail_objects_batch02`/`batch03`, 23 selling-floor cameras) — what is missing is a *human-corrected* test split, not the data |
+| Rare classes are memorised per camera, not learned | `column` scores 0.86–0.88 on cameras a run trained on and 0.00–0.51 on cameras it never saw. More *cameras* fixes this; more frames from the same ones does not |
+| `person` is trained on web photography | COCO alone, eye level and uncompressed, against ceiling-mounted h.264. Site boxes now exist as a teacher's opinion (1,141 across 23 cameras) with no human pass, and **night is not covered at all** |
+| Terrain metrics are not stable across dataset changes | `terrain_mIoU` averages over the classes *present*. Read `mIoU_classes` and the per-class `support` before reading `mIoU` |
+| The indoor taxonomy's gaps are inherited, not active | `caution` is capped by its sourcing — 3 of its 4 terrain classes have zero examples, and it scores 0.33 on test. `hydranet_indoor.yaml` still trains it; the retail line does not, and derives free space from `terrain` instead |
 
 **The work that moves this project is data work.** Plan accordingly: a team that assigns four
 engineers to model tuning and none to annotation will produce a better-tuned model with the
@@ -76,13 +79,13 @@ the same model in different directions produce results neither can interpret.
 
 ### C. Deployment
 
-Owns everything from `best.pt` to a running engine on the robot.
+Owns everything from `best.pt` to a running engine on the inference box.
 
 - ONNX export and its validation
 - TensorRT engine builds, FP16 now, INT8 when the model settles
 - The C++/Python runtime and post-processing (decode, NMS — and argmax, unless the export
   folded it into the graph, which on one board halved the frame)
-- Pre-processing parity between training and the robot
+- Pre-processing parity between training and the deployed engine
 - Latency budgets on the target board
 
 **Interface in:** a checkpoint plus the config that made it. See
@@ -117,107 +120,127 @@ moment.
 
 ## 2. What data to collect
 
-### The robot was assumed to have LiDAR, and that decided the priority order
+### Rank by what no other instrument can answer
 
-> **⚠ Corrected 2026-08-19: the platform this section was written for does not exist.**
-> The robot is a **Lite3 with one monocular camera and two ultrasound returns**, and the
-> ultrasound is `{forward, backward}` — only one of the two has a camera pointed at it, and
-> the occupancy research measured that its echo is *lateral*: across
-> 29 scored frames, **0 were comparable** to the camera's forward cone. There is no point
-> cloud. "The Lite3 LiDAR variant" appears in that document as one of the sensors the
-> project might **buy** if E-prep says a depth sensor is needed — which is the open decision,
-> not a description of what is mounted.
->
-> **Read the ranking below with that substituted, because the substitution does not change
-> it uniformly:**
->
-> * **Priorities 1 and 2 (`glass`, `wet_slippery`) are unaffected** — they were ranked first
->   because they are invisible to *any* range sensor and the camera is the only instrument.
->   That argument never depended on LiDAR being present.
-> * **Priority 3 (`floor_metal`) is unaffected** for the same reason: aperture-versus-foot is
->   a material judgement.
-> * **Priorities 4 and 5 (`threshold_ramp`, `stairs`) move back up, and the sentence "no
->   longer the camera's problem alone" is false.** Nothing else on this robot measures a
->   level change. Geometry is the camera's problem — or a depth sensor's, once E-prep
->   answers whether one is needed, and E-prep is itself blocked on walking the robot.
-> * **"LiDAR as an annotation lever" and "LiDAR as free validation" below are void**, not
->   deferred. Both need a point cloud. Their replacement is the auto-labelling pipeline in
->   the occupancy research direction, whose whole premise was that no 3D sensor exists.
+> **This section was rewritten on 2026-08-19.** It used to rank annotation by *danger x how
+> blind the LiDAR is*, for a quadruped that carried one. The quadruped line was removed and
+> never had a LiDAR anyway — the platform was a monocular camera and two ultrasound returns,
+> a correction that had already invalidated the ranking before the line went. The old order
+> (`glass`, `wet_slippery`, `floor_metal`, `threshold_ramp`, `stairs`) belongs to the indoor
+> taxonomy, which `hydranet_indoor.yaml` still trains; it is not what the shipped line needs.
+> The principle survived the platform: **rank by what no other instrument can answer.**
 
-The section as written assumed the platform carries LiDAR alongside the camera, so
-**this model's job is the half of the problem LiDAR cannot do**. Ranking annotation effort
-by "which class is most dangerous" alone gets the order wrong; rank by *danger × how blind
-the range sensor is* — and with no range sensor, everything geometric comes back.
+On a fixed store camera there is no second sensor at all, so the ranking is not against
+another instrument — it is against the **teacher models** that can label without a human, and
+against what a fixed viewpoint gives away for free. Three things follow, and they decide the
+order below:
 
-| | LiDAR | Camera (this model) |
+| | a teacher can supply it | a human must |
 |---|---|---|
-| Range and geometry | Accurate | Unreliable from one camera |
-| Stair edges, level changes | Directly measurable | Inferred |
-| Floor material (hard / soft / metal) | Invisible | The only source |
-| **Glass** | **Invisible — passes through or returns noise** | **The only source** |
-| **Wet floor** | **Invisible, and specularity adds false returns** | **The only source** |
+| masks for large edge-defined classes (`floor`, `wall`, `fixture`) | **yes** — SAM 3, prompted by text | review, not draw |
+| `person` boxes | **yes** — Grounding DINO at a measured threshold | verify a sample |
+| **is any of it right** | **no** | **this is the whole gap** |
+
+That last row is the one that orders everything. Every site number this project can produce
+today is an **agreement with a teacher**, not an accuracy: the training masks and the test
+masks come from the same model, so they share its systematic errors and cancel exactly where
+both are wrong. Annotation budget buys the difference between those two words.
 
 ### Priority order
 
-| Priority | Class | Why | Current examples |
+| Priority | What | Why | State |
 |---|---|---|---|
-| **1** | `glass` | **LiDAR cannot see it at all**, and it reads as an open corridor. Currently 0.50 IoU against a 0.97 ceiling — the single largest safety gap in the system. | ADE20K only |
-| **2** | `wet_slippery` | Also invisible to LiDAR, and specular returns actively mislead it. The most direct fall risk. | **0** |
-| 3 | `floor_metal` | Grating aperture versus foot size is a material judgement; LiDAR sees the holes but not whether the surface is safe. | **0** |
-| 4 | `threshold_ramp` | A level change is pure geometry, so LiDAR measures it directly. Still needed for the semantic map, but it is no longer the camera's problem alone. | **0** |
-| 5 | `stairs` | Same reasoning: step edges are geometric. | ADE20K only |
+| **1** | **Human-corrected test masks**, ~72 frames on the reserved cameras | Until they exist this line has **no site number at all** — not a low one. Everything below is unmeasurable without it, which is why it outranks classes that are visibly worse. | SAM 3 pre-labels plus one automated pass; `split.json`'s `test_provenance` says so with the data |
+| **2** | **One labelled clip of person tracks** | `idf1` and `id_switches` have no ground truth, so the tracker's 1234 fragments per clip can be described and not scored. Offline non-causal tracking has cut the human cost to minutes. | one human step from existing |
+| **3** | **Night `person`** | The teacher swap fixed the day; an empty IR store used to return 229 false people. A store camera is most often asked a security question at night, and the current batch is daylight-only. | day covered, night uncovered |
+| 4 | `column` review | Sourced, and *memorised per camera* rather than learned: 0.86–0.88 on cameras a run trained on, 0.00–0.51 on cameras it never saw. More cameras, not more frames from the same ones. | 10 of 23 selling-floor cameras carry it |
+| 5 | `product` / `fixture` review | Both have teacher data and want *judging* rather than drawing — keep / drop / relabel per connected component. That bounds precision honestly and costs clicks instead of brushwork. | `fixture` is a sink: 92.6% recall, 56.1% precision |
+| 6 | **One known length per store** | Not a mask. The geometry recipe recovers orientation from a background plate and **cannot recover scale**; the metre has to come from a tape measure once per camera. Without it every event polygon is a shape without a size. | one camera of 48 is calibrated |
 
-**One thing to verify on the robot before treating 4 and 5 as settled.** Door sills are
-often only 2–5 cm high, and whether a range sensor resolves that depends on its angular
-resolution and mounting height. **Answered by the correction above rather than by a
-measurement: there is no such sensor, so `threshold_ramp` and `stairs` have already moved
-back up the list.** The question that replaces it is E-prep's — how a monocular depth
-teacher behaves below 0.7 m on this lens, which public data cannot bound (NYUv2's returns
-start near 0.7 m and the robot's floor sits at 0.34 m).
+Everything else — `floor`, `wall` — is adequately covered by the teachers plus ADE20K. Do not
+spend annotation budget there.
 
-Everything else — floor, wall, door, furniture, person — is adequately covered by ADE20K.
-Do not spend annotation budget there.
+### Teacher models are the annotation lever
 
-### LiDAR as an annotation lever
+Geometric classes on the old robot line were going to be pre-labelled from a point cloud. The
+retail equivalent is a **promptable segmentation model**, and it is strictly better in one
+respect and worse in another.
 
-Geometric classes can be **pre-labelled automatically**: detect step edges and level changes
-in the point cloud, project them into the image, and let annotators correct a mask rather
-than draw one. That directly reduces the bottleneck for `stairs` and `threshold_ramp`.
+Better: it can propose a class it has never seen. `scripts/sam3_prelabel.py` takes text, so a
+display podium that no public dataset contains comes back as a mask. A label drawn from *this
+project's own model* can only reinforce what the model already believes — self-training on
+site frames moved `display_fixture` by **−0.0096** for exactly that reason.
 
-The material classes — `glass`, `wet_slippery`, `floor_metal` — have no such shortcut. They
-are hand-drawn, which is a second reason they belong at the top of the list.
+Worse: **a teacher is a second model with its own errors, not an oracle.** Everything it
+writes is a pre-label, and `hydranet-annotation check` still gates it. The two limits are
+structural and neither is fixable by prompting harder: consensus across frames removes only
+*random* error, and a fixture the teacher consistently misses survives untouched; and it
+improves precision while saying nothing about recall.
 
-### LiDAR as free validation
+### A fixed camera is free validation
 
-Where the model predicts *go* and the point cloud shows a 20 cm drop, that is a failure case
-found without anyone annotating anything. This is the cheapest possible implementation of
-the level-4 field evaluation below, and it should be running continuously rather than as a
-one-off study.
+The old robot line's version of this was "where the model says *go* and the point cloud shows a
+20 cm drop, that is a failure case found without anyone annotating anything". A fixed camera
+gives the same thing from a different direction, and it costs nothing but compute:
 
-### How much
+**The scene does not move, so a pixel that changes class between frames is one the model was
+unsure about.** No labels are needed to ask the question — only whether the answer was
+stable. Over 610 frames of one camera, 12.7% of the frame was settled floor and **16.7%
+flickered**, concentrated on the brighter, more specular near-field tiles. That is a
+measurement of the model's confusion obtained from unlabelled footage, and no metric computed
+on the validation split was going to report it.
 
-As an initial target per priority class:
+Two uses follow. `engine/consensus.py` turns it into a target-domain check that needs no
+ground truth. And the same property makes the annotation cheap in the other direction: on a
+camera that never moves the floor is **one polygon, correct for every frame that camera will
+ever produce** — per camera, not per frame.
 
-- **300–500 frames** containing the class, across **at least 5 distinct sites or sessions**
-- Of those, **~100 frames held back as test**, from sessions that appear in no other split
 
-Variety across sessions matters more than raw count. Five hundred frames from one corridor
-teaches the model that corridor.
+### How much, and the unit is cameras
+
+**Count cameras, not frames.** On a fixed installation a frame is nearly free and adds
+almost nothing: the 189th clip of a day from one camera tells you very little its 1st did
+not, because the shelves, the floor tiles and the mount have not moved. What varies is the
+camera.
+
+The measurement that settles it: resampling one run's validation score over **cameras**
+rather than over images gave `column` an interval of 0.000–0.512, because one of the three
+val cameras carried no `column` at all. **The camera is the dominant term.** Adding frames to
+the same three cameras would have attacked the smaller one.
+
+As an initial target per class that needs work:
+
+- the class present on **at least two test cameras**, or the per-class number is not reported
+  at all — it is that camera's number, and it moves for reasons unrelated to the model
+- **all three stores**, and both viewpoint families: wall-mounted wide-angle and near-nadir
+  over a desk are different problems
+- the **richest** camera for a rare class stays in *training*; the test only needs enough
+  pixels for a stable number, and where those compete training wins
+
+The one axis where more frames of the same camera does buy something is **time of day**.
+`person` and `product` genuinely vary across slots; `column` does not, and night IR is a
+different *appearance* of the same fixed scene rather than more of it.
 
 ### How to capture
 
-The training data has to look like what the robot sees, or the model learns a domain it will
-never be deployed in.
+The training data has to look like what the deployed camera sees, or the model learns a
+domain it will never run in.
 
-- **Camera height and angle: mount it on the robot**, or hold it at the robot's camera height
-  and pitch. ADE20K's weakness is exactly this — human-height, human-framed photographs.
-- **Lighting: deliberately vary it.** Include the bad cases: backlit entrances, overhead glare
-  on polished floors, dim corridors, mixed daylight and fluorescent.
-- **Include the hard negatives.** Specular reflections on a polished floor that look like an
-  open corridor, mirrors, glass walls with objects visible behind them. These are where the
-  dangerous failures live.
-- **Record continuous sessions and log them.** Session identity is what makes an honest split
-  possible later; frames without provenance cannot be split safely.
+- **The viewpoint is the mount, and it is already fixed.** Nothing here is captured by a
+  person walking around — it is pulled from the recorder. ADE20K's weakness is exactly this:
+  human-height, human-framed photography against ceiling-mounted, down-pitched, h.264 store
+  cameras.
+- **Cover the trading day, including after it.** Open-store slots for shoppers and stock, and
+  the night IR clips — which are not a nuisance case but the ones security is asked about.
+- **Include the hard negatives.** Specular reflections on a polished floor that read as open
+  aisle, storefront glass with the street visible through it, and the pegboard of hanging
+  packets that a person detector called 229 people on an empty night frame.
+- **Check the camera is worth pulling before pulling it.** A 48-camera site does not have 48
+  usable cameras: 6 are dead, 19 are back of house, and the ways one fails are independent —
+  container metadata catches a never-1080p camera, pixel statistics catch a black or
+  greyscale one, and only the pre-labels catch a stockroom pointed at racking.
+- **Record which camera and which slot.** Camera identity is what makes an honest split
+  possible later; frames without it cannot be split safely.
 
 ### Annotation spec
 
@@ -226,17 +249,26 @@ the background-remap trap that is the sharpest edge in the pipeline — is §3's
 [annotation spec](#the-annotation-spec). Two points belong here because they are planning
 decisions rather than drawing ones:
 
-- **Pin the policy table in the spec.** If annotators and training disagree about what
-  `threshold_ramp` means, the labels are silently wrong and nothing will surface it.
-- The three entries marked `REVIEW` in the policy table are **platform decisions, not
-  annotation decisions** — whether the gait handles stairs, whether the foot fits the
-  grating. Settle them with whoever owns the robot, then write the answer down.
+- **Pin the policy table in the spec.** If annotators and training disagree about where
+  `fixture` ends and `product` begins, the labels are silently wrong and nothing will
+  surface it. That boundary is the hardest one in this taxonomy and the one a coarser
+  scheme cannot recover once lost.
+- **Pick the scheme before the first mask is drawn.** A store annotated under the indoor
+  taxonomy comes back with no `display_fixture` in it at all — the masks validate, they
+  train, and the model learns that shelving is furniture. Nothing downstream reports it,
+  because a class absent from the data looks exactly like a class that is rare.
 
 ### Split rules
 
-**Split by session or sequence. Never randomly.** Adjacent frames are near-identical; a random
-split puts the same moment on both sides and validation then measures memorisation. The score
-will look excellent and mean nothing.
+**Split by camera. Never randomly, and never by clip.** Adjacent frames are near-identical, and
+on a fixed camera *every* frame is near-identical — a random split puts the same shelf on both
+sides and validation then measures memorisation. The score will look excellent and mean
+nothing. The gap has been measured: one run scored mIoU 0.778 on cameras it trained on and
+0.641 on cameras it never saw.
+
+A test camera never supplies a training frame. Not "just the night clips from it" — the moment
+it does, every comparison across batches needs a footnote explaining which model saw what, and
+in practice nobody writes that footnote.
 
 Three splits, with distinct jobs:
 
@@ -434,8 +466,8 @@ first training run on new labels, and again whenever a batch lands.
 - **Remap the exported background from 0 to 255.** This is the sharpest edge in the whole
   pipeline. Most tools write unlabelled pixels as 0; under `indoor_native`, 0 is `void`,
   a *trained* class — the loss ignores 255 and only 255. Export the background as 0 and
-  every unlabelled pixel teaches the model to predict `void` there, which on a robot means
-  a confident label over exactly the regions nobody looked at. `check` fails on this.
+  every unlabelled pixel teaches the model to predict `void` there — a confident label over
+  exactly the regions nobody looked at. `check` fails on this.
 - **One capture session per directory**: `images/train/lobby-2026-08-20-a/000123.png`. The
   directory is what carries session identity into the split, and `check` uses it to prove
   no session appears in two splits.
@@ -591,52 +623,37 @@ the five lowest-contrast cameras on the whole site are Taichung's. That is a sto
 setting, not per-camera noise.
 
 Two consequences to plan around. A batch with the floor off is **100% `blocked`** in its
-labelled pixels — it supervises where the robot cannot go and says nothing about where it
-can, so pair it with the per-camera floor polygon before reading any traversability
-number. And **never pre-label the test split with SAM 3**: a model scored against SAM 3's
+labelled pixels — it supervises what is occupied and says nothing about the free space, so
+pair it with the per-camera floor polygon before reading any number derived from the floor. And **never pre-label the test split with SAM 3**: a model scored against SAM 3's
 own masks measures agreement with SAM 3. §6 already requires building that split by hand,
 before the first training run.
 
-### Which classes to draw first, for the object taxonomy
+### Which classes to draw first
 
-Annotating more of those is close to wasted effort.
-
-**Annotating for the object taxonomy instead?** The ranking above is for the robot: it
-orders classes by danger × how blind LiDAR is. The object taxonomy
-([RETAIL.md](RETAIL.md)) has no robot and no LiDAR, so nothing about it
-carries over, and the two priority lists barely overlap:
+**The order is in §2**, and it is ranked by what no teacher model can supply. What belongs
+here is the measured detail behind three of its rows, because it decides *how* to draw them
+rather than whether:
 
 1. **`column`** — was zero examples and unrecoverable from anything already drawn, because
-   every site mask so far put columns inside `wall`. Also the cheapest class in either
-   taxonomy: the cameras are fixed, so it is **one polygon per camera**, correct for
-   every frame that camera will ever produce. **Sourced 2026-08-17** — SAM 3 finds those
-   columns at 7.14% of labelled pixels, and 10 of the selling-floor cameras carry `column`
-   at 3% or more. Sourcing it did not teach it: see
-   [RETAIL_DATA.md](RETAIL_DATA.md), where `column` scores 0.86–0.88 on
-   cameras a run trained on and 0.00–0.51 on cameras it never saw.
-2. **`product`** — was zero examples with no public dataset and no measurement of whether
-   SAM 3 could find it. **Measured 2026-08-17 and the prompts work**: `product` is 19.28% of
-   labelled pixels in `retail_objects_batch01`'s train split and 17.23% in test, present in
-   every frame, plus 10,524 merchandise instance boxes. The earlier "0 instances" figure was
-   a property of 352×240 footage and one prompt of eight, not of the footage.
-3. `fixture` — has data, and needs a *review* rather than fresh drawing: the migration
-   merges `obstacle_furniture` and `display_fixture` pixel-exactly, so what arrives is
-   as good as those two classes were, which for `display_fixture` was IoU 0.336.
+   every site mask put columns inside `wall`. Also the cheapest class in the taxonomy: the
+   cameras are fixed, so it is **one polygon per camera**, correct for every frame that
+   camera will ever produce. **Sourced 2026-08-17** — SAM 3 finds those columns at 7.14% of
+   labelled pixels, and 10 of the 23 selling-floor cameras carry it at 3% or more. Sourcing
+   it did not teach it: the model memorises it per camera rather than learning it.
+2. **`product`** — was zero examples with no public dataset and no measurement of whether a
+   teacher could find it. **Measured 2026-08-17 and the prompts work**: 19.28% of labelled
+   pixels in train and 17.23% in test, present in every frame, plus 10,524 instance boxes.
+   The earlier "0 instances" figure was a property of 352×240 footage and one prompt of
+   eight, not of the footage.
+3. **`fixture`** — has data and needs a *review* rather than fresh drawing: the migration
+   merges `obstacle_furniture` and `display_fixture` pixel-exactly, so what arrives is as
+   good as those two classes were, which for `display_fixture` was IoU 0.336. It is also a
+   sink — 92.6% recall against 56.1% precision, everything leaks in — so the review is
+   mostly *removals*.
 
-`glass` leaves the list entirely — the object taxonomy folds it into `wall`, so its
-failure stops being a class-level hazard. The pixels are still wrong; they are now wrong
-inside a class rather than being their own class.
-
-    hydranet-annotation labels --scheme retail_objects --out cvat_objects.json
-    hydranet-annotation check <dataset> --scheme retail_objects
-
-For 4 and 5, this section asked whether the point cloud could **pre-label** them: detect the
-edges geometrically, project into the image, and correct a mask rather than draw one.
-**There is no point cloud** (see the correction above), so that shortcut does not exist
-today. Its replacement is the monocular auto-labelling pipeline in
-the occupancy research programme, which was a research direction rather than a
-tool — so for now 4 and 5 are hand-drawn like the material classes, and the "second reason
-they come first" argument no longer separates the two groups.
+`glass` leaves the list entirely: the object taxonomy folds it into `wall`, so its failure
+stops being a class-level hazard. The pixels are still wrong; they are now wrong inside a
+class rather than being their own class.
 
 ---
 
@@ -863,13 +880,16 @@ Rules that make this number worth anything:
 - **Never tune against it.** If a test result is disappointing, the response is more data or
   a different approach — not a new checkpoint chosen on that same test set.
 
-### Level 4 — Does it work on the robot? (before deployment)
+### Level 4 — Does it work on the store's own footage? (before deployment)
 
 The only level that measures the actual system. The three below it can all pass on a model
 that fails here.
 
 - **Field footage inference.** Run `hydranet-infer-video` on real site recordings and watch
-  the overlay. Reflections, glass and thresholds are what to look for.
+  the overlay. Polished-floor reflections, storefront glass, and night IR are what to look
+  for — and watch a *held-out* camera, or you are watching the training set.
+- **Frame consensus on a fixed camera**, which needs no labels at all: a pixel that changes
+  class across a static scene is one the model was unsure about. See §2.
 - **Export parity.** Confirm the ONNX/TensorRT output matches PyTorch on the same input.
   A silent mismatch here — usually pre-processing — is the classic deployment bug, and the
   contract is carried by the input binding's *name*: `image_rgb_255` means the graph
@@ -889,8 +909,8 @@ at all. The rest still stand, and [RELEASE.md](RELEASE.md) §3 carries the curre
 | Gate | Requirement |
 |---|---|
 | Every head is supervised | Nothing exports with initial weights. Detection needs COCO, or the head must be removed from the export |
-| A `test` split exists | Configured, populated, split by session, never trained on |
-| Per-class floors met | `glass` and each caution class above an agreed threshold — set it with the robotics team, not by whoever is training |
+| A `test` split exists | Configured, populated, **split by camera**, never trained on — and human-corrected, or the number is an agreement with a teacher rather than an accuracy |
+| Per-class floors met | Each rare class above an agreed threshold, reported with its support — set it with whoever owns the product, not by whoever is training |
 | Field footage reviewed | A human has watched the overlay on real site video |
 | Export parity confirmed | TensorRT output matches PyTorch within tolerance |
 | Provenance intact | `meta.json` identifies code, config and dataset fingerprint for the exact checkpoint being shipped |
@@ -945,7 +965,7 @@ That ratio is the argument for two habits, and neither is about tooling:
 - **Refuse a dirty tree at the start of training, not at release.** The warning the trainer
   prints today is read after the fact or not at all. The cost of ignoring it is a whole run.
 - **Cut the release when the model ships, not when someone remembers.** `releases/v1` was
-  cut months after `hydranet_joint_coco10` went onto the robot, and cutting it immediately
+  cut months after `hydranet_joint_coco10` was first deployed, and cutting it immediately
   surfaced that the shipped checkpoint scores 0.360 terrain mIoU where the project's own
   notes had been quoting 0.491 — a per-head maximum from a different epoch. A model that is
   running somewhere with no frozen record is a model whose numbers drift in retelling.
@@ -957,13 +977,20 @@ the mechanism existed, was correct, and was worth nothing until it was run once.
 
 ## 7. Suggested order for a team starting today
 
-1. **Week 1 — capture.** Workstream A plans sites and shoots the three zero-example classes.
-   Workstream C builds out the Jetson runtime against the existing ONNX contract. Workstream B
-   reproduces the current baseline so there is a known-good reference.
-2. **Week 2 — annotate and split.** First annotated batch lands. Configure `split_test` at the
-   same time, from sessions reserved before annotation starts.
-3. **Week 3 — retrain and measure.** First run including in-house data. Compare per-class, not
-   mIoU, for the reason in level 2.
+1. **Week 1 — correct the test masks, before anything else.** Not capture: the footage is
+   already on disk and the teachers have already pre-labelled it. What does not exist is a
+   number anyone can defend, and §2's priority 1 is the reason. ~72 frames on the reserved
+   cameras, corrected by hand. Workstream C builds the Orin runtime against the existing
+   ONNX contract in parallel; Workstream B reproduces the current baseline so there is a
+   known-good reference.
+2. **Week 2 — re-measure everything against it.** Every site number this project has quoted
+   becomes checkable for the first time, and some of them will move. Expect that, and
+   expect it to be the most valuable week: a number that changes when it is finally
+   measured properly is a number that was steering decisions while wrong.
+3. **Week 3 — the labelled clip, then the classes.** One clip of person tracks gives `idf1`
+   and `id_switches` their first real denominators. Then `column` on more cameras and the
+   `fixture` review, in §2's order. Compare per-class with its support, not mIoU, for the
+   reason in level 2.
 4. **Then, and only then**, decide whether the model needs changing. It probably does not: at
    84.4% of parameters in a shared trunk exporting cleanly to TensorRT, the architecture is
    not what is holding this back.
