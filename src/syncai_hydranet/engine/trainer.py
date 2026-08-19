@@ -178,8 +178,34 @@ def _log_code_version(git: dict, out_dir: Path, logger) -> None:
 
 class Trainer:
     def __init__(self, cfg, resuming: bool = False):
+        """Seven phases, in an order that three of them constrain.
+
+        This was one 212-line block. The phases were already there -- every one of them
+        had a blank line and a paragraph of comment above it -- but the *constraints
+        between* them were not written down anywhere, because in one straight-line body
+        they read as "the line above". They are now each stated on the method they
+        constrain, which is the thing that was actually at risk: a reordering that still
+        runs, still trains, and quietly changes what is in the checkpoint.
+        """
         self.cfg = cfg
         self.device = pick_device(cfg.get("device"))
+        self._open_run_dir(cfg, resuming)
+        seed = self._seed_and_configure_backends(cfg)
+        self._build_model(cfg)
+        tcfg, dcfg = cfg["train"], cfg["data"]
+        names, train_sets, val_size = self._build_data(cfg, seed)
+        total_iters = self._build_schedule(tcfg)
+        self._configure_run_policy(tcfg)
+        self._write_run_meta(cfg, names, train_sets, dcfg, val_size, total_iters)
+
+    # ---------------------------------------------------------------- construction
+
+    def _open_run_dir(self, cfg, resuming: bool) -> None:
+        """The output directory and the logger, before anything that might warn.
+
+        First because every phase after it reports through `self.logger`, and a warning
+        raised before the log file exists is a warning nobody reads.
+        """
         self.out_dir = resolve_out_dir(Path(cfg["output_dir"]), resuming=resuming)
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.logger = get_logger("hydranet", self.out_dir / "train.log")
@@ -205,6 +231,13 @@ class Trainer:
         for w in check_config(cfg):
             self.logger.warning(f"config: {w}")
 
+    def _seed_and_configure_backends(self, cfg) -> int:
+        """Determinism and the backend flags. Returns the seed, which the loader needs.
+
+        **Before the model is built.** `seed_everything` seeds the RNG that initialises
+        the weights, so seeding after `build_model` would leave the initial weights
+        unseeded while every log line still reported a seed.
+        """
         seed = int(cfg.get("seed", 42))
         seed_everything(seed)
         configure_backends(
@@ -214,7 +247,10 @@ class Trainer:
             tf32=bool(cfg["train"].get("tf32", True)),
             logger=self.logger,
         )
+        return seed
 
+    def _build_model(self, cfg) -> None:
+        """The model, on the device, in its final memory format."""
         self.model = build_model(cfg).to(self.device)
         # Before the EMA copy is taken below: it deep-copies the model, so converting
         # afterwards would leave the weights validation actually runs on in NCHW.
@@ -224,10 +260,17 @@ class Trainer:
             logger=self.logger,
         )
         self.memory_format = model_memory_format(self.model)
-        tcfg = cfg["train"]
-        dcfg = cfg["data"]
-        input_size = dcfg["input_size"]
 
+    def _build_data(self, cfg, seed: int):
+        """Loaders and the split check. Returns `(names, train_sets, val_size)` for meta.
+
+        After `_build_model` only because it logs through the same logger; nothing here
+        touches the weights. The leak check raises rather than warns, and does it before
+        the first step, because the alternative is a finished run whose numbers cannot
+        be used.
+        """
+        tcfg, dcfg = cfg["train"], cfg["data"]
+        input_size = dcfg["input_size"]
         train_sets, val_sets, names, ratios, val_names = _build_datasets(dcfg, input_size)
         self.train_loader = MultiTaskLoader(
             train_sets,
@@ -277,7 +320,19 @@ class Trainer:
         # Built once: validation runs every epoch, and a DataLoader's worker pool is
         # expensive to create and pointless to throw away.
         self.val_loaders = build_val_loaders(self.val_sets, cfg, self.device)
+        return names, train_sets, val_size
 
+    def _build_schedule(self, tcfg):
+        """Optimizer, LR schedule, AMP, EMA and compile. Returns the total iteration count.
+
+        **After `_build_model`, and the ordering is load-bearing twice.** `_make_ema`
+        deep-copies the model, so a model converted to channels_last afterwards would
+        leave the weights validation actually runs on in NCHW. And `torch.compile` is
+        held as a separate handle rather than replacing `self.model`, for the reason
+        spelled out at that line: an OptimizedModule's `state_dict()` prefixes every key
+        with `_orig_mod.`, and assigning it would write checkpoints that neither
+        `hydranet-eval` nor `hydranet-export-onnx` can read.
+        """
         self.epochs = int(tcfg["epochs"])
         # Accumulation decouples the batch the optimiser sees from the batch that has to
         # fit in memory, so a laptop and an A100 can train the same effective batch
@@ -331,7 +386,14 @@ class Trainer:
                 f"torch.compile enabled (mode={mode}); the first steps of epoch 1 "
                 "include graph capture and will look stalled"
             )
+        return total_iters
 
+    def _configure_run_policy(self, tcfg) -> None:
+        """What the loop does per epoch: logging cadence, validation cadence, stopping.
+
+        None of it is state the model or the data depends on, so it is last before the
+        run meta -- and it is the phase whose defaults a config most often overrides.
+        """
         self.log_interval = int(tcfg.get("log_interval", 50))
         self.val_interval = int(tcfg.get("val_interval", 1))
         # Detection validation is 4,952 COCO images and 20% of every epoch, measured on
@@ -366,6 +428,14 @@ class Trainer:
         self.best_metric = -1.0
         self.start_epoch = 0  # last completed epoch; --resume advances it
 
+    def _write_run_meta(self, cfg, names, train_sets, dcfg, val_size, total_iters) -> None:
+        """The record of what this run is, written before it starts.
+
+        **Last, and it has to be.** It snapshots the resolved `cfg`, the step counts and
+        the dataset fingerprints -- all of which the phases above produce. Written up
+        front rather than at the end so that a run killed at epoch 3 is still traceable
+        to the data behind it.
+        """
         n_params = sum(p.numel() for p in self.model.parameters())
         meta = write_run_meta(
             self.out_dir,
