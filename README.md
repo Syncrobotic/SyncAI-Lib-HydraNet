@@ -25,10 +25,6 @@ current, but when the two disagree about a priority, the camera wins.
 
 ![all three heads and the floor raised into a scene](assets/retail_cctv_scene.gif)
 
-### The deployment that actually exists: fixed ceiling CCTV in a shop
-
-![all three heads and the floor raised into a scene](assets/retail_cctv_scene.gif)
-
 Every head on one frame of `Tao-Hsin-cam03`: free space with detections top left, the
 seven-class terrain map bottom left, and the floor rebuilt as a scene on the right. The
 panel raises the edge of the free space into a wall and colours it by what the terrain head
@@ -298,7 +294,7 @@ uv run pre-commit install    # enable pre-commit checks
 ```
 
 CI runs lint plus a Python 3.10 / 3.12 test matrix on GitHub Actions, and fails below 80%
-coverage (currently 87% across 1,171 tests). The tests need no datasets: model tests run on
+coverage (currently 87% across 1,300+ tests). The tests need no datasets: model tests run on
 random tensors, dataset tests build
 a fixture in `tmp_path`, and `test_overfit.py` verifies the training loop really converges by
 memorising one synthetic batch to over 95% pixel accuracy (chance is 33% across three classes).

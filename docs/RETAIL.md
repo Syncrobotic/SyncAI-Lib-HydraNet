@@ -25,8 +25,8 @@ belongs in a config**, and most of what follows is a way of telling those apart.
 | **L1** | the second stage, host-side ([`analytics/stage.py`](../src/syncai_hydranet/analytics/stage.py)) | `Track`s, and — when the pose model exists — 17 keypoints per person per frame |
 | **L2** | events ([`analytics/events.py`](../src/syncai_hydranet/analytics/events.py)) | one row per event, with the value it measured and the threshold it crossed |
 
-**Nothing crosses from L2 into L0.** `RETAIL.md` §2 refuses to make "within 5 m" a
-class and gives three reasons; all three transfer to every security event without
+**Nothing crosses from L2 into L0.** §5 below refuses to make "within 5 m" a class and
+gives three reasons; all three transfer to every security event without
 modification. Annotators cannot draw a zone boundary consistently, because it has no
 appearance. A zone in pixels dies the first time the mount is knocked, and nothing in
 training reports it. And "four minutes is loitering", "six people is too many" are
@@ -204,8 +204,9 @@ container's nominal rate.
 
 Counted with `ffprobe -count_frames`: Kaohsiung-cam04 holds **2,400 frames over 300.1 s,
 8.0 fps**, and Taichung-cam01 **2,130 over 304.3 s, 7.0 fps**. `avg_frame_rate` matches the
-counted value to three decimals on both and costs no decode, which is what
-`scripts/mine_fall_candidates.source_fps` now reads.
+counted value to three decimals on both and costs no decode, and since 2026-08-19 it is what
+`data/video.probe()` itself reads — the two scripts that had each grown a private
+`source_fps` around the old behaviour are back on the shared primitive.
 
 **The proposal it invalidates is its own.** There is no 30 fps of content to recover, so
 the sweep tops out at 7–8 and the headroom over the current 5 is about 1.6×, not 6×. That
@@ -214,11 +215,12 @@ faster**, which leaves appearance-based association as the only instrument for i
 of one of two. It also lowers the ceiling on tier 3 — a temporal action model over these
 clips gets 7–8 samples a second no matter what is spent on it.
 
-This is the sixth instance of the pattern §1 of ARCHITECTURE.md names: a number
-was attributed to a mechanism without checking what produced it, and the thing that
-produced this one was a metadata field that is allowed to be nominal. `probe` reports 30
-for every clip in `datasets/studioa_clips`, so anything else in this repository that reads
-its fps on this footage inherits the same error.
+This is the sixth instance of the pattern [ARCHITECTURE.md](ARCHITECTURE.md) Part II §1
+names: a number was attributed to a mechanism without checking what produced it, and the
+thing that produced this one was a metadata field that is allowed to be nominal. It went
+uncorrected in the primitive for two months while two callers worked around it privately,
+which is the part worth carrying — a workaround written twice is a repair that was never
+made. [RETAIL_DATA.md](RETAIL_DATA.md) has what the error cost downstream.
 
 ---
 
@@ -466,8 +468,9 @@ semantics *are* the output, and the cost is `display_fixture`'s 0.336.
 **2. Columns are inside `wall`, by construction.** `ADE20K_ID_TO_INDOOR` maps `column`
 (43) to `wall`, and the class comment has read "wall / ceiling / column" since the first
 commit. `wall` is 39.8% of every frame, so the largest and most stable class in the model
-is also the one hiding a structure the store cares about. RETAIL.md §5 already
-tracked a column through 97.4% of one camera's frames — as a false `caution`.
+is also the one hiding a structure the store cares about.
+[RETAIL_DATA.md](RETAIL_DATA.md) §5 tracked a column through 97.4% of one camera's frames
+— as a false `caution`.
 
 **3. Merchandise has no class, and the detection head is already finding it.** Sweeping
 the score threshold over 40 frames each:
@@ -633,8 +636,8 @@ taxonomy has **no site number at all** — not a low one.
 
 What the reservation does buy, before anyone draws anything: the cameras are decided in
 advance, from measured class share rather than from a contact sheet, so the split cannot be
-chosen after seeing which cameras a model happens to do well on. RETAIL.md §6 argues
-why this has to come first; nothing here changes that.
+chosen after seeing which cameras a model happens to do well on. §8 below argues why this
+has to come first; nothing here changes that.
 
 **4. Detection calibration.** `SCORE_THR_RETAIL = 0.20` restores boxes on the cameras
 that return none at 0.30, and it is a stopgap, not a fix: scores are not comparable
@@ -703,7 +706,7 @@ comparable to the 37.8 ms frame quoted above. Treat the ratios as the result.
 eight classes that change a shop *robot's* behaviour. For retail *analytics* that list
 deletes `book`, which is the single strongest merchandise signal the head produces — 1,683
 instances on Kaohsiung-cam08, and the whole subject of
-[RETAIL.md](RETAIL.md)'s audit. So there are two subsets, `robot_8` and
+§6's audit above. So there are two subsets, `robot_8` and
 `retail_analytics` (32 classes), and neither is a default. The eight-class figure is real
 and it is for the robot.
 
@@ -805,8 +808,7 @@ not after the numbers look interesting.
 
 **Two of the three were answered on 2026-08-18, and the premise of the third moved.** This
 document was written for a shop *robot*; the deployment that exists is fixed ceiling CCTV
-([RETAIL.md](RETAIL.md)), so read "the robot" below as "the camera's
-consumer" where it still makes sense.
+(§1), so read "the robot" below as "the camera's consumer" where it still makes sense.
 
 - ~~Is the merchandise zone a *reporting* output or a *motion* output?~~ **Answered:
   reporting, as coverage rather than count**, derived by SAM 3 with no human labour
@@ -815,7 +817,7 @@ consumer" where it still makes sense.
 - ~~Are shopping trolleys and baskets in scope?~~ **Answered: not in the detection
   vocabulary**, and the reason is sourcing rather than scope — COCO has neither, so a
   channel for them would be trained on nothing and report 0.000 while the run looked
-  normal. RETAIL.md §2 records the same verdict for `staff`.
+  normal. §2 records the same verdict for `staff`.
 - Does the robot operate during trading hours? **Still open, and now mostly a question about
   a different product.** The CCTV line runs during trading hours by construction, and the
   consequence this bullet predicted is measured: a 4.6-minute clip fragments into 1234

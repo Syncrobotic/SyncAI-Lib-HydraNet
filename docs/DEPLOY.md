@@ -1,7 +1,7 @@
 # Deployment: from a checkpoint to a board
 
 One file for the whole downstream path, merged 2026-08-19 from `DEPLOY_JETSON.md`,
-`DEPLOY.md` and `DEPLOY.md` — three documents that were always read in sequence.
+`ORIN_BRINGUP.md` and `TRAIN_MACOS.md` — three documents that were always read in sequence.
 
 * **Part I — the export contract and the engine.** ONNX, TensorRT, the two flags worth
   knowing before you benchmark, INT8's real cost.
@@ -306,7 +306,7 @@ are seeing rather than read the whole page.
 Budget about an hour, most of it the JetPack download.
 
 For what happens after the board works — the ONNX contract, post-processing, INT8 — see
-[DEPLOY.md](DEPLOY.md).
+Part I above.
 
 ---
 
@@ -512,7 +512,7 @@ win available, and it is measured rather than argued.
 > this rig's 10.3 — so **the table above stands as measured and is not restated**. What
 > transfers is the method: re-run `bench_camera_orin.py` on this board with
 > `--argmax-seg`, and split `postprocess` before concluding anything from its share again.
-> See [DEPLOY.md](DEPLOY.md) §3.
+> See Part I §3.
 
 Also measure the camera's own ceiling — ours is 30 FPS, so 26.5 was already near the limit
 and the real headroom is in the GPU's 7× spare capacity, not in frame rate.
@@ -683,7 +683,7 @@ source .venv/bin/activate              # then use the command names directly
 Verifying the environment:
 
 ```bash
-uv run pytest -q                                              # 1,170 passed, 1+ skipped
+uv run pytest -q                                              # 1,300+ passed, 1 skipped
 uv run python -c "import torch; print(torch.backends.mps.is_available())"   # True
 ```
 
@@ -833,4 +833,4 @@ uv run hydranet-export-onnx --config configs/hydranet_regnet800mf.yaml \
 ```
 
 Converting to a TensorRT engine with `trtexec` afterwards has to happen on the Jetson; see
-[DEPLOY.md](DEPLOY.md).
+Part I.

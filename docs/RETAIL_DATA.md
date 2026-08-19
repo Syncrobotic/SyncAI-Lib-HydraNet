@@ -232,7 +232,7 @@ Judge domain adaptation on the target domain or not at all.
 
 ---
 
-## 4. ## 2026-08-18 — val grew from 3 cameras to 8, and what that did not buy
+## 4. Val grew from 3 cameras to 8 (2026-08-18), and what that did not buy
 
 The rules above are about the **test** split. Val had been left at three cameras, and
 `scripts/val_sampling_error.py` measured what that costs. Resampling `b03_cw`'s val score
@@ -362,8 +362,6 @@ tables are domestic and dining, and mapping them would teach the model that a pr
 is nearly the right thing is the right thing. This project has already paid for that
 mistake once, with COCO diluting the segmentation heads. Both classes are `blocked`
 regardless, so the cost of the omission is semantic, not a safety regression.
-
-### What the site's own frames bought, and what they did not
 
 ### Self-training on the site's own frames: what it bought, and what it did not
 
@@ -507,25 +505,11 @@ Two of them are **stricter** for a shop, and only the differences are worth carr
 supervision of anything in the taxonomy.
 
 
-A site frame is full of shoppers and carries **no person boxes**. Without help, every
-point on every shopper is a labelled *negative* for channel 0 — which is not dilution but
-suppression, and it is the mechanism that held `product` at IoU 0.000 for 22 consecutive
-epochs (`config_schema.minority_sourced_terrain_classes`).
-
-So `FCOSLoss` takes a **class mask** and each dataset supplies its own: a COCO batch trains
-channels 0–1 and leaves 2–3 untouched, a site batch does the reverse. Untouched means *no
-gradient*, not a small one. `MultiTaskLoader.detection_class_steps()` prints the realised
-share at startup, counted from the schedule rather than estimated from `sample_ratio`.
-
-What that buys: a minority source is now **slow rather than suppressed**, so the COCO ratio
-can be set on throughput grounds instead of defensively.
-
-What it does not buy, and this is the sentence to carry out of this section:
-
-> **`person` is trained on COCO alone** — web photography, eye level, uncompressed —
-> against 23 overhead, down-pitched, h.264 selling-floor cameras. Its mAP is measured on
-> COCO val and *nowhere else*, because the site annotation file has no person category to
-> score against. A good number there is not evidence about a store.
+The mechanism that keeps a site batch from suppressing channel 0 — `FCOSLoss`'s per-dataset
+class mask — is [RETAIL.md](RETAIL.md) §2, along with the sentence it does not fix:
+**`person` is trained on COCO alone**, web photography at eye level against 23 overhead
+down-pitched h.264 selling-floor cameras, and its mAP is measured on COCO val and nowhere
+else. This section is the other half of that: where a site person box comes from at all.
 
 **Started 2026-08-18, teacher replaced 2026-08-19.** `datasets/retail_person_batch01`
 (146 boxes, 4 cameras, daylight-gated SAM 3) was the bootstrap; its gate existed because
@@ -539,15 +523,14 @@ Numbers, cross-checks and the one-night-clip caveat:
 [journal/2026-08-19-security-retail-teachers-and-methodology.md](journal/2026-08-19-security-retail-teachers-and-methodology.md).
 Still a teacher's opinion, not ground truth — two teachers agreeing is not accuracy.
 
-`column` is the precedent and it is not a mild one: sourced from ADE20K, passing every
-config gate, scoring 0.40–0.51 on val, and predicting **0.00% of pixels** across four
-daytime shop-floor cameras. Site person boxes are the critical path, not a nice-to-have.
+`column` is the precedent, and §1 of this file is what it costs: a class sourced from the
+wrong distribution passes every config gate, scores 0.40–0.51 on val, and predicts 0.00% of
+pixels in the shop. Site person boxes with a human pass are the critical path, not a
+nice-to-have.
 
 ---
 
----
-
-## 7. ## 4. The data, in the order it unblocks things
+## 7. The data, in the order it unblocks things
 
 | # | data | for | state |
 |---|---|---|---|
@@ -580,8 +563,6 @@ Three rules that apply to every row of that table and have each already been pai
   read `MultiTaskLoader.detection_class_steps()` rather than inferring it from
   `sample_ratio` — the ratio is not the share, and the config that measured well was
   already two-thirds COCO by steps while its comment said 0.1.
-
----
 
 ---
 

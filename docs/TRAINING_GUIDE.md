@@ -370,10 +370,10 @@ difficulty.
 
 ---
 
-*Related: [DEPLOY.md](DEPLOY.md) for local development, [the CUDA move](journal/2026-08-12-mps-to-cuda.md)
-for moving to a CUDA machine, [DEPLOY.md](DEPLOY.md) for deployment. The
-architecture diagram and per-component parameter counts are in the
-[README](../README.md).*
+*Related: [DEPLOY.md](DEPLOY.md) — Part III for local development on Apple Silicon, Parts I
+and II for the export contract and the board. [The CUDA move](journal/2026-08-12-mps-to-cuda.md)
+for moving to a CUDA machine. The architecture diagram and per-component parameter counts
+are in the [README](../README.md).*
 
 
 ---
