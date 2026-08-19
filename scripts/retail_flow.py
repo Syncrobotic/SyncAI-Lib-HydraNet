@@ -41,8 +41,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import torch
-from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 for candidate in (HERE.parent / "src", HERE / "src"):
@@ -50,39 +48,16 @@ for candidate in (HERE.parent / "src", HERE / "src"):
         sys.path.insert(0, str(candidate))
 
 from syncai_hydranet.analytics import Tracker, dwell_table, track_ground_path  # noqa: E402
+from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
 from syncai_hydranet.analytics.dwell import ground_map  # noqa: E402
 from syncai_hydranet.analytics.tracker import SIMPLIFICATIONS  # noqa: E402
 from syncai_hydranet.config import load_config  # noqa: E402
-from syncai_hydranet.data.coco_subsets import COCO_NAMES  # noqa: E402
-from syncai_hydranet.data.transforms import invert_geom  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera, GroundPlane  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
-
-PERSON = COCO_NAMES.index("person")
-
-
-def to_source_pixels(boxes: np.ndarray, region, src_w: int, src_h: int) -> np.ndarray:
-    """Model-canvas boxes -> pixels of the frame that was actually filmed.
-
-    `preprocess` letterboxes, so the canvas is content plus grey bars and a plain
-    `src_w / model_w` scale is wrong by the padding. Getting it wrong does not look
-    wrong: every box lands somewhere plausible, shifted by the bar width, and the ground
-    projection then reports a floor position that is confidently a metre off.
-
-    The arithmetic already exists as `invert_geom`, which the evaluator uses to put COCO
-    boxes back on the original image; this only translates between the two ways the
-    project describes the same letterbox. `region` is (x0, y0, content_w, content_h)
-    from `preprocess`; `geom` is (sx, sy, px, py) with `out = (box - p) / s`. A second
-    copy of the arithmetic would be a second chance to get a sign wrong.
-    """
-    if not len(boxes):
-        return np.zeros((0, 4))
-    x0, y0, cw, ch = region
-    return invert_geom(np.asarray(boxes, dtype=float), (cw / src_w, ch / src_h, x0, y0))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -148,24 +123,24 @@ def main(argv: list[str] | None = None) -> int:
         plane = GroundPlane(height=args.camera_height, pitch=np.deg2rad(args.pitch))
 
         tracker = Tracker(iou_threshold=args.iou, max_age=args.max_age, min_hits=args.min_hits)
-        n = 0
-        for frame in frames(clip, src_w, src_h, args.fps):
-            x, _, region = preprocess(Image.fromarray(frame), size)
-            with torch.no_grad():
-                res = model.predict(x.to(device), score_thr=args.score_thr)
-            det = res["detection"][0]
-            if len(det.get("labels", [])):
-                lab = det["labels"].cpu().numpy()
-                box = det["boxes"].cpu().numpy()[lab == PERSON]
-                box = to_source_pixels(box, region, src_w, src_h)
-            else:
-                box = np.zeros((0, 4))
-            tracker.update(box, n)
-            n += 1
-            if args.max_frames and n >= args.max_frames:
-                break
-
-        tracks = tracker.finished()
+        # k1=None states the choice rather than leaving it implicit: this script reports
+        # dwell and a floor heatmap at 0.25 m cells, where a one-or-two-pixel lens
+        # correction is far below the cell. `site_events.py` passes its camera's k1
+        # because a zone boundary is a metre-level claim about one polygon.
+        tracks, n, _, _, _ = track_clip(
+            clip,
+            model,
+            size,
+            device,
+            tracker,
+            frames=frames,
+            preprocess=preprocess,
+            probe=probe,
+            fps=args.fps,
+            score_thr=args.score_thr,
+            k1=None,
+            max_frames=args.max_frames,
+        )
         rows = dwell_table(tracks, fps=args.fps, last_frame=n - 1)
         paths = [track_ground_path(t, cam, plane) for t in tracks]
         gmap = ground_map(paths, cell_m=args.cell)

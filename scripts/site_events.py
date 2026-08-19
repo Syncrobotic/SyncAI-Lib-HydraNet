@@ -50,23 +50,19 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import torch
-from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
-sys.path.insert(0, str(HERE))
-
-from retail_flow import PERSON, to_source_pixels  # noqa: E402
 
 from syncai_hydranet.analytics import events as ev  # noqa: E402
+from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
 from syncai_hydranet.analytics.dwell import track_ground_path  # noqa: E402
 from syncai_hydranet.analytics.tracker import SIMPLIFICATIONS, Tracker  # noqa: E402
 from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
-from syncai_hydranet.geometry.calibrate import Pose, undistort_points  # noqa: E402
+from syncai_hydranet.geometry.calibrate import Pose  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera, GroundPlane  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
@@ -100,43 +96,29 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def undistort_boxes(boxes: np.ndarray, k1: float, w: int, h: int) -> np.ndarray:
-    """Undo the lens on box corners, so the ground projection sees a pinhole camera.
+def person_tracks(clip: str, model, size, device, args):
+    """This camera's boxes, lens-corrected before association.
 
-    Corners rather than the foot point alone, and then the axis-aligned hull: the tracker
-    associates on IoU and would otherwise compare undistorted foot points against distorted
-    boxes. The hull is an approximation of a shape that is no longer a rectangle after a
-    radial map; at these radii it moves an edge by a pixel or two, which is far below the
-    error in the pose itself and does not pretend otherwise.
+    `k1` is passed rather than defaulted: every event this script emits is a metre-level
+    claim about a floor polygon, so the lens correction is the difference between a zone
+    boundary that means something and one that is confidently a pixel-width out. The
+    shared loop is `analytics/clip_tracks.track_clip`, and it refuses to guess.
     """
-    if not len(boxes):
-        return boxes
-    centre = (w / 2.0, h / 2.0)
-    radius = math.hypot(h, w) / 2.0
-    pts = boxes.reshape(-1, 2, 2).reshape(-1, 2)
-    out = undistort_points(pts, k1, centre, radius).reshape(-1, 2, 2)
-    return np.concatenate([out.min(axis=1), out.max(axis=1)], axis=1)
-
-
-def track_clip(clip: str, model, size, device, args):
-    src_w, src_h, _ = probe(clip)
     tracker = Tracker(iou_threshold=args.iou, max_age=args.max_age, min_hits=args.min_hits)
-    n = 0
-    for frame in frames(clip, src_w, src_h, args.fps):
-        x, _, region = preprocess(Image.fromarray(frame), size)
-        with torch.no_grad():
-            res = model.predict(x.to(device), score_thr=args.score_thr)
-        det = res["detection"][0]
-        if len(det.get("labels", [])):
-            lab = det["labels"].cpu().numpy()
-            box = det["boxes"].cpu().numpy()[lab == PERSON]
-            box = to_source_pixels(box, region, src_w, src_h)
-            box = undistort_boxes(box, args.k1, src_w, src_h)
-        else:
-            box = np.zeros((0, 4))
-        tracker.update(box, n)
-        n += 1
-    return tracker.finished(), n, src_w, src_h
+    out = track_clip(
+        clip,
+        model,
+        size,
+        device,
+        tracker,
+        frames=frames,
+        preprocess=preprocess,
+        probe=probe,
+        fps=args.fps,
+        score_thr=args.score_thr,
+        k1=args.k1,
+    )
+    return out.tracks, out.frames, out.src_w, out.src_h
 
 
 def busiest_zone(tracks, cam, plane, side: float) -> tuple[ev.Zone, dict]:
@@ -184,7 +166,7 @@ def main(argv: list[str] | None = None) -> int:
     report = {"settings": vars(args), "clips": []}
     for clip in args.clips:
         camera = Path(clip).parent.name
-        tracks, n_frames, w, h = track_clip(clip, model, size, device, args)
+        tracks, n_frames, w, h = person_tracks(clip, model, size, device, args)
 
         # The gate before any metre is printed. A pose whose horizon lands inside the
         # frame manufactures floor; one below it has the camera looking up.

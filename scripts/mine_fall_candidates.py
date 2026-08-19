@@ -33,21 +33,17 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import torch
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
-sys.path.insert(0, str(HERE))
 
-# From the sibling script rather than copied: it inverts the letterbox, and its own
-# docstring makes the case -- "a second copy of the arithmetic would be a second chance to
-# get a sign wrong". Getting it wrong does not look wrong; every box lands somewhere
-# plausible, shifted by the bar width.
-from retail_flow import PERSON, to_source_pixels  # noqa: E402
-
+# The clip loop lives in the package now, not in a sibling script. It used to be imported
+# from `retail_flow.py` -- a script other scripts import is a module in the wrong place --
+# and the copy here had drifted: no lens correction, while `site_events.py` had one.
+from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
 from syncai_hydranet.analytics.events import fall_candidates  # noqa: E402
 from syncai_hydranet.analytics.tracker import Tracker  # noqa: E402
 from syncai_hydranet.config import load_config  # noqa: E402
@@ -74,6 +70,13 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--min-hits", type=int, default=3)
     ap.add_argument("--max-age", type=int, default=5)
     ap.add_argument("--iou", type=float, default=0.3)
+    # The lens, and it was missing until 2026-08-19. This script tracked on distorted
+    # boxes while `site_events.py` ran the same loop on undistorted ones; the tracker
+    # associates on IoU, so the two could link observations differently on the same clip.
+    # `0.0` reproduces the old behaviour exactly, for comparing candidate sets across the
+    # change. The default is Taichung-cam01's tile-grid fit and is an assumption on the
+    # other 47 cameras -- but the value it replaces was an unstated assumption of zero.
+    ap.add_argument("--k1", type=float, default=-0.225)
     # Deliberately more permissive than the library default of 1.5 s. This is a mining
     # pass: a candidate costs a human ten seconds to dismiss and a missed one costs the
     # whole question. Precision is not the objective here and should not be tuned for.
@@ -160,28 +163,32 @@ def border_contact(track, frame_start: int, frame_end: int, w: int, h: int, pad:
     return touches, [round(float(v), 1) for v in np.median(arr, axis=0)]
 
 
-def track_clip(clip: str, model, size, device, args) -> tuple[list, int, int]:
-    """Person tracks for one clip, plus the two denominators."""
-    src_w, src_h, _ = probe(clip)
+def person_tracks(clip: str, model, size, device, args) -> tuple[list, int, int]:
+    """Person tracks for one clip, plus the two denominators.
+
+    **`k1` is passed now and was not before.** This function used to hold its own copy of
+    the loop with no lens correction, while `site_events.py` held the same loop with one.
+    The tracker associates on IoU, so that divergence could change which observations get
+    linked -- and it is this script that produced the 48 candidate spans. The shared loop
+    is `analytics/clip_tracks.track_clip`; it has no default for `k1`, which is what stops
+    the two from drifting apart again.
+    """
     tracker = Tracker(iou_threshold=args.iou, max_age=args.max_age, min_hits=args.min_hits)
-    n = detections = 0
-    for frame in frames(clip, src_w, src_h, args.fps):
-        x, _, region = preprocess(Image.fromarray(frame), size)
-        with torch.no_grad():
-            res = model.predict(x.to(device), score_thr=args.score_thr)
-        det = res["detection"][0]
-        if len(det.get("labels", [])):
-            lab = det["labels"].cpu().numpy()
-            box = det["boxes"].cpu().numpy()[lab == PERSON]
-            box = to_source_pixels(box, region, src_w, src_h)
-        else:
-            box = np.zeros((0, 4))
-        detections += len(box)
-        tracker.update(box, n)
-        n += 1
-        if args.max_frames and n >= args.max_frames:
-            break
-    return tracker.finished(), n, detections
+    out = track_clip(
+        clip,
+        model,
+        size,
+        device,
+        tracker,
+        frames=frames,
+        preprocess=preprocess,
+        probe=probe,
+        fps=args.fps,
+        score_thr=args.score_thr,
+        k1=args.k1,
+        max_frames=args.max_frames,
+    )
+    return out.tracks, out.frames, out.detections
 
 
 def dump(clip: str, spans: list[tuple[int, int]], out_dir: Path, args) -> None:
@@ -226,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
         camera = Path(clip).parent.name
         session = Path(clip).stem
         src_w, src_h, _ = probe(clip)
-        tracks, n_frames, detections = track_clip(clip, model, size, device, args)
+        tracks, n_frames, detections = person_tracks(clip, model, size, device, args)
         got = fall_candidates(
             tracks,
             args.fps,

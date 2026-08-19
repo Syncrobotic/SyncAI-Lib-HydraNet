@@ -42,11 +42,9 @@ HERE = Path(__file__).resolve().parent
 for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
-sys.path.insert(0, str(HERE))
-
-from retail_flow import to_source_pixels  # noqa: E402
 
 from syncai_hydranet.analytics import events as ev  # noqa: E402
+from syncai_hydranet.analytics.clip_tracks import to_source_pixels  # noqa: E402
 from syncai_hydranet.analytics.track_attributes import (  # noqa: E402
     age_band,
     track_attributes,
