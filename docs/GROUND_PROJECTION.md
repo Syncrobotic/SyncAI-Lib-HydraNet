@@ -93,6 +93,18 @@ metre.** And on a fixed camera the whole thing is an **install-time calibration 
 not a per-frame prediction — which is the opposite of the per-frame fit this document argues
 for on a walking robot, and both are right for their own platform.
 
+**The known length does not need a tape measure (measured 2026-08-19,
+`runs/calib02_priors`).** Standard-dimension priors read off the plates lock scale to
+**±5–8%** — ±3–6% where a grout grid pins vfov: Taichung-cam01 at the 45 cm tile prior
+gives H = 2.40 m against the 2.38 m anchor (+1%); Kaohsiung-cam04's tile@60 and door@2.0 m
+agree within 1.3%. Two rules carry the result: prefer **menu-free references** (door
+height, standard mats) or two independent references that cross-cut, because tile pitch has
+a size menu (45/50/60/80 cm — pick wrong and the error is +35% while every residual still
+looks perfect); and measurement precision is not the bottleneck (same-camera references
+agree ≤3%), the prior is. Good enough for line-cross and social-distance rules; occupancy
+density squares the error (±10–16%), so a real measured length per store remains the
+upgrade path there.
+
 ## Status
 
 The projection runs offline against recorded clips. It is not wired into ROS; the live ROS

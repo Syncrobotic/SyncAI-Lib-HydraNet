@@ -190,3 +190,12 @@ four-crop lineup (shoes, watch, lanyard, hair): {1,8} female staffer, {6,7,11} m
 11 fragments → 6 identities. The lesson worth keeping: **crop-sheet resemblance misled
 both a human and an agent on identical uniforms; frame coexistence and sustained IoU are
 the evidence that cannot lie, so the review tool should surface them first.**
+
+**The metre without a tape measure (runs/calib02_priors).** Standard-dimension priors
+read off the plates lock scale to ±5–8% (±3–6% where a grout grid pins vfov):
+Taichung-cam01's 45 cm tile prior lands +1% from the 2.38 m anchor; Kaohsiung-cam04's
+tile and door cross-cut within 1.3%. The rule that carries it: menu-free references
+(door height, standard mats) or two independent references that cross-cut — tile pitch
+alone has a size menu (45/50/60/80) that residuals cannot break. Good enough for
+line-cross/social-distance; occupancy density squares the error, so a measured length
+per store stays the upgrade path there. Details now in GROUND_PROJECTION.md.
