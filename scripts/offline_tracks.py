@@ -56,7 +56,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -71,8 +70,8 @@ import itertools
 import track_review
 
 from syncai_hydranet.analytics import Tracker
-from syncai_hydranet.analytics.reid_metrics import _hungarian, id_switches, idf1
-from syncai_hydranet.analytics.tracker import iou
+from syncai_hydranet.analytics.bytetrack import OfflineForward, to_cwh
+from syncai_hydranet.analytics.reid_metrics import id_switches, idf1
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.transforms import invert_geom
 from syncai_hydranet.data.video import frames, probe
@@ -87,188 +86,37 @@ EMBED_W, EMBED_H = 128, 256  # crop_encoder's training resolution (scripts/train
 EMBED_CROPS_PER_FRAG = 8
 EMBED_STRIDE = 3  # every 3rd observation, so 8 crops span 24 frames of life, not the first 8
 
-
-# --------------------------------------------------------------------- Kalman
-
-# ByteTrack's published noise weights (its kalman_filter.py), tuned on MOT17 at 25-30
-# fps. The velocity prior is rescaled at construction by (25 / effective_fps): at the
-# 5 fps this samples (content is 7-8 fps real), per-frame displacement is ~5x MOT17's
-# for the same walking speed, and an unscaled prior would gate out every walking match.
-POS_W = 1.0 / 20.0
-VEL_W = 1.0 / 160.0
+# `Kalman`, `Fragment` and `OfflineForward` now live in the package, at
+# `analytics/bytetrack.py`, because `stable_infer.py` needs them too and was reaching
+# them here through a `sys.path` insert. That module's docstring carries the part worth
+# reading before using it: it runs a Kalman filter that `analytics/tracker.py` documents
+# a refusal to run, and nobody has measured the two against each other on this footage.
 
 
-def _cwh(box: np.ndarray) -> np.ndarray:
-    x0, y0, x1, y1 = box
-    return np.array([(x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0], dtype=float)
+def stash_crops(fwd: OfflineForward, frame: np.ndarray) -> None:
+    """Review thumbnails (track_review's geometry) + encoder crops, per live fragment.
 
-
-def _xyxy(s: np.ndarray) -> np.ndarray:
-    cx, cy, w, h = s[:4]
-    return np.array([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], dtype=float)
-
-
-class Kalman:
-    """Constant-velocity Kalman on (cx, cy, w, h) with height-proportional noise."""
-
-    def __init__(self, box: np.ndarray, vel_scale: float) -> None:
-        self.vel_scale = vel_scale
-        z = _cwh(box)
-        self.x = np.concatenate([z, np.zeros(4)])
-        h = z[3]
-        std = [2 * POS_W * h] * 4 + [10 * VEL_W * h * vel_scale] * 4
-        self.P = np.diag(np.square(std))
-        self.F = np.eye(8)
-        self.F[:4, 4:] = np.eye(4)
-
-    def predict(self) -> None:
-        h = max(self.x[3], 1.0)
-        q = np.square([POS_W * h] * 4 + [VEL_W * h * self.vel_scale] * 4)
-        self.x = self.F @ self.x
-        self.P = self.F @ self.P @ self.F.T + np.diag(q)
-
-    def update(self, box: np.ndarray) -> None:
-        z = _cwh(box)
-        h = max(z[3], 1.0)
-        r = np.square([POS_W * h] * 4)
-        innov_cov = self.P[:4, :4] + np.diag(r)
-        gain = self.P[:, :4] @ np.linalg.inv(innov_cov)
-        self.x = self.x + gain @ (z - self.x[:4])
-        self.P = self.P - gain @ self.P[:4, :]
-
-    @property
-    def box(self) -> np.ndarray:
-        return _xyxy(self.x)
-
-    @property
-    def velocity(self) -> np.ndarray:
-        return self.x[4:6].copy()
-
-
-# ----------------------------------------------------------- forward pass (ByteTrack)
-
-
-@dataclass
-class Fragment:
-    frag_id: int
-    kalman: Kalman
-    hits: int = 1
-    age: int = 0
-    confirmed: bool = False
-    frames: list[int] = field(default_factory=list)
-    boxes: list[np.ndarray] = field(default_factory=list)
-    review_crops: list[Image.Image] = field(default_factory=list)
-    embed_crops: list[np.ndarray] = field(default_factory=list)
-    obs_count: int = 0  # observations seen, for the embed-crop stride
-
-
-class OfflineForward:
-    """The causal half: two-stage (high/low score) association over Kalman predictions."""
-
-    def __init__(self, high_thr, low_thr, iou_thr, iou_thr_low, max_age, min_hits, vel_scale):
-        self.high_thr = high_thr
-        self.low_thr = low_thr
-        self.iou_thr = iou_thr
-        self.iou_thr_low = iou_thr_low
-        self.max_age = max_age
-        self.min_hits = min_hits
-        self.vel_scale = vel_scale
-        self.tracks: list[Fragment] = []
-        self.retired: list[Fragment] = []
-        self._next = 1
-
-    @staticmethod
-    def _associate(tracks, boxes, thr):
-        """Hungarian on IoU against predicted-or-last-observed, tracker.py's measured trick."""
-        if not tracks or len(boxes) == 0:
-            return {}, set(range(len(boxes)))
-        pred = np.stack([t.kalman.box for t in tracks])
-        m = iou(pred, boxes)
-        obs = np.stack([t.boxes[-1] for t in tracks])
-        m = np.maximum(m, iou(obs, boxes))
-        pairs = {}
-        for ti, di in _hungarian(-m):
-            if m[ti, di] >= thr:
-                pairs[ti] = di
-        return pairs, set(range(len(boxes))) - set(pairs.values())
-
-    def update(self, boxes: np.ndarray, scores: np.ndarray, frame_idx: int) -> None:
-        boxes = np.asarray(boxes, float).reshape(-1, 4)
-        scores = np.asarray(scores, float).reshape(-1)
-        for t in self.tracks:
-            t.kalman.predict()
-            t.age += 1
-
-        hi_idx = np.where(scores >= self.high_thr)[0]
-        lo_idx = np.where((scores >= self.low_thr) & (scores < self.high_thr))[0]
-
-        # Stage 1: every live track against the high band.
-        pairs, un_hi = self._associate(self.tracks, boxes[hi_idx], self.iou_thr)
-        matched_tracks = set()
-        for ti, di in pairs.items():
-            self._observe(self.tracks[ti], boxes[hi_idx[di]], frame_idx)
-            matched_tracks.add(ti)
-
-        # Stage 2: still-unmatched tracks against the low band. Stricter IoU: a
-        # low-score box is a noisier box, and this stage exists to bridge occlusion,
-        # not to grow the box into the fixture that caused it.
-        rest = [i for i in range(len(self.tracks)) if i not in matched_tracks]
-        pairs2, _ = self._associate(
-            [self.tracks[i] for i in rest], boxes[lo_idx], self.iou_thr_low
-        )
-        for ti, di in pairs2.items():
-            self._observe(self.tracks[rest[ti]], boxes[lo_idx[di]], frame_idx)
-
-        # Births: unmatched high-band detections only.
-        for di in sorted(un_hi):
-            box = boxes[hi_idx[di]].copy()
-            t = Fragment(self._next, Kalman(box, self.vel_scale))
-            t.frames.append(frame_idx)
-            t.boxes.append(box)
-            t.confirmed = self.min_hits <= 1
-            self.tracks.append(t)
-            self._next += 1
-
-        live, gone = [], []
-        for t in self.tracks:
-            (live if t.age <= self.max_age else gone).append(t)
-        self.tracks = live
-        self.retired.extend(t for t in gone if t.confirmed)
-
-    def _observe(self, t: Fragment, box: np.ndarray, frame_idx: int) -> None:
-        t.kalman.update(box)
-        t.hits += 1
-        t.age = 0
-        t.obs_count += 1
-        t.frames.append(frame_idx)
-        t.boxes.append(box.copy())
-        if t.hits >= self.min_hits:
-            t.confirmed = True
-
-    def stash_crops(self, frame: np.ndarray) -> None:
-        """Review thumbnails (track_review's geometry) + encoder crops, per live fragment."""
-        h, w = frame.shape[:2]
-        for t in self.tracks:
-            if t.age != 0 or not t.confirmed:
-                continue
-            x0, y0, x1, y1 = (int(v) for v in t.boxes[-1])
-            x0, y0 = max(0, x0), max(0, y0)
-            x1, y1 = min(w, x1), min(h, y1)
-            if x1 - x0 < 4 or y1 - y0 < 8:
-                continue
-            crop = Image.fromarray(frame[y0:y1, x0:x1])
-            if len(t.review_crops) < track_review.MAX_CROPS:
-                t.review_crops.append(crop.resize((track_review.CROP_W, track_review.CROP_H)))
-            if (
-                len(t.embed_crops) < EMBED_CROPS_PER_FRAG
-                and (t.obs_count - 1) % EMBED_STRIDE == 0
-            ):
-                t.embed_crops.append(
-                    np.asarray(crop.resize((EMBED_W, EMBED_H), Image.Resampling.BILINEAR))
-                )
-
-    def finished(self) -> list[Fragment]:
-        return self.retired + [t for t in self.tracks if t.confirmed]
+    A function here rather than a method there. It cuts crops at `track_review.py`'s
+    display sizes and the crop encoder's training resolution, which are this script's
+    concerns; `Fragment` keeps the two lists as storage for whoever wants to fill them,
+    and the tracker itself never looks at them.
+    """
+    h, w = frame.shape[:2]
+    for t in fwd.tracks:
+        if t.age != 0 or not t.confirmed:
+            continue
+        x0, y0, x1, y1 = (int(v) for v in t.boxes[-1])
+        x0, y0 = max(0, x0), max(0, y0)
+        x1, y1 = min(w, x1), min(h, y1)
+        if x1 - x0 < 4 or y1 - y0 < 8:
+            continue
+        crop = Image.fromarray(frame[y0:y1, x0:x1])
+        if len(t.review_crops) < track_review.MAX_CROPS:
+            t.review_crops.append(crop.resize((track_review.CROP_W, track_review.CROP_H)))
+        if len(t.embed_crops) < EMBED_CROPS_PER_FRAG and (t.obs_count - 1) % EMBED_STRIDE == 0:
+            t.embed_crops.append(
+                np.asarray(crop.resize((EMBED_W, EMBED_H), Image.Resampling.BILINEAR))
+            )
 
 
 # ----------------------------------------------------------------- non-causal stitch
@@ -331,7 +179,7 @@ def stitch(frags, sample_fps, gap_s, dist_base, dist_rate, size_gate,
     for ii, i in enumerate(order):
         a = frags[i]
         a_end, a_box = a.frames[-1], a.boxes[-1]
-        a_c, a_h = _cwh(a_box)[:2], max(a_box[3] - a_box[1], 1.0)
+        a_c, a_h = to_cwh(a_box)[:2], max(a_box[3] - a_box[1], 1.0)
         a_vel = a.kalman.velocity
         for j in order[ii + 1 :]:
             b = frags[j]
@@ -343,7 +191,7 @@ def stitch(frags, sample_fps, gap_s, dist_base, dist_rate, size_gate,
                 # relative to this a_end only if b.start grows -- so we can break.
                 break
             b_box = b.boxes[0]
-            b_c, b_h = _cwh(b_box)[:2], max(b_box[3] - b_box[1], 1.0)
+            b_c, b_h = to_cwh(b_box)[:2], max(b_box[3] - b_box[1], 1.0)
             if min(a_h, b_h) / max(a_h, b_h) < size_gate:
                 continue
             dt = gap / sample_fps
@@ -465,7 +313,9 @@ def measured_motion(frags, sample_fps) -> dict:
                 continue
             h = max(b0[3] - b0[1], 1.0)
             v.append(
-                float(np.linalg.norm(_cwh(np.asarray(b1))[:2] - _cwh(np.asarray(b0))[:2]) / h)
+                float(
+                    np.linalg.norm(to_cwh(np.asarray(b1))[:2] - to_cwh(np.asarray(b0))[:2]) / h
+                )
             )
     if not v:
         return {}
@@ -516,7 +366,7 @@ def run_offline(dets, raw_frames, args, sample_fps, vel_scale, encoder_device,
     )
     for n, (box, sc) in enumerate(dets):
         fwd.update(box, sc, n)
-        fwd.stash_crops(raw_frames[n])
+        stash_crops(fwd, raw_frames[n])
     frags = sorted(fwd.finished(), key=lambda t: t.frames[0])
 
     app_mode = appearance if appearance is not None else args.appearance

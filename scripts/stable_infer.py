@@ -25,7 +25,7 @@ Three mechanisms, each behind its own switch, so an ablation is just a combinati
    anything where it does not. (The EMA *state* is updated for the whole frame regardless,
    so a pixel entering or leaving the taken-over region does not carry stale state.)
 3. **Track-rendered boxes** (``--tracks``). Detections go through the online half of
-   `offline_tracks.OfflineForward` -- imported rather than copied -- which is a two-stage
+   `analytics.bytetrack.OfflineForward` -- imported rather than copied -- a two-stage
    hysteresis association at 0.35 to be born and 0.20 to survive; a box's class is its
    track's majority vote, and a frame that missed the object is filled from the Kalman
    motion model for up to ``--track-max-age`` frames.
@@ -77,8 +77,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import flicker_baseline as fb
-from offline_tracks import OfflineForward
 
+from syncai_hydranet.analytics.bytetrack import OfflineForward
 from syncai_hydranet.data.label_maps_retail_security import get_det_vocab
 from syncai_hydranet.data.video import finish_encoder, probe
 from syncai_hydranet.preprocessing import IMAGENET_MEAN, IMAGENET_STD
