@@ -194,6 +194,13 @@ class Trainer:
             # `runs/hydranet_indoor_det-20260813-190051/meta.json` says
             # `output_dir: runs/hydranet_indoor_det` today. Nothing reads the key after
             # this line; `self.out_dir` is what the run uses.
+            #
+            # **This covers the sibling and nothing else.** A directory renamed or copied
+            # after the run still carries the old path, and that is the worse case rather
+            # than the leftover one: `runs/hydranet_retail_objects_site_balanced_pooledmetric`
+            # names `runs/hydranet_retail_objects_site_balanced`, which exists and is a
+            # different experiment, so following it yields another run's real numbers
+            # instead of an error. Nothing here can see a rename that happens later.
             cfg["output_dir"] = str(self.out_dir)
         for w in check_config(cfg):
             self.logger.warning(f"config: {w}")

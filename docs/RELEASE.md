@@ -194,12 +194,26 @@ same list from the evaluation side.
 >
 > **What does *not* settle it, and was quoted first before a peer checked it:**
 > `meta.json`'s `experiment` field, which reads `hydranet_indoor`. That field does not
-> identify a run. Nine of the forty-one run directories carrying a `meta.json` disagree
-> with their own `experiment`, six of them calling themselves `hydranet_indoor` —
-> including **all four arms of the COCO ratio sweep**, the comparison this project cites
-> most. A reader who distrusts the directory name and goes to the provenance record gets a
-> field that cannot tell those four apart either; only the resolved
-> `data.datasets[*].sample_ratio` can. See [METHODOLOGY.md](METHODOLOGY.md) §6.
+> identify a run. Across the forty-one run directories carrying a `meta.json`:
+>
+> | | count |
+> |---|---|
+> | `experiment` ≠ its own `output_dir` | 8 |
+> | `output_dir` ≠ the directory it is in | 2 |
+> | at least one of the two pointing elsewhere | **9** |
+>
+> Six of them call themselves `hydranet_indoor`, **including all four arms of the COCO
+> ratio sweep** — the comparison this project cites most. A reader who distrusts the
+> directory name and goes to the provenance record gets a field that cannot tell those
+> four apart either. Only the resolved `data.datasets[*].sample_ratio` can.
+>
+> **And an internally consistent record is not a correct one.**
+> `runs/hydranet_retail_objects_site_balanced_pooledmetric` has both fields *agreeing* and
+> both wrong: they name `runs/hydranet_retail_objects_site_balanced`, which exists, holds
+> two checkpoints and thirty-nine metric rows, and is a different experiment. Follow that
+> record and you get no error and no dead path — you get another run's real data. The
+> other case, `hydranet_indoor_det-20260813-190051`, points at a directory that does not
+> exist, which is the kinder failure. See [METHODOLOGY.md](METHODOLOGY.md) §6.
 >
 > **It is re-cuttable, which is why deleting 209 MB was safe**: `runs/hydranet_joint_coco10`
 > is still on disk with its checkpoints, and `release_bundle.sh create` rebuilds the bundle
