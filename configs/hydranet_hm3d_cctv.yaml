@@ -1,0 +1,83 @@
+# =============================================================================
+# The retail/security experiment: can a depth model trained on HM3D rendered at a
+# *measured* CCTV pose recover the ground plane on a real store camera?
+#
+# WHY THIS MATTERS MORE THAN A DEPTH NUMBER
+#
+# Every L1/L2 event in RETAIL_SECURITY.md is a polygon in metres on the floor, so no
+# pose means no events. `scripts/fit_camera_from_people.py` fitted exactly one camera
+# by hand -- Taichung-cam01, k1=-0.225, vfov 70.4, pitch 50.2, height 2.38 -- out of 48.
+# If a network can read the plane off a single frame, that backlog stops being 47 manual
+# fits and becomes one inference pass.
+#
+# THE DESIGN DECISION THE EXPERIMENT TURNS ON
+#
+# The training poses are **jittered**, not fixed at the measured values. Rendered all at
+# 2.38 m / 50.2 deg, the pose becomes a constant of the dataset and a model that ignores
+# the image entirely scores perfectly. Height spans roughly 1.8-3.1 m and pitch 38-62 deg,
+# so recovering a specific frame's pose is something only the picture can answer.
+#
+# WHAT IT CANNOT SETTLE
+#
+# HM3D is homes; STUDIO A is a shop. This transfers *geometry*, not appearance -- it will
+# not fix `column` scoring zero on site, and it has no night IR at all. And the real-world
+# check has n=1, because one camera is all that has ever been fitted.
+# =============================================================================
+
+_base_: _base/hydranet.yaml
+
+experiment: hydranet_hm3d_cctv
+output_dir: runs/hydranet_hm3d_cctv
+
+model:
+  heads:
+    traversability: null
+    terrain: null
+    detection: null
+    depth:
+      type: depth_fpn
+      in_levels: [0, 1, 2]        # P3, P4, P5 -- same fusion as the seg heads
+      channels: 64
+      dropout: 0.1
+      # 10.0 matches NYUv2's evaluation cap, so delta1 here is the same quantity the
+      # teacher was scored on. Must equal the dataset's max_depth below.
+      max_depth: 10.0
+      # lam < 1 keeps 15% of the objective anchored to absolute scale. At 1.0 SILog is
+      # fully scale-invariant and would happily reproduce the teacher's exact failure.
+      loss: { lam: 0.85, alpha: 10.0 }
+  # Balancing is left at the base's `uncertainty`, which is what every config that drops
+  # heads does (hydranet_retail_objects.yaml likewise states neither key). Switching to
+  # `fixed` here would inherit the base's three weights naming heads this run does not
+  # have, and `_check_fixed_weights` refuses that -- correctly, since only
+  # `model.heads.<name>: null` removes an inherited key, not `fixed_weights.<name>`.
+  #
+  # With one head uncertainty weighting is `exp(-s)*L + s` over a single term: a learned
+  # reparameterisation of the loss scale rather than a balance between anything. Harmless,
+  # and honest to note that it is doing nothing useful until the multi-head config.
+
+data:
+  input_size: [480, 640]          # NYUv2's native size; no resampling of the GT at all
+  workers: 8
+  datasets:
+    - name: hm3d_cctv
+      type: rendered_depth
+      root: datasets/hm3d_cctv
+      # Split by SCENE, not by frame. Two frames of one living room from slightly
+      # different poses are not independent samples, and the repo already carries a
+      # `split_leaks` check because a camera-level leak once cost a three-seed run.
+      split_train: train          # 8 HM3D scenes
+      split_val: val              # 2 held-out scenes
+      supervises: [depth]
+      head_name: depth
+      max_depth: 10.0
+      sample_ratio: 1.0
+
+train:
+  # A few hundred frames an epoch, not 47k, so epochs are cheap and there need to be
+  # more of them. 40 is still well inside what the NYUv2 curve suggests is needed.
+  epochs: 40
+  batch_size: 16
+  # Every run in this repo sits on lr = batch_size x 1.25e-5 and
+  # tests/test_config_defaults.py checks the shipped configs still do.
+  lr: 2.0e-4
+  primary_metric: depth_delta1
