@@ -12,14 +12,27 @@ inputs are `bev_video.py` outputs, which `.gitignore` keeps out of the repositor
 this reproduces a published number rather than shipping the evidence for it. Re-render
 the three clips first if they are not on disk.
 
+The decode is `data/video.frames`, not a copy of it. There was a copy here, and its own
+comment said so -- "same shape as `cli/infer_video.frames`" -- which did not stop it
+carrying the same defect the original had: a short read ended the loop and ffmpeg's exit
+status went unread. Every number below is `hits / total`, so a clip that half-decoded
+would have moved the denominator and the percentage with it, silently, in a figure this
+file exists to publish.
+
     python3 scripts/count_false_caution.py
 """
 
-import subprocess
 import sys
 from pathlib import Path
 
 import numpy as np
+
+HERE = Path(__file__).resolve().parent
+for candidate in (HERE.parent / "src", HERE / "src"):
+    if candidate.is_dir():
+        sys.path.insert(0, str(candidate))
+
+from syncai_hydranet.data.video import frames  # noqa: E402
 
 CAM_FRAC = 0.65
 ROI = (0.035, 0.29, 0.135, 0.58)  # same box drawn on the figures
@@ -30,25 +43,6 @@ RUNS = [
     ("restart only", "assets/cmp_clip3_noself_bev.mp4", 1378, 504),
     ("restart + site", "assets/cmp_clip3_cctv_bev.mp4", 1378, 504),
 ]
-
-
-def frames(path, w, h):
-    p = subprocess.Popen(
-        ["ffmpeg", "-v", "error", "-i", path, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
-        stdout=subprocess.PIPE,
-    )
-    # stdout=PIPE was requested, so the pipe exists; Popen types it Optional because
-    # that argument is optional in general. Same shape as `cli/infer_video.frames`.
-    stdout = p.stdout
-    assert stdout is not None
-    n = w * h * 3
-    while True:
-        buf = stdout.read(n)
-        if len(buf) < n:
-            break
-        yield np.frombuffer(buf, np.uint8).reshape(h, w, 3)
-    stdout.close()
-    p.wait()
 
 
 def is_caution(px):
@@ -74,7 +68,7 @@ for name, path, w, h in RUNS:
     x1, y1 = int(ROI[2] * cw), int(ROI[3] * h)
     area = (x1 - x0) * (y1 - y0)
     hits, total, px_sum = 0, 0, 0
-    for f in frames(path, w, h):
+    for f in frames(path, w, h, None):
         roi = f[y0:y1, x0:x1]
         n = int(is_caution(roi).sum())
         total += 1
