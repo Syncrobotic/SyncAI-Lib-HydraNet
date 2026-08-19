@@ -664,12 +664,14 @@ uv run hydranet-train --config configs/hydranet_indoor.yaml --set train.lr=4.0e-
 cp configs/hydranet_indoor.yaml configs/indoor_site_a.yaml
 ```
 
-`--set` cannot index lists — `data.datasets[2].sample_ratio=0.1` silently creates a useless
-key rather than erroring. Override the whole list, or copy the file.
-
 Typos are caught: the config is validated as a whole after overrides, and unknown keys, wrong
 types, a `supervises` naming a non-existent head, or a `terrain_classes` count that disagrees
 with the head all abort with the full list of problems.
+
+That now includes `--set`'s one structural gap. It cannot index lists, and
+`data.datasets[2].sample_ratio=0.1` used to create a useless key named `datasets[2]` in
+silence; the schema rejects it and suggests `datasets`. The override still cannot be
+expressed that way — override the whole list, or copy the file.
 
 ### Choose `primary_metric` deliberately, before the run
 
@@ -920,10 +922,16 @@ Two habits make this pay off:
   current mapping. If a future rewrite ever changes trees rather than messages, tag the
   commits a run directory references *before* doing it.
 
-We do not run an experiment tracking server. For one machine, files plus TensorBoard cover it,
-and the provenance above is better than a tracker's defaults. That calculation changes once
-training routinely spans machines and there is no single place to compare them — which is the
-point at which workstream D should revisit it.
+Workstream D was told to revisit the "no tracking server" call once comparing runs stopped
+being possible by eye, and it has. `scripts/mlflow_sync.py` mirrors `meta.json` and
+`metrics.jsonl` into a local MLflow store under `runs/mlflow/`, idempotently, so cron or
+systemd can call it.
+
+**The files remain the truth** — nothing in training depends on the sync and deleting
+`runs/mlflow/` loses nothing it cannot rebuild. The trigger was not "training spans
+machines"; it was the `coco10` incident of 2026-08-19, where the COCO share sat in every
+`config.yaml` and still nearly produced a false contradiction, because nothing put many
+runs' parameters side by side unless someone thought to ask.
 
 ### A run is not a version, and the gap between them was 54 to 0
 

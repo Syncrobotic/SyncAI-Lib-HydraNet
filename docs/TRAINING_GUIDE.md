@@ -337,10 +337,14 @@ Then `hydranet-report` reads it back:
 hydranet-report runs/*  --diff     # rank the runs, and show what differed between them
 ```
 
-We do not run an experiment tracking server (MLflow, W&B). For one machine, files plus
-TensorBoard cover it, and the provenance above is better than a tracker's defaults. The point
-at which that stops being true is when training spans two machines and there is no single
-place to compare them — which is roughly where we are now, so expect this to be revisited.
+This used to end "we do not run an experiment tracking server", and it was revisited on the
+predicted trigger rather than a different one. `scripts/mlflow_sync.py` mirrors every run's
+`meta.json` and `metrics.jsonl` into a local MLflow store under `runs/mlflow/`.
+
+**The files stay the truth.** Nothing in training depends on the sync, deleting
+`runs/mlflow/` loses nothing the script cannot rebuild, and every number in `docs/` cites a
+run directory rather than a tracker row. MLflow here is an index and a UI over the record,
+never a second copy of it — which is the condition under which adding one costs nothing.
 
 ---
 

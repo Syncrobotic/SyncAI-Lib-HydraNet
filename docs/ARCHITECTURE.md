@@ -761,10 +761,15 @@ information about authorship at all.
   Shopping is a grocery aisle of closed shelving; these stores are open display tables.
   "Reach to shelf" may not be the dominant behaviour, and finding that out after the
   annotation spend is the `column` failure repeated at a higher price.
-* **Do not raise the `ty_ratchet.sh` baseline from 15 to 19.** Its docstring justifies the
-  loose number by claiming the debt is "almost all torch and pycocotools stub gaps".
-  Measured: 10 of 17 are in `data/transforms.py` and `data/datasets.py`, which is this
-  repository's own code. Raising it blesses debt the comment says is not there.
+* **Do not raise a `ty_ratchet.sh` baseline to bless debt.** This bullet used to name
+  specific numbers — "do not raise it from 15 to 19" — and both the numbers and the shape
+  of the gate have since moved, so what is left is the rule rather than the instance.
+  What happened: the docstring justified a loose baseline by claiming the debt was "almost
+  all torch and pycocotools stub gaps", 10 of 17 turned out to be in `data/transforms.py`
+  and `data/datasets.py`, and the script now records that measurement in place of the
+  excuse. There are also **two baselines now, not one** — `src/` and `scripts/` ratchet
+  independently, because a single sum lets debt in the code that ships hide behind an
+  improvement in the code that does not. Read the current numbers off the script.
 
 ---
 

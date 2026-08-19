@@ -752,9 +752,16 @@ Drop COCO's `sample_ratio` to `0.1` and each epoch takes a random 10%. Because
 `shuffle=True` and the iterator is rebuilt every epoch, each epoch sees a *different* 10%,
 so over a full run the whole dataset is still covered.
 
-Note that `set_path` in `config.py` does **not support list indices** —
-`--set data.datasets[2].sample_ratio=0.1` raises no error but silently creates a useless key
-literally named `datasets[2]`. Two workable approaches:
+Note that `set_path` in `config.py` does **not support list indices**. It used to create a
+useless key literally named `datasets[2]` and say nothing; `config_schema` now catches it:
+
+```text
+$ --set data.datasets[2].sample_ratio=0.1
+ConfigError: data.datasets[2]: unknown setting (did you mean 'datasets'?).
+Known: augment, datasets, input_size, letterbox, terrain_classes, workers
+```
+
+The override still cannot be expressed, so the two workable approaches are unchanged:
 
 ```bash
 # Approach A: copy the config (recommended, the settings persist)

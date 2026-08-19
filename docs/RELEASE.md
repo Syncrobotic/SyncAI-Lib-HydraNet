@@ -161,7 +161,11 @@ Both replace a measurement with a plausible number.
 
 ## 3. What has to be true before `main`
 
-Every item is currently unmet, which is an accurate summary of where the project is.
+**Two of these were met on 2026-08-19, cutting `releases/v1`**: export parity was confirmed
+at worst relative divergence 7.95e-06 across 17 outputs, and the export guard that refuses an
+unsupervised head is what let the bundle build at all. The rest are unmet, which remains an
+accurate summary of where the project is. [METHODOLOGY.md](METHODOLOGY.md) §5 carries the
+same list from the evaluation side.
 
 | Gate | How to check |
 |---|---|
