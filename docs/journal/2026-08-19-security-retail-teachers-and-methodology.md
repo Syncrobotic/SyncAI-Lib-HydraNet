@@ -213,3 +213,35 @@ current load. ONNX exported at batch 1/16/32/64 with embedded preprocessing and
 in-graph argmax (`exports/pro6000/`); `scripts/bench_pro6000.sh` sweeps
 fp16/best-precision TensorRT engines -- to be run ONLY on the idle GPU after the seed
 chain finishes, because a throughput number taken on a shared card is not a measurement.
+
+**Pose pilot (runs/pose_pilot01): the tier-2 slot powered on for the first time.**
+ViTPose-base on the human-verified track boxes is usable at ceiling-CCTV viewpoint, and
+its errors flag themselves — score tracks visibility, so events.py's 0.3 gate is
+meaningful here. Failure modes, measured: counters hide lower bodies (ankle/knee <0.3 on
+~60% of cam04 frames); a deep bow compresses to 33° in the image plane where the eye
+says ~90°, so `fall_angle_deg`'s 55° threshold is unvalidated in this viewpoint and no
+track ever crossed it; nose/eye are mid-confidence hallucinations under top-down views
+(ears are the stable head points); frame-edge truncation fails honestly (red scores).
+`pose_posture_events` and `reach_to_shelf_events` both ran on real input without
+exception — reach_to_shelf produced 9 semantically-correct spans on the reaching child
+(cam04 track 4), zero false spans on cam11. Three interface findings recorded in its
+REPORT §4: a stale function name in tracker.py:66; the terrain map's pixel-space
+contract is implicit (a canvas-resolution map silently yields zero events); and
+wrist∈fixture fires on occlusion/pose error rather than on touch, because the wrist
+pixel is usually labelled `person` by the wrist's own hand. Verdict: run ViTPose as an
+offline teacher/miner (~8–11 fps full pipeline); do not distill yet — nothing measures a
+distilled student, and the blockers on event quality are those two events.py semantics,
+not the pose model.
+
+**Output-stability baseline (runs/flicker_baseline01), the ruler for the optimisation
+directions.** On the demo clip (b03_cw_xl, cam04, 900 frames): static-mask flip rate
+1.50%/frame with **83.7% of flips oscillating back** — the flicker is vibration, not
+change, which is the shape logit-EMA fixes. The largest single noise source is
+**phantom `person` on static pixels** (21.7% of never-changing pixels read person at
+some point; 40.9% of static-area flips) — the same family as the night packet
+hallucination, and precisely what the in-domain person retrain targets: re-running this
+same instrument on the seed checkpoints is the before/after. Second source: fixture's
+class-boundary band flips at 5.3× its interior (wall 9.4×) — the static-composite
+direction erases exactly those bands. Detection side: 9.5 boxes/frame with 40% of
+IoU-matched chains lasting a single frame — rendering tracks with hysteresis, not raw
+detections, is the fix. Consensus stable_share 95.4% (person-excluded eligibility 47.6%).
