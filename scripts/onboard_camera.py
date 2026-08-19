@@ -1,35 +1,41 @@
 #!/usr/bin/env python3
-# 本檔的說明、註解與輸出訊息是繁體中文，全形標點是正確排版而非誤植；改成半形會毀掉
-# 排版，出現在輸出字串裡的更屬行為變更。僅豁免 unicode 混淆檢查，其餘規則照常。
-# ruff: noqa: RUF001, RUF002, RUF003
-"""機隊開通標定掃描：把 calib01／calib02 驗證過的每相機空間標定串成可重複的流程。
+"""Fleet onboarding calibration sweep: the per-camera spatial calibration that calib01 and
+calib02 validated, strung into a repeatable pipeline.
 
   nice -n 10 .venv/bin/python scripts/onboard_camera.py --out runs/onboard01
   nice -n 10 .venv/bin/python scripts/onboard_camera.py --camera Taichung-cam01
   .venv/bin/python scripts/onboard_camera.py --report-only --out runs/onboard01
 
-對每台 selling_floor 相機（`datasets/studioa_clips/cameras.json`）：
+For every selling_floor camera (`datasets/studioa_clips/cameras.json`):
 
-1. **方位**：挑白天 plate，重用 `calibrate_from_plate.py` 的管線（import，不複製幾何
-   算術——第二份算術是第二次寫錯的機會）：undistort（除法模型 k1 = −0.225，機隊硬體
-   假設，僅 Taichung-cam01 由磚縫網格實測）→ DA-V2 一次 → RANSAC「最低可信水平面」
-   → pitch／roll／plane 高。calib01 已證明這條路俯角對錨點 ±0.7°（vfov 釘對的前提下）。
-2. **尺度（可自動子集）**：DA-V2 的公尺不可信（本機隊高估 1.45–1.6×，calib01），
-   自動化的是人高統計——`datasets/retail_person_gdino01` 的框過同一套閘（score ≥ 0.5、
-   邊緣、長寬比）推過擬合平面，中位數對 1.70 m 先驗回推尺度修正。**≥ 10 個可用高度
-   才出數**，不足標 `unmeasured`。門高／地磚目視（calib02 的 ±5–8% 法）無法自動，
-   欄位留 null、標 `needs_visual_reference`。
-3. **量測紀律**：每台 vfov 55／70.4／85 三點敏感度全跑全存；主值取 70.4°（cam01 磚縫
-   釘定值，其餘機隊假設）。單一數字不帶帶寬不出表——帶寬就是 vfov 掃描的散佈。
-4. **plate 髒區**：HydraNet（stable01 的同一組 config／checkpoint）在 plate 上讀成
-   person 的比例——stable_infer 的經驗值：Kaohsiung-cam04 的 112757 板是 8.6%。
-   髒板的意義：中位數裡站著人，靜態合成在那裡永不接管，plate 上的幾何量測也別取那區。
+1. **Orientation**: pick a daytime plate and reuse the `calibrate_from_plate.py` pipeline
+   (imported, not copied -- a second copy of the geometry arithmetic is a second chance
+   to get it wrong): undistort (division model k1 = -0.225, a fleet-hardware assumption,
+   tile-grid measured only on Taichung-cam01) -> DA-V2 once -> RANSAC "lowest plausible
+   horizontal plane" -> pitch/roll/plane height. calib01 showed this path holds pitch to
+   ±0.7° of the anchor (provided the vfov is pinned).
+2. **Scale (the automatable subset)**: DA-V2's metres are not to be trusted (this fleet
+   overestimates 1.45-1.6x, calib01); what is automated is the person-height statistic --
+   boxes from `datasets/retail_person_gdino01` pass the same gates (score ≥ 0.5, edge,
+   aspect ratio), are pushed through the fitted plane, and the median against the 1.70 m
+   prior gives the scale correction back. **≥ 10 usable heights or no number** -- below
+   that, flag `unmeasured`. The door-height / floor-tile visual method (calib02's ±5-8%
+   method) cannot be automated; the fields stay null, flagged `needs_visual_reference`.
+3. **Measurement discipline**: every camera runs and stores the full three-point vfov
+   sensitivity at 55/70.4/85; the primary value is 70.4° (the cam01 tile-grid pinned
+   value, a fleet assumption for the rest). No single number enters a table without a
+   band -- the band is the spread of the vfov scan.
+4. **Plate dirty region**: the share of the plate HydraNet (stable01's exact
+   config/checkpoint pair) reads as person -- stable_infer's empirical figure:
+   Kaohsiung-cam04's 112757 plate is 8.6%. What a dirty plate means: someone is standing
+   inside the median, static compositing never takes over there, and geometry measured on
+   the plate should stay out of that region too.
 
-輸出 `runs/onboard01/<camera>.calib.json`（欄位名含單位，供 hydranet-scene／events
-消費）與全機隊 `runs/onboard01/REPORT.md`。
+Writes `runs/onboard01/<camera>.calib.json` (field names carry their units, consumed by
+hydranet-scene/events) and the fleet-wide `runs/onboard01/REPORT.md`.
 
-GPU 上有共用的訓練鏈時：DA-V2 與 HydraNet 都是單張、batch 恆為 1，整個行程請用
-`nice -n 10` 啟動。
+When a shared training run is on the GPU: DA-V2 and HydraNet are both single-image and
+batch is always 1; start the whole process under `nice -n 10`.
 """
 
 from __future__ import annotations
@@ -48,25 +54,28 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "src"))
 
-import calibrate_from_plate as cfp  # noqa: E402  幾何與檢核全部重用
+import calibrate_from_plate as cfp  # noqa: E402  the geometry and its checks, all reused
 
 SCHEMA = "hydranet-onboard-calib/v1"
 CAMERAS_JSON = Path("datasets/studioa_clips/cameras.json")
 PERSON_ANNS = Path("datasets/retail_person_gdino01/annotations/instances_all.json")
 PLATE_MODEL_CONFIG = Path("configs/hydranet_retail_security_b03_cw_xl.yaml")
 PLATE_MODEL_CKPT = Path("runs/hydranet_retail_security_b03_cw_xl/best.pt")
-K1_FLEET = -0.225  # Taichung-cam01 磚縫網格實測；其餘相機是同機隊硬體假設
-VFOV_PRIMARY = 70.4  # 同上：cam01 釘定，其餘機隊假設
-MIN_HEIGHTS = 10  # 人高統計出數的最低樣本數（任務規格）
-DIRTY_PLATE_FRAC = 0.05  # person 佔比超過此值標髒板（cam04 經驗值 8.6% 在此之上）
-PERSON_PRIOR_SYS_FRAC = 0.11  # calib01：人高尺度 vs 磚縫錨點的縫隙（姿態偏差，系統項）
-VFOV_UNPINNED_SYS_FRAC = 0.05  # calib02：vfov 未釘定相機的 ±5% 系統項
+K1_FLEET = -0.225  # tile-grid measured on Taichung-cam01; fleet-hardware assumption elsewhere
+VFOV_PRIMARY = 70.4  # likewise: pinned on cam01, a fleet assumption for the rest
+MIN_HEIGHTS = 10  # min samples for the person-height statistic to emit a number (task spec)
+DIRTY_PLATE_FRAC = 0.05  # person share above this marks a dirty plate (cam04's 8.6% is above)
+# calib01: the gap between the person-height scale and the tile-grid anchor (pose bias,
+# a systematic term)
+PERSON_PRIOR_SYS_FRAC = 0.11
+VFOV_UNPINNED_SYS_FRAC = 0.05  # calib02: the ±5% systematic term for vfov-unpinned cameras
 
 
 # ---------------------------------------------------------------------------
-# DA-V2 pipeline 快取：cfp.run_depth 每次呼叫都重建 pipeline，掃 22 台會重載 22 次
-# Large 權重。這裡把 transformers.pipeline 換成鍵值快取版——run_depth 的前後處理
-# 一行不動，只是同一組 (task, model, device) 回傳同一個實例。
+# DA-V2 pipeline cache: cfp.run_depth rebuilds the pipeline on every call, so sweeping
+# 22 cameras would reload the Large weights 22 times. Swap transformers.pipeline for a
+# keyed-cache version -- not a line of run_depth's pre/post-processing moves; the same
+# (task, model, device) triple just gets the same instance back.
 
 
 def _install_pipeline_cache() -> None:
@@ -85,8 +94,9 @@ def _install_pipeline_cache() -> None:
 
 
 # ---------------------------------------------------------------------------
-# plate 髒區：stable_infer 的同一種量法（同 config／checkpoint／preprocess／argmax），
-# 只是不建背景板，只回報 person 佔比。
+# Plate dirty region: measured exactly the way stable_infer measures it (same config /
+# checkpoint / preprocess / argmax), except no background board is built and only the
+# person share is reported.
 
 
 class PlatePersonMeter:
@@ -116,13 +126,14 @@ class PlatePersonMeter:
         content = crop_box(lab, region)
         return {
             "person_frac_plate": round(float((content == self.person_idx).mean()), 4),
-            # stable_infer 印的是整張畫布的比例（含 letterbox 邊），留著對表
+            # stable_infer prints the whole-canvas share (letterbox borders included);
+            # kept so the two tables can be compared
             "person_frac_canvas": round(float((lab == self.person_idx).mean()), 4),
         }
 
 
 # ---------------------------------------------------------------------------
-# 單台相機
+# One camera
 
 
 def selling_floor_cameras() -> list[str]:
@@ -145,7 +156,7 @@ def onboard_one(
     plates_root: Path,
 ) -> dict:
     now = _dt.date.today().isoformat()
-    is_pinned = camera == "Taichung-cam01"  # 磚縫網格：k1 與 vfov 皆實測
+    is_pinned = camera == "Taichung-cam01"  # tile grid: k1 and vfov both measured
     flags: list[str] = []
     if not is_pinned:
         flags += ["vfov_fleet_assumed", "k1_fleet_assumed"]
@@ -158,8 +169,9 @@ def onboard_one(
         "vfov_source": "tile_grid_pinned" if is_pinned else "fleet_hardware_assumed",
         "k1_division_model": k1,
         "k1_source": "tile_grid_measured" if is_pinned else "fleet_hardware_assumed",
-        # calib02 的目視先驗（門高／地磚）不可自動化：欄位保留、值留空，等 SOP 的
-        # 人工步驟回填。這是「未量測」，不是「量出 null」。
+        # calib02's visual priors (door height / floor tiles) cannot be automated: the
+        # fields are kept, the values left empty, and the SOP's manual step back-fills
+        # them. This is "not measured", not "measured out as null".
         "visual_reference": {
             "door_height_implied_height_m": None,
             "tile_pitch_implied_height_m": None,
@@ -199,13 +211,14 @@ def onboard_one(
         {"plate_used": str(plate_path), "plate_slot_utc": slot, "frame_hw_px": [h, w]}
     )
 
-    # plate 髒區（原始 plate，非 undistort 後——stable_infer 量的就是原板）
+    # Plate dirty region (the raw plate, not the undistorted one -- stable_infer
+    # measures the raw board)
     if meter is not None:
         result.update(meter.person_frac(Image.fromarray(rgb)))
         if result["person_frac_plate"] > DIRTY_PLATE_FRAC:
             flags.append("dirty_plate_person_frac_gt_0p05")
 
-    # 方位：undistort → DA-V2 一次 → 每個 vfov 各自 RANSAC 選地板
+    # Orientation: undistort -> DA-V2 once -> a RANSAC floor pick per vfov
     rgb_u = cfp.undistort_image(rgb, k1)
     depth = cfp.run_depth(rgb_u)
 
@@ -277,7 +290,8 @@ def onboard_one(
     if abs(primary["roll_deg"]) > 5.0:
         flags.append("roll_abs_gt_5deg")
 
-    # 尺度：人高統計（可自動子集）。scale 是「乘在 DA-V2 平面量上的公尺修正」。
+    # Scale: the person-height statistic (the automatable subset). `scale` is "the metre
+    # correction multiplied onto DA-V2 plane quantities".
     person = primary.get("person", {})
     n_heights = person.get("n_heights", 0)
     scale = person.get("scale_person")
@@ -289,8 +303,10 @@ def onboard_one(
         height_src = "dav2_plane_height_x_person_height_scale"
         scale_src = f"person_height_median_vs_{cfp.ADULT_M}m_prior_n{n_heights}"
         stat_frac = round(mad / med, 3)
-        # 標定高的 vfov 帶：每個 vfov 用它自己的 plane 高 × 它自己的人高尺度——
-        # 兩者同向隨 vfov 滑動，乘積比裸高穩定，帶寬會量出這件事而不是假設它
+        # The calibrated-height vfov band: each vfov uses its own plane height times its
+        # own person-height scale -- the two slide with vfov in the same direction, so
+        # the product is steadier than the raw height, and the band measures that fact
+        # rather than assuming it
         heights_scaled = []
         for r in ok_rows:
             s = r.get("person", {}).get("scale_person")
@@ -308,7 +324,7 @@ def onboard_one(
     unc: dict = {
         "vfov_scan_deg": [r["vfov_deg"] for r in ok_rows],
         "pitch_deg_band_vfov_scan": _band([r["pitch_deg"] for r in ok_rows]),
-        "pitch_deg_vs_anchor_at_pinned_vfov": 0.7,  # calib01 磚縫錨點交叉檢核
+        "pitch_deg_vs_anchor_at_pinned_vfov": 0.7,  # calib01 tile-grid anchor cross-check
         "roll_deg_band_vfov_scan": _band([r["roll_deg"] for r in ok_rows]),
         "height_dav2_raw_m_band_vfov_scan": _band([r["height_dav2_raw_m"] for r in ok_rows]),
         "height_m_band_vfov_scan": _band(heights_scaled) if heights_scaled else None,
@@ -316,7 +332,7 @@ def onboard_one(
         "scale_frac_stat_person_mad": stat_frac,
         "scale_frac_sys_person_prior": PERSON_PRIOR_SYS_FRAC if scale else None,
         "scale_frac_sys_vfov_unpinned": (None if is_pinned else VFOV_UNPINNED_SYS_FRAC),
-        "dominant_unknown": "vfov",  # calib01／calib02 的一致結論
+        "dominant_unknown": "vfov",  # the consistent calib01/calib02 conclusion
     }
 
     result.update(
@@ -347,7 +363,7 @@ def onboard_one(
 
 
 # ---------------------------------------------------------------------------
-# 彙總報告
+# The fleet report
 
 
 def _fmt_band(band: list[float] | None, unit: str = "") -> str:
@@ -372,26 +388,29 @@ def write_report(out_dir: Path, cameras: list[str]) -> None:
     )
 
     lines: list[str] = []
-    lines.append("# onboard01 — 機隊開通標定掃描（23 台 selling_floor）\n")
+    lines.append("# onboard01 — fleet onboarding calibration sweep (23 selling_floor)\n")
     lines.append(
-        f"產生：{_dt.date.today().isoformat()}・`scripts/onboard_camera.py`・"
-        f"方位管線 import 自 `calibrate_from_plate.py`（calib01 驗證：俯角 ±0.7°，"
-        "vfov 釘對的前提下）・尺度自動子集＝人高統計（calib02 驗證的目視先驗法"
-        "±5–8% 需人工，欄位留 null 標 `needs_visual_reference`）。\n"
+        f"Generated: {_dt.date.today().isoformat()} - `scripts/onboard_camera.py` - "
+        "orientation pipeline imported from `calibrate_from_plate.py` (calib01-validated: "
+        "pitch ±0.7° of the anchor, provided the vfov is pinned) - automated scale subset "
+        "= the person-height statistic (calib02's validated visual-prior method, ±5-8%, "
+        "needs a human; fields stay null, flagged `needs_visual_reference`).\n"
     )
     lines.append(
-        f"**完成率：{len(done)}/{len(cameras)} 台出方位；"
-        f"{len(scaled)} 台尺度可自動定出、{len(unscaled)} 台需目視參照物。**\n"
+        f"**Completion: {len(done)}/{len(cameras)} cameras with an orientation; "
+        f"{len(scaled)} scale automatically, {len(unscaled)} need a visual reference.**\n"
     )
     lines.append(
-        "帶寬紀律：主值取 vfov 70.4°（僅 Taichung-cam01 為磚縫釘定，其餘為機隊硬體"
-        "假設），括號帶寬＝vfov 55–85° 掃描的散佈。**帶寬不是誤差條裝飾——vfov 是"
-        "主導未知數，calib01 量到跨 vfov 高度滑 ~0.9 m、尺度滑 0.96→0.56。**\n"
+        "Band discipline: primary values are at vfov 70.4° (tile-grid pinned only on "
+        "Taichung-cam01, a fleet-hardware assumption for the rest); the bracketed band "
+        "is the spread of the vfov 55-85° scan. **The band is not error-bar decoration "
+        "-- vfov is the dominant unknown, and calib01 measured height sliding ~0.9 m and "
+        "scale sliding 0.96 -> 0.56 across vfov.**\n"
     )
-    lines.append("## 全機隊表\n")
+    lines.append("## Fleet table\n")
     lines.append(
-        "| 相機 | pitch°@70.4（55–85 帶） | roll°（帶） | H_DA-V2 raw m（帶） | "
-        "scale（來源） | H m 標定（帶） | plate person 佔比 | 旗標 |"
+        "| Camera | pitch°@70.4 (55-85 band) | roll° (band) | H_DA-V2 raw m (band) | "
+        "scale (source) | H m calibrated (band) | plate person share | flags |"
     )
     lines.append("|---|---|---|---|---|---|---|---|")
     for r in rows:
@@ -403,11 +422,13 @@ def write_report(out_dir: Path, cameras: list[str]) -> None:
         n_boxes = ""
         if r.get("scale"):
             n_boxes = r["scale_source"].rsplit("_n", 1)[-1]
-        scale_cell = f"{r['scale']:.3f}（人高 n={n_boxes}）" if r.get("scale") else "unmeasured"
+        scale_cell = (
+            f"{r['scale']:.3f} (person n={n_boxes})" if r.get("scale") else "unmeasured"
+        )
         height_cell = (
             f"**{r['height_m']:.2f}** {_fmt_band(u.get('height_m_band_vfov_scan'))}"
             if r.get("height_m")
-            else "—（需目視參照）"
+            else "— (needs visual reference)"
         )
         pf = r.get("person_frac_plate")
         pf_cell = f"{pf:.1%}" if pf is not None else "—"
@@ -426,62 +447,69 @@ def write_report(out_dir: Path, cameras: list[str]) -> None:
         )
     lines.append("")
 
-    lines.append("## 側裝相機（|roll| > 5°）\n")
+    lines.append("## Sideways-mounted cameras (|roll| > 5°)\n")
     if rolled:
         lines.append(
-            "VLM 試點說至少三台側裝；下面是全機隊第一次逐台量出來的 roll——"
-            "plane fit 白送的量，管線裡沒有別的東西在建模 roll：\n"
+            "The VLM pilot said at least three cameras are mounted sideways; below is "
+            "the fleet's first per-camera measured roll -- a quantity the plane fit "
+            "gives away for free, and nothing else in the pipeline models roll:\n"
         )
         for r in sorted(rolled, key=lambda r: -abs(r["roll_deg"])):
             u = r.get("uncertainty") or {}
             lines.append(
-                f"- **{r['camera']}：roll {r['roll_deg']:+.1f}°**"
-                f"（vfov 帶 {_fmt_band(u.get('roll_deg_band_vfov_scan'))}）"
+                f"- **{r['camera']}: roll {r['roll_deg']:+.1f}°**"
+                f" (vfov band {_fmt_band(u.get('roll_deg_band_vfov_scan'))})"
             )
     else:
-        lines.append("（無）")
+        lines.append("(none)")
     lines.append("")
 
-    lines.append("## plate 髒區（模型 person 佔比，stable_infer 同一種量法）\n")
+    lines.append("## Plate dirty regions (model person share, measured stable_infer's way)\n")
     lines.append(
-        f"參考點：stable01 量過 Kaohsiung-cam04 的 112757 板是 8.6%。"
-        f"超過 {DIRTY_PLATE_FRAC:.0%} 標 `dirty_plate_person_frac_gt_0p05`——"
-        "髒區在靜態合成裡永不接管，plate 上的幾何量測（磚縫、門緣）也該避開那區。\n"
+        "Reference point: stable01 measured Kaohsiung-cam04's 112757 plate at 8.6%. "
+        f"Above {DIRTY_PLATE_FRAC:.0%} flags `dirty_plate_person_frac_gt_0p05` -- static "
+        "compositing never takes over in a dirty region, and geometry measured on the "
+        "plate (tile joints, door edges) should keep out of it too.\n"
     )
     for r in dirty[:8]:
-        mark = "  ← 髒板" if r["person_frac_plate"] > DIRTY_PLATE_FRAC else ""
+        mark = "  <- dirty plate" if r["person_frac_plate"] > DIRTY_PLATE_FRAC else ""
         lines.append(
-            f"- {r['camera']}（{r.get('plate_slot_utc', '?')}）："
+            f"- {r['camera']} ({r.get('plate_slot_utc', '?')}): "
             f"{r['person_frac_plate']:.1%}{mark}"
         )
     lines.append("")
 
     if scaled:
         svals = [r["scale"] for r in scaled]
-        lines.append("## 尺度：自動（人高）vs 需目視\n")
+        lines.append("## Scale: automatic (person height) vs needs a visual reference\n")
         lines.append(
-            f"- 人高尺度可出數（≥{MIN_HEIGHTS} 高度樣本）：**{len(scaled)} 台**，"
-            f"scale 中位 {float(np.median(svals)):.3f}、"
-            f"範圍 [{min(svals):.3f}, {max(svals):.3f}]"
-            "（calib01 三台是 0.69–0.76；散佈若同量級，機隊常數修正仍是"
-            "「可信但未證」）。"
+            f"- Person-height scale produced a number (≥{MIN_HEIGHTS} height samples): "
+            f"**{len(scaled)} cameras**, median scale {float(np.median(svals)):.3f}, "
+            f"range [{min(svals):.3f}, {max(svals):.3f}]"
+            " (calib01's three cameras were 0.69-0.76; if the spread is of the same "
+            'order, a fleet-constant correction is still "plausible but unproven").'
         )
         lines.append(
-            f"- 需目視參照物（門高／地磚，calib02 法）：**{len(unscaled)} 台**。"
-            "另注意：人高尺度自帶 ±11% 系統項（1.70 m 先驗含姿態偏差，calib01），"
-            "**所有相機的目視欄位都留 null**——要收斂到 ±5–8% 還是得走一次 calib02 "
-            "的門／磚步驟，人高只是把「完全沒有公尺」變成「有個 ±11% 的公尺」。"
+            f"- Needs a visual reference (door height / floor tiles, the calib02 "
+            f"method): **{len(unscaled)} cameras**. Note also that the person-height "
+            "scale carries its own ±11% systematic term (the 1.70 m prior includes pose "
+            "bias, calib01), and **every camera's visual fields are left null** -- "
+            "converging to ±5-8% still takes one pass of calib02's door/tile step; "
+            'person height only turns "no metres at all" into "metres to within ±11%".'
         )
         lines.append("")
 
-    lines.append("## 量測紀律備忘\n")
+    lines.append("## Measurement-discipline notes\n")
     lines.append(
-        "- 每台三點 vfov 敏感度全存在 `<camera>.calib.json` 的 `by_vfov`；"
-        "表中每個主值旁的括號就是它的帶。\n"
-        "- k1 與 vfov 只有 Taichung-cam01 是實測（磚縫網格），其餘 22 台掛"
-        "`vfov_fleet_assumed`／`k1_fleet_assumed`，各背 ±5% 系統項（calib02）。\n"
-        "- DA-V2 永不定公尺：`height_dav2_raw_m` 是形狀量，"
-        "乘上 `scale` 才是公尺；`scale_source: unmeasured` 的相機沒有公尺。\n"
+        "- Every camera's three-point vfov sensitivity is stored in full under "
+        "`by_vfov` in `<camera>.calib.json`; the bracket next to each primary value in "
+        "the table is its band.\n"
+        "- k1 and vfov are measured (tile grid) only on Taichung-cam01; the other 22 "
+        "cameras carry `vfov_fleet_assumed`/`k1_fleet_assumed` and each shoulders a "
+        "±5% systematic term (calib02).\n"
+        "- DA-V2 never sets metres: `height_dav2_raw_m` is a shape quantity, and only "
+        "multiplied by `scale` is it metres; a camera with `scale_source: unmeasured` "
+        "has no metres.\n"
     )
     (out_dir / "REPORT.md").write_text("\n".join(lines) + "\n")
     print(f"REPORT.md written: {len(done)}/{len(cameras)} cameras calibrated")
@@ -494,7 +522,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("--camera", action="append", help="只跑這些相機（可重複）")
+    ap.add_argument("--camera", action="append", help="run only these cameras (repeatable)")
     ap.add_argument("--out", type=Path, default=Path("runs/onboard01"))
     ap.add_argument("--plates-root", type=Path, default=cfp.PLATES)
     ap.add_argument("--k1", type=float, default=K1_FLEET)
