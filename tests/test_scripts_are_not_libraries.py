@@ -14,6 +14,9 @@ was the obvious guard and is the wrong one: most of these are one-shot research 
 legitimately have no tests, and a gate that demands them gets deleted. This measures the
 thing that has actually gone wrong twice instead.
 
+**Tracked files only.** This measures what the gate that blocks a merge measures; an
+untracked script is not in the repository yet and its author is still writing it.
+
 **A ratchet, upward only.** The existing pairs are not a backlog this test is demanding be
 cleared; some are deliberate — `live_view_orin` imports `bench_camera_orin` because both are
 copied to the board standalone, which `tests/test_orin_standalone_copies.py` exists to keep
@@ -25,10 +28,38 @@ worked on, so a spurious "you may lower the baseline" failure would be the more 
 from __future__ import annotations
 
 import ast
+import subprocess
 from pathlib import Path
+
+import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 SCRIPTS = REPO / "scripts"
+
+
+def _tracked_scripts() -> list[Path]:
+    """The scripts git knows about, which is what the gate that blocks a merge sees.
+
+    Scanning the filesystem instead was the first version and it was wrong in the way this
+    repository keeps writing about: an untracked file mid-edit tripped the ratchet, so the
+    local suite went red for work that CI -- which checks out a commit -- cannot see. A
+    local gate stricter than the remote one teaches people the suite is flaky, which is the
+    mirror of the ruff-pin drift that let an unformatted Markdown block reach `dev`.
+
+    An untracked script becomes visible here the moment it is `git add`ed, which is the
+    first point its author can act on it and before it can reach anyone else.
+    """
+    out = subprocess.run(
+        ["git", "ls-files", "scripts/*.py"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if out.returncode != 0:
+        pytest.skip("not a git checkout (sdist or vendored copy)")
+    return [REPO / line for line in out.stdout.split() if line.endswith(".py")]
+
 
 # Measured 2026-08-19. Lower it when a pair is moved into the package; never raise it.
 BASELINE_PAIRS = 10
@@ -36,9 +67,10 @@ BASELINE_PAIRS = 10
 
 def _script_to_script_imports() -> list[tuple[str, str]]:
     """Every `scripts/a.py` that imports `scripts/b.py` by bare module name."""
-    modules = {f.stem for f in SCRIPTS.glob("*.py")}
+    tracked = _tracked_scripts()
+    modules = {f.stem for f in tracked}
     found: list[tuple[str, str]] = []
-    for f in sorted(SCRIPTS.glob("*.py")):
+    for f in sorted(tracked):
         try:
             tree = ast.parse(f.read_text(encoding="utf-8"))
         except SyntaxError:  # a script mid-edit is not this test's business
