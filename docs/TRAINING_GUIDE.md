@@ -561,8 +561,20 @@ uv run hydranet-infer-video --config ... --checkpoint runs/.../best.pt \
     --input clip.mp4 --output clip_pred.mp4 --fps 10
 ```
 
-`--layout side` (the default) writes traversability on the left and terrain on the right,
-both from the same forward pass:
+`--layout` takes four values. `side` (the default) writes traversability on the left and
+terrain on the right; `trav` and `terrain` write one of them full-frame; and **`quad`**
+adds the depth head as a fourth pane.
+
+Two things about `quad` are decisions rather than details. Its depth ramp is **fixed, never
+per-frame** — anything past the ends is clamped, so a frame that saturates *looks*
+saturated instead of looking like a different scene, which is what per-frame
+renormalisation would make it. `--depth-max` sets the far end and defaults to the head's own
+`max_depth`, the range it was trained to emit; an indoor corridor spends all of that in its
+first fifth, so a smaller value usually reads better. And `quad` **exits** on a config with
+no depth or traversability head rather than drawing an empty pane.
+
+`side` writes traversability on the left and terrain on the right, both from the same
+forward pass:
 
 ![traversability and terrain from one forward pass](../assets/hydranet_demo.gif)
 

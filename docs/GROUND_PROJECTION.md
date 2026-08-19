@@ -100,6 +100,17 @@ metre.** And on a fixed camera the whole thing is an **install-time calibration 
 not a per-frame prediction — which is the opposite of the per-frame fit this document argues
 for on a walking robot, and both are right for their own platform.
 
+> **An experiment is testing whether that last sentence holds** (added 2026-08-19).
+> `configs/hydranet_hm3d_cctv.yaml` trains a depth head on HM3D rendered at *measured* CCTV
+> poses, jittered — 1.8–3.1 m and 38–62° — so that a model cannot score by memorising a
+> constant. The question it asks is exactly the one above: **can a network read the ground
+> plane off a single frame**, and thereby turn a backlog of 47 unfitted cameras into one
+> inference pass? `scripts/fit_camera_from_people.py` has fitted exactly one of the 48.
+>
+> It is an open experiment, not a result, and it cannot settle everything even if it works:
+> HM3D is homes and the site is a shop, so it transfers *geometry* and not appearance, and
+> the real-world check has **n=1** because one camera is all that has ever been fitted.
+
 **The known length does not need a tape measure (measured 2026-08-19,
 `runs/calib02_priors`).** Standard-dimension priors read off the plates lock scale to
 **±5–8%** — ±3–6% where a grout grid pins vfov: Taichung-cam01 at the 45 cm tile prior
