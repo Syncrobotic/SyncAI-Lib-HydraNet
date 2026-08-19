@@ -19,10 +19,16 @@ htmlcov/
 # be traced to the data behind it. See data/fingerprint.py.
 datasets/
 runs/
+exports/
 *.pt
 *.pth
 *.onnx
 *.engine
+# TensorRT serialised engines. `.engine` is the Jetson convention and was the only one
+# listed; `scripts/bench_trt.py` writes `<name>.<tag>.plan`, so the four plans the
+# pro6000 sweep left in `exports/` sat untracked and *unignored* -- 100 MB that a
+# `git add -A` would have committed. Both extensions, because both are produced.
+*.plan
 
 # Everything under assets/, then the figures back in by name.
 #
