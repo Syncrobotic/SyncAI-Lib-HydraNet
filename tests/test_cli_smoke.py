@@ -293,6 +293,18 @@ def test_infer_image_accepts_a_directory(config, trained, dataset, tmp_path):
     assert len(list(out.glob("*_pred.jpg"))) == 4
 
 
+def _testsrc_clip(tmp_path: Path) -> Path:
+    """A one-second lavfi clip at the model's frame size."""
+    import subprocess
+
+    src = tmp_path / "clip.mp4"
+    lavfi = f"testsrc=size={FRAME[1]}x{FRAME[0]}:rate=5:duration=1"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", lavfi, str(src)], check=True
+    )
+    return src
+
+
 @pytest.mark.skipif(
     not (shutil.which("ffmpeg") and shutil.which("ffprobe")), reason="needs ffmpeg"
 )
@@ -320,6 +332,81 @@ def test_infer_video_writes_a_video(config, trained, tmp_path):
         ]
     )
     assert out.is_file() and out.stat().st_size > 0
+
+
+@pytest.mark.skipif(
+    not (shutil.which("ffmpeg") and shutil.which("ffprobe")), reason="needs ffmpeg"
+)
+def test_infer_video_refuses_to_report_success_when_ffmpeg_failed(
+    config, trained, tmp_path, monkeypatch, capsys
+):
+    """A full disk and an unwritable path both used to print `done: N frames -> out.mp4`.
+
+    The encoder's exit status is faked rather than provoked: a real failing ffmpeg dies
+    before the pipe buffer fills, so the run would end in BrokenPipeError on some frame
+    counts and in a clean exit on others. What is under test is that a non-zero status
+    reaches the user, and that is deterministic.
+    """
+    src = _testsrc_clip(tmp_path)
+    real_finish = infer_video.finish_encoder
+
+    def _failed(proc):
+        real_finish(proc)  # still reap it; only the status is faked
+        return 1
+
+    monkeypatch.setattr(infer_video, "finish_encoder", _failed)
+    with pytest.raises(SystemExit) as excinfo:
+        infer_video.main(
+            [
+                "--config", str(config),
+                "--checkpoint", str(trained / "best.pt"),
+                "--input", str(src),
+                "--output", str(tmp_path / "pred.mp4"),
+                "--max-frames", "2",
+            ]
+        )  # fmt: skip
+    assert "ffmpeg exited 1" in str(excinfo.value)
+    assert "done:" not in capsys.readouterr().out
+
+
+@pytest.mark.skipif(
+    not (shutil.which("ffmpeg") and shutil.which("ffprobe")), reason="needs ffmpeg"
+)
+def test_infer_video_shuts_the_encoder_down_when_a_frame_blows_up(
+    config, trained, tmp_path, monkeypatch
+):
+    """Without the `finally`, an exception mid-render left ffmpeg with no EOF on stdin --
+    an mp4 with no moov atom, unplayable, beside an orphaned process."""
+    src = _testsrc_clip(tmp_path)
+    closed = []
+    real_finish = infer_video.finish_encoder
+
+    def _spy(proc):
+        closed.append(proc)
+        return real_finish(proc)  # still reap it, or the test leaves an ffmpeg behind
+
+    monkeypatch.setattr(infer_video, "finish_encoder", _spy)
+
+    real_render = infer_video.render_frame
+    calls = {"n": 0}
+
+    def _explode(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("the model fell over on frame 2")
+        return real_render(*args, **kwargs)
+
+    monkeypatch.setattr(infer_video, "render_frame", _explode)
+    with pytest.raises(RuntimeError, match="frame 2"):
+        infer_video.main(
+            [
+                "--config", str(config),
+                "--checkpoint", str(trained / "best.pt"),
+                "--input", str(src),
+                "--output", str(tmp_path / "pred.mp4"),
+            ]
+        )  # fmt: skip
+    assert closed and closed[0] is not None, "the encoder was left running"
 
 
 # ----------------------------------------------------------------------------- scene

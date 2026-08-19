@@ -47,7 +47,7 @@ from ..config import load_config
 from ..data.coco_subsets import COCO_NAMES, head_order, retail_box_label
 from ..data.label_maps import get_scheme, terrain_to_traversability
 from ..data.label_maps_retail_security import get_det_vocab
-from ..data.video import frames, probe
+from ..data.video import finish_encoder, frames, probe
 from ..geometry import bev3d
 from ..geometry.bev import IGNORE, BevGrid, free_space_map, project_mask, scene
 from ..geometry.ground import Camera, GroundPlane
@@ -526,10 +526,16 @@ def render_video(in_path: Path, renderer: Renderer, args) -> int:
                 if args.max_frames and n >= args.max_frames:
                     break
         finally:
-            if writer is not None:
-                assert writer.stdin is not None
-                writer.stdin.close()
-                writer.wait()
+            code = finish_encoder(writer)
+
+    # Only reached when the loop finished; an exception on the way here has already
+    # propagated and is the more informative failure. A non-zero status is a full disk
+    # or an unwritable path, and this used to print `wrote ...` for both.
+    if code not in (None, 0):
+        sys.exit(
+            f"ffmpeg exited {code} while encoding {args.output}; "
+            f"the file is incomplete or was never written."
+        )
     print(f"wrote {args.output or args.json} ({n} frames)")
     return 0
 

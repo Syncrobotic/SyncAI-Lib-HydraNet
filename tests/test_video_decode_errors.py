@@ -22,7 +22,7 @@ import subprocess
 import numpy as np
 import pytest
 
-from syncai_hydranet.data.video import DecodeError, frames, probe
+from syncai_hydranet.data.video import DecodeError, finish_encoder, frames, probe
 
 W, H = 32, 24
 
@@ -150,3 +150,52 @@ def test_a_file_ffmpeg_cannot_open_raises_rather_than_yielding_nothing(tmp_path)
     with pytest.raises(DecodeError) as excinfo:
         list(frames(str(junk), W, H, None))
     assert "0 whole frames" in str(excinfo.value)
+
+
+# ------------------------------------------------------- shutting the encoder down
+
+
+class _FakeSink:
+    def __init__(self, raises: type[BaseException] | None = None):
+        self.closed = False
+        self._raises = raises
+
+    def close(self):
+        self.closed = True
+        if self._raises is not None:
+            raise self._raises()
+
+
+class _FakeEncoder:
+    def __init__(self, code: int = 0, sink: _FakeSink | None = None):
+        self.stdin = _FakeSink() if sink is None else sink
+        self._code = code
+        self.waited = False
+
+    def wait(self):
+        self.waited = True
+        return self._code
+
+
+def test_no_encoder_needs_no_special_case():
+    """A run that produced no frames never started one. None in, None out."""
+    assert finish_encoder(None) is None
+
+
+def test_the_pipe_is_closed_and_the_status_reported():
+    """Closing stdin is the EOF ffmpeg needs to write the moov atom and exit."""
+    enc = _FakeEncoder(code=0)
+    assert finish_encoder(enc) == 0
+    assert enc.stdin.closed and enc.waited
+
+
+def test_a_failed_encode_reports_its_status_rather_than_being_dropped():
+    """`ffmpeg exited 1` is a full disk or an unwritable path. Both used to print done."""
+    assert finish_encoder(_FakeEncoder(code=1)) == 1
+
+
+def test_a_broken_pipe_on_close_does_not_replace_the_callers_exception():
+    """This runs from a `finally`. Raising here would hide why we got there."""
+    enc = _FakeEncoder(code=1, sink=_FakeSink(raises=BrokenPipeError))
+    assert finish_encoder(enc) == 1
+    assert enc.waited

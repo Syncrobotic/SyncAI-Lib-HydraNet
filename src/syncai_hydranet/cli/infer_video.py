@@ -27,7 +27,7 @@ from ..data.label_maps_retail_security import get_det_vocab
 
 # Re-exported: seven scripts import these from here, and the move is not
 # theirs to absorb. `data/video.py` is where they live now.
-from ..data.video import frames, probe
+from ..data.video import finish_encoder, frames, probe
 from ..models.heads.detection import SCORE_THR_VIEW
 from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint, select_weights
@@ -242,67 +242,78 @@ def main(argv: list[str] | None = None) -> None:
     enc_size = None
     n_done, t0 = 0, time.time()
     sample_fps = args.fps if args.fps and args.fps < src_fps else None
-    for frame in frames(args.input, src_w, src_h, sample_fps):
-        out_img = render_frame(
-            frame,
-            model,
-            device,
-            args,
-            size=size,
-            terrain_colors=terrain_colors,
-            name_of=name_of,
-            model_max_depth=model_max_depth,
-        )
-        if writer is None:
-            ow, oh = out_img.size
-            ow, oh = ow - ow % 2, oh - oh % 2  # H.264 requires even dimensions
-            enc_size = (ow, oh)
-            writer = subprocess.Popen(
-                [
-                    "ffmpeg",
-                    "-v",
-                    "error",
-                    "-y",
-                    "-f",
-                    "rawvideo",
-                    "-pix_fmt",
-                    "rgb24",
-                    "-s",
-                    f"{ow}x{oh}",
-                    "-r",
-                    f"{out_fps}",
-                    "-i",
-                    "-",
-                    "-c:v",
-                    "libx264",
-                    "-pix_fmt",
-                    "yuv420p",
-                    "-crf",
-                    "20",
-                    args.output,
-                ],
-                stdin=subprocess.PIPE,
+    # The encoder starts inside the loop, so its shutdown has to survive whatever
+    # ends the loop. Without the `finally`, an exception mid-render left ffmpeg with
+    # no EOF on its stdin: an unplayable mp4 with no moov atom, and an orphan.
+    try:
+        for frame in frames(args.input, src_w, src_h, sample_fps):
+            out_img = render_frame(
+                frame,
+                model,
+                device,
+                args,
+                size=size,
+                terrain_colors=terrain_colors,
+                name_of=name_of,
+                model_max_depth=model_max_depth,
             )
-        # `writer` and `enc_size` are set together on the first frame and never again,
-        # and `Popen.stdin` is Optional only because `stdin=PIPE` is optional in
-        # general. One place to state all of that, rather than three re-derivations
-        # spread over the next four lines.
-        sink = writer.stdin
-        assert sink is not None and enc_size is not None
-        if out_img.size != enc_size:
-            out_img = out_img.resize(enc_size, Image.Resampling.BILINEAR)
-        sink.write(np.asarray(out_img, np.uint8).tobytes())
+            if writer is None:
+                ow, oh = out_img.size
+                ow, oh = ow - ow % 2, oh - oh % 2  # H.264 requires even dimensions
+                enc_size = (ow, oh)
+                writer = subprocess.Popen(
+                    [
+                        "ffmpeg",
+                        "-v",
+                        "error",
+                        "-y",
+                        "-f",
+                        "rawvideo",
+                        "-pix_fmt",
+                        "rgb24",
+                        "-s",
+                        f"{ow}x{oh}",
+                        "-r",
+                        f"{out_fps}",
+                        "-i",
+                        "-",
+                        "-c:v",
+                        "libx264",
+                        "-pix_fmt",
+                        "yuv420p",
+                        "-crf",
+                        "20",
+                        args.output,
+                    ],
+                    stdin=subprocess.PIPE,
+                )
+            # `writer` and `enc_size` are set together on the first frame and never again,
+            # and `Popen.stdin` is Optional only because `stdin=PIPE` is optional in
+            # general. One place to state all of that, rather than three re-derivations
+            # spread over the next four lines.
+            sink = writer.stdin
+            assert sink is not None and enc_size is not None
+            if out_img.size != enc_size:
+                out_img = out_img.resize(enc_size, Image.Resampling.BILINEAR)
+            sink.write(np.asarray(out_img, np.uint8).tobytes())
 
-        n_done += 1
-        if n_done % 30 == 0:
-            print(f"  {n_done} frames ({n_done / (time.time() - t0):.1f} fps)")
-        if args.max_frames and n_done >= args.max_frames:
-            break
+            n_done += 1
+            if n_done % 30 == 0:
+                print(f"  {n_done} frames ({n_done / (time.time() - t0):.1f} fps)")
+            if args.max_frames and n_done >= args.max_frames:
+                break
 
-    if writer is not None:
-        assert writer.stdin is not None
-        writer.stdin.close()
-        writer.wait()
+    finally:
+        code = finish_encoder(writer)
+
+    # Only reached when the loop finished: an exception on the way here has already
+    # propagated, and it is the more informative failure. A non-zero status here is
+    # a full disk or an unwritable path, and the old code printed `done:` for both.
+    if code not in (None, 0):
+        sys.exit(
+            f"ffmpeg exited {code} while encoding {args.output}; "
+            f"the file is incomplete or was never written."
+        )
     dt = time.time() - t0
     print(
         f"done: {n_done} frames in {dt:.1f}s "

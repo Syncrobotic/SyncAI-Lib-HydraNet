@@ -14,6 +14,7 @@ dependency -- are the reason this is worth having in one place at all.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import subprocess
 import tempfile
@@ -188,3 +189,28 @@ def frames(path: str, w: int, h: int, stride_fps: float | None):
                     f"the clip, not the clip.\n"
                     + (message or "ffmpeg said nothing; re-run without `-v error`.")
                 )
+
+
+def finish_encoder(proc: subprocess.Popen | None) -> int | None:
+    """Close an encoder's stdin, wait for it, and report its exit status. Never raises.
+
+    None in, None out, so a caller that never wrote a frame needs no special case.
+
+    Both video CLIs pipe raw RGB into an ffmpeg they started themselves, and both used to
+    get the shutdown subtly wrong in different ways. `cli/scene` closed the pipe in a
+    `finally` and ignored the status; `cli/infer_video` checked nothing and had no
+    `finally` at all, so any exception mid-loop left ffmpeg without an EOF -- an mp4 with
+    no moov atom, unplayable, beside an orphaned process. Both then printed `done: N
+    frames -> out.mp4` unconditionally, which is also what a full disk and an unwritable
+    path produced.
+
+    Not raising is deliberate: this runs from a `finally`, where raising would replace
+    whatever sent the caller there. It returns the status and lets the caller decide,
+    which it can only do sensibly once it knows the loop finished.
+    """
+    if proc is None:
+        return None
+    if proc.stdin is not None:
+        with contextlib.suppress(BrokenPipeError, OSError):
+            proc.stdin.close()
+    return proc.wait()
