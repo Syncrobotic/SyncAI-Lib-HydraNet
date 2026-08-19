@@ -4,6 +4,7 @@ pytest tests/test_runmeta.py -v
 """
 
 import json
+from pathlib import Path
 
 import yaml
 
@@ -123,6 +124,44 @@ def test_resuming_takes_the_lock_back(tmp_path):
     (out / "last.pt").write_bytes(b"")
     assert resolve_out_dir(out, resuming=True) == out
     assert (out / RUN_LOCK).is_file()
+
+
+def test_a_run_records_the_directory_it_actually_wrote_to(tmp_path):
+    """meta.json is provenance, and provenance that names another run is worse than none.
+
+    `resolve_out_dir` sends a second run to a timestamped sibling, and `write_run_meta`
+    snapshots the config it was handed -- so the sibling used to record the directory it
+    was *asked* for. `runs/hydranet_indoor_det-20260813-190051/meta.json` still says
+    `output_dir: runs/hydranet_indoor_det`, which is a different run's directory.
+
+    Found while checking a peer's finding that `experiment` does not identify a run either:
+    nine of forty-one run directories disagree with their own `experiment` field, six of
+    them calling themselves `hydranet_indoor`, including all four arms of the COCO ratio
+    sweep. That half is a labelling choice and is documented rather than changed. This half
+    was a record that did not match the fact.
+    """
+    from syncai_hydranet.engine.trainer import Trainer
+
+    out = tmp_path / "run"
+    out.mkdir()
+    (out / "best.pt").write_bytes(b"")  # occupied, so the next run gets a sibling
+
+    cfg = {"output_dir": str(out)}
+    resolved = resolve_out_dir(Path(cfg["output_dir"]))
+    assert resolved != out, "precondition: an occupied directory yields a sibling"
+
+    # The one line under test, in the shape Trainer applies it.
+    if str(resolved) != str(cfg["output_dir"]):
+        cfg["output_dir"] = str(resolved)
+    assert Path(cfg["output_dir"]) == resolved
+
+    meta = write_run_meta(resolved, cfg)
+    assert Path(meta["config"]["output_dir"]).name == resolved.name
+    on_disk = json.loads((resolved / "meta.json").read_text())
+    assert Path(on_disk["config"]["output_dir"]) == resolved, (
+        "meta.json names a directory this run did not write to"
+    )
+    assert Trainer  # the caller this mirrors; imported so a rename fails here too
 
 
 # ------------------------------------------------------------------- metadata

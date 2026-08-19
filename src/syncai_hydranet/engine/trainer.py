@@ -188,6 +188,13 @@ class Trainer:
                 f"{cfg['output_dir']} already holds a run; writing to {self.out_dir} "
                 f"instead. Use --resume to continue the existing one."
             )
+            # And record where it actually went. `write_run_meta` snapshots this cfg into
+            # meta.json and config.yaml, so without this a run in a timestamped sibling
+            # states the directory it was *asked* for -- which is a different run's.
+            # `runs/hydranet_indoor_det-20260813-190051/meta.json` says
+            # `output_dir: runs/hydranet_indoor_det` today. Nothing reads the key after
+            # this line; `self.out_dir` is what the run uses.
+            cfg["output_dir"] = str(self.out_dir)
         for w in check_config(cfg):
             self.logger.warning(f"config: {w}")
 
