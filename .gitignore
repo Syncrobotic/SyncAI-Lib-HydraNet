@@ -47,3 +47,8 @@ assets/*.pdf
 *credentials*.json
 gcp-key*.json
 .gcp/
+
+# Model release bundles. Staged locally, published to GCS -- a bundle carries a 128 MB
+# checkpoint and its per-target builds, and git is not where those belong. MANIFEST.json
+# is what makes a bundle verifiable wherever it lives; see docs/RELEASE.md.
+releases/

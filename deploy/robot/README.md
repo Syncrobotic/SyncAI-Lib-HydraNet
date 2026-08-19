@@ -51,7 +51,12 @@ setuptools 81).
 ```bash
 python convert_rknn_fp16.py hydranet_joint_coco10.onnx hydranet_joint_coco10.rknn
 # INT8: grab ~60 calibration frames from the robot's own camera, list them in dataset.txt,
-# then quantise. INT8 keeps accuracy here and is ~25-35% faster on the NPU.
+# then quantise. Measured 2026-08-19 on 200 ADE20K val images, int8 vs fp32 at the SAME
+# 384x512 so the resolution change is not folded in: traversability mIoU 0.5869 -> 0.5820
+# (-0.0049), terrain 0.3672 -> 0.3610 (-0.0062), 95.9%/91.2% of pixels unchanged. It is
+# also ~25-35% faster on the NPU. "INT8 keeps accuracy" had been an unmeasured claim here
+# until then; scripts/eval_rknn_build.py is what checks it, and every build should carry
+# its own numbers -- see docs/RELEASE.md.
 python convert_rknn_int8.py hydranet_joint_coco10.onnx hydranet_joint_coco10_int8.rknn dataset.txt
 ```
 
