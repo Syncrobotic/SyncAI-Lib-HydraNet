@@ -11,6 +11,21 @@ files were arranged to hold: batch02 would still train on a camera batch03 score
 batch moves together here, and `--check` refuses the whole operation if any of them would
 end up disagreeing.
 
+**Train-only supplements are checked too, and this is the failure that put it here.**
+`datasets/retail_objects_columns_clean` is a `column` supplement with no val and no test,
+so it has no assignment for this script to move and was invisible to it. It was built on
+2026-08-18 from the nine cameras then in neither val nor test; six hours later a `--to val`
+run promoted `Taichung-cam10`, and the supplement went on training on a val camera with
+nothing anywhere reporting it. The three `hydranet_retail_surfaces_columns` seeds that had
+already finished were honest; anything trained after that was not, and no tool said so.
+
+The fix is a digest rather than an assignment. A dataset that records `clean_against` --
+the batches it was built to be clean of, and a hash of their assignment at the time -- is
+verified before and after every move here: if this move would invalidate one, the whole
+operation is refused by name. See `datasets/retail_objects_columns_v2/split.json`. A
+supplement without that block is reported as unprotected rather than assumed safe, because
+"nothing to check" and "checked and fine" are the two states this failure confused.
+
 Three trees carry a camera and all three move: `images/<split>/`,
 `annotations/<split>/` (the masks), and the `annotations/instances_<split>.json` detection
 records, whose `file_name` is relative to its split and whose ids must not collide with the
@@ -21,6 +36,7 @@ recorded reason is one nobody can argue with later.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import sys
@@ -38,6 +54,13 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--to", required=True, choices=SPLITS)
     ap.add_argument("--batches", nargs="+", default=BATCHES)
     ap.add_argument("--reason", default="")
+    ap.add_argument(
+        "--allow-stale-supplements",
+        action="store_true",
+        help="proceed even though a train-only supplement would start "
+        "training on a held-out camera. Only correct when the supplement is "
+        "being rebuilt in the same change.",
+    )
     ap.add_argument("--apply", action="store_true", help="without this it only reports")
     return ap
 
@@ -86,6 +109,74 @@ def move_coco(root: Path, cam: str, src: str, dst: str, apply: bool) -> int:
     return len(moving)
 
 
+def assign_digest(roots: list[Path]) -> str:
+    """A stable hash of every batch's camera->split map, as `clean_against` records it."""
+    payload = {
+        str(r): dict(sorted(json.loads((r / "split.json").read_text())["assign"].items()))
+        for r in sorted(roots, key=str)
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:12]
+
+
+def supplements(datasets: Path = Path("datasets")) -> list[tuple[Path, dict]]:
+    """Every dataset carrying a `clean_against` block, and the block."""
+    found = []
+    for f in sorted(datasets.glob("*/split.json")):
+        try:
+            d = json.loads(f.read_text())
+        except json.JSONDecodeError:
+            continue
+        if "clean_against" in d:
+            found.append((f.parent, d))
+    return found
+
+
+def check_supplements(roots: list[Path], when: str) -> list[str]:
+    """Which supplements no longer match the assignment they were built against.
+
+    Reported by name and by camera, because "a supplement is stale" is not actionable and
+    "columns_v2 trains on Taichung-cam10, which is now val" is.
+    """
+    digest = assign_digest(roots)
+    broken = []
+    for root, d in supplements():
+        ca = d["clean_against"]
+        if ca.get("assign_sha256_12") == digest:
+            continue
+        held = {}
+        for r in roots:
+            assign = json.loads((r / "split.json").read_text())["assign"]
+            for cam in d.get("assign", {}):
+                if assign.get(cam) in ("val", "test"):
+                    held.setdefault(cam, {})[r.name] = assign[cam]
+        if held:
+            detail = "; ".join(f"{c} is {v}" for c, v in sorted(held.items()))
+            broken.append(f"{root} ({when}): {detail}")
+        else:
+            print(
+                f"note: {root} digest is stale but no camera of its is held; "
+                f"refresh assign_sha256_12 to {digest}"
+            )
+    return broken
+
+
+def check_after(cameras: list[str], to: str) -> list[str]:
+    """What `check_supplements` would say *after* this move, computed before making it.
+
+    Refusing afterwards is not a guard, it is a post-mortem.
+    """
+    if to == "train":
+        return []
+    broken = []
+    for root, d in supplements():
+        overlap = sorted(set(cameras) & set(d.get("assign", {})))
+        if overlap:
+            broken.append(
+                f"{root} trains on {', '.join(overlap)}, which this move sends to {to}"
+            )
+    return broken
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     roots = [Path(b) for b in args.batches]
@@ -115,6 +206,20 @@ def main(argv: list[str] | None = None) -> int:
     for r, cam, src, dirs in plan:
         n = sum(len(list(d.glob("*.jpg"))) for d in dirs)
         print(f"{r.name}: {cam}  {src} -> {args.to}   {len(dirs)} clips, {n} frames")
+    would = check_after(args.cameras, args.to)
+    if would:
+        print("\nREFUSED: this move invalidates a train-only supplement:", file=sys.stderr)
+        for line in would:
+            print(f"  {line}", file=sys.stderr)
+        print(
+            "\nRebuild the supplement without those cameras and update its "
+            "clean_against digest, or pass --allow-stale-supplements if you are "
+            "rebuilding it in the same breath.",
+            file=sys.stderr,
+        )
+        if not args.allow_stale_supplements:
+            return 1
+
     if not args.apply:
         print("\n(dry run; pass --apply)")
         return 0
@@ -138,6 +243,14 @@ def main(argv: list[str] | None = None) -> int:
             {"cameras": list(args.cameras), "to": args.to, "reason": args.reason}
         )
         f.write_text(json.dumps(sp, indent=1))
+
+    stale = check_supplements(roots, "after the move")
+    if stale:
+        print("\nSUPPLEMENTS NOW STALE -- rebuild before the next training run:")
+        for line in stale:
+            print(f"  {line}")
+    else:
+        print(f"\nsupplements verified; assignment digest is now {assign_digest(roots)}")
 
     print("\nafter:")
     for r in roots:
