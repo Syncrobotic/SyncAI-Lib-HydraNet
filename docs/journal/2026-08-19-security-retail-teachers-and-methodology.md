@@ -348,3 +348,19 @@ it belonged. Also on record: the bundle's "v2 annotation" zip is actually v1 (th
 labels live only in rap_zs.pkl, cross-checked 100% against v1 on shared attributes),
 and RAP's occlusion columns (OcclusionDown 20%) are the only labelled source for the
 occlusion that fragments site tracks.
+
+**The RAP v2 retrain is rejected, and the rejection vindicates the ordering rule
+(runs/rapv2_eval01, script at 0eeacd5).** Attribute ranking is genuinely good (watch-list
+AUROC 0.82–0.97, Female F1 0.92) — but on the only cross-run association protocol,
+Market-1501, the embedding fell to mAP 0.0113: **below the untrained-ImageNet floor
+(0.0318)** and a quarter of crop_encoder01 (0.0543). Pure attribute BCE on 17k crops
+ground away the pretrained generalisation — association-first was the documented
+ordering, and this measurement is why. Two more findings: the trainer's head is
+hard-wired to the 26 PA-100K channels, so rap_Employee (the staff attribute's first
+source) was never trained; and AgeOver60 is confirmed zero-positive in all three splits.
+crop_encoder01 stays. The next attribute round has three prerequisites before it is
+worth GPU: an identity/metric-learning loss beside the BCE, the rap_* columns wired into
+a configurable head, and an in-domain retrieval protocol (rap_zs identities) so
+association is measured where it will be used. Overfitting note for the record:
+attribute F1 plateaued (peak epoch 9, −1.5 points by 16) while the embedding was the
+real casualty — a metric that watches only attributes cannot see this failure.
