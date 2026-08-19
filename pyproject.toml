@@ -72,6 +72,11 @@ export = ["onnx>=1.15", "onnxsim>=0.4", "onnxruntime>=1.17,<1.23"]
 # not carry a 6.5 GB checkpoint it never runs. `facebook/sam3` is a gated repo, so this
 # installs the code and leaves the weights to `hf auth login`.
 annotate = ["transformers>=5.0"]
+bench = [
+    "matplotlib>=3.10.9",
+    "scipy>=1.15.3",
+    "tensorrt>=11.2.1.2",
+]
 
 [project.scripts]
 hydranet-train = "syncai_hydranet.cli.train:main"
