@@ -149,6 +149,33 @@ and therefore the Jetson post-processing, so decide it with whoever owns deploym
 than unilaterally. If it stays, add a consistency term to the loss so that 0.88% shrinks
 instead of being merely observed.
 
+> **Status, 2026-08-19: one of the two blockers is gone, the other is not, and the fleet
+> has already voted with its configs.** Counted rather than assumed:
+>
+> * **30 of the 36 shipped configs resolve without the head**, including every member of
+>   the shipping `retail_security` / `retail_surfaces` / `retail_objects` /
+>   `retail_products` family. The six that keep it are `hydranet_indoor`,
+>   `eval_indoor25`, `hydranet_regnet800mf`, `hydranet_retail`, `hydranet_retail_cctv`
+>   and `hydranet_retail_cocostuff`.
+> * **Only three files say so.** `retail_objects`, `retail_products` and `hm3d_cctv` write
+>   `traversability: null`; the other twenty-seven inherit the removal down their `_base_`
+>   chains. Worth stating because the resolved count reads like thirty configs each
+>   carrying a workaround, and inverting the default on that reading was tried and
+>   reverted: it would turn three one-line nulls into three full head declarations, two of
+>   which already carry partial loss overrides. The base is the right place for it while
+>   any config wants it.
+> * **"Decide it with whoever owns deployment" no longer names two people.** The quadruped
+>   line was removed on 2026-08-19, so there is one deployment target and one ONNX
+>   contract to change.
+> * **The ONNX blocker stands unchanged**, and so does one thing this section already
+>   admits: the three-way table above was measured on the segmentation-only checkpoint and
+>   has **not** been re-run on `releases/v1`. Removing a head on a one-checkpoint-old
+>   measurement would be the failure Part II section 1 catalogues, committed by this file.
+>
+> So what decides it is a re-run, not a discussion: `hydranet-eval --split test` on the
+> current shipping checkpoint, scored the same three ways. Until that exists the honest
+> state is "measured redundant once, on a model nobody ships".
+
 ---
 
 ## 3. What was checked and found sound
