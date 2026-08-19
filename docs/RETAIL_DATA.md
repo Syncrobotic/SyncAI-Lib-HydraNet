@@ -635,10 +635,11 @@ Still a teacher's opinion, not ground truth — two teachers agreeing is not acc
 > gap and needs no daylight gate" is withdrawn for night.** Re-measured the same day across
 > all 42 live cameras, 12 midnight frames each
 > ([journal/2026-08-19-night-person-fleet-recheck.md](journal/2026-08-19-night-person-fleet-recheck.md),
-> `runs/night_person_verdict`): **28 cameras hold, 3 carry a real person, and 11 are
-> counter-examples** — a box over 0.35 on an empty shuttered store, static against the
-> ~00:00 plate, and confirmed not-a-person at native resolution. The worst is **0.594**,
-> 1.7× the threshold.
+> `runs/night_person_verdict`): **28 cameras hold, 1 carries a real person, and 13 are
+> counter-examples** — a box over 0.35 on an empty shuttered store, confirmed not-a-person
+> at native resolution. The worst is **0.594**, 1.7× the threshold. (The first pass said 3
+> and 13−2; two cameras were filed as people on a *low* static share and hold parked
+> scooters and a hanging accessory. A veto's quiet side is not evidence — §7 of the journal.)
 >
 > The pipeline reproduces the original measurement on the camera it was made on before
 > anything else is read off it: Taichung-cam09 returns GDINO max 0.323 against 0.326 and
@@ -651,9 +652,13 @@ Still a teacher's opinion, not ground truth — two teachers agreeing is not acc
 > Kaohsiung-cam02 and 100% on Tao-Hsin-cam09, which is the trade the static gate was
 > switched off for in the first place.
 >
-> **So night `person` is a per-camera decision, not a fleet threshold**, and night tranches
-> cannot be labelled unreviewed. Day is unaffected. The static share against the existing
-> midnight plates is the discriminator that does work, in both directions, on all 42.
+> **So night `person` is a per-camera decision, not a fleet threshold.** What makes night
+> tranches usable is `src/syncai_hydranet/data/night_person.py`: GDINO at 0.35 followed by a
+> static veto at 0.50 against each camera's own midnight plate, with Kaohsiung-cam02 and
+> Tao-Hsin-cam09 excluded by name because no threshold separates them. Measured on the fleet:
+> **72 of 72 false boxes removed, 12 of 12 verified person boxes kept, 0 dropped on the 28
+> clean cameras.** Day is unaffected. The residual risk is a person who holds perfectly still
+> for a whole clip, which is an alerting-layer problem and not a labelling one.
 
 `column` is the precedent, and §1 of this file is what it costs: a class sourced from the
 wrong distribution passes every config gate, scores 0.40–0.51 on val, and predicts 0.00% of
