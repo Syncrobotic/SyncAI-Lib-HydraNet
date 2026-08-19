@@ -289,3 +289,23 @@ self-sealing). Its real case is serving capacity (taken-over pixels need no comp
 transfer), to be measured on the TensorRT path. Full stack: static flips 0.67%,
 oscillation share 81.6%→65.1%, verified by eye across moving-person frames (no smearing;
 EMA ghost 1–2 frames; boxes coast ≤5). Caveat: one camera, one slot, one clip.
+
+**The three-seed table (rule 4 satisfied), final epochs, aligned metrics:**
+
+| metric | seed42 | seed7 | seed13 | xl baseline |
+|---|---:|---:|---:|---:|
+| site_person mAP50 | 0.787 | 0.803 | 0.795 | — (no site person source) |
+| site_person mAP | 0.436 | 0.446 | 0.438 | — |
+| coco_person mAP | 0.2176 | 0.2158 | 0.2172 | 0.2103 |
+| site_boxes mAP | 0.118 | 0.118 | 0.130 | 0.117 |
+| site_boxes03 mAP | 0.121 | 0.114 | 0.137 | 0.122 |
+| terrain mIoU (site_seg03) | 0.549 | 0.591 | 0.567 | 0.565 |
+
+Reading: the new in-domain person capability is **stable across seeds** (mAP50 band
+0.016 wide); coco_person — the only human-labelled person metric — is above the
+baseline in **all three seeds** (+0.006..+0.007, small but unanimous); merchandise
+detection and segmentation sit inside their own seed bands, so the person supervision
+was added at **no measurable cost to any other head**. site_person numbers are
+agreement with GDINO per the standing caveat. The teacher swap decided on this
+morning's frame-identical measurement is now confirmed end-to-end: teacher → fleet
+batch → retrain → three seeds → stability ruler, all on instruments built today.
