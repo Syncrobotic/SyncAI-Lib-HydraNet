@@ -31,22 +31,18 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import torch
-from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
-import yaml  # noqa: E402
 
-from syncai_hydranet.data.label_maps import get_scheme  # noqa: E402
-from syncai_hydranet.labels import IGNORE  # noqa: E402
-from syncai_hydranet.models.hydranet import build_model  # noqa: E402
-from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
+from syncai_hydranet.engine.confusion import (  # noqa: E402
+    per_image_confusions,
+    run_config,
+)
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
-from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -62,78 +58,16 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def run_config(run: Path) -> dict:
-    """Read a finished run's config as a record, without today's validator.
-
-    `load_config` calls `check_config`, which is right for launching a run and wrong for
-    reading one: a run from this morning cannot be expected to satisfy a check added this
-    afternoon, and refusing to *analyse* it because of that loses the only evidence about
-    what it did. `runs/hydranet_retail_security_b03/config.yaml` is exactly that case --
-    it carries the two-name `classes` list whose check landed hours after it started.
-
-    A saved run config is already fully merged, so no `_base_` resolution is needed.
-    """
-    return yaml.safe_load((run / "config.yaml").read_text())
-
-
-def per_image_confusions(run: Path, args, device) -> tuple[np.ndarray, list[str], list[Path]]:
-    """One confusion matrix per image, un-summed.
-
-    Split out from `confusion` because the sum discards what a val set's own sampling error
-    is made of. Anything that asks "how much would this number move on a different draw of
-    images" -- `val_sampling_error.py` -- needs the per-image terms, and the alternative was
-    to copy this loop, whose upsample-before-argmax step is easy to get quietly wrong.
-    """
-    cfg = run_config(run)
-    model = build_model(cfg).to(device).eval()
-    model.load_state_dict(
-        select_weights(load_checkpoint(str(run / args.checkpoint)), args.weights)
-    )
-    classes = list(cfg["data"]["terrain_classes"])
-    mapping = get_scheme(args.label_map).mapping
-    imgs = sorted((Path(args.dataset) / "images" / args.split).rglob("*.jpg"))
-    if not imgs:
-        raise SystemExit(f"no images under {args.dataset}/images/{args.split}")
-    mats: list[np.ndarray] = []
-    kept: list[Path] = []
-    for jpg in imgs:
-        png = Path(str(jpg).replace("/images/", "/annotations/")).with_suffix(".png")
-        if not png.exists():
-            continue
-        raw = np.asarray(Image.open(png))
-        gt = np.full(raw.shape, 255, dtype=np.uint8)
-        for k, v in mapping.items():
-            if v != IGNORE:
-                gt[raw == k] = v
-        x, _, region = preprocess(Image.open(jpg), cfg["data"]["input_size"])
-        with torch.no_grad():
-            logits = model(x.to(device))["terrain"]
-        x0, y0, cw, ch = region
-        # Upsample the logits and argmax after: interpolating class ids is meaningless
-        # arithmetic, and the mask is full resolution while the head is not.
-        pred = (
-            torch.nn.functional.interpolate(
-                logits[:, :, y0 : y0 + ch, x0 : x0 + cw],
-                size=gt.shape,
-                mode="bilinear",
-                align_corners=False,
-            )
-            .argmax(1)[0]
-            .cpu()
-            .numpy()
-            .astype(np.uint8)
-        )
-        c = np.zeros((len(classes), len(classes)), dtype=np.int64)
-        ok = gt != IGNORE
-        np.add.at(c, (gt[ok], pred[ok]), 1)
-        mats.append(c)
-        kept.append(jpg)
-    return np.stack(mats), classes, kept
-
-
 def confusion(run: Path, args, device) -> tuple[np.ndarray, list[str]]:
-    mats, classes, _ = per_image_confusions(run, args, device)
-    return mats.sum(0), classes
+    return per_image_confusions(
+        run,
+        checkpoint=args.checkpoint,
+        weights=args.weights,
+        label_map=args.label_map,
+        dataset=args.dataset,
+        split=args.split,
+        device=device,
+    )[0].sum(0), run_config(run)["data"]["terrain_classes"]
 
 
 def iou(c: np.ndarray, i: int) -> float:

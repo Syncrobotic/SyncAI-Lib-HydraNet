@@ -72,9 +72,9 @@ def test_the_modules_that_mask_with_it_import_it():
         "src/syncai_hydranet/geometry/bev.py",
         "src/syncai_hydranet/cli/annotation.py",
         "src/syncai_hydranet/preprocessing.py",
+        "src/syncai_hydranet/engine/confusion.py",
         "scripts/sam3_prelabel.py",
         "scripts/annotation_batch.py",
-        "scripts/site_confusion.py",
     }
     missing = [
         rel

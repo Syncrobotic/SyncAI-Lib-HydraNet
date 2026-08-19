@@ -36,8 +36,8 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from site_confusion import per_image_confusions  # noqa: E402
 
+from syncai_hydranet.engine.confusion import per_image_confusions  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
 
 
@@ -89,7 +89,15 @@ def miou(mats: np.ndarray) -> tuple[float, np.ndarray]:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     device = pick_device(None)
-    mats, classes, paths = per_image_confusions(Path(args.run), args, device)
+    mats, classes, paths = per_image_confusions(
+        Path(args.run),
+        checkpoint=args.checkpoint,
+        weights=args.weights,
+        label_map=args.label_map,
+        dataset=args.dataset,
+        split=args.split,
+        device=device,
+    )
     names = classes[1:]
     cams = np.array([p.parts[-2].split("__")[0] for p in paths])
 
