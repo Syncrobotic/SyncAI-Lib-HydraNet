@@ -116,18 +116,48 @@ Three gates, all of which have fired on real runs here:
 To change anything, cut a new version. Promote by moving an **alias** — in Model Registry,
 or as a small pointer file — never by overwriting bytes.
 
-### Engines are not in the bundle
+### One version, several builds
 
-A TensorRT engine is tied to a **GPU architecture, TensorRT version and JetPack version**.
-The engine built for the AGX Orin on JetPack 6.1 / TRT 10.3 will not load on an Orin NX, or
-after a JetPack upgrade. So the engine is a per-target build artefact derived from
-`model.onnx`, not the model itself:
+The bundle is the model. What runs on a device is a **build** of it, and this project has
+two targets that need different ones:
 
 ```text
-releases/v1/engines/agx-orin_jp6.1_trt10.3_fp16.engine
+releases/v1/
+├── model.onnx                                       the portable graph, and the thing
+│                                                    every build is derived from
+└── builds/
+    ├── agx-orin_jp6.1_trt10.3_fp16.engine           product B, retail/security
+    └── rk3588_rknn1.6.0_int8_384x512.rknn           product A, the Lite3
 ```
 
-Rebuild on the board; keep the ONNX as the thing you version.
+Neither build belongs in the bundle proper, and for the same reason in both cases: they are
+tied to things the model knows nothing about. A TensorRT engine is bound to a **GPU
+architecture, TensorRT version and JetPack version** — the AGX Orin / JetPack 6.1 / TRT 10.3
+engine will not load on an Orin NX or after a JetPack upgrade. An RKNN is bound to the
+**toolkit version, which must match the robot's `librknnrt.so`** (1.6.0 here; see
+[`deploy/robot/README.md`](../deploy/robot/README.md)), and to the input size and
+quantisation it was converted at.
+
+Rebuild per target; keep the ONNX as the thing you version.
+
+### A build's numbers are not the model's numbers
+
+**This is the rule that is easiest to skip and most expensive to skip.** `metrics.json`
+records the selected epoch as trained: fp32, at the training input size. The robot runs
+int8 at 384x512, two lossy conversions away from that, and `deploy/robot/README.md`
+currently asserts "INT8 keeps accuracy here" with nothing behind it — `scripts/bench_*`
+measure throughput, not accuracy.
+
+So a build is not accepted until it has been scored on the same validation set as the model
+it came from, and the result stored beside it:
+
+```text
+releases/v1/builds/rk3588_rknn1.6.0_int8_384x512.metrics.json
+```
+
+Quoting the bundle's mAP for a quantised build is the same class of error as quoting a
+run's best-ever per-head score for a checkpoint selected on something else — see below.
+Both replace a measurement with a plausible number.
 
 ## 3. What has to be true before `main`
 
@@ -143,6 +173,27 @@ Every item is currently unmet, which is an accurate summary of where the project
 | Export parity | `--check-parity` |
 | Latency measured on the target board | `scripts/bench_orin.sh`, and `scripts/bench_camera_orin.py` for the end-to-end number |
 | Bundle published and verified | `release_bundle.sh publish` |
+
+### What cutting v1 immediately showed
+
+`releases/v1` is `runs/hydranet_joint_coco10`, the model on the robot. Cutting it produced a
+number the run directory had always contained and nobody had read: the shipped checkpoint is
+**epoch 55**, selected on `detection_mAP`, and its scores are
+
+| | selected checkpoint (v1) | best epoch for that head | given up |
+|---|---|---|---|
+| traversability mIoU | 0.584 | 0.608 | −0.024 |
+| terrain mIoU | **0.360** | 0.491 | **−0.131** |
+| detection mAP | 0.335 | 0.335 | — |
+
+The per-head maxima belong to three different epochs and to no model that exists. Reporting
+them as "the baseline" — which had happened in this project's own notes — credits a
+comparison with a gap the baseline never had. `metrics.json` in the bundle is the honest
+figure precisely because it is one epoch's row, not a column of maxima.
+
+It is also the concrete case `utils/runmeta.selection_report` was written for: 0.131 of
+terrain mIoU is six times its 0.02 warning threshold, and on that checkpoint
+`IoU/terrain/05_stairs` and `IoU/traversability/01_caution` are both exactly 0.0.
 
 ## 4. Which version is on which robot
 

@@ -483,6 +483,26 @@ and the provenance above is better than a tracker's defaults. That calculation c
 training routinely spans machines and there is no single place to compare them — which is the
 point at which workstream D should revisit it.
 
+### A run is not a version, and the gap between them was 54 to 0
+
+Counted on 2026-08-19: **54 run directories, 0 releases.** Of the 49 carrying `meta.json`,
+**31 were trained from a dirty tree** — their exact source exists only in
+`uncommitted.patch`, so they cannot be released at all, and the check that would have said
+so runs at release time, long after the eight hours were spent.
+
+That ratio is the argument for two habits, and neither is about tooling:
+
+- **Refuse a dirty tree at the start of training, not at release.** The warning the trainer
+  prints today is read after the fact or not at all. The cost of ignoring it is a whole run.
+- **Cut the release when the model ships, not when someone remembers.** `releases/v1` was
+  cut months after `hydranet_joint_coco10` went onto the robot, and cutting it immediately
+  surfaced that the shipped checkpoint scores 0.360 terrain mIoU where the project's own
+  notes had been quoting 0.491 — a per-head maximum from a different epoch. A model that is
+  running somewhere with no frozen record is a model whose numbers drift in retelling.
+
+[RELEASE.md](RELEASE.md) has the mechanism and the three gates. The point here is only that
+the mechanism existed, was correct, and was worth nothing until it was run once.
+
 ---
 
 ## 6. Suggested order for a team starting today
