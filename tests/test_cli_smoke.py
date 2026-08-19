@@ -114,8 +114,15 @@ def config(tmp_path, dataset) -> Path:
 
 @pytest.fixture
 def trained(config) -> Path:
-    """Run training once; the other CLIs need a checkpoint to load."""
-    train_cli.main(["--config", str(config)])
+    """Run training once; the other CLIs need a checkpoint to load.
+
+    `--allow-dirty` because the suite runs against a working checkout, which is dirty
+    whenever anyone is mid-change -- and on a shared checkout that is most of the time.
+    The gate it bypasses is about releasability, not correctness, and a smoke run is
+    never released. A test that failed on the state of someone else's editor would be
+    measuring the wrong thing.
+    """
+    train_cli.main(["--config", str(config), "--allow-dirty"])
     return Path(yaml.safe_load(config.read_text())["output_dir"])
 
 
@@ -164,6 +171,7 @@ def test_set_overrides_reach_the_run(config, tmp_path):
     out = tmp_path / "override"
     train_cli.main(
         [
+            "--allow-dirty",
             "--config",
             str(config),
             "--set",
@@ -181,6 +189,7 @@ def test_resume_continues_rather_than_restarting(config, trained):
     """Resuming must advance the epoch counter, not replay epoch 1 at full LR."""
     train_cli.main(
         [
+            "--allow-dirty",
             "--config",
             str(config),
             "--set",

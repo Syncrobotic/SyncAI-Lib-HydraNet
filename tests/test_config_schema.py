@@ -56,6 +56,11 @@ KNOWN_UNSOURCED = {
     # the channel, and if it does, this entry has to change. The whole point of pinning
     # these as data is that a config's empty channels are stated per config.
     "hydranet_retail_objects_nc2.yaml": ("product",),
+    # The robot's four-head config. Same twelve terrain classes as the three-head model
+    # it derives from, so it inherits the same three that ADE20K cannot source -- adding
+    # a depth head does not fill a segmentation channel. Listed rather than inferred for
+    # the reason above: if a dataset is ever added that fills them, this line must change.
+    "hydranet_robot_d4.yaml": ("floor_metal", "wet_slippery", "threshold_ramp"),
 }
 
 
