@@ -239,6 +239,21 @@ its fps on this footage inherits the same error.
   Occupancy counts tracks, loitering needs one to survive, tailgating needs two to be
   distinct. Read an occupancy alarm as an upper bound until association is fixed and
   measured.
+* **Every event row carries a wall clock, and it carries its offset.** `started_at` and
+  `ended_at` are ISO-8601 with a UTC offset, derived from the clip's `archive_<UTC>_` name
+  and the store's zone. Frames remain the unit of record for every computation — a dropped
+  frame changes the index and not the clock, which is why `stage.StageFrame` insists on the
+  index — but the conversion happens at the edge, because `frame_start: 5312` does not
+  locate anything in a DVR. This was missing until 2026-08-19: the rows were correct and
+  undeliverable.
+
+  **The clip filenames are UTC and the stores are UTC+8.** `scripts/site_events.py` takes
+  `--utc-offset` (default 8) and writes every time in the store's zone; the offset is in
+  the string so nobody has to know which convention was used. `scripts/pull_studioa.py`
+  learnt this the expensive way, having asked for "16:00, the busy hour" and received
+  greyscale IR of a shop with the shutters down. A clip whose name carries no time gets
+  `null` rather than an invented start — the events are still correct in frames, and a
+  guessed timestamp would look exactly as authoritative as a real one.
 
 ---
 

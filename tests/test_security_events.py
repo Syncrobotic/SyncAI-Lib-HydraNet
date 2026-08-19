@@ -17,6 +17,7 @@ pytest tests/test_security_events.py -v
 from __future__ import annotations
 
 import math
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pytest
@@ -258,3 +259,76 @@ def test_a_row_survives_json_with_no_numpy_left_in_it():
     row = ev.zone_events([track], [zone], CAM, PLANE, FPS, "cam01")[0].as_row()
     assert json.loads(json.dumps(row))["type"] == "zone_intrusion"
     assert row["basis"], "a row without a basis is a number nobody can attribute"
+
+
+# -------------------------------------------------- the wall clock, at the edge
+
+TAIPEI = timezone(timedelta(hours=8))
+CLIP = "datasets/studioa_clips/Taichung-cam01/archive_20260816-113012_20260816-113518.mp4"
+
+
+def _event(**kw) -> ev.SecurityEvent:
+    base = {"type": "loitering", "camera": "Taichung-cam01", "frame_start": 0,
+            "frame_end": 9, "fps": FPS}  # fmt: skip
+    return ev.SecurityEvent(**{**base, **kw})
+
+
+def test_the_filename_is_utc_and_the_store_is_not():
+    """The failure pull_studioa.py records in capitals, in one assertion.
+
+    11:30:12 UTC is 19:30:12 in a UTC+8 store. Asking for the local hour and getting the
+    UTC one is how a request for "16:00, the busy hour" returned a closed shop.
+    """
+    assert ev.clip_start_from_name(CLIP, TAIPEI) == datetime(
+        2026, 8, 16, 19, 30, 12, tzinfo=TAIPEI
+    )
+    assert ev.clip_start_from_name(CLIP) == datetime(
+        2026, 8, 16, 11, 30, 12, tzinfo=timezone.utc
+    )
+
+
+def test_a_clip_with_no_time_in_its_name_is_refused_rather_than_guessed():
+    """An invented start puts every row at a confidently wrong moment."""
+    with pytest.raises(ValueError, match="does not carry a recording time"):
+        ev.clip_start_from_name("clip.mp4")
+
+
+def test_an_unstamped_event_says_none_rather_than_a_plausible_time():
+    e = _event()
+    assert e.started_at is None and e.ended_at is None
+    assert e.as_row()["started_at"] is None
+
+
+def test_a_stamped_event_locates_itself_in_the_footage():
+    """`frame_start: 5312` does not locate anything in a DVR; this is what does."""
+    start = ev.clip_start_from_name(CLIP, TAIPEI)
+    (e,) = ev.with_clip_start([_event(frame_start=25, frame_end=49)], start)
+    assert e.started_at == start + timedelta(seconds=5.0)  # 25 frames at 5 fps
+    assert e.ended_at == start + timedelta(seconds=10.0)  # frame_end is inclusive
+    assert e.ended_at - e.started_at == timedelta(seconds=e.seconds)
+
+
+def test_the_row_carries_the_offset_so_nobody_has_to_ask_which_zone():
+    (e,) = ev.with_clip_start([_event()], ev.clip_start_from_name(CLIP, TAIPEI))
+    assert e.as_row()["started_at"] == "2026-08-16T19:30:12+08:00"
+
+
+def test_a_naive_start_is_refused():
+    """A time with no zone, in a report spanning a UTC bucket and a UTC+8 store, is a
+    time nobody can act on."""
+    with pytest.raises(ValueError, match="no timezone"):
+        ev.with_clip_start([_event()], datetime(2026, 8, 16, 19, 30, 12))
+
+
+def test_stamping_leaves_the_originals_alone():
+    """SecurityEvent is frozen and the builders return shared lists; replace, not mutate."""
+    original = _event()
+    (stamped,) = ev.with_clip_start([original], ev.clip_start_from_name(CLIP, TAIPEI))
+    assert original.clip_start is None
+    assert stamped is not original
+
+
+def test_no_start_is_a_no_op_rather_than_an_error():
+    """A clip from outside the corpus still produces events, correct in frames."""
+    rows = [_event(), _event(frame_start=10, frame_end=19)]
+    assert [e.as_row() for e in ev.with_clip_start(rows, None)] == [e.as_row() for e in rows]

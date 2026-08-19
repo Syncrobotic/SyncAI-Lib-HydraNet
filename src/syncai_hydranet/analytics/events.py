@@ -65,8 +65,12 @@ will be shown to have worked.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import re
+from collections.abc import Sequence
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta, timezone
 from itertools import pairwise
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -196,6 +200,11 @@ class SecurityEvent:
     threshold: float | None = None
     basis: str = ""
     extra: dict[str, Any] = field(default_factory=dict)
+    # When the clip's first frame was recorded, timezone-aware. Optional and defaulted so
+    # no builder signature changes: the wall clock is not something an event *detector*
+    # knows, it is something the run knows, and `with_clip_start` attaches it at the edge.
+    # See `started_at` for why a row without it is not deliverable.
+    clip_start: datetime | None = None
 
     @property
     def seconds(self) -> float:
@@ -207,6 +216,30 @@ class SecurityEvent:
         """
         return (self.frame_end - self.frame_start + 1) / self.fps
 
+    def at(self, frame: int) -> datetime | None:
+        """The wall clock at ``frame``, or None if this event was never stamped."""
+        if self.clip_start is None:
+            return None
+        return self.clip_start + timedelta(seconds=frame / self.fps)
+
+    @property
+    def started_at(self) -> datetime | None:
+        """When this event began, in real time.
+
+        Frames stay the unit of record for every computation above -- that argument is in
+        `stage.StageFrame` and it has not changed. This is the conversion at the edge, and
+        without it the output is not deliverable: a security operator handed
+        `frame_start: 5312` cannot pull the footage. Nothing in this package produced an
+        absolute time until now, while `scripts/pull_studioa.py` had been parsing one out
+        of every clip's name since the corpus was first pulled.
+        """
+        return self.at(self.frame_start)
+
+    @property
+    def ended_at(self) -> datetime | None:
+        """When this event stopped. `frame_end` is inclusive, hence the +1."""
+        return self.at(self.frame_end + 1)
+
     def as_row(self) -> dict:
         """Flat dict for JSONL, a database, or a dashboard. No numpy types survive it."""
         return {
@@ -215,6 +248,11 @@ class SecurityEvent:
             "frame_start": int(self.frame_start),
             "frame_end": int(self.frame_end),
             "seconds": round(self.seconds, 3),
+            # ISO-8601 with an offset, so a reader never has to ask which zone a time is
+            # in -- the mistake `pull_studioa` names in capitals, having pulled a closed
+            # store at "16:00" because the filenames are UTC and the shops are UTC+8.
+            "started_at": _iso(self.started_at),
+            "ended_at": _iso(self.ended_at),
             "track_ids": [int(t) for t in self.track_ids],
             "zone": self.zone,
             "value": None if self.value is None else float(self.value),
@@ -222,6 +260,56 @@ class SecurityEvent:
             "basis": self.basis,
             **dict(self.extra),
         }
+
+
+def _iso(when: datetime | None) -> str | None:
+    return None if when is None else when.isoformat()
+
+
+CLIP_NAME = re.compile(r"archive_(\d{8}-\d{6})_")
+
+
+def clip_start_from_name(path: str | Path, tz: timezone = timezone.utc) -> datetime:
+    """`archive_20260816-113012_20260816-113518.mp4` -> when recording started.
+
+    **The stamp in the name is UTC and the stores are UTC+8.** That is not a detail; it
+    is the failure `scripts/pull_studioa.py` documents in capitals, having asked for
+    "16:00, the busy hour" and received a greyscale IR clip of a closed shop. So this
+    reads the name as UTC and converts to ``tz``, and every timestamp downstream carries
+    its offset rather than relying on the reader to know.
+
+    Raises rather than guessing: a clip whose name does not carry a time cannot be given
+    one, and an invented start would put every event in the report at the wrong moment
+    while looking exactly as authoritative as a correct one.
+    """
+    m = CLIP_NAME.search(Path(path).name)
+    if m is None:
+        raise ValueError(
+            f"{Path(path).name!r} does not carry a recording time. Expected the site "
+            f"corpus's `archive_YYYYmmdd-HHMMSS_...` naming; pass the start explicitly "
+            f"for a clip from anywhere else."
+        )
+    utc = datetime.strptime(m.group(1), "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
+    return utc.astimezone(tz)
+
+
+def with_clip_start(
+    events: Sequence[SecurityEvent], clip_start: datetime | None
+) -> list[SecurityEvent]:
+    """Attach a clip's wall-clock start to a batch of events.
+
+    At the edge rather than threaded through ten builder signatures: an event detector
+    knows about frames and a run knows about clocks, and `stage.StageFrame` is explicit
+    that the conversion belongs here.
+    """
+    if clip_start is None:
+        return list(events)
+    if clip_start.tzinfo is None:
+        raise ValueError(
+            f"clip_start {clip_start!r} has no timezone. A naive time in a report that "
+            f"crosses a UTC+8 store and a UTC bucket is a time nobody can act on."
+        )
+    return [replace(e, clip_start=clip_start) for e in events]
 
 
 # --------------------------------------------------------------------------- geometry

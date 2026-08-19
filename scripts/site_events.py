@@ -47,6 +47,7 @@ import argparse
 import json
 import math
 import sys
+from datetime import timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -79,6 +80,15 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--checkpoint", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--fps", type=float, default=5.0)
+    ap.add_argument(
+        "--utc-offset",
+        type=float,
+        default=8.0,
+        help="hours the store is ahead of UTC. THE CLIP FILENAMES ARE UTC AND THE STORES "
+        "ARE UTC+8 -- every timestamp in events.json is written in this zone, with its "
+        "offset, so a security operator can pull the footage without converting anything. "
+        "See scripts/pull_studioa.py, which learnt this by pulling a closed shop at 16:00",
+    )
     ap.add_argument("--score-thr", type=float, default=0.20)
     ap.add_argument("--min-hits", type=int, default=3)
     ap.add_argument("--max-age", type=int, default=5)
@@ -164,8 +174,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  - {s}")
 
     report = {"settings": vars(args), "clips": []}
+    store_tz = timezone(timedelta(hours=args.utc_offset))
     for clip in args.clips:
         camera = Path(clip).parent.name
+        try:
+            clip_start = ev.clip_start_from_name(clip, store_tz)
+        except ValueError as e:
+            # Not fatal, and not silent either: the events are still correct in frames,
+            # and inventing a start would put every row at a confidently wrong moment.
+            print(f"  no recording time in the filename: {e}")
+            clip_start = None
         tracks, n_frames, w, h = person_tracks(clip, model, size, device, args)
 
         # The gate before any metre is printed. A pose whose horizon lands inside the
@@ -193,11 +211,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         rows += ev.crowd_events(tracks, cam, plane, args.fps, camera)
         rows.sort(key=lambda e: e.frame_start)
+        # The conversion at the edge. Frames stay the unit of record for everything
+        # above; a row without a wall clock is not something a security operator can
+        # act on, because `frame_start: 5312` does not locate anything in a DVR.
+        rows = ev.with_clip_start(rows, clip_start)
 
         lengths = [len(t.frames) for t in tracks]
         entry = {
             "camera": camera,
             "session": Path(clip).stem,
+            "clip_start": clip_start.isoformat() if clip_start else None,
             "frames": n_frames,
             "tracks": len(tracks),
             "median_track_frames": float(np.median(lengths)) if lengths else None,
