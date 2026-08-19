@@ -404,3 +404,23 @@ not work, category nouns do": laptop 0.800 vs macbook 0.478). Boundary rule reco
 boxed phone is `boxed_stock`, a demo unit is its category. Thresholds per class from
 score-distribution sweeps on the pilot plus the three near-nadir closeup cameras, gaps
 first, per rule 2. Floor-first sequencing unchanged — this lands in Phase 3.
+
+**AMENDMENT to §1, from the fleet-wide night re-measure (runs/night_person_verdict,
+caae812/d6d8df1): the 0.35 night gap is a property of one camera, not of the fleet.**
+The morning's caveat said exactly this risk; measured across all 42 alive cameras at
+~23:58 local: 28 hold, 3 show threshold-passing boxes that move (real people — the
+threshold working), and **11 are counter-examples** with static false persons up to
+**0.594 (1.7x the threshold)** — hanging pegboard stock (2), poster/standee humans (2),
+a parked scooter, dark objects on furniture (2), and four low-confidence IR blobs. The
+reproduction check anchors trust: the original camera returns 0.323/229 against the
+recorded 0.326/229, so the differences are the cameras', not the method's. **The teacher
+swap fixed days outright but moved the night failure rather than fixing it** (SAM 3
+hallucinated on Taichung-cam09; GDINO hallucinates on Taichung-cam01/Kaohsiung-cam07).
+Consensus voting is measured out as a night fix: teacher agreement is only 24% at box
+level, poster-humans fool both teachers (agreement is not evidence there), and requiring
+agreement kills 75–100% of real night people on two cameras — the same trade the old
+static gate was turned off for. **What discriminates is static share, bidirectionally**
+(real night people 0.27, false ones 0.98): motion evidence, not teacher opinion. Night
+person supply becomes a per-camera decision: 28 cameras usable at 0.35 directly, 11
+named cameras require the static-share veto or exclusion, and no single fleet-wide
+threshold exists (0.594 false sits above scores real daytime people still need).
