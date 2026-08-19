@@ -1,40 +1,29 @@
-# SyncAI-Lib-HydraNet — multi-task perception for quadruped robots
+# SyncAI-Lib-HydraNet — multi-task perception for store CCTV, and for a quadruped
 
 [![CI](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/actions/workflows/ci.yml)
 [![Python 3.10 – 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](pyproject.toml)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.1%2B-ee4c2c)](https://pytorch.org/)
 [![Licence Apache-2.0](https://img.shields.io/badge/licence-Apache--2.0-green)](LICENSE)
 
-Multi-head perception network for quadruped robots: **one forward pass, one frame, three
-outputs — traversable surface, terrain class, object detection.**
-The architecture follows the Tesla HydraNet idea: a shared backbone and neck carry almost
-all of the compute, while the task heads stay tiny and mutually independent.
-Written in PyTorch, trained on a CUDA box or an Apple Silicon Mac, exported to ONNX and
-run with TensorRT on a Jetson Orin.
+Multi-head perception network: **one forward pass, one frame, several outputs — traversable
+surface, terrain class, object detection, and now depth.** The architecture follows the
+Tesla HydraNet idea: a shared backbone and neck carry almost all of the compute, while the
+task heads stay tiny and mutually independent.
 
-![traversability and terrain from one forward pass, on office corridor footage](assets/hydranet_demo.gif)
+**One core, two products, and they are not equal in priority.**
 
-Left, traversability: green is walkable, red is blocked, with a detection boxed on the
-fire extinguisher against the left wall — the box is in the right place and the label is
-not readable at this size, which is the honest version of a head whose vocabulary is
-COCO's 80 and has no noun for one. Right, the terrain classes the same forward pass
-produced. One image in, both masks out, through the 60-epoch multi-task checkpoint.
+| | product | what it is | where it runs |
+|---|---|---|---|
+| **A — the main line** | **retail + security analytics** | fixed store CCTV: one camera answering *what merchandise, where do people go, how long do they stay* and *who entered where, how many, what did they do* | server-side, TensorRT on an Orin |
+| B — the secondary line | quadruped perception | can this robot put a foot here | on a Lite3's RK3588 NPU |
 
-Turning either of those into metres is geometry rather than learning, and the panel that
-does it is in the shop clip below — see [docs/GROUND_PROJECTION.md](docs/GROUND_PROJECTION.md)
-for why the projection maps backwards from floor cell to pixel, and for the part that is
-designed but not running: the pose is assumed here, while on the robot the ground plane is
-meant to be fitted to the depth return each frame, which is what tracks the pitch and roll
-of a walking quadruped.
+Both consume the same `src/syncai_hydranet`. The CCTV line is where the deployment,
+the data and the current work are; the robot line continues and its documents are kept
+current, but when the two disagree about a priority, the camera wins.
 
-**Read it for what it is.** The floor, the walls and the partitions are solid, and the two
-heads agree with each other — the trunk is doing its job. What this clip cannot show is the
-part that is not finished: `caution` scores 0.33 on the held-out test split and `stairs`
-0.32, because three of the four terrain classes that map to `caution` have **zero** training
-examples, and because the training data is ADE20K — human-height web photography, not
-footage from a robot's camera. Point the same model at a ceiling and a quarter of it comes
-back "go". The gap is data, not architecture; [docs/METHODOLOGY.md](docs/METHODOLOGY.md)
-says what to collect and in what order.
+## The main line: fixed ceiling CCTV in a shop
+
+![all three heads and the floor raised into a scene](assets/retail_cctv_scene.gif)
 
 ### The deployment that actually exists: fixed ceiling CCTV in a shop
 
@@ -75,6 +64,35 @@ And the floor itself is not solved: over 610 frames of this fixed camera the mod
 and blocked — concentrated on the brighter, more specular near-field tiles, which is the
 polished-floor failure [docs/RETAIL_SCOPE.md](docs/RETAIL_SCOPE.md) predicts. No public
 dataset fixes that one; a fixed camera makes it one annotated polygon per view.
+
+
+## The secondary line: the quadruped
+
+![traversability and terrain from one forward pass, on office corridor footage](assets/hydranet_demo.gif)
+
+Left, traversability: green is walkable, red is blocked, with a detection boxed on the
+fire extinguisher against the left wall — the box is in the right place and the label is
+not readable at this size, which is the honest version of a head whose vocabulary is
+COCO's 80 and has no noun for one. Right, the terrain classes the same forward pass
+produced. One image in, both masks out, through the 60-epoch multi-task checkpoint.
+
+**Read it for what it is.** The floor, the walls and the partitions are solid, and the two
+heads agree with each other — the trunk is doing its job. What this clip cannot show is the
+part that is not finished: `caution` scores 0.33 on the held-out test split and `stairs`
+0.32, because three of the four terrain classes that map to `caution` have **zero** training
+examples, and because the training data is ADE20K — human-height web photography, not
+footage from a robot's camera. Point the same model at a ceiling and a quarter of it comes
+back "go". The gap is data, not architecture; [docs/METHODOLOGY.md](docs/METHODOLOGY.md)
+says what to collect and in what order.
+
+The robot is a **Lite3: one monocular camera and two ultrasound returns, no LiDAR** — a
+correction that reordered the annotation backlog, and the reason
+[docs/RESEARCH_OCCUPANCY.md](docs/RESEARCH_OCCUPANCY.md) exists. Turning a mask into metres
+is geometry rather than learning: [docs/GROUND_PROJECTION.md](docs/GROUND_PROJECTION.md)
+covers both the per-frame fit a walking camera needs and the install-time calibration a
+fixed one gets instead.
+
+## The network
 
 ```mermaid
 flowchart TB
