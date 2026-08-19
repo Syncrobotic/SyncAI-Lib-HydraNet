@@ -924,10 +924,25 @@ config), `config.yaml`, `uncommitted.patch` when the tree was dirty, `metrics.js
 `train.log` and `tb/`. A second run into an occupied directory gets a timestamped sibling
 rather than overwriting `best.pt`.
 
-> **⚠ `experiment` is not an identifier. Measured 2026-08-19: 8 of the 41 runs carrying a
-> `meta.json` have an `experiment` that disagrees with their own `output_dir`,** because a
-> run launched from another config's YAML with `--set output_dir=...` keeps that config's
-> `experiment` string. Six of the eight say `hydranet_indoor`.
+> **⚠ A run's own provenance record can point at a different run. Measured 2026-08-19:
+> 9 of the 41 runs carrying a `meta.json` have at least one identifying field that does not
+> name them.** Two distinct failures, counted separately because they want different fixes:
+>
+> * **8 runs: `experiment` disagrees with `output_dir`.** A run launched from another
+>   config's YAML with `--set output_dir=...` keeps that config's `experiment` string. Six
+>   of the eight say `hydranet_indoor`. Left as-is on purpose — `experiment` is a *label*,
+>   and auto-deriving it from a path would be an opinion rather than a record.
+> * **2 runs: `output_dir` does not name the directory the run is in**, because
+>   `resolve_out_dir` writes a timestamped sibling when the target is occupied and the
+>   config kept the name it asked for. **Fixed forward in `84c9f82`**: the trainer now
+>   records the path it actually wrote to. Existing runs keep the old value.
+>
+> **The sharpest case is in neither list on its own.**
+> `runs/hydranet_retail_objects_site_balanced_pooledmetric` has `experiment` and
+> `output_dir` **agreeing with each other and both wrong** — they name
+> `runs/hydranet_retail_objects_site_balanced`, which exists on disk as a *different run*.
+> A reader following that record does not get an error or a dead path; they get real data
+> from the wrong experiment. An internally consistent record is not a correct one.
 >
 > It is worst exactly where it matters most. All four arms of the COCO ratio sweep — the
 > comparison this project reasons from most often — identify themselves identically:
