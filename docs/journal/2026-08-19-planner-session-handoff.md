@@ -85,6 +85,12 @@ decisions land; warn before context handoff (this file is that warning's product
 
 ## Final state at handoff (v4.2 delivered)
 
+**AMENDMENT (later the same day): the user let the floor gate stand open and asked for
+the immovable classes next. v5.0 (wall / column / display_table / shelf) is delivered and
+at the gate with v4.2 — see `2026-08-19-static-classes-decided-per-object.md`, which also
+records two measurements that invalidate the v2 height bands and flags that the reviewed
+v4.2 recipe still lives only in a session scratchpad.**
+
 The v4.2 single frame (`runs/site30k_qa/preview/K04_0002_v42_single.jpg` + edge/far
 before-after crops) passed the planner's own check and is **with the user for 確認**.
 Both complaints measurably addressed: BEV metric-space regularisation + depth-scaled
