@@ -35,6 +35,17 @@ settings a store manager changes on a Tuesday — a config value, or a retrainin
 So every zone in L2 is a polygon **in metres on the floor**, every threshold is a function
 argument, and the model contributes boxes and a terrain map.
 
+### Current outputs at a glance (updated 2026-08-19; statuses change, the contract above does not)
+
+| output | classes / content | status |
+|---|---|---|
+| **seg** (terrain, full-res) | `void`, `floor`, `wall`, `column`, `fixture` (shelf/display/counter), `person` | live |
+| **b-box** (detection + score) | `person`, `bag` (backpack/handbag/suitcase merged), `boxed_stock`, `device` | live; person quality upgrading via the GDINO in-domain retrain |
+| **track** (host-side, per person) | track id, per-frame boxes, velocity | live; offline high-quality variant (IDF1 0.823) for labelling |
+| **attr** (2nd stage, per person crop) | 256-d ReID embedding; 26 binary attributes (PA-100K: gender, age <18/18-60/>60, front/side/back, glasses, hat, hand/shoulder/back-pack, held object, upper/lower clothing styles) | live but **weak** (AgeOver60 recall 0.119 and degrading); RAP v2 retrain queued |
+| **pose** (17 keypoints/person) | COCO keypoint set | pilot passed 2026-08-19 (ViTPose offline, ceiling-view validated); not yet resident — next head to land |
+| **events** (rule layer, metres, basis/value/threshold per row) | running, loitering, line-cross, zone intrusion, tailgating, crowd, object-left, stock-removed, occupancy; `reach_to_shelf` produced its first real spans 2026-08-19; fall waits on pose | live |
+
 ### L0's outputs, exactly
 
 ```
