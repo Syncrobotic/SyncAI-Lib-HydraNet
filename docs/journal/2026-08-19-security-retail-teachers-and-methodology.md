@@ -309,3 +309,13 @@ was added at **no measurable cost to any other head**. site_person numbers are
 agreement with GDINO per the standing caveat. The teacher swap decided on this
 morning's frame-identical measurement is now confirmed end-to-end: teacher → fleet
 batch → retrain → three seeds → stability ruler, all on instruments built today.
+
+**The 96-stream target is met, and the risk sits exactly where the morning's
+arithmetic put it (runs/bench_pro6000, GPU verified idle).** fp16 TensorRT engines of
+the shipped graph at 640x1120: batch 16 delivers **3,272 frames/s compute** against the
+1,440 target (2.27x margin; batch 1 alone is 1,156 — batching is mandatory; 32/64 add
+nothing). With synchronous H2D copies the same engine drops to **1,553 f/s** — barely
+over target — confirming the data path, not the model, as the engineering frontier.
+Three known recoveries, none exotic: uint8 input binding (4x less to copy), pinned
+memory with dual-stream overlap, and the static-composite's taken-over pixels needing
+no transfer at all. Engine builds are ~30 s each, so rebuild-per-release is trivial.
