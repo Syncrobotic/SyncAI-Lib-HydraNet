@@ -276,7 +276,13 @@ class OfflineForward:
 
 def embed_fragments(frags, encoder_path, device) -> dict[int, np.ndarray]:
     """One L2-normalised embedding per fragment: mean of its crop embeddings."""
-    ck = torch.load(encoder_path, map_location="cpu", weights_only=False)
+    # Through the package loader, like every other checkpoint read here. This was a bare
+    # `torch.load(..., weights_only=False)`, which is arbitrary code execution on the file
+    # -- and it bought nothing: train_attributes.py writes {"model": state_dict,
+    # "attributes": [str, ...]}, which the restricted unpickler reads without complaint.
+    # The risk was never in today's local file; it is that the next encoder to arrive
+    # comes off a release page or a colleague's machine and nothing says so.
+    ck = load_checkpoint(encoder_path)
     enc = CropEncoder(len(ck["attributes"])).to(device).eval()
     enc.load_state_dict(ck["model"])
     mean = np.array([0.485, 0.456, 0.406], np.float32)

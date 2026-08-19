@@ -1,8 +1,21 @@
 """Reading and writing checkpoints.
 
-``torch.load`` defaults to a full pickle load, which executes arbitrary code from the
-file. Checkpoints get shared between machines and downloaded from release pages, so
-every load in this package goes through :func:`load_checkpoint` instead.
+``torch.load`` unpickles, and unpickling executes arbitrary code from the file. Its
+``weights_only`` default was False through torch 2.5 and True from 2.6, and this project
+floors at ``torch>=2.1`` -- so a bare ``torch.load`` is not "safe now", it is "safe on
+whichever torch the reader happens to have installed". Checkpoints get shared between
+machines and downloaded from release pages, so every load goes through
+:func:`load_checkpoint`, which pins the restricted unpickler and says what to do when a
+file genuinely needs more.
+
+That was the stated rule and only ``src/`` followed it. ``scripts/offline_tracks.py``
+passed ``weights_only=False`` outright -- on a checkpoint holding
+``{"model": state_dict, "attributes": [str, ...]}``, which the restricted unpickler reads
+without complaint, so the escape hatch bought nothing and cost the guarantee.
+``tests/test_checkpoint_loading_policy.py`` now greps for it, over ``src/`` and
+``scripts/`` alike; ``scripts/robot/`` is exempt as standalone and on its way out.
+
+Writing has a rule too, and it is not about pickles: see :func:`save_checkpoint`.
 """
 
 from __future__ import annotations

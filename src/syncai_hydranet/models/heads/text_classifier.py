@@ -68,9 +68,9 @@ def load_matrix_file(path, num_classes: int, expect_names: list[str] | None = No
     not every config declares names, and checking is refused rather than skipped when it
     can be done: passing names that disagree is an error, omitting them is a choice.
     """
-    import torch
+    from ...utils.checkpoint import load_checkpoint
 
-    blob = torch.load(path, map_location="cpu", weights_only=True)
+    blob = load_checkpoint(path)
     if not isinstance(blob, dict) or "matrix" not in blob:
         raise ValueError(
             f"{path} is not a text-embedding sidecar: expected a dict with a `matrix` key, "

@@ -160,7 +160,10 @@ def main(argv: list[str] | None = None) -> int:
     seg_cfg, seg = load(args.seg_config, args.seg_checkpoint, device)
     det_cfg, det = load(args.det_config, args.det_checkpoint, device)
     enc = CropEncoder(len(ATTRIBUTES)).to(device).eval()
-    enc.load_state_dict(torch.load(args.encoder, map_location="cpu")["model"])
+    # `load_checkpoint`, not a bare `torch.load`: the default for `weights_only` moved
+    # to True in torch 2.6 and this project still floors at 2.1, so a bare load means
+    # "arbitrary code execution, depending on which torch is installed".
+    enc.load_state_dict(load_checkpoint(args.encoder)["model"])
 
     if args.seg_size:
         seg_cfg["data"]["input_size"] = list(args.seg_size)
