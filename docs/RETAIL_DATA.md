@@ -158,6 +158,37 @@ share is `product` 2.49% and `person` 9.61%: an ordinary counter camera, not a w
 selection is unchanged in method and different in outcome, which is the argument for
 deriving it from measurement in the first place.
 
+## The clips run at 7–8 fps, and the container claims 30
+
+Every clip in `gs://studioa-recording` writes `30/1` into the stream's `r_frame_rate`.
+That is the container's *nominal* rate and it is wrong by a factor of four:
+
+| clip | frames | duration | real rate |
+|---|---|---|---|
+| Kaohsiung-cam04 | 2,400 | 300.1 s | **8.0 fps** |
+| Taichung-cam01 | 2,130 | 304.3 s | **7.0 fps** |
+
+Counted with `ffprobe -count_frames`. `avg_frame_rate` — frames divided by duration —
+matched the counted value to three decimals on both and costs no decode, so that is the
+field `data/video.probe()` reads.
+
+It read `r_frame_rate` until 2026-08-19, and the consequences were not confined to
+bookkeeping:
+
+* `hydranet-infer-video` defaults its **output** rate to whatever `probe()` says, so the
+  default render of a site clip encoded 7–8 fps of content at 30 fps. Four times too
+  fast, and handed to a customer looking exactly like a normal video.
+* It gates resampling on `--fps < src_fps`, so `--fps 10` was compared against 30, passed,
+  and had ffmpeg's `fps` filter *duplicate* frames up from 8. Ten frames of evidence per
+  second where the camera recorded eight.
+* Anything converting frame counts to seconds — dwell, loiter, speed, `SecurityEvent.seconds`
+  — divides by this number.
+
+Two scripts had found this independently before the primitive was fixed and each carried a
+private `source_fps` around it. Both are gone; there is one answer now, and
+`tests/test_video_probe.py` pins it. **When sampling, ask for a rate at or below 7 fps** —
+above it there is nothing to sample, only frames repeated.
+
 ## The `column` supply, and a scare that did not survive measurement
 
 At 14 of 24 cameras measured, `column` appeared on four, and this section argued about how

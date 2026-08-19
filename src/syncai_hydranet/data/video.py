@@ -19,6 +19,54 @@ import subprocess
 
 import numpy as np
 
+FALLBACK_FPS = 30.0
+
+
+def _rate(spec: object) -> float | None:
+    """``"8/1"`` -> 8.0. None for absent, malformed, or the ``0/0`` ffprobe writes
+    when the field has no answer -- a live stream or a fragmented mp4 has no average."""
+    if not isinstance(spec, str):
+        return None
+    num, _, den = spec.partition("/")
+    try:
+        n, d = float(num), float(den or 1)
+    except ValueError:
+        return None
+    if d == 0 or n <= 0:
+        return None
+    return n / d
+
+
+def _fps(stream: dict) -> float:
+    """The stream's real frame rate: ``avg_frame_rate``, then ``r_frame_rate``, then 30.
+
+    This read ``r_frame_rate`` for a long time and that field lies on the site corpus.
+    It is the container's *nominal* rate, and these cameras write ``30/1`` into it while
+    holding a quarter of that:
+
+    * Kaohsiung-cam04 -- 2,400 frames over 300.1 s, **8.0 fps**
+    * Taichung-cam01 -- 2,130 frames over 304.3 s, **7.0 fps**
+
+    Both counted with ``ffprobe -count_frames``; ``avg_frame_rate`` matched the counted
+    value to three decimals on each and costs no decode. Two scripts had already found
+    this independently and each grew a private `source_fps` to work around it
+    (`scripts/mine_fall_candidates.py`, `scripts/offline_tracks.py`) -- the workaround
+    was written twice and the primitive was never fixed.
+
+    What the lie cost, beyond bookkeeping. `cli/infer_video` takes ``--fps`` as *both*
+    the sampling rate and the output rate and defaults it to this value, so the default
+    invocation on a site clip encoded 7-8 fps of content at 30 fps: a render that plays
+    four times too fast, handed to a customer. It also gates resampling on
+    ``args.fps < src_fps``, so ``--fps 10`` passed a comparison against 30 and then had
+    ffmpeg's ``fps`` filter *duplicate* frames up from 8 -- ten frames of evidence per
+    second where the camera recorded eight.
+
+    30.0 as the last resort rather than raising: a stream with neither field is a stream
+    ffprobe could not measure, and the caller's own ``--fps`` overrides this anyway.
+    """
+    avg = _rate(stream.get("avg_frame_rate"))
+    return avg if avg is not None else (_rate(stream.get("r_frame_rate")) or FALLBACK_FPS)
+
 
 def probe(path: str) -> tuple[int, int, float]:
     """Return display width, height and fps, accounting for rotation metadata."""
@@ -47,8 +95,7 @@ def probe(path: str) -> tuple[int, int, float]:
     ).stdout
     st = json.loads(out)["streams"][0]
     w, h = int(st["width"]), int(st["height"])
-    num, _, den = st.get("r_frame_rate", "30/1").partition("/")
-    fps = float(num) / float(den or 1)
+    fps = _fps(st)
     rot = 0
     for sd in st.get("side_data_list", []):
         if "rotation" in sd:

@@ -55,7 +55,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -87,23 +86,6 @@ PERSON = track_review.PERSON
 EMBED_W, EMBED_H = 128, 256  # crop_encoder's training resolution (scripts/train_attributes.py)
 EMBED_CROPS_PER_FRAG = 8
 EMBED_STRIDE = 3  # every 3rd observation, so 8 crops span 24 frames of life, not the first 8
-
-
-def source_fps(clip: str) -> float:
-    """The clip's actual frame rate: `avg_frame_rate`, not `r_frame_rate`.
-
-    These cameras write 30/1 into `r_frame_rate` and hold 7-8 fps of content;
-    scripts/mine_fall_candidates.py:91 established `avg_frame_rate` matches a counted
-    decode to three decimals at no decode cost. `probe()` reads the lying field, so this
-    reads its own.
-    """
-    out = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
-         "stream=avg_frame_rate", "-of", "json", clip],
-        capture_output=True, text=True, check=True,
-    ).stdout  # fmt: skip
-    num, _, den = json.loads(out)["streams"][0]["avg_frame_rate"].partition("/")
-    return float(num) / float(den or 1)
 
 
 # --------------------------------------------------------------------- Kalman
@@ -650,7 +632,7 @@ def main(argv: list[str] | None = None) -> int:
     track_review.check_person_class_space(int(det_head.cls_pred.bias.shape[0]))
     size = cfg["data"]["input_size"]
 
-    real_fps = source_fps(args.clip)
+    _, _, real_fps = probe(args.clip)
     eff_fps = min(args.fps, real_fps)
     vel_scale = args.vel_scale if args.vel_scale is not None else 25.0 / eff_fps
     print(f"clip: {args.clip}")
