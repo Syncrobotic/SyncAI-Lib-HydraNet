@@ -49,6 +49,7 @@ for candidate in (HERE.parent / "src", HERE / "src"):
 
 from syncai_hydranet.analytics import Tracker, dwell_table, track_ground_path  # noqa: E402
 from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
+from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
 from syncai_hydranet.analytics.dwell import ground_map  # noqa: E402
 from syncai_hydranet.analytics.tracker import SIMPLIFICATIONS  # noqa: E402
 from syncai_hydranet.config import load_config  # noqa: E402
@@ -115,7 +116,10 @@ def main(argv: list[str] | None = None) -> int:
         f"vfov {args.vfov} deg -- per camera, and defaults are Taichung-cam01's"
     )
 
-    report = {"clips": [], "settings": vars(args) | {"simplifications": list(SIMPLIFICATIONS)}}
+    report = {
+        "clips": [],
+        "settings": report_settings(args, simplifications=list(SIMPLIFICATIONS)),
+    }
     for clip in args.clips:
         session = Path(clip).stem
         src_w, src_h, _ = probe(clip)

@@ -43,6 +43,7 @@ for candidate in (HERE.parent / "src", HERE / "src"):
 # from `retail_flow.py` -- a script other scripts import is a module in the wrong place --
 # and the copy here had drifted: no lens correction, while `site_events.py` had one.
 from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
+from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
 from syncai_hydranet.analytics.events import fall_candidates  # noqa: E402
 from syncai_hydranet.analytics.tracker import Tracker  # noqa: E402
 from syncai_hydranet.config import load_config  # noqa: E402
@@ -183,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     report: dict = {
-        "settings": vars(args),
+        "settings": report_settings(args),
         "what_this_is_not": (
             "a fall count. `fall_candidate` is a box-shape proxy that fires on bending to "
             "a low shelf and on legs occluded by a fixture. Every span below needs a human."

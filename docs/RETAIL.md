@@ -239,6 +239,16 @@ its fps on this footage inherits the same error.
   Occupancy counts tracks, loitering needs one to survive, tailgating needs two to be
   distinct. Read an occupancy alarm as an upper bound until association is fixed and
   measured.
+* **The `settings` block names what decided the numbers, and not where anything lives.**
+  Every row is a threshold crossing, so the argument list is provenance and belongs in the
+  report — but it used to be `vars(args)` verbatim, which meant each report also carried
+  `/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_clips/…`: an operator, a home directory,
+  a repository checkout and a dataset root, in a file that looks like output rather than
+  like a document. `analytics/delivery.report_settings` keeps the last two path components
+  — `hydranet_retail_security_b03/best.pt`, `Taichung-cam01/archive_…mp4` — which is enough
+  to identify and not enough to locate. A basename alone was tried first and is worse than
+  the leak: `best.pt` names nothing, there are forty of them under `runs/`, and a report
+  that cannot say which weights produced it is not auditable.
 * **Every event row carries a wall clock, and it carries its offset.** `started_at` and
   `ended_at` are ISO-8601 with a UTC offset, derived from the clip's `archive_<UTC>_` name
   and the store's zone. Frames remain the unit of record for every computation — a dropped
