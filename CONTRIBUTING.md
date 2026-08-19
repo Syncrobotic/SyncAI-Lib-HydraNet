@@ -74,3 +74,27 @@ uv run ruff check --fix .
 uv run ruff format .
 uv run pytest -q
 ```
+
+## Figures under `assets/`
+
+`assets/` is an **allowlist**, not a denylist: `.gitignore` ignores `assets/*` and
+names the figures back in one by one. Adding a new one therefore takes two steps,
+and the second one is the point:
+
+```bash
+git add -f assets/my_new_figure.png     # 1. override the ignore
+#          then add `!assets/my_new_figure.png` to .gitignore   # 2. keep it addable
+```
+
+The friction is deliberate. Most images in this project are rendered from customer
+CCTV — `datasets/studioa_clips/<City>-cam<NN>/` — and a single frame of a shop floor
+carries identifiable shoppers and staff. A denylist of formats cannot protect that,
+because the format a frame lands in is whichever one the renderer chose. It was
+`assets/*.mp4`, `*.mov` and `*.pdf` for a while, and a 1920x380 PNG cut from
+Taichung-cam01 walked straight past all three.
+
+So before step 1, look at the image and ask whether anyone in it is identifiable.
+A figure that only shows masks, meshes or plots is fine. A frame with people in it
+needs their consent or needs to not be here — the history is not editable after the
+fact, and `tests/test_assets_allowlist.py` is only guarding the mechanism, not the
+judgement.

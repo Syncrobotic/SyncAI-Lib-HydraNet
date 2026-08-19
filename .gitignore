@@ -24,16 +24,27 @@ runs/
 *.onnx
 *.engine
 
-# Large media
-assets/*.mp4
-assets/*.mov
-
-# Site documents. Everything tracked under assets/ is a figure for the README or the
-# docs; the PDFs that land here are customer fixture drawings, named for the store and
-# the city they came from. Same second-line-of-defence reasoning as the credentials
-# block below -- `git add -A` in a hurry should not be able to publish a client's
-# floor plan. Use `git add -f` if a PDF ever genuinely belongs in the repo.
-assets/*.pdf
+# Everything under assets/, then the figures back in by name.
+#
+# This used to be a denylist -- mp4, mov, pdf -- and its own comment said what it was
+# for: "`git add -A` in a hurry should not be able to publish a client's floor plan".
+# A denylist cannot do that job. The material this repo actually handles is retail CCTV
+# from customer stores, and one frame of it is a .png. `assets/retail_static_plate_cam01.png`
+# sat untracked in the tree while the denylist covered three formats none of which it was.
+#
+# So the default is now "no", and the seven figures that belong to the README and the
+# docs are listed below. Adding an eighth is a deliberate act -- `git add -f`, and a
+# moment spent asking whether shoppers are identifiable in it. That moment is the point;
+# a frame of a customer's shop floor cannot be un-published once it is in the history.
+assets/*
+!assets/.gitkeep
+!assets/bev3d_mesh_people.png
+!assets/eprep_sonar_vs_depth.png
+!assets/hydranet_demo.gif
+!assets/mesh_shop_preview.png
+!assets/retail_bootstrap_fixture_split.jpg
+!assets/retail_cctv_scene.gif
+!assets/social_preview.png
 
 # Editors / OS
 .vscode/
