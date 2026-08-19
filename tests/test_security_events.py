@@ -205,10 +205,10 @@ def test_reach_to_shelf_needs_both_heads_and_refuses_a_frame_with_no_terrain():
         kps[ev.KP["left_wrist"], :2] = np.array([560.0, 640.0])
         kps[ev.KP["right_wrist"], :2] = np.array([560.0, 640.0])
     track = posed(1, poses)
-    frames = [
-        {"frame_index": i, "terrain": terrain, "class_names": (), "boxes": None}
-        for i in range(6)
-    ]
+    # `frame_index` and `terrain` are the whole of what this consumer reads --
+    # `stage.TerrainFrame` is that shape. This used to carry `class_names: ()` and
+    # `boxes: None` as well, satisfying nothing.
+    frames = [{"frame_index": i, "terrain": terrain} for i in range(6)]
     got = ev.reach_to_shelf_events([track], frames, FPS, "cam01", fixture_id=fixture_id)
     assert [e.type for e in got] == ["reach_to_shelf"]
     assert got[0].value == pytest.approx(1.0), "the whole disk is fixture here"

@@ -36,8 +36,11 @@ does not restate it -- read `Track`.
 
 What genuinely had no shape is the **input**: what one frame hands the stage. Every
 consumer so far has reconstructed it from `HydraNet.predict`'s output dict by hand, which
-is how `retail_flow.py` ended up with a private format. `StageFrame` below is that shape,
-written down once.
+is how `retail_flow.py` ended up with a private format. The types below are that shape,
+written down once -- `StageFrame` for a producer that has everything, and the two narrower
+ones for the halves a consumer actually reads. `StageFrame`'s docstring says why it is
+three types rather than one, and the short version is that the one did not fit any of the
+code it was written for.
 
 ---------------------------------------------------------------------------
 WHY A TypedDict AND NOT A DATACLASS
@@ -56,32 +59,27 @@ from typing import TypedDict
 import numpy as np
 
 
-class _StageFrameRequired(TypedDict):
-    """Split from `StageFrame` only to mark one key optional on Python 3.10.
+class FrameRef(TypedDict):
+    """The one key every second-stage payload carries, whatever else it holds.
 
-    `NotRequired` is 3.11+, and this project's venv is 3.10 -- it was tried first and
-    fails at *import*, which `ty_ratchet.sh` does not catch because a type checker checks
-    types rather than importing the module. Worth the two extra lines rather than a
-    `typing_extensions` import in `src/`, which would put a dependency question in the way
-    of a two-key distinction.
+    Position in the clip, not a timestamp. Tracking, dwell and every metric here count in
+    frames and convert with `fps` at the edge, because a dropped frame changes the index
+    and does not change the wall clock -- and it is the index that decides whether two
+    boxes are adjacent observations or the same shopper seen twice.
     """
 
-    # Position in the clip, not a timestamp. Tracking, dwell and every metric here count
-    # in frames and convert with `fps` at the edge, because a dropped frame changes the
-    # index and does not change the wall clock -- and it is the index that decides whether
-    # two boxes are adjacent observations or the same shopper seen twice.
     frame_index: int
 
-    # The image the predictions came from, HxWx3 uint8 RGB. Required rather than optional
-    # even though tracking does not read it: the crop encoder is the whole reason this
-    # stage exists, and a payload a crop cannot be cut from would have to be redefined the
-    # moment it is built. `utils/temporal.py` needs it too, for its change-gate.
-    image: np.ndarray
 
-    # Detection boxes in **image pixels, xyxy**, already mapped back through the letterbox.
-    # Named as the model's own space rather than the panel's: the letterbox mapping is the
-    # first stage's business and doing it twice is a class of bug this project has already
-    # paid for once.
+class BoxFrame(FrameRef):
+    """What a consumer of *detections* needs. `events.zone_stock_counts` takes this.
+
+    Boxes are in **image pixels, xyxy**, already mapped back through the letterbox. Named
+    as the model's own space rather than the panel's: the letterbox mapping is the first
+    stage's business and doing it twice is a class of bug this project has already paid
+    for once.
+    """
+
     boxes: np.ndarray  # [N, 4] float32
     scores: np.ndarray  # [N] float32
     labels: np.ndarray  # [N] int64, indices into `class_names`
@@ -94,6 +92,36 @@ class _StageFrameRequired(TypedDict):
     class_names: tuple[str, ...]
 
 
+class TerrainFrame(FrameRef, total=False):
+    """What a consumer of the *dense map* needs. `events.reach_to_shelf_events` takes this.
+
+    Both keys are optional and the consumer says why for each: `terrain` because a
+    detection-only config has no terrain head and the function raises a sentence about it
+    rather than returning an empty list, and `image` because it is one of the two ways a
+    payload can state which pixel space the map lives in (`image_size` is the other).
+    """
+
+    terrain: np.ndarray | None  # class ids, HxW
+    image: np.ndarray  # HxWx3 uint8 RGB
+
+
+class _StageFrameRequired(BoxFrame):
+    """Split from `StageFrame` only to mark one key optional on Python 3.10.
+
+    `NotRequired` is 3.11+, and this project's venv is 3.10 -- it was tried first and
+    fails at *import*, which `ty_ratchet.sh` does not catch because a type checker checks
+    types rather than importing the module. Worth the two extra lines rather than a
+    `typing_extensions` import in `src/`, which would put a dependency question in the way
+    of a two-key distinction.
+    """
+
+    # Required here and optional in `TerrainFrame`, deliberately. A full first-stage
+    # payload can always supply the image and the crop encoder is the whole reason this
+    # stage exists, so a payload a crop cannot be cut from would have to be redefined the
+    # moment it is built. `utils/temporal.py` needs it too, for its change-gate.
+    image: np.ndarray
+
+
 class StageFrame(_StageFrameRequired, total=False):
     """One frame's worth of first-stage output, as the second stage needs it.
 
@@ -103,11 +131,20 @@ class StageFrame(_StageFrameRequired, total=False):
     coupled to which heads a config declared, and every retail config declares a different
     set.
 
-    Everything in `_StageFrameRequired` is mandatory; the keys below are not.
+    **Why this is three types and not one.** It was one, and the one did not fit. Measured
+    across the module that declares it: `zone_stock_counts` reads five of its six required
+    keys and never `image`; `reach_to_shelf_events` reads two, of which only
+    `frame_index` is required here; and the only producer of a real payload
+    (`scripts/pose_pilot.py`) builds `{frame_index, terrain}`, which satisfies none of it.
+    A contract that no consumer needs in full and no producer can supply is not a
+    contract -- it is a comment that type-checks, and annotating a signature with it would
+    have made a working caller an error.
+
+    So the split is by *what a consumer reads*, and this type is the full payload: a
+    `StageFrame` is assignable wherever a `BoxFrame` or a `TerrainFrame` is asked for,
+    because it has every key either requires. A producer that has everything states it
+    with this; a producer that has a dense map and no boxes states `TerrainFrame` and is
+    not lying about the rest.
     """
 
-    # Terrain class ids, HxW. Optional because a detection-only config has no terrain head
-    # and tracking does not need one -- but `dwell.ground_map` and the free-space
-    # derivation in `cli/scene.py` do, and a missing key is a better error than a plausible
-    # empty mask.
-    terrain: np.ndarray
+    terrain: np.ndarray | None

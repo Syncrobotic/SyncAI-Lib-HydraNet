@@ -77,6 +77,7 @@ import numpy as np
 
 from ..geometry.ground import Camera, GroundPlane
 from .dwell import track_ground_path
+from .stage import BoxFrame, TerrainFrame
 from .tracker import Track
 
 # Grouped by the instrument that can resolve them, which is the same judgement that
@@ -697,7 +698,7 @@ def stock_removed_events(
 
 
 def zone_stock_counts(
-    frames: list[dict],
+    frames: Sequence[BoxFrame],
     zone: Zone,
     cam: Camera,
     plane: GroundPlane,
@@ -1280,7 +1281,7 @@ def _wrist_contact(
 
 def reach_to_shelf_events(
     tracks: list[Track],
-    frames: list[dict],
+    frames: Sequence[TerrainFrame],
     fps: float,
     camera: str,
     fixture_id: int,
@@ -1357,11 +1358,15 @@ def reach_to_shelf_events(
             "needs one."
         )
     for f in frames:
-        if f.get("terrain") is None:
+        # Bound once rather than re-read after the guard: `stage.TerrainFrame` types
+        # `terrain` as optional, which is the truth, and a second `f["terrain"]` below a
+        # `.get(...) is None` check is a narrowing no type checker can follow.
+        terrain_map = f.get("terrain")
+        if terrain_map is None:
             continue
         hw = image_size if image_size is not None else _image_hw(f)
         if hw is not None:
-            _require_terrain_in_image_space(f["terrain"], hw, int(f["frame_index"]))
+            _require_terrain_in_image_space(terrain_map, hw, int(f["frame_index"]))
     events: list[SecurityEvent] = []
     for track in tracks:
         idx = np.asarray(track.frames)
@@ -1404,7 +1409,7 @@ def reach_to_shelf_events(
     return events
 
 
-def _image_hw(frame: dict) -> tuple[int, int] | None:
+def _image_hw(frame: TerrainFrame) -> tuple[int, int] | None:
     """(height, width) of the image a frame payload carries, or None if it carries none.
 
     `stage.StageFrame` makes `image` required, so the production payload always states
