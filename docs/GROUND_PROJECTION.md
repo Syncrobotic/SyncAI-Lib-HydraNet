@@ -74,8 +74,24 @@ image, one per line for a clip.
 The pose flags are `--camera-height`, `--pitch` and `--vfov`, and their values are printed
 on every rendered frame. `--pose-note` replaces that caption, for the case where the pose
 came from a fit rather than a guess — `scripts/fit_camera_from_people.py` recovers a fixed
-camera's height and pitch from detected people, which is the only pose here that is fitted
-to data today.
+camera's height and pitch from detected people.
+
+**A second fitted pose landed 2026-08-19, and it splits the problem in two.**
+`scripts/calibrate_from_plate.py` runs a metric monocular depth model over a camera's
+temporal-median background plate and fits the floor by RANSAC — one plate, one inference,
+no people needed. What comes back divides cleanly:
+
+| | verdict | evidence (`runs/calib01`) |
+|---|---|---|
+| **orientation** | **viable** | pitch recovered to **−0.7°** against the Taichung-cam01 fitted anchor, and it surfaced Kaohsiung-cam04's real **−12.9° mounting roll** that nothing else had caught |
+| **scale** | **not viable** | 3.84 m against a 2.38 m anchor — a **1.61×** overestimate at ceiling-CCTV viewpoint, worse than the same model's 1.18× on NYUv2 |
+| **vfov** | **the dominant unknown** | 55→85° swings fitted height by ~0.9 m and scale 0.96→0.56 — which is why it is held as an input and never fitted jointly |
+
+**So the metre never comes from the depth model.** The recipe that survives is: tile grid →
+lens parameters; plate + depth → plane orientation and roll; **one known length → the
+metre.** And on a fixed camera the whole thing is an **install-time calibration artifact**,
+not a per-frame prediction — which is the opposite of the per-frame fit this document argues
+for on a walking robot, and both are right for their own platform.
 
 ## Status
 

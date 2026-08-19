@@ -169,7 +169,19 @@ NYUv2 is a *zero-shot* indoor domain for it, exactly as our corridor will be.
 
 **The "Metric" in the model name does not survive a domain change.** A single factor of
 **0.847** — a flat 15% over-prediction — accounts for most of the error, and removing it
-lifts δ1 from 0.687 to 0.919. The geometry is sound; the metres are not. **So step (C) is
+lifts δ1 from 0.687 to 0.919.
+
+> **Second data point, 2026-08-19, and it is worse the further the viewpoint travels.**
+> `runs/calib01` ran the same checkpoint on **ceiling-CCTV** plates and recovered 3.84 m
+> against a 2.38 m fitted anchor — a **1.61× overestimate**, against NYUv2's 1.18×. Two
+> zero-shot domains, and the error grows with distance from the training distribution
+> rather than staying a constant. **This does not change the plan below; it hardens step
+> (A)'s caveat**: a fleet-constant correction factor is plausible and unproven, so the
+> teacher supplies *shape* and something else supplies the metre. See
+> [journal/2026-08-19-security-retail-teachers-and-methodology.md](journal/2026-08-19-security-retail-teachers-and-methodology.md)
+> §3 — and note the finding transfers in the useful direction: **orientation is
+> recoverable** from one plate and one inference (pitch to −0.7°, and it caught a −12.9°
+> mounting roll nobody knew about), which is exactly what (B)'s pose prior needs. The geometry is sound; the metres are not. **So step (C) is
 back to *supplying* scale, not checking it**, and the earlier note in this document saying
 otherwise was wrong. An auto-labeller that trusts the teacher's absolute output builds every
 voxel 15% too far away.
