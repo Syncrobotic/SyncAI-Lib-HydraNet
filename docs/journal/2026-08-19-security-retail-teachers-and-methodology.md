@@ -373,3 +373,18 @@ the fleet's best product-on-table closeups; one stockroom runs IR even at midday
 **Tao-Hsin-cam15 — a high-value selling-floor panorama — was missing from every
 pipeline** (no plate, no calibration, no batch) because the plate sweep predates it.
 The site30k allocation now keys on this census, not on cameras.json roles.
+
+**Serving increment 1 (runs/serve_pilot01, commits 0086a87/cbe1aef): the copy path is
+solved and the bottleneck has a new name.** uint8 input binding via graph surgery + pinned
+memory + dual-stream overlap takes the same fp16 b16 engine from 1,516 to **3,206
+frames/s with transfers — 99.8% of the engine's own compute ceiling**, so H2D has left
+the critical path exactly as the morning's arithmetic predicted (the in-graph
+cast/transpose costs ~2%). End-to-end, 16 simulated streams hold 14.6 of 15 fps; the
+tick budget now goes to **Python post-processing (29 ms) and CPU decode (11 ms)** —
+GPU h2d/compute/d2h sum to 5.1 ms and hide entirely. Three hotspots were measured and
+fixed on the way (score-floor NMS 500→11 ms via pre-NMS top-k; EMA 10.9→0.9 ms as an
+incremental torch op with a bit-equivalence test; the tracker's pure-Python Hungarian
+9.5 ms under the GIL → scipy). Increment 2's ordered list: NVDEC (16 paced streams
+already eat ~30% CPU; 96 will not fit), post scaling (EMA on-GPU, sharding, native
+assoc), the static-composite skip measured on the TRT path, per-checkpoint threshold
+sweeps, and engine provenance metadata.
