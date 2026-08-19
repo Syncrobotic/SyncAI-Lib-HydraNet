@@ -2,7 +2,8 @@
 
 *An internal walkthrough, using SyncAI-Lib-HydraNet as the worked example. Written for
 everyone who touches the perception stack — you do not need an ML background to follow it,
-but you do need to care about why the robot walks into a glass door.*
+but you do need to care about why a class can score 0.51 in validation and cover 0.00% of
+every real store frame.*
 
 Sections 1–8 are **why it is shaped this way and which measurements lie**; section 9 is
 **how to actually run it** (merged in from `USAGE.md` on 2026-08-19). For dividing the work
@@ -12,25 +13,37 @@ across a team, see [METHODOLOGY.md](METHODOLOGY.md).
 
 ## 1. What we are actually building
 
-A quadruped walking through a lobby needs three different questions answered about the same
-camera frame, at the same instant:
+A fixed camera on a shop ceiling needs two different questions answered about the same frame,
+at the same instant — and the deployed retail/security config
+(`hydranet_retail_security.yaml`) trains exactly two heads for them:
 
 | Question | Output shape | Called |
 |---|---|---|
-| Can I put a foot here? | one label per pixel, 3 classes | traversability |
-| What is this surface made of? | one label per pixel, 12 classes | terrain |
-| Where are the people and objects? | a list of boxes | detection |
+| What is this pixel part of? | one label per pixel, 6 classes: `void floor wall column fixture person` | terrain |
+| Where are the people and the merchandise? | a list of boxes, 4 classes: `person bag boxed_stock device` | detection |
 
-The first two are **segmentation**: the answer is a picture the same size as the input, where
-every pixel carries a class. The third is **detection**: the answer is a variable-length list
-of rectangles, each with a class and a confidence.
+The first is **segmentation**: the answer is a picture the same size as the input, where every
+pixel carries a class. The second is **detection**: a variable-length list of rectangles, each
+with a class and a confidence.
 
-That difference matters more than it looks. Segmentation answers "what is *here*" for every
-location, which is what you need to plan a footstep. Detection answers "how many of *those*
-are in frame and where", which is what you need to avoid a person. Neither substitutes for
-the other: a segmentation map does not tell you there are three people rather than one blob
-of person-coloured pixels, and a box around a person tells you nothing about whether the
-floor under them is wet.
+That difference matters more than it looks, and this deployment needs both for the same
+shopper. Segmentation answers "what is *here*" everywhere, which is what turns a mask into a
+floor polygon in metres. Detection answers "how many of *those*, and where", which is what a
+track, a dwell time and every security event are counted from. Neither substitutes for the
+other: a segmentation map cannot tell you there are three shoppers rather than one blob of
+person-coloured pixels, and a box around a shopper tells you nothing about whether the floor
+beneath them is a display fixture or an aisle.
+
+**`person` is in both heads on purpose.** Removing it from segmentation would leave a
+person-shaped hole of walkable floor in the free-space map, drawn confidently in metres —
+[RETAIL.md](RETAIL.md) has the measurement. Two heads answering about the same object is not
+redundancy to optimise away when the two answers feed different consumers.
+
+> **A third head exists in the code and this config does not train it.** `traversability` is
+> a 3-class `blocked / caution / go` segmentation head, and on retail data it would be a
+> lookup on `terrain` rather than a second signal — the 60-epoch run measured the two heads
+> agreeing on 99.1% of pixels. So the retail configs set `model.heads.traversability: null`
+> and derive free space from the terrain map instead. Section 3 explains the mechanism.
 
 ### How to read the scores
 
@@ -43,13 +56,19 @@ a review:
 - **mAP** for detection: roughly, how well the boxes are ranked and placed. Same direction —
   higher is better.
 
-The trap in mIoU is that it is a *mean over classes*, not over pixels. In an indoor frame,
-floor and wall are most of the image and `glass` might be 1% of it. A model that gets glass
-completely wrong loses very little mIoU, because glass is one class out of twelve regardless
-of how few pixels it holds. **That is exactly backwards from what we care about** — glass is
-the most dangerous class we have, because it reads as an open corridor. This is why we look
-at per-class IoU curves, not just the mean, and why `primary_metric` can be pointed at a
-single class.
+The trap in mIoU is that it is a *mean over classes*, not over pixels. In a shop frame, floor
+and wall are most of the image and `column` is **1.53%** of it. A model that gets `column`
+completely wrong loses very little mIoU, because it is one class out of six regardless of how
+few pixels it holds. **That is exactly backwards from what we care about** — the rare classes
+are the ones the taxonomy was created for. This is why we look at per-class IoU curves, not
+just the mean, and why `primary_metric` can be pointed at a single class.
+
+**And a per-class number needs its support printed next to it.** `column` scored 0.40–0.51 on
+the ADE20K validation split — on 22 images and 0.66% of labelled pixels — and then predicted
+**0.00% of pixels** across 240 frames of four daytime store cameras. Nothing about the 0.51
+announced how little stood behind it. `support/<head>/NN_<name>` is emitted beside every
+`IoU/<head>/NN_<name>` for exactly this reason, and below `evaluator.THIN_SUPPORT` the honest
+reading of a per-class number is "not measured".
 
 ---
 
@@ -99,9 +118,14 @@ others, and a fourth head (depth, say) costs 3–9% more parameters rather than 
 Architectures are the easy half. You can copy one from a paper in an afternoon. What actually
 consumes the schedule is that **no single dataset labels all three tasks.**
 
-We have segmentation labels for indoor scenes (ADE20K), segmentation labels for off-road
-(RUGD, RELLIS-3D), and detection labels for everything (COCO). Not one of them labels both.
-There is no dataset where the same image has a traversability mask *and* boxes.
+We have segmentation labels for indoor scenes (ADE20K), detection labels for everything
+(COCO), and site footage from the stores themselves — which has neither until a teacher model
+pre-labels it. **No public dataset has a shop's terrain mask and its person boxes on the same
+image**, and the site data only has both because two different teachers were run over it
+(SAM 3 for masks, Grounding DINO for `person`; see [RETAIL_DATA.md](RETAIL_DATA.md)).
+
+The off-road pair (RUGD, RELLIS-3D) is still wired in `label_maps.py` and reachable from
+`hydranet_regnet800mf.yaml`. Nothing on the retail line uses it.
 
 The standard wrong answer is to only train on data labelled for everything, which here means
 training on nothing. The approach that works is **partial supervision**:
@@ -117,18 +141,30 @@ the data, while each head only learns from data that actually answers its questi
 In the config this is one line per dataset:
 
 ```yaml
-- name: coco
+- name: ade20k         # web photography: the terrain classes it can supply
+  supervises: [terrain]
+- name: site_seg       # store cameras, SAM 3 masks
+  supervises: [terrain]
+- name: site_boxes     # store cameras, merchandise boxes
   supervises: [detection]
-- name: ade20k
-  supervises: [traversability, terrain]
+- name: coco_person    # `person` and `bag`, the only source for either
+  supervises: [detection]
 ```
 
 Two consequences to keep in mind:
 
-1. **Sampling ratio is a real knob.** Steps per epoch is `Σ len(loader_i) × ratio_i`. COCO has
-   ~117,000 images; at ratio 1.0 it will dominate every epoch and the segmentation heads will
-   see comparatively little. We run COCO at a reduced ratio, and each epoch takes a different
-   random slice, so nothing is permanently discarded.
+1. **Sampling ratio is a real knob, and the ratio is not the share.** Steps per epoch is
+   `Σ len(loader_i) × ratio_i`. COCO has ~117,000 images against ADE20K's 5,998 and the site
+   split's 180, so at ratio 1.0 it dominates every epoch. Each epoch takes a different random
+   slice, so nothing is permanently discarded — but **read
+   `MultiTaskLoader.detection_class_steps()` at startup rather than inferring the balance
+   from the ratios.** The security config sets COCO to 0.05 and it is still 64% of all steps;
+   a comment in an earlier config said "0.1" and meant two thirds.
+
+   How far you can push it was swept on the held-out test split, and the answer is
+   monotonic rather than a sweet spot: segmentation falls as the COCO share rises, and at
+   0.1 it comes out slightly *ahead* of a segmentation-only baseline. There is nothing to
+   find above that, only an exchange rate that gets worse.
 2. **A head with no dataset is silently useless.** If nothing supervises detection, the head
    still gets built and still outputs numbers — they are just the initial random weights.
    The config check warns about this at startup, and you should read that warning rather
@@ -140,23 +176,31 @@ Two consequences to keep in mind:
 
 ### One annotation, two heads
 
-Here is a trick worth stealing. We do not annotate traversability separately. Terrain labels
-already contain the information — if a pixel is `wet_slippery`, whether it is walkable is a
-*policy decision*, not a new labelling job. So we keep an explicit mapping table:
+Here is a trick worth stealing. Free space is never annotated separately. The terrain labels
+already contain it — whether a `fixture` pixel counts as walkable is a *policy decision*, not
+a new labelling job. So the policy lives in an explicit table:
 
 ```python
-INDOOR_TERRAIN_TO_TRAV = {
-    1: 2,   # floor_hard      -> go
-    4: 1,   # wet_slippery    -> caution
-    8: 0,   # glass           -> blocked
-    ...
+RETAIL_OBJECTS_TO_TRAV = {
+    0: 255,  # void    -> ignore
+    1: 2,    # floor   -> go
+    2: 0,    # wall    -> blocked
+    3: 0,    # column  -> blocked
+    4: 0,    # fixture -> blocked
+    5: 0,    # product -> blocked
+    6: 0,    # person  -> blocked
 }
 ```
 
-One annotation pass, two supervised heads. And when the platform changes — a gait that
-handles stairs, a foot that fits through grating — you change a policy table and retrain, not
-your entire label set. Put that table in the annotation spec so annotators and training
-cannot drift apart.
+**On the retail line that table is applied at inference rather than in training**, which is
+the whole reason the traversability head could be removed: `cli/scene.py` runs the terrain
+argmax through `terrain_to_traversability` and gets free space for zero parameters. On the
+indoor configs the same table is applied to *targets* during training, so one annotation pass
+supervises two heads.
+
+Either way the point is the same: when the policy changes — a store that wants its aisles
+measured to the fixture edge rather than the shopper's feet — you change a table, not your
+label set. Put it in the annotation spec so annotators and training cannot drift apart.
 
 ---
 
@@ -206,15 +250,27 @@ general lesson is broader than EMA: **know which weights your validation number 
 deliberately, it defaults to something reasonable-sounding, and the entire run silently
 optimises for it.
 
-Make it explicit and make it match the mission. If the thing that strands a robot is walking
-into glass, then select on glass:
+Make it explicit and make it match the mission. Every security event this deployment emits is
+keyed on a `person` box, so the retail/security config selects on the detection number
+measured against *site* data rather than web photography:
 
 ```yaml
-primary_metric: IoU/traversability/00_blocked
+primary_metric: detection_mAP/site_boxes
 ```
+
+Not bare `detection_mAP`: with two detection datasets the evaluator keys the metric per
+dataset, and a config selecting on a key that no longer exists falls back silently. Selecting
+on COCO's `person` mAP would pick the checkpoint that is best at 2,693 images of web
+photography, which is not what this camera does.
 
 A typo here aborts the run and lists the valid keys — deliberately, because the alternative
 is discovering after 14 hours that you selected on the wrong quantity.
+
+**And the metric you select on decides what survives, not just what is reported.** One run
+here saved epoch 31 because that was its detection peak, while its segmentation peaked at
+epoch 16 — 0.043 mIoU that exists in `metrics.jsonl` and in no checkpoint on disk. If both
+heads matter for a release, either select on the one that decides the product or accept that
+the other one's best epoch is a number you can read and never load.
 
 ### A default that is always overridden is not a default
 
@@ -241,12 +297,17 @@ gap is only ever discovered by whoever runs it without your command line.
 
 ### Random train/val splits will lie to you
 
-RUGD and RELLIS ship no official split, and your own footage certainly does not. If you split
-frames randomly, frame 1041 lands in train and frame 1042 in val — and they are nearly the
-same picture. Your validation score then measures memorisation, and it will look excellent.
+Store footage ships no split, and on a **fixed** camera the problem is sharper than on a
+moving one. Split frames randomly and frame 1041 lands in train and frame 1042 in val — the
+same shelf, the same floor tiles, a second apart. Your validation score then measures
+memorisation, and it will look excellent.
 
-**Split by sequence, or by recording session.** Always. The score will drop. That drop is not
-a regression; it is the first honest number you have had.
+**Split by camera. Not by clip, not by frame.** A fixed camera is one scene measured N times,
+not N samples, so a camera on both sides puts the answer in the training set. The score will
+drop. That drop is not a regression; it is the first honest number you have had — this
+project measured the gap directly, scoring one run on cameras it trained on (mIoU 0.778) and
+cameras it never saw (0.641). [RETAIL_DATA.md](RETAIL_DATA.md) has the split rules and why
+each exists.
 
 ### val is optimistic about itself
 
@@ -297,13 +358,25 @@ more:
    compute-bound, you are waiting on data loading. That is a different fix (more workers,
    smaller images offline) and no amount of model tuning will help.
 
-And know when to stop tuning. If `caution` will not move — ours went from 0.200 to 0.229
-after a move to a GPU ten times faster and three times the epochs, while every other
-traversability class scores above 0.84 — the question to ask is not "which learning rate" —
-it is "how many examples of `caution` are actually in the
-training data?" In our case: of the four terrain classes that map to caution, ADE20K contains
-exactly one, at 0.3% of pixels. **That is a data acquisition problem wearing a training
-problem's clothes,** and no hyperparameter fixes it.
+And know when to stop tuning. If a class will not move, the question is not "which learning
+rate" — it is "what is this class being shown?" Two cases from this project, and they need
+different answers:
+
+* **Starved.** `caution` went from 0.200 to 0.229 after a move to a GPU ten times faster and
+  three times the epochs, while every other class in its head scored above 0.84. Of the four
+  terrain classes that map to it, ADE20K contains exactly one, at 0.3% of pixels.
+* **Suppressed, which is worse and looks the same.** `product` sat at **exactly 0.000 for 22
+  consecutive epochs**. ADE20K was 90.2% of segmentation steps and contains *zero* `product`
+  pixels — so in nine batches out of ten, every pixel was a labelled **negative** for that
+  channel. A starved class learns slowly; this one did not move at all. **Sign, not share, is
+  what explains a channel pinned at zero**, and the fix is to lower the abundant dataset's
+  ratio rather than raise the scarce one — both reach the same balance, but raising the
+  scarce one gets there by showing the same few images many times an epoch, trading a
+  suppressed channel for a memorised one.
+
+**Both are data acquisition problems wearing a training problem's clothes,** and no
+hyperparameter fixes either. `config_schema.unsourced_terrain_classes` and
+`minority_sourced_terrain_classes` name both shapes before a GPU-hour is spent.
 
 ---
 
@@ -370,10 +443,12 @@ difficulty.
 
 ---
 
-*Related: [DEPLOY.md](DEPLOY.md) — Part III for local development on Apple Silicon, Parts I
-and II for the export contract and the board. [The CUDA move](journal/2026-08-12-mps-to-cuda.md)
-for moving to a CUDA machine. The architecture diagram and per-component parameter counts
-are in the [README](../README.md).*
+*Related: [RETAIL.md](RETAIL.md) for what the model outputs and why, and
+[RETAIL_DATA.md](RETAIL_DATA.md) for where the labels come from — read the second before
+quoting any site number. [DEPLOY.md](DEPLOY.md) — Part III for local development on Apple
+Silicon, Parts I and II for the export contract and the board.
+[The CUDA move](journal/2026-08-12-mps-to-cuda.md) for moving to a CUDA machine. The
+architecture diagram and per-component parameter counts are in the [README](../README.md).*
 
 
 ---
@@ -440,8 +515,8 @@ threshold, and the two runs' fingerprints differ.
 ### The ADE20K indoor subset
 
 ADE20K's 20k images span 1055 scene categories, most of them outdoor. The command below
-filters on **annotation content** (enough floor, little sky and vegetation) to select the
-ground-level indoor viewpoint a robot actually sees:
+filters on **annotation content** (enough floor, little sky and vegetation) to keep the
+indoor scenes, which is the closest a public dataset gets to a shop interior:
 
 ```bash
 uv run hydranet-prepare-ade20k \
@@ -455,14 +530,14 @@ The output is symlinks, so it costs no extra disk and re-running is cheap.
 ## Training
 
 ```bash
-uv run hydranet-train --config configs/hydranet_indoor.yaml
+uv run hydranet-train --config configs/hydranet_retail_security.yaml
 
 # override any setting (dot-path)
-uv run hydranet-train --config configs/hydranet_indoor.yaml \
+uv run hydranet-train --config configs/hydranet_retail_security.yaml \
     --set train.batch_size=8 model.neck.name=fpn 'data.input_size=[384,512]'
 
 # resume: the schedule continues from where it stopped, it does not replay
-uv run hydranet-train --config ... --resume runs/hydranet_indoor/last.pt
+uv run hydranet-train --config ... --resume runs/hydranet_retail_security/last.pt
 ```
 
 Training features: AMP mixed precision (`train.amp_dtype` accepts `bfloat16`), cosine +
@@ -487,10 +562,12 @@ learning rate carries over unchanged.
 ### Which metric picks the model
 
 `train.primary_metric` names the single number that decides `best.pt`; the default is
-`traversability_mIoU`. Any key validation emits works, including per-class ones:
+`traversability_mIoU`, which the retail configs override because they do not train that head.
+Any key validation emits works, including per-class and per-dataset ones:
 
 ```yaml
-primary_metric: IoU/traversability/00_blocked   # the class that actually strands a robot indoors
+primary_metric: detection_mAP/site_boxes        # the retail/security line: events key on boxes
+primary_metric: IoU/terrain/03_column           # or a single class, when that is the question
 ```
 
 A misspelled metric name aborts and lists every available key — rather than quietly
@@ -544,7 +621,7 @@ delete once you have checked nothing is training into it.
 These files exist precisely so `hydranet-report` can read them:
 
 ```bash
-uv run hydranet-report runs/hydranet_indoor        # detail and curves for one run
+uv run hydranet-report runs/hydranet_retail_security   # detail and curves for one run
 uv run hydranet-report runs/* --diff               # ranking across runs + config differences
 ```
 
@@ -608,13 +685,22 @@ no depth or traversability head rather than drawing an empty pane.
 `side` writes traversability on the left and terrain on the right, both from the same
 forward pass:
 
-![traversability and terrain from one forward pass](../assets/hydranet_demo.gif)
+![every head on one frame of a store camera](../assets/retail_cctv_scene.gif)
 
-An office corridor on the 60-epoch multi-task checkpoint. Floor, wall and partition are
-solid because those are the classes ADE20K has in quantity; the same model scores
-`caution` 0.33 and `stairs` 0.32 on the test split, and returns a quarter of a ceiling as
-"go". Watch a clip before trusting a number — a curve cannot show you a model calling a
-ceiling a floor, and this is the cheapest way to find it.
+Every head on one frame of `Tao-Hsin-cam03`, a **held-out** camera — the split in
+`retail_objects_batch02` is by camera, which is what makes this picture evidence of anything
+rather than a picture of the training set. It knows 26% of its window and the rest is behind
+something, which is the number to carry rather than the geometry.
+
+Watch a clip before trusting a number. A curve cannot show you a model calling a ceiling a
+floor, and this is the cheapest way to find it — over 610 frames of one fixed camera, 16.7%
+of the frame flickers between walkable and blocked, concentrated on the brighter near-field
+tiles. No metric on the val split was going to report that.
+
+The same network under `hydranet_indoor.yaml` on office footage, for contrast — same code,
+different taxonomy and different data:
+
+![traversability and terrain from one forward pass](../assets/hydranet_demo.gif)
 
 ### The floor in metres
 
