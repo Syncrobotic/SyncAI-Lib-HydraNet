@@ -28,7 +28,12 @@ import pytest
 from syncai_hydranet.analytics import events as ev
 from syncai_hydranet.analytics.stage import BoxFrame, FrameRef, StageFrame, TerrainFrame
 
-EVENTS = Path(ev.__file__)
+# The package directory, not one file. `events` was a single 1,425-line module when this
+# test was written and `Path(ev.__file__)` was the whole of it; it is now a package, so
+# that path is an `__init__.py` holding re-exports and no function bodies at all. Reading
+# the directory keeps the property that matters here -- the contract is read off the code
+# rather than restated -- and it survives the next time a consumer moves between modules.
+EVENTS = Path(ev.__file__).parent
 
 
 def _keys_read(func_name: str) -> set[str]:
@@ -37,8 +42,17 @@ def _keys_read(func_name: str) -> set[str]:
     Read off the source rather than asserted by hand: a test that restates the key list is
     a second copy of the contract, and the copy is what drifts.
     """
-    tree = ast.parse(EVENTS.read_text(encoding="utf-8"))
-    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == func_name)
+    fn = None
+    for path in sorted(EVENTS.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        found = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == func_name]
+        assert len(found) < 2, f"{func_name} defined twice in {path.name}"
+        if found:
+            assert fn is None, (
+                f"{func_name} defined in more than one module under {EVENTS.name}"
+            )
+            fn = found[0]
+    assert fn is not None, f"no top-level {func_name} anywhere under {EVENTS}"
     keys: set[str] = set()
     for n in ast.walk(fn):
         if (
