@@ -251,7 +251,7 @@ def test_the_board_reads_back_what_the_exporter_wrote(tmp_path):
     viewer names the channels. They live in different files that cannot import each other
     -- `live_view_orin.py` runs on a board with no `syncai_hydranet` installed -- so this
     is the only place the round trip is checked at all."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "robot"))
     try:
         import live_view_orin
     finally:

@@ -171,7 +171,7 @@ def test_parity_still_uses_relative_error_on_logits(monkeypatch):
 def test_live_view_reads_both_binding_forms():
     """The Jetson viewer cannot import this package, so this is the only place the two
     ends are checked against each other."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "robot"))
     try:
         import live_view_orin
     finally:

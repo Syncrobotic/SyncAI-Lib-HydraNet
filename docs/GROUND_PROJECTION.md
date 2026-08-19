@@ -108,7 +108,7 @@ upgrade path there.
 ## Status
 
 The projection runs offline against recorded clips. It is not wired into ROS; the live ROS
-view (`scripts/live_view_ros.py`) builds its scene from registered metric depth by
+view (`scripts/robot/live_view_ros.py`) builds its scene from registered metric depth by
 back-projection instead, and deliberately fits no plane. The figures published so far
 assume the camera rather than measuring it, which the captions say. What unblocks the
 measured version — and gives `fit_ground_plane` its first caller — is a session recorded on

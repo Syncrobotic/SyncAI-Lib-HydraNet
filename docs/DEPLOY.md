@@ -74,7 +74,7 @@ itself, so its input is **raw RGB in 0–255, NCHW**. The robot's job is to lett
 BGR→RGB, transpose, and hand the pixels over.
 
 This used to be the runtime's job, with the constants copied by hand into
-`scripts/bench_camera_orin.py`. Nothing tied that copy to `data/transforms.py`: change one
+`scripts/robot/bench_camera_orin.py`. Nothing tied that copy to `data/transforms.py`: change one
 and no test fails, no error appears, and the model is simply worse in a way that gets
 blamed on quantisation. Folded into the graph, the constants ship with the weights and
 TensorRT fuses them into the first convolution, so the cost is nil.
@@ -103,7 +103,7 @@ trtexec --onnx=hydranet.onnx --saveEngine=hydranet_fp16.engine --fp16 \
 trtexec --loadEngine=hydranet_fp16.engine --iterations=200 --avgRuns=100
 ```
 
-`scripts/bench_orin.sh` does both precisions in one pass. Set the board to its full power
+`scripts/robot/bench_orin.sh` does both precisions in one pass. Set the board to its full power
 mode first or the numbers understate it:
 
 ```bash
@@ -111,7 +111,7 @@ sudo nvpmodel -m 0 && sudo jetson_clocks
 ```
 
 **`trtexec` measures GPU inference only, and quoting it as FPS overstates the robot.** For
-the number that matters, `scripts/bench_camera_orin.py` runs the whole path from the camera
+the number that matters, `scripts/robot/bench_camera_orin.py` runs the whole path from the camera
 and times each stage separately, so the bottleneck is visible rather than assumed.
 
 INT8 needs a calibration dataset (a few hundred real images):
@@ -202,7 +202,7 @@ GB10, TRT 10.16, 512×640, single-thread, real decode, median of three, millisec
 | ` + CUDA graph` | 1.49 | 0.15 | 0 | 0.62 | **2.25** | **381–444** |
 
 Nothing above retrains anything or changes a weight. The last row needs no export change
-at all — `--useCudaGraph` in trtexec, or `scripts/live_view_orin.py --cuda-graph`, which
+at all — `--useCudaGraph` in trtexec, or `scripts/robot/live_view_orin.py --cuda-graph`, which
 saved a measured 0.87 ms/frame (30%) in the runtime.
 
 > **Read these absolutes as ±15%, and the ratios as solid.** That GPU is shared — the same
@@ -440,8 +440,8 @@ will not load on a different board or stack:
 # workstation
 uv run hydranet-export-onnx --config <run>/config.yaml --checkpoint <run>/best.pt \
     --output hydranet.onnx --check-parity
-scp hydranet.onnx scripts/bench_orin.sh scripts/bench_camera_orin.py \
-    scripts/live_view_orin.py <user>@<orin-ip>:~/
+scp hydranet.onnx scripts/robot/bench_orin.sh scripts/robot/bench_camera_orin.py \
+    scripts/robot/live_view_orin.py <user>@<orin-ip>:~/
 
 # orin
 sudo nvpmodel -m 0 && sudo jetson_clocks     # or the numbers understate the board
@@ -549,7 +549,7 @@ The node already publishes what is needed, including depth registered to the col
 
 ```bash
 source /opt/ros/humble/setup.bash
-python3 scripts/probe_ros_realsense.py --weights <state_dict>.pt \
+python3 scripts/robot/probe_ros_realsense.py --weights <state_dict>.pt \
     --config configs/hydranet_indoor.yaml --frames 40 --save 6 --range 5.0
 ```
 
@@ -608,7 +608,7 @@ is invisible in the picture — it looks like a working live view — so it is w
 on `now - header.stamp` rather than trusting the frame rate.
 
 One more, on pairing: take "the latest colour and the latest depth" and the two are up to a
-full frame apart (measured: mean 33 ms, max 67 ms). `scripts/live_view_ros.py` keeps a short
+full frame apart (measured: mean 33 ms, max 67 ms). `scripts/robot/live_view_ros.py` keeps a short
 depth history and picks the nearest stamp, which brings the skew to 0 ms because the driver
 stamps aligned depth with its colour frame's time. Without that, the range mask describes
 the world 67 ms beside the image it is drawn on.

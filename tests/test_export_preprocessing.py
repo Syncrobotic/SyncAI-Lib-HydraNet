@@ -2,7 +2,7 @@
 
 METHODOLOGY.md assigns "pre-processing parity between training and the robot" to the
 deployment stream, and the repository was implementing it twice: `data/transforms.py` for
-training, a hand-copied mean/std in `scripts/bench_camera_orin.py` for the Jetson. Nothing
+training, a hand-copied mean/std in `scripts/robot/bench_camera_orin.py` for the Jetson. Nothing
 tied the two together. Change one and no test fails, no error appears -- the model on the
 robot is just worse, and the blame lands on quantisation.
 

@@ -1,6 +1,6 @@
 """What a live view does between reading a camera and writing a picture.
 
-Everything here used to live in `scripts/live_view_ros.py`, reachable only by running a
+Everything here used to live in `scripts/robot/live_view_ros.py`, reachable only by running a
 ROS node on a robot. None of it needs ROS: the reach classification is two numpy arrays
 and a threshold, the panel builder takes a colour frame and a depth frame, and the
 recorder takes images and writes files. Only the subscriptions are ROS, and those stay in
@@ -10,9 +10,9 @@ The move is not tidying. Outside the package this code sat outside the type ratc
 coverage floor and the wheel, so the most involved 560 lines in the project were also the
 only ones nothing checked.
 
-`scripts/live_view_orin.py` and `scripts/bench_camera_orin.py` are a different case and
-deliberately stay where they are -- they run on a board with no `syncai_hydranet`
-installed, which is a real constraint rather than an accident, and
+`scripts/robot/live_view_orin.py` and `scripts/robot/bench_camera_orin.py` are a
+different case and deliberately stay where they are -- they run on a board with no
+`syncai_hydranet` installed, which is a real constraint rather than an accident, and
 `tests/test_orin_standalone_copies.py` is what keeps those copies honest.
 """
 

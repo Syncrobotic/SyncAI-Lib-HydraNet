@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """E-prep: does the monocular depth teacher agree with the robot's own range sensor?
 
-    python3 scripts/eprep_depth_residual.py --capture datasets/robot_eprep/stand01 \\
+    python3 scripts/robot/eprep_depth_residual.py --capture datasets/robot_eprep/stand01 \\
         --stride 60 --out runs/eprep/stand01
 
 `docs/RESEARCH_OCCUPANCY.md` makes the whole occupancy programme turn on one number: run

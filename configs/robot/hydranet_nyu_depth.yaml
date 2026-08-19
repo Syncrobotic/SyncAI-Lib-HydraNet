@@ -5,7 +5,7 @@
 # height both need depth before anything else, and the public teacher we measured does
 # not hand it over. Scored zero-shot on this very split, Depth-Anything V2 Metric Indoor
 # over-predicts by a flat 15% -- delta1 0.687 as-is, 0.919 once one global factor is
-# removed (scripts/eprep_teacher_nyuv2.py). Its geometry transferred; its metres did not.
+# removed (scripts/robot/eprep_teacher_nyuv2.py). Its geometry transferred; its metres did not.
 # So **0.687 is the number this run has to beat**, on the same 654 images, to be worth
 # more than the thing we could have downloaded.
 #

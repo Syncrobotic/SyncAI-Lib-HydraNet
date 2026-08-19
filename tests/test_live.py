@@ -1,6 +1,6 @@
 """The live view's per-frame work, now that it is reachable without a robot.
 
-All of this used to be inside `scripts/live_view_ros.py`, where the only way to run it was
+All of this used to be inside `scripts/robot/live_view_ros.py`, where the only way to run it was
 to source ROS on a robot that was already holding its camera. Nothing here needs either.
 
 The reach classification is the part worth pinning hardest. It is the one place where the

@@ -101,7 +101,7 @@ have — there was none, see below.
 ## E-prep, run once — what came back (2026-08-18)
 
 Run with [`scripts/robot_capture.py`](../scripts/robot_capture.py) +
-[`scripts/eprep_depth_residual.py`](../scripts/eprep_depth_residual.py) on
+[`scripts/robot/eprep_depth_residual.py`](../scripts/robot/eprep_depth_residual.py) on
 `datasets/robot_eprep/stand01`: the robot standing still for 90 s in an office corridor,
 scene provably static across the whole clip. **It did not produce a residual, and the
 reason is worth more than the residual would have been.**
@@ -155,7 +155,7 @@ easier — supplying scale demoted to checking it. Measuring it says otherwise; 
 
 ## The teacher's error bar, from public ground truth (2026-08-18)
 
-Since the robot could not supply the anchor, [`scripts/eprep_teacher_nyuv2.py`](../scripts/eprep_teacher_nyuv2.py)
+Since the robot could not supply the anchor, [`scripts/robot/eprep_teacher_nyuv2.py`](../scripts/robot/eprep_teacher_nyuv2.py)
 scored the teacher on **NYU Depth V2's 654-image official test split** — dense metric Kinect
 depth, standard Eigen crop, no robot involved. This checkpoint is the Hypersim-trained one, so
 NYUv2 is a *zero-shot* indoor domain for it, exactly as our corridor will be.

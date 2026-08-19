@@ -19,7 +19,7 @@ from collections.abc import Iterable, Sequence
 #
 # Spelled the way COCO spells them, spaces and all, because these names are matched
 # against COCOeval's own categories -- `INDOOR_25` below is checked against this list for
-# exactly that reason. `scripts/live_view_orin.py` keeps a hyphenated copy for drawing on
+# exactly that reason. `scripts/robot/live_view_orin.py` keeps a hyphenated copy for drawing on
 # frames; tests/test_orin_standalone_copies.py pins that the only difference is the
 # hyphen, so the board cannot start naming a class something this list does not know.
 COCO_NAMES = [

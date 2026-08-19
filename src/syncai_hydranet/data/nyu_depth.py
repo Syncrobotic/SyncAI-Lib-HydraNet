@@ -4,7 +4,7 @@
 one `.h5` per frame. It is here to train the depth head (`models/heads/depth.py`) on real
 metric ground truth, because the public teacher we measured does not transfer its metres:
 zero-shot on this same split it over-predicts by a flat 15% while keeping its geometry
-(`scripts/eprep_teacher_nyuv2.py`).
+(`scripts/robot/eprep_teacher_nyuv2.py`).
 
 ---------------------------------------------------------------------------
 WHY THIS DOES NOT USE THE SHARED TRANSFORM PIPELINE

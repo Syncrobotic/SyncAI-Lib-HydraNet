@@ -278,7 +278,7 @@ If your camera's aspect ratio differs from `input_size`, turn on `data.letterbox
 This was hypothetical until `heads/depth.py` landed, so the steps below are now a
 description of something in the tree rather than a plan — read `depth_fpn` in
 [`hydranet.py`](src/syncai_hydranet/models/hydranet.py) and
-[`configs/hydranet_nyu_depth.yaml`](configs/hydranet_nyu_depth.yaml) alongside them.
+[`configs/robot/hydranet_nyu_depth.yaml`](configs/robot/hydranet_nyu_depth.yaml) alongside them.
 
 1. Add the head module under `src/syncai_hydranet/models/heads/` (it takes the FPN feature list)
 2. Register the type branch in `hydranet.py::HydraNet.__init__` and add its loss in `compute_losses`

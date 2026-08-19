@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Put an error bar on the depth teacher using public ground truth, since the robot cannot.
 
-    python3 scripts/eprep_teacher_nyuv2.py --data datasets/nyu_depth_v2/extracted \\
+    python3 scripts/robot/eprep_teacher_nyuv2.py --data datasets/nyu_depth_v2/extracted \\
         --out runs/eprep/nyuv2
 
 E-prep asks one question -- is the monocular depth teacher metric enough to bootstrap 3D
