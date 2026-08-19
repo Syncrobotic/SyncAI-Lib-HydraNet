@@ -31,7 +31,8 @@ which split it was measured on, so the two are comparable.
 > **Which checkpoint "shipped" means, re-checked 2026-08-19.** When this was written it was
 > `runs/hydranet_indoor/best.pt` — epoch 27, **segmentation only, no detection head** (its
 > test traversability mIoU 0.7055 is the "segmentation only" row of the ratio sweep at the
-> foot of this file). Since `releases/v1` was cut, the model that is actually deployed is
+> foot of this file; that section's run-to-column table says which run is which, and warns
+> that `coco10` means share **1.0**). Since `releases/v1` was cut, the model that is actually deployed is
 > `runs/hydranet_joint_coco10` at **epoch 55, selected on `detection_mAP`**, and it is a
 > different and much weaker segmenter: on its validation row `caution` and `stairs` are
 > **exactly 0.0**, `glass` is 0.066, `door` 0.003, terrain mIoU 0.360 against the 0.5694
@@ -273,6 +274,39 @@ Sweeping `sample_ratio` produced a sharp result on the held-out test split:
 | `glass` IoU | 0.5021 | **0.5462** | 0.0692 |
 | terrain mIoU | 0.5718 | **0.5968** | 0.3591 |
 | detection mAP | — | 0.1985 | **0.3348** |
+
+### Which run is which column, and the naming trap in between
+
+Recorded 2026-08-19 because reading a run's ratio off its *name* nearly manufactured a
+contradiction that does not exist. Every figure below is `sample_ratio` on the coco dataset
+block of that run's own `config.yaml`:
+
+| sweep column | run | COCO `sample_ratio` | `primary_metric` |
+|---|---|---|---|
+| segmentation only | `runs/hydranet_indoor` | — (no coco block) | `traversability_mIoU` |
+| **COCO 0.1** | `runs/hydranet_indoor_det60` | **0.1** | `traversability_mIoU` |
+| COCO 0.3 (in the four-point sweep) | `runs/hydranet_joint_coco03` | **0.3** | `detection_mAP` |
+| **COCO 1.0** | `runs/hydranet_joint_coco10` | **1.0** | `detection_mAP` |
+
+> **⚠ `coco10` means share 1.0, not 0.10** — and `coco03` means 0.3, so the two names are
+> not even on the same scale as each other. Reading them as decimals puts the strongest
+> segmenter and the weakest one in each other's places, which is the exact shape of error
+> this repository keeps paying for: a record consulted about something it does not encode.
+> **Read `config.yaml`, never the directory name.**
+
+The apparent contradiction it resolves: `hydranet_joint_coco10`'s validation `glass` never
+reaches the segmentation-only run's 0.4981 at *any* epoch, peaking at 0.4221. Under the
+misreading that looks like the "COCO 0.1 costs nothing" result failing to reproduce. It is
+not — that run **is** the 1.0 corner, the sweep's worst segmenter by construction. Two
+independent cross-checks confirm the mapping: `releases/v1` (= this run, epoch 55) reports
+`detection_mAP` **0.33478**, which is the 1.0 column's 0.3348, and its `glass` 0.066 sits on
+the 1.0 column's 0.0692 rather than anywhere near 0.5462.
+
+**Which means `releases/v1` ships the 1.0 corner** — the best detector and the weakest
+segmenter this sweep produced — while the sweep's own recommendation for retail is to stay
+at 0.1. That is not a mistake: v1's `primary_metric` is `detection_mAP`, so it selected
+exactly what it was asked to. It is a trade-off a reader should be able to see, and
+[RELEASE.md](RELEASE.md) now names it beside the release table.
 
 The natural reading is dilution: at ratio 1.0 the segmentation heads receive about a
 quarter of the optimiser steps and the rare classes starve. **That reading is not

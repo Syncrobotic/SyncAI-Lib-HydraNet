@@ -384,7 +384,10 @@ accept as the cost of a second task. Underneath, on **val**:
 > [`journal/2026-08-14-experiments-and-geometry.md`](journal/2026-08-14-experiments-and-geometry.md)
 > shows the real shape: segmentation falls **monotonically** with COCO share, and at 0.1 it
 > comes out slightly *ahead* of the segmentation-only baseline. There was no collapse at 0.1
-> to explain. `best.pt` is chosen on val, so each run was cut at whatever epoch that rare
+> to explain. (Take each sweep point's ratio from its run's `config.yaml`, never from the
+> directory name: **`coco10` is share 1.0**, `coco03` is 0.3, and the 0.1 point is
+> `hydranet_indoor_det60`. The mapping and its cross-checks are in
+> [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md).) `best.pt` is chosen on val, so each run was cut at whatever epoch that rare
 > class happened to spike, and the selection manufactured the variance it was then measured
 > with. The comparison also changed two things at once — COCO was added *and* the run was cut
 > from 60 epochs to 30 — which is the other reason it could not have attributed anything.

@@ -408,6 +408,13 @@ Swept at 60 epochs and scored on the held-out test split:
 | terrain mIoU | 0.5718 | **0.5968** | 0.3591 |
 | detection mAP | — | 0.1985 | **0.3348** |
 
+**Which run is which column:** `hydranet_indoor` (no coco block), `hydranet_indoor_det60`
+(0.1), `hydranet_joint_coco03` (0.3) and `hydranet_joint_coco10` (**1.0**). `coco10` means
+share **1.0**, not 0.10, and `coco03` means 0.3 — the two names are not on the same scale,
+and reading them as decimals swaps the strongest segmenter for the weakest. Take the ratio
+from the run's `config.yaml`; [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md) carries the
+full table and the cross-checks.
+
 At 0.1, detection is free: every segmentation number matches or beats the
 segmentation-only baseline and mAP 0.20 arrives anyway. At 1.0, the model goes very nearly
 blind to glass — 0.502 to 0.069 — in exchange for mAP 0.199 → 0.335.

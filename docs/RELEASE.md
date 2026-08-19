@@ -195,6 +195,18 @@ It is also the concrete case `utils/runmeta.selection_report` was written for: 0
 terrain mIoU is six times its 0.02 warning threshold, and on that checkpoint
 `IoU/terrain/05_stairs` and `IoU/traversability/01_caution` are both exactly 0.0.
 
+**And the trade-off behind those zeros, which the table above cannot show** (added
+2026-08-19). `runs/hydranet_joint_coco10` is the **COCO `sample_ratio: 1.0`** arm of the
+ratio sweep — the name means share 1.0, not 0.10 — so v1 ships the sweep's best detector and
+its **weakest segmenter**: at that ratio `glass` falls from 0.5021 to 0.0692 on test, while
+`detection_mAP` rises from 0.1985 to 0.3348. That is not a fault of the release. v1's
+`primary_metric` is `detection_mAP`, and it selected exactly what it was asked to. But the
+same sweep's recommendation for the retail line is to stay at **0.1**, so the model that is
+on the robot sits at the opposite corner from the ratio this project otherwise defends, and
+anyone quoting v1's segmentation numbers should know which corner they come from.
+[ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md) carries the sweep, the run-to-column table
+and the cross-checks.
+
 ## 4. Which version is on which robot
 
 The bundle answers "what is this model". It does not answer "what is running where".
