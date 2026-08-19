@@ -99,14 +99,17 @@ for candidate in (HERE.parent / "src", HERE / "src"):
 from syncai_hydranet.data.video import frames, probe  # noqa: E402  # isort: skip
 from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.coco_subsets import COCO_NAMES  # noqa: E402
-from syncai_hydranet.geometry.bev import box_extents  # noqa: E402
-from syncai_hydranet.geometry.ground import Camera, GroundPlane  # noqa: E402
+
+# The fit itself lives in the package (2026-08-19): `person_checks` in
+# `geometry/plate_calibration.py` runs it as the depth-free sanity bound, and a package
+# module cannot import a script. The 1.70 m prior moved with it, so it exists once.
+from syncai_hydranet.geometry.plate_calibration import (  # noqa: E402
+    fit_pose_from_people as fit,
+)
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
-
-ADULT_M = 1.70
 
 
 def collect(args, device) -> np.ndarray:
@@ -150,31 +153,6 @@ def collect(args, device) -> np.ndarray:
     if shape is None or not keep:
         raise SystemExit("no usable person detections; lower --person-score or --stride")
     return np.asarray(keep, dtype=float), shape
-
-
-def fit(boxes: np.ndarray, shape, vfov: float, heights, pitches):
-    cam = Camera.from_vfov(shape[0], shape[1], vfov)
-    best = None
-    for pitch in pitches:
-        plane_unit = GroundPlane(height=1.0, pitch=np.radians(pitch))
-        ext = box_extents(boxes, cam, plane_unit)
-        hs = ext[:, 1]
-        hs = hs[np.isfinite(hs) & (hs > 0)]
-        if len(hs) < 8:
-            continue
-        # Heights scale linearly with camera height, so the *relative* spread is a
-        # function of pitch alone -- which is what makes this a one-dimensional search
-        # per pitch instead of a two-dimensional one.
-        med = float(np.median(hs))
-        spread = float(np.median(np.abs(hs - med))) / max(med, 1e-9)
-        cam_h = ADULT_M / med  # the height that puts the median person at 1.70 m
-        if not (heights[0] <= cam_h <= heights[-1]):
-            continue
-        if best is None or spread < best[0]:
-            best = (spread, float(pitch), float(cam_h), len(hs))
-    if best is None:
-        raise SystemExit("no pitch produced a usable fit within the allowed height range")
-    return best
 
 
 def main(argv=None) -> int:

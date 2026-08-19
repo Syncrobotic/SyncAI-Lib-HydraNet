@@ -8,12 +8,14 @@ calib02 validated, strung into a repeatable pipeline.
 
 For every selling_floor camera (`datasets/studioa_clips/cameras.json`):
 
-1. **Orientation**: pick a daytime plate and reuse the `calibrate_from_plate.py` pipeline
-   (imported, not copied -- a second copy of the geometry arithmetic is a second chance
-   to get it wrong): undistort (division model k1 = -0.225, a fleet-hardware assumption,
-   tile-grid measured only on Taichung-cam01) -> DA-V2 once -> RANSAC "lowest plausible
-   horizontal plane" -> pitch/roll/plane height. calib01 showed this path holds pitch to
-   ±0.7° of the anchor (provided the vfov is pinned).
+1. **Orientation**: pick a daytime plate and reuse the calib01 pipeline from
+   `syncai_hydranet.geometry.plate_calibration` (the package module behind
+   `calibrate_from_plate.py`; imported, not copied -- a second copy of the geometry
+   arithmetic is a second chance to get it wrong): undistort (division model
+   k1 = -0.225, a fleet-hardware assumption, tile-grid measured only on Taichung-cam01)
+   -> DA-V2 once -> RANSAC "lowest plausible horizontal plane" -> pitch/roll/plane
+   height. calib01 showed this path holds pitch to ±0.7° of the anchor (provided the
+   vfov is pinned).
 2. **Scale (the automatable subset)**: DA-V2's metres are not to be trusted (this fleet
    overestimates 1.45-1.6x, calib01); what is automated is the person-height statistic --
    boxes from `datasets/retail_person_gdino01` pass the same gates (score ≥ 0.5, edge,
@@ -51,10 +53,14 @@ import numpy as np
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "src"))
 
-import calibrate_from_plate as cfp  # noqa: E402  the geometry and its checks, all reused
+# The geometry and its checks, all reused from the package -- not from
+# `calibrate_from_plate.py`, which is the same code's CLI (the pipeline moved into the
+# package on 2026-08-19 so a script would stop being another script's library).
+from syncai_hydranet.geometry import plate_calibration as pc  # noqa: E402
+from syncai_hydranet.geometry.calibrate import horizon_row  # noqa: E402
+from syncai_hydranet.geometry.ground import Camera  # noqa: E402
 
 SCHEMA = "hydranet-onboard-calib/v1"
 CAMERAS_JSON = Path("datasets/studioa_clips/cameras.json")
@@ -72,7 +78,7 @@ VFOV_UNPINNED_SYS_FRAC = 0.05  # calib02: the ±5% systematic term for vfov-unpi
 
 
 # ---------------------------------------------------------------------------
-# DA-V2 pipeline cache: cfp.run_depth rebuilds the pipeline on every call, so sweeping
+# DA-V2 pipeline cache: pc.run_depth rebuilds the pipeline on every call, so sweeping
 # 22 cameras would reload the Large weights 22 times. Swap transformers.pipeline for a
 # keyed-cache version -- not a line of run_depth's pre/post-processing moves; the same
 # (task, model, device) triple just gets the same instance back.
@@ -178,10 +184,10 @@ def onboard_one(
             "status": "needs_visual_reference",
         },
         "provenance": {
-            "orientation_pipeline": "scripts/calibrate_from_plate.py (imported)",
-            "depth_model": cfp.MODEL,
+            "orientation_pipeline": "syncai_hydranet.geometry.plate_calibration (imported)",
+            "depth_model": pc.MODEL,
             "person_boxes": str(PERSON_ANNS),
-            "person_height_prior_m": cfp.ADULT_M,
+            "person_height_prior_m": pc.ADULT_M,
             "plate_person_model": f"{PLATE_MODEL_CONFIG} + {PLATE_MODEL_CKPT} (ema)",
         },
     }
@@ -203,7 +209,7 @@ def onboard_one(
         )
         return result
 
-    slot = cfp.pick_daytime_slot(cam_dir)
+    slot = pc.pick_daytime_slot(cam_dir)
     plate_path = cam_dir / f"plate_{slot}.png"
     rgb = np.asarray(Image.open(plate_path).convert("RGB"))
     h, w = rgb.shape[:2]
@@ -219,17 +225,17 @@ def onboard_one(
             flags.append("dirty_plate_person_frac_gt_0p05")
 
     # Orientation: undistort -> DA-V2 once -> a RANSAC floor pick per vfov
-    rgb_u = cfp.undistort_image(rgb, k1)
-    depth = cfp.run_depth(rgb_u)
+    rgb_u = pc.undistort_image(rgb, k1)
+    depth = pc.run_depth(rgb_u)
 
-    boxes = cfp.load_person_boxes(PERSON_ANNS, camera, w, h, k1)
+    boxes = pc.load_person_boxes(PERSON_ANNS, camera, w, h, k1)
     result["person_boxes_after_gates"] = len(boxes)
 
     by_vfov: list[dict] = []
     for vfov in vfovs:
-        cam = cfp.Camera.from_vfov(h, w, vfov)
-        cands = cfp.floor_candidates(depth, cam, inlier_m=0.05)
-        plane, residual, cand_rows = cfp.choose_floor(cands, 0.05)
+        cam = Camera.from_vfov(h, w, vfov)
+        cands = pc.floor_candidates(depth, cam, inlier_m=0.05)
+        plane, residual, cand_rows = pc.choose_floor(cands, 0.05)
         row: dict = {"vfov_deg": vfov, "candidates": cand_rows}
         if plane is None:
             row["failed"] = "no plausible floor plane among RANSAC candidates"
@@ -239,7 +245,7 @@ def onboard_one(
         import math
 
         pitch_deg = math.degrees(plane.pitch)
-        hrow = cfp.horizon_row(pitch_deg, cam.fy, h)
+        hrow = horizon_row(pitch_deg, cam.fy, h)
         finite = np.isfinite(residual)
         row.update(
             {
@@ -249,12 +255,12 @@ def onboard_one(
                 "inlier_frac_frame": round(float((np.abs(residual[finite]) < 0.05).mean()), 4),
                 "horizon_row": round(hrow, 1),
                 "horizon_inside_frame": bool(0 <= hrow < h),
-                "column": cfp.column_health(cam, plane, h, w),
-                "floor_scale_dav2_raw": cfp.floor_scale(cam, plane, h, w),
+                "column": pc.column_health(cam, plane, h, w),
+                "floor_scale_dav2_raw": pc.floor_scale(cam, plane, h, w),
             }
         )
         if len(boxes):
-            row["person"] = cfp.person_checks(boxes, cam, plane, (h, w), vfov)
+            row["person"] = pc.person_checks(boxes, cam, plane, (h, w), vfov)
         by_vfov.append(row)
     result["by_vfov"] = by_vfov
 
@@ -301,7 +307,7 @@ def onboard_one(
         mad = person["implied_person_height_mad_m"]
         height_m = round(primary["height_dav2_raw_m"] * scale, 2)
         height_src = "dav2_plane_height_x_person_height_scale"
-        scale_src = f"person_height_median_vs_{cfp.ADULT_M}m_prior_n{n_heights}"
+        scale_src = f"person_height_median_vs_{pc.ADULT_M}m_prior_n{n_heights}"
         stat_frac = round(mad / med, 3)
         # The calibrated-height vfov band: each vfov uses its own plane height times its
         # own person-height scale -- the two slide with vfov in the same direction, so
@@ -391,7 +397,8 @@ def write_report(out_dir: Path, cameras: list[str]) -> None:
     lines.append("# onboard01 — fleet onboarding calibration sweep (23 selling_floor)\n")
     lines.append(
         f"Generated: {_dt.date.today().isoformat()} - `scripts/onboard_camera.py` - "
-        "orientation pipeline imported from `calibrate_from_plate.py` (calib01-validated: "
+        "orientation pipeline imported from `geometry/plate_calibration.py` "
+        "(calib01-validated: "
         "pitch ±0.7° of the anchor, provided the vfov is pinned) - automated scale subset "
         "= the person-height statistic (calib02's validated visual-prior method, ±5-8%, "
         "needs a human; fields stay null, flagged `needs_visual_reference`).\n"
@@ -524,7 +531,7 @@ def main(argv=None) -> int:
     )
     ap.add_argument("--camera", action="append", help="run only these cameras (repeatable)")
     ap.add_argument("--out", type=Path, default=Path("runs/onboard01"))
-    ap.add_argument("--plates-root", type=Path, default=cfp.PLATES)
+    ap.add_argument("--plates-root", type=Path, default=pc.PLATES)
     ap.add_argument("--k1", type=float, default=K1_FLEET)
     ap.add_argument("--vfovs", default="55,70.4,85")
     ap.add_argument("--skip-person-frac", action="store_true")

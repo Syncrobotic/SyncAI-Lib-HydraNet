@@ -62,7 +62,10 @@ def _tracked_scripts() -> list[Path]:
 
 
 # Measured 2026-08-19. Lower it when a pair is moved into the package; never raise it.
-BASELINE_PAIRS = 10
+# 10 -> 9 same day: the plate-calibration pipeline moved to
+# `geometry/plate_calibration.py`, which removed `calibrate_from_plate ->
+# fit_camera_from_people` (and kept `onboard_camera` from becoming the 11th pair).
+BASELINE_PAIRS = 9
 
 
 def _script_to_script_imports() -> list[tuple[str, str]]:
