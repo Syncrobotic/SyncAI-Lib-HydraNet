@@ -524,11 +524,20 @@ daytime shop-floor cameras. Site person boxes are the critical path, not a nice-
 | 2 | **one labelled site clip** (person tracks) | `idf1` / `id_switches`, which do not exist today | **one human step from done (2026-08-19)** — `scripts/offline_tracks.py` cut cam11 to 2 fragments / 0 switches against its 2-identity GT; applying `runs/offline_tracks01/cam11` needs **zero merge decisions**. cam04 follows at ~4–6 merges |
 | 3 | COCO `person`+`bag` | bootstrap for channels 0–1 | on disk, wired in `hydranet_retail_security.yaml` |
 | 4 | COCO keypoints | tier-2 pose bootstrap | **on disk, nothing reads it yet** |
-| 5 | CrowdHuman | occlusion and density, which is what fragments tracks | not downloaded; research licence |
-| 6 | RAP v2 | attributes, indoor mall CCTV distribution | licence unconfirmed — one question, changes the plan more than anything else here |
+| 5 | CrowdHuman | occlusion and density, which is what fragments tracks | research licence — **cleared for the current research phase** (user ruling 2026-08-19, see licence note below); not yet downloaded |
+| 6 | RAP v2 | attributes, indoor mall CCTV distribution | **on disk 2026-08-19** (`datasets/RAP-v2`, 84k crops + annotations, plus `rap_zs.pkl`/`peta_zs.pkl` identity-disjoint splits — use those, they are the split discipline this file already argues for). Commercial licence still unconfirmed — research-phase use cleared, flagged for the pre-commercial re-audit |
+| 10 | **PoseLift** (WACV 2025, Apache-2.0) | shoplifting benchmark: real retail CCTV pose sequences, 43 shoplifting / 112 normal | **on disk 2026-08-19** (`datasets/PoseLift`, 151 pkl, train/test/GT + STG-NF baseline). Too small to train on; it is the tier-2 evaluation benchmark. Sibling corpus RetailS (~20M pose frames): licence inquiry pending with the authors |
+| 11 | MSP60K / WIDER-Attribute / RAP v1 | attribute reserves from the same 2026-08-19 bundle (`datasets/_incoming/attr_bundle`) | MSP60K (60k, multi-scenario incl. surveillance, 2024) worth evaluating after RAP v2; WIDER is eye-level web photos — pretraining at best; RAP v1 superseded by v2, keep archived |
 | 7 | PA-100K / PETA / Market-1501 | attribute mass, benchmark, re-ID floor | on disk, and **used**: `runs/crop_encoder01` is 8 epochs on PA-100K, and its embedding scores mAP 0.0543 / rank-1 0.1689 on Market-1501's protocol against `reid_metrics.py`'s untrained-resnet18 floor of 0.0318. A floor cleared, not association solved |
 | 8 | RWF-2000 / UCF-Crime | `fight` | **do not buy yet** — see tier 3 |
 | 9 | URFD / Le2i fall sets | `fall` | **rejected as a training source**: staged, domestic, eye-level. The `column` failure in advance |
+
+> **Licence stance, ruled by the user 2026-08-19:** the model is currently **research
+> use only**, so research-licensed sources (CrowdHuman, RAP v2, and the bundle in row 11)
+> are usable now. The obligation this creates instead of removes: **before anything
+> ships commercially, the training-data lineage must be re-audited** and every
+> research-only source either dropped from the weights or relicensed. This table's
+> "state" column is the lineage record — keep it accurate per source.
 
 Three rules that apply to every row of that table and have each already been paid for once:
 
@@ -556,7 +565,10 @@ one ordering constraint that makes the difference between a report and a wrong r
 > is the association metric, and `runs/crop_encoder01` is a first attribute encoder. The
 > **ordering constraint below is unchanged and is still the point of the document** —
 > association is still not fixed, and the encoder was trained on PA-100K rather than on the
-> RAP v2 this page argues for first, because RAP's licence question is still open.
+> RAP v2 this page argues for first, because RAP's licence question was still open.
+> **2026-08-19: RAP v2 is on disk and cleared for research-phase use** (licence note in §7)
+> — the "train the encoder on RAP v2 with the identity-disjoint `rap_zs` split" step this
+> page argues for is now unblocked.
 
 `analytics/tracker.py` is IoU association over detection boxes and `analytics/dwell.py`
 turns tracks into dwell. `analytics/track_attributes.py` and `analytics/reid_metrics.py`

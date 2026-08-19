@@ -149,3 +149,33 @@ Deferred with reasons:
 - **ReID topology self-supervision** — real, but positives from time-windows are noisy
   in a dwell-heavy store; the clean free signal is **co-occurring tracks = definite
   negatives**. Needs the camera-transition topology measured first.
+
+---
+
+## Addendum, later the same day
+
+**VLM triage pilot: ran with Claude reading frames directly — verdict "worth building,
+but placed differently".** All 48 fall candidates judged (report:
+`runs/vlm_triage01/REPORT.md`): 0 real falls, fully consistent with the recorded
+conclusion, 45/48 high confidence. The classification is the payoff — 69% sideways-mounted
+cameras (at least three, not the one previously on record), 48% frame-edge truncations,
+35% seated, 21% lean-over-counter — and it distils into four front-layer rules:
+(1) drop `touches_frame_border` candidates outright; (2) disable or rotate the proxy on
+cameras whose median person aspect is ≥1 (sideways/top-down mounts); (3) zone-mask seating
+areas; (4) require a track to have shown an upright box before it may trigger. With all
+four, this batch reduces to single-digit genuinely-hard cases — which is what a VLM (or a
+human) should be looking at. Cost measured: ~3 frames / 2–3k tokens per candidate.
+
+**Licence stance ruled by the user: research use for now.** CrowdHuman and RAP v2 are
+usable in the current phase; the obligation is a **pre-commercial lineage re-audit**
+(recorded in RETAIL_DATA §7). RAP v2 arrived and is extracted (`datasets/RAP-v2`,
+84,929 crops + annotations, with the identity-disjoint `rap_zs`/`peta_zs` splits);
+PoseLift is on disk complete (151 pkl, Apache-2.0) as the tier-2 shoplifting benchmark;
+the same bundle carried MSP60K / WIDER / RAP v1 as attribute reserves
+(`datasets/_incoming/attr_bundle`).
+
+**Scale without a tape measure:** the user ruled out manual site measurement; the metre
+is being estimated from standard-dimension priors (door widths, tile pitch, A4 signage)
+read off the plates, cross-checked against the person-height scale and the Taichung-cam01
+anchor — `runs/calib02_priors` when it lands. Metre-space event thresholds tolerate
+5–10% scale error; occupancy density is the consumer that does not.
