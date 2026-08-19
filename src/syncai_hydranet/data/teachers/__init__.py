@@ -27,14 +27,32 @@ from __future__ import annotations
 
 from .boxes import boxes_from_masks, dedupe, drop_static, nms
 from .photometry import MIN_CHROMA, MIN_LUMA, is_daylight, luma_chroma
+from .sam3 import (
+    MAX_BOX_FRAC,
+    MODEL_ID,
+    compose,
+    consensus,
+    frame_boxes,
+    frame_masks,
+    load_sam3,
+    segment,
+)
 
 __all__ = [
+    "MAX_BOX_FRAC",
     "MIN_CHROMA",
     "MIN_LUMA",
+    "MODEL_ID",
     "boxes_from_masks",
+    "compose",
+    "consensus",
     "dedupe",
     "drop_static",
+    "frame_boxes",
+    "frame_masks",
     "is_daylight",
+    "load_sam3",
     "luma_chroma",
     "nms",
+    "segment",
 ]

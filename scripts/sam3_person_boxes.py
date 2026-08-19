@@ -65,8 +65,6 @@ for candidate in (HERE.parent / "src", HERE / "src"):
         sys.path.insert(0, str(candidate))
 sys.path.insert(0, str(HERE))
 
-from sam3_prelabel import load_sam3, segment  # noqa: E402
-
 from syncai_hydranet.data.teachers.boxes import (  # noqa: E402
     boxes_from_masks,
     drop_static,
@@ -76,6 +74,7 @@ from syncai_hydranet.data.teachers.photometry import (  # noqa: E402
     MIN_LUMA,
     is_daylight,
 )
+from syncai_hydranet.data.teachers.sam3 import load_sam3, segment  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
 
 

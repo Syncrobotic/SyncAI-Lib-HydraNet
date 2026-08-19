@@ -55,12 +55,11 @@ for candidate in (HERE.parent / "src", HERE / "src"):
         sys.path.insert(0, str(candidate))
 sys.path.insert(0, str(HERE))
 
-from sam3_prelabel import load_sam3, segment  # noqa: E402
-
 from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402
 from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.sam3_prompts_objects import CONCEPTS  # noqa: E402
 from syncai_hydranet.data.teachers.photometry import is_daylight  # noqa: E402
+from syncai_hydranet.data.teachers.sam3 import load_sam3, segment  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402

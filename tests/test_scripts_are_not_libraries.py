@@ -9,8 +9,8 @@ caller depends on is the thing nothing checks. That is also how four copies of o
 came to disagree about whether to correct the lens, which changed which observations a
 tracker linked, under the mining run that concluded "none of the 48 spans is a posture".
 
-`scripts/` is 10,748 lines against `src/`'s 18,364 and sits at 7% coverage. A coverage floor
-was the obvious guard and is the wrong one: most of these are one-shot research tools that
+`scripts/` is 13,619 lines against `src/`'s 21,585 (2026-08-20) and sits at 7%
+coverage. A coverage floor was the obvious guard and is the wrong one: most of these are one-shot research tools that
 legitimately have no tests, and a gate that demands them gets deleted. This measures the
 thing that has actually gone wrong twice instead.
 
@@ -69,7 +69,12 @@ def _tracked_scripts() -> list[Path]:
 # `sam3_product_coverage -> sam3_person_boxes`. It was two copies of one formula, one
 # gating and one reporting, and the reporting copy's docstring named the other instead of
 # importing it.
-BASELINE_PAIRS = 8
+# 8 -> 6: the SAM 3 teacher moved to `data/teachers/sam3.py`, which removed both
+# `-> sam3_prelabel` pairs. `column_camera_sweep._prelabel` went with them: it loaded the
+# same script *by path* to stay out of this count, and said in its own docstring that a
+# third caller wanting `segment` was the signal to move it into the package. That caller
+# arrived.
+BASELINE_PAIRS = 6
 
 
 def _script_to_script_imports() -> list[tuple[str, str]]:
@@ -106,10 +111,18 @@ def test_no_new_script_becomes_a_library_for_another():
 def test_the_measurement_still_finds_the_pairs_it_was_written_against():
     """A guard whose search returns nothing passes forever. Pin two known pairs.
 
-    `sam3_person_boxes -> sam3_prelabel` is the SAM 3 loader being shared out of a script,
-    and it is the clearest candidate for the package of anything in the list.
+    The two it was written against -- both `-> sam3_prelabel` -- are gone, into
+    `data/teachers/sam3.py`, which is the outcome this test exists to produce. Re-pinned
+    on the two remaining kinds rather than deleted, because the *forms* are what the scan
+    can lose: `bev_demo -> bev_page` is `from x import Y` and `stable_infer ->
+    flicker_baseline` is a plain `import x`, and an AST walk that stops seeing one of
+    those goes quiet rather than red.
+
+    `live_view_orin -> bench_camera_orin` is deliberately not pinned here even though it
+    is the most durable pair in the list: it is exempt for a reason
+    (`tests/test_orin_standalone_copies.py`), and a pin would read as approval.
     """
     pairs = _script_to_script_imports()
     assert pairs, "the scan found no imports at all — has scripts/ moved?"
-    assert ("sam3_person_boxes.py", "sam3_prelabel") in pairs
-    assert ("sam3_product_coverage.py", "sam3_prelabel") in pairs
+    assert ("bev_demo.py", "bev_page") in pairs
+    assert ("stable_infer.py", "flicker_baseline") in pairs

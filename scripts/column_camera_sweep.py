@@ -81,7 +81,6 @@ a prompt fired and not *what* it fired on.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -95,34 +94,14 @@ for candidate in (HERE.parent / "src", HERE / "src"):
         sys.path.insert(0, str(candidate))
 
 from syncai_hydranet.data import sam3_prompts_objects as _objects  # noqa: E402
+from syncai_hydranet.data.teachers.sam3 import (  # noqa: E402
+    MODEL_ID,
+    load_sam3,
+    segment,
+    vision_features,
+)
 from syncai_hydranet.data.video import frames as video_frames  # noqa: E402
 from syncai_hydranet.data.video import probe  # noqa: E402
-
-
-def _prelabel():
-    """`sam3_prelabel.py` is a script, not a package module; load it by path.
-
-    Importing it rather than copying `segment` is deliberate: the encode-once path and
-    the post-processing thresholds are the thing being reproduced, and a second copy of
-    them would drift from the one that made the batches.
-
-    **Declared rather than hidden:** this is a script-to-script dependency, and loading it
-    by path makes it invisible to `tests/test_scripts_are_not_libraries.py`, which counts
-    them and ratchets. That is not why it is written this way -- `sam3_prelabel.py` is not
-    an importable module name -- but the exemption is real, so it is written down here. If
-    a third caller wants `segment`, that is the signal to move it into
-    `src/syncai_hydranet` rather than to add another of these.
-    """
-    path = HERE / "sam3_prelabel.py"
-    spec = importlib.util.spec_from_file_location("_sam3_prelabel", path)
-    if spec is None or spec.loader is None:
-        # Unreachable for an existing .py file; the guard is what makes the None-typed
-        # returns above checkable rather than silently narrowed.
-        raise ImportError(f"cannot build an import spec for {path}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
 
 # The census's five, by the names cameras.json uses. Sweep C saw all five unrotated.
 SIDEWAYS = (
@@ -188,13 +167,13 @@ def first_frame(clip: Path) -> Image.Image | None:
     return None
 
 
-def ask(mod, proc, model, image: Image.Image, device: str, prompts) -> dict:
+def ask(proc, model, image: Image.Image, device: str, prompts) -> dict:
     """Every `column` prompt against one frame, as counts and pixel shares per cut.
 
     The union is over prompts, which is what the concept means: `column` and `pillar`
     finding the same pillar is two prompts agreeing, not two columns.
     """
-    embeds = mod.vision_features(proc, model, image, device)
+    embeds = vision_features(proc, model, image, device)
     area = image.width * image.height
     per_prompt: dict[str, dict] = {}
     unions = {c: np.zeros((image.height, image.width), dtype=bool) for c in CUTS}
@@ -203,7 +182,7 @@ def ask(mod, proc, model, image: Image.Image, device: str, prompts) -> dict:
         # Ask once at the lowest cut and filter upward: the scores are the same objects.
         inst = [
             (m, s)
-            for m, s in mod.segment(proc, model, image, prompt, min(CUTS), device, embeds)
+            for m, s in segment(proc, model, image, prompt, min(CUTS), device, embeds)
             if m.sum() >= MIN_PIXELS
         ]
         per_prompt[prompt] = {
@@ -264,8 +243,7 @@ def main() -> int:
     print(f"{len(cams)} cameras x {len(prompts)} prompts, cuts {CUTS}")
     print(f"prompts: {', '.join(prompts)}\n")
 
-    mod = _prelabel()
-    proc, model = mod.load_sam3(mod.MODEL_ID, args.device)
+    proc, model = load_sam3(MODEL_ID, args.device)
 
     results: dict[str, dict] = {}
     for i, cam in enumerate(cams, 1):
@@ -278,11 +256,11 @@ def main() -> int:
             frame = first_frame(clip)
             if frame is None:
                 continue
-            entry[name] = ask(mod, proc, model, frame, args.device, prompts)
+            entry[name] = ask(proc, model, frame, args.device, prompts)
             entry["tranches"][name] = {"clip": clip.name, "local_hour": round(landed, 2)}
             if args.rotate and cam in SIDEWAYS:
                 entry[f"{name}_rot90"] = ask(
-                    mod, proc, model, frame.rotate(90, expand=True), args.device, prompts
+                    proc, model, frame.rotate(90, expand=True), args.device, prompts
                 )
 
         results[cam] = entry
