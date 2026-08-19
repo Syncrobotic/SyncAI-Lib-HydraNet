@@ -245,3 +245,15 @@ class-boundary band flips at 5.3× its interior (wall 9.4×) — the static-comp
 direction erases exactly those bands. Detection side: 9.5 boxes/frame with 40% of
 IoU-matched chains lasting a single frame — rendering tracks with hysteresis, not raw
 detections, is the fix. Consensus stable_share 95.4% (person-excluded eligibility 47.6%).
+
+**First seed of the retrain, measured on the stability ruler (single seed — the
+three-seed table follows).** Same instrument, same clip, only the checkpoint changed
+(xl → b03_gdino seed42): static-area flip rate **1.50% → 1.00%**, oscillation share
+83.7% → 78.6%, fixture boundary-band flips (in-static) 0.094 → 0.065. Person detection
+found the crowd it used to miss — 3.0 → 6.8 boxes/frame with track p90 14 → 42 frames
+and single-frame tracks 42% → 33% — while coco_person mAP also rose 0.210 → 0.218, so
+this is not threshold-shopping. One apparent regression dissolved on inspection:
+boxed_stock boxes/frame collapsed 5.5 → 0.12 *at the fixed 0.30 render threshold*, but
+its mAP is unchanged (0.1174 → 0.1179) — a score-calibration shift, not a capability
+loss, and the argument for per-class working thresholds at the serving layer.
+site_person val lands at mAP50 0.787 (agreement with GDINO, per the standing caveat).
