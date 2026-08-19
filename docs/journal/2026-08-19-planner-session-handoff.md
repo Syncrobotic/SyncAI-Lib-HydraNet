@@ -82,3 +82,16 @@ The ones that bite hardest: interrupt on design flaws immediately; verify every 
 view personally; one sample until confirmed; 3-minute demo videos, frame-checked;
 source code in English, replies in Traditional Chinese; docs updated the moment
 decisions land; warn before context handoff (this file is that warning's product).
+
+## Final state at handoff (v4.2 delivered)
+
+The v4.2 single frame (`runs/site30k_qa/preview/K04_0002_v42_single.jpg` + edge/far
+before-after crops) passed the planner's own check and is **with the user for 確認**.
+Both complaints measurably addressed: BEV metric-space regularisation + depth-scaled
+tolerance fixed the far field (coverage 99→105% of the v4.1 far-field baseline), SLIC
+snapping fixed edge fragmentation; attribution stays complete (OTHER 0.0%,
+regularisation cost named at 4.3%). One named residual for review: thin pillar-skirt
+collars ≤ tol(r) where both teachers blur the seam at 6 m — visible in
+`_v42_pillar_zoom.jpg`, structurally bounded. Successor: on user approval run the
+~10-frame small batch (same recipe, three pilot cameras), verify every frame
+personally, get approval again, then unlock Phase 3 floor-first annotation.
