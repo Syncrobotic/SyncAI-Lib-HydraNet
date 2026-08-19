@@ -49,6 +49,14 @@ Consequences:
 - SAM 3 remains the teacher for masks and long-tail merchandise prompts; the swap is for
   `person` only.
 
+> **RESOLVED, and not in this entry's favour — 2026-08-19.** The re-measurement this
+> caveat asks for was done the same day across all 42 live cameras:
+> [2026-08-19-night-person-fleet-recheck.md](2026-08-19-night-person-fleet-recheck.md).
+> **0.35 does not hold at night fleet-wide.** 28 cameras hold, 3 carry a real person, 11 are
+> counter-examples with a false score up to 0.594. Taichung-cam09 itself reproduces exactly
+> (0.323 vs 0.326; SAM 3 229 vs 229), so the gap was real and it was this camera's. Read the
+> night rows of the table above as one camera's numbers, which is what they were.
+
 **Caveats, before anyone quotes these numbers wider than they reach:** the night side is
 **one empty-store clip on one camera** (Taichung-cam09) plus its static-plate check; nine
 of 48 cameras returned SAM 3 night hallucinations on 2026-08-18, so the gap should be

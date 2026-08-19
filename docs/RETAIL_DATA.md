@@ -625,12 +625,35 @@ else. This section is the other half of that: where a site person box comes from
 SAM 3 returns hanging packets as people on IR night frames, which also meant **night was
 not covered at all**. Measured on the same frames, **Grounding DINO at 0.35 separates the
 two populations outright** — 0 boxes on the empty night IR clip against SAM 3's 229, with
-the night score maximum at 0.326, so the threshold sits in a measured gap and needs no
-daylight gate. The site person source is now `datasets/retail_person_gdino01`: 23
-selling-floor cameras × 3 open-store slots, **1,141 boxes** at 0.35+NMS, no camera empty.
-Numbers, cross-checks and the one-night-clip caveat:
+the night score maximum at 0.326. The site person source is now
+`datasets/retail_person_gdino01`: 23 selling-floor cameras × 3 open-store slots,
+**1,141 boxes** at 0.35+NMS, no camera empty. Numbers and cross-checks:
 [journal/2026-08-19-security-retail-teachers-and-methodology.md](journal/2026-08-19-security-retail-teachers-and-methodology.md).
 Still a teacher's opinion, not ground truth — two teachers agreeing is not accuracy.
+
+> **The night half of that does not survive the fleet, and the sentence "sits in a measured
+> gap and needs no daylight gate" is withdrawn for night.** Re-measured the same day across
+> all 42 live cameras, 12 midnight frames each
+> ([journal/2026-08-19-night-person-fleet-recheck.md](journal/2026-08-19-night-person-fleet-recheck.md),
+> `runs/night_person_verdict`): **28 cameras hold, 3 carry a real person, and 11 are
+> counter-examples** — a box over 0.35 on an empty shuttered store, static against the
+> ~00:00 plate, and confirmed not-a-person at native resolution. The worst is **0.594**,
+> 1.7× the threshold.
+>
+> The pipeline reproduces the original measurement on the camera it was made on before
+> anything else is read off it: Taichung-cam09 returns GDINO max 0.323 against 0.326 and
+> SAM 3 229 against 229. The gap was real; it was one camera's.
+>
+> **The swap did not fix the hanging-packet failure, it moved it.** GDINO reads pegboard
+> stock as people on Taichung-cam01 (0.594) and Kaohsiung-cam07, where SAM 3 returns
+> nothing; SAM 3 reads it on Taichung-cam09, where GDINO returns 0.323. Box-level agreement
+> at night is **24%**. Requiring both clears 9 of the 11 — and costs real people, 75% on
+> Kaohsiung-cam02 and 100% on Tao-Hsin-cam09, which is the trade the static gate was
+> switched off for in the first place.
+>
+> **So night `person` is a per-camera decision, not a fleet threshold**, and night tranches
+> cannot be labelled unreviewed. Day is unaffected. The static share against the existing
+> midnight plates is the discriminator that does work, in both directions, on all 42.
 
 `column` is the precedent, and §1 of this file is what it costs: a class sourced from the
 wrong distribution passes every config gate, scores 0.40–0.51 on val, and predicts 0.00% of
