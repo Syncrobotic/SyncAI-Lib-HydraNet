@@ -10,6 +10,23 @@
 # is how a checker gets deleted a week later. Blocking the *increase* is the part worth
 # having -- new code type-checks, old debt is paid down as those files are touched.
 #
+# ===========================================================================
+# TWO WARNINGS BEFORE EDITING THIS FILE. Both were paid for on 2026-08-19.
+#
+# 1. **Never invoke the checker in a way that can write to the caller's `.venv`.**
+#    `uv run --python 3.12` does not merely select an interpreter -- it re-syncs the
+#    project environment to it. One run switched this repo's venv from 3.10.12 to
+#    3.12.13 and dropped the `export` extra, on a checkout several people share, and it
+#    surfaced as an unrelated test skipping on a missing `onnx`. A measuring tool that
+#    rewrites the environment it measures is more dangerous than whatever it measures.
+#    `--isolated` below is not a detail; it is what makes this safe to run twice.
+#
+# 2. **The baselines are meaningless unless the interpreter is pinned.** See the block
+#    above `TY_PYTHON` for the three-environment table. The short version: the count
+#    reports what the installed *stubs* say, `uv.lock` resolves a different numpy per
+#    Python version, and the same tree measured 8 and 12 on two of them.
+# ===========================================================================
+#
 # This comment used to say the debt was "almost all torch and pycocotools stub gaps
 # rather than anything this repo wrote", and used that to justify a loose baseline. It
 # was measurably backwards. At 17 diagnostics only 7 mentioned a torch type at all, and
@@ -96,11 +113,7 @@ BASELINE="${TY_BASELINE:-$DEFAULT_BASELINE}"
 # what the test matrix's upper row uses, so the gate measures the environment contributors
 # actually get. Override for a one-off with TY_PYTHON=3.10.
 TY_PYTHON="${TY_PYTHON:-3.12}"
-# `--isolated` so the gate never mutates the caller's `.venv`. Without it, `uv run
-# --python 3.12` re-syncs the project environment to 3.12 -- it silently switched this
-# repo's venv from 3.10 and dropped the `export` extra the first time it ran, on a
-# checkout several people share. A checker that edits your environment to measure it is
-# not a checker you run twice.
+# `--isolated` is load-bearing -- warning 1 in the header says why. Do not drop it.
 RUNNER=(uv run --isolated --python "$TY_PYTHON" ty check "$TARGET" --output-format=concise)
 
 # ty exits 0 clean, 1 with diagnostics, 2 when it could not run at all -- a broken
