@@ -25,7 +25,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts" / "robot"
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
 
 @pytest.fixture(scope="module")

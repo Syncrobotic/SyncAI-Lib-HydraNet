@@ -14,7 +14,7 @@ The move is not tidying. Outside the package this code sat outside the type ratc
 coverage floor and the wheel, so the most involved 560 lines in the project were also the
 only ones nothing checked.
 
-`scripts/robot/live_view_orin.py` and `scripts/robot/bench_camera_orin.py` are a
+`scripts/live_view_orin.py` and `scripts/bench_camera_orin.py` are a
 different case and deliberately stay where they are -- they run on a board with no
 `syncai_hydranet` installed, which is a real constraint rather than an accident, and
 `tests/test_orin_standalone_copies.py` is what keeps those copies honest.

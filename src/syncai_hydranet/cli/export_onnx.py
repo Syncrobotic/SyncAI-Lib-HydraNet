@@ -60,7 +60,7 @@ class ExportWrapper(nn.Module):
     Why that is worth two extra operators: pre-processing parity between training and the
     robot is listed in METHODOLOGY.md as a deployment responsibility, and the repository
     was implementing it twice -- ``data/transforms.py`` for training and a hand-copied
-    mean/std in ``scripts/robot/bench_camera_orin.py`` for the Jetson. Nothing connects the two.
+    mean/std in ``scripts/bench_camera_orin.py`` for the Jetson. Nothing connects the two.
     Change one and no test fails, no error appears, and the model on the robot is simply
     worse in a way that gets blamed on quantisation or on the camera.
 

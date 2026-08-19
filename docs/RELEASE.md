@@ -171,7 +171,7 @@ Every item is currently unmet, which is an accurate summary of where the project
 | Per-class floors met | Not just mIoU. A mean stays respectable while one class goes to noise — that has happened here |
 | Field footage reviewed | A human has watched the overlay on real site video |
 | Export parity | `--check-parity` |
-| Latency measured on the target board | `scripts/robot/bench_orin.sh`, and `scripts/robot/bench_camera_orin.py` for the end-to-end number |
+| Latency measured on the target board | `scripts/bench_orin.sh`, and `scripts/bench_camera_orin.py` for the end-to-end number |
 | Bundle published and verified | `release_bundle.sh publish` |
 
 ### What cutting v1 immediately showed
