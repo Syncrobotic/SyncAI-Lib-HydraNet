@@ -211,7 +211,7 @@ section.
 > on.** The robot is a **Lite3 with one monocular camera and two ultrasound returns**
 > (`{forward, backward}`), whose forward echo was measured *lateral* — 0 of 29 frames
 > comparable to the camera's cone. There is no point cloud, and "the Lite3 LiDAR variant"
-> is one of the sensors [RESEARCH_OCCUPANCY.md](RESEARCH_OCCUPANCY.md) would justify
+> is one of the sensors the (removed) occupancy research direction would justify
 > **buying** if E-prep says so. Row by row:
 >
 > * **Terrain — unchanged.** Material semantics were never LiDAR's to provide, and with no
@@ -249,7 +249,7 @@ data shortage with an architecture that needs more data.
 > **2026-08-19: the first half has nothing to fuse.** With no point cloud, the cheap
 > deterministic route does not exist. The *warning* in the second half is the part that
 > survives and it is now load-bearing rather than theoretical — a BEV output head is exactly
-> what [RESEARCH_OCCUPANCY.md](RESEARCH_OCCUPANCY.md) proposes (step E1), and that document
+> what the removed occupancy direction proposed (its step E1), and that document
 > agrees the binding constraint is supervision: its whole first milestone is auto-labelling,
 > because it accepts that hand-drawn 3D data is unaffordable. The two documents disagree
 > about the conclusion and agree about the constraint, which is the honest state of it.

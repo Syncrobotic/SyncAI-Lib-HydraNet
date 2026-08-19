@@ -4,7 +4,9 @@
 one `.h5` per frame. It is here to train the depth head (`models/heads/depth.py`) on real
 metric ground truth, because the public teacher we measured does not transfer its metres:
 zero-shot on this same split it over-predicts by a flat 15% while keeping its geometry
-(`scripts/robot/eprep_teacher_nyuv2.py`).
+(measured on the 654-image official test split; the script that measured it went with
+the quadruped line on 2026-08-19, and `scripts/calibrate_from_plate.py` carries the
+derivation).
 
 ---------------------------------------------------------------------------
 WHY THIS DOES NOT USE THE SHARED TRANSFORM PIPELINE

@@ -1,4 +1,4 @@
-# SyncAI-Lib-HydraNet — multi-task perception for store CCTV, and for a quadruped
+# SyncAI-Lib-HydraNet — multi-task perception for fixed store CCTV
 
 [![CI](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/actions/workflows/ci.yml)
 [![Python 3.10 – 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](pyproject.toml)
@@ -10,18 +10,18 @@ surface, terrain class, object detection, and now depth.** The architecture foll
 Tesla HydraNet idea: a shared backbone and neck carry almost all of the compute, while the
 task heads stay tiny and mutually independent.
 
-**One core, two products, and they are not equal in priority.**
+**One product: fixed store CCTV.** One camera answers both halves of the ask — retail
+analytics (*what merchandise, where do people go, how long do they stay*) and security
+(*who entered where, how many, what did they do*) — off one model, one export and one
+latency budget. It runs server-side, TensorRT on an AGX Orin.
 
-| | product | what it is | where it runs |
-|---|---|---|---|
-| **A — the main line** | **retail + security analytics** | fixed store CCTV: one camera answering *what merchandise, where do people go, how long do they stay* and *who entered where, how many, what did they do* | server-side, TensorRT on an Orin |
-| B — the secondary line | quadruped perception | can this robot put a foot here | on a Lite3's RK3588 NPU |
+> **A quadruped line was removed on 2026-08-19.** It shared this core and shipped RKNN to a
+> Lite3's RK3588 NPU. It is in the history, not the tree. What it left behind is documented
+> in the commit that removed it — including the pieces that turned out to be shared and
+> stayed: the geometry module, the traversability head, the indoor taxonomy and the depth
+> head all serve the camera too, and none of them moved.
 
-Both consume the same `src/syncai_hydranet`. The CCTV line is where the deployment,
-the data and the current work are; the robot line continues and its documents are kept
-current, but when the two disagree about a priority, the camera wins.
-
-## The main line: fixed ceiling CCTV in a shop
+## What it does, on a real store camera
 
 ![all three heads and the floor raised into a scene](assets/retail_cctv_scene.gif)
 
@@ -61,32 +61,6 @@ and blocked — concentrated on the brighter, more specular near-field tiles, wh
 polished-floor failure [docs/RETAIL.md](docs/RETAIL.md) predicts. No public
 dataset fixes that one; a fixed camera makes it one annotated polygon per view.
 
-
-## The secondary line: the quadruped
-
-![traversability and terrain from one forward pass, on office corridor footage](assets/hydranet_demo.gif)
-
-Left, traversability: green is walkable, red is blocked, with a detection boxed on the
-fire extinguisher against the left wall — the box is in the right place and the label is
-not readable at this size, which is the honest version of a head whose vocabulary is
-COCO's 80 and has no noun for one. Right, the terrain classes the same forward pass
-produced. One image in, both masks out, through the 60-epoch multi-task checkpoint.
-
-**Read it for what it is.** The floor, the walls and the partitions are solid, and the two
-heads agree with each other — the trunk is doing its job. What this clip cannot show is the
-part that is not finished: `caution` scores 0.33 on the held-out test split and `stairs`
-0.32, because three of the four terrain classes that map to `caution` have **zero** training
-examples, and because the training data is ADE20K — human-height web photography, not
-footage from a robot's camera. Point the same model at a ceiling and a quarter of it comes
-back "go". The gap is data, not architecture; [docs/METHODOLOGY.md](docs/METHODOLOGY.md)
-says what to collect and in what order.
-
-The robot is a **Lite3: one monocular camera and two ultrasound returns, no LiDAR** — a
-correction that reordered the annotation backlog, and the reason
-[docs/RESEARCH_OCCUPANCY.md](docs/RESEARCH_OCCUPANCY.md) exists. Turning a mask into metres
-is geometry rather than learning: [docs/GROUND_PROJECTION.md](docs/GROUND_PROJECTION.md)
-covers both the per-frame fit a walking camera needs and the install-time calibration a
-fixed one gets instead.
 
 ## The network
 
@@ -187,7 +161,6 @@ had stopped matching the work.
 | deploying | [docs/DEPLOY.md](docs/DEPLOY.md) — the export contract, board bring-up from scratch, and local development on a Mac |
 | shipping a version | [docs/RELEASE.md](docs/RELEASE.md) — `dev → stage → main`, and separately how a *model* gets a version |
 | turning a mask into metres | [docs/GROUND_PROJECTION.md](docs/GROUND_PROJECTION.md) |
-| on the robot's research line | [docs/RESEARCH_OCCUPANCY.md](docs/RESEARCH_OCCUPANCY.md) — the occupancy north star and the one prerequisite that decides it |
 
 `docs/journal/` holds dated notes from particular days. They are records, not documentation
 — accurate about the day they describe and not maintained afterwards, so their links to the
@@ -274,7 +247,7 @@ If your camera's aspect ratio differs from `input_size`, turn on `data.letterbox
 This was hypothetical until `heads/depth.py` landed, so the steps below are now a
 description of something in the tree rather than a plan — read `depth_fpn` in
 [`hydranet.py`](src/syncai_hydranet/models/hydranet.py) and
-[`configs/robot/hydranet_nyu_depth.yaml`](configs/robot/hydranet_nyu_depth.yaml) alongside them.
+[`configs/hydranet_hm3d_cctv.yaml`](configs/hydranet_hm3d_cctv.yaml) alongside them.
 
 1. Add the head module under `src/syncai_hydranet/models/heads/` (it takes the FPN feature list)
 2. Register the type branch in `hydranet.py::HydraNet.__init__` and add its loss in `compute_losses`

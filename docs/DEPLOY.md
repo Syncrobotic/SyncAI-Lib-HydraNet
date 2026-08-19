@@ -561,7 +561,7 @@ The node already publishes what is needed, including depth registered to the col
 
 ```bash
 source /opt/ros/humble/setup.bash
-python3 scripts/robot/probe_ros_realsense.py --weights <state_dict>.pt \
+python3 probe_ros_realsense.py --weights <state_dict>.pt \   # removed with the robot line
     --config configs/hydranet_indoor.yaml --frames 40 --save 6 --range 5.0
 ```
 
@@ -620,7 +620,7 @@ is invisible in the picture — it looks like a working live view — so it is w
 on `now - header.stamp` rather than trusting the frame rate.
 
 One more, on pairing: take "the latest colour and the latest depth" and the two are up to a
-full frame apart (measured: mean 33 ms, max 67 ms). `scripts/robot/live_view_ros.py` keeps a short
+full frame apart (measured: mean 33 ms, max 67 ms). The removed ROS view kept a short
 depth history and picks the nearest stamp, which brings the skew to 0 ms because the driver
 stamps aligned depth with its colour frame's time. Without that, the range mask describes
 the world 67 ms beside the image it is drawn on.

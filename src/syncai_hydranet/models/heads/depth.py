@@ -1,10 +1,11 @@
 """A dense metric-depth head, and the loss that makes it metric rather than merely shaped.
 
 The third head family the registry's docstring anticipated. It exists because
-`docs/RESEARCH_OCCUPANCY.md`'s heads ① occupancy and ⑤ ground height both need depth
+This head was built for the quadruped's occupancy direction -- both its occupancy and
+ground-height heads need depth
 before they need anything else, and because measuring a public teacher settled that we
 cannot simply borrow one: Depth-Anything V2 Metric Indoor, scored zero-shot on NYUv2,
-over-predicts by a flat 15% (`scripts/robot/eprep_teacher_nyuv2.py`). Its *geometry* is sound --
+over-predicts by a flat 15% on zero-shot NYUv2. Its *geometry* is sound --
 delta1 goes 0.687 -> 0.919 once a single global factor is removed -- so what a head of our
 own has to supply is the part that did not transfer: the metres.
 

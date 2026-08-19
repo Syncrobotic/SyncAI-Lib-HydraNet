@@ -60,7 +60,6 @@ KNOWN_UNSOURCED = {
     # it derives from, so it inherits the same three that ADE20K cannot source -- adding
     # a depth head does not fill a segmentation channel. Listed rather than inferred for
     # the reason above: if a dataset is ever added that fills them, this line must change.
-    "hydranet_robot_d4.yaml": ("floor_metal", "wet_slippery", "threshold_ramp"),
 }
 
 

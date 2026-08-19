@@ -33,7 +33,7 @@ Training configs: `configs/hydranet_retail_*` and `configs/hydranet_retail_secur
 **Not yet assembled here:** the runtime that wires L0 inference (engine) + L1 + L2 into a
 running service, its per-site config (the floor-metre zones, the event thresholds), and the
 ops to run it (compose/systemd, camera ingest, output sink). That is what belongs in this
-directory, symmetric with `deploy/robot/`'s inference service — added when the server-side
+directory — added when the server-side
 deployment is built, not invented before it exists.
 
 The annotation that feeds this product's training is [`../../tools/annotation/`](../../tools/annotation/)

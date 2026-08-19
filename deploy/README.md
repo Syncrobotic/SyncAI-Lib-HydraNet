@@ -3,22 +3,22 @@
 A **deployment surface** is where a trained model becomes a running thing in its target
 environment, plus the ops to get it there. It is the *downstream* end of the pipeline.
 
-This repo is **one core, two products**:
+This repo is **one core, one product**. It carried two until 2026-08-19, when the quadruped
+line was removed:
 
 | surface | product | environment | state |
 |---|---|---|---|
-| [`retail-security/`](retail-security/) | **the main line** — retail + security analytics | server-side, fixed store CCTV: L0 inference → L1 tracks → L2 events | **not assembled** — README only, no runtime here yet |
-| [`robot/`](robot/) | secondary — quadruped | on the Lite3's RK3588 NPU: real-time perception → BEV/costmap → control | **running** — three systemd units, committed byte-identical to the board |
+| [`retail-security/`](retail-security/) | retail + security analytics | server-side, fixed store CCTV: L0 inference → L1 tracks → L2 events | **not assembled** — README only, no runtime here yet |
 
-**Read that state column before the descriptions.** The line this project leads with has no
-code in its surface yet, and the secondary line has a service running on hardware. That is
-the true shape of the repository today, and it is the first thing a reader should know
-rather than something they discover by opening two READMEs.
+**Read that state column.** The only line this repository now has does not yet have code in
+its deployment surface. That was worth saying when there were two surfaces and it is worth
+saying more now: what ships is still an ONNX and a hand-run engine build, not a service.
 
-Both consume the **same core** (`src/syncai_hydranet`: the HydraNet model, `geometry/`,
-training, ONNX export). The core never imports a surface; each surface depends on the core.
-That one-way arrow is what keeps the two products two *consumers of one codebase* rather
-than two copies that drift.
+The surface consumes the **core** (`src/syncai_hydranet`: the HydraNet model, `geometry/`,
+training, ONNX export). The core never imports a surface. That one-way arrow is what let two
+products be *consumers of one codebase* rather than two copies that drift, and it is why
+removing one of them took no core changes at all — the strongest evidence the boundary was
+real.
 
 **What is not here:** *data production*. Annotation (CVAT) produces the training labels for
 both products and sits *upstream* of training, so it lives in [`../tools/annotation/`](../tools/annotation/),

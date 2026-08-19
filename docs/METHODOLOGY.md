@@ -122,7 +122,7 @@ moment.
 > **⚠ Corrected 2026-08-19: the platform this section was written for does not exist.**
 > The robot is a **Lite3 with one monocular camera and two ultrasound returns**, and the
 > ultrasound is `{forward, backward}` — only one of the two has a camera pointed at it, and
-> [RESEARCH_OCCUPANCY.md](RESEARCH_OCCUPANCY.md) measured that its echo is *lateral*: across
+> the occupancy research measured that its echo is *lateral*: across
 > 29 scored frames, **0 were comparable** to the camera's forward cone. There is no point
 > cloud. "The Lite3 LiDAR variant" appears in that document as one of the sensors the
 > project might **buy** if E-prep says a depth sensor is needed — which is the open decision,
@@ -142,7 +142,7 @@ moment.
 >   answers whether one is needed, and E-prep is itself blocked on walking the robot.
 > * **"LiDAR as an annotation lever" and "LiDAR as free validation" below are void**, not
 >   deferred. Both need a point cloud. Their replacement is the auto-labelling pipeline in
->   RESEARCH_OCCUPANCY.md, whose whole premise is that no 3D sensor exists.
+>   the occupancy research direction, whose whole premise was that no 3D sensor exists.
 
 The section as written assumed the platform carries LiDAR alongside the camera, so
 **this model's job is the half of the problem LiDAR cannot do**. Ranking annotation effort
@@ -634,7 +634,7 @@ For 4 and 5, this section asked whether the point cloud could **pre-label** them
 edges geometrically, project into the image, and correct a mask rather than draw one.
 **There is no point cloud** (see the correction above), so that shortcut does not exist
 today. Its replacement is the monocular auto-labelling pipeline in
-[RESEARCH_OCCUPANCY.md](RESEARCH_OCCUPANCY.md), which is a research programme rather than a
+the occupancy research programme, which was a research direction rather than a
 tool — so for now 4 and 5 are hand-drawn like the material classes, and the "second reason
 they come first" argument no longer separates the two groups.
 

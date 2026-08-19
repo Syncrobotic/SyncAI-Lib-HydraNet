@@ -126,27 +126,31 @@ releases/v1/
 ├── model.onnx                                       the portable graph, and the thing
 │                                                    every build is derived from
 └── builds/
-    ├── agx-orin_jp6.1_trt10.3_fp16.engine           product B, retail/security
-    └── rk3588_rknn1.6.0_int8_384x512.rknn           product A, the Lite3
+    └── agx-orin_jp6.1_trt10.3_fp16.engine           the retail/security line
 ```
+
+**There used to be a second build row**, `rk3588_rknn1.6.0_int8_384x512.rknn` for the Lite3
+quadruped. The quadruped line was removed from this repository on 2026-08-19; the shape
+below — one ONNX, several target-bound builds, none of them in the bundle proper — is what
+it was written to describe and is why it is kept with one build in it.
 
 Neither build belongs in the bundle proper, and for the same reason in both cases: they are
 tied to things the model knows nothing about. A TensorRT engine is bound to a **GPU
 architecture, TensorRT version and JetPack version** — the AGX Orin / JetPack 6.1 / TRT 10.3
 engine will not load on an Orin NX or after a JetPack upgrade. An RKNN is bound to the
-**toolkit version, which must match the robot's `librknnrt.so`** (1.6.0 here; see
-[`deploy/robot/README.md`](../deploy/robot/README.md)), and to the input size and
-quantisation it was converted at.
+runtime version on the board it targets, and to the input size and quantisation it was
+converted at.
 
 Rebuild per target; keep the ONNX as the thing you version.
 
 ### A build's numbers are not the model's numbers
 
 **This is the rule that is easiest to skip and most expensive to skip.** `metrics.json`
-records the selected epoch as trained: fp32, at the training input size. The robot runs
-int8 at 384x512, two lossy conversions away from that, and `deploy/robot/README.md`
-currently asserts "INT8 keeps accuracy here" with nothing behind it — `scripts/bench_*`
-measure throughput, not accuracy.
+records the selected epoch as trained: fp32, at the training input size. A quantised build
+at a smaller input is two lossy conversions away from that. The quadruped deployment this
+paragraph was written from asserted "INT8 keeps accuracy here" with nothing behind it —
+`scripts/bench_*` measure throughput, not accuracy — and that is the failure to avoid
+repeating on the Orin build, where nothing yet measures it either.
 
 So a build is not accepted until it has been scored on the same validation set as the model
 it came from, and the result stored beside it:

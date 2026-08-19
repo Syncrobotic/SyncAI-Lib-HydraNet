@@ -308,7 +308,7 @@ consequences, in increasing order of expense:
 the other direction, for a depth head: *do not build it, LiDAR measures it better than a
 monocular head ever will.* **That verdict has since been overturned** — the robot has no
 LiDAR, `models/heads/depth.py` was built, and a depth head is head ⑤ of the occupancy
-direction ([RESEARCH_OCCUPANCY.md](RESEARCH_OCCUPANCY.md)). The conclusion *this* section
+direction. The conclusion *this* section
 reaches does not depend on it: "within 5 m" stays out of the weights because it is a
 product parameter and an annotator cannot draw it, which is true whatever measures the
 distance.

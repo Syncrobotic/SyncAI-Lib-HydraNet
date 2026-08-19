@@ -1,6 +1,7 @@
 """One implementation of inference preprocessing.
 
-There were four: byte-identical in bev_video, live_view_ros and probe_ros_realsense,
+There were four: byte-identical in bev_video and in two ROS scripts of the quadruped line
+(removed 2026-08-19),
 once more in infer_image with a letterbox switch, and a fifth expanded inline in
 infer_video. Four chances to feed the network something it was not trained on, and the
 symptom would be a model that merely looks worse in one tool than in another.
@@ -17,7 +18,7 @@ from syncai_hydranet.utils.visualize import preprocess
 
 
 def test_letterbox_path_matches_the_hand_written_copies():
-    """Byte-for-byte what bev_video, live_view_ros and probe_ros_realsense each did."""
+    """Byte-for-byte what bev_video and the two removed ROS scripts each did."""
     from syncai_hydranet.utils.visualize import letterbox
 
     img = Image.new("RGB", (100, 50), (30, 60, 90))

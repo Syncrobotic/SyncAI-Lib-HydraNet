@@ -13,7 +13,7 @@ passed ``weights_only=False`` outright -- on a checkpoint holding
 ``{"model": state_dict, "attributes": [str, ...]}``, which the restricted unpickler reads
 without complaint, so the escape hatch bought nothing and cost the guarantee.
 ``tests/test_checkpoint_loading_policy.py`` now greps for it, over ``src/`` and
-``scripts/`` alike; ``scripts/robot/`` is exempt as standalone and on its way out.
+``scripts/`` alike.
 
 Writing has a rule too, and it is not about pickles: see :func:`save_checkpoint`.
 """

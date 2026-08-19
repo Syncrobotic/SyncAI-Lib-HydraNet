@@ -12,8 +12,10 @@ True in torch 2.6, and this project floors at torch>=2.1 -- so a bare `torch.loa
 that ran against the pinned torch would pass while the packaged floor stayed exposed.
 What has to be pinned is the *source*, which is also what a reviewer reads.
 
-`scripts/robot/` is exempt: it is the quadruped line, standalone by design and on its way
-out of this repository.
+There is no exemption. `scripts/robot/` used to hold one -- standalone board scripts that
+never import the package -- and the quadruped line was removed on 2026-08-19, so the rule
+now covers every path without a carve-out. Restore the mechanism, not the entry, if a
+standalone tree ever reappears.
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 ROOTS = (REPO / "src", REPO / "scripts")
-EXEMPT = (REPO / "scripts" / "robot",)
+EXEMPT: tuple[Path, ...] = ()
 
 # The definition itself, and the docstring that explains what not to do.
 ALLOWED = {REPO / "src" / "syncai_hydranet" / "utils" / "checkpoint.py"}

@@ -38,7 +38,8 @@ other horizontal surface. All candidates are recorded so the choice is auditable
 * fitted height/pitch vs an anchor pose where one exists (Taichung-cam01: 2.38 m /
   50.2 deg from the tile grid, `hm3d_render.py` "cctv" preset). The ratio
   anchor_height / fitted_height is the depth model's scale error, comparable to the
-  0.847 global factor measured on NYUv2 (`eprep_teacher_nyuv2.py`).
+  0.847 global factor measured on NYUv2 (see NYUV2_SCALE below for the derivation --
+  the script that produced it belonged to the quadruped line and was removed with it).
 * person boxes (`datasets/retail_person_batch01`) pushed through the fitted plane via
   `box_extents`: if the plane is right, standing adults should median ~1.70 m. The ratio
   1.70 / median is a second, independent estimate of the same scale factor.
@@ -76,7 +77,15 @@ from syncai_hydranet.geometry.ground import (  # noqa: E402
 
 MODEL = "depth-anything/Depth-Anything-V2-Metric-Indoor-Large-hf"
 ADULT_M = 1.70  # same prior as fit_camera_from_people.py, same caveats
-NYUV2_SCALE = 0.847  # eprep_teacher_nyuv2.py: global gt/pred median on zero-shot NYUv2
+# Zero-shot NYUv2, 654-image official test split, Eigen crop: the global median of
+# gt/pred over the whole split. Applying it lifts delta-1 from 0.687 to 0.919 and drops
+# AbsRel 0.212 -> 0.101, which is what makes it a scale error rather than a shape error.
+#
+# The derivation is written out here because the script that produced it
+# (`eprep_teacher_nyuv2.py`) was part of the quadruped line and was removed with it on
+# 2026-08-19. A constant whose provenance is a dead path is a magic number one commit
+# later; re-deriving it needs only NYUv2 and this checkpoint.
+NYUV2_SCALE = 0.847
 PLATES = Path("datasets/studioa_static")
 
 
