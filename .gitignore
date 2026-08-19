@@ -32,14 +32,16 @@ runs/
 # from customer stores, and one frame of it is a .png. `assets/retail_static_plate_cam01.png`
 # sat untracked in the tree while the denylist covered three formats none of which it was.
 #
-# So the default is now "no", and the seven figures that belong to the README and the
-# docs are listed below. Adding an eighth is a deliberate act -- `git add -f`, and a
-# moment spent asking whether shoppers are identifiable in it. That moment is the point;
-# a frame of a customer's shop floor cannot be un-published once it is in the history.
+# So the default is now "no", and the figures that belong to the README and the docs are
+# listed below. Adding one more is a deliberate act -- `git add -f`, then a line here --
+# and the moment in between is the point: a frame of a customer's shop floor cannot be
+# un-published once it is in the history.
+#
+# The list has to match what is tracked, exactly. A `!` line for a figure that has since
+# been deleted is a hole with that filename's shape in it, and `tests/test_assets_allowlist.py`
+# fails on one in either direction.
 assets/*
-!assets/.gitkeep
 !assets/bev3d_mesh_people.png
-!assets/eprep_sonar_vs_depth.png
 !assets/hydranet_demo.gif
 !assets/mesh_shop_preview.png
 !assets/retail_bootstrap_fixture_split.jpg

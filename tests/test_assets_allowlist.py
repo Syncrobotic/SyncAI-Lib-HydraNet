@@ -67,3 +67,23 @@ def test_a_new_asset_is_ignored_by_default(name: str):
         f"assets/{name} would be picked up by `git add -A`. assets/ must stay an "
         "allowlist -- ignore `assets/*` and name the figures back in individually."
     )
+
+
+def test_the_allowlist_names_exactly_what_is_tracked():
+    """Drift in either direction is a defect.
+
+    A `!` line for a figure that has since been deleted leaves a hole with that exact
+    filename's shape in it -- `assets/eprep_sonar_vs_depth.png` was removed with the
+    quadruped-line cleanup and its line outlived it by two commits. A tracked figure with
+    no line cannot be staged without `-f`, which is the other half of the same mistake.
+    """
+    listed = {
+        line[len("!assets/") :]
+        for line in (REPO / ".gitignore").read_text().splitlines()
+        if line.startswith("!assets/")
+    }
+    tracked = {p.split("/", 1)[1] for p in _git("ls-files", "assets/").stdout.split()}
+    assert listed == tracked, (
+        f"only in .gitignore: {sorted(listed - tracked)}; "
+        f"only tracked: {sorted(tracked - listed)}"
+    )
