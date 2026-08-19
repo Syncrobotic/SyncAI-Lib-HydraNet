@@ -285,6 +285,99 @@ after this change**, and no checkpoint trained before it can be scored on this v
 `scripts/resplit_selling_floor.py`, which moves a camera in every batch at once or refuses,
 and it records the cameras and the reason under `moves` in both `split.json` files.
 
+### The resplit put a val camera back inside the `column` supplement (2026-08-19)
+
+`datasets/retail_objects_columns_clean` is named `_clean` because it was rebuilt to exclude
+val and test after the first version leaked. **It is not clean any more, and nothing broke
+to say so.** The timestamps are the whole argument:
+
+    14:51  retail_objects_columns_clean built -- 9 cameras "in neither val nor test"
+    15:10  \
+    15:29   >  the three hydranet_retail_surfaces_columns seeds finish
+    15:41  /
+    19:47  split.json rewritten: the third `moves` entry promotes Taichung-cam10 to val
+
+`Taichung-cam10` is 12 of the supplement's 108 training frames and is now a **val** camera
+in both batches. `Kaohsiung-cam02` is 12 more and is now **batch03 test**. The runs were
+honest when they ran; anything trained or re-scored on today's split is not.
+
+`resplit_selling_floor.py` could not have caught it. Its `BATCHES` constant names batch02
+and batch03, and `retail_objects_columns_clean` carries **no `split.json` at all** — it is
+train-only by config, so there was no assignment for the tool to move or refuse. The config
+comment predicted the shape of this and got the direction wrong: it warned that a batch
+*selected on a property* selects against the split it already belongs to. This is the
+reverse — **a static supplement is invalidated by the split moving underneath it**, and the
+supplement has no record of which split it was clean against.
+
+Two consequences. The `column` site_seg 0.454 → 0.505 that the three columns seeds measured
+is against the **old** val and is not comparable to any post-resplit number, exactly as the
+section above says of every other checkpoint. And any supplement that trains on cameras
+needs a `split.json` recording the assignment it was built under, so a later move can refuse
+rather than pass.
+
+### The `column` camera population, and why "more cameras" is nearly exhausted
+
+Sweep C swept all 48 cameras; `datasets/retail_objects_columns` is the **14** where SAM 3
+returns a column at `min_score` 0.5. That is the entire population, and the split has
+already spent most of it:
+
+| | cameras | which |
+|---|---|---|
+| available to train | **6** | Kaohsiung-cam04, Kaohsiung-cam08, Taichung-cam04, Taichung-cam05, Taichung-cam11, Tao-Hsin-cam04 |
+| + back of house | 1 | Kaohsiung-cam01 — and the census corrects `cameras.json`: it is the indoor storefront entrance, not a corridor. Kept for `column` only; every other class on it is set to IGNORE |
+| held as val | 3 | Taichung-cam01, Taichung-cam10, Tao-Hsin-cam15 |
+| held as test | 3 | Kaohsiung-cam03, Kaohsiung-cam12, Tao-Hsin-cam03 |
+| batch03 test | 1 | Kaohsiung-cam02 |
+
+**Six of fourteen is what the priority-4 line "more cameras, not more frames" can currently
+buy, and the supplement already has all six.** R4 and R7 are what spend the other eight and
+neither is negotiable — a class measured on one camera is that camera's number.
+
+### The band was re-swept, and it yields nothing (2026-08-19)
+
+Sweep C's per-camera output was never written down, so the cameras its threshold discarded
+could not be named. `scripts/column_camera_sweep.py` re-runs it and keeps the identities;
+`runs/column_sweep03/REPORT.md` is the result, and the script exists so the next person
+does not pay for this measurement a third time.
+
+**It adds no trainable camera.** 17 cameras clear 0.50 and 24 clear 0.25, but:
+
+- three clear 0.50 that are not in the shipped 14 — Kaohsiung-cam05 (val), Taichung-cam12
+  (batch03 test), **Tao-Hsin-cam11 (trainable)**;
+- seven sit in the 0.25–0.50 band, of which exactly one, **Taichung-cam09**, is trainable;
+- both trainable candidates were opened at native resolution and **rejected**. Tao-Hsin-cam11's
+  mask is street bollards seen through a glass door — glass failure mode 2, "finds what is
+  behind it". Taichung-cam09's is a narrow vertical strip beside a display podium, the
+  documented drift onto "narrow vertical thing".
+
+**Tranche consistency is the finding worth keeping.** Sweep C had two frames per camera, one
+day and one night. This one has four store-local tranches, and the count of tranches a camera
+clears 0.50 in separates a column from a lighting artefact almost by itself:
+
+| tranches @0.50 | cameras | in the shipped 14 |
+|---|---|---|
+| 4 of 4 | 11 | 11 |
+| 3 of 4 | 2 | 2 |
+| 2 of 4 | 1 | 0 |
+| **1 of 4** | **3** | **1** |
+
+Thirteen of the fourteen fire in three or four; every camera the sweep newly clears fires in
+one. **Require 3 of 4 before a camera supplies a training pixel.** The rule also flags a
+sitting member: `Taichung-cam04` is in the supplement and clears 0.50 at midnight only, on a
+fragment behind the back counter that never reaches the floor.
+
+**The rotation arm is a clean negative.** The census found five sideways ~90° mounts, not
+one, and sweep C had asked all five for a "column" without rotating them — where a column
+would be a horizontal bar. Re-asked upright, **not one of the five gains a column at 0.50**.
+The hypothesis was reasonable and it is wrong; nobody needs to try it again.
+
+So the next `column` instance comes from a pull date or a store this project has not seen —
+the only source that fixes the memorisation gap rather than padding around it. A second
+lighting condition on the six is worth having as a *second view* of the same pillars, not as
+more columns, and the tranche table above is what that is worth. A frame budget follows from
+that rather than from a round number: 12 frames per camera is already one clip's worth, and
+a fixed camera's second clip of a day is not a second sample.
+
 ---
 
 ## 5. The teachers, and which one owns which class
