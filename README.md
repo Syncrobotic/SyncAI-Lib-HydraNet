@@ -176,8 +176,9 @@ uv run hydranet-eval  --config configs/hydranet_indoor.yaml \
 
 `docs/journal/` holds dated notes from particular days: session handoffs, a hardware move.
 They are records, not documentation — accurate about the day they describe and not
-maintained afterwards. The newest,
-[2026-08-14](docs/journal/2026-08-14-deploy-retail-handoff.md), says what is in flight.
+maintained afterwards. The two newest say what is in flight on each product line:
+[2026-08-18, retail + security](docs/journal/2026-08-18-retail-security-handoff.md) and
+[2026-08-18, the Lite3 robot](docs/journal/2026-08-18-lite3-robot-bringup-handoff.md).
 
 ## Commands
 
@@ -253,7 +254,12 @@ Label schemes are defined in `SCHEMES` in
 If your camera's aspect ratio differs from `input_size`, turn on `data.letterbox: true`
 (a portrait phone video squeezed straight into the input is compressed more than 2× horizontally).
 
-## Adding a task head (example: monocular depth)
+## Adding a task head (worked example: monocular depth)
+
+This was hypothetical until `heads/depth.py` landed, so the steps below are now a
+description of something in the tree rather than a plan — read `depth_fpn` in
+[`hydranet.py`](src/syncai_hydranet/models/hydranet.py) and
+[`configs/hydranet_nyu_depth.yaml`](configs/hydranet_nyu_depth.yaml) alongside them.
 
 1. Add the head module under `src/syncai_hydranet/models/heads/` (it takes the FPN feature list)
 2. Register the type branch in `hydranet.py::HydraNet.__init__` and add its loss in `compute_losses`
@@ -273,7 +279,7 @@ uv run pre-commit install    # enable pre-commit checks
 ```
 
 CI runs lint plus a Python 3.10 / 3.12 test matrix on GitHub Actions, and fails below 80%
-coverage (currently 85% across 464 tests). The tests need no datasets: model tests run on
+coverage (currently 87% across 1,171 tests). The tests need no datasets: model tests run on
 random tensors, dataset tests build
 a fixture in `tmp_path`, and `test_overfit.py` verifies the training loop really converges by
 memorising one synthetic batch to over 95% pixel accuracy (chance is 33% across three classes).
@@ -290,6 +296,8 @@ src/syncai_hydranet/
 │   ├── neck.py               # BiFPN / FPN
 │   ├── heads/segmentation.py # Semantic-FPN segmentation head (shared by both seg heads)
 │   ├── heads/detection.py    # FCOS head + target assignment + decode/NMS
+│   ├── heads/depth.py        # Semantic-FPN-shaped depth head, SILog loss
+│   ├── heads/registry.py     # one interface over head families that are not alike
 │   ├── losses.py             # CE+Dice / Focal+GIoU / uncertainty weighting
 │   └── hydranet.py           # assembly + compute_losses + predict
 ├── data/

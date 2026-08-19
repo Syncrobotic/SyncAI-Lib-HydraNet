@@ -102,8 +102,17 @@ the same as being told about it at the point it matters.
 ## The cameras
 
 Chosen from measured class share in the SAM 3 pre-labels, not from the contact sheets.
-Only 24 of the fleet's 48 cameras are shop floor — the rest are back office, stockroom,
-classroom, stairwell, street or effectively black — and only those 24 are in scope.
+Only part of the fleet's 48 cameras is shop floor — the rest are back office, stockroom,
+classroom, stairwell, street or effectively black — and only those are in scope.
+
+> **Corrected 2026-08-18 by a full census.** This section said 24, and the fleet survey in
+> `datasets/studioa_clips/cameras.json` — one frame per camera at 12:30 and 18:00, dead
+> confirmed by mean luma over 24 sampled frames — resolves it to **23 selling floor, 19 back
+> of house, 6 dead**. The camera that moved is **Taichung-cam08**, a near-nadir repair bench
+> rather than a room view; it is assigned in `retail_objects_batch02` and so appears in that
+> dataset's 24, which is why per-dataset counts below and elsewhere still read 24. `cameras.json`
+> is the authority on role, and the doc's own §"val grew from 3 cameras to 8" already counts
+> against the 23.
 
 | camera | column | product | person | why |
 |---|---|---|---|---|

@@ -214,12 +214,19 @@ orders classes by danger × how blind LiDAR is. The object taxonomy
 ([RETAIL_OBJECTS.md](RETAIL_OBJECTS.md)) has no robot and no LiDAR, so nothing about it
 carries over, and the two priority lists barely overlap:
 
-1. **`column`** — zero examples and unrecoverable from anything already drawn, because
-   every site mask so far puts columns inside `wall`. Also the cheapest class in either
+1. **`column`** — was zero examples and unrecoverable from anything already drawn, because
+   every site mask so far put columns inside `wall`. Also the cheapest class in either
    taxonomy: the cameras are fixed, so it is **one polygon per camera**, correct for
-   every frame that camera will ever produce. 41 cameras.
-2. **`product`** — zero examples, no public dataset, and no measurement yet of whether
-   SAM 3 can find it. The first batch is an experiment.
+   every frame that camera will ever produce. **Sourced 2026-08-17** — SAM 3 finds those
+   columns at 7.14% of labelled pixels, and 10 of the selling-floor cameras carry `column`
+   at 3% or more. Sourcing it did not teach it: see
+   [RETAIL_OBJECTS_SPLIT.md](RETAIL_OBJECTS_SPLIT.md), where `column` scores 0.86–0.88 on
+   cameras a run trained on and 0.00–0.51 on cameras it never saw.
+2. **`product`** — was zero examples with no public dataset and no measurement of whether
+   SAM 3 could find it. **Measured 2026-08-17 and the prompts work**: `product` is 19.28% of
+   labelled pixels in `retail_objects_batch01`'s train split and 17.23% in test, present in
+   every frame, plus 10,524 merchandise instance boxes. The earlier "0 instances" figure was
+   a property of 352×240 footage and one prompt of eight, not of the footage.
 3. `fixture` — has data, and needs a *review* rather than fresh drawing: the migration
    merges `obstacle_furniture` and `display_fixture` pixel-exactly, so what arrives is
    as good as those two classes were, which for `display_fixture` was IoU 0.336.
@@ -339,7 +346,10 @@ those frames are what decides whether any later number means anything.
 
 A 48-camera site does not have 48 usable cameras, and the ways one fails are independent
 — each check below passed cameras the others rejected, so running one and calling it a
-survey overstates the fleet. Measured across the three stores:
+survey overstates the fleet. Measured across the three stores. **The full census landed
+2026-08-18** in `datasets/studioa_clips/cameras.json`: **23 selling floor, 19 back of
+house, 6 dead**, with a role and a note per camera. Read that file rather than re-deriving
+a count from the checks below.
 
 | check | reads | caught | misses |
 |---|---|---|---|

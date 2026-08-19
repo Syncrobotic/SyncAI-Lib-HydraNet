@@ -18,14 +18,20 @@ The model design is ahead of the data. The architecture works, exports cleanly t
 and the parameter budget confirms the shared-trunk premise (84.4% trunk, 15.6% heads). What
 limits the system today is not the network:
 
+> **Revised 2026-08-19.** Four rows of the table below were rewritten because the
+> measurements behind them were superseded: the COCO row's collapse was an artefact of
+> scoring on the split that also selected the checkpoint (see level 2), and site data
+> arrived in the meantime. The shape of the conclusion did not change — the constraint is
+> still data — but the numbers that argued it did.
+
 | Constraint | Status |
 |---|---|
-| `caution` cannot exceed ~0.20 | 3 of the 4 terrain classes that map to it have **zero** training examples |
+| `caution` is capped by its sourcing, not by tuning | 3 of the 4 terrain classes that map to it have **zero** training examples. It scores **0.33 on the held-out test split** — the ~0.20 figure this row used to quote was a val number, and val also selected the checkpoint |
 | Terrain metrics are not stable across dataset changes | `terrain_mIoU` averages over the classes *present*, currently 8 of 12 |
-| No *field* number exists | A `test` split now exists, but it is ADE20K — same-distribution web photography, not our sites |
-| Detection is trained but weak | COCO landed; mAP 0.173 after 30 epochs and still climbing. Export refuses any head no dataset supervises. |
-| Adding COCO starved the rare classes | The segmentation heads get ~25% of the optimiser steps in the mixed run, and `caution` fell from 0.229 to noise. See level 2 below — this is the current blocker on the mixed configuration. |
-| Real-world accuracy is unknown | Training data is ADE20K only — web photos, not robot-height footage of our sites |
+| A *field* number exists and is an **agreement**, not an accuracy | Site splits are built and reserved by camera ([RETAIL_OBJECTS_SPLIT.md](RETAIL_OBJECTS_SPLIT.md)), but every mask in them is SAM 3 output with no human pass, so a model trained on SAM 3 and scored against SAM 3 shares its errors. `split.json`'s `test_provenance` says so with the data |
+| Detection is trained, and the number depends entirely on which set | `releases/v1` scores **mAP 0.335 on COCO val2017** (0.3246 on the 25 indoor categories). The retail line, which is the only one scored on site boxes at all, gets **0.07–0.11 on `site_boxes`** from a different family of runs. A web number is not evidence about a store, and the two are not comparable. Export refuses any head no dataset supervises |
+| The COCO share is a monotonic trade, not a collapse | Swept at four ratios and scored on **test** (`journal/2026-08-14-experiments-and-geometry.md`): at `sample_ratio: 0.1` every segmentation metric matches or beats the segmentation-only baseline and detection arrives free; above it, segmentation falls monotonically. There is no sweet spot to find and no blocker here — only an exchange rate that gets worse as you climb |
+| Real-world accuracy is still unmeasured | Site footage is now in training (`retail_objects_batch02`/`batch03`, 23 selling-floor cameras) — what is missing is a *human-corrected* test split, not the data |
 
 **The work that moves this project is data work.** Plan accordingly: a team that assigns four
 engineers to model tuning and none to annotation will produce a better-tuned model with the
@@ -221,7 +227,7 @@ to val produces an official-looking number that is quietly circular.
 
 ### Before the first run
 
-1. `uv sync --group dev --extra export`, then `uv run pytest -q` — 464 tests, no dataset
+1. `uv sync --group dev --extra export`, then `uv run pytest -q` — 1,171 tests, no dataset
    needed. If these fail, stop; nothing downstream will be interpretable.
 2. `uv run pre-commit install --hook-type pre-commit --hook-type commit-msg` — both types, see
    [CONTRIBUTING.md](../CONTRIBUTING.md).
@@ -296,7 +302,7 @@ another.
 ### Level 1 — Does the code work? (every commit)
 
 ```bash
-uv run pytest -q          # 464 tests, no dataset required
+uv run pytest -q          # 1,171 tests, no dataset required
 ```
 
 Includes `test_overfit.py`, which memorises one synthetic batch to >95% pixel accuracy. Shape
@@ -331,9 +337,11 @@ well-evidenced number are formatted identically, and only one of them is a measu
 `evaluator.THIN_SUPPORT` (1% of labelled pixels) the log says so and the honest reading is
 "not measured".
 
-**A mean can hide a class that stopped learning entirely.** This is the sharper failure, and
-it happened here. Adding COCO to supervise the detection head moved `traversability_mIoU`
-from 0.6765 to 0.6303 — a 7% drop, easy to accept as the cost of a second task. Underneath:
+**A mean can hide a class that stopped learning entirely.** This is the sharper failure.
+The instance this section was written from is **withdrawn**, and both halves are kept
+because the difference between them is the lesson. Adding COCO to supervise the detection
+head appeared to move `traversability_mIoU` from 0.6765 to 0.6303 — a 7% drop, easy to
+accept as the cost of a second task. Underneath, on **val**:
 
 | Class | Seg-only (ships) | With COCO (ships) |
 |---|---|---|
@@ -341,21 +349,29 @@ from 0.6765 to 0.6303 — a 7% drop, easy to accept as the cost of a second task
 | `go` | 0.8455 | 0.8463 |
 | **`caution`** | **0.2294** | **0.0908** |
 
-And `caution` did not merely fall — it never learned at all. Across the whole run it sat
-between 0.000 and 0.017, and the 0.0908 that `best.pt` captured is a single noisy spike that
-happened to land on the epoch with the best mean. By the final epoch it was 0.0039 and
-`stairs` was exactly 0.0000.
+> **Withdrawn 2026-08-14: these are val numbers, and val also selected both checkpoints.**
+> Scored on the held-out **test** split, the same checkpoints are equivalent on `caution` —
+> 0.3252 against 0.3346 — and the four-point ratio sweep in
+> [`journal/2026-08-14-experiments-and-geometry.md`](journal/2026-08-14-experiments-and-geometry.md)
+> shows the real shape: segmentation falls **monotonically** with COCO share, and at 0.1 it
+> comes out slightly *ahead* of the segmentation-only baseline. There was no collapse at 0.1
+> to explain. `best.pt` is chosen on val, so each run was cut at whatever epoch that rare
+> class happened to spike, and the selection manufactured the variance it was then measured
+> with. The comparison also changed two things at once — COCO was added *and* the run was cut
+> from 60 epochs to 30 — which is the other reason it could not have attributed anything.
+>
+> **What survives is the reading habit, not the number.** A mean really can hide a class
+> pinned at zero; the denominator never changes, so the class count would not catch it. Read
+> per-class IoU as a time series. Just do not read a rare class off the split that selected
+> the checkpoint — see "Report rare classes on the test split only" in
+> [RETAIL_SCOPE.md](RETAIL_SCOPE.md) §6.
 
-The denominator never changed — all three classes were present throughout — so the class
-count would not have caught this. **Two of three classes were healthy, and the mean stayed
-respectable while one class went to noise.** Averages hide their worst member; the fewer
-classes in the mean, the better they hide it.
-
-The mechanism is worth understanding, because it will recur: COCO has 118,287 images against
-ADE20K's 5,998, so even at `sample_ratio: 0.1` the segmentation heads received roughly a
-quarter of the optimiser steps. Common classes had signal to spare. `stairs` occupies 0.3% of
-pixels and starved, and since three of `caution`'s four constituent classes have no data at
-all, `caution` is effectively `stairs` and starved with it.
+The starvation mechanism is still worth understanding, because a *large* COCO share does
+cost segmentation and the sweep measures it: COCO has 118,287 images against ADE20K's 5,998,
+so the ratio decides how many optimiser steps the segmentation heads get at all. `stairs`
+occupies 0.3% of pixels, and since three of `caution`'s four constituent classes have no data
+at all, `caution` is effectively `stairs` and moves with it. At `sample_ratio: 1.0` on test,
+`glass` goes 0.5021 → 0.0692. **Share is the lever; 0.1 is the floor, not an optimum.**
 
 **It recurred on 2026-08-17 as `product`, and one part of the account is established while
 another is not. Both are recorded here, because this is the process reference and a reader
@@ -440,7 +456,10 @@ that fails here.
 
 ### Acceptance gates before deployment
 
-Every one of these is currently unmet, which is a fair summary of the project's state:
+Written when every one was unmet. **Two have since been met** (2026-08-19, cutting
+`releases/v1`): export parity was confirmed at worst relative divergence 7.95e-06 across 17
+outputs, and the export guard that refuses an unsupervised head is what let the bundle build
+at all. The rest still stand, and [RELEASE.md](RELEASE.md) §3 carries the current list:
 
 | Gate | Requirement |
 |---|---|

@@ -28,7 +28,7 @@ source .venv/bin/activate              # then use the command names directly
 Verifying the environment:
 
 ```bash
-uv run pytest -q                                              # 464 passed, 6 skipped
+uv run pytest -q                                              # 1,170 passed, 1+ skipped
 uv run python -c "import torch; print(torch.backends.mps.is_available())"   # True
 ```
 

@@ -94,9 +94,15 @@ can be set on throughput grounds instead of defensively.
 What it does not buy, and this is the sentence to carry out of this section:
 
 > **`person` is trained on COCO alone** — web photography, eye level, uncompressed —
-> against 24 overhead, down-pitched, h.264 store cameras. Its mAP is measured on COCO val
-> and *nowhere else*, because the site annotation file has no person category to score
-> against. A good number there is not evidence about a store.
+> against 23 overhead, down-pitched, h.264 selling-floor cameras. Its mAP is measured on
+> COCO val and *nowhere else*, because the site annotation file has no person category to
+> score against. A good number there is not evidence about a store.
+
+**Started 2026-08-18.** `datasets/retail_person_batch01` holds **146 site person boxes**,
+daylight-gated, produced by `scripts/sam3_person_boxes.py`. That is a bootstrap, not the
+answer: it is SAM 3's opinion under R3, and the gate that makes it usable — an IR frame is
+monochrome by construction, so it is rejected on chroma — also means **night is not covered
+at all**, which is when a store camera is most often asked a security question.
 
 `column` is the precedent and it is not a mild one: sourced from ADE20K, passing every
 config gate, scoring 0.40–0.51 on val, and predicting **0.00% of pixels** across four
@@ -173,11 +179,17 @@ to a low shelf, crouching at bottom stock, and legs occluded by a fixture** are 
 most common things a shopper does, and `dwell.py` already records that fixtures are exactly
 where shoppers stand.
 
-Its job is the other one. Run it over the 3.2 GB of site clips already on disk, look at
-what it returns, and that answers the question ARCHITECTURE_DIRECTION.md insists is
-answered *before* any behaviour annotation is paid for: **do these events occur on these
-cameras at all.** The type name carries the distinction, because a type name survives being
-copied into a dashboard and a docstring does not.
+Its job is the other one. Run it over the site clips already on disk, look at what it
+returns, and that answers the question ARCHITECTURE_DIRECTION.md insists is answered
+*before* any behaviour annotation is paid for: **do these events occur on these cameras at
+all.** The type name carries the distinction, because a type name survives being copied into
+a dashboard and a docstring does not.
+
+**Answered 2026-08-18, and the answer is no.** `runs/fall_mining01`, over 192 clips / 48
+cameras / 188,523 person boxes, returned **48 `fall_candidate` spans**. 23 of them touch the
+frame edge and the rest sit on near-nadir or rotated cameras. **None is a posture.** On this
+corpus the proxy measures camera mounting, so the behaviour-annotation spend this miner was
+built to justify is not justified — which is exactly what it was built to be able to say.
 
 ### The frame rate, which was assumed and is now counted
 
@@ -210,13 +222,13 @@ its fps on this footage inherits the same error.
 
 | # | data | for | state |
 |---|---|---|---|
-| 1 | **site person boxes**, same 288 frames, same 24 cameras | `person` in domain | **not started — critical path** |
+| 1 | **site person boxes**, same 288 frames, same 24 batch02 cameras | `person` in domain | **started 2026-08-18** — `retail_person_batch01`, 146 boxes, daylight-gated, SAM 3 pre-labels with no human pass. Still the critical path |
 | 2 | **one labelled site clip** (person tracks) | `idf1` / `id_switches`, which do not exist today | **not started — blocks all of tier 3** |
 | 3 | COCO `person`+`bag` | bootstrap for channels 0–1 | on disk, wired in `hydranet_retail_security.yaml` |
 | 4 | COCO keypoints | tier-2 pose bootstrap | **on disk, nothing reads it yet** |
 | 5 | CrowdHuman | occlusion and density, which is what fragments tracks | not downloaded; research licence |
 | 6 | RAP v2 | attributes, indoor mall CCTV distribution | licence unconfirmed — one question, changes the plan more than anything else here |
-| 7 | PA-100K / PETA / Market-1501 | attribute mass, benchmark, re-ID floor | on disk; `reid_metrics.py` already scores an untrained resnet18 at mAP 0.0318 |
+| 7 | PA-100K / PETA / Market-1501 | attribute mass, benchmark, re-ID floor | on disk, and **used**: `runs/crop_encoder01` is 8 epochs on PA-100K, and its embedding scores mAP 0.0543 / rank-1 0.1689 on Market-1501's protocol against `reid_metrics.py`'s untrained-resnet18 floor of 0.0318. A floor cleared, not association solved |
 | 8 | RWF-2000 / UCF-Crime | `fight` | **do not buy yet** — see tier 3 |
 | 9 | URFD / Le2i fall sets | `fall` | **rejected as a training source**: staged, domestic, eye-level. The `column` failure in advance |
 

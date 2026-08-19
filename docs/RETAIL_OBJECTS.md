@@ -12,8 +12,9 @@ is still the reference for it.
 ## The audit
 
 18 fixed-camera site clips across three stores, 1,620 frames sampled at 3 fps, scored
-with the 60-epoch checkpoint `runs/hydranet_retail/best.pt`. Raw output in
-`runs/review_20260816/`.
+with the 60-epoch checkpoint `runs/hydranet_retail/best.pt`. Raw output was in
+`runs/review_20260816/`, **which is no longer on disk** (checked 2026-08-19) — the tables
+below are the surviving record, and re-deriving them means re-running the sweep.
 
 The camera does not move, so a pixel that changes class between frames is one the model
 was unsure about — the same error signal the SAM 3 consensus pass uses, turned on the
@@ -116,7 +117,10 @@ happens once, before validation, so the schema, `unsupervised_heads`, the export
 
 Everything under `datasets/retail_sam3_consensus*` is annotated as the retail 13. The
 `retail_objects_migrated` label map reads it under the new taxonomy with no re-export.
-Verified on all 216 consensus frames:
+Verified on all 216 consensus frames — **those directories, and `datasets/retail_cctv_pilot*`
+cited further down, are no longer on disk** (checked 2026-08-19), so the table below is the
+record and the check is not re-runnable as written. The label map it verifies is, and
+`tests/test_retail_objects_scheme.py` still pins it:
 
 ```
 retail_native              retail_objects_migrated

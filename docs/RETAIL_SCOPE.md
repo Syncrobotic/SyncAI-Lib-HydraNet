@@ -477,12 +477,21 @@ number that is 43% of the frame and undivided is not a finding, it is a place to
 
 ## 8. Open questions for whoever owns the product
 
-- Is the merchandise zone a *reporting* output (analytics: dwell time, coverage) or a
-  *motion* output (the robot must not enter it)? The two want different accuracy and
-  different failure behaviour, and the answer changes whether §3's BEV derivation is
-  sufficient.
-- Are shopping trolleys and baskets in scope? They are the most common dynamic obstacle in
-  a shop and COCO has neither.
-- Does the robot operate during trading hours? If so, `person` density is an order of
-  magnitude above anything in the indoor footage, and occlusion — not classification —
-  becomes the hard problem.
+**Two of the three were answered on 2026-08-18, and the premise of the third moved.** This
+document was written for a shop *robot*; the deployment that exists is fixed ceiling CCTV
+([RETAIL_SECURITY.md](RETAIL_SECURITY.md)), so read "the robot" below as "the camera's
+consumer" where it still makes sense.
+
+- ~~Is the merchandise zone a *reporting* output or a *motion* output?~~ **Answered:
+  reporting, as coverage rather than count**, derived by SAM 3 with no human labour
+  (`runs/coverage01`: Tao-Hsin-cam02 35.0%, Taichung-cam04 30.9%, Kaohsiung-cam08 25.6%).
+  §3's BEV derivation is therefore sufficient.
+- ~~Are shopping trolleys and baskets in scope?~~ **Answered: not in the detection
+  vocabulary**, and the reason is sourcing rather than scope — COCO has neither, so a
+  channel for them would be trained on nothing and report 0.000 while the run looked
+  normal. RETAIL_SECURITY.md §2 records the same verdict for `staff`.
+- Does the robot operate during trading hours? **Still open, and now mostly a question about
+  a different product.** The CCTV line runs during trading hours by construction, and the
+  consequence this bullet predicted is measured: a 4.6-minute clip fragments into 1234
+  tracks, so occlusion rather than classification is the hard problem
+  ([PERSON_ATTRIBUTES.md](PERSON_ATTRIBUTES.md)).

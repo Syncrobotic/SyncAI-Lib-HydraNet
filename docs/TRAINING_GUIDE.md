@@ -128,10 +128,13 @@ Two consequences to keep in mind:
    see comparatively little. We run COCO at a reduced ratio, and each epoch takes a different
    random slice, so nothing is permanently discarded.
 2. **A head with no dataset is silently useless.** If nothing supervises detection, the head
-   still gets built, still gets exported to ONNX, and still outputs numbers — they are just
-   the initial random weights. The config check warns about this at startup, and you should
-   read that warning rather than scroll past it. Right now, on the indoor config, this is
-   genuinely the case until COCO is downloaded.
+   still gets built and still outputs numbers — they are just the initial random weights.
+   The config check warns about this at startup, and you should read that warning rather
+   than scroll past it. It is no longer only a warning: **`hydranet-export-onnx` refuses**
+   an unsupervised head, which is one of the three gates `scripts/release_bundle.sh` runs
+   ([RELEASE.md](RELEASE.md) §2). COCO has since been downloaded and the indoor config's
+   detection head is supervised, so the example this item was written from no longer
+   applies — the mechanism it describes still does.
 
 ### One annotation, two heads
 

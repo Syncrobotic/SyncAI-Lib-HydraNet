@@ -4,9 +4,17 @@ The product ask is age, gender and action per shopper. This file records what th
 measurements decide about that, which public datasets are worth their download, and the
 one ordering constraint that makes the difference between a report and a wrong report.
 
-Nothing here is built yet. `analytics/tracker.py` is IoU association over detection boxes
-and `analytics/dwell.py` turns tracks into dwell; there is no attribute model, no crop
-encoder and no re-identification.
+> **Updated 2026-08-18.** This file opened with "nothing here is built yet". Two of the
+> three pieces have since landed and are described in place below: `analytics/reid_metrics.py`
+> is the association metric, and `runs/crop_encoder01` is a first attribute encoder. The
+> **ordering constraint below is unchanged and is still the point of the document** —
+> association is still not fixed, and the encoder was trained on PA-100K rather than on the
+> RAP v2 this page argues for first, because RAP's licence question is still open.
+
+`analytics/tracker.py` is IoU association over detection boxes and `analytics/dwell.py`
+turns tracks into dwell. `analytics/track_attributes.py` and `analytics/reid_metrics.py`
+have since joined them; there is still no re-identification *model*, and association is
+still unfixed.
 
 ## What the site measurements already decide
 
@@ -65,7 +73,7 @@ Assessed against this project's cameras, not against each other.
 ### RAP v2 — first, and the reason is distribution, not size
 
 Real indoor shopping-mall surveillance: the same mounting height, down-pitch, indoor
-lighting and compression as the 24 store cameras. It is 16% *smaller* than PA-100K and
+lighting and compression as the 23 selling-floor cameras. It is 16% *smaller* than PA-100K and
 that does not matter.
 
 This project has already paid for the alternative view. ADE20K's `column` is architectural
@@ -84,6 +92,15 @@ intended use before committing a schedule to it.
 ### PA-100K — volume, and the mixing rule that is not optional
 
 100k outdoor crops, 26 attributes. Useful as pre-training mass; wrong as the main source.
+
+**Run anyway, 2026-08-18, because it was the one on disk.** `runs/crop_encoder01`, 8 epochs:
+Female recall 0.839 / precision 0.856 on 36,492 training crops, AgeLess18 0.639 / 0.919 on
+4,152, and **AgeOver60 0.119 / 0.357 on 1,127 — degrading as training ran**, which is a
+1.41% attribute once the loss can afford to say no. Unasked-for and more useful: the same
+embedding scores **mAP 0.0543 / rank-1 0.1689** on Market-1501's protocol with no identity
+label anywhere, against a 0.0318 ImageNet floor. Read that as a floor cleared, not as
+association solved — and note it does not change the verdict in the table: an outdoor-street
+encoder is still the wrong main source for indoor CCTV.
 
 **Mixing it in by file count is a mistake this project has already made and measured.**
 ADE20K at 90.2% of segmentation steps, containing zero `product` pixels, held that class at
@@ -110,8 +127,10 @@ for being in someone else's dataset.
 1. **Confirm RAP v2's licence and whether its re-ID subset is usable.** One question,
    and it changes the plan more than anything else on this page.
 2. **Fix track association**, measured on ID switches and track length rather than on
-   attribute accuracy. There is no re-identification metric in this repo yet; adding one
-   is the prerequisite for knowing whether step 3 helped.
+   attribute accuracy. **The metric now exists** — `analytics/reid_metrics.py`, landed in
+   `078f0e9` — but only half of it is live: `idf1` and `id_switches` need ground-truth
+   tracks and no site clip is labelled, so the next thing on this line is **one labelled
+   clip**, not a model.
 3. **Then attributes**, on the same encoder.
 
 Reversing 2 and 3 produces a demographic report whose denominator is fragments. It will
