@@ -333,3 +333,18 @@ sideways one — the VLM pilot's "at least three" is now "four plus one". SOP ga
 for the install checklist: a mount-type pre-check (sideways is auto-fixable by
 rotation), one tile-grid shot per store per camera model to pin vfov/k1, and reading a
 door frame's two endpoints as an install-day action, which zeroes the 14 unmeasured.
+
+**RAP v2 is on the attribute pipeline and training (runs/rapv2_crop01), with two
+findings that reshape the attribute plan.** 19 of PA-100K's 26 attributes map from the
+identity-disjoint rap_zs split (17,062/4,648/4,928; zero cross-split identity overlap
+verified, 0.76% ambiguous track keys recorded). Finding one: **AgeOver60 has zero
+positives in the identity-labelled subset** — the product's most-asked attribute cannot
+be trained or measured from RAP v2 either, so that channel stays frozen and the age
+story still rests on PA-100K's 1,127 crops; a data acquisition question, not a training
+one. Finding two: **rap_Employee (staff uniform) carries 6.15% positives** — the
+`staff` attribute the detection vocabulary deliberately refused (a uniform is an
+attribute of a person) has its first real source, exactly where the architecture said
+it belonged. Also on record: the bundle's "v2 annotation" zip is actually v1 (the v2
+labels live only in rap_zs.pkl, cross-checked 100% against v1 on shared attributes),
+and RAP's occlusion columns (OcclusionDown 20%) are the only labelled source for the
+occlusion that fragments site tracks.
