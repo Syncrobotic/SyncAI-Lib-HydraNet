@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -89,44 +88,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="second pass over clips with candidates, writing their frames as JPEGs",
     )
     return ap
-
-
-def source_fps(clip: str) -> float:
-    """The clip's **actual** frame rate, which is not the one `probe` reports.
-
-    `probe` reads `r_frame_rate`, and these clips carry `30/1` there while the stream
-    holds 2,400 frames over 300.1 s -- **8.0 fps**. Counted with `ffprobe -count_frames`
-    on Kaohsiung-cam04; Taichung-cam01 is 2,130 over 304.3 s, 7.0 fps. `r_frame_rate` is
-    the container's nominal rate. `avg_frame_rate` matched the counted value to three
-    decimals on both clips and costs no decode, so it is what this reads.
-
-    It matters beyond bookkeeping. A plan to recover temporal resolution for behaviour by
-    sampling at 15 or 30 fps has **nothing to recover** -- there is no 30 fps of content.
-    Fragmentation therefore cannot be fixed by sampling faster, which leaves appearance
-    association as the only instrument for it rather than one of two.
-    """
-    out = subprocess.run(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-select_streams",
-            "v:0",
-            "-show_entries",
-            "stream=avg_frame_rate",
-            "-of",
-            "default=nw=1:nk=1",
-            clip,
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
-    num, _, den = out.partition("/")
-    try:
-        return float(num) / float(den or 1)
-    except (ValueError, ZeroDivisionError):
-        return float("nan")
 
 
 def border_contact(track, frame_start: int, frame_end: int, w: int, h: int, pad: int = 3):
@@ -217,7 +178,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"checkpoint: {args.checkpoint} (person boxes come from its COCO-trained head)")
     print(
         f"sampling at {args.fps} fps. These clips report r_frame_rate 30/1 and actually "
-        "hold 7-8 fps of content, counted; see `source_fps`.\n"
+        "hold 7-8 fps of content, counted; `probe` reads avg_frame_rate for that "
+        "reason -- see data/video._fps.\n"
     )
 
     report: dict = {
@@ -232,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
     for clip in args.clips:
         camera = Path(clip).parent.name
         session = Path(clip).stem
-        src_w, src_h, _ = probe(clip)
+        src_w, src_h, src_fps = probe(clip)
         tracks, n_frames, detections = person_tracks(clip, model, size, device, args)
         got = fall_candidates(
             tracks,
@@ -256,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
         entry = {
             "camera": camera,
             "session": session,
-            "source_fps": round(source_fps(clip), 3),
+            "source_fps": round(src_fps, 3),
             "frames": n_frames,
             "person_detections": detections,
             "tracks": len(tracks),

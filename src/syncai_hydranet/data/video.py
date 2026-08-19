@@ -63,6 +63,12 @@ def _fps(stream: dict) -> float:
     ffmpeg's ``fps`` filter *duplicate* frames up from 8 -- ten frames of evidence per
     second where the camera recorded eight.
 
+    One conclusion worth keeping in front of anyone who samples this corpus, from the
+    docstring this replaced: a plan to recover temporal resolution for behaviour by
+    sampling at 15 or 30 fps has **nothing to recover**, because there is no 30 fps of
+    content. Track fragmentation cannot be fixed by sampling faster, which leaves
+    appearance association as the only instrument for it rather than one of two.
+
     30.0 as the last resort rather than raising: a stream with neither field is a stream
     ffprobe could not measure, and the caller's own ``--fps`` overrides this anyway.
     """
