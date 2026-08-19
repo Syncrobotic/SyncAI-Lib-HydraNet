@@ -323,7 +323,7 @@ already spent most of it:
 
 | | cameras | which |
 |---|---|---|
-| available to train | **6** | Kaohsiung-cam04, Kaohsiung-cam08, Taichung-cam04, Taichung-cam05, Taichung-cam11, Tao-Hsin-cam04 |
+| available to train | **6**, then 5 — see the 3-of-4 rule below | Kaohsiung-cam04, Kaohsiung-cam08, ~~Taichung-cam04~~, Taichung-cam05, Taichung-cam11, Tao-Hsin-cam04 |
 | + back of house | 1 | Kaohsiung-cam01 — and the census corrects `cameras.json`: it is the indoor storefront entrance, not a corridor. Kept for `column` only; every other class on it is set to IGNORE |
 | held as val | 3 | Taichung-cam01, Taichung-cam10, Tao-Hsin-cam15 |
 | held as test | 3 | Kaohsiung-cam03, Kaohsiung-cam12, Tao-Hsin-cam03 |
@@ -362,9 +362,25 @@ clears 0.50 in separates a column from a lighting artefact almost by itself:
 | **1 of 4** | **3** | **1** |
 
 Thirteen of the fourteen fire in three or four; every camera the sweep newly clears fires in
-one. **Require 3 of 4 before a camera supplies a training pixel.** The rule also flags a
-sitting member: `Taichung-cam04` is in the supplement and clears 0.50 at midnight only, on a
-fragment behind the back counter that never reaches the floor.
+one. **A camera must clear 0.50 in 3 of the 4 tranches before it supplies a `column` pixel.**
+Adopted 2026-08-19; `datasets/retail_objects_columns_v2/split.json` carries it under
+`column_supply_rule` so it travels with the data. The rule counts tranches rather than
+raising the threshold because a peak score is one frame's opinion under one light.
+
+**It bit a sitting member, and that is the reason to trust it.** `Taichung-cam04` was in the
+supplement and clears 0.50 at midnight only — 0.727, against 0.408 / 0.000 / 0.332 for
+midday, afternoon and evening. Opened at native resolution, the midnight mask is a vertical
+fragment behind the back counter that never reaches the floor: `column` drifting onto a wall
+strip, which is the failure this class has had from the beginning. Its column pixels are now
+IGNORE; its `fixture` 27.40%, `product` 11.64% and `person` 7.35% are untouched, so the
+camera stays in the batch for everything it *is* good for.
+
+**So the honest count is five selling-floor cameras, not six**, and the supply behind them is
+far more uneven than a camera count suggests: Kaohsiung-cam08 17.67%, Taichung-cam11 15.13%,
+Kaohsiung-cam01 9.23% (storefront entrance, restricted to `column` only), Taichung-cam05
+3.25%, Tao-Hsin-cam04 3.25%, **Kaohsiung-cam04 0.27%**. Kaohsiung-cam04 passes the rule
+legitimately and simply has a small column. Recorded because a camera count is not a pixel
+count, and this class has been misread that way before — §1 of this file is what that cost.
 
 **The rotation arm is a clean negative.** The census found five sideways ~90° mounts, not
 one, and sweep C had asked all five for a "column" without rotating them — where a column

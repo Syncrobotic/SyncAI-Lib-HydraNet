@@ -26,18 +26,31 @@ and 24 clear 0.25, but the split has already spent every one of them that matter
     vertical strip beside a display podium, the documented drift onto "narrow vertical
     thing". Neither is a column.
 
-So the trainable population for `column` stays at **6 cameras**, and "more cameras, not
-more frames" is exhausted within the current pull. The next column comes from a pull date
+So the trainable population for `column` gains nothing -- and the 3-of-4 rule below then
+takes one away, leaving **5 selling-floor cameras**. "More cameras, not more frames" is
+exhausted within the current pull. The next column comes from a pull date
 or a store this project has not seen.
 
-TRANCHE CONSISTENCY, THE FINDING WORTH REUSING
+THE 3-OF-4 RULE, WHICH IS NOW THE RULE
 
 Four store-local tranches rather than sweep C's two, and the count of tranches a camera
 clears 0.50 in turns out to separate a column from a lighting artefact almost by itself:
 13 of the shipped 14 fire in 3 or 4, while every camera this sweep adds fires in exactly
-one. **Require 3 of 4 before a camera supplies a training pixel.** The test also flags a
-sitting member: `Taichung-cam04` is in the shipped 14 and fires only at midnight, on a
-fragment behind a counter that never reaches the floor.
+one. **A camera must clear 0.50 in 3 of the 4 tranches before it supplies a `column`
+pixel.** Adopted 2026-08-19; `datasets/retail_objects_columns_v2/split.json` carries it
+under `column_supply_rule` so it travels with the data.
+
+A peak score is one frame's opinion under one light, which is why the rule counts tranches
+rather than raising the threshold. Sweep C had two frames per camera and could not have
+run this test at all.
+
+**It bit a sitting member, which is the reason to trust it.** `Taichung-cam04` was in the
+shipped 14 and clears 0.50 at midnight only -- 0.727, against 0.408 / 0.000 / 0.332 for
+midday, afternoon and evening. Opened at native resolution, the midnight mask is a vertical
+fragment behind the back counter that never reaches the floor: `column` drifting onto a wall
+strip. Its column pixels are now IGNORE in the supplement; its fixture, product and person
+pixels are untouched. The honest count of selling-floor cameras supplying `column` is
+therefore **5**, not 6.
 
 THE ROTATION ARM: NEGATIVE, AND WORTH SAYING SO
 

@@ -79,8 +79,10 @@ is the output. Of everything it surfaces, exactly two cameras are both new and t
 | Tao-Hsin-cam11 | 0.594, evening only | street bollards seen **through a glass door** — glass failure mode 2, "finds what is behind it" |
 | Taichung-cam09 | 0.359, never clears 0.50 | a narrow vertical strip beside a display podium — the documented drift onto "narrow vertical thing" |
 
-The trainable population for `column` therefore stays at **6 cameras**, and the priority-4
-line "more cameras, not more frames" is exhausted inside the current pull.
+The re-sweep therefore adds nothing to the trainable population, and §4 then takes one away:
+the honest count ends at **5 selling-floor cameras**. The priority-4 line "more cameras, not
+more frames" is exhausted inside the current pull, and searching harder made the number
+smaller rather than larger.
 
 ## 4. Tranche consistency, which is the one reusable thing here
 
@@ -95,10 +97,32 @@ nearly by itself:
 | 2 of 4 | 1 | 0 |
 | **1 of 4** | **3** | **1** |
 
-**Require 3 of 4 before a camera supplies a training pixel.** The rule also flags a sitting
-member: `Taichung-cam04` is in the supplement and clears 0.50 at midnight only, on a fragment
-behind the back counter that never reaches the floor. Flagged in `columns_v2`'s `split.json`
-rather than removed — that is a judgement about the class, not about this leak.
+**Adopted the same day as a rule**: a camera must clear 0.50 in 3 of the 4 tranches before it
+supplies a `column` pixel. It counts tranches rather than raising the threshold because a peak
+score is one frame's opinion under one light — sweep C had two frames per camera and could not
+have run this test at all. `columns_v2`'s `split.json` carries it under `column_supply_rule`,
+so it travels with the data rather than living only here.
+
+### The rule bit a sitting member, and that is why it is worth having
+
+`Taichung-cam04` was in the shipped 14 and in the rebuilt supplement, and it clears 0.50 at
+**midnight only** — 0.727, against 0.408 / 0.000 / 0.332 for midday, afternoon and evening.
+Opened at native resolution, the midnight mask is a vertical fragment behind the back counter
+that never reaches the floor: `column` drifting onto a wall strip, the failure this class has
+had since it was sourced.
+
+Actioned rather than only flagged, by the same minimal means used on Kaohsiung-cam01 — its
+0.91% of `column` pixels are set to IGNORE, while `fixture` 27.40%, `product` 11.64% and
+`person` 7.35% stay, so the camera remains in the batch for everything it is good for. **Not
+labelling beats labelling wrong**, and a supplement is the last place to defend a class's
+pixel count.
+
+**The honest number of selling-floor cameras supplying `column` is therefore 5, not 6.** The
+supply behind them is also far more uneven than a camera count suggests: Kaohsiung-cam08
+17.67%, Taichung-cam11 15.13%, Kaohsiung-cam01 9.23% (restricted to `column` only),
+Taichung-cam05 3.25%, Tao-Hsin-cam04 3.25%, **Kaohsiung-cam04 0.27%**. The last passes the
+rule legitimately and simply has a small column. Worth recording because a camera count is not
+a pixel count, and §1 of RETAIL_DATA is what reading this class that way cost the first time.
 
 ## 5. `datasets/studioa_clips/_survey` was a trap; renamed
 
