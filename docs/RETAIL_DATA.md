@@ -706,3 +706,27 @@ for being in someone else's dataset.
 
 Reversing 2 and 3 produces a demographic report whose denominator is fragments. It will
 look finished.
+
+---
+
+## 9. The operator-feedback disposition log
+
+The data engine's first brick exists: `src/syncai_hydranet/serving/dispositions.py`
+(decided 2026-08-19, journal §4 item 4 — schema before product). Every alert shown to an
+operator is filed at raise time, and every confirm/reject verdict is appended after it,
+into per-UTC-day JSONL under a root directory — `<root>/YYYY-MM-DD.jsonl`, by convention
+`datasets/dispositions/`. No database; the consumers are a training pipeline and grep. A
+row carries the event row **verbatim** (`basis`/`value`/`threshold`/`type`, no scores),
+the pullable footage reference (clip + frame offsets, or a stream wall-clock time — an
+alert with neither is refused), the model identity (checkpoint path, `git_state`, config
+hash — the same identity `meta.json` records), and the hash of the camera's `calib.json`
+that the geometry ran under. Dispositions are their own appended rows joined by
+`alert_id`, so history is never edited; alerts are **unreviewed by default** and a
+verdict against an unknown `alert_id` is an error, not a row.
+
+> **The precision-only caveat, which is the design constraint and not a footnote.** This
+> log labels the *confident-positive frontier*: operators can judge only what alerted,
+> and recall failures never alert, so nothing here measures the miss rate. A week of
+> confirmed alerts is compatible with a model missing half of everything. Read it as
+> "of what we showed operators, how much was real" — the recall instrument is the
+> statistical-anomaly mining layer, kept deliberately separate.
