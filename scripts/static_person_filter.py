@@ -43,11 +43,22 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw
+
+HERE = Path(__file__).resolve().parent
+for candidate in (HERE.parent / "src", HERE / "src"):
+    if candidate.is_dir():
+        sys.path.insert(0, str(candidate))
+
+# The canonical implementation lives in the package, because `night_person.py` applies the
+# threshold this script's report is used to choose. Two copies of the maths would make the
+# instrument that measured the gap and the gate that sits in it different instruments.
+from syncai_hydranet.data.night_person import static_share  # noqa: E402
 
 
 def parse_name(file_name: str) -> tuple[str, str, int]:
@@ -61,24 +72,6 @@ def parse_name(file_name: str) -> tuple[str, str, int]:
     """
     camera, session, frame = file_name.rsplit(".", 1)[0].split("__")
     return camera, session.split("_")[1], int(frame)
-
-
-def static_share(mask: np.ndarray, box, img_w: int, img_h: int) -> tuple[float, int]:
-    """Fraction of a box's area that never changed, plus the pixel count behind it.
-
-    The count is returned because rule 1 applies to this number too: a share of 1.00 over
-    nine mask pixels is a box smaller than the mask's resolution, not a confident verdict.
-    """
-    mh, mw = mask.shape
-    x, y, w, h = box
-    x0 = int(np.floor(x * mw / img_w))
-    y0 = int(np.floor(y * mh / img_h))
-    x1 = int(np.ceil((x + w) * mw / img_w))
-    y1 = int(np.ceil((y + h) * mh / img_h))
-    x0, y0 = max(x0, 0), max(y0, 0)
-    x1, y1 = min(max(x1, x0 + 1), mw), min(max(y1, y0 + 1), mh)
-    patch = mask[y0:y1, x0:x1]
-    return (float(patch.mean()) if patch.size else 0.0), int(patch.size)
 
 
 def load_mask(static_root: Path, camera: str, slot: str, which: str) -> np.ndarray | None:
