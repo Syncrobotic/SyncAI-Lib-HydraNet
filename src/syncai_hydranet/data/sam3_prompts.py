@@ -335,21 +335,41 @@ DEFAULT_ON = tuple(c.name for c in CONCEPTS if c.default_on)
 MOVING = ("person",)
 
 
-def resolve(include: list[str] | None, exclude: list[str] | None) -> list[Concept]:
-    """The concepts to run, starting from the default set.
+def resolve_from(
+    by_name: dict[str, Concept],
+    default_on: tuple[str, ...],
+    include: list[str] | None,
+    exclude: list[str] | None,
+) -> list[Concept]:
+    """The concepts to run for one prompt table, starting from its default set.
 
     ``--include`` names a class that is off by default; ``--exclude`` drops one that is
     on. Both take class names rather than prompts, so the caller cannot half-enable a
     class by naming three of its eight prompts and then read the coverage table as if
     the class had been searched for properly.
+
+    The tables are arguments rather than this module's globals because there are two of
+    them and there will be more: `sam3_prelabel.py`'s ``PROMPT_SETS`` selects a whole
+    module by ``--scheme``, so every table needs this function and each one used to
+    carry its own copy of it. The copies were identical to the character, and
+    `sam3_prompts_objects.resolve` said so in its own docstring -- "Mirrors
+    sam3_prompts.resolve" -- which is a note that the divergence has not happened *yet*
+    rather than a reason it cannot. The error messages are the part worth protecting:
+    they enumerate the known classes, so a table that fell behind would refuse a class
+    it holds, or offer one it does not.
     """
-    chosen = dict.fromkeys(DEFAULT_ON)
+    chosen = dict.fromkeys(default_on)
     for name in include or ():
-        if name not in BY_NAME:
-            raise SystemExit(f"unknown class {name!r}; known: {', '.join(sorted(BY_NAME))}")
+        if name not in by_name:
+            raise SystemExit(f"unknown class {name!r}; known: {', '.join(sorted(by_name))}")
         chosen[name] = None
     for name in exclude or ():
-        if name not in BY_NAME:
-            raise SystemExit(f"unknown class {name!r}; known: {', '.join(sorted(BY_NAME))}")
+        if name not in by_name:
+            raise SystemExit(f"unknown class {name!r}; known: {', '.join(sorted(by_name))}")
         chosen.pop(name, None)
-    return [BY_NAME[n] for n in chosen]
+    return [by_name[n] for n in chosen]
+
+
+def resolve(include: list[str] | None, exclude: list[str] | None) -> list[Concept]:
+    """This module's table, as `sam3_prelabel.py --scheme retail` selects it."""
+    return resolve_from(BY_NAME, DEFAULT_ON, include, exclude)

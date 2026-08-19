@@ -38,7 +38,7 @@ Check the first batch before trusting the second.
 from __future__ import annotations
 
 from .label_maps_retail_objects import RETAIL_OBJECTS
-from .sam3_prompts import DEFAULT_MIN_SCORE, Concept
+from .sam3_prompts import DEFAULT_MIN_SCORE, Concept, resolve_from
 
 # Four layers rather than three, because merchandise sits *on* the thing that holds it
 # and that is not a judgement call -- it is the whole spatial relationship a shop is
@@ -277,17 +277,8 @@ assert DEFAULT_MIN_SCORE == 0.40, "the min_score note above quotes this value"
 
 
 def resolve(include: list[str] | None, exclude: list[str] | None) -> list[Concept]:
-    """The concepts to run, starting from the default set. Mirrors sam3_prompts.resolve."""
-    chosen = dict.fromkeys(DEFAULT_ON)
-    for name in include or ():
-        if name not in BY_NAME:
-            raise SystemExit(f"unknown class {name!r}; known: {', '.join(sorted(BY_NAME))}")
-        chosen[name] = None
-    for name in exclude or ():
-        if name not in BY_NAME:
-            raise SystemExit(f"unknown class {name!r}; known: {', '.join(sorted(BY_NAME))}")
-        chosen.pop(name, None)
-    return [BY_NAME[n] for n in chosen]
+    """This module's table, as `sam3_prelabel.py --scheme retail_objects` selects it."""
+    return resolve_from(BY_NAME, DEFAULT_ON, include, exclude)
 
 
 # ---------------------------------------------------------------------------
