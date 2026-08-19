@@ -338,7 +338,10 @@ block of that run's own `config.yaml`:
 | **COCO 1.0** | `runs/hydranet_joint_coco10` | **1.0** | `detection_mAP` |
 
 > **⚠ `coco10` means share 1.0, not 0.10** — and `coco03` means 0.3, so the two names are
-> not even on the same scale as each other. Reading them as decimals puts the strongest
+> not even on the same scale as each other. **Nor does `meta.json` rescue you: all four arms
+> record `experiment: hydranet_indoor`**, because each was launched from that config with an
+> overridden `output_dir`. The resolved `sample_ratio` is the only field that separates
+> them. Reading them as decimals puts the strongest
 > segmenter and the weakest one in each other's places, which is the exact shape of error
 > this repository keeps paying for: a record consulted about something it does not encode.
 > **Read `config.yaml`, never the directory name.**

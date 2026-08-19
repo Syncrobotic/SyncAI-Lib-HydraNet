@@ -924,6 +924,30 @@ config), `config.yaml`, `uncommitted.patch` when the tree was dirty, `metrics.js
 `train.log` and `tb/`. A second run into an occupied directory gets a timestamped sibling
 rather than overwriting `best.pt`.
 
+> **⚠ `experiment` is not an identifier. Measured 2026-08-19: 8 of the 41 runs carrying a
+> `meta.json` have an `experiment` that disagrees with their own `output_dir`,** because a
+> run launched from another config's YAML with `--set output_dir=...` keeps that config's
+> `experiment` string. Six of the eight say `hydranet_indoor`.
+>
+> It is worst exactly where it matters most. All four arms of the COCO ratio sweep — the
+> comparison this project reasons from most often — identify themselves identically:
+>
+>     runs/hydranet_indoor         experiment=hydranet_indoor   coco sample_ratio  (none)
+>     runs/hydranet_indoor_det60   experiment=hydranet_indoor   coco sample_ratio  0.1
+>     runs/hydranet_joint_coco03   experiment=hydranet_indoor   coco sample_ratio  0.3
+>     runs/hydranet_joint_coco10   experiment=hydranet_indoor   coco sample_ratio  1.0
+>
+> **The only field that tells them apart is the resolved config itself.** Read
+> `config.data.datasets[*].sample_ratio`, not `experiment` and not the directory name —
+> `coco10` means share 1.0, which is the same trap one layer up
+> ([ARCHITECTURE.md](ARCHITECTURE.md), the sweep section).
+>
+> This is not hypothetical damage. A review pass on 2026-08-19 read `experiment:
+> hydranet_indoor` out of `releases/v1` and concluded the bundle was the indoor line's. The
+> conclusion was right — 12 terrain classes, a traversability head, ADE20K and COCO — but it
+> was right by way of a field that would have said the same thing about a run that was none
+> of those. **Confirm from the resolved config, which cannot drift from what trained.**
+
 ```bash
 uv run hydranet-report runs/*  --diff     # rank runs, and show what differed
 ```
