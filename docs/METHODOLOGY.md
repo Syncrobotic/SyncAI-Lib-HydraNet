@@ -932,17 +932,28 @@ rather than overwriting `best.pt`.
 >   config's YAML with `--set output_dir=...` keeps that config's `experiment` string. Six
 >   of the eight say `hydranet_indoor`. Left as-is on purpose — `experiment` is a *label*,
 >   and auto-deriving it from a path would be an opinion rather than a record.
-> * **2 runs: `output_dir` does not name the directory the run is in**, because
->   `resolve_out_dir` writes a timestamped sibling when the target is occupied and the
->   config kept the name it asked for. **Fixed forward in `84c9f82`**: the trainer now
->   records the path it actually wrote to. Existing runs keep the old value.
+> * **2 runs: `output_dir` does not name the directory the run is in.** These two fail in
+>   opposite ways, and only one of them is survivable:
 >
-> **The sharpest case is in neither list on its own.**
-> `runs/hydranet_retail_objects_site_balanced_pooledmetric` has `experiment` and
-> `output_dir` **agreeing with each other and both wrong** — they name
-> `runs/hydranet_retail_objects_site_balanced`, which exists on disk as a *different run*.
-> A reader following that record does not get an error or a dead path; they get real data
-> from the wrong experiment. An internally consistent record is not a correct one.
+>       hydranet_indoor_det-20260813-190051  -> runs/hydranet_indoor_det
+>                                               does not exist. Dead path, fails loudly.
+>       ..._site_balanced_pooledmetric       -> runs/hydranet_retail_objects_site_balanced
+>                                               exists: 2 checkpoints, 39 metric rows,
+>                                               and a different `primary_metric`.
+>
+>   **The second one hands you real numbers from the wrong experiment.** Its `experiment`
+>   and `output_dir` *agree with each other* and are both wrong, so nothing about the record
+>   looks off — an internally consistent record is not a correct one.
+>
+> **The fix covers the kind failure, not the unkind one**, and that is a property of the
+> cause rather than an oversight. `84c9f82` makes the trainer record the path it actually
+> wrote to, which fixes the timestamped-sibling case that produced the dead path. The second
+> directory does not match the sibling pattern: it was **renamed or copied after the run
+> finished**, and nothing in `Trainer.__init__` can see a rename that happens later.
+> Existing runs keep their old values either way.
+>
+> So the guidance does not change: when a record and a directory disagree, believe the
+> directory, and confirm from the resolved config.
 >
 > It is worst exactly where it matters most. All four arms of the COCO ratio sweep — the
 > comparison this project reasons from most often — identify themselves identically:
