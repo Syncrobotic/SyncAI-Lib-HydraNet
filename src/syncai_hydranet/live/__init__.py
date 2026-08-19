@@ -1,5 +1,9 @@
 """What a live view does between reading a camera and writing a picture.
 
+Secondary line: this serves the quadruped, and the robot-only entry points that call
+it live under `scripts/robot/`. It deliberately did **not** move there with them --
+see the paragraph below on what sitting outside the package costs.
+
 Everything here used to live in `scripts/robot/live_view_ros.py`, reachable only by running a
 ROS node on a robot. None of it needs ROS: the reach classification is two numpy arrays
 and a threshold, the panel builder takes a colour frame and a depth frame, and the

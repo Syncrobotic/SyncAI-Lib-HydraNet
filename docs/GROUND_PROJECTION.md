@@ -1,5 +1,12 @@
 # Ground projection
 
+> **This file serves both lines and the split runs down the middle of it.** The
+> per-frame plane fit below is the *quadruped's* need — a walking camera pitches and
+> rolls every step — and the quadruped is the secondary line. The **fixed-camera**
+> half, under *Running it*, is the main CCTV line: on a camera that never moves the
+> whole thing is an install-time calibration artifact. Neither half is deprecated;
+> they are answers to the same question for two platforms.
+
 A traversability mask answers "is this pixel walkable". A navigation stack asks something
 else: "is there a path three metres ahead". Those are the same information in different
 coordinates, and the conversion is geometry, not learning.

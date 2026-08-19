@@ -1,5 +1,11 @@
 # Research direction: a BEV occupancy network for the quadruped, and the one thing it turns on
 
+> **Secondary line.** This project leads with the fixed store CCTV security and
+> retail model; the quadruped continues and is maintained, but ranks behind it. See
+> [README](../README.md) for the split, and [RETAIL.md](RETAIL.md) for the main line.
+> Nothing in this document is withdrawn — it is the research direction the user has
+> committed to, and it is labelled rather than deprecated.
+
 **Scope.** Product A, the Lite3 robot line ([`deploy/robot/`](../deploy/robot/)). The
 north star is the modern occupancy-network perception stack — multi-camera → shared
 backbone → geometry-conditioned BEV cross-attention → temporal transformer → a fan of

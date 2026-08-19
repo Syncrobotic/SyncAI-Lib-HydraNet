@@ -22,6 +22,12 @@ data or measurement.
 
 # Part I — measured verdicts
 
+> **Written for the quadruped, which is now the secondary line.** The verdicts stand where
+> they are about the architecture rather than the platform — section 1's resolution ceiling
+> and section 2's head redundancy are properties of the labels and the taxonomy, and both
+> apply to the CCTV line unchanged. Two verdicts were overturned and say so in place. Read
+> the platform-specific reasoning in section 5 with the LiDAR correction beside it.
+
 Every number in this part was produced on this checkout against the shipped checkpoint and
 the held-out test split — the methods are described well enough to re-run when the data
 changes.
