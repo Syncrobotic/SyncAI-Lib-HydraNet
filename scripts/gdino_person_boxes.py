@@ -27,7 +27,7 @@ Two deliberate differences from the SAM 3 script:
 2. **Scores are kept down to a floor of 0.10** in `instances_all.json`, so the two
    populations stay visible in full. `--train-thr` additionally writes
    `instances_train.json` filtered at the working threshold with per-frame greedy
-   NMS (IoU 0.55, same as `sam3_prelabel._dedupe`) for training consumption.
+   NMS (IoU 0.55, `data/teachers/boxes.py`) for training consumption.
 
 What survives is still a teacher's opinion and not ground truth.
 """
@@ -49,6 +49,7 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
+from syncai_hydranet.data.teachers.boxes import nms  # noqa: E402
 from syncai_hydranet.data.teachers.photometry import luma_chroma  # noqa: E402
 
 THRESHOLD_LADDER = (0.25, 0.35, 0.50)  # reported per camera; nothing is filtered by them
@@ -104,20 +105,6 @@ def detect(proc, model, img: Image.Image, prompt: str, floor: float, device: str
     boxes = res["boxes"].cpu().float().numpy().reshape(-1, 4)
     scores = res["scores"].cpu().float().numpy().reshape(-1, 1)
     return np.concatenate([boxes, scores], axis=1)
-
-
-def nms(boxes: np.ndarray, iou_thr: float) -> np.ndarray:
-    """Greedy per-frame NMS, same shape as sam3_prelabel._dedupe."""
-    if len(boxes) < 2:
-        return boxes
-    from syncai_hydranet.analytics.tracker import iou
-
-    order = np.argsort(-boxes[:, 4])
-    keep: list[int] = []
-    for i in order:
-        if all(iou(boxes[i : i + 1, :4], boxes[j : j + 1, :4])[0, 0] < iou_thr for j in keep):
-            keep.append(i)
-    return boxes[sorted(keep)]
 
 
 def iter_image_dirs(dirs: list[str]):

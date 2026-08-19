@@ -67,7 +67,10 @@ sys.path.insert(0, str(HERE))
 
 from sam3_prelabel import load_sam3, segment  # noqa: E402
 
-from syncai_hydranet.analytics.tracker import iou  # noqa: E402
+from syncai_hydranet.data.teachers.boxes import (  # noqa: E402
+    boxes_from_masks,
+    drop_static,
+)
 from syncai_hydranet.data.teachers.photometry import (  # noqa: E402
     MIN_CHROMA,
     MIN_LUMA,
@@ -95,48 +98,6 @@ def build_parser() -> argparse.ArgumentParser:
     # 0 disables. Off by default -- see the docstring: it was measured removing people.
     ap.add_argument("--static-share", type=float, default=0.0)
     return ap
-
-
-def boxes_from_masks(pairs) -> np.ndarray:
-    out = []
-    for mask, score in pairs:
-        ys, xs = np.nonzero(mask)
-        if not len(xs):
-            continue
-        out.append([xs.min(), ys.min(), xs.max() + 1, ys.max() + 1, score])
-    return np.asarray(out, dtype=float).reshape(-1, 5)
-
-
-def drop_static(per_frame: list[np.ndarray], iou_thr: float, share: float):
-    """Split boxes into moving and recurring. Returns (kept, dropped) per frame.
-
-    **Dropped, not deleted.** Kaohsiung-cam04 dropped 21 of 103 and that camera is a
-    service counter where staff stand at one station for the whole sample window -- so a
-    gate aimed at hanging merchandise can equally remove the shopper who is standing
-    still, who is the one a loitering alarm exists for. Returning both sides is what lets
-    that be looked at instead of assumed.
-
-    The inverse of the consensus vote, and deliberately so: `sam3_prompts.py`'s hanging
-    packets agree in every frame, which is what a vote rewards. Recurrence is the signal
-    that the thing is not a shopper.
-    """
-    n = len(per_frame)
-    need = max(round(share * n), 2)
-    kept, dropped = [], []
-    for i, boxes in enumerate(per_frame):
-        if not len(boxes):
-            kept.append(boxes)
-            continue
-        recur = np.zeros(len(boxes), dtype=int)
-        for j, other in enumerate(per_frame):
-            if i == j or not len(other):
-                continue
-            m = iou(boxes[:, :4], other[:, :4])
-            recur += (m.max(axis=1) >= iou_thr).astype(int)
-        keep = recur < need
-        dropped.append(boxes[~keep])
-        kept.append(boxes[keep])
-    return kept, dropped
 
 
 def main(argv: list[str] | None = None) -> int:

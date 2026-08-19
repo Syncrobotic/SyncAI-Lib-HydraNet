@@ -25,11 +25,16 @@ another caller had a reason to import.
 
 from __future__ import annotations
 
+from .boxes import boxes_from_masks, dedupe, drop_static, nms
 from .photometry import MIN_CHROMA, MIN_LUMA, is_daylight, luma_chroma
 
 __all__ = [
     "MIN_CHROMA",
     "MIN_LUMA",
+    "boxes_from_masks",
+    "dedupe",
+    "drop_static",
     "is_daylight",
     "luma_chroma",
+    "nms",
 ]

@@ -81,6 +81,7 @@ from syncai_hydranet.data import sam3_prompts as _retail_prompts  # noqa: E402
 from syncai_hydranet.data import sam3_prompts_objects as _object_prompts  # noqa: E402
 from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
 from syncai_hydranet.data.sam3_prompts import DEFAULT_MIN_SCORE  # noqa: E402
+from syncai_hydranet.data.teachers.boxes import dedupe  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
 from syncai_hydranet.labels import IGNORE  # noqa: E402
 
@@ -367,49 +368,7 @@ def frame_boxes(proc, model, frame: np.ndarray, det_classes, args) -> list[dict]
                         "iscrowd": 0,
                     }
                 )
-    return _dedupe(out), dropped
-
-
-def _dedupe(boxes: list[dict], iou_thr: float = 0.55) -> list[dict]:
-    """Greedy per-class NMS across prompts.
-
-    The prompts inside one class are a union by design -- `product box` and `boxed
-    product` are two ways of asking for the same shelf -- so without this every item
-    appears once per prompt that found it. Measured on two frames of Taichung-cam01
-    before this existed: 266 `boxed_stock` boxes from two prompts over roughly 146
-    actual items. A detector trained on that learns that one object is two.
-
-    Kept separate from the segmentation path because `compose` resolves the same overlap
-    a different and equally deliberate way: two prompts of one class agreeing is a union
-    of *pixels*, which needs no arbitration. Two prompts of one class agreeing on an
-    *instance* is a duplicate, which does.
-    """
-    out: list[dict] = []
-    for cat in {b["category_id"] for b in boxes}:
-        cand = sorted(
-            (b for b in boxes if b["category_id"] == cat),
-            key=lambda b: b["score"],
-            reverse=True,
-        )
-        keep: list[dict] = []
-        for b in cand:
-            bx, by, bw, bh = b["bbox"]
-            if any(_iou((bx, by, bw, bh), k["bbox"]) > iou_thr for k in keep):
-                continue
-            keep.append(b)
-        out.extend(keep)
-    return out
-
-
-def _iou(a, b) -> float:
-    ax0, ay0, aw, ah = a
-    bx0, by0, bw, bh = b
-    ax1, ay1, bx1, by1 = ax0 + aw, ay0 + ah, bx0 + bw, by0 + bh
-    ix = max(0.0, min(ax1, bx1) - max(ax0, bx0))
-    iy = max(0.0, min(ay1, by1) - max(ay0, by0))
-    inter = ix * iy
-    union = aw * ah + bw * bh - inter
-    return inter / union if union > 0 else 0.0
+    return dedupe(out), dropped
 
 
 def validate_inputs(clips: list[str]) -> None:
