@@ -1,0 +1,200 @@
+# One change from hydranet_retail_security_b03_cw_hires: input_size 512x896 -> 640x1120.
+# Same 1.75 aspect, so canvas content stays at 98.4%; this buys object *size*, not padding.
+#
+# WHY, MEASURED RATHER THAN ASSUMED
+#
+# The site detection set is 120 training images of 1920x1080 whose objects are tiny --
+# median short side 54 px in the source. What the canvas does to that is the whole story:
+#
+#   512x640   content 70.3%   median short side 17.3 px   8.0-12.5% of boxes under 8 px
+#   512x896   content 98.4%   median short side 24.3 px   1.6-2.0% under 8 px
+#   640x1120  content 98.4%   median short side ~30 px
+#
+# FCOS's finest level is stride 8, so a box whose short side is under 8 px does not span
+# a single feature cell. At 512x640 roughly a tenth of the training boxes were in that
+# state -- not hard to learn, unlearnable.
+#
+# And the jump has already been measured on exactly this pair of configs, which differ in
+# nothing else: detection_mAP/site_boxes 0.1210 (cw) -> 0.1469 (cw_hires), +21% relative.
+# That is a larger gain than batch03's extra annotation (+0.013) and class weights
+# (+0.002) combined. This run asks whether the lever keeps pulling at 30 px.
+#
+# Cost is 1.56x the pixels of 512x896. On the deployment side that is close to free: the
+# Orin graph is launch-bound, not compute-bound -- DEPLOY_JETSON.md measures FP16 at
+# 2.31 ms with CUDA graphs alone taking 2.61 -> 1.95 ms across 416 kernel launches.
+seed: 42
+model:
+  backbone:
+    name: regnet_x_800mf
+    pretrained: true
+    frozen_stages: 0
+  neck:
+    name: bifpn
+    out_channels: 96
+    num_repeats: 2
+    num_levels: 5
+  heads:
+    terrain:
+      type: semantic_fpn
+      num_classes: 6
+      in_levels:
+      - 0
+      - 1
+      - 2
+      channels: 64
+      dropout: 0.1
+      loss:
+        ce_weight: 1.0
+        dice_weight: 1.5
+        ignore_index: 255
+        class_weights:
+        - 0.0
+        - 0.54
+        - 0.66
+        - 1.6
+        - 0.46
+        - 1.73
+    detection:
+      type: fcos
+      num_classes: 4
+      in_levels:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      channels: 96
+      num_convs: 4
+      strides:
+      - 8
+      - 16
+      - 32
+      - 64
+      - 128
+      loss:
+        cls_weight: 1.0
+        reg_weight: 1.0
+        centerness_weight: 1.0
+      classes:
+      - person
+      - bag
+      - boxed_stock
+      - device
+  loss_balancing: uncertainty
+  fixed_weights:
+    traversability: 1.0
+    terrain: 1.0
+    detection: 1.0
+data:
+  input_size:
+  - 640
+  - 1120
+  workers: 8
+  augment:
+    scale_range:
+    - 0.75
+    - 1.5
+    flip_p: 0.5
+    brightness: 0.3
+    contrast: 0.3
+    saturation: 0.3
+  letterbox: true
+  terrain_classes:
+  - void
+  - floor
+  - wall
+  - column
+  - fixture
+  - person
+  datasets:
+  - name: ade20k
+    type: seg_folder
+    root: datasets/ADE20K
+    split_train: train
+    split_val: val
+    split_test: test
+    label_map: ade20k_retail_surfaces
+    sample_ratio: 0.15
+    supervises:
+    - terrain
+  - name: site_seg
+    type: seg_folder
+    root: datasets/retail_objects_batch02
+    split_train: train
+    split_val: val
+    split_test: test
+    label_map: retail_surfaces_from_objects
+    sample_ratio: 2.0
+    supervises:
+    - terrain
+  - name: site_seg03
+    type: seg_folder
+    root: datasets/retail_objects_batch03
+    split_train: train
+    split_val: val
+    split_test: test
+    label_map: retail_surfaces_from_objects
+    sample_ratio: 2.0
+    supervises:
+    - terrain
+  - name: site_boxes
+    type: coco
+    root: datasets/retail_objects_batch02
+    split_train: train
+    split_val: val
+    split_test: test
+    det_vocab: retail_security
+    sample_ratio: 3.0
+    supervises:
+    - detection
+  - name: site_boxes03
+    type: coco
+    root: datasets/retail_objects_batch03
+    split_train: train
+    split_val: val
+    split_test: test
+    det_vocab: retail_security
+    sample_ratio: 1.0
+    supervises:
+    - detection
+  - name: coco_person
+    type: coco
+    root: datasets/coco
+    split_train: train2017
+    split_val: val2017
+    classes:
+    - person
+    - backpack
+    - handbag
+    - suitcase
+    det_vocab: retail_security
+    sample_ratio: 0.05
+    supervises:
+    - detection
+train:
+  epochs: 60
+  batch_size: 32
+  optimizer: adamw
+  lr: 0.0004
+  backbone_lr_mult: 0.1
+  weight_decay: 0.05
+  warmup_iters: 1000
+  scheduler: cosine
+  amp: true
+  amp_dtype: bfloat16
+  grad_clip: 10.0
+  ema: true
+  ema_decay: 0.9998
+  log_interval: 50
+  val_interval: 1
+  primary_metric: terrain_mIoU/site_seg03
+  channels_last: true
+  early_stop_patience: 0
+  detection_val_interval: 5
+export:
+  opset: 17
+  input_size:
+  - 512
+  - 640
+experiment: hydranet_retail_security_b03_cw_xl
+output_dir: runs/hydranet_retail_security_b03_cw_xl

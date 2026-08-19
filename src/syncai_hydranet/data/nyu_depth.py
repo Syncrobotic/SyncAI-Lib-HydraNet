@@ -136,7 +136,11 @@ class RenderedDepthDataset(Dataset[dict[str, Any]]):
         head_name: str = "depth",
         max_depth: float = 10.0,
     ):
-        self.files = sorted((Path(root) / folder).glob("*_rgb.png"))
+        # rglob, so a split may be one directory or a tree of per-scene shards. Rendering
+        # parallelises one process per scene, and letting each write its own subdirectory
+        # avoids renumbering frames on merge -- which is the step that would quietly pair
+        # an RGB from one scene with a depth from another.
+        self.files = sorted((Path(root) / folder).rglob("*_rgb.png"))
         if not self.files:
             raise FileNotFoundError(f"no *_rgb.png under {Path(root) / folder}")
         self.size = (int(input_size[0]), int(input_size[1]))
