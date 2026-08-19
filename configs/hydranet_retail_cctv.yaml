@@ -74,7 +74,7 @@ data:
       #
       # That was run on 2026-08-14, together with the control that removes this dataset
       # and changes nothing else (runs/hydranet_retail_cctv_noself). Result in
-      # docs/RETAIL_SCOPE.md. Short version: **on ADE20K these frames do nothing** -- the
+      # docs/RETAIL.md. Short version: **on ADE20K these frames do nothing** -- the
       # whole gain belongs to the low-LR restart, and without the control this run would
       # have been written up as "adaptation improved the source domain too", which is
       # false. What they do buy is only visible on the site's own footage: a static false

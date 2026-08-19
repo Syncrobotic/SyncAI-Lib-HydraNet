@@ -42,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--weights",
         choices=["ema", "model"],
         default="ema",
-        help="EMA weights need enough training steps to be meaningful; see docs/TRAIN_MACOS.md",
+        help="EMA weights need enough training steps to be meaningful; see docs/DEPLOY.md",
     )
     ap.add_argument("--score-thr", type=float, default=SCORE_THR_VIEW)
     ap.add_argument(

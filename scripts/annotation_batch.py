@@ -26,7 +26,7 @@ line.
 
 The pre-labels are a starting point and nothing more. Nothing here should be trained on
 until a human has been over it -- which is exactly what the annotation contract in
-docs/ANNOTATION_SETUP.md is for.
+docs/METHODOLOGY.md is for.
 """
 
 from __future__ import annotations
@@ -66,7 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--weights",
         choices=["ema", "model"],
         default="ema",
-        help="EMA weights need enough training steps to be meaningful; see docs/TRAIN_MACOS.md",
+        help="EMA weights need enough training steps to be meaningful; see docs/DEPLOY.md",
     )
     ap.add_argument("--out", required=True, help="dataset root to write")
     ap.add_argument("--split", default="train")

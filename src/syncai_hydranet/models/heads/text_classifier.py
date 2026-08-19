@@ -1,7 +1,7 @@
 """An open-vocabulary classifier for the detection head: names as data, not as weights.
 
 **The problem this exists for is measured, not hypothetical.** The audit in
-`docs/RETAIL_OBJECTS.md` swept the detection head over Kaohsiung-cam08, an Apple store: at
+`docs/RETAIL.md` swept the detection head over Kaohsiung-cam08, an Apple store: at
 score 0.05 it returns **1,683 `book`** and no `laptop` at any threshold. The head is
 finding the merchandise and naming it with the nearest shape word COCO owns. **The
 localisation already works; the vocabulary does not.** A boxed handset is not a book, and
@@ -21,7 +21,7 @@ What that buys, in the order it matters here:
    has to round them to `book`.
 2. **Per-store vocabularies without retraining.** One shop sells phones and another sells
    clothes; that is a different matrix, not a different model. This is the same argument
-   RETAIL_SCOPE.md §2 makes for the 5 m rule and §3 for the merchandise zone -- a product
+   RETAIL.md §2 makes for the 5 m rule and §3 for the merchandise zone -- a product
    parameter belongs in a config, not in the weights.
 3. **Export narrowing becomes a row slice.** `--detection-classes` already slices
    `cls_pred`'s output channels; here it slices the text matrix instead, and the visual
@@ -36,7 +36,7 @@ is worth doing before either of the other two on the list.
 **What it does not do.** It does not make the head detect things it has no visual evidence
 for. The cam08 result is what makes this promising -- the boxes are already in the right
 places -- and a class with no visual support will still score nothing, more legibly. It
-also inherits whatever the text encoder believes: `docs/RETAIL_OBJECTS.md` records that
+also inherits whatever the text encoder believes: `docs/RETAIL.md` records that
 web English's `iphone` is a product shot rather than thirty pixels of handset on a shelf,
 and an embedding of that word carries the same problem into this matrix.
 """

@@ -10,7 +10,7 @@ what the measurement is.
 
 What earns it a place anyway is that it is the only instrument in this repository that
 works **on the store**, today, with nobody annotating anything. The gap it addresses is the
-one RETAIL_OBJECTS_SPLIT.md opens with: `runs/hydranet_retail_objects` scored terrain mIoU
+one RETAIL_DATA.md opens with: `runs/hydranet_retail_objects` scored terrain mIoU
 **0.7668** on ADE20K and predicted `column` **0.00%** and `product` **0.00%** on the
 footage it is meant to serve. Both numbers are true. Every labelled split this project has
 is the first kind, and a labelled split of the second kind needs human-corrected masks (R3)
@@ -18,8 +18,8 @@ that do not exist yet. Meanwhile every architecture question -- `num_convs`, a n
 attention block, an open-vocabulary head -- wants to be judged on the shop.
 
 The camera does not move, so a pixel can be asked the same question N times and the spread
-of the answers is an error signal that costs no labels. RETAIL_OBJECTS.md's audit used it
-as the `agree` column; RETAIL_SCOPE.md §5 used it to count a false `caution` on a
+of the answers is an error signal that costs no labels. RETAIL.md's audit used it
+as the `agree` column; RETAIL.md §5 used it to count a false `caution` on a
 structural column through 1,782 of 1,830 frames, where four frames sampled by eye had
 suggested the opposite conclusion. Both were one-off scripts.
 

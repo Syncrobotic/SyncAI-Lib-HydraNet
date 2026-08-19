@@ -3,7 +3,7 @@
     hydranet-annotation labels --out cvat_labels.json    # the schema CVAT imports
     hydranet-annotation check datasets/site_a            # the gate before training
 
-[docs/ANNOTATION_SETUP.md](../../../docs/ANNOTATION_SETUP.md) states the contract between
+[docs/METHODOLOGY.md](../../../docs/METHODOLOGY.md) states the contract between
 annotators and training in prose, and prose drifts: a class renamed in the tool, an id
 typed by hand, a background exported as 0 where the loss expects 255, one session
 appearing in both train and val. None of that raises an error. Training accepts the
@@ -53,7 +53,7 @@ from ..utils.visualize import terrain_palette
 
 TRAV_NAMES = {0: "blocked", 1: "caution", 2: "go", IGNORE: "ignore"}
 
-# Annotation priority, from ANNOTATION_SETUP.md: rank by danger x how blind LiDAR is.
+# Annotation priority, from METHODOLOGY.md: rank by danger x how blind LiDAR is.
 # Confirmed annotate-only -- the full-vocabulary ADE20K does not supply these three.
 # `display_fixture` is retail-only and joins the list for the same reason: no public
 # dataset has shop fixtures, and ADE20K's tables are domestic.

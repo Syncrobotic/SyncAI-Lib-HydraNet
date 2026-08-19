@@ -1,6 +1,6 @@
 """The second stage's crop encoder: one model, association first, attributes second.
 
-`PERSON_ATTRIBUTES.md` sets the ordering and gives the reason, which is not a preference
+`RETAIL_DATA.md` sets the ordering and gives the reason, which is not a preference
 about what is interesting to build:
 
     A 4.6-minute clip fragments into 1234 tracks. Attributes computed per track on that
@@ -24,7 +24,7 @@ does not clear that number has not earned its place.
 **Not a HydraNet head, and it cannot be one.** `hydranet.py`'s design rule 2 says heads
 read only the neck's feature list; this reads a *crop cut from the detection head's boxes*,
 which the `Head` protocol has no way to express. It gets its own small ONNX export, which
-is the boundary `stage.py` and ARCHITECTURE_DIRECTION.md section 2 describe.
+is the boundary `stage.py` and ARCHITECTURE.md section 2 describe.
 
 **Why resnet18 and not the project's regnet trunk.** The floor above was measured on
 resnet18, so this is comparable to it by construction. A different backbone would make the

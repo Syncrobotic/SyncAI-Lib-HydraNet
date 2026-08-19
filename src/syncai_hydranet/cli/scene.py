@@ -260,7 +260,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--weights",
         choices=["ema", "model"],
         default="ema",
-        help="EMA weights need enough training steps to be meaningful; see docs/TRAIN_MACOS.md",
+        help="EMA weights need enough training steps to be meaningful; see docs/DEPLOY.md",
     )
     ap.add_argument("--input", required=True, help="image or video file")
     ap.add_argument("--output", default=None, help="rendered panel; omit to write none")

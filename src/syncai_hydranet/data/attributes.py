@@ -1,6 +1,6 @@
 """PA-100K person attributes: the second stage's first supervised signal.
 
-`PERSON_ATTRIBUTES.md` ranked RAP v2 first on distribution and PA-100K second on volume.
+`RETAIL_DATA.md` ranked RAP v2 first on distribution and PA-100K second on volume.
 RAP v2 was not obtained, and measuring the alternatives changed the ranking rather than
 merely losing the first choice:
 
@@ -28,7 +28,7 @@ The ask is "age, gender, action". Counted over the 80,000 training crops:
 
 **Age is three bands and one of them holds 93% of everybody.** So the honest output is two
 binary questions -- is this person under 18, is this person over 60 -- and the second rests
-on 1,127 crops. That is the same conclusion `ARCHITECTURE_DIRECTION.md` reached from the
+on 1,127 crops. That is the same conclusion `ARCHITECTURE.md` reached from the
 other direction (a head region of 31-42 px), arrived at independently from the data.
 
 `SUPPORT` below carries the count for every attribute, because a report that quotes

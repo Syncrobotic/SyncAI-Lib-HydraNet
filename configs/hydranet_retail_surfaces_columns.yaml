@@ -16,7 +16,7 @@
 #
 # WHAT THIS RUN CAN AND CANNOT SETTLE
 #
-# It can settle whether an *externally* labelled batch moves the class. RETAIL_SCOPE.md
+# It can settle whether an *externally* labelled batch moves the class. RETAIL.md
 # measured the self-training version of this question and got **-0.0096** on
 # `display_fixture`: labels drawn from the model can only harden what it already believes.
 # SAM 3 has never seen this model's mistakes, so the sign is genuinely unknown, and
@@ -59,7 +59,7 @@
 #
 # So the `column`/site_seg 0.34 -> 0.84 that first run produced is contamination, not a
 # result: the model had seen two thirds of the cameras it was scored on. The test split
-# is the more expensive half of the damage -- `RETAIL_OBJECTS_SPLIT.md` exists because a
+# is the more expensive half of the damage -- `RETAIL_DATA.md` exists because a
 # rare class has to be measured somewhere nothing in training has read.
 #
 # `datasets/retail_objects_columns_clean` is the nine cameras that appear in neither val

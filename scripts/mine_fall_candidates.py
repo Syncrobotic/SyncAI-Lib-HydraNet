@@ -11,7 +11,7 @@ three most common things it fires on are a shopper bending to a low shelf, someo
 crouching at bottom stock, and legs occluded by a fixture -- which is why the event type
 is named `fall_candidate` and why nothing here reports a number as a fall.
 
-What it is for is the precondition ARCHITECTURE_DIRECTION.md sets before any behaviour
+What it is for is the precondition ARCHITECTURE.md sets before any behaviour
 annotation is paid for: **confirm the behaviour occurs on these cameras at all.** MERL
 Shopping is a grocery aisle of closed shelving and these are open display tables; finding
 out after the annotation spend is the `column` failure at a higher price. A cheap proxy
@@ -138,7 +138,7 @@ def border_contact(track, frame_start: int, frame_end: int, w: int, h: int, pad:
     crouching, fixture occlusion), and it is the worst-behaved of the four: on a camera
     that never moves it recurs in the same place in every clip that camera will ever
     produce, so it does not average out. Same shape as the `caution` painted on a fixed
-    structural column in RETAIL_SCOPE.md, which was in 97.4% of 1,830 frames.
+    structural column in RETAIL.md, which was in 97.4% of 1,830 frames.
 
     Flagged rather than dropped. What share of candidates are border artefacts is itself
     the measurement, and a filter would delete the evidence for it.

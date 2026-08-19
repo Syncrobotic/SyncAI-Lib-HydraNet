@@ -35,7 +35,7 @@
 # Two thirds of the frame comes back `wall` or `floor` -- classes SAM 3 left as 255, so
 # those predictions cost nothing. The model found a free answer and the loss agreed.
 #
-# **This is the same shape as RETAIL_SCOPE.md §5.** There, self-training's pseudo-labels
+# **This is the same shape as RETAIL.md §5.** There, self-training's pseudo-labels
 # taught the model that fixture-shaped things in a shop are not `display_fixture`. Here,
 # ADE20K teaches that a shop contains no `product`. Both times a large, clean, *wrong-domain*
 # dataset actively taught something false, and both times the smaller correct dataset was

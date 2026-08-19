@@ -15,7 +15,7 @@ encoder rather than two models:
   floor is what this has to clear to have earned anything, and it is measured with the
   same code on the same protocol rather than quoted from a paper.
 
-`PERSON_ATTRIBUTES.md` puts association first and attributes second. This trains the
+`RETAIL_DATA.md` puts association first and attributes second. This trains the
 attribute head because that is the label PA-100K carries, and reports the embedding
 because that is the output the ordering says matters -- so a run that improves attributes
 while leaving association at the ImageNet floor is visible as exactly that, rather than
@@ -161,10 +161,10 @@ if __name__ == "__main__":
 # --------------------------------------------------------------------- association
 #
 # The half this script's docstring promised and its first version did not compute -- which
-# is the failure `ARCHITECTURE_DIRECTION.md` section 5 names in the abstract: "the
+# is the failure `ARCHITECTURE.md` section 5 names in the abstract: "the
 # mechanism was built and the thing that would show whether it worked was not". An
 # attribute head that improves while the embedding sits at the ImageNet floor is a model
-# that has learned nothing about the job `PERSON_ATTRIBUTES.md` puts first.
+# that has learned nothing about the job `RETAIL_DATA.md` puts first.
 
 
 def _market_split(root: Path, folder: str):

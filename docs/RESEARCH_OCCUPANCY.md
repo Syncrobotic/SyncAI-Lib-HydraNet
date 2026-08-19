@@ -223,13 +223,13 @@ answer, and only once it walks.
   *consumes* an elevation map (e.g. `Lite3_rl_deploy`), which the velocity interface does
   not expose. Decide this before ⑤, because it changes the data campaign.
 - **Two compute tiers, one training pipeline.** RK3588 for the robot student, Orin for the
-  retail/security tier ([DEPLOY_JETSON.md](DEPLOY_JETSON.md)). The auto-labeler and the
+  retail/security tier ([DEPLOY.md](DEPLOY.md)). The auto-labeler and the
   full model are shared; only the distilled student differs. This is the same one-core /
   two-products split the repo is organised around.
 
 ## Why this unifies the two products
 
 A patrolling quadruped running this stack is a **mobile instance of product B**: the same
-person/detection/terrain perception and the same L1/L2 events ([RETAIL_SECURITY.md](RETAIL_SECURITY.md)),
+person/detection/terrain perception and the same L1/L2 events ([RETAIL.md](RETAIL.md)),
 now covering the aisles a fixed camera cannot see. The occupancy net is where product A's
 navigation and product B's analytics stop being two problems.

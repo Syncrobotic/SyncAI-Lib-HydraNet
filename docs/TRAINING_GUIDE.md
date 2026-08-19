@@ -4,7 +4,9 @@
 everyone who touches the perception stack — you do not need an ML background to follow it,
 but you do need to care about why the robot walks into a glass door.*
 
-Reading time: about 10 minutes.
+Sections 1–8 are **why it is shaped this way and which measurements lie**; section 9 is
+**how to actually run it** (merged in from `USAGE.md` on 2026-08-19). For dividing the work
+across a team, see [METHODOLOGY.md](METHODOLOGY.md).
 
 ---
 
@@ -363,7 +365,237 @@ difficulty.
 
 ---
 
-*Related: [TRAIN_MACOS.md](TRAIN_MACOS.md) for local development, [the CUDA move](journal/2026-08-12-mps-to-cuda.md)
-for moving to a CUDA machine, [DEPLOY_JETSON.md](DEPLOY_JETSON.md) for deployment. The
+*Related: [DEPLOY.md](DEPLOY.md) for local development, [the CUDA move](journal/2026-08-12-mps-to-cuda.md)
+for moving to a CUDA machine, [DEPLOY.md](DEPLOY.md) for deployment. The
 architecture diagram and per-component parameter counts are in the
 [README](../README.md).*
+
+
+---
+
+## 9. Running it
+
+| Dataset | Used for | Download |
+|---|---|---|
+| ADE20K | Indoor terrain / traversability | <https://groups.csail.mit.edu/vision/datasets/ADE20K/> |
+| RUGD | Off-road terrain / traversability | <http://rugd.vision/> |
+| RELLIS-3D | Off-road terrain / traversability | <https://github.com/unmannedlab/RELLIS-3D> |
+| COCO 2017 | Object detection | <https://cocodataset.org/#download> |
+
+Expected layout:
+
+```text
+datasets/
+├── ADE20K/                                # produced by hydranet-prepare-ade20k
+│   ├── images/{train,val}/**.jpg
+│   └── annotations/{train,val}/**.png     # single channel, integers 0..150
+├── RUGD/
+│   ├── images/{train,val}/**.png
+│   └── annotations/{train,val}/**.png     # RGB palette
+└── coco/
+    ├── train2017/  val2017/
+    └── annotations/instances_{train,val}2017.json
+```
+
+RUGD and RELLIS ship no official train/val split — split them by sequence, or the same
+sequence leaks across both sides. The same goes for your own footage: split by **recording
+session**, because adjacent frames are near-identical and a random split will badly
+overstate performance.
+
+Just want to get something running? Trim `data.datasets` down to whatever you actually
+have — the heads are still built, they just go unsupervised (startup warns you which head
+nobody is supervising).
+
+### Three splits
+
+The rules are in [METHODOLOGY.md](METHODOLOGY.md) §2; the config is three keys:
+
+```yaml
+- name: ade20k
+  split_train: train
+  split_val: val
+  split_test: test        # optional, and deliberately not defaulted to val
+```
+
+```bash
+uv run hydranet-eval --config ... --checkpoint ... --split test
+```
+
+Passing `--split test` without a configured `split_test` fails loudly and tells you what to
+create; it never falls back to val silently.
+
+### Data versioning
+
+Datasets are not in git and there is no DVC. Instead, every training run writes a
+**fingerprint** of each split (file count, total bytes, digest of the path-and-size listing)
+into `runs/<experiment>/meta.json`, so any checkpoint can answer "which data was I trained
+on?". Re-export the annotations, add a few hundred site photos, or change a filter
+threshold, and the two runs' fingerprints differ.
+
+### The ADE20K indoor subset
+
+ADE20K's 20k images span 1055 scene categories, most of them outdoor. The command below
+filters on **annotation content** (enough floor, little sky and vegetation) to select the
+ground-level indoor viewpoint a robot actually sees:
+
+```bash
+uv run hydranet-prepare-ade20k \
+    --src datasets/ADEChallengeData2016 --dst datasets/ADE20K
+# training   -> train: kept 5998/20210 (29.7%)
+# validation -> val:   kept  614/2000  (30.7%)
+```
+
+The output is symlinks, so it costs no extra disk and re-running is cheap.
+
+## Training
+
+```bash
+uv run hydranet-train --config configs/hydranet_indoor.yaml
+
+# override any setting (dot-path)
+uv run hydranet-train --config configs/hydranet_indoor.yaml \
+    --set train.batch_size=8 model.neck.name=fpn 'data.input_size=[384,512]'
+
+# resume: the schedule continues from where it stopped, it does not replay
+uv run hydranet-train --config ... --resume runs/hydranet_indoor/last.pt
+```
+
+Training features: AMP mixed precision (`train.amp_dtype` accepts `bfloat16`), cosine +
+warmup, EMA (the decay ramps up, so short runs are safe too), a lower learning rate for the
+backbone, gradient accumulation, and best/last checkpoints.
+
+Typos in `--set` are not swallowed: the config is validated as a whole after the overrides
+are applied, and unknown keys, type mismatches, a `supervises` entry pointing at a
+non-existent head, or a `terrain_classes` count that disagrees with the head are all listed
+at once before anything aborts.
+
+### Out of VRAM? Accumulate gradients
+
+```bash
+--set train.batch_size=4 train.grad_accum_steps=4     # effective batch 16
+```
+
+The schedule, EMA and `global_step` all advance per optimizer step, so when you move to a
+different machine you only need to keep `batch_size × grad_accum_steps` constant and the
+learning rate carries over unchanged.
+
+### Which metric picks the model
+
+`train.primary_metric` names the single number that decides `best.pt`; the default is
+`traversability_mIoU`. Any key validation emits works, including per-class ones:
+
+```yaml
+primary_metric: IoU/traversability/00_blocked   # the class that actually strands a robot indoors
+```
+
+A misspelled metric name aborts and lists every available key — rather than quietly
+selecting the model on some other criterion for a whole run.
+
+### What each run leaves behind
+
+```text
+runs/<experiment>/
+├── meta.json          git commit, dirty flag, environment, dataset fingerprints, full config
+├── config.yaml        config snapshot after --set, ready to re-run directly
+├── uncommitted.patch  only when the working tree had uncommitted changes (a commit hash
+│                      alone cannot restore the code)
+├── metrics.jsonl      one line per validation, machine-readable
+├── train.log
+└── tb/
+```
+
+If a directory of that name already holds results, the new run writes to a timestamped
+sibling instead: it will not overwrite an existing `best.pt`, and it will not mix two runs'
+TensorBoard events together. To continue a run, use `--resume` (which lists, item by item,
+any setting that differs from the one stored in the checkpoint).
+
+These files exist precisely so `hydranet-report` can read them:
+
+```bash
+uv run hydranet-report runs/hydranet_indoor        # detail and curves for one run
+uv run hydranet-report runs/* --diff               # ranking across runs + config differences
+```
+
+```text
+run                          commit    epochs  best      @epoch  metric
+-----------------------------------------------------------------------
+indoor-b                     eaba6b8e  40      0.6412    37      traversability_mIoU
+indoor-a                     3c12224f* 40      0.5980    31      traversability_mIoU
+
+indoor-a -> indoor-b
+  train.lr: 0.0002 -> 0.0004
+```
+
+The `*` after a commit means that run's working tree was dirty.
+
+### Watching a run
+
+```bash
+uv run tensorboard --logdir runs/
+```
+
+Beyond loss curves, TensorBoard also receives:
+
+- **`val_pred/*` comparison images** — each validation writes an "input | prediction |
+  label" triptych. Grey is letterbox padding, black is the ignore region. A curve only tells
+  you the loss is going down; this is what shows you the model is calling an entire floor a wall.
+- **`IoU/<head>/<class>`** — per-class IoU. Indoors, the classes that matter most (glass,
+  stairs) occupy a tiny pixel fraction, and mIoU alone lets the large classes hide them.
+- **`task_weight/*`** — the `exp(-s)` learned by uncertainty weighting, which shows which
+  task is dominating the trunk's gradients. A head collapsing toward zero has effectively
+  stopped learning.
+
+## Evaluation and inference
+
+```bash
+uv run hydranet-eval --config ... --checkpoint runs/.../best.pt
+
+# report final numbers on the held-out test split, as JSON for cross-run comparison
+uv run hydranet-eval --config ... --checkpoint runs/.../best.pt \
+    --split test --json reports/best_test.json
+
+uv run hydranet-infer-image --config ... --checkpoint runs/.../best.pt \
+    --input photo.jpg --output out/
+
+uv run hydranet-infer-video --config ... --checkpoint runs/.../best.pt \
+    --input clip.mp4 --output clip_pred.mp4 --fps 10
+```
+
+`--layout side` (the default) writes traversability on the left and terrain on the right,
+both from the same forward pass:
+
+![traversability and terrain from one forward pass](../assets/hydranet_demo.gif)
+
+An office corridor on the 60-epoch multi-task checkpoint. Floor, wall and partition are
+solid because those are the classes ADE20K has in quantity; the same model scores
+`caution` 0.33 and `stairs` 0.32 on the test split, and returns a quarter of a ceiling as
+"go". Watch a clip before trusting a number — a curve cannot show you a model calling a
+ceiling a floor, and this is the cheapest way to find it.
+
+### The floor in metres
+
+```bash
+uv run hydranet-scene --config ... --checkpoint runs/.../best.pt \
+    --input clip.mp4 --output clip_bev.mp4
+
+# the scene as data rather than a picture: one JSON object per frame
+uv run hydranet-scene --config ... --checkpoint ... --input frame.jpg --json scene.json
+```
+
+Camera view on the left, the floor rebuilt in metres on the right, with each detection
+placed where its box meets the ground. It needs a camera pose and does not have one, so it
+takes `--camera-height` (1.5 m), `--pitch` (15° down) and `--vfov` (55°) and **prints them
+on every frame**: get any of them wrong and every distance is off by a smooth factor that
+looks entirely plausible. `--range` sets how far out to map.
+
+Those three numbers are assumptions for archived footage and a phone video. On a fixed
+camera, `scripts/fit_camera_from_people.py` recovers height and pitch by fitting detected
+people against a 1.70 m adult; pass the result with `--pose-note` so the caption stops
+claiming a guess. [GROUND_PROJECTION.md](GROUND_PROJECTION.md) is what the projection does
+and what survives the assumption.
+
+### Deploying
+
+Export, engine build and board bring-up are [DEPLOY.md](DEPLOY.md). The one thing to know
+from here: `hydranet-export-onnx --check-parity` is the acceptance gate, and it runs on CPU
+so any machine can produce the ONNX.

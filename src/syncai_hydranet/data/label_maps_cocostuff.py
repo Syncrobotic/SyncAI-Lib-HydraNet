@@ -10,7 +10,7 @@ no new imagery. It exists to buy volume for the classes ADE20K starves:
 It supplies **none** of ``floor_metal``, ``wet_slippery`` or ``threshold_ramp``, and no
 free-standing display podiums. Those were tested against the full ADE20K release on
 2026-08-13 and rejected; this download does not change the answer. See
-docs/RETAIL_SCOPE.md -- site annotation is still the only source.
+docs/RETAIL.md -- site annotation is still the only source.
 
 Three properties of the PNGs, all measured off the pixels rather than read off
 ``labels.txt``, because each one fails silently:

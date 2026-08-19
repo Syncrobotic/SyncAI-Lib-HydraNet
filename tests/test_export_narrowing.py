@@ -1,6 +1,6 @@
 """Narrowing the detection head at export must not rename anyone's boxes.
 
-RETAIL_SCOPE.md §4 has said "train on 80, narrow at export" since it was written, and the
+RETAIL.md §4 has said "train on 80, narrow at export" since it was written, and the
 reason is measured: on the AGX Orin post-processing was 16.33 ms of a 37.8 ms frame,
 nearly all of it the sigmoid over 80 classes at 6,820 positions. The narrowing itself is
 four lines. What needs testing is everything around it, because every failure mode here is

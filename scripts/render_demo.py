@@ -22,7 +22,7 @@ clearest statement of why that run exists.
 **Nothing here is validated on site.** Terrain is trained on ADE20K plus 180 SAM 3
 pre-labelled site frames, `person` on COCO alone, attributes on PA-100K, and the ground
 plane on one camera's tile-grid fit. The video shows what the system says, which is not
-the same as what is true, and every number behind it is in docs/RETAIL_SECURITY.md with
+the same as what is true, and every number behind it is in docs/RETAIL.md with
 its support.
 """
 

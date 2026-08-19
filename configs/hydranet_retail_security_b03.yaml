@@ -5,7 +5,7 @@
 # **This config exists to isolate the data.** Its sibling
 # `hydranet_retail_security_b03_hires.yaml` adds an input-resolution change on top, and
 # running only that one would confound two edits in a single number -- which is the
-# mistake ARCHITECTURE_DIRECTION.md section 4 spends a page on. Three seeds each, matched
+# mistake ARCHITECTURE.md section 4 spends a page on. Three seeds each, matched
 # to the parent's, so every comparison is paired.
 #
 # ---------------------------------------------------------------------------

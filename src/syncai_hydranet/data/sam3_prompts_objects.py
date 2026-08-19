@@ -17,7 +17,7 @@ it without touching a threshold.
 **`column` gets its own prompts and sits above `wall`.** sam3_prompts.py already carries
 ``column`` and ``pillar``, buried inside the ``wall`` concept's prompt list and switched
 off by default. They were there to fill structural holes next to the floor, and the
-comment notes RETAIL_SCOPE.md s5 found a *column* was exactly what the baseline painted
+comment notes RETAIL.md s5 found a *column* was exactly what the baseline painted
 ``caution`` on in 97.4% of frames. Same prompts, promoted to a class.
 
 The layer matters: ``column`` is on the thing layer and ``wall`` stays on the ground
@@ -238,7 +238,7 @@ CONCEPTS = (
     # --- off by default, for the reasons the retail table already established -------
     #
     # The floor is one static polygon per fixed camera, which beats a pre-label per
-    # frame; RETAIL_SCOPE.md s5 measured that. `wall` is adequately covered already.
+    # frame; RETAIL.md s5 measured that. `wall` is adequately covered already.
     # Both are on the ground layer so that fixtures, columns, products and people all
     # paint over them.
     #

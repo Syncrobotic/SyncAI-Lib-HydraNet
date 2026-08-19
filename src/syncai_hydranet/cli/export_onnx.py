@@ -5,7 +5,7 @@
 
 The forward graph holds only convolution, resize and exp: no NMS and no dynamic control
 flow, so trtexec fuses it in one piece. NMS stays in the host post-processing code (see
-docs/DEPLOY_JETSON.md).
+docs/DEPLOY.md).
 
 Two flags move work off the host, and both change the output contract rather than the
 model -- the weights are untouched and nothing is retrained:
@@ -79,7 +79,7 @@ class ExportWrapper(nn.Module):
         + CUDA graph              1.49  0.15     0       0.62   2.25  381-444
 
     **The host argmax was the largest single item in the frame, larger than the engine**,
-    and it was on nobody's lever list -- DEPLOY_JETSON.md §4 lists four ways to make the
+    and it was on nobody's lever list -- DEPLOY.md §4 lists four ways to make the
     engine smaller and the engine was 31% of the problem. The D2H transfer falls with it,
     from 9.18 MB of float logits to 0.33 MB of uint8 class ids.
 

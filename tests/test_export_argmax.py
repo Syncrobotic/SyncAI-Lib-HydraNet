@@ -2,7 +2,7 @@
 
 Measured on a GB10 at 512x640, single thread, real decode: the **host argmax was the
 largest single item in the frame** -- 2.53 ms of 6.70 ms, larger than the engine's 2.09 ms.
-DEPLOY_JETSON.md §4 lists four ways to make the engine smaller and the engine is 31% of the
+DEPLOY.md §4 lists four ways to make the engine smaller and the engine is 31% of the
 problem. Folding the argmax in measures 4.00 ms, a 40% frame reduction, from an export flag
 with no retraining and no weight changed.
 

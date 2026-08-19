@@ -204,7 +204,7 @@ its **weakest segmenter**: at that ratio `glass` falls from 0.5021 to 0.0692 on 
 same sweep's recommendation for the retail line is to stay at **0.1**, so the model that is
 on the robot sits at the opposite corner from the ratio this project otherwise defends, and
 anyone quoting v1's segmentation numbers should know which corner they come from.
-[ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md) carries the sweep, the run-to-column table
+[ARCHITECTURE.md](ARCHITECTURE.md) carries the sweep, the run-to-column table
 and the cross-checks.
 
 ## 4. Which version is on which robot

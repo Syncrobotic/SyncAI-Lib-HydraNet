@@ -89,7 +89,7 @@ def build_parser() -> argparse.ArgumentParser:
     # over all 48 cameras at two time slots: 21 of 96 frames sit at **exactly 0.00**
     # (monochrome by construction) and every colour frame is **>= 2.13**. The two
     # populations do not overlap and there is nothing between them, so the threshold
-    # belongs in that gap. ARCHITECTURE_DIRECTION.md rule 2 -- any threshold is relative
+    # belongs in that gap. ARCHITECTURE.md rule 2 -- any threshold is relative
     # to a measured baseline, never an absolute -- and this is the second time this
     # project has paid for ignoring it.
     ap.add_argument("--min-luma", type=float, default=40.0)

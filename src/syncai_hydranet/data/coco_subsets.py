@@ -182,7 +182,7 @@ def retail_box_label(label_id: int) -> str:
 # ---------------------------------------------------------------------------
 # Export-time narrowing.
 #
-# RETAIL_SCOPE.md §4 draws the distinction these lists exist for: **train on 80, narrow
+# RETAIL.md §4 draws the distinction these lists exist for: **train on 80, narrow
 # at export.** `data.datasets[].classes` narrows at training time, which is the opposite
 # trade -- it throws away COCO supervision the shared trunk gets for free, and buys the
 # robot nothing, because a head trained on 80 and a head trained on 8 cost the same to
@@ -191,7 +191,7 @@ def retail_box_label(label_id: int) -> str:
 #
 # So these are deployment decisions, applied to a checkpoint that already saw all 80.
 
-# The eight classes RETAIL_SCOPE.md §4 names as changing a shop robot's behaviour. This
+# The eight classes RETAIL.md §4 names as changing a shop robot's behaviour. This
 # is the *motion* list: what a planner has to react to.
 ROBOT_8 = [
     "person",

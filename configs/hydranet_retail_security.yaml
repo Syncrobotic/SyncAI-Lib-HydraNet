@@ -33,7 +33,7 @@
 #   * a minority source is now slow, not suppressed -- which is why the COCO ratio below
 #     can be set on throughput grounds rather than defensively;
 #   * `person` is still trained on COCO alone: web photography, eye level, uncompressed,
-#     against 24 overhead h.264 store cameras. RETAIL_SCOPE.md measured what that gap did
+#     against 24 overhead h.264 store cameras. RETAIL.md measured what that gap did
 #     to `column`, a class ADE20K *did* supply -- 0.40-0.51 on val, 0.00% of pixels on
 #     site. Person detection here is a bootstrap until site person boxes exist, and every
 #     number downstream of it (tracks, dwell, occupancy, every event in
@@ -53,7 +53,7 @@
 #   coco_person 65,744 imgs -> 2,054 batches x 0.05 = 102 det steps
 #
 # So COCO is 64% of all steps. That sounds high against the "keep COCO at 0.1" rule in
-# RETAIL_SCOPE.md until the same arithmetic is applied to the config that measured it:
+# RETAIL.md until the same arithmetic is applied to the config that measured it:
 # there, 0.1 of full COCO against ADE20K at 1.0 was already about two thirds of steps.
 # The rule was written in ratios and the ratio is not the share. `MultiTaskLoader.
 # detection_class_steps` prints the realised share at startup so this stops being an
@@ -61,7 +61,7 @@
 #
 # It is still the first thing to sweep, and the sweep costs three seeds or it reports
 # nothing: `detection_mAP/site_boxes` has a measured seed spread of 0.0173 on this
-# family (ARCHITECTURE_DIRECTION.md section 4), so a single-run comparison of two ratios
+# family (ARCHITECTURE.md section 4), so a single-run comparison of two ratios
 # decides nothing at all.
 #
 # ---------------------------------------------------------------------------
@@ -73,7 +73,7 @@
 #
 # Fall, fight, abandoned object, line crossing, occupancy: none of them is a model output
 # here. They are events over tracks and the ground plane, they live in
-# `analytics/events.py`, and `docs/RETAIL_SECURITY.md` argues why putting any of them in
+# `analytics/events.py`, and `docs/RETAIL.md` argues why putting any of them in
 # the exported graph would be the "within 5 m is not a class" mistake repeated.
 # =============================================================================
 

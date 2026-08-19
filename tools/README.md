@@ -8,7 +8,7 @@ downstream end. Filing these under `deploy/` would confuse an input with an outp
 
 A version-pinned CVAT deployment (`cvat.sh` + an override over upstream's compose) that
 produces the training labels for **both** products — the robot and retail-security train on
-the same annotation pipeline. Full operator guide: [`docs/ANNOTATION_SETUP.md`](../docs/ANNOTATION_SETUP.md).
+the same annotation pipeline. Full operator guide: [`docs/METHODOLOGY.md`](../docs/METHODOLOGY.md).
 Site footage is customer premises, which is why the stack binds to loopback and is reached
 through a tunnel, never a published port.
 

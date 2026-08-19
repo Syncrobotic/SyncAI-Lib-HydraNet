@@ -20,7 +20,7 @@
 # (+0.002) combined. This run asks whether the lever keeps pulling at 30 px.
 #
 # Cost is 1.56x the pixels of 512x896. On the deployment side that is close to free: the
-# Orin graph is launch-bound, not compute-bound -- DEPLOY_JETSON.md measures FP16 at
+# Orin graph is launch-bound, not compute-bound -- DEPLOY.md measures FP16 at
 # 2.31 ms with CUDA graphs alone taking 2.61 -> 1.95 ms across 416 kernel launches.
 seed: 42
 model:

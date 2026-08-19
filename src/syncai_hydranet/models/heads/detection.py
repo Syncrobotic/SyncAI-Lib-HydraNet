@@ -88,8 +88,8 @@ SCORE_THR_VIEW = 0.30
 # without the ~10/frame that 0.15 produces, and it is a stopgap for a calibration
 # problem rather than a fix: scores are not comparable between these cameras, so one
 # global number cannot be right for both. The fix is per-class thresholds fitted to
-# hand-labelled site boxes, and this project has none yet -- ANNOTATION_SETUP.md ranks
-# that work and RETAIL_SCOPE.md s6 explains why the test split has to come first.
+# hand-labelled site boxes, and this project has none yet -- METHODOLOGY.md ranks
+# that work and RETAIL.md s6 explains why the test split has to come first.
 #
 # Deliberately NOT the default for SCORE_THR_VIEW: 0.30 was chosen for the robot's
 # forward-facing camera, where a false box is a stop the robot did not need, and

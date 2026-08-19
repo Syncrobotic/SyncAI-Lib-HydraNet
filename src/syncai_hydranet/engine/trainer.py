@@ -326,8 +326,8 @@ class Trainer:
         # every epoch, because it is what selects best.pt.
         #
         # An interval, and deliberately not removal. mAP is not dead weight even when it
-        # selects nothing: RETAIL_SCOPE.md's COCO-dilution sweep is only readable because
-        # detection was measured alongside segmentation, and ARCHITECTURE_REVIEW.md's AMP
+        # selects nothing: RETAIL.md's COCO-dilution sweep is only readable because
+        # detection was measured alongside segmentation, and ARCHITECTURE.md's AMP
         # crash in the FCOS loss survived 166 tests and a full 60-epoch run because
         # nothing exercised that path. An unvalidated head is not a head with a stale
         # number; it is a head whose collapse is invisible. The interval keeps the

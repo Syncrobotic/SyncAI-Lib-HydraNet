@@ -8,7 +8,7 @@ bag has been left, stock has gone off a shelf.
 ---------------------------------------------------------------------------
 WHY THESE ARE NOT MODEL OUTPUTS, AND THE ARGUMENT IS ALREADY IN THIS REPOSITORY
 
-`RETAIL_SCOPE.md` section 2 refuses to make "walkable area within 5 m" a class, and the
+`RETAIL.md` section 2 refuses to make "walkable area within 5 m" a class, and the
 three reasons transfer to every event here without modification:
 
 1. **Annotators cannot label it consistently.** Where a restricted zone ends is a
@@ -32,7 +32,7 @@ No score. These are threshold crossings on measured quantities, so an event carr
 `value` it measured and the `threshold` it crossed, and a reader can see how marginal it
 was without a number that looks like a probability and is not one. A confidence here
 would be invented, and this project has a standing rule against numbers whose production
-nobody can name (`ARCHITECTURE_DIRECTION.md` section 1).
+nobody can name (`ARCHITECTURE.md` section 1).
 
 `basis` names the instrument instead: which measurement produced this event. That is the
 same rule applied to the event itself -- "before attributing a number to a mechanism,
@@ -44,7 +44,7 @@ WHAT IS NOT BUILT, AND IT IS NOT AN OVERSIGHT
 `fall` and `fight` are in `EVENT_TYPES` because the schema is a contract with whatever
 consumes these rows and adding a field later is more expensive than reserving one. They
 have no producer here. Both need a temporal model over crops, and
-`ARCHITECTURE_DIRECTION.md`'s "what not to build" names the precondition nobody has met:
+`ARCHITECTURE.md`'s "what not to build" names the precondition nobody has met:
 **confirm the behaviour occurs on these cameras before paying for the annotation.** MERL
 Shopping is a grocery aisle of closed shelving; these are open display tables. A
 plausible detector shipped unmeasured is the failure this project ranks worst.
@@ -55,7 +55,7 @@ refusal naming what is missing rather than an empty list that reads like "no eve
 ---------------------------------------------------------------------------
 THE PRECONDITION EVERY ROW HERE INHERITS
 
-All of it stands on person tracks, and `PERSON_ATTRIBUTES.md` measured what those are
+All of it stands on person tracks, and `RETAIL_DATA.md` measured what those are
 worth today: a 4.6-minute clip fragments into **1234 tracks**. Occupancy counts tracks,
 loitering measures how long one lasts, and an intrusion is one track crossing a line --
 so fragmentation does not add noise to these numbers, it biases them, and in a known
@@ -123,10 +123,10 @@ UNBUILT = {
     "fight": (
         "needs a temporal model over a whole track, and the blocker is association "
         "rather than data: track length is a median 9-16 frames at 5 fps "
-        "(PERSON_ATTRIBUTES.md), and a clip-level classifier never receives a whole "
+        "(RETAIL_DATA.md), and a clip-level classifier never receives a whole "
         "person. RWF-2000 is the plausible source and buying it first would train a "
         "model on an input this pipeline cannot deliver. Association metric, then "
-        "association, then this -- ARCHITECTURE_DIRECTION.md section 5. Nothing in "
+        "association, then this -- ARCHITECTURE.md section 5. Nothing in "
         "datasets/studioa_clips has been checked for a single instance either, and "
         "`fall_candidate` below is how that gets checked without paying for it first"
     ),
@@ -363,7 +363,7 @@ def occupancy_events(
 
     Counts **tracks**, which is the honest unit and not the wanted one. Two fragments of
     one shopper are two tracks, so this over-counts by exactly the fragmentation rate --
-    the same bias `PERSON_ATTRIBUTES.md` describes for demographics, arriving at a rule
+    the same bias `RETAIL_DATA.md` describes for demographics, arriving at a rule
     that raises an alarm. Until association is fixed, read a queue alarm as an upper
     bound.
     """
@@ -860,7 +860,7 @@ def fall_candidates(
 
     So its precision as an alarm is somewhere near useless and its recall as a *filter*
     is what makes it worth having. Run it over the site clips already on disk, look at
-    what it returns, and that answers the question ARCHITECTURE_DIRECTION.md insists is
+    what it returns, and that answers the question ARCHITECTURE.md insists is
     answered before any behaviour annotation is paid for: **do these events occur on
     these cameras at all.** A tier-1 proxy is the cheapest instrument that can ask.
 
@@ -924,7 +924,7 @@ def fall_candidates(
 # A clip-level action model wants 16-64 consecutive frames of one person. At 5 fps the
 # median track does not contain a whole person for long enough, so such a model would be
 # trained on an input this pipeline cannot deliver -- and the fix for that is association
-# (ARCHITECTURE_DIRECTION.md section 5), not a bigger action model.
+# (ARCHITECTURE.md section 5), not a bigger action model.
 #
 # **Pose is per-frame, so fragmentation shortens it instead of invalidating it.** Nine
 # frames of a track is nine poses, and a fall is a change of torso angle over one or two
@@ -934,7 +934,7 @@ def fall_candidates(
 # Two further things it gets for free: `person_keypoints_train2017.json` is already on
 # disk, so this direction needs no dataset purchase to start; and the pose model is a
 # second-stage crop model with its own small ONNX export, which is exactly the boundary
-# `stage.py` and ARCHITECTURE_DIRECTION.md section 2 describe. It is not a HydraNet head
+# `stage.py` and ARCHITECTURE.md section 2 describe. It is not a HydraNet head
 # and cannot be one -- a keypoint head needs the detection head's boxes, and the `Head`
 # protocol's `forward_into(out, feats, size)` has no way to say that.
 
@@ -1037,7 +1037,7 @@ def pose_posture_events(
     crouch and reports nothing, which is precisely the case that matters.
 
     Every threshold here is a default and none is measured. They are stated as arguments
-    for the reason RETAIL_SCOPE.md gives about the 5 m rule: a number that belongs to a
+    for the reason RETAIL.md gives about the 5 m rule: a number that belongs to a
     store belongs in a config, not in weights, and not in a constant either.
     """
     require_keypoints(tracks)
@@ -1149,7 +1149,7 @@ def reach_to_shelf_events(
 
     What it is not: a purchase, a pick-up, or an interaction with a specific product. It
     is a wrist over a shelf. MERL Shopping's "reach to shelf" is the nearest labelled
-    thing and ARCHITECTURE_DIRECTION.md's warning about it applies here too -- those are
+    thing and ARCHITECTURE.md's warning about it applies here too -- those are
     closed grocery shelves and these are open display tables, so do not assume the
     behaviour has the same shape before counting it here.
     """

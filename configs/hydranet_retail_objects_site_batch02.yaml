@@ -45,7 +45,7 @@
 # The balanced run had `split_val: test` because batch01 had no val split, so `best.pt` was
 # selected on the test cameras -- which makes its 0.4821 a test number that also chose the
 # checkpoint, and burns that split for that run. batch02 holds out three train cameras as
-# val for exactly this. R2 of docs/RETAIL_OBJECTS_SPLIT.md is what says the test cameras
+# val for exactly this. R2 of docs/RETAIL_DATA.md is what says the test cameras
 # may not participate in selection; keeping the leak "for comparability" would preserve
 # comparability with a number that should not have existed.
 #

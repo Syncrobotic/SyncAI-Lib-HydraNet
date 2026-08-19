@@ -19,7 +19,7 @@
 # **`product` is in every single mask.** So is `fixture`. `column`, which the whole
 # taxonomy exists to separate out of `wall`, is in 115 of 216 -- against ADE20K's 22 of
 # 285 val images at 0.66% of pixels, which is the evidence base
-# RETAIL_OBJECTS_SPLIT.md §R7 was written about.
+# RETAIL_DATA.md §R7 was written about.
 #
 # ---------------------------------------------------------------------------
 # What batch01 does NOT have, and why that makes it a second dataset rather than a
@@ -37,7 +37,7 @@
 # ---------------------------------------------------------------------------
 # Two honest limits, stated before the numbers arrive rather than after
 #
-# **1. batch01's `test` split cannot serve RETAIL_OBJECTS_SPLIT.md §R3.** Those masks are
+# **1. batch01's `test` split cannot serve RETAIL_DATA.md §R3.** Those masks are
 # SAM 3's opinion, and R3 exists because a test set drawn by the same tool that drew the
 # training set measures whether the model reproduced SAM 3, not whether it is right. So it
 # is wired in as **val** -- selection, never reporting -- and this run has **no valid site

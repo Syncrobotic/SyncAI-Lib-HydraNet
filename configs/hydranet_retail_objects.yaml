@@ -162,7 +162,7 @@ data:
 train:
   # batch 32 with lr 4.0e-4: this project's own scaling rule, lr = batch_size x 1.25e-5.
   #
-  # hydranet_retail.yaml stays at batch 8 because every number in RETAIL_SCOPE.md was
+  # hydranet_retail.yaml stays at batch 8 because every number in RETAIL.md was
   # measured there and a faster baseline that no longer compares to those tables is a
   # bad trade. That constraint does not apply to this config -- it is a new taxonomy
   # with no prior results to stay comparable with, so it starts at the measured

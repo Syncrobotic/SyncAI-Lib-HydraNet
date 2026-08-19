@@ -1,6 +1,6 @@
 """Retail people-flow analytics: tracking, dwell and ground-plane heatmaps.
 
-**Post-processing, deliberately.** docs/ARCHITECTURE_REVIEW.md rules tracking out of the
+**Post-processing, deliberately.** docs/ARCHITECTURE.md rules tracking out of the
 network -- "Cross-frame post-processing. Putting it in the graph would break the
 no-dynamic-control-flow property that makes TensorRT conversion work first time" -- and
 this package is what that verdict implies rather than a departure from it. Nothing here

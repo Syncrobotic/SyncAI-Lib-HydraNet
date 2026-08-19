@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check a site dataset against RETAIL_OBJECTS_SPLIT.md's rules, from the record.
+"""Check a site dataset against RETAIL_DATA.md's rules, from the record.
 
     python3 scripts/site_split_report.py --dataset datasets/retail_objects_batch01
 
@@ -178,7 +178,7 @@ def main(argv: list[str] | None = None) -> int:
     print("\n--- R3: test masks must be human-corrected")
     print("  NOT CHECKABLE HERE. Nothing in a mask file records who drew it. If these came "
           "from SAM 3 and were not corrected, every number above measures agreement with "
-          "SAM 3 rather than correctness -- see RETAIL_OBJECTS_SPLIT.md R3.")  # fmt: skip
+          "SAM 3 rather than correctness -- see RETAIL_DATA.md R3.")  # fmt: skip
 
     if args.write_cameras:
         out = root / "cameras.json"

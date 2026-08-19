@@ -9,7 +9,7 @@
 # ---------------------------------------------------------------------------
 # Why this run exists
 #
-# DEPLOY_JETSON.md §4 has listed `num_convs: 2` as latency lever 4 since it was written,
+# DEPLOY.md §4 has listed `num_convs: 2` as latency lever 4 since it was written,
 # with nothing measured behind it. Two things arrived on 2026-08-17 that make it worth
 # settling rather than recommending.
 #
@@ -42,7 +42,7 @@
 # trunk, so a change in terrain mIoU here means the towers were feeding the trunk
 # gradients rather than that the towers matter for segmentation.
 #
-# **Cannot:** anything about the store. RETAIL_OBJECTS_SPLIT.md opens with this run's
+# **Cannot:** anything about the store. RETAIL_DATA.md opens with this run's
 # parent scoring terrain_mIoU 0.7668 while predicting `column` 0.00% and `product` 0.00%
 # on the footage it is meant to serve. Both numbers are true. Do not read an ADE20K
 # delta here as evidence about a shop, in either direction. The target-domain question
@@ -63,7 +63,7 @@
 # `fixed_weights` check, `4fb05ff` export-time class narrowing. None changes training
 # arithmetic. That is an argument, not a measurement, so **re-score both checkpoints in
 # one pass under one code state before believing any delta** -- the same discipline
-# RETAIL_SCOPE.md §5 applied to the three self-training checkpoints, which is the only
+# RETAIL.md §5 applied to the three self-training checkpoints, which is the only
 # reason its numbers were trustworthy.
 # =============================================================================
 _base_: hydranet_retail_objects.yaml

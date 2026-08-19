@@ -1,7 +1,7 @@
 """What to ask SAM 3 for, and what its answer is allowed to become.
 
 Self-training cannot invent a class. ``configs/hydranet_retail_cctv.yaml`` says so in
-prose and [docs/RETAIL_SCOPE.md](../../../docs/RETAIL_SCOPE.md) measures it: the site
+prose and [docs/RETAIL.md](../../../docs/RETAIL.md) measures it: the site
 pseudo-labels moved ``display_fixture`` by **-0.0096**, because the free-standing podiums
 came back unlabelled and the model was then taught that fixture-shaped things in a shop
 are not fixtures. The label source was the model itself, so the loop could only harden.
@@ -11,7 +11,7 @@ knowledge is external**. It has never seen this model's mistakes, so a podium it
 is new information rather than an echo. That is the whole argument for this module, and
 it is also its limit -- SAM 3 is a different model with different errors, not an oracle.
 Everything here is a *pre-label*, and the contract in
-[docs/ANNOTATION_SETUP.md](../../../docs/ANNOTATION_SETUP.md) still gates it.
+[docs/METHODOLOGY.md](../../../docs/METHODOLOGY.md) still gates it.
 
 Ids are imported, never typed. ``RETAIL_TERRAIN`` is the one place the numbering lives,
 and a table of hand-written ints here would be a second one -- the exact drift the
@@ -36,7 +36,7 @@ Neither is precision. Both say a prompt *fires*, not that what it fired on was r
 Precision needs hand-labelled frames, and at time of writing this domain has **none** --
 every mask in ``datasets/retail_cctv_pilot*`` is SAM 3 output with no human pass. That
 makes it usable as a pre-label and unusable as a test split: scoring a model against it
-measures agreement with SAM 3. See RETAIL_SCOPE.md s6 for why the test split has to be
+measures agreement with SAM 3. See RETAIL.md s6 for why the test split has to be
 built by hand and built first.
 """
 
@@ -160,7 +160,7 @@ CONCEPTS = (
             "product display rack",
         ),
         LAYER_THING,
-        note="the only class no public dataset supplies; RETAIL_SCOPE.md s5",
+        note="the only class no public dataset supplies; RETAIL.md s5",
     ),
     # --- collides with the above, deliberately and unresolvably ------------------
     #
@@ -174,7 +174,7 @@ CONCEPTS = (
     # question for the annotator, and guessing it in either direction is how the
     # -0.0096 happened the first time.
     # `trolley` and `trash can` come from sweep B: a shopping trolley is the most common
-    # dynamic obstacle in a shop and COCO has no class for it (RETAIL_SCOPE.md s8 raises
+    # dynamic obstacle in a shop and COCO has no class for it (RETAIL.md s8 raises
     # this as an open question). Here it is at least segmented as an obstacle.
     Concept(
         "obstacle_furniture",
@@ -223,7 +223,7 @@ CONCEPTS = (
     # failure mode is a robot walking through a pane it read as an open aisle. A
     # confident wrong pre-label here is worse than a blank, because a blank gets drawn.
     #
-    # ANNOTATION_SETUP.md already ranks glass the highest-priority annotation target.
+    # METHODOLOGY.md already ranks glass the highest-priority annotation target.
     # It stays a human class. --include glass only to reproduce the finding.
     Concept(
         "glass",
@@ -236,7 +236,7 @@ CONCEPTS = (
     # --- present in the footage, but not worth a model run ----------------------
     #
     # Off by default, and not because SAM 3 fails on them -- "tiled floor" hits 4/8 at
-    # 0.706 over 28% of the frame, which is fine. It is that RETAIL_SCOPE.md s5 already
+    # 0.706 over 28% of the frame, which is fine. It is that RETAIL.md s5 already
     # measured the cheaper answer: on a camera that never moves the floor is a single
     # static region, so one polygon drawn once is correct for all 1,830 frames that
     # camera will ever produce. Per camera, not per frame.
@@ -252,7 +252,7 @@ CONCEPTS = (
     Concept("floor_soft", ("carpet", "mat", "floor mat"), LAYER_GROUND, default_on=False),
     # `ceiling`, `column` and `pillar` are sweep B's, and they earn their place for a
     # reason that is not their own accuracy: they fill the structural holes that would
-    # otherwise sit next to the floor as ignore, and RETAIL_SCOPE.md s5 documents a
+    # otherwise sit next to the floor as ignore, and RETAIL.md s5 documents a
     # *column* as the exact thing the baseline painted `caution` on in 97.4% of frames.
     # All four are `blocked`, so mislabelling one as another costs nothing to the robot.
     Concept(
@@ -294,7 +294,7 @@ CONCEPTS = (
     #
     # wet_slippery and floor_metal are a different problem entirely. They are
     # *materials* -- a wet floor is the same object as a dry floor -- and a promptable
-    # concept model has no handle on them. ANNOTATION_SETUP.md ranks wet_slippery second
+    # concept model has no handle on them. METHODOLOGY.md ranks wet_slippery second
     # by priority and calls all three annotate-only; nothing here changes that. Draw
     # them by hand, and film a mopped floor first, because zero frames contain one.
     Concept(

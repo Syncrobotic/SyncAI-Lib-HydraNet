@@ -2,8 +2,8 @@
 
 The server-side deployment surface for **fixed store CCTV**. "Retail" and "security" are
 **not two products** — they are two questions the same camera answers, off one model, one
-export, one latency budget (see [`docs/RETAIL_SECURITY.md`](../../docs/RETAIL_SECURITY.md)
-and [`docs/ARCHITECTURE_DIRECTION.md`](../../docs/ARCHITECTURE_DIRECTION.md)). Retail asks
+export, one latency budget (see [`docs/RETAIL.md`](../../docs/RETAIL.md)
+and [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md)). Retail asks
 *what merchandise, where do people go, how long do they stay*; security asks *who entered
 where, how many, how long, what did they do*.
 

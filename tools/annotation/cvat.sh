@@ -152,7 +152,7 @@ cmd_backup() {
     gcloud storage cp -r "$dest" "$GCS_PREFIX/$stamp/" \
       || echo "upload failed; the local copy in $dest is still good" >&2
   fi
-  echo "restore procedure: docs/ANNOTATION_SETUP.md"
+  echo "restore procedure: docs/METHODOLOGY.md"
 }
 
 case "${1:-}" in

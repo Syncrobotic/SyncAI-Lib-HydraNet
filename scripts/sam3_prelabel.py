@@ -10,7 +10,7 @@ two answer different questions and are best run over the same frames:
     annotation_batch.py   what the model already half-knows -- correct its mask
     sam3_prelabel.py      what the model has never seen    -- SAM 3 proposes one
 
-The distinction matters more than it looks. `docs/RETAIL_SCOPE.md` measured self-training
+The distinction matters more than it looks. `docs/RETAIL.md` measured self-training
 on this exact footage: pseudo-labels moved `display_fixture` by **-0.0096**, because the
 podiums came back unlabelled and the model then learned that shop fixtures are not
 fixtures. Labels drawn from the model can only reinforce what it already believes. SAM 3

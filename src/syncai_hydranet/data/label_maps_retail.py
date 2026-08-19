@@ -29,7 +29,7 @@ Two things a store needs that are deliberately **not** classes here:
   trains as noise. Derive it in bird's-eye view from the fixture footprint instead,
   where "within 1.5 m of a fixture" is a number rather than an opinion.
 
-See [docs/RETAIL_SCOPE.md](../../../docs/RETAIL_SCOPE.md).
+See [docs/RETAIL.md](../../../docs/RETAIL.md).
 """
 
 from __future__ import annotations

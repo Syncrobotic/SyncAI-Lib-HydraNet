@@ -1,5 +1,5 @@
 # =============================================================================
-# Phase 1 of docs/ARCHITECTURE_DIRECTION.md: split the taxonomy by instrument.
+# Phase 1 of docs/ARCHITECTURE.md: split the taxonomy by instrument.
 #
 # `hydranet_retail_products.yaml` with `product` taken out of the segmentation head and
 # left to the detection head, which is the instrument that can resolve it. That config's
@@ -43,7 +43,7 @@
 # Three seed replicates of the parent config scored `detection_mAP` 0.0655 / 0.0821 /
 # 0.0648 -- a spread of **0.0173** on a config where nothing changed but the seed. A
 # single run of this config against a single run of the parent decides nothing. Three
-# seeds or no claim; see ARCHITECTURE_DIRECTION.md section 4.
+# seeds or no claim; see ARCHITECTURE.md section 4.
 #
 # What this config *can* answer on one run is narrower and still worth having: whether
 # `fixture` improves once it stops competing with `product` for the same pixels. That is

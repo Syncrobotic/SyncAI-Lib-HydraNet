@@ -17,7 +17,7 @@ that means and both are recorded in the manifest.
 its value is that nothing selects on it. Training keeps choosing checkpoints on ADE20K
 val exactly as before, so runs stay comparable with everything measured to date, and
 ``val2017`` becomes a test split that no part of training reads. This follows
-docs/RETAIL_SCOPE.md section 6: the split that answers the question is never the split
+docs/RETAIL.md section 6: the split that answers the question is never the split
 that picked the answer.
 
 The tool refuses to write into a non-empty split rather than merging into it. Re-running

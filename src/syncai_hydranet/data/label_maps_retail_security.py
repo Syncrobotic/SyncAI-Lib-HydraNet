@@ -37,7 +37,7 @@ Two answers, and this file ships the cheap one:
    no gradient at all. It costs nothing and it is not a substitute for (2).
 2. **Annotate person boxes on the site frames.** Masking means `person` is trained on
    COCO alone: web photography, eye level, uncompressed. The 24 store cameras are
-   overhead, down-pitched and h.264, and `RETAIL_SCOPE.md` measured what that gap does to
+   overhead, down-pitched and h.264, and `RETAIL.md` measured what that gap does to
    a class ADE20K *did* supply. Until site person boxes exist, person detection on site
    footage is a bootstrap and every number downstream of it -- tracks, dwell, occupancy,
    every event in `analytics/events.py` -- inherits that.

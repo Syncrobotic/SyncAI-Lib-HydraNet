@@ -62,7 +62,7 @@ about that. Only the position of the boundary comes from the mask.
 And the floor itself is not solved: over 610 frames of this fixed camera the model returns
 `go` consistently for only **12.7%** of the frame, while **16.7%** flickers between walkable
 and blocked — concentrated on the brighter, more specular near-field tiles, which is the
-polished-floor failure [docs/RETAIL_SCOPE.md](docs/RETAIL_SCOPE.md) predicts. No public
+polished-floor failure [docs/RETAIL.md](docs/RETAIL.md) predicts. No public
 dataset fixes that one; a fixed camera makes it one annotated polygon per view.
 
 
@@ -178,25 +178,26 @@ uv run hydranet-eval  --config configs/hydranet_indoor.yaml \
 
 ## Where to look
 
+Nine documents, down from seventeen — merged 2026-08-19 because the boundaries between them
+had stopped matching the work.
+
 | If you are | Read |
 |---|---|
-| running it | [docs/USAGE.md](docs/USAGE.md) — datasets, training flags, what a run leaves behind |
-| new to multi-head training | [docs/TRAINING_GUIDE.md](docs/TRAINING_GUIDE.md) — why it is shaped this way, and which measurements lie |
-| picking it up as a team | [docs/METHODOLOGY.md](docs/METHODOLOGY.md) — dividing the work, what data to collect, the four levels of evaluation |
-| annotating | [docs/ANNOTATION_SETUP.md](docs/ANNOTATION_SETUP.md) — the CVAT stack and the labelling contract |
-| changing the architecture | [docs/ARCHITECTURE_REVIEW.md](docs/ARCHITECTURE_REVIEW.md) — measured answers, including two that say *no* |
-| deploying | [docs/DEPLOY_JETSON.md](docs/DEPLOY_JETSON.md), then [docs/ORIN_BRINGUP.md](docs/ORIN_BRINGUP.md) for a board from scratch |
+| working the **main line** | [docs/RETAIL.md](docs/RETAIL.md) — the output contract, the taxonomies, behaviour split by the instrument that can resolve it, and what stays out of the weights |
+| working on its **data** | [docs/RETAIL_DATA.md](docs/RETAIL_DATA.md) — the split rules, the camera roles, the teacher models, and why every site number is an *agreement* rather than an accuracy |
+| running or learning it | [docs/TRAINING_GUIDE.md](docs/TRAINING_GUIDE.md) — why it is shaped this way, which measurements lie, and (§9) how to actually run it |
+| picking it up as a team | [docs/METHODOLOGY.md](docs/METHODOLOGY.md) — dividing the work, what data to collect, how labels get made, the four levels of evaluation |
+| changing the architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — Part I the measured verdicts (two since overturned, marked in place), Part II where the CCTV line goes |
+| deploying | [docs/DEPLOY.md](docs/DEPLOY.md) — the export contract, board bring-up from scratch, and local development on a Mac |
 | shipping a version | [docs/RELEASE.md](docs/RELEASE.md) — `dev → stage → main`, and separately how a *model* gets a version |
-| scoping a retail robot | [docs/RETAIL_SCOPE.md](docs/RETAIL_SCOPE.md) — what to build and what to keep out of the network |
-| retail + security on one camera | [docs/RETAIL_SECURITY.md](docs/RETAIL_SECURITY.md) — the three output layers, the shared detection vocabulary, and which behaviour questions have an instrument |
-| turning a mask into metres | [docs/GROUND_PROJECTION.md](docs/GROUND_PROJECTION.md) — the projection above, and why the camera pose is fitted per frame |
-| on a Mac | [docs/TRAIN_MACOS.md](docs/TRAIN_MACOS.md) |
+| turning a mask into metres | [docs/GROUND_PROJECTION.md](docs/GROUND_PROJECTION.md) |
+| on the robot's research line | [docs/RESEARCH_OCCUPANCY.md](docs/RESEARCH_OCCUPANCY.md) — the occupancy north star and the one prerequisite that decides it |
 
-`docs/journal/` holds dated notes from particular days: session handoffs, a hardware move.
-They are records, not documentation — accurate about the day they describe and not
-maintained afterwards. The two newest say what is in flight on each product line:
-[2026-08-18, retail + security](docs/journal/2026-08-18-retail-security-handoff.md) and
-[2026-08-18, the Lite3 robot](docs/journal/2026-08-18-lite3-robot-bringup-handoff.md).
+`docs/journal/` holds dated notes from particular days. They are records, not documentation
+— accurate about the day they describe and not maintained afterwards, so their links to the
+pre-merge filenames are left as they were written. Each merged document names its sources in
+its own header, which is how to find where a journal's citation went. The newest is
+[2026-08-19](docs/journal/2026-08-19-security-retail-teachers-and-methodology.md).
 
 ## Commands
 
@@ -239,7 +240,7 @@ Both rename the bindings they change (`terrain_argmax`, `det_cls8_p3`), so a run
 written for the old contract fails to find its binding rather than misreading it, and
 `--detection-classes` writes a `<output>.classes.json` sidecar because a TensorRT engine
 keeps binding names and nothing else. Full tables and the correctness checks are in
-[DEPLOY_JETSON.md](docs/DEPLOY_JETSON.md).
+[DEPLOY.md](docs/DEPLOY.md).
 
 ## Deployment configs
 
@@ -255,7 +256,7 @@ COCO for the detection head, unchanged.
 
 `configs/` holds more, each narrower than a deployment: `hydranet_retail_objects.yaml` (the
 second retail taxonomy — objects rather than traversability, argued in
-[RETAIL_OBJECTS.md](docs/RETAIL_OBJECTS.md)), `hydranet_retail_cctv.yaml` (the fixed-camera
+[RETAIL.md](docs/RETAIL.md)), `hydranet_retail_cctv.yaml` (the fixed-camera
 fine-tune at 512×896), `hydranet_retail_cocostuff.yaml` and
 `hydranet_retail_objects_nc2.yaml` (one-variable experiments, each naming in the file the
 control it must be read against), and `eval_indoor25.yaml`, which is an evaluation rather

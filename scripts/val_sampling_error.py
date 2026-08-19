@@ -3,7 +3,7 @@
 
     python3 scripts/val_sampling_error.py runs/hydranet_retail_security_b03_cw
 
-`ARCHITECTURE_DIRECTION.md` section 4 rule 4 records that three seeds of the same config
+`ARCHITECTURE.md` section 4 rule 4 records that three seeds of the same config
 land 0.0196 apart in `terrain_mIoU/site_seg`, and that pairing does not shrink it. That
 number is measured with **every seed scored on the same 48 images**, so it is model-side
 variance by construction and a larger val set cannot touch it -- which is the argument
