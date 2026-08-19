@@ -495,6 +495,8 @@ selecting the model on some other criterion for a whole run.
 
 ```text
 runs/<experiment>/
+├── best.pt            the epoch that scored highest on train.primary_metric
+├── last.pt            the most recent epoch; this is what --resume reads
 ├── meta.json          git commit, dirty flag, environment, dataset fingerprints, full config
 ├── config.yaml        config snapshot after --set, ready to re-run directly
 ├── uncommitted.patch  only when the working tree had uncommitted changes (a commit hash
@@ -503,6 +505,18 @@ runs/<experiment>/
 ├── train.log
 └── tb/
 ```
+
+Both checkpoints are written to a hidden sibling and renamed into place, so a run that
+is killed inside a 128 MB write still has the previous epoch's copy. Before that change,
+`last.pt` was overwritten in place every epoch: a preemption landing in the middle of one
+left a truncated file where the run's only resume point had been, and `load_checkpoint`
+would then correctly refuse it — by which point a multi-day run had nowhere to restart
+from. A stray `.last.pt.tmp` in a run directory is the remains of exactly that, and is
+safe to delete.
+
+The rename protects against *this process* dying, which is what preemption is. It is not
+a durability barrier against the machine losing power, which would need an `fsync` of
+128 MB every epoch; see `utils/checkpoint.save_checkpoint` for that trade.
 
 If a directory of that name already holds results, the new run writes to a timestamped
 sibling instead: it will not overwrite an existing `best.pt`, and it will not mix two runs'

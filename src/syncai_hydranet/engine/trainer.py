@@ -27,7 +27,7 @@ from ..data.fingerprint import fingerprint_dataset
 from ..data.multitask import MultiTaskLoader
 from ..models.heads.segmentation import SemanticFPNHead
 from ..models.hydranet import build_model
-from ..utils.checkpoint import CKPT_FORMAT, load_checkpoint
+from ..utils.checkpoint import CKPT_FORMAT, load_checkpoint, save_checkpoint
 from ..utils.device import (
     pick_device,
     supports_amp,
@@ -641,7 +641,10 @@ class Trainer:
         }
 
     def save(self, name: str, epoch: int):
-        torch.save(self.state_dict(epoch), self.out_dir / name)
+        # Through a temporary file and a rename. `last.pt` is overwritten every epoch,
+        # and a preemption landing inside that write used to leave a truncated file
+        # where the only resume point had been. See utils.checkpoint.save_checkpoint.
+        save_checkpoint(self.state_dict(epoch), self.out_dir / name)
 
     def load(self, path: str, resume: bool = False):
         ckpt = load_checkpoint(path)

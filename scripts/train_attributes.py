@@ -41,6 +41,7 @@ for candidate in (HERE.parent / "src", HERE / "src"):
 
 from syncai_hydranet.data.attributes import ATTRIBUTES, PA100K, SUPPORT  # noqa: E402
 from syncai_hydranet.models.crop_encoder import AttributeLoss, CropEncoder  # noqa: E402
+from syncai_hydranet.utils.checkpoint import save_checkpoint  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
 from syncai_hydranet.utils.seeding import seed_everything  # noqa: E402
 
@@ -137,7 +138,9 @@ def main(argv: list[str] | None = None) -> int:
         }
         history.append(row)
         (out_root / "metrics.json").write_text(json.dumps(history, indent=2))
-        torch.save(
+        # Rename rather than overwrite: an interrupted write to `last.pt` would leave a
+        # truncated file where the run's only resume point was.
+        save_checkpoint(
             {"model": model.state_dict(), "attributes": ATTRIBUTES}, out_root / "last.pt"
         )
         ask = {k: metrics[k] for k in ("Female", "AgeLess18", "AgeOver60")}

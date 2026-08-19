@@ -7,6 +7,7 @@ pytest tests/test_checkpoint.py -v
 """
 
 import logging
+from pathlib import Path
 
 import pytest
 import torch
@@ -14,7 +15,7 @@ import torch.nn as nn
 
 from syncai_hydranet.engine.optim import WarmupCosine
 from syncai_hydranet.engine.trainer import CKPT_FORMAT, Trainer
-from syncai_hydranet.utils.checkpoint import load_checkpoint
+from syncai_hydranet.utils.checkpoint import load_checkpoint, save_checkpoint
 
 WARMUP, TOTAL = 10, 100
 
@@ -223,3 +224,55 @@ def test_best_metric_survives_so_best_pt_is_not_overwritten(tmp_path):
     fresh.load_train_state(load_checkpoint(path))
     assert fresh.best_metric == 0.61
     assert fresh.best_metric > 0.55  # a worse epoch must not win
+
+
+# ------------------------------------------------- a write that dies mid-flight
+
+
+def test_a_saved_checkpoint_reads_back(tmp_path):
+    path = save_checkpoint({"model": {"w": torch.ones(3)}}, tmp_path / "last.pt")
+    assert path == tmp_path / "last.pt"
+    assert torch.equal(load_checkpoint(path)["model"]["w"], torch.ones(3))
+
+
+def test_a_crash_mid_write_leaves_the_previous_checkpoint_intact(tmp_path, monkeypatch):
+    """The whole point. `last.pt` is overwritten every epoch and runs here get preempted.
+
+    Writing in place meant a SIGKILL inside `torch.save` left a truncated file where the
+    only resume point had been -- the previous epoch's copy was already gone, because it
+    was the same path.
+    """
+    path = tmp_path / "last.pt"
+    save_checkpoint({"epoch": 1, "w": torch.ones(3)}, path)
+    good = path.read_bytes()
+
+    def _die(*_args, **_kwargs):
+        raise KeyboardInterrupt("preempted mid-write")
+
+    monkeypatch.setattr(torch, "save", _die)
+    with pytest.raises(KeyboardInterrupt):
+        save_checkpoint({"epoch": 2, "w": torch.zeros(3)}, path)
+
+    assert path.read_bytes() == good, "the previous epoch's checkpoint was destroyed"
+    assert load_checkpoint(path)["epoch"] == 1
+
+
+def test_the_temporary_file_is_hidden_and_is_not_a_pt(tmp_path, monkeypatch):
+    """`resolve_out_dir` decides a directory is occupied by globbing `*.pt`.
+
+    A temporary called `last.pt.tmp` would not match that glob either, but it would show
+    up in every listing of a run's checkpoints. Hidden and suffixed keeps it out of both.
+    """
+    seen = []
+    real_save = torch.save
+
+    def _spy(obj, f, *a, **k):
+        seen.append(Path(f).name)
+        return real_save(obj, f, *a, **k)
+
+    monkeypatch.setattr(torch, "save", _spy)
+    save_checkpoint({"epoch": 1}, tmp_path / "best.pt")
+
+    assert seen == [".best.pt.tmp"]
+    assert not list(tmp_path.glob("*.tmp")), "the temporary outlived the rename"
+    assert [p.name for p in tmp_path.glob("*.pt")] == ["best.pt"]

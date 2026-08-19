@@ -1,4 +1,4 @@
-"""Checkpoint loading.
+"""Reading and writing checkpoints.
 
 ``torch.load`` defaults to a full pickle load, which executes arbitrary code from the
 file. Checkpoints get shared between machines and downloaded from release pages, so
@@ -8,10 +8,44 @@ every load in this package goes through :func:`load_checkpoint` instead.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import torch
 
 CKPT_FORMAT = 2  # 1 = weights + optimizer only; 2 = full trainer state
+
+
+def save_checkpoint(obj: Any, path: str | Path) -> Path:
+    """Write a checkpoint through a temporary file, so a crash cannot destroy the old one.
+
+    ``torch.save`` straight to the destination is not atomic, and ``last.pt`` is
+    overwritten every epoch. A 128 MB write interrupted halfway leaves a truncated file
+    where the only resume point used to be -- and the previous epoch's copy is already
+    gone, because it was the same path. `load_checkpoint` then refuses it correctly, by
+    which point a multi-day run has nowhere to restart from.
+
+    This is not a hypothetical on this box. `Trainer.state_dict` carries
+    ``epochs_since_best`` specifically because "runs on this box get preempted", and a
+    preemption is a SIGKILL that can land in the middle of a write as easily as anywhere
+    else.
+
+    Writing to a sibling and renaming makes the swap atomic: ``Path.replace`` is
+    ``rename(2)``, which either happened or did not, and the loser is the temporary
+    file. The temporary name is hidden and does not end in ``.pt``, which keeps it out
+    of both ``resolve_out_dir``'s ``*.pt`` occupancy glob and any tooling that lists a
+    run's checkpoints.
+
+    **What this does not cover.** A rename is atomic with respect to *this process
+    dying*; it is not a durability barrier against the *machine* dying, because the
+    temporary file's bytes may still be in the page cache. That would need an ``fsync``
+    of the file and of the directory, at the cost of flushing 128 MB to disk every epoch.
+    The failure this box actually sees is preemption, which the page cache survives.
+    """
+    path = Path(path)
+    tmp = path.with_name(f".{path.name}.tmp")
+    torch.save(obj, tmp)
+    tmp.replace(path)
+    return path
 
 
 def load_checkpoint(path: str | Path, map_location: str = "cpu") -> dict:
