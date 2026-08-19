@@ -27,7 +27,7 @@
 # would put the baseline in two places, and the copy nobody edits is the one that
 # silently stops meaning anything.
 #
-# **Two baselines, not one sum.** src/ is what ships to the robot and scripts/ is
+# **Two baselines, not one sum.** src/ is what ships and scripts/ is
 # dev-side, and a single number would let src/ debt hide behind a scripts/ improvement --
 # the total can fall while the thing that ships gets worse. They ratchet independently.
 #

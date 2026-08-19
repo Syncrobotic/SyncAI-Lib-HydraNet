@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "syncai-hydranet"
 # Single source of truth: src/syncai_hydranet/__init__.py
 dynamic = ["version"]
-description = "Multi-head perception network for quadruped robots: traversability segmentation, terrain classification and object detection in a single forward pass."
+description = "Multi-head perception network for fixed store CCTV: terrain segmentation, traversability and object detection in a single forward pass."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
@@ -24,7 +24,9 @@ keywords = [
     "object-detection",
     "traversability",
     "terrain-classification",
-    "quadruped",
+    "cctv",
+    "retail-analytics",
+    "video-surveillance",
     "hydranet",
     "bifpn",
     "fcos",
@@ -32,7 +34,6 @@ keywords = [
     "onnx",
     "tensorrt",
     "jetson",
-    "autonomous-navigation",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -67,8 +68,8 @@ dependencies = [
 # 3.10, which is also half the CI matrix. Raise the cap when the floor moves to 3.11.
 export = ["onnx>=1.15", "onnxsim>=0.4", "onnxruntime>=1.17,<1.23"]
 # SAM 3 pre-labelling (scripts/sam3_prelabel.py). An annotation-time tool, never a
-# runtime dependency: nothing under src/ imports transformers, and the robot must not
-# carry a 6.5 GB checkpoint it never runs. `facebook/sam3` is a gated repo, so this
+# runtime dependency: nothing under src/ imports transformers, and an inference box must
+# not carry a 6.5 GB checkpoint it never runs. `facebook/sam3` is a gated repo, so this
 # installs the code and leaves the weights to `hf auth login`.
 annotate = ["transformers>=5.0"]
 

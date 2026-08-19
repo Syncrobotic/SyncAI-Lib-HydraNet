@@ -1,9 +1,9 @@
-"""SyncAI-Lib-HydraNet: multi-head perception network for quadruped robots.
+"""SyncAI-Lib-HydraNet: multi-head perception network for fixed store CCTV.
 
 A single backbone and BiFPN neck feed three lightweight heads that all run in one
 forward pass:
 
-1. Traversability segmentation: can the robot step here?
+1. Traversability segmentation: is this floor free space?
 2. Terrain segmentation: what is the surface made of?
 3. Object detection: FCOS, anchor-free.
 

@@ -22,7 +22,8 @@ data or measurement.
 
 # Part I — measured verdicts
 
-> **Written for the quadruped, which is now the secondary line.** The verdicts stand where
+> **Written for the quadruped, which was removed from this repository on 2026-08-19.**
+> Kept because the verdicts outlived the platform. They stand where
 > they are about the architecture rather than the platform — section 1's resolution ceiling
 > and section 2's head redundancy are properties of the labels and the taxonomy, and both
 > apply to the CCTV line unchanged. Two verdicts were overturned and say so in place. Read
