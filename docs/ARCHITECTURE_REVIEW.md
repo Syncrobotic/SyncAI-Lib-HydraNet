@@ -28,6 +28,23 @@ score, before any question of learning.
 on the 329-image test split. The ceiling is a property of the label geometry rather than of
 which split it was measured on, so the two are comparable.
 
+> **Which checkpoint "shipped" means, re-checked 2026-08-19.** When this was written it was
+> `runs/hydranet_indoor/best.pt` — epoch 27, **segmentation only, no detection head** (its
+> test traversability mIoU 0.7055 is the "segmentation only" row of the ratio sweep at the
+> foot of this file). Since `releases/v1` was cut, the model that is actually deployed is
+> `runs/hydranet_joint_coco10` at **epoch 55, selected on `detection_mAP`**, and it is a
+> different and much weaker segmenter: on its validation row `caution` and `stairs` are
+> **exactly 0.0**, `glass` is 0.066, `door` 0.003, terrain mIoU 0.360 against the 0.5694
+> that `hydranet_indoor` reached. **The "Current" column below has not been re-derived for
+> it** — and it must not be, on this split, without re-running `hydranet-eval --split test`,
+> because those v1 figures are validation and these are test.
+>
+> **Neither conclusion in this section moves.** The ceiling is a property of the labels, so
+> it is checkpoint-independent, and every "headroom used" figure below becomes an *upper*
+> bound for the deployed model rather than an estimate of it. "Resolution is not the
+> constraint" is if anything better supported: the shipped model sits further from the same
+> ceiling than the checkpoint measured here did.
+
 | Class | Ceiling @ stride 8 | Ceiling @ stride 4 | Current | Headroom used |
 |---|---|---|---|---|
 | `wall` | 0.986 | 0.995 | 0.815 | 83% |
@@ -82,7 +99,16 @@ plain argmax either, so the result is not an artefact of how the derivation was 
 2. It removes a real inconsistency. The two heads currently contradict each other on
    **0.88%** of labelled pixels — the model saying "glass" and "walkable" about the same
    pixel — and nothing in the code prevents it. A derived output is consistent by
-   construction. (`head_disagreement` now reports this every validation.)
+   construction. (`head_disagreement` now reports this every validation, and **it carries
+   over to the deployed model**: `releases/v1/metrics.json` records 0.009083, reproducing
+   this 0.88–0.91% on a different run entirely.)
+
+> **Re-checked 2026-08-19.** The three-way table above was measured on the segmentation-only
+> checkpoint (see §1's note) and **has not been re-run on `releases/v1`**, so "277K
+> parameters buy 0.002 mIoU" is a within-checkpoint result that has not been reconfirmed on
+> the shipped weights. `head_disagreement` is the one quantity that did carry over, and it
+> is the one the argument leans on: the two heads remain near-deterministically related, so
+> the redundancy verdict stands while its exact price tag is one checkpoint old.
 3. **Policy changes become free.** The table is applied to *targets* during training, so
    changing it today means retraining. Derived, it is applied at inference: changing it is
    a config edit. Three entries in that table are marked `REVIEW` because they are
@@ -159,13 +185,34 @@ failure.
 The platform carries LiDAR, which settles the question that would otherwise dominate this
 section.
 
+> **⚠ Corrected 2026-08-19: it does not, and this is the premise two verdicts below rest
+> on.** The robot is a **Lite3 with one monocular camera and two ultrasound returns**
+> (`{forward, backward}`), whose forward echo was measured *lateral* — 0 of 29 frames
+> comparable to the camera's cone. There is no point cloud, and "the Lite3 LiDAR variant"
+> is one of the sensors [RESEARCH_OCCUPANCY.md](RESEARCH_OCCUPANCY.md) would justify
+> **buying** if E-prep says so. Row by row:
+>
+> * **Terrain — unchanged.** Material semantics were never LiDAR's to provide, and with no
+>   range sensor at all the case for making this head authoritative is stronger.
+> * **Detection, Traversability — unchanged.** Neither argument mentions LiDAR.
+> * **Depth — OVERTURNED.** `models/heads/depth.py` was built (`0f8f8ea`),
+>   `runs/hydranet_nyu_depth` trained it, and it is head ⑤ of the occupancy direction. The
+>   reasoning here ("LiDAR already measures it") had no referent.
+> * **Surface normal / slope — the reasoning is void**, though nothing has been built. It
+>   would now derive from the depth head's output rather than from a point cloud, which is a
+>   different and unmeasured proposition; treat the verdict as unexamined, not as standing.
+> * **Confidence, instance/panoptic, tracking — unchanged.** All three are argued from the
+>   exported graph and from cost, not from the sensor suite. In particular the tracking
+>   verdict, which [ARCHITECTURE_DIRECTION.md](ARCHITECTURE_DIRECTION.md) §2 and
+>   [PERSON_ATTRIBUTES.md](PERSON_ATTRIBUTES.md) both lean on, stands exactly as written.
+
 | Head | Verdict | Reasoning |
 |---|---|---|
 | Terrain segmentation, 12 classes | **Keep, and make authoritative** | Material semantics are what LiDAR cannot provide. This is the model's irreplaceable output. |
 | Detection | **Keep; narrow the class set at deployment** | Dynamic obstacles are a separate decision. See below. |
 | Traversability | **Remove, derive instead** | Measured redundant in section 2. |
-| Depth | **Do not build** | LiDAR already measures it, more accurately than a monocular head ever would. |
-| Surface normal / slope | **Do not build** | Derived from the point cloud. |
+| Depth | ~~**Do not build**~~ — **built** | Said "LiDAR already measures it, more accurately than a monocular head ever would". There is no LiDAR; the head exists. |
+| Surface normal / slope | **Do not build** — reasoning void | Said "derived from the point cloud". There is no point cloud. Unexamined rather than settled. |
 | Confidence / uncertainty | **Do not build a head** | Temperature-calibrate the existing softmax instead. A new head is the wrong tool for a calibration problem. |
 | Instance or panoptic segmentation | **Do not build** | Detection plus semantics already answers the decisions, at far lower cost. |
 | Tracking / re-identification | **Do not build** | Cross-frame post-processing. Putting it in the graph would break the no-dynamic-control-flow property that makes TensorRT conversion work first time. |
@@ -176,6 +223,14 @@ not need to be learned. Mid-level fusion (LiDAR as an input channel) and a BEV o
 are both plausible in principle and both wrong here: each demands calibration-aware
 training data, and annotation throughput is already the binding constraint. Do not solve a
 data shortage with an architecture that needs more data.
+
+> **2026-08-19: the first half has nothing to fuse.** With no point cloud, the cheap
+> deterministic route does not exist. The *warning* in the second half is the part that
+> survives and it is now load-bearing rather than theoretical — a BEV output head is exactly
+> what [RESEARCH_OCCUPANCY.md](RESEARCH_OCCUPANCY.md) proposes (step E1), and that document
+> agrees the binding constraint is supervision: its whole first milestone is auto-labelling,
+> because it accepts that hand-drawn 3D data is unaffordable. The two documents disagree
+> about the conclusion and agree about the constraint, which is the honest state of it.
 
 **On narrowing detection.** COCO's 80 classes cost more than parameters at inference: at
 512×640 the class logits are 80 × 6,825 ≈ 546,000 values per frame to move and decode, and
@@ -188,16 +243,24 @@ the trunk — and narrow at export, rather than choosing one or the other.
 ## Open questions, in the order worth answering
 
 1. **Remove the traversability head?** Needs the deployment owner. Measured above.
-2. **What is the field accuracy?** Unknown. Everything here is ADE20K, which is web
-   photography, not robot-height footage of our sites. This is the largest unquantified
-   risk in the project and no architecture change addresses it.
+2. **What is the field accuracy?** Still unknown *for the robot*. Everything here is
+   ADE20K, which is web photography, not robot-height footage. The retail line has since
+   built site splits and found the next problem behind this one — a number scored against
+   SAM 3 pre-labels is an *agreement*, not an accuracy
+   ([RETAIL_OBJECTS_SPLIT.md](RETAIL_OBJECTS_SPLIT.md) R3) — and the robot line has no site
+   data at all until `robot_capture.py`'s clips are annotated. Still the largest
+   unquantified risk, and still not an architecture question.
 3. **Do the rare classes need loss reweighting rather than more data?** Currently
    unanswerable: three of them have zero examples, so there is nothing to reweight. Ask
    again after the first in-house annotation batch.
-4. **Can LiDAR resolve a 2–5 cm door sill on this platform?** It decides whether
-   `threshold_ramp` and `stairs` stay low on the annotation priority list or move back up.
-   One measurement on the real robot settles it; until then the ordering in
-   [METHODOLOGY.md](METHODOLOGY.md) carries an assumption rather than a result.
+4. ~~**Can LiDAR resolve a 2–5 cm door sill on this platform?**~~ **Void — there is no
+   LiDAR** (2026-08-19). It has been replaced by a harder question with the same
+   consequence: **how a monocular depth teacher behaves below 0.7 m on this lens.** Public
+   data cannot bound it — NYUv2's returns start near 0.7 m and the robot's forward cone puts
+   the floor at 0.34 m — so only the robot can answer, and only once it walks.
+   `threshold_ramp` and `stairs` have **already moved back up** the
+   [METHODOLOGY.md](METHODOLOGY.md) list in the meantime, because nothing else on the
+   platform measures a level change.
 
 ---
 

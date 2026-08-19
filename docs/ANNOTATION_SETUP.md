@@ -188,6 +188,18 @@ first training run on new labels, and again whenever a batch lands.
 The robot carries LiDAR, so annotate first for the things **LiDAR cannot see**. Geometry is
 already covered by the other sensor; material is not.
 
+> **⚠ Corrected 2026-08-19: it does not.** The Lite3 has **one monocular camera and two
+> ultrasound returns**, one forward and one backward, and the forward echo was measured
+> lateral — 0 of 29 frames comparable to the camera's cone
+> ([RESEARCH_OCCUPANCY.md](RESEARCH_OCCUPANCY.md)). Nothing on this robot produces a point
+> cloud. The ordering below survives at the top and breaks at the bottom: `glass`,
+> `wet_slippery` and `floor_metal` keep their places, because they are invisible to any
+> range sensor and the camera is the only instrument either way. **Items 4 and 5 move back
+> up** — with no second sensor, a level change is the camera's problem, and "no longer the
+> camera's problem alone" is false. Whether a depth sensor gets bought is E-prep's open
+> decision, and E-prep is blocked on walking the robot. The point-cloud pre-labelling
+> suggestion four paragraphs down is void for the same reason.
+
 None of the three zero-example classes can be bought instead of annotated. The
 full-vocabulary ADE20K does have `grating`, `puddle` and `ramp` in its label list, and it
 was checked: across our 6,612 indoor frames that is 1 image of `floor_metal`, 0 of
@@ -201,10 +213,12 @@ was checked: across our 6,612 indoor frames that is 1 image of `floor_metal`, 0 
    misleading on a wet floor. Standing water, freshly mopped floors, spills. Zero examples.
 3. `floor_metal` — grating, steel plate, drain covers. Zero examples. LiDAR sees the holes
    but cannot judge whether the surface is safe to step on.
-4. `threshold_ramp` — door sills, ramps, level changes. Zero examples, but a level change is
-   pure geometry, so LiDAR measures it directly. Still needed for the semantic map; no
-   longer the camera's problem alone.
-5. `stairs` — same reasoning as 4.
+4. `threshold_ramp` — door sills, ramps, level changes. Zero examples. This entry read "a
+   level change is pure geometry, so LiDAR measures it directly … no longer the camera's
+   problem alone", which the correction above withdraws: on this platform it is the
+   camera's problem alone.
+5. `stairs` — same reasoning as 4, and `stairs` is the class the occupancy research names
+   as the one traversability has to lift off 0.32.
 
 Everything else — floor, wall, door, furniture, person — is adequately covered already.
 Annotating more of those is close to wasted effort.
@@ -238,9 +252,13 @@ inside a class rather than being their own class.
     hydranet-annotation labels --scheme retail_objects --out cvat_objects.json
     hydranet-annotation check <dataset> --scheme retail_objects
 
-For 4 and 5, ask whether the point cloud can **pre-label** them: detect the edges
-geometrically, project into the image, and correct a mask rather than draw one. The
-material classes above have no such shortcut, which is the second reason they come first.
+For 4 and 5, this section asked whether the point cloud could **pre-label** them: detect the
+edges geometrically, project into the image, and correct a mask rather than draw one.
+**There is no point cloud** (see the correction above), so that shortcut does not exist
+today. Its replacement is the monocular auto-labelling pipeline in
+[RESEARCH_OCCUPANCY.md](RESEARCH_OCCUPANCY.md), which is a research programme rather than a
+tool — so for now 4 and 5 are hand-drawn like the material classes, and the "second reason
+they come first" argument no longer separates the two groups.
 
 ### Pre-labelling the missing classes with SAM 3
 

@@ -61,7 +61,12 @@ consequences, in increasing order of expense:
 
 [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md) already reached the same conclusion from
 the other direction, for a depth head: *do not build it, LiDAR measures it better than a
-monocular head ever will.*
+monocular head ever will.* **That verdict has since been overturned** — the robot has no
+LiDAR, `models/heads/depth.py` was built, and a depth head is head ⑤ of the occupancy
+direction ([RESEARCH_OCCUPANCY.md](RESEARCH_OCCUPANCY.md)). The conclusion *this* section
+reaches does not depend on it: "within 5 m" stays out of the weights because it is a
+product parameter and an annotator cannot draw it, which is true whatever measures the
+distance.
 
 There is also a price tag on the alternative. This model scores `stairs` at 0.32 — a large,
 high-contrast, geometrically distinctive class with **314 training images** behind it.
@@ -91,9 +96,13 @@ its footprint's distance), it degrades on ramps and thresholds, and re-calibrati
 required whenever the mount changes — which is a five-minute job rather than a relabelling
 project.
 
-**B. LiDAR mask.** The robot already carries LiDAR, it needs no flat-floor assumption, and
-it is the more accurate of the two. It costs an extrinsic calibration between LiDAR and
-camera, which is more work than A and worth it if floors are not reliably flat.
+**B. LiDAR mask.** ~~The robot already carries LiDAR~~ — **it does not** (corrected
+2026-08-19; the Lite3 is monocular plus two ultrasound returns, and a LiDAR variant is one
+of the sensors E-prep would justify *buying*). Kept as an option because the reasoning holds
+the day one is fitted: it needs no flat-floor assumption and is the more accurate of the
+two, at the cost of a LiDAR↔camera extrinsic. **Today it is not available**, which makes A
+the only calibrated route on the robot and leaves the retail line — a fixed camera on a flat
+shop floor — squarely in A's best case anyway.
 
 **C. The depth camera, if the platform has one.** `10.8.140.130` carries an Intel RealSense
 **D435I** publishing metric depth already registered to the colour frame, so the 5 m test

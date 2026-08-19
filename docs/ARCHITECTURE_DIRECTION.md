@@ -1,9 +1,14 @@
 # Architecture direction: the retail analytics programme
 
 **Scope, and the boundary that makes this document safe to read.**
-[ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md) reviews the **robot platform** — a
-LiDAR-carrying machine whose model answers "can I drive here". Its verdicts stand as
-written and nothing here overturns them. This document covers the **retail analytics
+[ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md) reviews the **robot platform** — a machine
+whose model answers "can I drive here". Nothing *here* overturns its verdicts, and the ones
+this document leans on (tracking and re-identification stay off the exported graph) stand
+exactly as written. **Two of them were overturned elsewhere**, so "its verdicts stand" is no
+longer safe as a blanket: it described the platform as LiDAR-carrying and it is not — the
+Lite3 is monocular plus two ultrasound returns — which voided its "do not build a depth
+head" verdict (one was built) and its point-cloud fusion route. Both corrections are marked
+in place in that file. This document covers the **retail analytics
 programme**: fixed store CCTV, no LiDAR, and a product ask ("零售分析需要年齡、性別、動作")
 that the robot review never considered.
 
