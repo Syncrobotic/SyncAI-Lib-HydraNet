@@ -26,6 +26,8 @@ another caller had a reason to import.
 from __future__ import annotations
 
 from .boxes import boxes_from_masks, dedupe, drop_static, nms
+from .gdino import MODEL_ID as GDINO_MODEL_ID
+from .gdino import PERSON_THRESHOLD, detect, load_gdino
 from .photometry import MIN_CHROMA, MIN_LUMA, is_daylight, luma_chroma
 from .sam3 import (
     MAX_BOX_FRAC,
@@ -39,18 +41,22 @@ from .sam3 import (
 )
 
 __all__ = [
+    "GDINO_MODEL_ID",
     "MAX_BOX_FRAC",
     "MIN_CHROMA",
     "MIN_LUMA",
     "MODEL_ID",
+    "PERSON_THRESHOLD",
     "boxes_from_masks",
     "compose",
     "consensus",
     "dedupe",
+    "detect",
     "drop_static",
     "frame_boxes",
     "frame_masks",
     "is_daylight",
+    "load_gdino",
     "load_sam3",
     "luma_chroma",
     "nms",

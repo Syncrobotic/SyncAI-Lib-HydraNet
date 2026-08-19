@@ -50,6 +50,11 @@ for candidate in (HERE.parent / "src", HERE / "src"):
         sys.path.insert(0, str(candidate))
 
 from syncai_hydranet.data.teachers.boxes import nms  # noqa: E402
+from syncai_hydranet.data.teachers.gdino import (  # noqa: E402
+    MODEL_ID,
+    detect,
+    load_gdino,
+)
 from syncai_hydranet.data.teachers.photometry import luma_chroma  # noqa: E402
 
 THRESHOLD_LADDER = (0.25, 0.35, 0.50)  # reported per camera; nothing is filtered by them
@@ -63,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     src.add_argument("--images", nargs="+", help="frame dirs from sam3_person_boxes")
     src.add_argument("--clips", nargs="+", help="mp4 clips; sampled frames are saved to --out")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--model-id", default="IDEA-Research/grounding-dino-base")
+    ap.add_argument("--model-id", default=MODEL_ID)
     ap.add_argument("--prompt", default="person")
     ap.add_argument("--frames", type=int, default=8, help="frames sampled per clip")
     # Floor, not a working threshold: low enough that both score populations are
@@ -79,32 +84,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ap.add_argument("--nms-iou", type=float, default=0.55)
     return ap
-
-
-def load_gdino(model_id: str, device: str):
-    from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
-
-    proc = AutoProcessor.from_pretrained(model_id)
-    model = AutoModelForZeroShotObjectDetection.from_pretrained(model_id).to(device).eval()
-    return proc, model
-
-
-@torch.inference_mode()
-def detect(proc, model, img: Image.Image, prompt: str, floor: float, device: str) -> np.ndarray:
-    """Boxes as [x1, y1, x2, y2, score] above the floor, xyxy in source pixels."""
-    text = prompt.strip().lower().rstrip(".") + "."
-    inputs = proc(images=img, text=text, return_tensors="pt").to(device)
-    outputs = model(**inputs)
-    kwargs = {"threshold": floor, "text_threshold": floor, "target_sizes": [img.size[::-1]]}
-    try:
-        (res,) = proc.post_process_grounded_object_detection(
-            outputs, inputs.input_ids, **kwargs
-        )
-    except TypeError:  # older signature without positional input_ids
-        (res,) = proc.post_process_grounded_object_detection(outputs, **kwargs)
-    boxes = res["boxes"].cpu().float().numpy().reshape(-1, 4)
-    scores = res["scores"].cpu().float().numpy().reshape(-1, 1)
-    return np.concatenate([boxes, scores], axis=1)
 
 
 def iter_image_dirs(dirs: list[str]):
