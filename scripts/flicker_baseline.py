@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-# 本檔的說明、註解與輸出訊息是繁體中文，全形標點是正確排版而非誤植；改成半形會毀掉
-# 排版，出現在輸出字串裡的更屬行為變更。僅豁免 unicode 混淆檢查，其餘規則照常。
-# ruff: noqa: RUF001, RUF002, RUF003
-"""輸出穩定度基線量測：優化前先立量尺。
+"""Output-stability baseline: lay the ruler down before optimising anything.
 
   nice -n 10 .venv/bin/python scripts/flicker_baseline.py \
     --config configs/hydranet_retail_security_b03_cw_xl.yaml \
@@ -11,30 +8,38 @@
     --static-mask datasets/studioa_static/Kaohsiung-cam04/static_20260816-112757.png \
     --out runs/flicker_baseline01
 
-demo 影片看到的兩個症狀——seg 破碎、label 彈跳——在這裡各自變成數字，
-之後每一項優化（靜態合成、軌跡渲染、logits EMA）都對著同一組數字比。
+The two symptoms visible in the demo video -- fragmented segmentation and jumping labels --
+each become a number here, and every later optimisation (static compositing, track
+rendering, logits EMA) is compared against this same set.
 
-量的是四件事，每一件都分「靜態遮罩內 / 遮罩外」兩欄，因為靜態區域的翻面
-全是噪音，動態區域的翻面可能是真變化：
+Four things are measured, each split into two columns, **inside the static mask** and
+outside it, because a flip in a static region is noise by construction while a flip in a
+moving region may be a real change:
 
-1. 逐幀 label 翻面率，以及翻面像素中在 --bounce-window 幀內又翻回原類的
-   比例（真彈跳 vs 真變化）。
-2. 分割連通塊數量與小塊（面積 < --small-area-frac 幀面）佔比的逐幀分佈。
-3. 偵測穩定度：逐幀框數方差；IoU >= --track-iou 貪婪跨幀配對後的框存活
-   長度分佈，單幀即逝框的比例。
-4. 逐類別（6 類）翻面率；wall/column/fixture 以眾數圖邊界膨脹出 ±r 邊界帶，
-   帶內 vs 類內部的翻面率對比。
+1. Per-frame label flip rate, and the share of flipped pixels that read back their previous
+   class within ``--bounce-window`` frames -- a bounce against a real change.
+2. Per-frame distribution of connected-component count and the share that are small
+   (area < ``--small-area-frac`` of the frame).
+3. Detection stability: per-frame variance in box count; the distribution of box survival
+   length after greedy adjacent-frame matching at IoU >= ``--track-iou``; and the share of
+   boxes that live for exactly one frame.
+4. Per-class (6 classes) flip rate. For wall/column/fixture the modal map's class boundary
+   is dilated into a +/-r band, and the flip rate inside the band is contrasted with the
+   rate in the class interior.
 
-跨幀一致性沿用 engine/consensus.py 的 FrameConsensus 定義（同一個
-agree_threshold、同一個 person 排除、同一份 caveat），不另發明平行指標；
-本腳本增量補的是它不量的「相鄰幀」行為：翻面、彈跳、破碎、框存活。
+Cross-frame agreement reuses `engine/consensus.py`'s `FrameConsensus` definition -- the
+same `agree_threshold`, the same `person` exclusion, the same caveats -- rather than
+inventing a parallel metric. What this script adds is the *adjacent-frame* behaviour that
+one does not measure: flips, bounces, fragmentation and box survival.
 
-彈跳（bounce）的定義：在第 t 幀翻面（label[t-1] != label[t]）的像素，若在
-之後 --bounce-window 幀內任一幀讀回 label[t-1]，記為彈跳。片尾視窗未走完
-的翻面屬「不可判定」，從分母中扣除而不是當成非彈跳——否則片尾必然拉低
-彈跳率。
+**Bounce, defined.** A pixel that flips at frame t (``label[t-1] != label[t]``) counts as a
+bounce if any frame within the next ``--bounce-window`` reads back ``label[t-1]``. Flips
+whose window runs past the end of the clip are *undecidable* and are subtracted from the
+denominator rather than counted as non-bounces -- otherwise the tail of every clip drags
+the bounce rate down by construction.
 
-GPU 上有共用的訓練鏈時：batch 恆為 1，整個行程請用 `nice -n 10` 啟動。
+When a training run shares the GPU: batch is always 1, and start the whole process under
+`nice -n 10`.
 """
 
 from __future__ import annotations
@@ -67,74 +72,81 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ap.add_argument("--config", required=True)
     ap.add_argument("--checkpoint", required=True)
-    ap.add_argument("--input", required=True, help="固定相機影片")
+    ap.add_argument("--input", required=True, help="a clip from a fixed camera")
     ap.add_argument(
         "--static-mask",
         required=True,
-        help="static_plates.py 產出的靜態遮罩（255=整段 clip 從未變過的像素），"
-        "必須是與 clip 同一個 time slot 的那張——跨 slot 的照度差會吃掉遮罩的意義",
+        help="the static mask static_plates.py produces (255 = a pixel that never changed "
+        "across the whole clip). It must be the mask for the *same* time slot as the "
+        "clip: the illumination difference between slots eats the mask's meaning",
     )
     ap.add_argument(
-        "--out", type=Path, required=True, help="runs/flicker_baselineNN 之類的輸出目錄"
+        "--out", type=Path, required=True, help="output directory, e.g. runs/flicker_baselineNN"
     )
     ap.add_argument("--weights", choices=["ema", "model"], default="ema")
-    ap.add_argument("--fps", type=float, default=5.0, help="取樣 fps（與 demo 影片一致）")
-    ap.add_argument("--max-frames", type=int, default=900, help="0 表示整段")
+    ap.add_argument(
+        "--fps", type=float, default=5.0, help="sampling fps; the demo video's rate"
+    )
+    ap.add_argument("--max-frames", type=int, default=900, help="0 means the whole clip")
     ap.add_argument("--score-thr", type=float, default=SCORE_THR_VIEW)
     ap.add_argument("--nms-thr", type=float, default=0.6)
     ap.add_argument(
         "--track-iou",
         type=float,
         default=0.5,
-        help="跨幀貪婪配對的 IoU 門檻（同類別、僅相鄰幀）",
+        help="IoU threshold for the greedy cross-frame match; same class, adjacent frames only",
     )
     ap.add_argument(
         "--small-area-frac",
         type=float,
         default=0.001,
-        help="連通塊面積小於（此值 × 內容區面積）記為小塊，即『破碎度』的碎片定義",
+        help="a connected component below this fraction of the content area counts as small; "
+        "this is the definition of a fragment for the fragmentation figure",
     )
     ap.add_argument(
         "--boundary-radius",
         type=int,
         default=5,
-        help="邊界帶半徑（像素，對眾數圖類別區域做膨脹/侵蝕各 r 得 ±r 帶）",
+        help="boundary band radius in pixels; the modal map's class region is dilated and "
+        "eroded by r each to give the +/-r band",
     )
     ap.add_argument(
         "--boundary-classes",
         nargs="*",
         default=["wall", "column", "fixture"],
-        help="要做邊界帶分析的 terrain 類別",
+        help="terrain classes to run the boundary-band analysis over",
     )
     ap.add_argument(
         "--bounce-window",
         type=int,
         default=25,
-        help="翻面後多少幀內翻回原類才算彈跳（5fps 下預設 25 幀 = 5 秒）",
+        help="how many frames a flip has to read back its previous class in to count as a "
+        "bounce; the default of 25 is 5 seconds at 5 fps",
     )
     ap.add_argument(
         "--box-static-thr",
         type=float,
         default=0.5,
-        help="框內靜態像素占比超過此值，該框歸入『靜態區』欄",
+        help="a box whose static-pixel share exceeds this is counted in the static column",
     )
     ap.add_argument(
         "--agree-threshold",
         type=float,
         default=0.9,
-        help="直接傳給 FrameConsensus.result 的 agree_threshold，沿用其定義",
+        help="passed straight to FrameConsensus.result as agree_threshold; its definition, "
+        "not a second one",
     )
     ap.add_argument("--device", default=None)
     return ap
 
 
 # ---------------------------------------------------------------------------
-# 偵測跨幀配對
+# ------------------------------------------------- detection, matched across frames
 # ---------------------------------------------------------------------------
 
 
 def iou_matrix(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """成對 IoU，a: [N,4] b: [M,4]（xyxy）。"""
+    """Pairwise IoU. a: [N, 4], b: [M, 4], both xyxy."""
     if len(a) == 0 or len(b) == 0:
         return np.zeros((len(a), len(b)), dtype=np.float64)
     lt = np.maximum(a[:, None, :2], b[None, :, :2])
@@ -148,13 +160,14 @@ def iou_matrix(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 
 def greedy_tracks(per_frame: list[dict], iou_thr: float) -> list[dict]:
-    """相鄰幀、同類別、IoU 由高至低的貪婪配對，串成 track。
+    """Greedy adjacent-frame, same-class matching by descending IoU, strung into tracks.
 
-    刻意只配相鄰幀、不設 max-age：這裡量的是「未經任何平滑的原始輸出有多不穩」，
-    允許跨幀補洞的 tracker 會把本要量的斷裂縫回去。
+    Adjacent frames only and no max-age, deliberately. What is being measured is how
+    unstable the **raw** output is before any smoothing, and a tracker allowed to bridge a
+    gap would sew up exactly the breaks this exists to count.
     """
     tracks: list[dict] = []
-    active: list[dict] = []  # 每項: {label, boxes, static_fracs, last_box}
+    active: list[dict] = []  # each: {label, boxes, static_fracs, last_box}
     for det in per_frame:
         boxes, labels, sfr = det["boxes"], det["labels"], det["static_frac"]
         matched_cur = np.zeros(len(boxes), dtype=bool)
@@ -196,12 +209,16 @@ def greedy_tracks(per_frame: list[dict], iou_thr: float) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# 統計小工具
+# ------------------------------------------------------------------ small statistics
 # ---------------------------------------------------------------------------
 
 
 def dist(values) -> dict:
-    """一個逐幀量的分佈摘要。空序列回 None 欄——寧可 JSON 裡是 null 也不要編一個 0。"""
+    """Distribution summary of one per-frame quantity.
+
+    An empty sequence returns None fields: a null in the JSON is better than an invented
+    zero, which reads as a measurement.
+    """
     a = np.asarray(values, dtype=np.float64)
     if a.size == 0:
         return {"n": 0, "mean": None, "p50": None, "p90": None, "max": None}
@@ -234,7 +251,7 @@ def save_heatmap(arr: np.ndarray, path: Path, title: str, vmax: float | None = N
 
 
 # ---------------------------------------------------------------------------
-# 主流程
+# ------------------------------------------------------------------------------- main
 # ---------------------------------------------------------------------------
 
 
@@ -253,7 +270,9 @@ def main(argv: list[str] | None = None) -> dict:
     n_cls = len(class_names)
     for c in args.boundary_classes:
         if c not in class_names:
-            raise SystemExit(f"--boundary-classes {c!r} 不在 terrain_classes {class_names}")
+            raise SystemExit(
+                f"--boundary-classes {c!r} is not in terrain_classes {class_names}"
+            )
     det_classes: list[str] = []
     det_cfg = (cfg.get("model", {}).get("heads", {}) or {}).get("detection") or {}
     det_classes = list(det_cfg.get("classes", []))
@@ -261,28 +280,28 @@ def main(argv: list[str] | None = None) -> dict:
     src_w, src_h, src_fps = probe(args.input)
     sample_fps = args.fps if args.fps and args.fps < src_fps else None
     print(
-        f"input {src_w}x{src_h} @ {src_fps:.2f}fps, 取樣 {args.fps}fps, "
-        f"最多 {args.max_frames or '全部'} 幀, device={device}"
+        f"input {src_w}x{src_h} @ {src_fps:.2f}fps, sampling {args.fps}fps, "
+        f"at most {args.max_frames or 'all'} frames, device={device}"
     )
 
     static_img = Image.open(args.static_mask).convert("L")
 
-    # 沿用 consensus.py 的定義：同一個 person 排除、同一個 agree_threshold。
+    # consensus.py's definition, reused: same person exclusion, same agree_threshold.
     consensus = FrameConsensus(class_names)
 
-    # 逐像素累積器（在 letterbox 內容區座標；第一幀建立）。
-    flip_map = None  # 每像素翻面次數
-    bounce_map = None  # 每像素彈跳次數
-    censored_map = None  # 片尾視窗未走完、不可判定的翻面次數
-    occupancy = None  # [C,H,W] prev==c 的幀數（翻面率分母）
-    flip_from = None  # [C,H,W] prev==c 且翻面的次數
-    static = None  # 靜態遮罩（內容區解析度）
-    pending: deque = deque()  # 彈跳判定中的翻面事件
+    # Per-pixel accumulators, in letterbox content-area coordinates, built on the first frame.
+    flip_map = None  # flips per pixel
+    bounce_map = None  # bounces per pixel
+    censored_map = None  # flips whose bounce window ran past the end of the clip
+    occupancy = None  # [C,H,W] frames where prev == c -- the flip-rate denominator
+    flip_from = None  # [C,H,W] flips out of class c
+    static = None  # the static mask, at content-area resolution
+    pending: deque = deque()  # flips still inside their bounce window
 
     prev = None
-    per_frame_flip = []  # (整體, 靜態內, 靜態外) 逐幀翻面率
-    comp_rows = []  # 逐幀連通塊統計
-    det_frames = []  # 逐幀偵測
+    per_frame_flip = []  # per frame: (overall, inside static, outside static)
+    comp_rows = []  # per-frame connected-component statistics
+    det_frames = []  # per-frame detections
     content_area = None
     n_frames = 0
 
@@ -303,16 +322,18 @@ def main(argv: list[str] | None = None) -> dict:
             flip_from = np.zeros((n_cls, h, w), dtype=np.int32)
             static = np.asarray(static_img.resize((w, h), Image.Resampling.NEAREST)) > 127
             n_static = int(static.sum())
-            print(f"內容區 {w}x{h}, 靜態像素 {n_static} ({n_static / content_area:.1%})")
+            share = n_static / content_area
+            print(f"content area {w}x{h}, static pixels {n_static} ({share:.1%})")
 
-        # 首幀初始化後這些累積器恆非 None；ty 無法跨迭代收窄，以 assert 收窄。
+        # Non-None from the first frame onwards. ty cannot narrow across iterations, so the
+        # assert is what tells it.
         assert flip_map is not None and bounce_map is not None and censored_map is not None
         assert occupancy is not None and flip_from is not None and static is not None
         assert content_area is not None
 
         consensus.update(cur.astype(np.int64))
 
-        # -- 1. 翻面 + 彈跳 --------------------------------------------------
+        # -- 1. flips and bounces --------------------------------------------
         if prev is not None:
             changed = prev != cur
             flip_map += changed
@@ -327,7 +348,7 @@ def main(argv: list[str] | None = None) -> dict:
                     float(changed[~static].mean()) if (~static).any() else float("nan"),
                 )
             )
-            # 先結算既有事件（今天的幀就是它們的「之後」）
+            # Settle the open events first: this frame is their "later"
             for ev in pending:
                 back = ev["mask"] & (cur == ev["orig"])
                 bounce_map += back
@@ -340,7 +361,7 @@ def main(argv: list[str] | None = None) -> dict:
                     {"mask": changed.copy(), "orig": prev.copy(), "ttl": args.bounce_window}
                 )
 
-        # -- 2. 連通塊 -------------------------------------------------------
+        # -- 2. connected components -----------------------------------------
         small_cut = args.small_area_frac * content_area
         row = {
             "total": 0,
@@ -370,7 +391,7 @@ def main(argv: list[str] | None = None) -> dict:
             row["small_dynamic"] += int((is_small & ~is_static).sum())
         comp_rows.append(row)
 
-        # -- 3. 偵測 ---------------------------------------------------------
+        # -- 3. detections ---------------------------------------------------
         det = res.get("detection", [{}])[0]
         boxes = det.get("boxes")
         if boxes is not None and len(boxes):
@@ -399,17 +420,20 @@ def main(argv: list[str] | None = None) -> dict:
         prev = cur
         n_frames += 1
         if n_frames % 100 == 0:
-            print(f"  {n_frames} 幀")
+            print(f"  {n_frames} frames")
         if args.max_frames and n_frames >= args.max_frames:
             break
 
     if n_frames < 2:
-        raise SystemExit(f"只解出 {n_frames} 幀，量不了相鄰幀行為")
-    # 走到這裡至少處理了兩幀，累積器必已在首幀建立；同樣是為 ty 收窄。
+        raise SystemExit(
+            f"only {n_frames} frame(s) decoded; adjacent-frame behaviour needs two"
+        )
+    # Two frames at least by here, so the accumulators exist. Again, narrowing for ty.
     assert flip_map is not None and bounce_map is not None and censored_map is not None
     assert occupancy is not None and flip_from is not None and static is not None
 
-    # 片尾視窗未走完的翻面：從彈跳分母扣掉，而不是當成「沒彈」。
+    # Flips whose window ran past the end come out of the bounce denominator rather than
+    # counting as non-bounces -- see the module docstring.
     for ev in pending:
         censored_map += ev["mask"]
 
@@ -417,7 +441,7 @@ def main(argv: list[str] | None = None) -> dict:
     result = consensus.result(args.agree_threshold)
     modal = result.modal
 
-    # -- 匯總 1：翻面 / 彈跳 -------------------------------------------------
+    # -- summary 1: flips and bounces ---------------------------------------
     def zone_stats(zone: np.ndarray) -> dict:
         zpx = int(zone.sum())
         flips = int(flip_map[zone].sum())
@@ -448,7 +472,7 @@ def main(argv: list[str] | None = None) -> dict:
         entry["share_of_all_flips"] = rate(int(flip_from[c].sum()), int(flip_map.sum()))
         per_class_flip[name] = entry
 
-    # -- 匯總 4：邊界帶（眾數圖上的類別邊界 ±r） -----------------------------
+    # -- summary 4: boundary bands, +/-r around a class edge on the modal map -
     boundary = {}
     r = args.boundary_radius
     for name in args.boundary_classes:
@@ -476,7 +500,7 @@ def main(argv: list[str] | None = None) -> dict:
             ),
         }
 
-    # -- 匯總 2：破碎度 ------------------------------------------------------
+    # -- summary 2: fragmentation -------------------------------------------
     comp_stats = {
         "total_components_per_frame": dist([r_["total"] for r_ in comp_rows]),
         "small_share_per_frame": dist(
@@ -492,7 +516,7 @@ def main(argv: list[str] | None = None) -> dict:
         ),
     }
 
-    # -- 匯總 3：偵測穩定度 --------------------------------------------------
+    # -- summary 3: detection stability -------------------------------------
     counts = np.array([len(d["boxes"]) for d in det_frames], dtype=np.float64)
     in_counts = np.array(
         [int((d["static_frac"] >= args.box_static_thr).sum()) for d in det_frames],
@@ -539,7 +563,10 @@ def main(argv: list[str] | None = None) -> dict:
         }
 
     metrics = {
-        "measured": "flicker baseline: 相鄰幀翻面/彈跳、破碎度、偵測存活、邊界帶",
+        "measured": (
+            "flicker baseline: adjacent-frame flips and bounces, fragmentation, "
+            "box survival, boundary bands"
+        ),
         "input": str(args.input),
         "static_mask": str(args.static_mask),
         "config": str(args.config),
@@ -570,16 +597,17 @@ def main(argv: list[str] | None = None) -> dict:
         "boundary_bands": boundary,
         "fragmentation": comp_stats,
         "detection": det_stats,
-        # 沿用的既有量測，原封不動放進來（含它自己的 caveat）。
+        # The existing measurement, carried in untouched, caveats and all.
         "consensus": result.to_dict(),
     }
 
     out_json = args.out / "metrics.json"
     out_json.write_text(json.dumps(metrics, ensure_ascii=False, indent=2))
-    print(f"寫出 {out_json}")
+    print(f"wrote {out_json}")
 
-    # -- 熱圖 ----------------------------------------------------------------
-    # 標題用 ASCII：跑量測的機器上 matplotlib 多半沒有 CJK 字型，中文標題只會變豆腐字。
+    # -- heat maps -----------------------------------------------------------
+    # ASCII titles: the box running the measurement usually has no CJK font for
+    # matplotlib, so anything else renders as tofu.
     flip_rate_map = flip_map / n_trans
     save_heatmap(
         flip_rate_map,
@@ -600,7 +628,7 @@ def main(argv: list[str] | None = None) -> dict:
         "flip rate inside static mask (any nonzero here is noise)",
         vmax=float(np.percentile(flip_rate_map, 99.5)) or None,
     )
-    print(f"熱圖寫入 {args.out}/")
+    print(f"heat maps written to {args.out}/")
     return metrics
 
 

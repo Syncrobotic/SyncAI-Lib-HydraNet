@@ -1,5 +1,5 @@
 # =============================================================================
-# 零售 + 安防: one store camera, one trunk, one detection head that holds both questions.
+# Retail and security: one store camera, one trunk, one detection head holding both.
 #
 # `hydranet_retail_surfaces.yaml` is this config's parent and answers the retail half:
 # six terrain classes and a two-class merchandise detector. What it cannot do is the

@@ -166,11 +166,11 @@ def main(argv: list[str] | None = None) -> int:
 
     shares = np.array([r["static_share"] for r in rows])
     print(f"\n{len(rows)} boxes over {len({r['file_name'] for r in rows})} frames")
-    print("static_share 分佈:")
+    print("static_share distribution:")
     for q in (5, 10, 25, 50, 75, 90, 95, 99, 100):
         print(f"   p{q:<3d} {np.percentile(shares, q):.3f}")
     hist, edges = np.histogram(shares, bins=10, range=(0, 1))
-    print("  直方圖 (0..1, 10 bins):")
+    print("  histogram (0..1, 10 bins):")
     for h, lo in zip(hist, edges[:-1], strict=False):
         print(f"   {lo:.1f}-{lo + 0.1:.1f}  {h:5d}  {'#' * min(60, h)}")
 
@@ -227,15 +227,16 @@ def main(argv: list[str] | None = None) -> int:
     }
     (args.out / "report.json").write_text(json.dumps(report, indent=1) + "\n")
     (args.out / "boxes.json").write_text(json.dumps(rows, indent=1) + "\n")
-    print("\n每台相機:")
+    print("\nper camera:")
     for cam, v in report["per_camera"].items():
         print(
-            f"   {cam:20s} {v['boxes']:4d} boxes  中位 {v['median_share']:.3f}"
+            f"   {cam:20s} {v['boxes']:4d} boxes  median {v['median_share']:.3f}"
             f"  >=0.9: {v['over_0.9']}"
         )
     if args.drop_above is not None:
-        print(f"\n--drop-above {args.drop_above}: 會丟掉 {report['would_drop']} / {len(rows)}")
-    print(f"\n{drawn} 張圖 -> {args.out}/frames  (紅 >=0.9, 黃 >=0.5, 綠 <0.5)")
+        dropped = report["would_drop"]
+        print(f"\n--drop-above {args.drop_above}: would drop {dropped} / {len(rows)}")
+    print(f"\n{drawn} frames -> {args.out}/frames  (red >=0.9, amber >=0.5, green <0.5)")
     return 0
 
 
