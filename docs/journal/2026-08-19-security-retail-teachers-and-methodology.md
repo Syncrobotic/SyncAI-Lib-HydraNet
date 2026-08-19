@@ -364,3 +364,12 @@ a configurable head, and an in-domain retrieval protocol (rap_zs identities) so
 association is measured where it will be used. Overfitting note for the record:
 attribute F1 plateaued (peak epoch 9, −1.5 points by 16) while the embedding was the
 real casualty — a metric that watches only attributes cannot see this failure.
+
+**The fleet census, every view personally verified (runs/camera_census01).** One real
+frame per camera, all 48 looked at by eye per the user's standing rule. The counts that
+change plans: sideways mounts are **five**, not one (K-09/K-10 hid in the back-of-house
+set the calibration sweep never scored); three near-nadir cameras see no floor but are
+the fleet's best product-on-table closeups; one stockroom runs IR even at midday; and
+**Tao-Hsin-cam15 — a high-value selling-floor panorama — was missing from every
+pipeline** (no plate, no calibration, no batch) because the plate sweep predates it.
+The site30k allocation now keys on this census, not on cameras.json roles.
