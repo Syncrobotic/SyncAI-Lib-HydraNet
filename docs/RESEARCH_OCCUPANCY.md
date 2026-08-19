@@ -112,7 +112,7 @@ Run with [`scripts/robot_capture.py`](../scripts/robot_capture.py) +
 scene provably static across the whole clip. **It did not produce a residual, and the
 reason is worth more than the residual would have been.**
 
-![E-prep first run](../assets/eprep_sonar_vs_depth.png)
+*(figure `eprep_sonar_vs_depth.png` removed 2026-08-19 with the robot-line asset cleanup; the numbers it showed are in the text above)*
 
 **There was no robot footage.** Every video in this repo is a fixed store camera, product
 B. The quadruped had never recorded anything, so E-prep's "footage we already have" did
