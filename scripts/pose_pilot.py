@@ -49,6 +49,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from syncai_hydranet.analytics import events as ev
+from syncai_hydranet.analytics.stage import TerrainFrame
 from syncai_hydranet.analytics.tracker import Track
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as video_frames
@@ -239,7 +240,9 @@ def run_cam(cam: str, args, pose_proc, pose_model, terr_model, terr_size, device
 
     kps_by_track: dict[str, list[np.ndarray]] = {tid: [] for tid in gt}
     frame_jpeg: dict[int, bytes] = {}
-    terrain_frames: list[dict] = []
+    # `TerrainFrame`, not `list[dict]`: this is the second stage's real payload
+    # producer, and `reach_to_shelf_events` states what it reads. See analytics/stage.py.
+    terrain_frames: list[TerrainFrame] = []
     t0 = time.time()
     n_frames = 0
     for idx, frame in enumerate(video_frames(clip, src_w, src_h, fps)):
@@ -353,9 +356,17 @@ def run_cam(cam: str, args, pose_proc, pose_model, terr_model, terr_size, device
         results["reach_to_shelf_events"] = {"error": traceback.format_exc()}
     results["fixture_id"] = fixture_id
     results["fixture_class"] = args.fixture_class
-    fixture_px = {
-        int(f["frame_index"]): int((f["terrain"] == fixture_id).sum()) for f in terrain_frames
-    }
+    # Bound rather than filtered in the comprehension. `TerrainFrame` types `terrain` as
+    # optional and the guard is not pedantry: without it `f["terrain"] == fixture_id` is
+    # `False` rather than a mask the moment one frame carries no map, and `.sum()` on a
+    # bool raises three lines from where the cause is. A comprehension's `if` does not
+    # narrow the subscript that follows it, which is the same gap events.py has.
+    fixture_px: dict[int, int] = {}
+    for f in terrain_frames:
+        terrain_map = f.get("terrain")
+        if terrain_map is None:
+            continue
+        fixture_px[int(f["frame_index"])] = int((terrain_map == fixture_id).sum())
     results["fixture_px"] = {
         "median_per_frame": int(np.median(list(fixture_px.values()))),
         "frames_with_any": int(sum(v > 0 for v in fixture_px.values())),

@@ -83,13 +83,13 @@ A model version is the weights, the graph, the config, the lineage and the numbe
 together and checksummed. `scripts/release_bundle.sh` builds one:
 
 ```bash
-scripts/release_bundle.sh create runs/hydranet_indoor_det60 v1
-scripts/release_bundle.sh verify releases/v1
-scripts/release_bundle.sh publish releases/v1 gs://syncai-hydranet
+scripts/release_bundle.sh create runs/<experiment> <version>
+scripts/release_bundle.sh verify releases/<version>
+scripts/release_bundle.sh publish releases/<version> gs://syncai-hydranet
 ```
 
 ```text
-releases/v1/
+releases/<version>/
 ├── model.pt        weights
 ├── model.onnx      the portable graph — this is what is version-controlled
 ├── config.yaml     exact config, including any --set overrides
@@ -122,7 +122,7 @@ The bundle is the model. What runs on a device is a **build** of it, and this pr
 two targets that need different ones:
 
 ```text
-releases/v1/
+releases/<version>/
 ├── model.onnx                                       the portable graph, and the thing
 │                                                    every build is derived from
 └── builds/
@@ -131,7 +131,7 @@ releases/v1/
 
 **There used to be a second build row**, `rk3588_rknn1.6.0_int8_384x512.rknn` for the Lite3
 quadruped. The quadruped line was removed from this repository on 2026-08-19; the shape
-below — one ONNX, several target-bound builds, none of them in the bundle proper — is what
+above — one ONNX, several target-bound builds, none of them in the bundle proper — is what
 it was written to describe and is why it is kept with one build in it.
 
 Neither build belongs in the bundle proper, and for the same reason in both cases: they are
@@ -156,7 +156,7 @@ So a build is not accepted until it has been scored on the same validation set a
 it came from, and the result stored beside it:
 
 ```text
-releases/v1/builds/rk3588_rknn1.6.0_int8_384x512.metrics.json
+releases/<version>/builds/agx-orin_jp6.1_trt10.3_fp16.metrics.json
 ```
 
 Quoting the bundle's mAP for a quantised build is the same class of error as quoting a
@@ -184,7 +184,23 @@ same list from the evaluation side.
 
 ### What cutting v1 immediately showed
 
-`releases/v1` is `runs/hydranet_joint_coco10`, the model on the robot. Cutting it produced a
+> **The v1 bundle was deleted on 2026-08-19 with the rest of the quadruped line, and this
+> section is kept because the finding is not the bundle.** It was the right thing to
+> delete: its `meta.json` says `experiment: hydranet_indoor` — the indoor 12-class
+> taxonomy, ADE20K and COCO, with the traversability head — and its `builds/` held exactly
+> one artefact, `rk3588_rknn1.6.0_int8_384x512.rknn`, the Lite3's. There was never an
+> agx-orin build in it, so nothing the retail/security line ships was in that directory.
+>
+> **It is re-cuttable, which is why deleting 209 MB was safe**: `runs/hydranet_joint_coco10`
+> is still on disk with its checkpoints, and `release_bundle.sh create` rebuilds the bundle
+> from it. Every number quoted below came out of that run and is recorded here rather than
+> only in the deleted `metrics.json`.
+>
+> **`releases/` is still where a version goes.** The directory is gitignored and the
+> bundler recreates it (`mkdir -p "releases/$version"`), so its absence from a fresh
+> checkout means nothing has been cut yet, not that the convention moved.
+
+`releases/v1` was `runs/hydranet_joint_coco10`, the model that went on the robot. Cutting it produced a
 number the run directory had always contained and nobody had read: the shipped checkpoint is
 **epoch 55**, selected on `detection_mAP`, and its scores are
 
