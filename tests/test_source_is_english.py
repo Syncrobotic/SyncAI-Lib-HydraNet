@@ -31,7 +31,21 @@ import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 # CJK ideographs, plus kana. Latin-1 accents and the en dash are not what this is about.
-CJK = re.compile(r"[぀-ヿ㐀-䶿一-鿿豈-﫿]")
+#
+# Written as escapes rather than as the characters themselves, and that is not a style
+# preference. Spelled literally this line is CJK source text inside the file that scans
+# for CJK source text, so the scan matched itself and
+# `test_no_cjk_in_source[test_source_is_english.py]` failed on the guard rather than on
+# anything the guard is for. `test_no_file_re_exempts_itself` below had already hit the
+# same trap and worked around it by skipping this file by path, noting "Built rather
+# than written out: the literal would match this file's own source" -- one function
+# later, and only for its own pattern.
+#
+# A guard that cannot be run against itself has a blind spot exactly its own size, so
+# the fix is for this file to be English like the ones it polices rather than to be
+# exempted from itself. The ranges are unchanged: U+3040-30FF kana, U+3400-4DBF and
+# U+4E00-9FFF ideographs, U+F900-FAFF compatibility ideographs.
+CJK = re.compile("[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 ROOTS = ("src", "scripts", "tests", "tools", "configs", "deploy")
 SUFFIXES = {".py", ".sh", ".yaml", ".yml", ".toml", ".json", ".cff"}
 
