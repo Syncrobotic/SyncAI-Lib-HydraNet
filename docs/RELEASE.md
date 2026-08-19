@@ -186,10 +186,20 @@ same list from the evaluation side.
 
 > **The v1 bundle was deleted on 2026-08-19 with the rest of the quadruped line, and this
 > section is kept because the finding is not the bundle.** It was the right thing to
-> delete: its `meta.json` says `experiment: hydranet_indoor` — the indoor 12-class
-> taxonomy, ADE20K and COCO, with the traversability head — and its `builds/` held exactly
-> one artefact, `rk3588_rknn1.6.0_int8_384x512.rknn`, the Lite3's. There was never an
-> agx-orin build in it, so nothing the retail/security line ships was in that directory.
+> delete, and the evidence that settles it is `builds/`: it held exactly one artefact,
+> `rk3588_rknn1.6.0_int8_384x512.rknn`, the Lite3's. There was never an agx-orin build in
+> it, so nothing the retail/security line ships was in that directory. The bundle's
+> resolved config agrees — the indoor 12-class `terrain_classes`, a traversability head,
+> ADE20K and COCO.
+>
+> **What does *not* settle it, and was quoted first before a peer checked it:**
+> `meta.json`'s `experiment` field, which reads `hydranet_indoor`. That field does not
+> identify a run. Nine of the forty-one run directories carrying a `meta.json` disagree
+> with their own `experiment`, six of them calling themselves `hydranet_indoor` —
+> including **all four arms of the COCO ratio sweep**, the comparison this project cites
+> most. A reader who distrusts the directory name and goes to the provenance record gets a
+> field that cannot tell those four apart either; only the resolved
+> `data.datasets[*].sample_ratio` can. See [METHODOLOGY.md](METHODOLOGY.md) §6.
 >
 > **It is re-cuttable, which is why deleting 209 MB was safe**: `runs/hydranet_joint_coco10`
 > is still on disk with its checkpoints, and `release_bundle.sh create` rebuilds the bundle
