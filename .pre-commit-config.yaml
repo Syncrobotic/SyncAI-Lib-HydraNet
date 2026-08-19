@@ -18,8 +18,15 @@ repos:
         # is here for datasets and checkpoints, and this does not loosen it for those.
         exclude: ^assets/.*\.gif$
 
+  # Pinned to the same ruff `uv.lock` gives CI. They drifted once -- v0.13.0 here against
+  # 0.16.2 there -- and the gap was not cosmetic: ruff learnt to format Python code blocks
+  # inside Markdown somewhere between the two, so a commit passed this hook and failed
+  # `ruff format --check .` in CI, on a file the author had no reason to think ruff read.
+  # A local gate that is more permissive than the remote one is worse than no local gate,
+  # because it teaches people the remote one is flaky. tests/test_hook_versions.py checks
+  # they still agree.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.13.0
+    rev: v0.16.2
     hooks:
       - id: ruff
         args: [--fix]

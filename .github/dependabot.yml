@@ -51,3 +51,20 @@ updates:
       dev-tooling:
         patterns: [ruff, pytest, pytest-cov, pre-commit, ty]
         update-types: [minor, patch]
+
+  # Without this the hook revs in .pre-commit-config.yaml are pinned and unmanaged, which
+  # is the same trap the github-actions block above describes: a pin cannot float, so it
+  # never picks up its own fixes, and nothing was watching. It drifted far enough that the
+  # local ruff and CI's ruff disagreed about what "formatted" means.
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+    target-branch: dev
+    commit-message:
+      prefix: build
+    labels: [dependencies]
+    open-pull-requests-limit: 5
+    groups:
+      hooks:
+        patterns: ["*"]

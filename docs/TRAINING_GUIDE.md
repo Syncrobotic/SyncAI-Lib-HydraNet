@@ -183,12 +183,12 @@ a new labelling job. So the policy lives in an explicit table:
 ```python
 RETAIL_OBJECTS_TO_TRAV = {
     0: 255,  # void    -> ignore
-    1: 2,    # floor   -> go
-    2: 0,    # wall    -> blocked
-    3: 0,    # column  -> blocked
-    4: 0,    # fixture -> blocked
-    5: 0,    # product -> blocked
-    6: 0,    # person  -> blocked
+    1: 2,  # floor   -> go
+    2: 0,  # wall    -> blocked
+    3: 0,  # column  -> blocked
+    4: 0,  # fixture -> blocked
+    5: 0,  # product -> blocked
+    6: 0,  # person  -> blocked
 }
 ```
 
