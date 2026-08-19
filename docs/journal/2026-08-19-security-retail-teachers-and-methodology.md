@@ -257,3 +257,19 @@ boxed_stock boxes/frame collapsed 5.5 → 0.12 *at the fixed 0.30 render thresho
 its mAP is unchanged (0.1174 → 0.1179) — a score-calibration shift, not a capability
 loss, and the argument for per-class working thresholds at the serving layer.
 site_person val lands at mAP50 0.787 (agreement with GDINO, per the standing caveat).
+
+**The reach_to_shelf mechanism is fixed and the fix found the person the old one
+missed (`2c2188d`, `9e6818c`).** The old rule read the terrain class *at* the wrist
+pixel — which is usually the wrist's own hand, labelled `person` — so it fired on
+occlusion and pose error rather than on touch. The new rule reads what the hand is
+*over*: fixture share of a 25 px disc around the wrist, person-pixels excluded,
+contact at ≥0.35 (both defaults derived from measurements recorded in the docstring;
+the gap 0.41–0.55 between non-contact spikes and the weakest real contact is where the
+threshold sits). Re-run on the pose-pilot data: the child (t4) still fires at the same
+frames but now *because* the hand is over the display (peak share 0.93–1.0), and the
+deep-bowing customer (t2) — wrist confidently on the display, zero events under the old
+rule because 98–100% of the wrist pixel was `person` — now fires across every reaching
+window, each verified by eye on terrain overlays. cam11 stays at zero under a full
+parameter scan. The terrain map's pixel-space contract is now explicit (wrong size
+raises, message names the fix), and the stale function name in the keypoints contract
+is corrected. Still open from the pilot: `fall_angle_deg`'s viewpoint semantics.
