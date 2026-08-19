@@ -10,10 +10,14 @@ One file for the whole downstream path, merged 2026-08-19 from `DEPLOY_JETSON.md
 * **Part III — a workstation that is not a Jetson.** Apple Silicon for local development,
   and what it can and cannot do.
 
-**Two targets, one ONNX.** The retail/security line runs TensorRT on an Orin; the robot
-line runs RKNN on the Lite3's RK3588 NPU, toolkit pinned to the board's `librknnrt`. Both
-are *builds* of one released model — [RELEASE.md](RELEASE.md) §2 owns that distinction, and
-a build is not accepted without its own metrics beside it.
+**One target, and the distinction it was drawn to make outlives it.** This said "two
+targets, one ONNX" until the quadruped line was removed on 2026-08-19; the second was RKNN
+on a Lite3's RK3588 NPU. What remains is TensorRT on an Orin — but an engine is still a
+*build* of a released model rather than the model itself, and
+[RELEASE.md](RELEASE.md) §2 still owns that distinction. It is not bookkeeping for a
+plural: a build is bound to a GPU architecture, a TensorRT version and a JetPack version,
+so it is not accepted without its own metrics beside it, measured at the precision and
+input size it will actually run at.
 
 ---
 
@@ -559,15 +563,16 @@ The node already publishes what is needed, including depth registered to the col
 /camera/camera/aligned_depth_to_color/image_raw   16UC1, millimetres
 ```
 
-```bash
-source /opt/ros/humble/setup.bash
-python3 probe_ros_realsense.py --weights <state_dict>.pt \   # removed with the robot line
-    --config configs/hydranet_indoor.yaml --frames 40 --save 6 --range 5.0
-```
+> **The tooling for this section went with the quadruped line on 2026-08-19**
+> (`probe_ros_realsense.py`, `live_view_ros.py`). The section is kept because its
+> *measurements* are cited elsewhere — [GROUND_PROJECTION.md](GROUND_PROJECTION.md) and
+> [RETAIL.md](RETAIL.md) §5 both rest on the no-depth figure below — and because the
+> transport costs are the reason a CCTV deployment reads frames the way it does. Read it
+> as a record of what was measured, not as a procedure that can be re-run as written.
 
-It subscribes with `qos_profile_sensor_data` (the node publishes best-effort; a default
-reliable subscription receives nothing and looks like a dead topic), runs the checkpoint in
-PyTorch, and gates walkable on metric depth.
+The script subscribed with `qos_profile_sensor_data` (the node publishes best-effort; a
+default reliable subscription receives nothing and looks like a dead topic), ran the
+checkpoint in PyTorch, and gated walkable on metric depth.
 
 ### What it measured, and why the engine still matters
 

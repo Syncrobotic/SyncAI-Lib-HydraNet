@@ -213,11 +213,15 @@ keeps binding names and nothing else. Full tables and the correctness checks are
 
 ## Deployment configs
 
-| Config | Environment | Terrain classes | Segmentation datasets |
-|---|---|---|---|
-| `hydranet_regnet800mf.yaml` | Off-road | 12 outdoor (grass / gravel / tree-bush …) | RUGD, RELLIS-3D |
-| `hydranet_indoor.yaml` | Indoor (lobbies / corridors / factory floors) | 12 indoor (floor / glass / stairs …) | ADE20K + your own annotations |
-| `hydranet_retail.yaml` | Retail (shops / supermarkets) | the indoor 12 + `display_fixture` | ADE20K + store footage |
+The line this repository ships is the retail/security one, and its configs are the
+`hydranet_retail_*` family. Two others are kept, and it is worth being explicit about why,
+because a table that lists three environments side by side reads as three products:
+
+| Config | Environment | Terrain classes | Segmentation datasets | Status |
+|---|---|---|---|---|
+| `hydranet_retail.yaml` | Retail (shops / supermarkets) | the indoor 12 + `display_fixture` | ADE20K + store footage | **the shipping line** |
+| `hydranet_indoor.yaml` | Indoor (lobbies / corridors / factory floors) | 12 indoor (floor / glass / stairs …) | ADE20K + your own annotations | the retail taxonomy's parent — ids 0–11 are byte-identical, and `runs/hydranet_indoor` is the baseline every architecture measurement in [ARCHITECTURE.md](docs/ARCHITECTURE.md) Part I was taken against |
+| `hydranet_regnet800mf.yaml` | Off-road | 12 outdoor (grass / gravel / tree-bush …) | RUGD, RELLIS-3D | still wired, and **nothing on the retail line uses it**. It is also what four test files train against, which is why it is a live config rather than a dead one |
 
 Model structure, losses and training mechanics are identical across all three — the
 differences are `data.terrain_classes`, `label_map` and the data sources. All three use
