@@ -69,12 +69,16 @@ def _tracked_scripts() -> list[Path]:
 # `sam3_product_coverage -> sam3_person_boxes`. It was two copies of one formula, one
 # gating and one reporting, and the reporting copy's docstring named the other instead of
 # importing it.
+# 6 -> 5: `propose_zones -> calibrate_from_plate` was pure indirection -- the script it
+# imported `undistort_image` from had itself imported it from
+# `geometry/plate_calibration.py`, and carried a comment saying other scripts re-imported
+# it. One hop removed, no code moved.
 # 8 -> 6: the SAM 3 teacher moved to `data/teachers/sam3.py`, which removed both
 # `-> sam3_prelabel` pairs. `column_camera_sweep._prelabel` went with them: it loaded the
 # same script *by path* to stay out of this count, and said in its own docstring that a
 # third caller wanting `segment` was the signal to move it into the package. That caller
 # arrived.
-BASELINE_PAIRS = 6
+BASELINE_PAIRS = 5
 
 
 def _script_to_script_imports() -> list[tuple[str, str]]:

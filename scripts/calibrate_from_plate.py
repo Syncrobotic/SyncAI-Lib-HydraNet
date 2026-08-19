@@ -71,7 +71,6 @@ from syncai_hydranet.geometry.ground import Camera  # noqa: E402
 # The pipeline itself lives in the package (moved there 2026-08-19, when
 # onboard_camera.py became its second script consumer): the wheel, the type ratchet and
 # the coverage floor reach it there, and there is exactly one copy of every formula.
-# `undistort_image` and `run_depth` are re-imported here by other scripts.
 from syncai_hydranet.geometry.plate_calibration import (  # noqa: E402
     MODEL,
     PLATES,
