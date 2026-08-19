@@ -189,6 +189,46 @@ def terrain_palette(classes, n_classes: int | None = None) -> np.ndarray:
     )
 
 
+# Depth is metres, not a class id, so it gets a ramp rather than a palette -- and the ramp
+# is pinned to a fixed range rather than normalised per frame. Per-frame normalisation makes
+# every frame look equally confident: a corridor whose true span is 0.3-5 m and one whose
+# span is 0.3-1 m render identically. That matters here more than usual, because this head's
+# metres are the part known to be wrong -- a published metric-depth model over-predicted by
+# a flat 15% on a domain change (measured 2026-08-18, docs/RESEARCH_OCCUPANCY.md), and a
+# self-scaling colour map hides exactly that error while looking sharper.
+#
+# Near is warm. A robot reads "red is close", and the alternative convention -- warm for
+# far, as a raw depth value would give -- puts the loudest colour on the part of the frame
+# that matters least.
+_DEPTH_RAMP = np.array(
+    [
+        [230, 60, 40],  # near
+        [245, 175, 55],
+        [225, 225, 70],
+        [110, 205, 110],
+        [45, 150, 190],
+        [15, 30, 85],  # far
+    ],
+    dtype=np.float32,
+)
+
+
+def depth_colors(depth_m: np.ndarray, vmax: float, vmin: float = 0.0) -> np.ndarray:
+    """Metric depth ``[H, W]`` -> RGB ``uint8``, on a FIXED ``vmin..vmax`` scale.
+
+    Anything beyond the ends is clamped rather than rescaled, so a frame that saturates
+    looks saturated instead of looking like a different scene.
+    """
+    d = np.clip(
+        (np.asarray(depth_m, dtype=np.float32) - vmin) / max(vmax - vmin, 1e-6), 0.0, 1.0
+    )
+    pos = d * (len(_DEPTH_RAMP) - 1)
+    lo = np.floor(pos).astype(np.int32)
+    hi = np.minimum(lo + 1, len(_DEPTH_RAMP) - 1)
+    t = (pos - lo)[..., None]
+    return (_DEPTH_RAMP[lo] * (1 - t) + _DEPTH_RAMP[hi] * t).astype(np.uint8)
+
+
 def overlay(
     base: Image.Image, mask: np.ndarray, palette: np.ndarray, alpha: float = 0.45
 ) -> Image.Image:
