@@ -168,6 +168,30 @@ class TexturedScene:
         return out
 
 
+def snap_labels(sampled: np.ndarray, table: np.ndarray) -> np.ndarray:
+    """Sampled texture colours -> label ids: nearest within `SNAP_MAX`, else unlabeled.
+
+    Done over the frame's *distinct* colours, not its pixels. The direct version compares
+    every hit against every label -- a 304k x 661 x 3 array, 1.6 GB of temporary -- and
+    profiling put it at **6.71 s of a 7.2 s frame**, against 0.14 s for the raycast that
+    does the actual work. A 480x640 frame holds on the order of a thousand distinct
+    colours, so collapsing to those first gives the identical answer for ~1% of the cost.
+
+    Worth stating plainly because it is the general shape: this was never a job that
+    wanted a bigger machine. An idle GPU would have accelerated the 0.14 s.
+    """
+    flat = sampled.reshape(-1, 3).astype(np.int32)
+    packed = (flat[:, 0] << 16) | (flat[:, 1] << 8) | flat[:, 2]
+    uniq, inverse = np.unique(packed, return_inverse=True)
+    rgb = np.stack([(uniq >> 16) & 255, (uniq >> 8) & 255, uniq & 255], axis=1).astype(
+        np.float64
+    )
+    d = np.linalg.norm(rgb[:, None, :] - table[None, :, :], axis=2)
+    near = d.argmin(axis=1)
+    near[d[np.arange(len(near)), near] > SNAP_MAX] = UNLABELED
+    return near[inverse].astype(np.uint16)
+
+
 def up_axis(mesh: trimesh.Trimesh) -> int:
     """Which axis is vertical, decided from the mesh rather than assumed.
 
@@ -218,7 +242,7 @@ def camera_rays(size, vfov_deg: float, position, yaw_deg: float, pitch_deg: floa
 
 
 def render(
-    rgb: TexturedScene, sem: TexturedScene, table, position, yaw, cfg: Pose, up: int
+    rgb: TexturedScene, sem: TexturedScene | None, table, position, yaw, cfg: Pose, up: int
 ) -> dict:
     h, w = cfg.size
     origins, dirs, fwd = camera_rays(cfg.size, cfg.vfov, position, yaw, cfg.pitch, up)
@@ -235,11 +259,8 @@ def render(
         bary = trimesh.triangles.points_to_barycentric(rgb.vertices[tri], locs)
         colour[idx_ray] = rgb.sample(idx_tri, bary)
         # Same topology in both meshes, so the hit triangle index carries across.
-        sem_rgb = sem.sample(idx_tri, bary).astype(np.float64)
-        d = np.linalg.norm(sem_rgb[:, None, :] - table[None, :, :], axis=2)
-        near = d.argmin(axis=1)
-        near[d[np.arange(len(near)), near] > SNAP_MAX] = UNLABELED
-        labels[idx_ray] = near.astype(np.uint16)
+        if sem is not None:
+            labels[idx_ray] = snap_labels(sem.sample(idx_tri, bary), table)
     return {
         "rgb": colour.reshape(h, w, 3),
         "depth": depth.reshape(h, w),
@@ -290,28 +311,103 @@ def floor_points(rgb: TexturedScene, up: int, n: int, rng, need_clear: float = 0
     return floor[pick]
 
 
-def floor_label(depth: np.ndarray, cfg: Pose) -> tuple[float, float, float] | None:
+def pick_yaw(rgb: TexturedScene, eye: np.ndarray, up: int, rng, n_probe: int = 24) -> float:
+    """Aim the camera at open space instead of spinning it at random.
+
+    A random yaw in a furnished house points at a wall most of the time, and a frame with
+    no floor in it is dropped later at full rendering cost. Under the plausibility gate
+    that cost 60-70 of every 70 placements in the worst scenes and left a validation split
+    of ten frames.
+
+    So probe the horizon first: one ray per candidate yaw, then choose among the roomiest.
+    Randomised over the top third rather than taking the maximum, because always facing
+    the longest sightline would make every frame a corridor shot and quietly narrow the
+    dataset in a different way.
+    """
+    yaws = np.linspace(0, 360, n_probe, endpoint=False)
+    ax, bx = (i for i in range(3) if i != up)
+    dirs = np.zeros((n_probe, 3))
+    dirs[:, ax] = np.cos(np.radians(yaws))
+    dirs[:, bx] = np.sin(np.radians(yaws))
+    origins = np.broadcast_to(eye, dirs.shape)
+    _tri, idx_ray, locs = rgb.mesh.ray.intersects_id(
+        origins, dirs, multiple_hits=False, return_locations=True
+    )
+    clear = np.full(n_probe, np.inf)
+    if len(idx_ray):
+        clear[idx_ray] = np.linalg.norm(locs - origins[idx_ray], axis=1)
+    top = np.argsort(clear)[-max(1, n_probe // 3) :]
+    return float(yaws[rng.choice(top)])
+
+
+def floor_label(depth: np.ndarray, cfg: Pose, inlier_m: float = 0.05) -> dict | None:
     """The frame's true pose relative to the floor, measured from its own ground truth.
 
     **Not the same as the pose it was rendered at, and that difference was a real bug.**
     `floor_points` places the eye a fixed height above whatever flat surface it sampled,
-    and some of those surfaces are counters, steps and platforms rather than the floor:
-    across eight test frames, three sat 0.48-0.65 m up, and for every one of them RANSAC
-    on the ground-truth depth returned exactly `placed height + platform height`. The fit
-    was right and the nominal label was wrong, by half a metre, on 3 frames in 8.
+    and some of those are counters, steps and platforms: across eight test frames three
+    sat 0.48-0.65 m up, and for each one RANSAC on the ground-truth depth returned exactly
+    `placed height + platform height`. The fit was right and the nominal label was wrong,
+    by half a metre, on three frames in eight -- and the loss would have fallen anyway.
 
-    Training on the nominal number would have taught a systematic error to a third of the
-    set. So the label is whatever the geometry says, computed from GT depth with the same
-    function that will later be run on predicted depth -- which also means the two are
-    comparable by construction rather than by assumption.
+    So the label is whatever the geometry says, computed with the same function that will
+    later run on *predicted* depth, which makes the two comparable by construction.
+
+    `inlier_frac` is how much of the frame the fitted plane actually explains, and it
+    replaces an earlier check that counted semantic `floor` pixels. Two reasons it is
+    better: it measures what the fit stands on rather than what the annotation calls
+    floor, and **it needs no semantic mesh** -- which matters because HM3D annotates only
+    a subset of scenes. Six of ten minival scenes have no `.semantic.glb` at all, and
+    gating on semantics silently discarded every one of them.
     """
     d = depth.astype(np.float64).copy()
     d[d <= 0] = np.nan
     h, w = d.shape
-    plane, _ = fit_ground_plane(d, Camera.from_vfov(h, w, cfg.vfov))
+    plane, residual = fit_ground_plane(d, Camera.from_vfov(h, w, cfg.vfov))
     if plane is None:
         return None
-    return plane.height, math.degrees(plane.pitch), math.degrees(plane.roll)
+    finite = np.isfinite(residual)
+    inlier = float((np.abs(residual[finite]) <= inlier_m).mean()) if finite.any() else 0.0
+    return {
+        "height": round(plane.height, 4),
+        "pitch": round(math.degrees(plane.pitch), 3),
+        "roll": round(math.degrees(plane.roll), 3),
+        "inlier_frac": round(inlier, 4),
+    }
+
+
+# A downward-looking camera standing on a floor. Deliberately far wider than any jitter
+# this script applies, so these reject physically impossible fits without narrowing the
+# label distribution the model has to learn.
+# Separate constants rather than one dict: mixing a pair and a scalar in a dict types
+# every read as their union, which is true and unusable -- the same shape that made
+# PRESETS a NamedTuple above.
+FLOOR_HEIGHT_M = (0.5, 5.0)
+FLOOR_PITCH_DEG = (5.0, 85.0)
+FLOOR_MAX_ROLL_DEG = 15.0
+
+
+def plausible_floor(label: dict, min_inlier: float) -> bool:
+    """Is the fitted plane a floor, or is it a wall RANSAC liked the look of?
+
+    An inlier fraction alone does not answer this, and trusting it produced a dataset
+    whose pitch labels ran from -71 to +85 degrees against a rendered range of 38 to 62,
+    with heights down to 0.01 m. Those are ceilings and walls: any large flat surface has
+    inliers, and a plane fitted to the ceiling is every bit as tight as one fitted to the
+    floor.
+
+    What separates them is not fit quality but geometry -- a floor is below the camera and
+    the camera looks down at it. Bounds are wide enough that they cannot be doing the
+    labelling; they only remove fits that no camera placement could have produced.
+    """
+    lo, hi = FLOOR_HEIGHT_M
+    plo, phi = FLOOR_PITCH_DEG
+    return (
+        label["inlier_frac"] >= min_inlier
+        and lo <= label["height"] <= hi
+        and plo <= label["pitch"] <= phi
+        and abs(label["roll"]) <= FLOOR_MAX_ROLL_DEG
+    )
 
 
 def main() -> int:
@@ -331,8 +427,8 @@ def main() -> int:
     ap.add_argument(
         "--min-floor-frac",
         type=float,
-        default=0.05,
-        help="drop frames whose semantic floor covers less than this fraction",
+        default=0.25,
+        help="drop frames whose fitted ground plane explains less of the frame than this",
     )
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--preset", choices=sorted(PRESETS), default="cctv")
@@ -359,10 +455,22 @@ def main() -> int:
         if not (scene / f"{stem}.glb").exists():
             continue
         rgb = TexturedScene(scene / f"{stem}.glb")
-        sem = TexturedScene(scene / f"{stem}.semantic.glb")
-        table, names = load_label_table(scene / f"{stem}.semantic.txt")
+        # Semantics are optional. HM3D ships annotations for a subset only -- six of ten
+        # minival scenes have no semantic mesh -- and depth supervision does not need
+        # them. Requiring them threw away those scenes with a stack trace.
+        sem_path = scene / f"{stem}.semantic.glb"
+        has_sem = sem_path.exists() and (scene / f"{stem}.semantic.txt").exists()
+        sem = TexturedScene(sem_path) if has_sem else None
+        table, names = (
+            load_label_table(scene / f"{stem}.semantic.txt")
+            if has_sem
+            else (np.zeros((1, 3)), ["unlabeled"])
+        )
         up = up_axis(rgb.mesh)
-        print(f"{stem}: {len(rgb.faces):,} faces, up-axis={'xyz'[up]}, {len(names)} labels")
+        print(
+            f"{stem}: {len(rgb.faces):,} faces, up-axis={'xyz'[up]}, "
+            f"{len(names) if has_sem else 'no'} labels"
+        )
         # Headroom for the tallest jittered eye, plus a little, so a frame is not
         # rejected for a placement the jitter happened to push into the ceiling.
         spots = floor_points(
@@ -377,12 +485,10 @@ def main() -> int:
             )
             eye = spot.copy()
             eye[up] += cfg.height
-            yaw = float(rng.uniform(0, 360))
+            yaw = pick_yaw(rgb, eye, up, rng)
             r = render(rgb, sem, table, eye, yaw, cfg, up)
-            floor_ids = [j for j, n in enumerate(names) if n == "floor"]
-            floor_frac = float(np.isin(r["semantic"], floor_ids).mean())
-            label = floor_label(r["depth"], cfg) if floor_frac >= args.min_floor_frac else None
-            if label is None:
+            label = floor_label(r["depth"], cfg)
+            if label is None or not plausible_floor(label, args.min_floor_frac):
                 dropped += 1
                 continue
             Image.fromarray(r["rgb"]).save(args.out / f"{i:05d}_rgb.png")
@@ -391,7 +497,8 @@ def main() -> int:
             Image.fromarray((r["depth"] * 1000).clip(0, 65535).astype(np.uint16)).save(
                 args.out / f"{i:05d}_depth.png"
             )
-            Image.fromarray(r["semantic"]).save(args.out / f"{i:05d}_semantic.png")
+            if has_sem:
+                Image.fromarray(r["semantic"]).save(args.out / f"{i:05d}_semantic.png")
             seen = np.unique(r["semantic"])
             d = r["depth"][r["depth"] > 0]
             manifest.append(
@@ -403,19 +510,16 @@ def main() -> int:
                     "yaw_deg": yaw,
                     # The measured pose, which is the label. `*_nominal` is where the eye
                     # was put, kept only so a surprising gap between them is visible.
-                    "height": round(label[0], 4),
-                    "pitch": round(label[1], 3),
-                    "roll": round(label[2], 3),
+                    **label,
                     "height_nominal": round(cfg.height, 4),
                     "pitch_nominal": round(cfg.pitch, 3),
-                    "floor_frac": round(floor_frac, 4),
                     "vfov": cfg.vfov,
                     "size": list(cfg.size),
                     "hit_frac": round(r["hit_frac"], 4),
                     "depth_m": [round(float(d.min()), 3), round(float(d.max()), 3)]
                     if len(d)
                     else None,
-                    "labels": [names[j] for j in seen[:12]],
+                    "labels": [names[j] for j in seen[:12]] if has_sem else [],
                 }
             )
             i += 1
