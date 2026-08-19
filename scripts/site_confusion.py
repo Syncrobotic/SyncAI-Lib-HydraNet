@@ -42,6 +42,7 @@ for candidate in (HERE.parent / "src", HERE / "src"):
 import yaml  # noqa: E402
 
 from syncai_hydranet.data.label_maps import get_scheme  # noqa: E402
+from syncai_hydranet.labels import IGNORE  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
@@ -102,7 +103,7 @@ def per_image_confusions(run: Path, args, device) -> tuple[np.ndarray, list[str]
         raw = np.asarray(Image.open(png))
         gt = np.full(raw.shape, 255, dtype=np.uint8)
         for k, v in mapping.items():
-            if v != 255:
+            if v != IGNORE:
                 gt[raw == k] = v
         x, _, region = preprocess(Image.open(jpg), cfg["data"]["input_size"])
         with torch.no_grad():
@@ -123,7 +124,7 @@ def per_image_confusions(run: Path, args, device) -> tuple[np.ndarray, list[str]
             .astype(np.uint8)
         )
         c = np.zeros((len(classes), len(classes)), dtype=np.int64)
-        ok = gt != 255
+        ok = gt != IGNORE
         np.add.at(c, (gt[ok], pred[ok]), 1)
         mats.append(c)
         kept.append(jpg)

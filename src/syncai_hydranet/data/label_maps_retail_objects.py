@@ -45,6 +45,7 @@ so the numbering is free -- but once site masks are exported against it, it is n
 
 from __future__ import annotations
 
+from ..labels import IGNORE
 from .label_maps_indoor import ADE20K_ID_TO_INDOOR, INDOOR_TERRAIN
 from .label_maps_retail import RETAIL_TERRAIN
 
@@ -257,7 +258,7 @@ def unsourced_classes(*mappings: dict[int, int]) -> tuple[str, ...]:
     IoU 0.000, and every run that trained them looked completely normal. An empty output
     channel is invisible at training time. This makes it a config-time answer.
     """
-    produced = {v for m in mappings for v in m.values() if v != 255}
+    produced = {v for m in mappings for v in m.values() if v != IGNORE}
     return tuple(name for name, tid in RETAIL_OBJECTS.items() if tid and tid not in produced)
 
 

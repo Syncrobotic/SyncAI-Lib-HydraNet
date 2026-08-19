@@ -14,6 +14,7 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image
 
+from ..labels import IGNORE
 from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD, PAD_COLOR
 
 # Traversability: blocked / caution / go. The one taxonomy that does not change between
@@ -324,8 +325,8 @@ def prediction_grid(images, preds, gts, palette, max_n: int = 4, gap: int = 4) -
         g = np.asarray(gts[i].detach().cpu().numpy(), dtype=np.int64)
         pred_img = np.asarray(overlay(base, p, palette))
         # Paint label ignore (255) black so unsupervised regions are obvious.
-        gt_img = np.asarray(overlay(base, np.where(g == 255, 0, g), palette))
-        gt_img = np.where((g == 255)[..., None], 0, gt_img).astype(np.uint8)
+        gt_img = np.asarray(overlay(base, np.where(g == IGNORE, 0, g), palette))
+        gt_img = np.where((g == IGNORE)[..., None], 0, gt_img).astype(np.uint8)
         sep = np.full((gt_img.shape[0], gap, 3), 255, np.uint8)
         rows.append(np.concatenate([np.asarray(base), sep, pred_img, sep, gt_img], axis=1))
     if not rows:

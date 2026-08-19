@@ -49,12 +49,11 @@ for candidate in (HERE.parent / "src", HERE / "src"):
 from syncai_hydranet.data.video import frames, probe  # noqa: E402  # isort: skip
 from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
+from syncai_hydranet.labels import IGNORE  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.preprocessing import IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
-
-IGNORE = 255
 
 
 def build_parser() -> argparse.ArgumentParser:

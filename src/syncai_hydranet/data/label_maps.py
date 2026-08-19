@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..labels import IGNORE
 from . import label_maps_cocostuff as _cs
 from . import label_maps_indoor as _ind
 from . import label_maps_retail as _ret
@@ -124,7 +125,7 @@ def terrain_to_traversability(terrain_mask, trav_map=None):
     """Map an ``HxW`` terrain id array to traversability ids (0/1/2, 255 = ignore)."""
     import numpy as np
 
-    out = np.full_like(terrain_mask, 255)
+    out = np.full_like(terrain_mask, IGNORE)
     for t_id, trav in (trav_map or TERRAIN_TO_TRAV).items():
         out[terrain_mask == t_id] = trav
     return out

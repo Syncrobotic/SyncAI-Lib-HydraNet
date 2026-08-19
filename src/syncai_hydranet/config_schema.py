@@ -398,7 +398,7 @@ def unsourced_terrain_classes(cfg: dict) -> dict[str, tuple[str, ...]]:
     """
     out: dict[str, tuple[str, ...]] = {}
     for classes, members in _taxonomy_groups(cfg).items():
-        produced = {v for _n, s, _r in members for v in s.mapping.values() if v != 255}
+        produced = {v for _n, s, _r in members for v in s.mapping.values() if v != IGNORE}
         # Class 0 is `void` in every scheme and is not a class anyone trains, so a
         # mapping that never emits it is correct rather than incomplete.
         missing = tuple(name for tid, name in enumerate(classes) if tid and tid not in produced)
@@ -489,7 +489,7 @@ def minority_sourced_terrain_classes(cfg: dict) -> dict[str, tuple[list, list]]:
 
 def _is_identity(scheme: Any) -> bool:
     """A scheme whose mapping is ``{id: id}`` claims every class and evidences none."""
-    return all(k == v for k, v in scheme.mapping.items() if v != 255)
+    return all(k == v for k, v in scheme.mapping.items() if v != IGNORE)
 
 
 # Deliberately NOT reported here: which class the dominant dataset gives those pixels

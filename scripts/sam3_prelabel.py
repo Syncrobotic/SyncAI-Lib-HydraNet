@@ -82,6 +82,7 @@ from syncai_hydranet.data import sam3_prompts_objects as _object_prompts  # noqa
 from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
 from syncai_hydranet.data.sam3_prompts import DEFAULT_MIN_SCORE  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
+from syncai_hydranet.labels import IGNORE  # noqa: E402
 
 # Two taxonomies, two prompt tables, and the pairing is not interchangeable: a concept
 # resolves its class id against the taxonomy it belongs to, so running the retail table
@@ -93,7 +94,6 @@ PROMPT_SETS = {
     "retail_objects": _object_prompts,
 }
 
-IGNORE = 255
 CONTESTED = -1
 # Below this an "instance" is a speck: SAM 3 emits a handful of stray pixels on a
 # confident prompt, and a 3-pixel box trains a detector to fire on noise.

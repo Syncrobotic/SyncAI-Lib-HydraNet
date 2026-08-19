@@ -27,6 +27,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from .labels import IGNORE
+
 # ImageNet statistics, in the 0-1 scale. The export path multiplies both by 255 because
 # the graph is handed uint8 pixels; see cli/export_onnx.py.
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
@@ -38,6 +40,12 @@ PAD_COLOR = (114, 114, 114)
 
 # Padded pixels are always ignore, never a class. They contribute no loss, which is the
 # only honest thing to do with a region the camera never saw.
-PAD_LABEL = 255
+#
+# Aliased rather than restated. `labels.IGNORE` is the mask-file contract -- the value an
+# annotation PNG carries where nobody said, and the value the loss is told to skip -- and
+# letterbox padding is a region nobody could have said anything about. Two names for one
+# number is fine when one is defined as the other; two definitions of 255 is what
+# `labels.py` was written to end, and this was the copy it did not reach.
+PAD_LABEL = IGNORE
 
 __all__ = ["IMAGENET_MEAN", "IMAGENET_STD", "PAD_COLOR", "PAD_LABEL"]

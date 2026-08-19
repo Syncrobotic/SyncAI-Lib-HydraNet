@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 
 from ..data.multitask import collate
 from ..data.transforms import invert_geom
+from ..labels import IGNORE
 from ..models.heads.detection import SCORE_THR_EVAL
 from ..utils.seeding import model_memory_format
 
@@ -36,7 +37,7 @@ class ConfusionMatrix:
             self.mat = torch.zeros(self.n * self.n, dtype=torch.int64, device=pred.device)
         p = pred.reshape(-1)
         t = target.reshape(-1).to(p.device)
-        valid = t != 255
+        valid = t != IGNORE
         idx = t[valid] * self.n + p[valid]
         self.mat += torch.bincount(idx, minlength=self.n * self.n)
 
@@ -108,11 +109,11 @@ def head_disagreement(trav_pred, terrain_pred, trav_map: dict, valid) -> tuple[i
     counts. It is reported rather than corrected, because which head should win is a
     deployment decision, not an evaluation one.
     """
-    lut = torch.full((max(trav_map) + 1,), 255, dtype=torch.long, device=terrain_pred.device)
+    lut = torch.full((max(trav_map) + 1,), IGNORE, dtype=torch.long, device=terrain_pred.device)
     for k, v in trav_map.items():
         lut[k] = v
     derived = lut[terrain_pred.clamp(max=len(lut) - 1)]
-    both = valid & (derived != 255)
+    both = valid & (derived != IGNORE)
     return int((both & (derived != trav_pred)).sum()), int(both.sum())
 
 
@@ -537,7 +538,7 @@ def evaluate(
             if trav_map and {"traversability", "terrain"} <= set(seg_preds):
                 trav_pred, trav_tgt = seg_preds["traversability"]
                 d, n = head_disagreement(
-                    trav_pred, seg_preds["terrain"][0], trav_map, trav_tgt != 255
+                    trav_pred, seg_preds["terrain"][0], trav_map, trav_tgt != IGNORE
                 )
                 disagree += d
                 disagree_total += n
