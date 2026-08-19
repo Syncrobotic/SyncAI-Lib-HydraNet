@@ -55,12 +55,12 @@ for candidate in (HERE.parent / "src", HERE / "src"):
         sys.path.insert(0, str(candidate))
 sys.path.insert(0, str(HERE))
 
-from sam3_person_boxes import is_daylight  # noqa: E402
 from sam3_prelabel import load_sam3, segment  # noqa: E402
 
 from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402
 from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.sam3_prompts_objects import CONCEPTS  # noqa: E402
+from syncai_hydranet.data.teachers.photometry import is_daylight  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
@@ -124,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
         every = max(int(300 * 5 / max(args.frames, 1)), 1)
         seen = 0
         for i, frame in enumerate(frames(clip, w, h, 5.0)):
-            if i % every or not is_daylight(frame, 40.0, 1.0):  # 1.0: see sam3_person_boxes
+            if i % every or not is_daylight(frame):
                 continue
             img = Image.fromarray(frame)  # native, nothing downscaled
             product = np.zeros((h, w), dtype=bool)

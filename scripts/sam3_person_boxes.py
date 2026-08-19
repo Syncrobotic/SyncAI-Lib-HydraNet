@@ -68,6 +68,11 @@ sys.path.insert(0, str(HERE))
 from sam3_prelabel import load_sam3, segment  # noqa: E402
 
 from syncai_hydranet.analytics.tracker import iou  # noqa: E402
+from syncai_hydranet.data.teachers.photometry import (  # noqa: E402
+    MIN_CHROMA,
+    MIN_LUMA,
+    is_daylight,
+)
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
 
 
@@ -80,32 +85,16 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--model-id", default="facebook/sam3")
     ap.add_argument("--frames", type=int, default=12, help="frames sampled per clip")
     ap.add_argument("--min-score", type=float, default=0.50)
-    # Daylight gate. Both are properties of the pixels: an IR frame is monochrome by
-    # construction, so its per-pixel channel spread collapses.
-    #
-    # **1.0 is measured, not chosen**, and the first version used 6.0 chosen out of the
-    # air -- which rejected Kaohsiung-cam08 outright, a bright white-walled store at luma
-    # 108 whose chroma is only 3.90 because the store itself is grey and white. Sampled
-    # over all 48 cameras at two time slots: 21 of 96 frames sit at **exactly 0.00**
-    # (monochrome by construction) and every colour frame is **>= 2.13**. The two
-    # populations do not overlap and there is nothing between them, so the threshold
-    # belongs in that gap. ARCHITECTURE.md rule 2 -- any threshold is relative
-    # to a measured baseline, never an absolute -- and this is the second time this
-    # project has paid for ignoring it.
-    ap.add_argument("--min-luma", type=float, default=40.0)
-    ap.add_argument("--min-chroma", type=float, default=1.0)
+    # Daylight gate. Both are properties of the pixels, and both defaults are measured
+    # over all 48 cameras -- `data/teachers/photometry.py` carries the distribution and
+    # why 1.0 sits where it does.
+    ap.add_argument("--min-luma", type=float, default=MIN_LUMA)
+    ap.add_argument("--min-chroma", type=float, default=MIN_CHROMA)
     # Static gate. A box recurring at IoU >= 0.7 in this share of frames is furniture.
     ap.add_argument("--static-iou", type=float, default=0.7)
     # 0 disables. Off by default -- see the docstring: it was measured removing people.
     ap.add_argument("--static-share", type=float, default=0.0)
     return ap
-
-
-def is_daylight(frame: np.ndarray, min_luma: float, min_chroma: float) -> bool:
-    """Colour and bright enough to be a daytime frame, tested on the pixels."""
-    luma = float(frame.mean())
-    chroma = float(np.abs(frame.astype(np.int16) - frame.mean(axis=2, keepdims=True)).mean())
-    return luma >= min_luma and chroma >= min_chroma
 
 
 def boxes_from_masks(pairs) -> np.ndarray:

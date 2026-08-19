@@ -49,6 +49,8 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
+from syncai_hydranet.data.teachers.photometry import luma_chroma  # noqa: E402
+
 THRESHOLD_LADDER = (0.25, 0.35, 0.50)  # reported per camera; nothing is filtered by them
 
 
@@ -116,13 +118,6 @@ def nms(boxes: np.ndarray, iou_thr: float) -> np.ndarray:
         if all(iou(boxes[i : i + 1, :4], boxes[j : j + 1, :4])[0, 0] < iou_thr for j in keep):
             keep.append(i)
     return boxes[sorted(keep)]
-
-
-def luma_chroma(frame: np.ndarray) -> tuple[float, float]:
-    """Same pixel test as sam3_person_boxes.is_daylight, reported rather than gated."""
-    luma = float(frame.mean())
-    chroma = float(np.abs(frame.astype(np.int16) - frame.mean(axis=2, keepdims=True)).mean())
-    return luma, chroma
 
 
 def iter_image_dirs(dirs: list[str]):

@@ -65,7 +65,11 @@ def _tracked_scripts() -> list[Path]:
 # 10 -> 9 same day: the plate-calibration pipeline moved to
 # `geometry/plate_calibration.py`, which removed `calibrate_from_plate ->
 # fit_camera_from_people` (and kept `onboard_camera` from becoming the 11th pair).
-BASELINE_PAIRS = 9
+# 9 -> 8: the day/night pixel test moved to `data/teachers/photometry.py`, which removed
+# `sam3_product_coverage -> sam3_person_boxes`. It was two copies of one formula, one
+# gating and one reporting, and the reporting copy's docstring named the other instead of
+# importing it.
+BASELINE_PAIRS = 8
 
 
 def _script_to_script_imports() -> list[tuple[str, str]]:
