@@ -277,10 +277,22 @@ If that is not fast enough, adjust in this order (cheapest first):
 
 ## 5. Matching the pre-processing
 
-The engine input is `(pixel/255 - mean) / std` with ImageNet mean/std, in RGB order.
-If the camera gives BGR (OpenCV), remember to convert to RGB — otherwise accuracy quietly
-drops by 5–10 points.
-On the Jetson, prefer a CUDA kernel or VPI for pre-processing to avoid a CPU bottleneck.
+**Read the input binding name and do what it says** — §1 has the contract and this section
+used to contradict it. It said "the engine input is `(pixel/255 - mean) / std`", which was
+true before the normalisation was folded into the graph and has been false since:
+
+| input binding | what the runtime owes it |
+|---|---|
+| `image_rgb_255` | letterbox, BGR→RGB, transpose to NCHW, hand over **raw 0–255 pixels**. Subtract nothing. |
+| `images` | the old contract — the runtime owns mean/std. Only an export built with `--no-embed-preprocessing` has it. |
+
+Normalising against `image_rgb_255` does it **twice**. That is the failure §1 describes as
+"silent and costs accuracy, not a crash", and following the old text here was the most
+likely way to cause it.
+
+What is unchanged: the order is **RGB**, and a BGR camera feed handed over unconverted
+costs 5–10 points quietly. On the Jetson, prefer a CUDA kernel or VPI for the letterbox and
+the transpose, to keep pre-processing off the CPU.
 
 ---
 

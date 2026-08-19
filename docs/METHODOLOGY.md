@@ -869,9 +869,12 @@ that fails here.
 - **Field footage inference.** Run `hydranet-infer-video` on real site recordings and watch
   the overlay. Reflections, glass and thresholds are what to look for.
 - **Export parity.** Confirm the ONNX/TensorRT output matches PyTorch on the same input.
-  A silent mismatch here — usually pre-processing — is the classic deployment bug: the engine
-  input is `(pixel/255 - mean) / std` with ImageNet statistics in **RGB**, and a BGR camera
-  feed costs 5–10 points quietly.
+  A silent mismatch here — usually pre-processing — is the classic deployment bug, and the
+  contract is carried by the input binding's *name*: `image_rgb_255` means the graph
+  normalises and the runtime hands over **raw 0–255 RGB**, while `images` means the old
+  convention where the runtime owns mean/std. Normalising against the first does it twice,
+  which costs accuracy and raises nothing. A BGR feed handed over unconverted costs 5–10
+  points just as quietly. [DEPLOY.md](DEPLOY.md) §1 and §5 have both halves.
 - **Latency on the target board**, not on the workstation.
 
 ### Acceptance gates before deployment
