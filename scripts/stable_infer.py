@@ -460,7 +460,10 @@ class StabilisedModel:
             if box[2] - box[0] < 1 or box[3] - box[1] < 1:
                 continue
             bs.append(box)
-            ls.append(int(np.bincount(votes).argmax()))  # class = the track's majority vote
+            counts = np.bincount(votes)
+            # numpy 2.5 stubs reject a plain argmax() here; the code is right (same
+            # stub family as dwell.py's float(arr.min())), so the ignore is scoped.
+            ls.append(int(counts.argmax()))  # ty: ignore[no-matching-overload]
             ss.append(float(t.__dict__.get("last_score", 0.0)))
             meta.append({"id": t.frag_id, "coasting": t.age > 0})
         if bs:
