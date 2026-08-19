@@ -163,32 +163,31 @@ quote-style = "double"
 # kind. `ty` is the same vendor and the same speed class as ruff, so it costs one
 # tool rather than a new toolchain.
 #
-# Wired into CI as a RATCHET, not a pass/fail gate: the `types` job in ci.yml holds
-# src/ to a baseline count that may fall and never rise. Run it the same way locally:
-#     uv run ty check src/
+# Wired into CI as a RATCHET, not a pass/fail gate: the `types` job in ci.yml holds src/
+# and scripts/ to baseline counts that may fall and never rise. Run it the same way
+# locally, and run it through the script rather than by hand:
+#     ./scripts/ty_ratchet.sh src/
 #
-# src/ sits at 17, and the honest split is that most of it is not this project's code:
-# torch's own stubs (`Module.to(memory_format=...)` has no matching overload, `nn.init`
-# and `list.__init__` reject what torch itself hands them) and pycocotools, which ships
-# none. What is genuinely ours is `data/datasets.py` -- `__getitem__` returns a dict
-# where `Dataset` declares a single item, and `_decode_ann`'s `mapping` is two different
-# dict shapes selected by a string -- plus the numpy scalars `data/transforms.py` feeds
-# to `float()`. None is a live bug, which is why the whole set is not blocking; turning
-# the gate red on all of them at once is how a checker gets deleted a week later.
-# scripts/ and tests/ carry another ~23 and are outside the ratchet.
+# **Do not run `uv run ty check src/` and compare the number to the baseline.** The count
+# depends on which interpreter `uv` resolves, because `uv.lock` selects a different numpy
+# per Python version and the checker reports what the *stubs* say. The same tree at the
+# same commit measured 8 on python 3.10 / numpy 2.2 and 12 on python 3.12 / numpy 2.5.
+# `ty_ratchet.sh` pins the interpreter for exactly that reason, and its header carries the
+# three-environment table.
 #
-# The count was 45 before two passes over it:
-#   · PIL constants moved to their enum homes (`Image.Resampling.BILINEAR` over
-#     `Image.BILINEAR`). Pillow injects the flat aliases at import time with
-#     `setattr(module, ...)`, so they exist at runtime and are invisible to every
-#     static checker. The enum spelling is the documented one since 9.1, which the
-#     >=10.0 floor already guarantees, and `Image.Transform.PERSPECTIVE` /
-#     `Image.Transpose.FLIP_LEFT_RIGHT` were type errors under the flat name besides.
-#   · four annotations that were wrong rather than merely unproven: `bev.scene` was
-#     annotated `-> dict` while every caller unpacks the `(dict, ndarray)` it actually
-#     returns, the head `in_levels`/`strides` said `list[int]` over tuple defaults, and
-#     both multi-task weighters promised a Tensor while returning None for an empty
-#     `losses`. Those are the ones worth having a checker for.
+# The baselines and what is behind them live in that script, not here. An earlier version
+# of this block enumerated the diagnostics by cause and named "src/ sits at 17"; the count
+# had since moved to 8 and then to 12 without anyone touching the prose, which is this
+# project's own recurring failure -- a sentence describing a state with nothing checking
+# it. A count belongs where it is enforced.
+#
+# What survives that deletion, because it is the policy rather than the number: most of
+# this debt is not this project's code. It is torch's stubs (`Module.to(memory_format=)`
+# has no matching overload, `nn.init` and `list.__init__` reject what torch itself hands
+# them), pycocotools, which ships none, and numpy, whose 2.5 stubs reject `arr.min()` on a
+# float64 array. None is a live bug, which is why the set is ratcheted rather than
+# blocking -- turning the gate red on all of it at once is how a checker gets deleted a
+# week later.
 # ---------------------------------------------------------------------------
 [tool.ty.rules]
 # onnx, onnxruntime and onnxsim live in the `export` extra, so a base install cannot

@@ -4,6 +4,7 @@
 #   scripts/ty_ratchet.sh            # src/, its own baseline
 #   scripts/ty_ratchet.sh scripts/   # scripts/, its own baseline
 #   TY_BASELINE=12 scripts/ty_ratchet.sh scripts/   # override, for a one-off
+#   TY_PYTHON=3.10 scripts/ty_ratchet.sh            # override the pinned interpreter
 #
 # A ratchet rather than a pass/fail gate: turning a gate red on all of the debt at once
 # is how a checker gets deleted a week later. Blocking the *increase* is the part worth
@@ -70,11 +71,32 @@ TARGET="${1:-src/}"
 # unlike src/'s, this number has never been paid down, so naming its members would imply
 # a review that has not happened.
 case "$TARGET" in
-  scripts/|scripts) DEFAULT_BASELINE=19 ;;
-  *)                DEFAULT_BASELINE=8 ;;
+  scripts/|scripts) DEFAULT_BASELINE=18 ;;
+  *)                DEFAULT_BASELINE=12 ;;
 esac
 BASELINE="${TY_BASELINE:-$DEFAULT_BASELINE}"
-RUNNER=(uv run ty check "$TARGET" --output-format=concise)
+
+# **The interpreter is pinned, and without this the baselines mean nothing.**
+#
+# `uv.lock` resolves a different dependency set per Python version, and the count moves
+# with it -- the checker reports what the installed *stubs* say, not only what this code
+# says. Measured on one tree, one commit, three environments:
+#
+#     python 3.10 / numpy 2.2.6    src/  8    scripts/ 27
+#     python 3.12 / numpy 2.5.2    src/ 12    scripts/ 18   (fresh `uv sync --locked`)
+#     python 3.12, pinned here     src/ 12    scripts/ 18   (reproducible everywhere)
+#
+# Nothing in the tree differed between those rows. A ratchet whose number depends on which
+# interpreter `uv` happened to pick cannot ratchet: it fails for a contributor whose venv
+# is a minor version behind CI's, and it passes for one whose venv is ahead. This was found
+# when a peer attributed an 8-diagnostic overage to a file move that could not have caused
+# it -- moving files inside `scripts/` cannot change a recursive check of `scripts/`.
+#
+# 3.12 rather than the 3.10 floor because it is what a fresh `uv sync` resolves today and
+# what the test matrix's upper row uses, so the gate measures the environment contributors
+# actually get. Override for a one-off with TY_PYTHON=3.10.
+TY_PYTHON="${TY_PYTHON:-3.12}"
+RUNNER=(uv run --python "$TY_PYTHON" ty check "$TARGET" --output-format=concise)
 
 # ty exits 0 clean, 1 with diagnostics, 2 when it could not run at all -- a broken
 # [tool.ty] table, an unreadable tree. Only 0 and 1 mean the count below is real, so 2
