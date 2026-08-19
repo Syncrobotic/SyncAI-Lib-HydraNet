@@ -316,6 +316,7 @@ Every run here writes:
 
 ```text
 runs/<experiment>/
+├── .run.lock          the pid that claimed this directory; see below
 ├── meta.json          git commit, dirty flag, environment, dataset fingerprints, full config
 ├── config.yaml        the config after --set overrides, ready to re-run
 ├── uncommitted.patch  the working-tree diff, when there was one
@@ -522,6 +523,19 @@ If a directory of that name already holds results, the new run writes to a times
 sibling instead: it will not overwrite an existing `best.pt`, and it will not mix two runs'
 TensorBoard events together. To continue a run, use `--resume` (which lists, item by item,
 any setting that differs from the one stored in the checkpoint).
+
+A run **claims** its directory the moment it resolves it, with a `.run.lock` holding the
+pid. That matters because several sessions share this checkout and one GPU. Occupancy used
+to be decided by artefacts — `any(*.pt) or meta.json` — and `meta.json` is not written until
+the *end* of `Trainer.__init__`, after the model is built, the datasets are scanned and every
+split is fingerprinted. A second run starting anywhere inside that window found a directory
+that existed and was not yet occupied, and was handed it; the two then shared `train.log`,
+`tb/`, `metrics.jsonl`, `last.pt` and `best.pt`.
+
+Nothing deletes the lock at the end of a run. A preempted run never reaches a cleanup step,
+so liveness is the test that has to work: a lock whose pid is gone reads as abandoned and
+the directory is reused. A `.run.lock` in a directory you want to reuse by hand is safe to
+delete once you have checked nothing is training into it.
 
 These files exist precisely so `hydranet-report` can read them:
 
