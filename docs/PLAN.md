@@ -112,6 +112,25 @@ pointless and the serving tick should fill 8–16. `channels_last` is slower tha
 > the segmentation head in that slot. Pose has more output channels and may cost more.
 > This is gate 2's job.
 
+**Is bottom-up pose even viable at stride 8 here?** Measured over the 66,599 Gold person
+boxes (score ≥ 0.50, verified 60/60 real by eye on 2026-08-24), scaled from the 1920×1080
+source to the 640×1120 network input:
+
+| | p05 | p25 | p50 | p75 | p95 |
+|---|---:|---:|---:|---:|---:|
+| person height at network scale | 53 px | 116 | **178** | 256 | 344 |
+| stride-8 cells tall | 6.7 | 14.5 | **22.3** | 32.0 | 42.9 |
+
+**99.9% clear 32 px** — the practical floor for bottom-up keypoints — and **90.2% clear
+64 px**. So a heatmap head at P3 is viable for the great majority of people in these views;
+the bottom 5% at 6.7 cells will be poor and should be expected to be.
+
+The residual risk is not resolution but **teacher family**: ViTPose is top-down, working on
+person crops, and distilling it into a bottom-up whole-frame head is standard but not free.
+If that distillation fails, pose belongs on rung 4 as a crop-stage model — and then L0 has
+one head, HydraNet's shared trunk earns nothing, and the honest move is an off-the-shelf
+detector. **This is the single claim the architecture now rests on.**
+
 ### 3.3 Why the input stays at 640 × 1120
 
 FCOS's finest level is stride 8, so a box whose short side is under 8 px does not span one
@@ -310,7 +329,7 @@ can be looked at, and states what makes it fail.
 | # | step | artefact | gate |
 |---|---|---|---|
 | 1 | freeze [VISION.md](VISION.md) and §1–§4 here | these two documents | you agree with the placement rule, the L0 table and the commissioning flow |
-| 2 | **throughput ceiling**, with the pose head in place | one number: frames/s under TensorRT + CUDA graphs, against 1,440 | ≥1,440 → resolution and two heads stand. Below → we know exactly what to trade, measured. `trtexec` is absent from this machine; either install the TensorRT CLI or drive the Python API |
+| 2 | **throughput ceiling** | frames/s under TensorRT, against 1,440 | **PASSED 2026-08-24 — 1,552 fps at batch 16, 1.08×.** TensorRT 1.65× over eager; CUDA graphs buy nothing on this card. Caveat: measured with `terrain` in the second slot, not `pose`, and engine-only. See [journal/2026-08-24](journal/2026-08-24-the-throughput-number.md) |
 | 3 | **commissioning, all 48 cameras** | per-camera `camera.json` + **a 1 m floor grid rendered on a real frame, one image per camera** | the grid looks right to your eye on every camera |
 | 4 | **detection first** (`RETAIL_DATA` order, and the plan's own §5 #7) | `site_boxes` mAP; Gold/Silver/Gray tiers built from the existing `instances_all_*.json` at **zero GPU cost** | Gold precision ≥95%, Silver ≥85% on a 300-frame sample. **Tiering pass done 2026-08-24 — Gold 60/60 by eye, Gray 3–4/60, and 43.4% of Gray traced to 37 fixed hotspots across nine cameras. See [journal/2026-08-24](journal/2026-08-24-box-tiering-and-the-fixed-false-positives.md)** |
 | 5 | **pose head resident** | keypoint error against the ViTPose teacher, plus the throughput number from step 2 re-taken | pose good enough for `reach_to_shelf` and `crouch` to fire correctly on a clip you watch |
@@ -332,9 +351,11 @@ those hotspots and put them through an accept/reject pass.
 
 ## 8. Open — each blocks a specific step
 
-1. **The 1,440 frames/s target has never been measured** (step 2). Eager reaches 941 with
-   two heads. `scripts/bench_pro6000.sh` cannot run: `trtexec` is not installed, only
-   TensorRT's Python bindings.
+1. ~~**The 1,440 frames/s target has never been measured**~~ — **measured 2026-08-24:
+   1,552 fps, 1.08×.** What remains open is the margin's *provenance*: it was taken with
+   `terrain` in the second slot rather than `pose`, and it is engine-only — no decode, no
+   host NMS, no tracking, no PCIe. `cc80fc3` named those three as the real risk. **8% is
+   thin, and it is a margin on a proxy.**
 2. **`stack` as a new detection class** takes the head from 4 to 5 classes — rung 7, so it
    invalidates every checkpoint's comparability. And a vocabulary change silently empties
    `analytics/events/zones.py:346`, whose default class list is `("boxed_stock", "device")`:

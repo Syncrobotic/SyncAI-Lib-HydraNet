@@ -193,8 +193,10 @@ train:
   detection_val_interval: 5
 export:
   opset: 17
-  input_size:
-  - 512
-  - 640
+  # No `input_size` override on purpose: the export inherits `data.input_size`.
+  # It carried 512x640 from an ancestor config until 2026-08-24 -- the exact canvas
+  # this file's header argues is unusable (8.0-12.5% of boxes under FCOS's stride-8
+  # cell, "not hard to learn, unlearnable"). Training at 640x1120 and exporting at
+  # 512x640 puts every deployed object at 0.57x the scale the weights learned.
 experiment: hydranet_retail_security_b03_cw_xl
 output_dir: runs/hydranet_retail_security_b03_cw_xl
