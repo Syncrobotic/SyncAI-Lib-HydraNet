@@ -18,6 +18,7 @@ from . import label_maps_cocostuff as _cs
 from . import label_maps_indoor as _ind
 from . import label_maps_retail as _ret
 from . import label_maps_retail_objects as _obj
+from . import label_maps_site30k as _s30
 
 # Unified 12-class terrain, aligned with ``data.terrain_classes`` in the configs.
 TERRAIN = {
@@ -244,6 +245,47 @@ SCHEMES: dict[str, LabelScheme] = {
         _obj.RETAIL_OBJECTS_ID_TO_SURFACES,
         _obj.RETAIL_SURFACES_TO_TRAV,
         _obj.RETAIL_SURFACES,
+    ),
+    # The site30k campaign taxonomy: eleven ids as written, or the same masks folded
+    # back onto RETAIL_SURFACES so they can be mixed with batch02/batch03 under the
+    # configs that already exist. label_maps_site30k.py argues for both readings.
+    "site30k_native": _scheme(
+        "site30k_native",
+        "id",
+        _s30.SITE30K_NATIVE_ID,
+        _s30.SITE30K_TO_TRAV,
+        _s30.SITE30K,
+    ),
+    "site30k_to_surfaces": _scheme(
+        "site30k_to_surfaces",
+        "id",
+        _s30.SITE30K_ID_TO_SURFACES,
+        _obj.RETAIL_SURFACES_TO_TRAV,
+        _obj.RETAIL_SURFACES,
+    ),
+    # The other direction: read a RETAIL_SURFACES dataset (ADE20K, batch02, batch03) so it
+    # can supervise an 11-class site30k head. `fixture` becomes IGNORE, because the split
+    # into display_table/shelf is a judgement those masks never made.
+    "surfaces_to_site30k": _scheme(
+        "surfaces_to_site30k",
+        "id",
+        _s30.SURFACES_ID_TO_SITE30K,
+        _s30.SITE30K_TO_TRAV,
+        _s30.SITE30K,
+    ),
+    "ade20k_site30k": _scheme(
+        "ade20k_site30k",
+        "id",
+        _s30.ADE20K_ID_TO_SITE30K,
+        _s30.SITE30K_TO_TRAV,
+        _s30.SITE30K,
+    ),
+    "retail_objects_to_site30k": _scheme(
+        "retail_objects_to_site30k",
+        "id",
+        _s30.RETAIL_OBJECTS_ID_TO_SITE30K,
+        _s30.SITE30K_TO_TRAV,
+        _s30.SITE30K,
     ),
     # Reads the retail-13 site masks already collected (SAM 3 consensus, pilot) under
     # the object taxonomy, so that work carries over. `column` does not survive the
