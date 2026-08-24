@@ -316,7 +316,6 @@ class GeomTeacher:
     def __init__(self, camera: str, third: ThirdOpinion, frame_hw=(1080, 1920)):
         import math as _math
 
-        from calibrate_from_plate import run_depth, undistort_image
         from matplotlib.path import Path as MplPath
 
         from syncai_hydranet.geometry.calibrate import undistort_points
@@ -327,6 +326,10 @@ class GeomTeacher:
             GroundPlane,
             pixel_to_ground,
             unproject,
+        )
+        from syncai_hydranet.geometry.plate_calibration import (
+            run_depth,
+            undistort_image,
         )
 
         calib = json.loads((HERE.parent / f"runs/onboard01/{camera}.calib.json").read_text())
