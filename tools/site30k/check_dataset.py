@@ -14,6 +14,7 @@ Every check here is one that a long unattended run can fail silently:
 
 Exits non-zero if anything failed, so it can gate a training run.
 """
+
 import argparse
 import hashlib
 import sys
@@ -30,10 +31,14 @@ IGNORE = 255
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", type=Path, default=Path("datasets/site30k_v1"))
-    ap.add_argument("--sample", type=int, default=0,
-                    help="check only N masks, spread evenly (0 = all)")
-    ap.add_argument("--hash-images", action="store_true",
-                    help="also hash every image to find duplicates (slow)")
+    ap.add_argument(
+        "--sample", type=int, default=0, help="check only N masks, spread evenly (0 = all)"
+    )
+    ap.add_argument(
+        "--hash-images",
+        action="store_true",
+        help="also hash every image to find duplicates (slow)",
+    )
     args = ap.parse_args()
 
     all_masks = sorted((args.root / "masks").glob("*.png"))
@@ -77,16 +82,20 @@ def main() -> int:
                 seen[h] = p.stem
 
     print(f"{len(masks)} masks checked in {args.root}")
-    print(f"  labelled share: mean {100 * np.mean(labelled):.1f}%  "
-          f"min {100 * np.min(labelled):.1f}%  max {100 * np.max(labelled):.1f}%")
+    print(
+        f"  labelled share: mean {100 * np.mean(labelled):.1f}%  "
+        f"min {100 * np.min(labelled):.1f}%  max {100 * np.max(labelled):.1f}%"
+    )
     print("  per camera: " + ", ".join(f"{c} {n}" for c, n in sorted(per_camera.items())))
     problems = 0
-    for name, items in (("masks with no image", missing_image),
-                        ("images with no mask", orphan_image),
-                        ("masks with ids outside the taxonomy", bad_ids),
-                        ("masks under 5% labelled", empty),
-                        ("masks over 97% one class", lopsided),
-                        ("duplicate image bytes", dupes)):
+    for name, items in (
+        ("masks with no image", missing_image),
+        ("images with no mask", orphan_image),
+        ("masks with ids outside the taxonomy", bad_ids),
+        ("masks under 5% labelled", empty),
+        ("masks over 97% one class", lopsided),
+        ("duplicate image bytes", dupes),
+    ):
         if items:
             problems += len(items)
             print(f"  !! {name}: {len(items)}")

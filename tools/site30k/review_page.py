@@ -10,6 +10,7 @@ proves nothing that the first frame did not already prove.
 
 Writes review_page.html next to the dataset. Publish it with the Artifact tool.
 """
+
 import argparse
 import base64
 import io
@@ -22,8 +23,12 @@ import numpy as np
 from PIL import Image
 
 CLASS_COLORS = {
-    "floor": "#3CB44B", "wall": "#0082C8", "column": "#FFE119",
-    "display_table": "#F58230", "shelf": "#F032E6", "person": "#E6194B",
+    "floor": "#3CB44B",
+    "wall": "#0082C8",
+    "column": "#FFE119",
+    "display_table": "#F58230",
+    "shelf": "#F032E6",
+    "person": "#E6194B",
 }
 IDS = {"floor": 1, "wall": 2, "column": 3, "display_table": 4, "shelf": 5, "person": 6}
 
@@ -74,12 +79,23 @@ def main() -> int:
                 m = np.asarray(Image.open(mask_path))
                 shares = {k: round(100 * float((m == v).mean()), 2) for k, v in IDS.items()}
                 labelled = round(100 * float((m != 255).mean()), 1)
-            frames.append({"name": name, "date": name.split("__")[1][:8],
-                           "labelled": labelled, "shares": shares,
-                           "img": encode(p, 1100, 74)})
-        cameras.append({"camera": cam, "dates": len(dates),
-                        "total": sum(len(v) for v in by_cam[cam].values()),
-                        "frames": frames})
+            frames.append(
+                {
+                    "name": name,
+                    "date": name.split("__")[1][:8],
+                    "labelled": labelled,
+                    "shares": shares,
+                    "img": encode(p, 1100, 74),
+                }
+            )
+        cameras.append(
+            {
+                "camera": cam,
+                "dates": len(dates),
+                "total": sum(len(v) for v in by_cam[cam].values()),
+                "frames": frames,
+            }
+        )
 
     fails = []
     fpath = args.root / "failures.jsonl"
@@ -87,39 +103,53 @@ def main() -> int:
         fails = [json.loads(line) for line in fpath.read_text().splitlines() if line.strip()]
     n_masks = len(list((args.root / "masks").glob("*.png")))
 
-    legend = "".join(f'<span class="lg"><i style="background:{c}"></i>{k}</span>'
-                     for k, c in CLASS_COLORS.items())
+    legend = "".join(
+        f'<span class="lg"><i style="background:{c}"></i>{k}</span>'
+        for k, c in CLASS_COLORS.items()
+    )
     body = []
     for cam in cameras:
         cards = []
         for f in cam["frames"]:
             bar = "".join(
                 f'<i style="width:{f["shares"].get(k, 0)}%;background:{c}" title="{k} '
-                f'{f["shares"].get(k, 0)}%"></i>' for k, c in CLASS_COLORS.items())
+                f'{f["shares"].get(k, 0)}%"></i>'
+                for k, c in CLASS_COLORS.items()
+            )
             unl = max(0.0, 100 - sum(f["shares"].values()))
             cards.append(
                 f'<article class="card"><img src="data:image/jpeg;base64,{f["img"]}" '
                 f'alt="{f["name"]}" loading="lazy">'
                 f'<div class="meta"><div class="row"><span class="pct mono">'
-                f'{f["labelled"]}%<em>labelled</em></span>'
+                f"{f['labelled']}%<em>labelled</em></span>"
                 f'<span class="date mono">{f["date"]}</span></div>'
                 f'<div class="stack">{bar}<i class="unl" style="width:{unl}%"></i></div>'
-                f'<div class="fname mono">{f["name"]}</div></div></article>')
+                f'<div class="fname mono">{f["name"]}</div></div></article>'
+            )
         body.append(
             f'<section><div class="cam"><h2>{cam["camera"]}</h2>'
             f'<span class="n">{cam["total"]} preview frames over {cam["dates"]} dates '
-            f'&middot; showing {len(cam["frames"])}</span></div>'
-            f'<div class="grid">{"".join(cards)}</div></section>')
+            f"&middot; showing {len(cam['frames'])}</span></div>"
+            f'<div class="grid">{"".join(cards)}</div></section>'
+        )
 
     fail_rows = "".join(
         f'<tr><td class="mono">{f.get("camera", "?")}</td><td class="mono">'
         f'{f.get("date", "?")}</td><td class="mono">{f.get("rc", "?")}</td>'
         f'<td class="mono small">{(f.get("tail", "") or "")[-160:]}</td></tr>'
-        for f in fails[:40])
+        for f in fails[:40]
+    )
 
-    fail_section = ("<section><div class='cam'><h2>Failed units</h2></div><table>"
-                    "<tr><th>camera</th><th>date</th><th>rc</th><th>last words</th></tr>"
-                    + fail_rows + "</table></section>") if fails else ""
+    fail_section = (
+        (
+            "<section><div class='cam'><h2>Failed units</h2></div><table>"
+            "<tr><th>camera</th><th>date</th><th>rc</th><th>last words</th></tr>"
+            + fail_rows
+            + "</table></section>"
+        )
+        if fails
+        else ""
+    )
     html = f"""<title>Site30k v1 Review</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400&display=swap">
 <style>
@@ -189,8 +219,10 @@ footer {{ border-top:1px solid var(--line); color:var(--dim); font-size:12.5px;
 frames they label. Previews exist for one frame in twenty.</footer>
 """
     out.write_text(html)
-    print(f"{len(cameras)} cameras, {sum(len(c['frames']) for c in cameras)} sampled "
-          f"frames, {len(fails)} failures -> {out} ({out.stat().st_size / 1e6:.1f} MB)")
+    print(
+        f"{len(cameras)} cameras, {sum(len(c['frames']) for c in cameras)} sampled "
+        f"frames, {len(fails)} failures -> {out} ({out.stat().st_size / 1e6:.1f} MB)"
+    )
     return 0
 
 

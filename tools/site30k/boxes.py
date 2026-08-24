@@ -16,6 +16,7 @@ teachers, so this script keeps them apart instead of inventing one pipeline:
 
 Usage: batch30_boxes.py <batch_dir> [out_dir]
 """
+
 import importlib.util
 import json
 import sys
@@ -28,7 +29,8 @@ from scipy import ndimage
 sys.path.insert(0, "/home/paul/SyncAI-Lib-HydraNet/src")
 sys.path.insert(0, "/home/paul/SyncAI-Lib-HydraNet/scripts")
 spec = importlib.util.spec_from_file_location(
-    "campaign", "/home/paul/SyncAI-Lib-HydraNet/scripts/campaign_site30k.py")
+    "campaign", "/home/paul/SyncAI-Lib-HydraNet/scripts/campaign_site30k.py"
+)
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
 
@@ -37,39 +39,64 @@ OUT = Path(sys.argv[2]) if len(sys.argv) > 2 else BATCH / "boxes"
 OUT.mkdir(parents=True, exist_ok=True)
 
 PRODUCT_IDS = {7: "laptop", 8: "tablet", 9: "phone", 10: "boxed_stock"}
-BOX_COLORS = {"person": (230, 25, 75), "laptop": (140, 60, 255), "tablet": (255, 0, 150),
-              "phone": (255, 140, 0), "boxed_stock": (170, 110, 40)}
+BOX_COLORS = {
+    "person": (230, 25, 75),
+    "laptop": (140, 60, 255),
+    "tablet": (255, 0, 150),
+    "phone": (255, 140, 0),
+    "boxed_stock": (170, 110, 40),
+}
 MIN_PRODUCT_PX = 300
 
-device = M.torch.device if False else ("cuda" if __import__("torch").cuda.is_available() else "cpu")
+device = (
+    M.torch.device if False else ("cuda" if __import__("torch").cuda.is_available() else "cpu")
+)
 gd_proc, gd_model = M.load_gdino("IDEA-Research/grounding-dino-base", device)
 
-coco = {"info": {"source": str(BATCH),
-                 "person": f"Grounding DINO @{M.PERSON_TRAIN_THR}, NMS {M.NMS_IOU}",
-                 "product": "SAM 3 product pixels of the batch mask, boxed per component",
-                 "pet": "not labelled: no threshold chosen (pet_census.json)"},
-        "categories": [{"id": 1, "name": "person"}, {"id": 2, "name": "pet"},
-                       {"id": 3, "name": "product"}],
-        "images": [], "annotations": []}
+coco = {
+    "info": {
+        "source": str(BATCH),
+        "person": f"Grounding DINO @{M.PERSON_TRAIN_THR}, NMS {M.NMS_IOU}",
+        "product": "SAM 3 product pixels of the batch mask, boxed per component",
+        "pet": "not labelled: no threshold chosen (pet_census.json)",
+    },
+    "categories": [
+        {"id": 1, "name": "person"},
+        {"id": 2, "name": "pet"},
+        {"id": 3, "name": "product"},
+    ],
+    "images": [],
+    "annotations": [],
+}
 aid = 0
 report = []
 for iid, mask_path in enumerate(sorted((BATCH / "masks").glob("*.png")), start=1):
     name = mask_path.stem
     img = Image.open(BATCH / "preview" / f"{name}_raw.jpg").convert("RGB")
     mask = np.asarray(Image.open(mask_path))
-    coco["images"].append({"id": iid, "file_name": f"{name}.jpg",
-                           "width": img.width, "height": img.height})
+    coco["images"].append(
+        {"id": iid, "file_name": f"{name}.jpg", "width": img.width, "height": img.height}
+    )
 
     boxes = []
     raw = M.gdino_detect(gd_proc, gd_model, img, "person", M.SCORE_FLOOR, device)
     kept = M.gdino_nms(raw[raw[:, 4] >= M.PERSON_TRAIN_THR], M.NMS_IOU) if len(raw) else raw
     for b in kept:
-        boxes.append(("person", float(b[4]), [float(b[0]), float(b[1]), float(b[2]), float(b[3])]))
+        boxes.append(
+            ("person", float(b[4]), [float(b[0]), float(b[1]), float(b[2]), float(b[3])])
+        )
         aid += 1
-        coco["annotations"].append({
-            "id": aid, "image_id": iid, "category_id": 1, "score": float(b[4]),
-            "bbox": [float(b[0]), float(b[1]), float(b[2] - b[0]), float(b[3] - b[1])],
-            "area": float((b[2] - b[0]) * (b[3] - b[1])), "iscrowd": 0})
+        coco["annotations"].append(
+            {
+                "id": aid,
+                "image_id": iid,
+                "category_id": 1,
+                "score": float(b[4]),
+                "bbox": [float(b[0]), float(b[1]), float(b[2] - b[0]), float(b[3] - b[1])],
+                "area": float((b[2] - b[0]) * (b[3] - b[1])),
+                "iscrowd": 0,
+            }
+        )
 
     for cid, fam in PRODUCT_IDS.items():
         lb, n = ndimage.label(mask == cid)
@@ -80,9 +107,17 @@ for iid, mask_path in enumerate(sorted((BATCH / "masks").glob("*.png")), start=1
             x0, y0, x1, y1 = float(xs.min()), float(ys.min()), float(xs.max()), float(ys.max())
             boxes.append((fam, None, [x0, y0, x1, y1]))
             aid += 1
-            coco["annotations"].append({
-                "id": aid, "image_id": iid, "category_id": 3, "family": fam,
-                "bbox": [x0, y0, x1 - x0, y1 - y0], "area": float(len(ys)), "iscrowd": 0})
+            coco["annotations"].append(
+                {
+                    "id": aid,
+                    "image_id": iid,
+                    "category_id": 3,
+                    "family": fam,
+                    "bbox": [x0, y0, x1 - x0, y1 - y0],
+                    "area": float(len(ys)),
+                    "iscrowd": 0,
+                }
+            )
 
     vis = img.copy()
     d = ImageDraw.Draw(vis)

@@ -18,6 +18,7 @@ in flight.
               pass that has to be looked at before 30,000 frames are labelled by a
               recipe reviewed on three cameras.
 """
+
 import argparse
 import json
 import os
@@ -42,8 +43,12 @@ def main() -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--preview-stride", type=int, default=20)
-    ap.add_argument("--smoke", type=int, default=0,
-                    help="frames per clip; runs ONE unit per camera and stops")
+    ap.add_argument(
+        "--smoke",
+        type=int,
+        default=0,
+        help="frames per clip; runs ONE unit per camera and stops",
+    )
     ap.add_argument("--limit", type=int, default=0, help="first N units only")
     args = ap.parse_args()
 
@@ -72,15 +77,17 @@ def main() -> int:
                 interleaved.append(by_cam[cam].pop(0))
     units = interleaved
     if args.limit:
-        units = units[:args.limit]
+        units = units[: args.limit]
     frames = args.smoke or plan["frames_per_clip"]
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "logs").mkdir(exist_ok=True)
     failures = (args.out / "failures.jsonl").open("a")
     progress = (args.out / "progress.jsonl").open("a")
 
-    print(f"{len(units)} units, {frames} frames per clip, {args.workers} workers -> "
-          f"{args.out}", flush=True)
+    print(
+        f"{len(units)} units, {frames} frames per clip, {args.workers} workers -> {args.out}",
+        flush=True,
+    )
     running: list[tuple[subprocess.Popen, dict, float, object]] = []
     queue = list(units)
     done = 0
@@ -93,17 +100,29 @@ def main() -> int:
             # the original run's per-frame log lines for all 261 units on 2026-08-20.
             # The failure tail below reads the last 800 bytes, so it still sees this run.
             log = (args.out / "logs" / f"{tag}.log").open("a")
-            log.write(f"\n===== run started {time.strftime('%Y-%m-%d %H:%M:%S')}, "
-                      f"{frames} frames per clip =====\n")
+            log.write(
+                f"\n===== run started {time.strftime('%Y-%m-%d %H:%M:%S')}, "
+                f"{frames} frames per clip =====\n"
+            )
             log.flush()
-            cmd = [str(PYTHON), str(RECIPE), "--resume",
-                   f"--preview-stride={args.preview_stride}",
-                   str(args.out), str(frames), *unit_targets(u, frames)]
-            env = dict(os.environ, PYTHONUNBUFFERED="1",
-                       SITE30K_CLIP_ROOT=PULL,
-                       SITE30K_PLATE_ROOT="datasets/studioa_static_site30k")
-            p = subprocess.Popen(["nice", "-n", "10", *cmd], stdout=log,
-                                 stderr=subprocess.STDOUT, env=env)
+            cmd = [
+                str(PYTHON),
+                str(RECIPE),
+                "--resume",
+                f"--preview-stride={args.preview_stride}",
+                str(args.out),
+                str(frames),
+                *unit_targets(u, frames),
+            ]
+            env = dict(
+                os.environ,
+                PYTHONUNBUFFERED="1",
+                SITE30K_CLIP_ROOT=PULL,
+                SITE30K_PLATE_ROOT="datasets/studioa_static_site30k",
+            )
+            p = subprocess.Popen(
+                ["nice", "-n", "10", *cmd], stdout=log, stderr=subprocess.STDOUT, env=env
+            )
             running.append((p, u, time.time(), log))
         time.sleep(2)
         for entry in list(running):
@@ -113,8 +132,13 @@ def main() -> int:
             running.remove(entry)
             log.close()
             done += 1
-            rec = {"camera": u["camera"], "date": u["date"], "rc": p.returncode,
-                   "seconds": round(time.time() - started, 1), "frames": u["frames"]}
+            rec = {
+                "camera": u["camera"],
+                "date": u["date"],
+                "rc": p.returncode,
+                "seconds": round(time.time() - started, 1),
+                "frames": u["frames"],
+            }
             progress.write(json.dumps(rec) + "\n")
             progress.flush()
             if p.returncode != 0:
@@ -123,12 +147,18 @@ def main() -> int:
                 failures.flush()
             rate = (time.time() - t0) / max(done, 1)
             left = (len(queue) + len(running)) * rate / max(args.workers, 1)
-            print(f"[{done}/{len(units)}] {u['camera']} {u['date']} rc={p.returncode} "
-                  f"{rec['seconds']:.0f}s   eta {left / 3600:.1f} h", flush=True)
+            print(
+                f"[{done}/{len(units)}] {u['camera']} {u['date']} rc={p.returncode} "
+                f"{rec['seconds']:.0f}s   eta {left / 3600:.1f} h",
+                flush=True,
+            )
     masks = args.out / "masks"
     n_masks = len(list(masks.glob("*.png"))) if masks.exists() else 0
-    print(f"\nall units finished in {(time.time() - t0) / 3600:.2f} h; "
-          f"{n_masks} masks in {args.out}", flush=True)
+    print(
+        f"\nall units finished in {(time.time() - t0) / 3600:.2f} h; "
+        f"{n_masks} masks in {args.out}",
+        flush=True,
+    )
     return 0
 
 

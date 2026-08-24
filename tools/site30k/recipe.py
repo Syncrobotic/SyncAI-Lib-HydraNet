@@ -39,6 +39,7 @@ only the frame-dependent teachers run.
 
 Usage: batch30.py <out_dir> <default_frames_per_clip> <camera:clip_stem[:frames]> ...
 """
+
 import json
 import math
 import os
@@ -56,7 +57,8 @@ sys.path.insert(0, "/home/paul/SyncAI-Lib-HydraNet/scripts")
 import importlib.util
 
 spec = importlib.util.spec_from_file_location(
-    "campaign", "/home/paul/SyncAI-Lib-HydraNet/scripts/campaign_site30k.py")
+    "campaign", "/home/paul/SyncAI-Lib-HydraNet/scripts/campaign_site30k.py"
+)
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
 from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
@@ -76,15 +78,47 @@ CLIP_ROOT = os.environ.get("SITE30K_CLIP_ROOT", "datasets/studioa_clips")
 PLATE_ROOT = os.environ.get("SITE30K_PLATE_ROOT", "datasets/studioa_static")
 H, W = 1080, 1920
 IGNORE = 255
-IDS = {"floor": 1, "wall": 2, "column": 3, "display_table": 4, "shelf": 5, "person": 6,
-       "laptop": 7, "tablet": 8, "phone": 9, "boxed_stock": 10}
-COLORS = {1: (60, 200, 60), 2: (70, 130, 240), 3: (200, 80, 220), 4: (255, 190, 40),
-          5: (0, 200, 200), 6: (230, 25, 75), 7: (90, 0, 200), 8: (255, 0, 150),
-          9: (255, 120, 0), 10: (140, 60, 20)}
-TABLE_FAMILY = ("display table", "display podium", "retail counter", "display counter",
-                "checkout counter", "table")
-SHELF_FAMILY = ("shelving unit", "shelf", "merchandise rack", "product display rack",
-                "product display stand", "showcase cabinet", "display case")
+IDS = {
+    "floor": 1,
+    "wall": 2,
+    "column": 3,
+    "display_table": 4,
+    "shelf": 5,
+    "person": 6,
+    "laptop": 7,
+    "tablet": 8,
+    "phone": 9,
+    "boxed_stock": 10,
+}
+COLORS = {
+    1: (60, 200, 60),
+    2: (70, 130, 240),
+    3: (200, 80, 220),
+    4: (255, 190, 40),
+    5: (0, 200, 200),
+    6: (230, 25, 75),
+    7: (90, 0, 200),
+    8: (255, 0, 150),
+    9: (255, 120, 0),
+    10: (140, 60, 20),
+}
+TABLE_FAMILY = (
+    "display table",
+    "display podium",
+    "retail counter",
+    "display counter",
+    "checkout counter",
+    "table",
+)
+SHELF_FAMILY = (
+    "shelving unit",
+    "shelf",
+    "merchandise rack",
+    "product display rack",
+    "product display stand",
+    "showcase cabinet",
+    "display case",
+)
 PRODUCT_PROMPTS = {
     # v5.3: the class covers every computer on a counter, portable or not. `computer
     # monitor` holds 27 of 48 cameras at peak 0.930 in the swept library and `imac` fires
@@ -94,14 +128,33 @@ PRODUCT_PROMPTS = {
     "laptop": ("laptop", "open laptop", "notebook computer", "computer monitor", "imac"),
     "tablet": ("tablet", "tablet computer", "ipad on a stand"),
     "phone": ("phone", "smartphone", "mobile phone"),
-    "boxed_stock": ("product box on a shelf", "boxed product", "packaged goods",
-                    "merchandise on a shelf", "headphones box"),
+    "boxed_stock": (
+        "product box on a shelf",
+        "boxed product",
+        "packaged goods",
+        "merchandise on a shelf",
+        "headphones box",
+    ),
 }
-NEGATIVE = ("desk telephone", "landline telephone", "office telephone", "printer",
-            "receipt printer", "cash register", "point of sale terminal", "trolley",
-            "cart", "trash can", "keyboard", "computer mouse", "card reader",
-            "payment terminal", "credit card machine", "barcode scanner",
-            "handheld scanner")
+NEGATIVE = (
+    "desk telephone",
+    "landline telephone",
+    "office telephone",
+    "printer",
+    "receipt printer",
+    "cash register",
+    "point of sale terminal",
+    "trolley",
+    "cart",
+    "trash can",
+    "keyboard",
+    "computer mouse",
+    "card reader",
+    "payment terminal",
+    "credit card machine",
+    "barcode scanner",
+    "handheld scanner",
+)
 PRODUCT_MIN = {"laptop": 0.45, "tablet": 0.45, "phone": 0.45, "boxed_stock": 0.40}
 # v5.3: exclusions that are PARTS of what they would veto. A keyboard covering 60% of a
 # `laptop` claim is the laptop's own keyboard, or the one in front of the iMac; it is
@@ -147,7 +200,7 @@ TIE_MARGIN, TABLE_FLAT_MIN = 0.15, 0.30
 FIXTURE_SCORE_MIN = 0.65
 PART_CONTAINMENT, FOOTPRINT_TOL = 0.80, 0.15
 CHANGE_WITHDRAW = 0.50
-CHROMA_CHANGE = 4   # YCbCr levels; measured knee, see the withdrawal comment
+CHROMA_CHANGE = 4  # YCbCr levels; measured knee, see the withdrawal comment
 ISLAND_PX = 800
 PRODUCT_IOU, NEG_TIE, NEG_COVER, FLOOR_SUPPORT_MAX = 0.55, 0.15, 0.60, 0.30
 GUIDE_RADIUS, GUIDE_EPS = 8, 1e-4
@@ -162,19 +215,24 @@ def box_sum(a, r):
 
 
 def guided(p, guide, r, eps):
-    N = box_sum(np.ones((H, W), np.float32), r)
-    gm = np.stack([box_sum(guide[..., c], r) / N for c in range(3)], -1)
-    pm = box_sum(p, r) / N
-    cov = np.stack([box_sum(guide[..., c] * p, r) / N - gm[..., c] * pm for c in range(3)], -1)
+    n_pts = box_sum(np.ones((H, W), np.float32), r)
+    gm = np.stack([box_sum(guide[..., c], r) / n_pts for c in range(3)], -1)
+    pm = box_sum(p, r) / n_pts
+    cov = np.stack(
+        [box_sum(guide[..., c] * p, r) / n_pts - gm[..., c] * pm for c in range(3)], -1
+    )
     var = np.empty((H, W, 3, 3), np.float32)
     for i in range(3):
         for j in range(3):
-            var[..., i, j] = box_sum(guide[..., i] * guide[..., j], r) / N - gm[..., i] * gm[..., j]
+            var[..., i, j] = (
+                box_sum(guide[..., i] * guide[..., j], r) / n_pts - gm[..., i] * gm[..., j]
+            )
     var += eps * np.eye(3, dtype=np.float32)
     a = np.linalg.solve(var, cov[..., None]).squeeze(-1)
     b = pm - (a * gm).sum(-1)
-    return ((np.stack([box_sum(a[..., c], r) / N for c in range(3)], -1) * guide).sum(-1)
-            + box_sum(b, r) / N)
+    return (np.stack([box_sum(a[..., c], r) / n_pts for c in range(3)], -1) * guide).sum(
+        -1
+    ) + box_sum(b, r) / n_pts
 
 
 def slic_numpy(rgb, spacing, iters=8, compact=5.0):
@@ -196,7 +254,9 @@ def slic_numpy(rgb, spacing, iters=8, compact=5.0):
             ylo, yhi = max(int(y0) - spacing, 0), min(int(y0) + spacing + 1, hh)
             xlo, xhi = max(int(x0) - spacing, 0), min(int(x0) + spacing + 1, ww)
             dc = ((lab_[ylo:yhi, xlo:xhi] - cfeat[k]) ** 2).sum(-1)
-            ds = ((yy[ylo:yhi, xlo:xhi] - y0) ** 2 + (xx[ylo:yhi, xlo:xhi] - x0) ** 2) / (spacing ** 2)
+            ds = ((yy[ylo:yhi, xlo:xhi] - y0) ** 2 + (xx[ylo:yhi, xlo:xhi] - x0) ** 2) / (
+                spacing**2
+            )
             d = dc + compact * ds
             win = d < dist[ylo:yhi, xlo:xhi]
             dist[ylo:yhi, xlo:xhi][win] = d[win]
@@ -229,19 +289,27 @@ class CameraGeometry:
             self.lx = None if not np.isfinite(self.lx).any() else self.lx
             self.lz = None if self.lx is None else self.lz
             self.geom = None
-            print(f"  [{camera}] geometry from cache ({100 * self.oob.mean():.1f}% "
-                  "unmeasurable)", flush=True)
+            print(
+                f"  [{camera}] geometry from cache ({100 * self.oob.mean():.1f}% unmeasurable)",
+                flush=True,
+            )
             return
         self.geom = M.GeomTeacher(camera, third)
         calib = json.loads((ROOT / f"runs/onboard01/{camera}.calib.json").read_text())
         k1 = float(calib.get("k1_division_model") or 0.0)
         vfov = float(calib["vfov_assumed_deg"])
-        plane = GroundPlane(height=float(calib["height_m"]),
-                            pitch=math.radians(calib["pitch_deg"]),
-                            roll=math.radians(calib["roll_deg"]))
+        plane = GroundPlane(
+            height=float(calib["height_m"]),
+            pitch=math.radians(calib["pitch_deg"]),
+            roll=math.radians(calib["roll_deg"]),
+        )
         vv, uu = np.mgrid[0:H, 0:W].astype(np.float64)
-        und = undistort_points(np.stack([uu.ravel(), vv.ravel()], 1), k1,
-                               (W / 2.0, H / 2.0), math.hypot(H, W) / 2.0)
+        und = undistort_points(
+            np.stack([uu.ravel(), vv.ravel()], 1),
+            k1,
+            (W / 2.0, H / 2.0),
+            math.hypot(H, W) / 2.0,
+        )
         uu_u, vv_u = und[:, 0].reshape(H, W), und[:, 1].reshape(H, W)
         gx, gz = pixel_to_ground(uu_u, vv_u, GCamera.from_vfov(H, W, vfov), plane)
         self.gx, self.gz = gx.astype(np.float32), gz.astype(np.float32)
@@ -254,8 +322,10 @@ class CameraGeometry:
         self.geom_ok = ~self.oob & np.isfinite(self.height)
         # level-frame horizontal coordinates, for footprints of off-plane objects
         self.lx, self.lz = None, None
-        print(f"  [{camera}] geometry: {100 * self.oob.mean():.1f}% of the frame has no "
-              f"measurable geometry (undistort samples outside the plate)")
+        print(
+            f"  [{camera}] geometry: {100 * self.oob.mean():.1f}% of the frame has no "
+            f"measurable geometry (undistort samples outside the plate)"
+        )
 
     def save_cache(self):
         """Written only once lx/lz exist, so the cache is never a partial one."""
@@ -266,9 +336,18 @@ class CameraGeometry:
         # name has to carry the suffix or the rename below chases a file that was never
         # written under that name.
         tmp = self.CACHE / f"{self.camera}.tmp{os.getpid()}.npz"
-        np.savez(tmp, gx=self.gx, gz=self.gz, oob=self.oob, height=self.height,
-                 horiz=self.horiz, geom_ok=self.geom_ok, lx=self.lx, lz=self.lz)
-        os.replace(tmp, self.CACHE / f"{self.camera}.npz")
+        np.savez(
+            tmp,
+            gx=self.gx,
+            gz=self.gz,
+            oob=self.oob,
+            height=self.height,
+            horiz=self.horiz,
+            geom_ok=self.geom_ok,
+            lx=self.lx,
+            lz=self.lz,
+        )
+        Path(tmp).replace(self.CACHE / f"{self.camera}.npz")
 
 
 def decide_structure(cl_masks, cl_votes, b03_maps, geo, lx, lz):
@@ -285,9 +364,17 @@ def decide_structure(cl_masks, cl_votes, b03_maps, geo, lx, lz):
     for k, m in enumerate(cl_masks):
         best = {"wall": 0.0, "column": 0.0, "table": 0.0, "shelf": 0.0}
         for concept, prompt, score in cl_votes[k]:
-            fam = ("wall" if concept == "wall" else "column" if concept == "column"
-                   else "table" if prompt in TABLE_FAMILY
-                   else "shelf" if prompt in SHELF_FAMILY else None)
+            fam = (
+                "wall"
+                if concept == "wall"
+                else "column"
+                if concept == "column"
+                else "table"
+                if prompt in TABLE_FAMILY
+                else "shelf"
+                if prompt in SHELF_FAMILY
+                else None
+            )
             if fam:
                 best[fam] = max(best[fam], score)
         ranked = sorted(best.items(), key=lambda kv: -kv[1])
@@ -306,11 +393,14 @@ def decide_structure(cl_masks, cl_votes, b03_maps, geo, lx, lz):
                     win = "table" if flat >= TABLE_FLAT_MIN else "shelf"
                     note = f"tiebreak by top-surface share {flat:.2f}"
                 else:
-                    note = (f"low margin {margin:.3f}, geometry abstains ({gshare:.2f}) "
-                            "-- prompt winner kept, FLAGGED")
+                    note = (
+                        f"low margin {margin:.3f}, geometry abstains ({gshare:.2f}) "
+                        "-- prompt winner kept, FLAGGED"
+                    )
             elif "wall" in pair and (b03_fix >= B03_FIXTURE_MIN or b03_wall >= B03_WALL_MIN):
-                win = ("wall" if b03_wall >= B03_WALL_MIN
-                       else [f for f in pair if f != "wall"][0])
+                win = (
+                    "wall" if b03_wall >= B03_WALL_MIN else next(f for f in pair if f != "wall")
+                )
                 note = f"tiebreak by b03 (wall {b03_wall:.2f} / fixture {b03_fix:.2f})"
             else:
                 win, note = None, f"contested, margin {margin:.3f}, b03 supports neither"
@@ -330,24 +420,43 @@ def decide_structure(cl_masks, cl_votes, b03_maps, geo, lx, lz):
                 reject = f"column unadjudicable, {gshare:.2f} measurable"
         if win is None and reject is None:
             reject = note
-        decisions.append({"k": k, "px": int(m.sum()), "win": win, "score": round(top, 3),
-                          "margin": round(margin, 3), "note": note, "reject": reject,
-                          "flagged": "FLAGGED" in note,
-                          # the three teacher readings behind the verdict, recorded for
-                          # every cluster and not just the ones a tiebreak explained --
-                          # a gate can only be judged against the distribution it sees
-                          "b03_wall": round(b03_wall, 3), "b03_fix": round(b03_fix, 3),
-                          "flat": round(flat, 3), "gshare": round(gshare, 3)})
+        decisions.append(
+            {
+                "k": k,
+                "px": int(m.sum()),
+                "win": win,
+                "score": round(top, 3),
+                "margin": round(margin, 3),
+                "note": note,
+                "reject": reject,
+                "flagged": "FLAGGED" in note,
+                # the three teacher readings behind the verdict, recorded for
+                # every cluster and not just the ones a tiebreak explained --
+                # a gate can only be judged against the distribution it sees
+                "b03_wall": round(b03_wall, 3),
+                "b03_fix": round(b03_fix, 3),
+                "flat": round(flat, 3),
+                "gshare": round(gshare, 3),
+            }
+        )
 
     gfin = geo.geom_ok & np.isfinite(lx) & np.isfinite(lz)
-    accept = sorted([d for d in decisions if d["win"] and not d["reject"]],
-                    key=lambda d: -d["score"])
+    accept = sorted(
+        [d for d in decisions if d["win"] and not d["reject"]], key=lambda d: -d["score"]
+    )
     foot = {}
     for d in accept:
         m = cl_masks[d["k"]] & gfin
-        foot[d["k"]] = (None if m.sum() < 500 else
-                        (np.percentile(lx[m], 5), np.percentile(lx[m], 95),
-                         np.percentile(lz[m], 5), np.percentile(lz[m], 95)))
+        foot[d["k"]] = (
+            None
+            if m.sum() < 500
+            else (
+                np.percentile(lx[m], 5),
+                np.percentile(lx[m], 95),
+                np.percentile(lz[m], 5),
+                np.percentile(lz[m], 95),
+            )
+        )
     for i, d in enumerate(accept):
         m = cl_masks[d["k"]] & gfin
         gshare = float((cl_masks[d["k"]] & geo.geom_ok).sum() / max(cl_masks[d["k"]].sum(), 1))
@@ -358,24 +467,33 @@ def decide_structure(cl_masks, cl_votes, b03_maps, geo, lx, lz):
             if foot[e["k"]] is None or e["win"] == d["win"]:
                 continue
             ey, ex = np.where(cl_masks[e["k"]])
-            in_box = float(((dy >= ey.min()) & (dy <= ey.max())
-                            & (dx >= ex.min()) & (dx <= ex.max())).mean())
+            in_box = float(
+                (
+                    (dy >= ey.min()) & (dy <= ey.max()) & (dx >= ex.min()) & (dx <= ex.max())
+                ).mean()
+            )
             if in_box < 0.5:
                 continue
             x0, x1, z0, z1 = foot[e["k"]]
-            share = float(((lx[m] >= x0 - FOOTPRINT_TOL) & (lx[m] <= x1 + FOOTPRINT_TOL)
-                           & (lz[m] >= z0 - FOOTPRINT_TOL)
-                           & (lz[m] <= z1 + FOOTPRINT_TOL)).mean())
+            share = float(
+                (
+                    (lx[m] >= x0 - FOOTPRINT_TOL)
+                    & (lx[m] <= x1 + FOOTPRINT_TOL)
+                    & (lz[m] >= z0 - FOOTPRINT_TOL)
+                    & (lz[m] <= z1 + FOOTPRINT_TOL)
+                ).mean()
+            )
             if share >= PART_CONTAINMENT:
                 d["reject"] = f"{share:.0%} inside C{e['k']} ({e['win']}): a part"
                 break
 
-    CLASS_ID = {"wall": 2, "column": 3, "table": 4, "shelf": 5}
+    class_id = {"wall": 2, "column": 3, "table": 4, "shelf": 5}
     static = np.full((H, W), IGNORE, np.uint8)
-    for d in sorted([d for d in decisions if d["win"] and not d["reject"]],
-                    key=lambda d: -d["score"]):
+    for d in sorted(
+        [d for d in decisions if d["win"] and not d["reject"]], key=lambda d: -d["score"]
+    ):
         sel = cl_masks[d["k"]] & (static == IGNORE)
-        static[sel] = CLASS_ID[d["win"]]
+        static[sel] = class_id[d["win"]]
     return static, decisions
 
 
@@ -395,7 +513,6 @@ def cluster(masks, meta):
     return cl_masks, cl_votes
 
 
-
 def ensure_plate(camera: str, slot: str, clip: Path, plate_path: Path) -> bool:
     """The clip's own person-free median, made here if the static pass never ran.
 
@@ -409,16 +526,19 @@ def ensure_plate(camera: str, slot: str, clip: Path, plate_path: Path) -> bool:
         return True
     try:
         w, h, _ = probe(str(clip))
-        frames_ = [f for f in decode_frames(str(clip), w, h, 0.5)]
+        frames_ = list(decode_frames(str(clip), w, h, 0.5))
     except Exception as exc:
         print(f"  !! {camera} {slot}: plate decode failed: {exc}", flush=True)
         return False
     if len(frames_) < 20:
         print(f"  !! {camera} {slot}: only {len(frames_)} frames, no plate", flush=True)
         return False
-    small = np.stack([np.asarray(Image.fromarray(f).resize((960, 540),
-                                                           Image.Resampling.BILINEAR))
-                      for f in frames_])
+    small = np.stack(
+        [
+            np.asarray(Image.fromarray(f).resize((960, 540), Image.Resampling.BILINEAR))
+            for f in frames_
+        ]
+    )
     plate = np.median(small, axis=0).astype(np.uint8)
     plate_path.parent.mkdir(parents=True, exist_ok=True)
     Image.fromarray(plate).save(plate_path)
@@ -454,49 +574,69 @@ def camera_floor(camera, geo, slots, plate_cache):
         ev |= pf
         b03_floor_any |= b03p == 1
         ctx_any |= np.isin(b03p, (0, 1, 2))
-        print(f"  [{camera} {slot}] plate dirty {100 * dirty.mean():.1f}%, "
-              f"plate floor {100 * pf.mean():.1f}% of frame")
+        print(
+            f"  [{camera} {slot}] plate dirty {100 * dirty.mean():.1f}%, "
+            f"plate floor {100 * pf.mean():.1f}% of frame"
+        )
     # v5.4 third source: unambiguous ground geometry, admitted whatever b03 says.
-    strict = (np.isfinite(geo.height) & ~geo.oob & (~dirty_all)
-              & (np.abs(geo.height) <= np.minimum(tol, STRICT_TOL)) & (geo.horiz >= 0.8))
+    strict = (
+        np.isfinite(geo.height)
+        & ~geo.oob
+        & (~dirty_all)
+        & (np.abs(geo.height) <= np.minimum(tol, STRICT_TOL))
+        & (geo.horiz >= 0.8)
+    )
     new_ev = strict & ~ev
-    ev_teach = ev.copy()   # what the two teachers claim on their own, before the strict source
+    ev_teach = ev.copy()  # what the two teachers claim on their own, before the strict source
     ev = (ev | strict) & ~dirty_all
     cand = (~dirty_all) & ((onplane & ctx_any) | b03_floor_any | strict)
-    print(f"  [{camera}] strict-geometry source: {100 * strict.mean():.1f}% of frame, "
-          f"new to the evidence {100 * new_ev.mean():.1f}%")
-    print(f"  [{camera}] pooled: dirty in every plate {100 * dirty_all.mean():.1f}%, "
-          f"candidates {100 * cand.mean():.1f}%, evidence {100 * ev.mean():.1f}% of frame")
+    print(
+        f"  [{camera}] strict-geometry source: {100 * strict.mean():.1f}% of frame, "
+        f"new to the evidence {100 * new_ev.mean():.1f}%"
+    )
+    print(
+        f"  [{camera}] pooled: dirty in every plate {100 * dirty_all.mean():.1f}%, "
+        f"candidates {100 * cand.mean():.1f}%, evidence {100 * ev.mean():.1f}% of frame"
+    )
 
-    CELL = 0.05
-    GW, GH = int(30 / CELL), int(12 / CELL)
+    cell = 0.05
+    gw, gh = int(30 / cell), int(12 / cell)
     ok = cand & np.isfinite(geo.gx) & np.isfinite(geo.gz) & (rng < 12)
-    cxi = np.floor((geo.gx[ok] + 15) / CELL).astype(int)
-    czi = np.floor(geo.gz[ok] / CELL).astype(int)
-    inb = (cxi >= 0) & (cxi < GW) & (czi >= 0) & (czi < GH)
-    cc = np.zeros((GH, GW), np.int32)
-    pc = np.zeros((GH, GW), np.int32)
+    cxi = np.floor((geo.gx[ok] + 15) / cell).astype(int)
+    czi = np.floor(geo.gz[ok] / cell).astype(int)
+    inb = (cxi >= 0) & (cxi < gw) & (czi >= 0) & (czi < gh)
+    cc = np.zeros((gh, gw), np.int32)
+    pc = np.zeros((gh, gw), np.int32)
     np.add.at(cc, (czi[inb], cxi[inb]), 1)
     np.add.at(pc, (czi[inb], cxi[inb]), ev[ok][inb].astype(np.int32))
     bev = (cc > 0) & (pc / np.maximum(cc, 1) >= 0.45)
     bev = ndimage.binary_closing(bev, structure=np.ones((3, 3)))
     lb, nn = ndimage.label(bev)
-    ar = ndimage.sum_labels(np.ones_like(lb), lb, np.arange(1, nn + 1)) * CELL * CELL
+    ar = ndimage.sum_labels(np.ones_like(lb), lb, np.arange(1, nn + 1)) * cell * cell
     bev = np.isin(lb, np.flatnonzero(ar >= 0.15) + 1)
     hh_ = ndimage.binary_fill_holes(bev) & ~bev
     lh, nh = ndimage.label(hh_)
-    hs = ndimage.sum_labels(np.ones_like(lh), lh, np.arange(1, nh + 1)) * CELL * CELL
+    hs = ndimage.sum_labels(np.ones_like(lh), lh, np.arange(1, nh + 1)) * cell * cell
     bev |= np.isin(lh, np.flatnonzero(hs <= 0.25) + 1)
-    cxa = np.floor((geo.gx + 15) / CELL).astype(np.int64)
-    cza = np.floor(geo.gz / CELL).astype(np.int64)
-    valid = (cand & np.isfinite(geo.gx) & np.isfinite(geo.gz)
-             & (cxa >= 0) & (cxa < GW) & (cza >= 0) & (cza < GH))
+    cxa = np.floor((geo.gx + 15) / cell).astype(np.int64)
+    cza = np.floor(geo.gz / cell).astype(np.int64)
+    valid = (
+        cand
+        & np.isfinite(geo.gx)
+        & np.isfinite(geo.gz)
+        & (cxa >= 0)
+        & (cxa < gw)
+        & (cza >= 0)
+        & (cza < gh)
+    )
     floor_raw = np.zeros(cand.shape, bool)
     vi = np.where(valid)
     floor_raw[vi] = bev[cza[vi], cxa[vi]]
     floor_raw[cand & ~valid] = ev[cand & ~valid]
-    print(f"  [{camera}] floor voted (before the per-plate boundary): "
-          f"{100 * floor_raw.mean():.1f}% of frame")
+    print(
+        f"  [{camera}] floor voted (before the per-plate boundary): "
+        f"{100 * floor_raw.mean():.1f}% of frame"
+    )
     # Pixels only the strict source claims are returned separately: they are the ones the
     # per-clip object layer is allowed to veto (see the enclosed-hole rule in main).
     return floor_raw, floor_raw & ~ev_teach
@@ -508,12 +648,12 @@ def main():
     # This is what lets one camera be split across workers without changing the recipe:
     # the pooled floor still sees all of that camera's plates in every worker.
     only = set()
-    preview_stride = 1     # 1 = an overlay for every frame; N = one in N (QA sample)
+    preview_stride = 1  # 1 = an overlay for every frame; N = one in N (QA sample)
     resume = False
     rest = []
     for a in argv:
         if a.startswith("--only="):
-            only |= {s for s in a[len("--only="):].split(",") if s}
+            only |= {s for s in a[len("--only=") :].split(",") if s}
         elif a.startswith("--preview-stride="):
             preview_stride = max(1, int(a.split("=", 1)[1]))
         elif a == "--resume":
@@ -564,8 +704,7 @@ def main():
         for cam_i, _stem, slot_i, _n, _clip, plate_path in parsed:
             if cam_i != camera or (camera, slot_i) in plate_cache:
                 continue
-            img = Image.open(plate_path).convert("RGB").resize(
-                (W, H), Image.Resampling.LANCZOS)
+            img = Image.open(plate_path).convert("RGB").resize((W, H), Image.Resampling.LANCZOS)
             plate_imgs[(camera, slot_i)] = img
             plate_cache[(camera, slot_i)] = third.terrain_ids(img)
         slots = list(dict.fromkeys(p[2] for p in parsed if p[0] == camera))
@@ -575,38 +714,50 @@ def main():
         # plate (least person-smear) instead of once per clip. 5.1 s per clip in the
         # measured budget, 7.2% of the whole run.
         cleanest = min(slots, key=lambda s: float((plate_cache[(camera, s)] == 5).mean()))
-        slic_cam[camera] = np.asarray(Image.fromarray(
-            slic_numpy(np.asarray(plate_imgs[(camera, cleanest)].resize((960, 540))),
-                       30).astype(np.int32), "I")
-            .resize((W, H), Image.Resampling.NEAREST))
-        print(f"  [{camera}] superpixels from the cleanest plate ({cleanest}, "
-              f"{100 * float((plate_cache[(camera, cleanest)] == 5).mean()):.1f}% dirty)")
+        slic_cam[camera] = np.asarray(
+            Image.fromarray(
+                slic_numpy(
+                    np.asarray(plate_imgs[(camera, cleanest)].resize((960, 540))), 30
+                ).astype(np.int32),
+                "I",
+            ).resize((W, H), Image.Resampling.NEAREST)
+        )
+        print(
+            f"  [{camera}] superpixels from the cleanest plate ({cleanest}, "
+            f"{100 * float((plate_cache[(camera, cleanest)] == 5).mean()):.1f}% dirty)"
+        )
         if geo.lx is None:
             # level-frame X/Z from the same depth the teacher used, for footprints
             calib = json.loads((ROOT / f"runs/onboard01/{camera}.calib.json").read_text())
             from calibrate_from_plate import run_depth, undistort_image
 
             from syncai_hydranet.geometry.ground import unproject
+
             k1 = float(calib.get("k1_division_model") or 0.0)
             vfov = float(calib["vfov_assumed_deg"])
-            plane = GroundPlane(height=float(calib["height_m"]),
-                                pitch=math.radians(calib["pitch_deg"]),
-                                roll=math.radians(calib["roll_deg"]))
+            plane = GroundPlane(
+                height=float(calib["height_m"]),
+                pitch=math.radians(calib["pitch_deg"]),
+                roll=math.radians(calib["roll_deg"]),
+            )
             native = np.asarray(Image.open(calib["plate_used"]).convert("RGB"))
             ph, pw = native.shape[:2]
             depth = run_depth(undistort_image(native, k1)) * float(calib["scale"])
             level = unproject(depth, GCamera.from_vfov(ph, pw, vfov)) @ plane.rotation
             vv, uu = np.mgrid[0:H, 0:W].astype(np.float64)
-            und = undistort_points(np.stack([uu.ravel(), vv.ravel()], 1), k1,
-                                   (W / 2.0, H / 2.0), math.hypot(H, W) / 2.0)
+            und = undistort_points(
+                np.stack([uu.ravel(), vv.ravel()], 1),
+                k1,
+                (W / 2.0, H / 2.0),
+                math.hypot(H, W) / 2.0,
+            )
             su = np.clip(np.round(und[:, 0].reshape(H, W) * (pw / W)).astype(int), 0, pw - 1)
             sv = np.clip(np.round(und[:, 1].reshape(H, W) * (ph / H)).astype(int), 0, ph - 1)
             geo.lx = level[..., 0][sv, su].astype(np.float32)
             geo.lz = level[..., 2][sv, su].astype(np.float32)
             geo.save_cache()
 
-        floor_cam[camera], strict_only[camera] = camera_floor(
-            camera, geo, slots, plate_cache)
+        floor_cam[camera], strict_only[camera] = camera_floor(camera, geo, slots, plate_cache)
 
         # v5.8: the immovable objects are decided ONCE PER CAMERA too, over the SAM 3
         # instances of every plate. Same reason as the floor, and the same evidence
@@ -618,29 +769,42 @@ def main():
             embeds = SAM3.vision_features(proc, model, pimg, device)
             for concept in static_concepts:
                 for prompt in concept.prompts:
-                    for m_, s_ in SAM3.segment(proc, model, pimg, prompt,
-                                                          concept.min_score, device, embeds):
+                    for m_, s_ in SAM3.segment(
+                        proc, model, pimg, prompt, concept.min_score, device, embeds
+                    ):
                         if m_.sum() < 500:
                             continue
-                        smeta.append({"concept": concept.name, "prompt": prompt,
-                                      "score": float(s_), "px": int(m_.sum()),
-                                      "slot": slot_i})
+                        smeta.append(
+                            {
+                                "concept": concept.name,
+                                "prompt": prompt,
+                                "score": float(s_),
+                                "px": int(m_.sum()),
+                                "slot": slot_i,
+                            }
+                        )
                         smasks.append(m_)
         cl_masks, cl_votes = cluster(smasks, smeta)
         static_cam[camera], decisions_cam[camera] = decide_structure(
-            cl_masks, cl_votes, [plate_cache[(camera, s)] for s in slots], geo,
-            geo.lx, geo.lz)
+            cl_masks, cl_votes, [plate_cache[(camera, s)] for s in slots], geo, geo.lx, geo.lz
+        )
         acc = sum(1 for d in decisions_cam[camera] if d["win"] and not d["reject"])
-        print(f"  [{camera}] structure over {len(slots)} plates: {len(smasks)} instances "
-              f"-> {len(cl_masks)} objects, {acc} accepted")
+        print(
+            f"  [{camera}] structure over {len(slots)} plates: {len(smasks)} instances "
+            f"-> {len(cl_masks)} objects, {acc} accepted"
+        )
 
     render = [p for p in parsed if not only or p[1] in only]
     if only:
-        print(f"rendering {len(render)} of {len(parsed)} clips passed "
-              f"(the rest are here for the pooled floor only)")
+        print(
+            f"rendering {len(render)} of {len(parsed)} clips passed "
+            f"(the rest are here for the pooled floor only)"
+        )
     for camera, stem, slot, n_here, clip, plate_path in render:
-        if resume and all((out_dir / "masks" / f"{camera}__{slot}__{i:04d}.png").exists()
-                          for i in range(n_here)):
+        if resume and all(
+            (out_dir / "masks" / f"{camera}__{slot}__{i:04d}.png").exists()
+            for i in range(n_here)
+        ):
             print(f"== {camera} {slot}: {n_here} frames already written, skipped")
             continue
         print(f"== {camera} {slot}")
@@ -648,7 +812,6 @@ def main():
         geo = geo_cache[camera]
         plate_img = plate_imgs[(camera, slot)]
         plate_rgb = np.asarray(plate_img, dtype=np.int16)
-        b03p = plate_cache[(camera, slot)]
         static, decisions = static_cam[camera], decisions_cam[camera]
         slic = slic_cam[camera]
 
@@ -658,9 +821,15 @@ def main():
         # plate, so a fixture that moved between slots still cuts the floor where it
         # actually stands. Each frame then subtracts what stands ON the floor -- people,
         # products, fixtures -- exactly as in v5.2.
-        floor_clip = guided(floor_cam[camera].astype(np.float32),
-                            plate_rgb.astype(np.float32) / 255.0,
-                            GUIDE_RADIUS, GUIDE_EPS) >= 0.5
+        floor_clip = (
+            guided(
+                floor_cam[camera].astype(np.float32),
+                plate_rgb.astype(np.float32) / 255.0,
+                GUIDE_RADIUS,
+                GUIDE_EPS,
+            )
+            >= 0.5
+        )
         floor_clip = ndimage.binary_fill_holes(floor_clip)
         # The object layer vetoes the strict source INSIDE ITSELF. A pixel that only the
         # strict-geometry source claims and that lies in a hole fully enclosed by one
@@ -682,20 +851,27 @@ def main():
         # teachers' own evidence.
         veto = floor_clip & holes
         floor_clip &= ~veto
-        print(f"  floor (per camera, boundary on this plate): "
-              f"{100 * floor_clip.mean():.1f}% of frame"
-              f"   (object-hole veto removed {int(veto.sum())} px)")
+        print(
+            f"  floor (per camera, boundary on this plate): "
+            f"{100 * floor_clip.mean():.1f}% of frame"
+            f"   (object-hole veto removed {int(veto.sum())} px)"
+        )
 
         kept, day = M.load_clip(str(clip), 1.0)
         pool = [i for i, d in enumerate(day) if d] or list(range(len(kept)))
         # v6.1: farthest-first was hard-capped at 10, so `--frames 25` silently gave 10.
         # The cap is now the request itself, which is what makes the per-clip fixed cost
         # (32 s: decode, superpixels, noise floor) amortise over more frames.
-        picks = [pool[i] for i in farthest_first([describe(kept[i]) for i in pool],
-                                                 max(n_here, 10))]
+        picks = [
+            pool[i] for i in farthest_first([describe(kept[i]) for i in pool], max(n_here, 10))
+        ]
         sub = np.linspace(0, len(kept) - 1, min(48, len(kept))).astype(int)
-        devs = np.stack([np.abs(kept[i].astype(np.int16) - plate_rgb).mean(axis=2).astype(np.uint8)
-                         for i in sub])
+        devs = np.stack(
+            [
+                np.abs(kept[i].astype(np.int16) - plate_rgb).mean(axis=2).astype(np.uint8)
+                for i in sub
+            ]
+        )
         thr_map = np.maximum(np.percentile(devs, 10, axis=0), 1.0) * 8.0
         del devs
 
@@ -714,17 +890,21 @@ def main():
             pmeta, pmasks = [], []
             for cls, prompts in PRODUCT_PROMPTS.items():
                 for prompt in prompts:
-                    for m, s in SAM3.segment(proc, model, img, prompt, 0.25,
-                                                        device, fembeds):
+                    for m, s in SAM3.segment(proc, model, img, prompt, 0.25, device, fembeds):
                         if m.sum() < 80 or s < PRODUCT_MIN[cls]:
                             continue
-                        pmeta.append({"cls": cls, "prompt": prompt, "score": float(s),
-                                      "px": int(m.sum())})
+                        pmeta.append(
+                            {
+                                "cls": cls,
+                                "prompt": prompt,
+                                "score": float(s),
+                                "px": int(m.sum()),
+                            }
+                        )
                         pmasks.append(m)
             nmeta, nmasks = [], []
             for prompt in NEGATIVE:
-                for m, s in SAM3.segment(proc, model, img, prompt, 0.25,
-                                                    device, fembeds):
+                for m, s in SAM3.segment(proc, model, img, prompt, 0.25, device, fembeds):
                     if m.sum() >= 80:
                         nmeta.append({"prompt": prompt, "score": float(s)})
                         nmasks.append(m)
@@ -734,8 +914,10 @@ def main():
                 m = pmasks[i]
                 for kk in keep:
                     inter = (m & pmasks[kk]).sum()
-                    if (inter / max((m | pmasks[kk]).sum(), 1) >= PRODUCT_IOU
-                            or inter / m.sum() >= 0.8):
+                    if (
+                        inter / max((m | pmasks[kk]).sum(), 1) >= PRODUCT_IOU
+                        or inter / m.sum() >= 0.8
+                    ):
                         break
                 else:
                     keep.append(i)
@@ -752,11 +934,17 @@ def main():
                         continue
                     if (m & nmasks[j]).sum() / m.sum() >= NEG_COVER and nr["score"] > neg:
                         neg, neg_name = nr["score"], nr["prompt"]
-                below = ndimage.binary_dilation(
-                    m, structure=np.array([[0, 0, 0], [0, 1, 0], [0, 1, 0]]),
-                    iterations=12) & ~m
-                fs = (float((structure_floor[below] == IDS["floor"]).mean())
-                      if below.sum() > 20 else 0.0)
+                below = (
+                    ndimage.binary_dilation(
+                        m, structure=np.array([[0, 0, 0], [0, 1, 0], [0, 1, 0]]), iterations=12
+                    )
+                    & ~m
+                )
+                fs = (
+                    float((structure_floor[below] == IDS["floor"]).mean())
+                    if below.sum() > 20
+                    else 0.0
+                )
                 if neg > r["score"]:
                     refused.append((r, f"`{neg_name}` {neg:.2f} beats {r['score']:.2f}"))
                 elif r["score"] - neg < NEG_TIE:
@@ -779,17 +967,20 @@ def main():
             # floor already uses -- a shadow on the floor is floor.
             fy = np.asarray(img.convert("YCbCr"), dtype=np.int16)
             py = np.asarray(plate_img.convert("YCbCr"), dtype=np.int16)
-            dchroma = np.maximum(np.abs(fy[..., 1] - py[..., 1]),
-                                 np.abs(fy[..., 2] - py[..., 2]))
+            dchroma = np.maximum(
+                np.abs(fy[..., 1] - py[..., 1]), np.abs(fy[..., 2] - py[..., 2])
+            )
             changed = ~static_px & ~person & (dchroma > CHROMA_CHANGE)
-            seg_ch = (np.bincount(slic[changed], minlength=int(slic.max()) + 1)
-                      / np.maximum(np.bincount(slic.ravel(), minlength=int(slic.max()) + 1), 1))
+            seg_ch = np.bincount(slic[changed], minlength=int(slic.max()) + 1) / np.maximum(
+                np.bincount(slic.ravel(), minlength=int(slic.max()) + 1), 1
+            )
             withdraw = np.isin(mask, [2, 3, 4, 5]) & (seg_ch[slic] >= CHANGE_WITHDRAW)
             mask[withdraw] = IGNORE
             mask[products != IGNORE] = products[products != IGNORE]
             mask[person] = IDS["person"]
-            shade = (ndimage.binary_fill_holes(np.isin(mask, [IDS["floor"], IDS["person"]]))
-                     & (mask == IGNORE))
+            shade = ndimage.binary_fill_holes(np.isin(mask, [IDS["floor"], IDS["person"]])) & (
+                mask == IGNORE
+            )
             mask[shade] = IDS["floor"]
             for cid in (1, 2, 3, 4, 5):
                 cls = mask == cid
@@ -838,17 +1029,34 @@ def main():
                 y += 16
             if n % preview_stride == 0:
                 vis.save(out_dir / "preview" / f"{name}.jpg", quality=92)
-            report.append({"name": name, "camera": camera, "slot": slot,
-                           "labelled_pct": lab_pct, "shares": shares,
-                           "products_kept": len(keep) - len(refused),
-                           "products_refused": [(r["cls"], round(r["score"], 2), why)
-                                                for r, why in refused],
-                           "structure": [d for d in decisions if d["win"]]})
+            report.append(
+                {
+                    "name": name,
+                    "camera": camera,
+                    "slot": slot,
+                    "labelled_pct": lab_pct,
+                    "shares": shares,
+                    "products_kept": len(keep) - len(refused),
+                    "products_refused": [
+                        (r["cls"], round(r["score"], 2), why) for r, why in refused
+                    ],
+                    "structure": [d for d in decisions if d["win"]],
+                }
+            )
             print(f"  {name}: labelled {lab_pct}%  {shares}")
-        status.write(json.dumps({"camera": camera, "slot": slot, "stem": stem,
-                                 "frames": len(picks[:n_here]),
-                                 "seconds": round(time.time() - t_clip, 1),
-                                 "plate": str(plate_path)}) + "\n")
+        status.write(
+            json.dumps(
+                {
+                    "camera": camera,
+                    "slot": slot,
+                    "stem": stem,
+                    "frames": len(picks[:n_here]),
+                    "seconds": round(time.time() - t_clip, 1),
+                    "plate": str(plate_path),
+                }
+            )
+            + "\n"
+        )
         status.flush()
         del kept
 
@@ -867,8 +1075,9 @@ def main():
             merged = {}
     merged.update({r["name"]: r for r in report})
     report_path.write_text(json.dumps(list(merged.values()), indent=1))
-    print(f"\n{len(report)} frames written to {out_dir}; "
-          f"{report_path.name} holds {len(merged)}")
+    print(
+        f"\n{len(report)} frames written to {out_dir}; {report_path.name} holds {len(merged)}"
+    )
 
 
 if __name__ == "__main__":

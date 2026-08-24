@@ -42,6 +42,7 @@ Resumable per image into `boxes_cache.jsonl`: a rerun re-reads the cache and onl
 for frames it has never seen. The COCO files are assembled from the cache at the end, so a
 kill mid-run costs the frames in flight and nothing else.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -90,15 +91,20 @@ def product_boxes(mask: np.ndarray) -> list[tuple[str, list[float], int]]:
         lab, n = ndimage.label(mask == cid)
         if not n:
             continue
-        for sl, k in zip(ndimage.find_objects(lab), range(1, n + 1)):
+        for sl, k in zip(ndimage.find_objects(lab), range(1, n + 1), strict=True):
             if sl is None:
                 continue
             area = int((lab[sl] == k).sum())
             if area < MIN_PRODUCT_PX:
                 continue
             ys, xs = sl
-            out.append((fam, [float(xs.start), float(ys.start),
-                              float(xs.stop - 1), float(ys.stop - 1)], area))
+            out.append(
+                (
+                    fam,
+                    [float(xs.start), float(ys.start), float(xs.stop - 1), float(ys.stop - 1)],
+                    area,
+                )
+            )
     return out
 
 
@@ -106,7 +112,9 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", type=Path, default=Path("datasets/site30k_v1"))
     ap.add_argument("--model", default=G.MODEL_ID)
-    ap.add_argument("--limit", type=int, default=0, help="first N frames only, for a smoke pass")
+    ap.add_argument(
+        "--limit", type=int, default=0, help="first N frames only, for a smoke pass"
+    )
     ap.add_argument("--preview", type=int, default=24, help="how many drawn frames to write")
     ap.add_argument("--preview-every", type=int, default=1200)
     args = ap.parse_args()
@@ -191,10 +199,14 @@ def assemble(root: Path, masks, cached: dict, split_of: dict) -> None:
     info = {
         "source": str(root),
         "person": f"Grounding DINO {G.MODEL_ID} @{G.PERSON_THRESHOLD}, NMS {NMS_IOU}",
-        "product": (f"connected components of the campaign mask ids {sorted(PRODUCT_IDS)}, "
-                    f">= {MIN_PRODUCT_PX} px; families mapped to the retail_security vocab"),
+        "product": (
+            f"connected components of the campaign mask ids {sorted(PRODUCT_IDS)}, "
+            f">= {MIN_PRODUCT_PX} px; families mapped to the retail_security vocab"
+        ),
         "family_to_vocab": FAMILY_TO_VOCAB,
-        "note": "teacher opinion, not ground truth. Daylight only: no night static veto applied.",
+        "note": (
+            "teacher opinion, not ground truth. Daylight only: no night static veto applied."
+        ),
     }
     per_split: dict[str, dict] = {}
     tally: dict[str, Counter] = {}
@@ -206,13 +218,26 @@ def assemble(root: Path, masks, cached: dict, split_of: dict) -> None:
         split = split_of.get(camera)
         if split is None:
             continue
-        d = per_split.setdefault(split, {"info": info, "categories": CATEGORIES,
-                                         "images": [], "annotations": [],
-                                         "annotations_all": []})
+        d = per_split.setdefault(
+            split,
+            {
+                "info": info,
+                "categories": CATEGORIES,
+                "images": [],
+                "annotations": [],
+                "annotations_all": [],
+            },
+        )
         t = tally.setdefault(split, Counter())
         iid = len(d["images"]) + 1
-        d["images"].append({"id": iid, "file_name": f"{rec['name']}.jpg",
-                            "width": rec["w"], "height": rec["h"]})
+        d["images"].append(
+            {
+                "id": iid,
+                "file_name": f"{rec['name']}.jpg",
+                "width": rec["w"],
+                "height": rec["h"],
+            }
+        )
         for b in rec["person"]:
             add(d["annotations"], iid, "person", b[:4], score=b[4])
             t["person"] += 1
@@ -228,20 +253,34 @@ def assemble(root: Path, masks, cached: dict, split_of: dict) -> None:
         allann = d.pop("annotations_all")
         (ann_dir / f"instances_{split}.json").write_text(json.dumps(d))
         (ann_dir / f"instances_all_{split}.json").write_text(
-            json.dumps({"info": info, "categories": CATEGORIES,
-                        "images": d["images"], "annotations": allann}))
+            json.dumps(
+                {
+                    "info": info,
+                    "categories": CATEGORIES,
+                    "images": d["images"],
+                    "annotations": allann,
+                }
+            )
+        )
         n_img = len(d["images"])
         empty = n_img - len({a["image_id"] for a in d["annotations"]})
-        print(f"  {split:5s} {n_img:6d} images  {len(d['annotations']):7d} boxes  "
-              f"{dict(sorted(tally[split].items()))}  ({empty} images with no box)")
+        print(
+            f"  {split:5s} {n_img:6d} images  {len(d['annotations']):7d} boxes  "
+            f"{dict(sorted(tally[split].items()))}  ({empty} images with no box)"
+        )
     print(f"wrote instances_<split>.json and instances_all_<split>.json under {ann_dir}")
 
 
 def add(into: list, image_id: int, cls: str, xyxy, score=None, family=None, area=None) -> None:
     x0, y0, x1, y1 = (float(v) for v in xyxy)
-    rec = {"id": len(into) + 1, "image_id": image_id, "category_id": VOCAB_ID[cls] + 1,
-           "bbox": [x0, y0, x1 - x0, y1 - y0],
-           "area": float(area if area is not None else (x1 - x0) * (y1 - y0)), "iscrowd": 0}
+    rec = {
+        "id": len(into) + 1,
+        "image_id": image_id,
+        "category_id": VOCAB_ID[cls] + 1,
+        "bbox": [x0, y0, x1 - x0, y1 - y0],
+        "area": float(area if area is not None else (x1 - x0) * (y1 - y0)),
+        "iscrowd": 0,
+    }
     if score is not None:
         rec["score"] = float(score)
     if family is not None:

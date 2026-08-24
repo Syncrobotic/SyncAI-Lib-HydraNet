@@ -15,7 +15,8 @@ layouts is how a multitask dataset ends up training its segmentation head on nin
 and its detection head on nothing.
 
     python tools/site30k/materialize_splits.py --root datasets/site30k_v1
-    python tools/site30k/materialize_splits.py --root datasets/site30k_v1 --exclude Tao-Hsin-cam03
+    python tools/site30k/materialize_splits.py --root datasets/site30k_v1 \
+        --exclude Tao-Hsin-cam03
 
 The assignment is inherited per CAMERA from `datasets/site30k/split.json` and is not a
 decision this script makes. A camera missing from that file is an error and not a default:
@@ -26,6 +27,7 @@ It also prints the camera identities per split, not only the counts. A split's f
 answers "is there enough"; only the camera list answers "can this measure anything", and
 that is the question that comes next -- site30k_v1's test split is one camera.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -45,7 +47,7 @@ def link(src: Path, dst: Path) -> bool:
     """Point dst at src by a relative symlink. True if anything changed."""
     rel = os.path.relpath(src, dst.parent)
     if dst.is_symlink():
-        if os.readlink(dst) == rel:
+        if dst.readlink() == Path(rel):
             return False
         dst.unlink()
     elif dst.exists():
@@ -111,9 +113,9 @@ def main() -> int:
 
     changed = 0
     for split, stems in sorted(by_split.items()):
-        img_dir = args.root / "images" / split      # SegFolderDataset
+        img_dir = args.root / "images" / split  # SegFolderDataset
         ann_dir = args.root / "annotations" / split
-        det_dir = args.root / split                 # CocoDetDataset
+        det_dir = args.root / split  # CocoDetDataset
         if not args.dry_run:
             for d in (img_dir, ann_dir, det_dir):
                 d.mkdir(parents=True, exist_ok=True)
@@ -128,7 +130,10 @@ def main() -> int:
         stems = by_split.get(split, [])
         cams = sorted(cameras.get(split, ()))
         share = 100 * len(stems) / total if total else 0.0
-        print(f"  {split:5s} {len(stems):6d} frames  {share:5.1f}%  {len(cams)} cameras: {', '.join(cams) or '-'}")
+        print(
+            f"  {split:5s} {len(stems):6d} frames  {share:5.1f}%  "
+            f"{len(cams)} cameras: {', '.join(cams) or '-'}"
+        )
 
     if len(cameras.get("test", ())) < 2:
         print(

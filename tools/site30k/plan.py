@@ -30,6 +30,7 @@ Scope, and the reason for each bound:
 
 Writes campaign_plan.json: one entry per unit, ready for run_campaign.sh.
 """
+
 import argparse
 import json
 import re
@@ -39,7 +40,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 sys.path.insert(0, "/home/paul/SyncAI-Lib-HydraNet/src")
-from syncai_hydranet.data.video import probe  # noqa: E402
+from syncai_hydranet.data.video import probe
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
 PULL = ROOT / "datasets/studioa_pull_site30k"
@@ -52,11 +53,14 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--target", type=int, default=30000, help="frames to annotate")
     ap.add_argument("--max-per-clip", type=int, default=40)
-    ap.add_argument("--min-width", type=int, default=1920,
-                    help="clips narrower than this are left out (see the docstring)")
+    ap.add_argument(
+        "--min-width",
+        type=int,
+        default=1920,
+        help="clips narrower than this are left out (see the docstring)",
+    )
     ap.add_argument("--out", type=Path, default=ROOT / "runs/site30k_qa/campaign_plan.json")
-    ap.add_argument("--split-json", type=Path,
-                    default=ROOT / "datasets/site30k/split.json")
+    ap.add_argument("--split-json", type=Path, default=ROOT / "datasets/site30k/split.json")
     args = ap.parse_args()
 
     split = json.loads(args.split_json.read_text())["assign"]
@@ -71,7 +75,9 @@ def main() -> int:
         calib = json.loads(calib_path.read_text())
         zones = json.loads(zones_path.read_text())
         if zones.get("units") != "m" or calib.get("scale") is None:
-            rejected.append((cam, f"zones units={zones.get('units')} scale={calib.get('scale')}"))
+            rejected.append(
+                (cam, f"zones units={zones.get('units')} scale={calib.get('scale')}")
+            )
             continue
         if not any(pr["name_suggestion"] == "walkable_floor" for pr in zones["proposals"]):
             rejected.append((cam, "no walkable_floor polygon"))
@@ -95,14 +101,14 @@ def main() -> int:
         cam, date, clip = item
         try:
             w, h, _ = probe(str(clip))
-        except Exception:                                       # noqa: BLE001
+        except Exception:
             return cam, date, clip, 0, 0
         return cam, date, clip, w, h
 
     small = 0
     unreadable = 0
     with ThreadPoolExecutor(12) as pool:
-        for cam, date, clip, w, h in pool.map(sized, candidates):
+        for cam, date, clip, w, _h in pool.map(sized, candidates):
             if w == 0:
                 unreadable += 1
                 continue
@@ -113,18 +119,37 @@ def main() -> int:
 
     n_clips = sum(len(v) for v in units.values())
     per_clip = min(args.max_per_clip, max(1, round(args.target / max(n_clips, 1))))
-    plan = [{"camera": cam, "date": date, "split": split.get(cam, "train"),
-             "clips": sorted(stems), "frames_per_clip": per_clip,
-             "frames": per_clip * len(stems)}
-            for (cam, date), stems in sorted(units.items())]
+    plan = [
+        {
+            "camera": cam,
+            "date": date,
+            "split": split.get(cam, "train"),
+            "clips": sorted(stems),
+            "frames_per_clip": per_clip,
+            "frames": per_clip * len(stems),
+        }
+        for (cam, date), stems in sorted(units.items())
+    ]
     total = sum(u["frames"] for u in plan)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(
-        {"target": args.target, "frames_per_clip": per_clip, "units": len(plan),
-         "cameras_rejected": {c: w for c, w in rejected},
-         "clips": n_clips, "planned_frames": total, "night_clips_skipped": skipped_night,
-         "clips_below_min_width": small, "clips_unreadable": unreadable,
-         "cameras": len(cameras), "plan": plan}, indent=1))
+    args.out.write_text(
+        json.dumps(
+            {
+                "target": args.target,
+                "frames_per_clip": per_clip,
+                "units": len(plan),
+                "cameras_rejected": dict(rejected),
+                "clips": n_clips,
+                "planned_frames": total,
+                "night_clips_skipped": skipped_night,
+                "clips_below_min_width": small,
+                "clips_unreadable": unreadable,
+                "cameras": len(cameras),
+                "plan": plan,
+            },
+            indent=1,
+        )
+    )
 
     by_split: dict[str, int] = defaultdict(int)
     for u in plan:
@@ -132,10 +157,14 @@ def main() -> int:
     print(f"{len(rejected)} cameras left out for want of a metric calibration:")
     for cam, why in rejected:
         print(f"   {cam:20s} {why}")
-    print(f"{len(cameras)} usable cameras, {len(plan)} camera-date units, "
-          f"{n_clips} day clips at {args.min_width}px or wider")
-    print(f"   left out: {skipped_night} night clips, {small} sub-resolution clips, "
-          f"{unreadable} unreadable")
+    print(
+        f"{len(cameras)} usable cameras, {len(plan)} camera-date units, "
+        f"{n_clips} day clips at {args.min_width}px or wider"
+    )
+    print(
+        f"   left out: {skipped_night} night clips, {small} sub-resolution clips, "
+        f"{unreadable} unreadable"
+    )
     print(f"{per_clip} frames per clip -> {total} frames planned (target {args.target})")
     for s, n in sorted(by_split.items()):
         print(f"   {s:6s} {n:6d} frames  ({100 * n / max(total, 1):.1f}%)")

@@ -141,8 +141,11 @@ SHELF_FAMILY = (
 # so a later taxonomy has a place to start (the trolley note in sam3_prompts_objects).
 OMITTED_FIXTURE_PROMPTS = ("office furniture", "trolley", "trash can")
 
-DETECTION_CATEGORIES = ({"id": 1, "name": "person"}, {"id": 2, "name": "pet"},
-                        {"id": 3, "name": "product"})
+DETECTION_CATEGORIES = (
+    {"id": 1, "name": "person"},
+    {"id": 2, "name": "pet"},
+    {"id": 3, "name": "product"},
+)
 
 PERSON_TRAIN_THR = 0.35  # measured day/night gap: night IR tops out 0.326, day >= 0.35
 FLOOR_TOL_M = 0.20  # on-plane tolerance; see the measured gap note in GeomTeacher
@@ -185,8 +188,14 @@ def build_concepts() -> list[Concept]:
     return [
         Concept("floor", OBJ.BY_NAME["floor"].prompts, OBJ.LAYER_GROUND, taxonomy=SITE30K),
         Concept("wall", OBJ.BY_NAME["wall"].prompts, OBJ.LAYER_GROUND, taxonomy=SITE30K),
-        Concept("column", col.prompts, OBJ.LAYER_THING, min_score=col.min_score,
-                taxonomy=SITE30K, note="min_score inherited from the 48-camera sweep"),
+        Concept(
+            "column",
+            col.prompts,
+            OBJ.LAYER_THING,
+            min_score=col.min_score,
+            taxonomy=SITE30K,
+            note="min_score inherited from the 48-camera sweep",
+        ),
         # Same layer on purpose: overlap between the families -> IGNORE, not a guess.
         Concept("display_table", TABLE_FAMILY, OBJ.LAYER_THING, taxonomy=SITE30K),
         Concept("shelf", SHELF_FAMILY, OBJ.LAYER_THING, taxonomy=SITE30K),
@@ -224,8 +233,9 @@ class ThirdOpinion:
         out = Image.fromarray(terr.astype(np.uint8)).resize(img.size, Image.Resampling.NEAREST)
         return np.asarray(out)
 
-    def veto(self, mask: np.ndarray, img: Image.Image,
-             ids: dict[int, int] | None = None) -> tuple[np.ndarray, dict]:
+    def veto(
+        self, mask: np.ndarray, img: Image.Image, ids: dict[int, int] | None = None
+    ) -> tuple[np.ndarray, dict]:
         """Where the model disagrees on a vetoed class, the pixel becomes IGNORE.
 
         ``ids`` narrows the veto set; the v2 recipe passes {person: person} only --
@@ -278,10 +288,16 @@ def build_concepts_v2() -> tuple[list[Concept], list[Concept]]:
     col = OBJ.BY_NAME["column"]
     static = [
         Concept("wall", OBJ.BY_NAME["wall"].prompts, OBJ.LAYER_GROUND, taxonomy=SITE30K_V2),
-        Concept("column", col.prompts, OBJ.LAYER_THING, min_score=col.min_score,
-                taxonomy=SITE30K_V2),
-        Concept("fixture", OBJ.BY_NAME["fixture"].prompts, OBJ.LAYER_THING,
-                taxonomy=SITE30K_V2, note="generic fixture; geometry names table/shelf"),
+        Concept(
+            "column", col.prompts, OBJ.LAYER_THING, min_score=col.min_score, taxonomy=SITE30K_V2
+        ),
+        Concept(
+            "fixture",
+            OBJ.BY_NAME["fixture"].prompts,
+            OBJ.LAYER_THING,
+            taxonomy=SITE30K_V2,
+            note="generic fixture; geometry names table/shelf",
+        ),
     ]
     moving = [Concept("person", ("person",), OBJ.LAYER_PERSON, taxonomy=SITE30K_V2)]
     return static, moving
@@ -323,9 +339,11 @@ class GeomTeacher:
         h, w = frame_hw
         vfov = float(calib["vfov_assumed_deg"])
         k1 = float(calib.get("k1_division_model") or 0.0)
-        plane = GroundPlane(height=float(calib["height_m"]),
-                            pitch=_math.radians(calib["pitch_deg"]),
-                            roll=_math.radians(calib["roll_deg"]))
+        plane = GroundPlane(
+            height=float(calib["height_m"]),
+            pitch=_math.radians(calib["pitch_deg"]),
+            roll=_math.radians(calib["roll_deg"]),
+        )
         cam_full = GCamera.from_vfov(h, w, vfov)
 
         # Undistorted coordinate of every (distorted) frame pixel, frame scale.
@@ -344,8 +362,11 @@ class GeomTeacher:
         geom_floor = inside.reshape(h, w)
 
         # b03 floor channel on the plate (static, person-light).
-        plate = Image.open(calib["plate_used"]).convert("RGB").resize((w, h),
-                                                                      Image.Resampling.LANCZOS)
+        plate = (
+            Image.open(calib["plate_used"])
+            .convert("RGB")
+            .resize((w, h), Image.Resampling.LANCZOS)
+        )
         b03_ids = third.terrain_ids(plate)
         self.b03_plate = b03_ids  # 0 void 1 floor 2 wall 3 column 4 fixture 5 person
         self._geom_floor = geom_floor  # kept for floor-diag attribution
@@ -403,8 +424,9 @@ class GeomTeacher:
         """
         from scipy import ndimage
 
-        img = Image.open(plate_path).convert("RGB").resize((1920, 1080),
-                                                           Image.Resampling.LANCZOS)
+        img = (
+            Image.open(plate_path).convert("RGB").resize((1920, 1080), Image.Resampling.LANCZOS)
+        )
         ids = self.third.terrain_ids(img)
         dirty = ndimage.binary_dilation(ids == 5, iterations=3)  # person + halo
         fin = np.isfinite(self.height)
@@ -429,9 +451,12 @@ class GeomTeacher:
         out[table] = SITE30K["display_table"]
         out[shelf] = SITE30K["shelf"]
         out[both] = IGNORE
-        stats = {"fixture_px": int(fixture.sum()), "table_px": int((out == 4).sum()),
-                 "shelf_px": int((out == 5).sum()),
-                 "ignored_px": int((fixture & (out == IGNORE)).sum())}
+        stats = {
+            "fixture_px": int(fixture.sum()),
+            "table_px": int((out == 4).sum()),
+            "shelf_px": int((out == 5).sum()),
+            "ignored_px": int((fixture & (out == IGNORE)).sum()),
+        }
         return out, stats
 
 
@@ -461,25 +486,39 @@ def load_clip(clip: str, sample_fps: float = 1.0):
     return kept, day
 
 
-def coco_image(images: list, name: str, img: Image.Image, lu: float, ch: float,
-               night: bool, camera: str) -> int:
+def coco_image(
+    images: list, name: str, img: Image.Image, lu: float, ch: float, night: bool, camera: str
+) -> int:
     image_id = len(images) + 1
-    images.append({
-        "id": image_id, "file_name": name, "width": img.width, "height": img.height,
-        "camera": camera, "luma": round(lu, 2), "chroma": round(ch, 2),
-        "night": bool(night),
-    })
+    images.append(
+        {
+            "id": image_id,
+            "file_name": name,
+            "width": img.width,
+            "height": img.height,
+            "camera": camera,
+            "luma": round(lu, 2),
+            "chroma": round(ch, 2),
+            "night": bool(night),
+        }
+    )
     return image_id
 
 
 def add_boxes(store: list, boxes, image_id: int, cat_id: int, extra: dict | None = None):
     for b in boxes:
-        store.append({
-            "id": len(store) + 1, "image_id": image_id, "category_id": cat_id,
-            "bbox": [float(b[0]), float(b[1]), float(b[2] - b[0]), float(b[3] - b[1])],
-            "area": float((b[2] - b[0]) * (b[3] - b[1])),
-            "score": float(b[4]), "iscrowd": 0, **(extra or {}),
-        })
+        store.append(
+            {
+                "id": len(store) + 1,
+                "image_id": image_id,
+                "category_id": cat_id,
+                "bbox": [float(b[0]), float(b[1]), float(b[2] - b[0]), float(b[3] - b[1])],
+                "area": float((b[2] - b[0]) * (b[3] - b[1])),
+                "score": float(b[4]),
+                "iscrowd": 0,
+                **(extra or {}),
+            }
+        )
 
 
 # ---------------------------------------------------------------------------------
@@ -490,11 +529,12 @@ def cmd_annotate(args) -> int:
     validate_inputs(args.clips)
     # session name = <camera>__<clipstem>: the camera prefix is the collision lesson
     # from data.video.session_names, applied up front rather than re-learned.
-    sessions = session_names([
-        str(Path(c).parent.name) + "__" + Path(c).stem for c in args.clips
-    ])
-    split_of = json.loads(Path(args.split_json).read_text())["assign"] if args.split_json \
-        else {}
+    sessions = session_names(
+        [str(Path(c).parent.name) + "__" + Path(c).stem for c in args.clips]
+    )
+    split_of = (
+        json.loads(Path(args.split_json).read_text())["assign"] if args.split_json else {}
+    )
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     if args.recipe in ("v2", "v3"):
@@ -514,20 +554,28 @@ def cmd_annotate(args) -> int:
     # purpose (the 352x240 lesson is docs-recorded).
 
     root = Path(args.out)
-    per_split: dict[str, dict] = defaultdict(lambda: {"images": [], "annotations": [],
-                                                      "all_annotations": []})
+    per_split: dict[str, dict] = defaultdict(
+        lambda: {"images": [], "annotations": [], "all_annotations": []}
+    )
     census = {"person": [], "pet": [], "product": []}
-    manifest = {"teachers": {
-        "seg": f"SAM 3 ({SAM3_MODEL_ID}) consensus@{CONSENSUS} "
-               f"+ b03 third-opinion veto on floor/wall/column/person",
-        "person": f"Grounding DINO ({args.gdino_model}) @{PERSON_TRAIN_THR}",
-        "pet": f"Grounding DINO '{args.pet_prompt}' -- census first, threshold "
-               f"{args.pet_thr if args.pet_thr is not None else 'NOT CHOSEN YET'}",
-        "product": "SAM 3 DETECTION_CLASSES at native resolution, merged to `product`",
-    }, "taxonomy": SITE30K, "fixture_split": {
-        "display_table": list(TABLE_FAMILY), "shelf": list(SHELF_FAMILY),
-        "omitted": list(OMITTED_FIXTURE_PROMPTS)},
-        "consensus": CONSENSUS, "clips": []}
+    manifest = {
+        "teachers": {
+            "seg": f"SAM 3 ({SAM3_MODEL_ID}) consensus@{CONSENSUS} "
+            f"+ b03 third-opinion veto on floor/wall/column/person",
+            "person": f"Grounding DINO ({args.gdino_model}) @{PERSON_TRAIN_THR}",
+            "pet": f"Grounding DINO '{args.pet_prompt}' -- census first, threshold "
+            f"{args.pet_thr if args.pet_thr is not None else 'NOT CHOSEN YET'}",
+            "product": "SAM 3 DETECTION_CLASSES at native resolution, merged to `product`",
+        },
+        "taxonomy": SITE30K,
+        "fixture_split": {
+            "display_table": list(TABLE_FAMILY),
+            "shelf": list(SHELF_FAMILY),
+            "omitted": list(OMITTED_FIXTURE_PROMPTS),
+        },
+        "consensus": CONSENSUS,
+        "clips": [],
+    }
     pixel_totals: dict[str, Counter] = defaultdict(Counter)
     veto_totals: dict[int, Counter] = defaultdict(Counter)
 
@@ -553,9 +601,16 @@ def cmd_annotate(args) -> int:
         ann_dir.mkdir(parents=True, exist_ok=True)
         bucket = per_split[split]
 
-        clip_entry = {"session": session, "source": clip, "camera": camera,
-                      "split": split, "night": night_clip, "frames": len(picks),
-                      "picks": picks, "recipe": args.recipe}
+        clip_entry = {
+            "session": session,
+            "source": clip,
+            "camera": camera,
+            "split": split,
+            "night": night_clip,
+            "frames": len(picks),
+            "picks": picks,
+            "recipe": args.recipe,
+        }
 
         shared = None
         static_share = None
@@ -577,7 +632,8 @@ def cmd_annotate(args) -> int:
                 plate_path = str(cand)  # the SAME clip's own median -- crispest diff
             else:
                 calib_p = json.loads(
-                    (HERE.parent / f"runs/onboard01/{camera}.calib.json").read_text())
+                    (HERE.parent / f"runs/onboard01/{camera}.calib.json").read_text()
+                )
                 plate_path = calib_p["plate_used"]
             plate_floor, dirty, plate_rgb = geom.plate_labeling(plate_path)
             # Per-pixel noise floor of |frame - plate|, static_plates style: a LOW
@@ -585,16 +641,25 @@ def cmd_annotate(args) -> int:
             # frame-wide constant, times the measured multiplier. The resampling
             # residual of the 960x540 plate is inside the floor by construction.
             sub = np.linspace(0, len(kept) - 1, min(48, len(kept))).astype(int)
-            devs = np.stack([
-                np.abs(kept[i].astype(np.int16) - plate_rgb).mean(axis=2).astype(np.uint8)
-                for i in sub])
+            devs = np.stack(
+                [
+                    np.abs(kept[i].astype(np.int16) - plate_rgb).mean(axis=2).astype(np.uint8)
+                    for i in sub
+                ]
+            )
             noise = np.maximum(np.percentile(devs, 10, axis=0), 1.0)
             del devs
             thr_map = noise * args.prop_mult
-            mv_list = [frame_masks(sam3_proc, sam3_model, kept[i], moving, device=device)[1]
-                       for i in picks]
-            v4_ctx = {"plate_floor": plate_floor, "plate_rgb": plate_rgb,
-                      "thr_map": thr_map, "coverage": []}
+            mv_list = [
+                frame_masks(sam3_proc, sam3_model, kept[i], moving, device=device)[1]
+                for i in picks
+            ]
+            v4_ctx = {
+                "plate_floor": plate_floor,
+                "plate_rgb": plate_rgb,
+                "thr_map": thr_map,
+                "coverage": [],
+            }
             clip_entry["plate"] = plate_path
             clip_entry["plate_dirty_pct"] = round(100 * float(dirty.mean()), 2)
             clip_entry["plate_floor_pct"] = round(100 * float(plate_floor.mean()), 2)
@@ -607,20 +672,26 @@ def cmd_annotate(args) -> int:
             geom = geom_cache[camera]
             shared = np.full(kept[0].shape[:2], IGNORE, np.uint8)
             shared[geom.onplane_floor] = SITE30K["floor"]
-            mv_list = [frame_masks(sam3_proc, sam3_model, kept[i], moving, device=device)[1]
-                       for i in picks]
+            mv_list = [
+                frame_masks(sam3_proc, sam3_model, kept[i], moving, device=device)[1]
+                for i in picks
+            ]
             clip_entry["floor_sources"] = geom.floor_sources
             clip_entry["floor_core_pct"] = round(100 * float(geom.onplane_floor.mean()), 2)
         elif not night_clip:
-            per_frame = [frame_masks(sam3_proc, sam3_model, kept[i], static, device=device)
-                         for i in picks]
+            per_frame = [
+                frame_masks(sam3_proc, sam3_model, kept[i], static, device=device)
+                for i in picks
+            ]
             if args.recipe == "v2":
                 # Person pixels are subtracted from the static vote INPUT: a person who
                 # stands still for the whole clip otherwise enters the vote and takes a
                 # static class with her (measured on the v1 pilot: a customer painted
                 # `shelf`). Computed once and reused for the per-frame composite below.
-                mv_list = [frame_masks(sam3_proc, sam3_model, kept[i], moving, device=device)[1]
-                           for i in picks]
+                mv_list = [
+                    frame_masks(sam3_proc, sam3_model, kept[i], moving, device=device)[1]
+                    for i in picks
+                ]
                 for (_, sm), pm in zip(per_frame, mv_list, strict=True):
                     sm[pm != IGNORE] = IGNORE
             shared, static_share = consensus([m for _, m in per_frame], CONSENSUS)
@@ -658,8 +729,7 @@ def cmd_annotate(args) -> int:
                 mask = np.full((img.height, img.width), IGNORE, np.uint8)
             else:
                 if v4_ctx is not None:
-                    dev_t = np.abs(frame.astype(np.int16)
-                                   - v4_ctx["plate_rgb"]).mean(axis=2)
+                    dev_t = np.abs(frame.astype(np.int16) - v4_ctx["plate_rgb"]).mean(axis=2)
                     static_px = dev_t <= v4_ctx["thr_map"]
                     mask = np.full(dev_t.shape, IGNORE, np.uint8)
                     mask[static_px & v4_ctx["plate_floor"]] = SITE30K["floor"]
@@ -671,15 +741,20 @@ def cmd_annotate(args) -> int:
                     # the floor claim is withdrawn (IGNORE); SAM3's person pixels then
                     # paint over whatever they cover. Floor survives only outside any
                     # person evidence -- precision first.
-                    pboxes_pre = gdino_detect(gd_proc, gd_model, img, "person",
-                                              SCORE_FLOOR, device)
-                    strong = gdino_nms(pboxes_pre[pboxes_pre[:, 4] >= PERSON_TRAIN_THR],
-                                       NMS_IOU)
+                    pboxes_pre = gdino_detect(
+                        gd_proc, gd_model, img, "person", SCORE_FLOOR, device
+                    )
+                    strong = gdino_nms(
+                        pboxes_pre[pboxes_pre[:, 4] >= PERSON_TRAIN_THR], NMS_IOU
+                    )
                     bm = np.zeros(mask.shape, dtype=bool)
                     for b in strong:
-                        x0, y0, x1, y1 = (max(int(b[0]), 0), max(int(b[1]), 0),
-                                          min(int(b[2]) + 1, mask.shape[1]),
-                                          min(int(b[3]) + 1, mask.shape[0]))
+                        x0, y0, x1, y1 = (
+                            max(int(b[0]), 0),
+                            max(int(b[1]), 0),
+                            min(int(b[2]) + 1, mask.shape[1]),
+                            min(int(b[3]) + 1, mask.shape[0]),
+                        )
                         bm[y0:y1, x0:x1] = True
                     mask[bm & (mask == SITE30K["floor"])] = IGNORE
                 if mv_list is not None:
@@ -691,8 +766,7 @@ def cmd_annotate(args) -> int:
                     # v2/v3: per-frame veto narrows to person -- floor is resolved
                     # statically against the plate, column is exempt (b03 is the
                     # documented site `column` failure, not its examiner)
-                    ids = ({SITE30K["person"]: 5} if args.recipe in ("v2", "v3", "v4")
-                           else None)
+                    ids = {SITE30K["person"]: 5} if args.recipe in ("v2", "v3", "v4") else None
                     mask, vstats = third.veto(mask, img, ids)
                     for sid, st in vstats.items():
                         veto_totals[sid].update(st)
@@ -704,21 +778,25 @@ def cmd_annotate(args) -> int:
                     p_total = int(pf.sum())
                     lab = int(((mask == SITE30K["floor"]) & pf).sum())
                     person_hole = int(((mask == SITE30K["person"]) & pf).sum())
-                    changed_hole = int((pf & ~static_px
-                                        & (mask != SITE30K["person"])).sum())
+                    changed_hole = int((pf & ~static_px & (mask != SITE30K["person"])).sum())
                     veto_hole = p_total - lab - person_hole - changed_hole
-                    v4_ctx["coverage"].append({
-                        "frame": stem,
-                        "floor_labelled_pct_of_visible": round(100 * lab / max(p_total, 1), 1),
-                        "person_hole_pct": round(100 * person_hole / max(p_total, 1), 1),
-                        "changed_hole_pct": round(100 * changed_hole / max(p_total, 1), 1),
-                        "other_hole_pct": round(100 * veto_hole / max(p_total, 1), 1),
-                    })
+                    v4_ctx["coverage"].append(
+                        {
+                            "frame": stem,
+                            "floor_labelled_pct_of_visible": round(
+                                100 * lab / max(p_total, 1), 1
+                            ),
+                            "person_hole_pct": round(100 * person_hole / max(p_total, 1), 1),
+                            "changed_hole_pct": round(100 * changed_hole / max(p_total, 1), 1),
+                            "other_hole_pct": round(100 * veto_hole / max(p_total, 1), 1),
+                        }
+                    )
             Image.fromarray(mask).save(ann_dir / f"{stem}.png")
             pixel_totals[camera].update(mask.ravel().tolist())
 
-            image_id = coco_image(bucket["images"], f"{session}/{stem}.jpg", img,
-                                  lu, ch, night_clip, camera)
+            image_id = coco_image(
+                bucket["images"], f"{session}/{stem}.jpg", img, lu, ch, night_clip, camera
+            )
 
             # person: GDINO, floor kept in *_all, threshold+NMS into the train file.
             # Night clips: the thresholded boxes are DEFERRED and passed through a
@@ -728,8 +806,11 @@ def cmd_annotate(args) -> int:
             # A box recurring in place across a 5-minute closed-store clip is
             # furniture. This gate is night-only: by day it deletes standing staff
             # (measured, sam3_person_boxes docstring).
-            pboxes = (pboxes_pre if pboxes_pre is not None else
-                      gdino_detect(gd_proc, gd_model, img, "person", SCORE_FLOOR, device))
+            pboxes = (
+                pboxes_pre
+                if pboxes_pre is not None
+                else gdino_detect(gd_proc, gd_model, img, "person", SCORE_FLOOR, device)
+            )
             census["person"].extend(float(b[4]) for b in pboxes)
             add_boxes(bucket["all_annotations"], pboxes, image_id, 1)
             kept_person = gdino_nms(pboxes[pboxes[:, 4] >= PERSON_TRAIN_THR], NMS_IOU)
@@ -739,42 +820,61 @@ def cmd_annotate(args) -> int:
                 add_boxes(bucket["annotations"], kept_person, image_id, 1)
 
             # pet: census always; boxes only once a threshold exists
-            petboxes = gdino_detect(gd_proc, gd_model, img, args.pet_prompt,
-                                    SCORE_FLOOR, device)
+            petboxes = gdino_detect(
+                gd_proc, gd_model, img, args.pet_prompt, SCORE_FLOOR, device
+            )
             census["pet"].extend(float(b[4]) for b in petboxes)
             add_boxes(bucket["all_annotations"], petboxes, image_id, 2)
             if args.pet_thr is not None:
-                add_boxes(bucket["annotations"],
-                          gdino_nms(petboxes[petboxes[:, 4] >= args.pet_thr], NMS_IOU),
-                          image_id, 2)
+                add_boxes(
+                    bucket["annotations"],
+                    gdino_nms(petboxes[petboxes[:, 4] >= args.pet_thr], NMS_IOU),
+                    image_id,
+                    2,
+                )
 
             # product: SAM 3 at native resolution, day frames only (no merchandise
             # measurement exists for IR night and person-only is the tranche's label)
             if not night_clip:
-                found, _dropped = frame_boxes(sam3_proc, sam3_model, frame,
-                                              OBJ.DETECTION_CLASSES, device=device,
-                                              max_box_frac=args.max_box_frac)
+                found, _dropped = frame_boxes(
+                    sam3_proc,
+                    sam3_model,
+                    frame,
+                    OBJ.DETECTION_CLASSES,
+                    device=device,
+                    max_box_frac=args.max_box_frac,
+                )
                 for b in found:
                     census["product"].append(float(b["score"]))
-                    bucket["annotations"].append({
-                        "id": len(bucket["annotations"]) + 1, "image_id": image_id,
-                        "category_id": 3, "bbox": b["bbox"], "area": b["area"],
-                        "score": b["score"], "iscrowd": 0,
-                        "source_family": b["category"], "prompt": b["prompt"],
-                    })
+                    bucket["annotations"].append(
+                        {
+                            "id": len(bucket["annotations"]) + 1,
+                            "image_id": image_id,
+                            "category_id": 3,
+                            "bbox": b["bbox"],
+                            "area": b["area"],
+                            "score": b["score"],
+                            "iscrowd": 0,
+                            "source_family": b["category"],
+                            "prompt": b["prompt"],
+                        }
+                    )
                     bucket["all_annotations"].append(
-                        dict(bucket["annotations"][-1],
-                             id=len(bucket["all_annotations"]) + 1))
+                        dict(bucket["annotations"][-1], id=len(bucket["all_annotations"]) + 1)
+                    )
 
         if v4_ctx is not None:
             clip_entry["floor_coverage"] = v4_ctx["coverage"]
             covs = [c["floor_labelled_pct_of_visible"] for c in v4_ctx["coverage"]]
-            print(f"  visible-floor labelled per frame: min {min(covs):.1f}% "
-                  f"mean {sum(covs) / len(covs):.1f}% max {max(covs):.1f}%")
+            print(
+                f"  visible-floor labelled per frame: min {min(covs):.1f}% "
+                f"mean {sum(covs) / len(covs):.1f}% max {max(covs):.1f}%"
+            )
 
         if night_person:
-            kept_f, dropped_f = drop_static([b for _, b in night_person],
-                                            args.night_static_iou, args.night_static_share)
+            kept_f, dropped_f = drop_static(
+                [b for _, b in night_person], args.night_static_iou, args.night_static_share
+            )
             n_drop = int(sum(len(b) for b in dropped_f))
             for (image_id, _), kb in zip(night_person, kept_f, strict=True):
                 add_boxes(bucket["annotations"], kb, image_id, 1)
@@ -783,32 +883,42 @@ def cmd_annotate(args) -> int:
 
         manifest["clips"].append(clip_entry)
         share_str = static_share if static_share is None else round(static_share, 3)
-        print(f"{session}: split={split} night={night_clip} frames={len(picks)} "
-              f"static_share={share_str} {time.time() - t0:.0f}s", flush=True)
+        print(
+            f"{session}: split={split} night={night_clip} frames={len(picks)} "
+            f"static_share={share_str} {time.time() - t0:.0f}s",
+            flush=True,
+        )
 
     # write COCO files per split
     info = {
         "description": "site30k teacher annotations -- PRE-LABEL, NOT GROUND TRUTH",
         "person": f"GDINO @{PERSON_TRAIN_THR} (train file), floor {SCORE_FLOOR} (all file)",
         "pet": f"prompt '{args.pet_prompt}', threshold "
-               f"{args.pet_thr if args.pet_thr is not None else 'not chosen: census only'}",
+        f"{args.pet_thr if args.pet_thr is not None else 'not chosen: census only'}",
         "product": "SAM 3 native-resolution instances, families merged, family recorded",
     }
     for split, bucket in per_split.items():
         ann_root = root / "annotations"
         ann_root.mkdir(parents=True, exist_ok=True)
         for tag, anns in (("", bucket["annotations"]), ("all_", bucket["all_annotations"])):
-            (ann_root / f"instances_{tag}{split}.json").write_text(json.dumps({
-                "info": info, "categories": list(DETECTION_CATEGORIES),
-                "images": bucket["images"], "annotations": anns,
-            }))
+            (ann_root / f"instances_{tag}{split}.json").write_text(
+                json.dumps(
+                    {
+                        "info": info,
+                        "categories": list(DETECTION_CATEGORIES),
+                        "images": bucket["images"],
+                        "annotations": anns,
+                    }
+                )
+            )
 
     manifest["veto_totals"] = {str(k): dict(v) for k, v in veto_totals.items()}
     root.mkdir(parents=True, exist_ok=True)
     out_manifest = root / f"campaign_batch_{datetime.now():%Y%m%d-%H%M%S}.json"
     out_manifest.write_text(json.dumps(manifest, indent=2) + "\n")
-    (root / "census_latest.json").write_text(json.dumps(
-        {k: sorted(v) for k, v in census.items()}) + "\n")
+    (root / "census_latest.json").write_text(
+        json.dumps({k: sorted(v) for k, v in census.items()}) + "\n"
+    )
 
     # per-camera pixel composition, printed with denominators
     id_to_name = {v: k for k, v in SITE30K.items()}
@@ -818,9 +928,12 @@ def cmd_annotate(args) -> int:
         labelled = total - tot[IGNORE]
         parts = "  ".join(
             f"{id_to_name[i]}:{100 * tot[i] / max(labelled, 1):.1f}%"
-            for i in sorted(id_to_name) if tot[i])
-        print(f"  {camera}: labelled {100 * labelled / max(total, 1):.1f}% of {total} px  "
-              f"{parts}")
+            for i in sorted(id_to_name)
+            if tot[i]
+        )
+        print(
+            f"  {camera}: labelled {100 * labelled / max(total, 1):.1f}% of {total} px  {parts}"
+        )
     for sid, st in sorted(veto_totals.items()):
         c, v = st["claimed"], st["vetoed"]
         print(f"  veto {id_to_name[sid]}: {v}/{c} px ({100 * v / max(c, 1):.1f}%) -> 255")
@@ -850,19 +963,26 @@ def cmd_floor_diag(args) -> int:
     for camera in args.cameras:
         geom = GeomTeacher(camera, third)
         calib = json.loads((HERE.parent / f"runs/onboard01/{camera}.calib.json").read_text())
-        plate = Image.open(calib["plate_used"]).convert("RGB").resize((1920, 1080),
-                                                                      Image.Resampling.LANCZOS)
+        plate = (
+            Image.open(calib["plate_used"])
+            .convert("RGB")
+            .resize((1920, 1080), Image.Resampling.LANCZOS)
+        )
         b03_floor = geom.b03_plate == 1
         gonly = geom._geom_floor & ~b03_floor
         bonly = b03_floor & ~geom._geom_floor
         core = geom.floor_mask
         base = np.asarray(plate).astype(np.float32)
         over = base.copy()
-        for sel, rgb in ((core, (60, 200, 60)), (bonly, (60, 90, 230)),
-                         (gonly, (240, 210, 40))):
+        for sel, rgb in (
+            (core, (60, 200, 60)),
+            (bonly, (60, 90, 230)),
+            (gonly, (240, 210, 40)),
+        ):
             over[sel] = 0.35 * base[sel] + 0.65 * np.array(rgb, np.float32)
-        Image.fromarray(over.astype(np.uint8)).save(out_dir / f"floor_diag_{camera}.jpg",
-                                                    quality=90)
+        Image.fromarray(over.astype(np.uint8)).save(
+            out_dir / f"floor_diag_{camera}.jpg", quality=90
+        )
         total = core.size
         # The independent geometric witness: DA-V2 height-above-plane on the plate.
         # Quantiles of |h| over b03-floor px against b03-non-floor px tell whether an
@@ -878,13 +998,12 @@ def cmd_floor_diag(args) -> int:
             "geom_only_pct": round(100 * float(gonly.mean()), 2),
             "b03_floor_pct": round(100 * float(b03_floor.mean()), 2),
             "geom_floor_pct": round(100 * float(geom._geom_floor.mean()), 2),
-            "abs_h_b03floor_q": {str(q): round(float(np.quantile(h_floor, q)), 3)
-                                 for q in qs},
-            "abs_h_other_q": {str(q): round(float(np.quantile(h_other, q)), 3)
-                              for q in qs},
-            "onplane_pct_at": {str(t): round(100 * float((b03_floor & fin
-                                                          & (np.abs(h) <= t)).mean()), 2)
-                               for t in (0.1, 0.15, 0.2, 0.3)},
+            "abs_h_b03floor_q": {str(q): round(float(np.quantile(h_floor, q)), 3) for q in qs},
+            "abs_h_other_q": {str(q): round(float(np.quantile(h_other, q)), 3) for q in qs},
+            "onplane_pct_at": {
+                str(t): round(100 * float((b03_floor & fin & (np.abs(h) <= t)).mean()), 2)
+                for t in (0.1, 0.15, 0.2, 0.3)
+            },
             "total_px": int(total),
             "calib_flags": calib.get("flags", []),
         }
@@ -917,8 +1036,9 @@ def cmd_sweep_fixture(args) -> int:
         pool = [i for i, d in enumerate(day) if d] or list(range(len(kept)))
         descs = [describe(kept[i]) for i in pool]
         picks = [pool[i] for i in farthest_first(descs, args.frames)]
-        per_frame = [frame_masks(sam3_proc, sam3_model, kept[i], static, device=device)
-                     for i in picks]
+        per_frame = [
+            frame_masks(sam3_proc, sam3_model, kept[i], static, device=device) for i in picks
+        ]
         for i, (_, sm) in zip(picks, per_frame, strict=True):
             _, pm = frame_masks(sam3_proc, sam3_model, kept[i], moving, device=device)
             sm[pm != IGNORE] = IGNORE
@@ -929,25 +1049,35 @@ def cmd_sweep_fixture(args) -> int:
         finite = np.isfinite(h) & np.isfinite(hz)
         h, hz = h[finite], hz[finite]
         rows = []
-        print(f"\n{camera}: {int(fix.sum())} consensus fixture px "
-              f"(static share {share:.3f}); height x orientation histogram")
+        print(
+            f"\n{camera}: {int(fix.sum())} consensus fixture px "
+            f"(static share {share:.3f}); height x orientation histogram"
+        )
         print(f"  {'height bin':>12} {'horiz>=0.8':>10} {'0.5-0.8':>9} {'vert<=0.5':>10}")
         for lo in np.arange(-0.2, 2.6, 0.1):
             hi = lo + 0.1
             sel = (h >= lo) & (h < hi)
-            r = {"bin": f"{lo:.1f}-{hi:.1f}",
-                 "horizontal": int((sel & (hz >= 0.8)).sum()),
-                 "mid": int((sel & (hz > 0.5) & (hz < 0.8)).sum()),
-                 "vertical": int((sel & (hz <= 0.5)).sum())}
+            r = {
+                "bin": f"{lo:.1f}-{hi:.1f}",
+                "horizontal": int((sel & (hz >= 0.8)).sum()),
+                "mid": int((sel & (hz > 0.5) & (hz < 0.8)).sum()),
+                "vertical": int((sel & (hz <= 0.5)).sum()),
+            }
             rows.append(r)
             if r["horizontal"] + r["mid"] + r["vertical"]:
-                print(f"  {r['bin']:>12} {r['horizontal']:>10} {r['mid']:>9} "
-                      f"{r['vertical']:>10}")
+                print(
+                    f"  {r['bin']:>12} {r['horizontal']:>10} {r['mid']:>9} {r['vertical']:>10}"
+                )
         q = {f"{p}": round(float(np.quantile(hz, p)), 3) for p in (0.1, 0.25, 0.5, 0.75, 0.9)}
         print(f"  horiz quantiles over fixture px: {q}")
-        report[camera] = {"fixture_px": int(fix.sum()), "static_share": round(share, 4),
-                          "clip": clip, "frames": len(picks),
-                          "histogram": rows, "horiz_quantiles": q}
+        report[camera] = {
+            "fixture_px": int(fix.sum()),
+            "static_share": round(share, 4),
+            "clip": clip,
+            "frames": len(picks),
+            "histogram": rows,
+            "horiz_quantiles": q,
+        }
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(report, indent=2) + "\n")
     print(f"\nwrote {args.out}")
@@ -979,13 +1109,21 @@ def cmd_pet_census(args) -> int:
                     break
                 img = Image.fromarray(frame)
                 lu, ch = luma_chroma(frame)
-                boxes = gdino_detect(gd_proc, gd_model, img, args.pet_prompt,
-                                     args.floor, device)
+                boxes = gdino_detect(
+                    gd_proc, gd_model, img, args.pet_prompt, args.floor, device
+                )
                 for b in boxes:
-                    rows.append({"camera": camera, "clip": Path(clip).stem, "frame": i,
-                                 "score": round(float(b[4]), 4),
-                                 "bbox": [round(float(x), 1) for x in b[:4]],
-                                 "luma": round(lu, 1), "chroma": round(ch, 1)})
+                    rows.append(
+                        {
+                            "camera": camera,
+                            "clip": Path(clip).stem,
+                            "frame": i,
+                            "score": round(float(b[4]), 4),
+                            "bbox": [round(float(x), 1) for x in b[:4]],
+                            "luma": round(lu, 1),
+                            "chroma": round(ch, 1),
+                        }
+                    )
                 got += 1
                 n_frames += 1
         except Exception as exc:
@@ -994,17 +1132,26 @@ def cmd_pet_census(args) -> int:
             break
     scores = sorted(r["score"] for r in rows)
     out = {
-        "prompt": args.pet_prompt, "floor": args.floor,
-        "frames_scored": n_frames, "clips": len(clips), "boxes": len(rows),
+        "prompt": args.pet_prompt,
+        "floor": args.floor,
+        "frames_scored": n_frames,
+        "clips": len(clips),
+        "boxes": len(rows),
         "scores_sorted": scores,
-        "quantiles": {q: round(float(np.quantile(scores, float(q))), 4)
-                      for q in ("0.5", "0.9", "0.98", "0.99", "1.0")} if scores else {},
+        "quantiles": {
+            q: round(float(np.quantile(scores, float(q))), 4)
+            for q in ("0.5", "0.9", "0.98", "0.99", "1.0")
+        }
+        if scores
+        else {},
         "detections": rows,
     }
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(out, indent=2) + "\n")
-    print(f"{len(rows)} '{args.pet_prompt}' boxes >= {args.floor} over {n_frames} frames "
-          f"-> {args.out}")
+    print(
+        f"{len(rows)} '{args.pet_prompt}' boxes >= {args.floor} over {n_frames} frames "
+        f"-> {args.out}"
+    )
     if scores:
         print("score quantiles:", out["quantiles"])
     else:
@@ -1028,8 +1175,9 @@ PREVIEW_COLORS = {
 BOX_COLORS = {"person": (230, 25, 75), "pet": (70, 240, 240), "product": (170, 255, 0)}
 
 
-def render_preview(img: Image.Image, mask: np.ndarray, boxes: list[dict],
-                   title: str) -> Image.Image:
+def render_preview(
+    img: Image.Image, mask: np.ndarray, boxes: list[dict], title: str
+) -> Image.Image:
     from PIL import ImageDraw
 
     # left: segmentation overlay + legend
@@ -1046,8 +1194,7 @@ def render_preview(img: Image.Image, mask: np.ndarray, boxes: list[dict],
     total = mask.size
     labelled = total - counted[IGNORE]
     draw.rectangle([4, 4, 330, 8 + 22 * (len(PREVIEW_COLORS) + 1)], fill=(0, 0, 0))
-    draw.text((10, y), f"{title}  labelled {100 * labelled / total:.0f}%",
-              fill=(255, 255, 255))
+    draw.text((10, y), f"{title}  labelled {100 * labelled / total:.0f}%", fill=(255, 255, 255))
     y += 22
     for cid, (rgb, name) in PREVIEW_COLORS.items():
         draw.rectangle([10, y + 3, 26, y + 15], fill=rgb)
@@ -1063,8 +1210,7 @@ def render_preview(img: Image.Image, mask: np.ndarray, boxes: list[dict],
         x, yb, w, h = b["bbox"]
         color = BOX_COLORS.get(b["category"], (255, 255, 255))
         draw.rectangle([x, yb, x + w, yb + h], outline=color, width=2)
-        draw.text((x + 2, max(yb - 12, 0)), f"{b['category']} {b['score']:.2f}",
-                  fill=color)
+        draw.text((x + 2, max(yb - 12, 0)), f"{b['category']} {b['score']:.2f}", fill=color)
     head = "  ".join(f"{k}:{v}" for k, v in sorted(tally.items())) or "no boxes"
     draw.rectangle([4, 4, 420, 24], fill=(0, 0, 0))
     draw.text((10, 8), f"boxes: {head}", fill=(255, 255, 255))
@@ -1090,8 +1236,12 @@ def cmd_preview(args) -> int:
             cat_of = {c["id"]: c["name"] for c in coco["categories"]}
             for a in coco["annotations"]:
                 by_image[name_of_img[a["image_id"]]].append(
-                    {"bbox": a["bbox"], "score": a.get("score", 0.0),
-                     "category": cat_of[a["category_id"]]})
+                    {
+                        "bbox": a["bbox"],
+                        "score": a.get("score", 0.0),
+                        "category": cat_of[a["category_id"]],
+                    }
+                )
         for jpg in sorted(split_dir.rglob("*.jpg")):
             rel = jpg.relative_to(split_dir)
             png = root / "annotations" / split / rel.with_suffix(".png")
@@ -1099,10 +1249,10 @@ def cmd_preview(args) -> int:
                 continue
             img = Image.open(jpg).convert("RGB")
             mask = np.asarray(Image.open(png))
-            panel = render_preview(img, mask, by_image.get(str(rel), []),
-                                   f"{split}/{rel}")
+            panel = render_preview(img, mask, by_image.get(str(rel), []), f"{split}/{rel}")
             name = f"{str(rel).replace('/', '__')}".replace(
-                ".jpg", f"_preview{args.suffix}.jpg")
+                ".jpg", f"_preview{args.suffix}.jpg"
+            )
             panel.save(out_dir / name, quality=90)
             written.append(str(out_dir / name))
     print("\n".join(written))
@@ -1137,8 +1287,10 @@ def cmd_compare(args) -> int:
     common = sorted(set(a) & set(b), key=lambda k: a[k][0])
     ids = [1, 2, 3, 4, 5, 6, 255]
     hdr = ["floor", "wall", "col", "table", "shelf", "person", "ignore"]
-    print(f"{len(common)} matched frames of {len(a)} old / {len(b)} new "
-          f"(shares are % of the whole frame, old -> new)")
+    print(
+        f"{len(common)} matched frames of {len(a)} old / {len(b)} new "
+        f"(shares are % of the whole frame, old -> new)"
+    )
     print(f"{'frame':55s} " + " ".join(f"{h:>14}" for h in hdr))
     rows = []
     for k in common:
@@ -1183,8 +1335,10 @@ def cmd_qa(args) -> int:
         if inst.exists():
             coco = json.loads(inst.read_text())
             n_images = len(coco["images"])
-            cam_of = {im["id"]: im.get("camera", im["file_name"].split("__")[0])
-                      for im in coco["images"]}
+            cam_of = {
+                im["id"]: im.get("camera", im["file_name"].split("__")[0])
+                for im in coco["images"]
+            }
             cat_of = {c["id"]: c["name"] for c in coco["categories"]}
             for a in coco["annotations"]:
                 boxes_by[cam_of[a["image_id"]]][cat_of[a["category_id"]]] += 1
@@ -1194,12 +1348,12 @@ def cmd_qa(args) -> int:
             total = sum(tot.values())
             labelled = total - tot[IGNORE]
             cams[camera] = {
-                "total_px": total, "labelled_px": labelled,
+                "total_px": total,
+                "labelled_px": labelled,
                 "pixels": {id_to_name[i]: tot[i] for i in sorted(id_to_name) if tot[i]},
                 "boxes": dict(boxes_by[camera]),
             }
-        report["splits"][split] = {"masks": n_masks, "coco_images": n_images,
-                                   "cameras": cams}
+        report["splits"][split] = {"masks": n_masks, "coco_images": n_images, "cameras": cams}
     out = Path(args.out) if args.out else root / "qa_counts.json"
     out.write_text(json.dumps(report, indent=2) + "\n")
     print(f"wrote {out}")
@@ -1210,8 +1364,9 @@ def cmd_qa(args) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     an = sub.add_parser("annotate", help="teacher-annotate clips into the site30k layout")
@@ -1219,50 +1374,88 @@ def build_parser() -> argparse.ArgumentParser:
     an.add_argument("--out", required=True)
     an.add_argument("--frames", type=int, default=8, help="frames kept per clip")
     an.add_argument("--sample-fps", type=float, default=1.0)
-    an.add_argument("--split-json",
-                    default=str(HERE.parent / "datasets/retail_objects_batch03/split.json"),
-                    help="camera split assignments to INHERIT (R1/R2)")
-    an.add_argument("--default-split", default="train",
-                    help="for a camera the inherited split does not name")
+    an.add_argument(
+        "--split-json",
+        default=str(HERE.parent / "datasets/retail_objects_batch03/split.json"),
+        help="camera split assignments to INHERIT (R1/R2)",
+    )
+    an.add_argument(
+        "--default-split",
+        default="train",
+        help="for a camera the inherited split does not name",
+    )
     an.add_argument("--gdino-model", default="IDEA-Research/grounding-dino-base")
     an.add_argument("--pet-prompt", default="dog. cat.")
-    an.add_argument("--pet-thr", type=float, default=None,
-                    help="chosen from the census; None = census only, no pet boxes")
+    an.add_argument(
+        "--pet-thr",
+        type=float,
+        default=None,
+        help="chosen from the census; None = census only, no pet boxes",
+    )
     an.add_argument("--max-box-frac", type=float, default=MAX_BOX_FRAC)
     an.add_argument("--no-third-opinion", action="store_true")
-    an.add_argument("--recipe", choices=["v1", "v2", "v3", "v4"], default="v4",
-                    help="v2: SAM3 shape + geometry classes. v3: floor(intersection)+"
-                    "person. v4 (current ruling): plate-first -- label the person-free "
-                    "plate with the UNION of floor sources minus the dirty region, "
-                    "then propagate per frame by each pixel's own noise floor; moved "
-                    "pixels are person (SAM3 contour) or IGNORE")
-    an.add_argument("--prop-mult", type=float, default=8.0,
-                    help="v4: a pixel has moved off the plate when |frame-plate| "
-                    "exceeds this multiple of its own p10 noise floor "
-                    "(static_plates' measured DYNAMIC_MULT)")
+    an.add_argument(
+        "--recipe",
+        choices=["v1", "v2", "v3", "v4"],
+        default="v4",
+        help="v2: SAM3 shape + geometry classes. v3: floor(intersection)+"
+        "person. v4 (current ruling): plate-first -- label the person-free "
+        "plate with the UNION of floor sources minus the dirty region, "
+        "then propagate per frame by each pixel's own noise floor; moved "
+        "pixels are person (SAM3 contour) or IGNORE",
+    )
+    an.add_argument(
+        "--prop-mult",
+        type=float,
+        default=8.0,
+        help="v4: a pixel has moved off the plate when |frame-plate| "
+        "exceeds this multiple of its own p10 noise floor "
+        "(static_plates' measured DYNAMIC_MULT)",
+    )
     # v2 band edges: MUST come from a sweep-fixture gap (rule 2), passed explicitly.
     an.add_argument("--table-lo", type=float, default=0.6)
     an.add_argument("--table-hi", type=float, default=1.2)
     an.add_argument("--shelf-min", type=float, default=1.4)
-    an.add_argument("--horiz-thr", type=float, default=0.8,
-                    help="|n_up| at/above which a surface counts as a horizontal top")
-    an.add_argument("--vert-thr", type=float, default=0.5,
-                    help="|n_up| at/below which a surface counts as a vertical face")
-    an.add_argument("--night-static-iou", type=float, default=0.7,
-                    help="night clips only: IoU at which a recurring box is the same box")
-    an.add_argument("--night-static-share", type=float, default=0.5,
-                    help="night clips only: drop a person box recurring in this share "
-                    "of the clip's frames. Measured: the Taichung-cam01 packet scores "
-                    "0.62 and recurs in 6 of 9 other frames (0.67) -- 0.8 missed it; "
-                    "0.5 catches it, and a night-time real person walks through in "
-                    "1-3 frames of a 5-minute clip")
-    an.add_argument("--vert-min-h", type=float, default=1.0,
-                    help="a vertical face is shelf only at/above this height; below it "
-                    "table sides and shelf faces are one population (measured)")
+    an.add_argument(
+        "--horiz-thr",
+        type=float,
+        default=0.8,
+        help="|n_up| at/above which a surface counts as a horizontal top",
+    )
+    an.add_argument(
+        "--vert-thr",
+        type=float,
+        default=0.5,
+        help="|n_up| at/below which a surface counts as a vertical face",
+    )
+    an.add_argument(
+        "--night-static-iou",
+        type=float,
+        default=0.7,
+        help="night clips only: IoU at which a recurring box is the same box",
+    )
+    an.add_argument(
+        "--night-static-share",
+        type=float,
+        default=0.5,
+        help="night clips only: drop a person box recurring in this share "
+        "of the clip's frames. Measured: the Taichung-cam01 packet scores "
+        "0.62 and recurs in 6 of 9 other frames (0.67) -- 0.8 missed it; "
+        "0.5 catches it, and a night-time real person walks through in "
+        "1-3 frames of a 5-minute clip",
+    )
+    an.add_argument(
+        "--vert-min-h",
+        type=float,
+        default=1.0,
+        help="a vertical face is shelf only at/above this height; below it "
+        "table sides and shelf faces are one population (measured)",
+    )
     an.set_defaults(fn=cmd_annotate)
 
-    sw = sub.add_parser("sweep-fixture",
-                        help="height/orientation distribution over consensus fixture px")
+    sw = sub.add_parser(
+        "sweep-fixture", help="height/orientation distribution over consensus fixture px"
+    )
     sw.add_argument("clips", nargs="+")
     sw.add_argument("--out", required=True)
     sw.add_argument("--frames", type=int, default=10)
