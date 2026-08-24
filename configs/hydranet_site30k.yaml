@@ -1,0 +1,156 @@
+# site30k_v1: the campaign taxonomy trained as written -- eleven dense classes, and the
+# detection head unchanged at the shipping `retail_security` four.
+#
+# This is the first config that trains on datasets/site30k_v1 (29,211 teacher-annotated
+# frames, nine metric cameras, finished 2026-08-20). Two decisions are the user's and are
+# recorded here so a later reader does not have to reconstruct them:
+#
+#   (1) PRODUCTS GO IN THE DENSE HEAD. `label_map: site30k_native` keeps laptop/tablet/
+#       phone/boxed_stock as terrain classes 7-10. This REVERSES the decision in
+#       analytics/events/_types.py:24, which moved `product` out of the dense head because
+#       merchandise is 2-3 feature cells across at stride 8. That argument was never
+#       refuted, so this run is its counter-experiment: read
+#       terrain_IoU/{laptop,tablet,phone} against the pixel shares below before believing
+#       the classes learned anything.
+#   (2) THE DETECTION VOCAB STAYS `retail_security`. The campaign's own COCO would have
+#       said `product`; tools/site30k/box_pass.py maps the per-box family back --
+#       boxed_stock -> boxed_stock, laptop|tablet|phone -> device -- so the deployed
+#       business logic keeps working. analytics/events/zones.py:346 matches stock by NAME
+#       and returns 0 for every frame, without raising, against a vocabulary that no
+#       longer contains the names it asks for.
+#
+# MEASURED PIXEL SHARES over a 244-mask sample of the finished dataset, which is where the
+# class weights below come from and what makes two of the eleven classes doubtful:
+#
+#   floor 27.62  wall 25.61  display_table 17.10  shelf 7.76  boxed_stock 5.63
+#   person 3.31  column 2.68  laptop 1.23  phone 0.25  tablet 0.13   IGNORE 8.69
+#
+# `tablet` at 0.13% and `phone` at 0.25% are minority-sourced classes in a dataset whose
+# dominant classes supply every one of their pixels as a negative. This project has
+# measured that failure before; expect them to be suppressed and do not read a zero IoU as
+# a bug in the loss.
+#
+# WHAT THIS CONFIG DOES NOT YET INCLUDE
+#   * the glass fix. tools/site30k/zones.json is drawn and dry-run but NOT stamped, so
+#     Tao-Hsin-cam03 and cam04 still carry the shopfront glazing -- and the street behind
+#     it -- as `wall`. Stamping adds id 11 and this config must gain a class.
+#   * a decision on Tao-Hsin-cam03. It is the ONLY test camera and its counter banks read
+#     as `wall` (69.2% wall, 0.0% shelf), so test numbers from this config measure that
+#     defect. Either stamp the zones, or re-run materialize_splits.py with
+#     `--exclude Tao-Hsin-cam03` and accept having no test split at all.
+#
+# NOTE: `data.datasets` is a LIST -- _base_ merge replaces lists wholesale, so every entry
+# is written out here rather than inherited.
+
+_base_: hydranet_retail_security_b03_cw_xl.yaml
+
+experiment: hydranet_site30k
+
+model:
+  heads:
+    terrain:
+      num_classes: 11
+      loss:
+        # Inverse-share, square-rooted and clipped to [0.4, 2.5]: a first setting, not a
+        # measured optimum. Straight inverse frequency would put tablet at 200x and turn
+        # the loss into a tablet detector. void is 0.0 -- the campaign never writes it.
+        class_weights:
+        - 0.0    # void
+        - 0.45   # floor          27.62%
+        - 0.47   # wall           25.61%
+        - 1.45   # column          2.68%
+        - 0.57   # display_table  17.10%
+        - 0.85   # shelf           7.76%
+        - 1.30   # person          3.31%
+        - 2.10   # laptop          1.23%
+        - 2.50   # tablet          0.13%  (clipped; see the note above)
+        - 2.50   # phone           0.25%  (clipped)
+        - 1.00   # boxed_stock     5.63%
+
+data:
+  # The eleven the terrain head now predicts, in `label_maps_site30k.SITE30K` order.
+  # analytics/events/pose.py:353 looks a class up by NAME in this list, so these strings
+  # are an interface and not a label: `display_fixture` is GONE, split in two.
+  terrain_classes:
+  - void
+  - floor
+  - wall
+  - column
+  - display_table
+  - shelf
+  - person
+  - laptop
+  - tablet
+  - phone
+  - boxed_stock
+  datasets:
+  # ---- the campaign itself -------------------------------------------------------
+  - name: site30k_seg
+    type: seg_folder
+    root: datasets/site30k_v1
+    split_train: train
+    split_val: val
+    split_test: test
+    label_map: site30k_native
+    sample_ratio: 1.0
+    supervises:
+    - terrain
+  - name: site30k_boxes
+    type: coco
+    root: datasets/site30k_v1
+    split_train: train
+    split_val: val
+    split_test: test
+    det_vocab: retail_security
+    sample_ratio: 1.0
+    supervises:
+    - detection
+  # ---- the sibling segmentation sets, read into the eleven ------------------------
+  # `fixture` becomes IGNORE in both: those masks predate the display_table/shelf split
+  # and cannot say which one they meant. They still carry floor / wall / column / person,
+  # which are four of the five classes that matter for the security line.
+  - name: ade20k
+    type: seg_folder
+    root: datasets/ADE20K
+    split_train: train
+    split_val: val
+    split_test: test
+    label_map: ade20k_site30k
+    sample_ratio: 0.15
+    supervises:
+    - terrain
+  - name: site_seg03
+    type: seg_folder
+    root: datasets/retail_objects_batch03
+    split_train: train
+    split_val: val
+    split_test: test
+    label_map: retail_objects_to_site30k
+    sample_ratio: 0.5
+    supervises:
+    - terrain
+  # ---- detection: the existing site boxes, plus web `person` for pose diversity ----
+  - name: site_boxes03
+    type: coco
+    root: datasets/retail_objects_batch03
+    split_train: train
+    split_val: val
+    split_test: test
+    det_vocab: retail_security
+    sample_ratio: 0.5
+    supervises:
+    - detection
+  - name: coco_person
+    type: coco
+    root: datasets/coco
+    split_train: train2017
+    split_val: val2017
+    classes:
+    - person
+    - backpack
+    - handbag
+    - suitcase
+    det_vocab: retail_security
+    sample_ratio: 0.05
+    supervises:
+    - detection
