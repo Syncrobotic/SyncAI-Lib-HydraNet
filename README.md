@@ -33,6 +33,81 @@ spends the GPU. The boundary is enforced, not remembered:
 `tests/test_package_boundaries.py` fails if a serving-path module ever imports
 `syncai_bev3d`.
 
+## Two model suites, one product
+
+The project runs **two very different kinds of model**, and confusing them is the
+classic failure this architecture exists to prevent:
+
+| | the **teachers** (`syncai_bev3d`) | the **student** (`syncai_hydranet`) |
+|---|---|---|
+| models | SAM 3, Grounding DINO, Depth-Anything V2, ViTPose — hundreds of millions to billions of parameters | one HydraNet, **~8 M parameters** |
+| when | **once per camera** (commissioning) and **once per dataset** (labelling) | **every frame, 96 streams × 15 fps** |
+| where the answers go | cached: `camera.json`, masks, keypoint files | inferred: boxes + keypoints per frame |
+| allowed to be slow | yes — 40 s per plate is fine | no — the whole budget is 1,440 frames/s |
+
+```mermaid
+flowchart LR
+    subgraph OFFLINE ["once per camera / dataset — syncai_bev3d"]
+        PLATE["static plate"] --> TEACH["SAM3 · GDINO · DA-V2<br/>+ depth & floor-boundary completion"]
+        TEACH --> CJ[("camera.json<br/>masks · walkable · zones<br/>shelf ROIs · FP polygons")]
+        TEACH --> SCENE["3D scene<br/>GLB / OBJ"]
+        VIT["ViTPose over Gold boxes"] --> KP[("keypoint labels")]
+    end
+    subgraph ONLINE ["every frame — syncai_hydranet"]
+        NET["HydraNet ~8M"] --> TRK["tracks in metres"] --> EV["rules → events → alerts"]
+    end
+    CJ --> TRK
+    KP -. distillation .-> NET
+```
+
+## The network
+
+```mermaid
+flowchart TB
+    IMG(["image · 3 × 640 × 1120"])
+
+    subgraph TRUNK ["SHARED TRUNK — ~7.03 M params · measured 88% of the model"]
+        direction TB
+        BB["<b>RegNetX-800MF backbone</b><br/>stem → stage1 → stage2 → stage3 → stage4"]
+        NECK["<b>BiFPN × 2</b> · 96 ch<br/>weighted top-down, then bottom-up"]
+        PYR["P3 1/8 · P4 1/16 · P5 1/32 · P6 1/64 · P7 1/128"]
+        BB --> NECK --> PYR
+    end
+
+    subgraph HEADS ["TASK HEADS — mutually independent, read only the neck"]
+        direction LR
+        TERR["<b>Terrain</b><br/>Semantic-FPN · 6 classes<br/>(training aid; static structure<br/>ships from camera.json)"]
+        DET["<b>Detection</b> · FCOS<br/>person · bag · device · boxed_stock<br/>~0.67 M"]
+        POSE["<b>Pose</b> · heatmaps @ P3<br/>17 keypoints · ~0.25 M<br/>decoded inside detection boxes"]
+    end
+
+    OUTE["6 × 640 × 1120"]
+    OUTD["per level P3–P7<br/>cls 4 · reg 4 · ctr 1<br/>NMS outside the graph"]
+    OUTP["17 × 80 × 140<br/>per-box argmax outside the graph"]
+
+    IMG --> BB
+    PYR -->|"P3–P5"| TERR
+    PYR -->|"P3–P7"| DET
+    PYR -->|"P3"| POSE
+    TERR --> OUTE
+    DET --> OUTD
+    POSE --> OUTP
+
+    classDef trunk fill:#2d6a9f,stroke:#1b4a72,color:#fff
+    classDef head fill:#b4531f,stroke:#7d3915,color:#fff
+    classDef out fill:#3d7a4a,stroke:#255030,color:#fff
+    classDef io fill:#555,stroke:#333,color:#fff
+    class BB,NECK,PYR trunk
+    class TERR,DET,POSE head
+    class OUTE,OUTD,OUTP out
+    class IMG io
+```
+
+Measured (PLAN §2.2): the shared trunk buys a second per-frame task for **+3%
+throughput**; two separate networks cost **+74%**. The forward graph is pure
+convolution — NMS and keypoint decoding live in post-processing, which is what keeps
+the ONNX → TensorRT export clean (1,552 fps engine-only at batch 16 on the PRO 6000).
+
 ## Install & run
 
 ```bash
