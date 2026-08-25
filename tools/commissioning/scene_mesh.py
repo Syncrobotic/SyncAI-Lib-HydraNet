@@ -44,6 +44,10 @@ PALETTE = {
     "disc": (242, 180, 78),
     "door": (176, 126, 88),
     "product": (86, 214, 188),
+    "product_boxed_stock": (190, 90, 235),
+    "product_macbook": (60, 150, 255),
+    "product_ipad": (255, 150, 0),
+    "product_iphone": (255, 70, 70),
 }
 CLASS_NAMES = {2: "wall", 3: "column", 4: "display_table", 5: "display_shelf"}
 CELL = 0.06
@@ -77,7 +81,14 @@ def cell_grids(camera):
             heights[cid] = float(np.clip(np.percentile(hs, 85), 0.3, 3.0))
     # extras: door footprints, and product cells with the height merchandise sits at
     hts = {}
-    for name, cid in (("door", 6), ("product", 7)):
+    for name, cid in (
+        ("door", 6),
+        ("product", 7),
+        ("product_boxed_stock", 8),
+        ("product_macbook", 9),
+        ("product_ipad", 10),
+        ("product_iphone", 11),
+    ):
         f = ROOT / "runs/commission01" / camera / "masks" / f"{name}.png"
         if not f.exists():
             continue
@@ -311,7 +322,13 @@ def build_scene_regular(camera):
                 items.append((place(mesh, at), name, 255, True))
     # extras: doors as solid tall slabs, products as slabs at their measured height
     cy2, sy2 = np.cos(yaw), np.sin(yaw)
-    for cid, name, hgt in ((6, "door", 2.05), (7, "product", 0.15)):
+    for cid, name, hgt in (
+        (6, "door", 2.05),
+        (8, "product_boxed_stock", 0.15),
+        (9, "product_macbook", 0.12),
+        (10, "product_ipad", 0.1),
+        (11, "product_iphone", 0.08),
+    ):
         if cid not in grids:
             continue
         lab, n = ndimage.label(grids[cid], structure=np.ones((3, 3)))

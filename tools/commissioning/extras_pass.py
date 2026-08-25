@@ -27,13 +27,32 @@ from syncai_hydranet.geometry.camera_json import CameraFile
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
 W, H = 1920, 1080
-MIN_PX = 2000  # at 1080p: smaller than any real door or product face
+MIN_PX = 2000  # doors and the generic product union
+MIN_SUB_PX = 150  # a phone on a table is small and real
+
+
+class _Sub:
+    """A prompt bundle for a product subclass; measured usable at plate resolution
+    (the old "0 instances" verdict was taken at 352x240 -- the plates are 1080p)."""
+
+    def __init__(self, prompts, min_score=0.3):
+        self.prompts = prompts
+        self.min_score = min_score
 
 
 def concepts():
     door = next(c for c in P.CONCEPTS if c.name == "door")
     product = next(c for c in O.CONCEPTS if c.name == "product")
-    return {"door": door, "product": product}
+    return {
+        "door": door,
+        "product": product,
+        "product_iphone": _Sub(("iphone", "smartphone", "mobile phone")),
+        "product_ipad": _Sub(("ipad", "tablet computer")),
+        "product_macbook": _Sub(("macbook", "open laptop", "laptop computer")),
+        "product_boxed_stock": _Sub(
+            ("stack of product boxes", "product box on a shelf", "boxed product")
+        ),
+    }
 
 
 def run_camera(camera, proc, model, device, table):
@@ -52,7 +71,7 @@ def run_camera(camera, proc, model, device, table):
             for m, _s in SAM3.segment(
                 proc, model, img, prompt, concept.min_score, device, embeds
             ):
-                if m.sum() < MIN_PX:
+                if m.sum() < (MIN_SUB_PX if name.startswith("product_") else MIN_PX):
                     continue
                 union |= m
                 n += 1

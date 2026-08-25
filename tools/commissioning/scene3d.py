@@ -121,12 +121,16 @@ def run(camera: str):
     # see everything the commissioning knows, in the same colours as the mask sheets
     overlay_rgb = {
         "walkable": (60, 200, 90),
-        "wall": (150, 150, 160),
+        "wall": (110, 110, 235),
         "column": (240, 200, 60),
         "display_table": (200, 90, 200),
         "display_shelf": (90, 140, 240),
         "door": (200, 120, 60),
         "product": (86, 214, 188),
+        "product_boxed_stock": (190, 90, 235),
+        "product_macbook": (60, 150, 255),
+        "product_ipad": (255, 150, 0),
+        "product_iphone": (255, 70, 70),
     }
     for name, col in overlay_rgb.items():
         f = cf.mask_files.get(name)
