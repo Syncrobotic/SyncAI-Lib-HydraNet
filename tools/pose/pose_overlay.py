@@ -23,6 +23,8 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
+from syncai_hydranet.analytics import Tracker
+from syncai_hydranet.analytics.events import pose_posture_events
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.models.hydranet import build_model
@@ -72,8 +74,23 @@ def main() -> int:
     ap.add_argument("--fps", type=float, default=5.0)
     ap.add_argument("--score-thr", type=float, default=0.35)
     ap.add_argument("--stills", type=int, default=1, help="how many frames to also save as png")
+    ap.add_argument(
+        "--still-frames",
+        default="",
+        help="comma-separated frame indices to save instead of the first --stills. "
+        "An event names the frames it fired on; this is how you look at them without "
+        "rendering the other 880",
+    )
     ap.add_argument("--video", action="store_true")
     ap.add_argument("--tag", default="pose")
+    ap.add_argument(
+        "--events",
+        action="store_true",
+        help="track the detections, feed the keypoints through, and run "
+        "`pose_posture_events`. Until the pose head existed nothing filled "
+        "`Track.keypoints` and every pose event refused itself; this is that wire, "
+        "end to end on real footage",
+    )
     args = ap.parse_args()
 
     clip = (
@@ -108,6 +125,8 @@ def main() -> int:
         )  # fmt: skip
 
     saved = n = n_people = n_joints = 0
+    tracker = Tracker() if args.events else None
+    want = {int(x) for x in args.still_frames.split(",") if x.strip()}
     for frame in decode_frames(str(clip), 1920, 1080, args.fps):
         if n >= args.frames:
             break
@@ -134,6 +153,16 @@ def main() -> int:
             b = det["boxes"].cpu().numpy()[keep]
             kps = pose_rows.cpu().numpy()[keep]
             if len(b):
+                # source pixels for the tracker and the events: `Track.keypoints` is
+                # specified in image pixels, and a view-space copy would make every
+                # threshold in `events/pose.py` depend on the panel size
+                src_scale = 1920.0 / cw
+                boxes_src = (b - np.array([x0, y0, x0, y0])) * src_scale
+                kps_src = kps.copy()
+                kps_src[:, :, 0] = (kps_src[:, :, 0] - x0) * src_scale
+                kps_src[:, :, 1] = (kps_src[:, :, 1] - y0) * src_scale
+                if tracker is not None:
+                    tracker.update(boxes_src, n, keypoints=kps_src)
                 for bi, kp in zip(b, kps, strict=True):
                     bb = (bi - np.array([x0, y0, x0, y0])) * to_view
                     d.rectangle(list(bb), outline=BOX_COLOR, width=2)
@@ -142,6 +171,8 @@ def main() -> int:
                     kp[:, 1] = (kp[:, 1] - y0) * to_view
                     n_joints += draw_person(d, kp, float(bb[3] - bb[1]))
                     people += 1
+        if tracker is not None and not people:
+            tracker.update(np.zeros((0, 4)), n, keypoints=np.zeros((0, 17, 3)))
         n_people += people
         d.rectangle([0, out_h - 18, out_w, out_h], fill=(0, 0, 0))
         d.text(
@@ -152,7 +183,7 @@ def main() -> int:
         )
         if enc:
             enc.stdin.write(np.asarray(view, np.uint8).tobytes())
-        if saved < args.stills:
+        if (n in want) if want else (saved < args.stills):
             view.save(ROOT / f"assets/{args.tag}_{args.camera}_{stamp}_{n:04d}.png")
             saved += 1
         if n % 100 == 0:
@@ -167,6 +198,14 @@ def main() -> int:
             print(f"wrote {final}")
             print(f"  newest also at {latest}")
     print(f"{n} frames, {n_people} person detections, {n_joints} joints above {KP_MIN_CONF}")
+    if tracker is not None:
+        tracks = [t for t in tracker.tracks + tracker.retired if t.confirmed]
+        print(f"{len(tracks)} confirmed tracks, all carrying one keypoint set per frame")
+        events = pose_posture_events(tracks, args.fps, args.camera)
+        if not events:
+            print("no fall or crouch cleared its sustained threshold on this clip")
+        for e in events:
+            print(f"  {e}")
     return 0
 
 

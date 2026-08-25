@@ -127,10 +127,49 @@ class Tracker:
         # shopper who left the frame is exactly the one whose visit is complete.
         self.retired: list[Track] = []
         self._next_id = 1
+        # None until the first update decides. See `update` -- keypoints are all
+        # frames or none, because a gap in them cannot be recovered afterwards.
+        self._keypoints_seen: bool | None = None
 
-    def update(self, boxes: np.ndarray, frame_idx: int) -> list[Track]:
-        """Advance one frame. ``boxes`` is (N,4) xyxy for one class. Returns live tracks."""
+    def update(
+        self,
+        boxes: np.ndarray,
+        frame_idx: int,
+        keypoints: np.ndarray | None = None,
+    ) -> list[Track]:
+        """Advance one frame. ``boxes`` is (N,4) xyxy for one class. Returns live tracks.
+
+        ``keypoints`` is (N,17,3) in image pixels, one row per box in the same order --
+        x, y, score. Supplying it is what makes `events.pose_posture_events` and
+        `reach_to_shelf_events` runnable: they read ``track.keypoints[i]`` against
+        ``track.frames[i]`` and `require_keypoints` refuses the pair when the lengths
+        disagree. Until the pose head existed nothing could fill it and the refusal was
+        the whole story; now the producer exists and this is the wire.
+
+        **All frames or none, per tracker.** Passing keypoints on some calls and not
+        others silently misaligns the two lists against `frames`, which is exactly the
+        drift `Track.keypoints` documents as its reason for being a field. A tracker that
+        has seen keypoints refuses a later call without them, and the reverse, rather
+        than producing a track whose pose belongs to different frames than it claims.
+        """
         boxes = np.asarray(boxes, dtype=float).reshape(-1, 4)
+        if keypoints is not None:
+            keypoints = np.asarray(keypoints, dtype=float).reshape(-1, 17, 3)
+            if len(keypoints) != len(boxes):
+                raise ValueError(
+                    f"{len(keypoints)} keypoint sets for {len(boxes)} boxes: they are "
+                    "matched by position, so a mismatch has no safe interpretation"
+                )
+        if self._keypoints_seen is None:
+            self._keypoints_seen = keypoints is not None
+        elif self._keypoints_seen != (keypoints is not None):
+            had, now = self._keypoints_seen, keypoints is not None
+            raise ValueError(
+                f"this tracker was updated {'with' if had else 'without'} keypoints and is "
+                f"now being updated {'with' if now else 'without'} them. `Track.keypoints` "
+                "has to stay index-aligned with `Track.frames`; a gap cannot be recovered "
+                "later, so it is refused here rather than found by a pose event."
+            )
 
         # Predict: constant velocity on the box centre, size held.
         for t in self.tracks:
@@ -148,12 +187,18 @@ class Tracker:
             t.age = 0
             t.frames.append(frame_idx)
             t.boxes.append(new.copy())
+            if keypoints is not None:
+                t.keypoints.append(keypoints[di].copy())
             if t.hits >= self.min_hits:
                 t.confirmed = True
 
         for di in set(range(len(boxes))) - set(matched.values()):
             t = Track(
-                self._next_id, boxes[di].copy(), frames=[frame_idx], boxes=[boxes[di].copy()]
+                self._next_id,
+                boxes[di].copy(),
+                frames=[frame_idx],
+                boxes=[boxes[di].copy()],
+                keypoints=[] if keypoints is None else [keypoints[di].copy()],
             )
             t.confirmed = self.min_hits <= 1
             self.tracks.append(t)

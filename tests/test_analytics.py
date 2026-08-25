@@ -171,3 +171,58 @@ def test_nan_positions_do_not_reach_the_map():
 
 def test_an_empty_input_is_an_empty_map_not_a_crash():
     assert ground_map([], cell_m=0.5).cells.sum() == 0
+
+
+# --- keypoints through the tracker ----------------------------------------------------
+# `Track.keypoints` existed with no producer: the second-stage pose model did not exist,
+# `require_keypoints` refused every pose event, and the field's own comment said so. The
+# pose head exists now, so these hold the wire to the contract the events read.
+
+
+def _kps(n: int, x: float) -> np.ndarray:
+    """n people, all joints at (x, 100) with full confidence."""
+    a = np.zeros((n, 17, 3), float)
+    a[:, :, 0] = x
+    a[:, :, 1] = 100.0
+    a[:, :, 2] = 1.0
+    return a
+
+
+def test_keypoints_stay_aligned_with_observed_frames():
+    from syncai_hydranet.analytics.events import require_keypoints
+
+    tr = Tracker(min_hits=1)
+    box = np.array([[10.0, 10.0, 30.0, 70.0]])
+    for f in range(4):
+        tr.update(box + f, f, keypoints=_kps(1, 20.0 + f))
+    (track,) = tr.tracks
+    assert len(track.keypoints) == len(track.frames) == 4
+    # index-aligned, not merely equal in length: frame i's pose is frame i's
+    assert [k[0, 0] for k in track.keypoints] == [20.0, 21.0, 22.0, 23.0]
+    require_keypoints([track])  # the refusal that gated every pose event now passes
+
+
+def test_keypoints_count_must_match_boxes():
+    tr = Tracker(min_hits=1)
+    with pytest.raises(ValueError, match="matched by position"):
+        tr.update(np.zeros((2, 4)), 0, keypoints=_kps(1, 5.0))
+
+
+def test_tracker_refuses_to_start_or_stop_carrying_keypoints():
+    box = np.array([[10.0, 10.0, 30.0, 70.0]])
+
+    with_kp = Tracker(min_hits=1)
+    with_kp.update(box, 0, keypoints=_kps(1, 20.0))
+    with pytest.raises(ValueError, match="index-aligned"):
+        with_kp.update(box, 1)
+
+    without = Tracker(min_hits=1)
+    without.update(box, 0)
+    with pytest.raises(ValueError, match="index-aligned"):
+        without.update(box, 1, keypoints=_kps(1, 20.0))
+
+
+def test_keypoints_absent_keeps_todays_behaviour():
+    tr = Tracker(min_hits=1)
+    tr.update(np.array([[10.0, 10.0, 30.0, 70.0]]), 0)
+    assert tr.tracks[0].keypoints == []
