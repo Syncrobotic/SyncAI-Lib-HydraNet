@@ -34,7 +34,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import threading
 import time
 from pathlib import Path
@@ -42,7 +41,6 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
 
 TARGET_FPS = 1440.0  # 96 streams x 15 fps
 STREAM_FPS = 15.0
@@ -310,9 +308,14 @@ def main(argv=None) -> int:
         if not args.plan:
             raise SystemExit("--plan is required for the engine leg")
         print("\nengine ...", flush=True)
-        from bench_trt import bench as bench_engine  # same method, one implementation
+        # `serving.engine.bench_sync` is the same method, already in the package and
+        # already the baseline every recovery in `serving/` is measured against.
+        # Importing scripts/bench_trt for it was a script-to-script dependency and
+        # `tests/test_scripts_are_not_libraries.py` ratchets on exactly that -- it caught
+        # this, which is the whole point of a ratchet.
+        from syncai_hydranet.serving.engine import bench_sync
 
-        results["engine"] = bench_engine(args.plan, args.batch, args.seconds)
+        results["engine"] = bench_sync(args.plan, args.batch, args.seconds)
         print(" ", results["engine"])
 
     if "post" in legs:
