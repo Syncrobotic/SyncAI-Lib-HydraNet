@@ -450,6 +450,19 @@ def build_dataset(
             head_name=dcfg.get("head_name", "depth"),
             max_depth=dcfg.get("max_depth", 10.0),
         )
+    if dcfg["type"] == "pose_keypoints":
+        from .pose_keypoints import PoseKeypointsDataset
+
+        return PoseKeypointsDataset(
+            dcfg["root"],
+            folder,
+            input_size,
+            train,
+            supervises=sup,
+            letterbox=letterbox,
+            augment=augment,
+            head_name=dcfg.get("head_name", "pose"),
+        )
     raise ValueError(f"unknown dataset type: {dcfg['type']}")
 
 

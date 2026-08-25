@@ -26,6 +26,33 @@ class Sample(dict):
 # wrong once letterbox padding is involved.
 GEOM_IDENTITY = (1.0, 1.0, 0.0, 0.0)
 
+# COCO-17 left/right pairs, for the horizontal flip. A mirrored image with unswapped
+# keypoint identities teaches the head that "left wrist" means "whichever side", which
+# is worse than no flip at all.
+POSE_LR_SWAP = [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15]
+
+
+def _pose_scale(sample: Sample, sx: float, sy: float) -> None:
+    if "pose" in sample and len(sample["pose"]):
+        kp = sample["pose"].copy()
+        kp[:, :, 0] *= sx
+        kp[:, :, 1] *= sy
+        sample["pose"] = kp
+
+
+def _pose_shift_clip(sample: Sample, dx: float, dy: float, w: int, h: int) -> None:
+    """Shift keypoints; one that leaves the canvas keeps its position but loses its
+    confidence -- the person stays, the joint stops supervising."""
+    if "pose" in sample and len(sample["pose"]):
+        kp = sample["pose"].copy()
+        kp[:, :, 0] += dx
+        kp[:, :, 1] += dy
+        outside = (
+            (kp[:, :, 0] < 0) | (kp[:, :, 0] >= w) | (kp[:, :, 1] < 0) | (kp[:, :, 1] >= h)
+        )
+        kp[:, :, 2] = np.where(outside, 0.0, kp[:, :, 2])
+        sample["pose"] = kp
+
 
 def _geom_scale(sample: Sample, fx: float, fy: float) -> None:
     g = sample.get("geom", GEOM_IDENTITY)
@@ -71,6 +98,7 @@ def _resize(sample: Sample, size: tuple[int, int]) -> Sample:
         b[:, [0, 2]] *= sx
         b[:, [1, 3]] *= sy
         sample["boxes"] = b
+    _pose_scale(sample, w / ow, h / oh)
     return sample
 
 
@@ -106,6 +134,7 @@ def _paste(sample: Sample, size: tuple[int, int], x0: int, y0: int) -> Sample:
         b[:, [1, 3]] = b[:, [1, 3]].clip(0, h)
         keep = (b[:, 2] - b[:, 0] > 2) & (b[:, 3] - b[:, 1] > 2)
         sample["boxes"], sample["labels"] = b[keep], sample["labels"][keep]
+    _pose_shift_clip(sample, x0, y0, w, h)
     return sample
 
 
@@ -145,6 +174,10 @@ class RandomHorizontalFlip:
             b = s["boxes"].copy()
             b[:, [0, 2]] = w - b[:, [2, 0]]
             s["boxes"] = b
+        if "pose" in s and len(s["pose"]):
+            kp = s["pose"][:, POSE_LR_SWAP, :].copy()
+            kp[:, :, 0] = w - kp[:, :, 0]
+            s["pose"] = kp
         return s
 
 
@@ -183,6 +216,7 @@ class RandomScaleCrop:
             b[:, [1, 3]] = b[:, [1, 3]].clip(0, h)
             keep = (b[:, 2] - b[:, 0] > 2) & (b[:, 3] - b[:, 1] > 2)
             s["boxes"], s["labels"] = b[keep], s["labels"][keep]
+        _pose_shift_clip(s, -x0, -y0, w, h)
         return s
 
 

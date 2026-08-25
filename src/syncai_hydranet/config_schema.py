@@ -127,6 +127,16 @@ HEAD_BY_TYPE = {
         # `coco_subsets.head_order`, one level down.
         "classes": Spec((list,)),
     },
+    "pose_p3": {
+        **HEAD_COMMON,
+        # num_classes is the keypoint count (17): the field is common and required, and
+        # the keypoint count is the honest value for "how many output channels".
+        "num_convs": Spec((int,)),
+        # Gaussian radius in stride-8 cells, and the teacher-confidence floor below
+        # which a keypoint renders no target at all (heads/pose.py).
+        "sigma_cells": Spec(NUMBER),
+        "teacher_min_conf": Spec(NUMBER),
+    },
 }
 LOSS_BY_TYPE = {
     "semantic_fpn": {
@@ -152,6 +162,7 @@ LOSS_BY_TYPE = {
         "reg_weight": Spec(NUMBER),
         "centerness_weight": Spec(NUMBER),
     },
+    "pose_p3": {},
     "depth_fpn": {
         # SILog's scale-invariance dial. 1.0 makes the loss blind to absolute scale, which
         # is exactly the failure measured in the public teacher (a flat 15% over-prediction
@@ -190,7 +201,9 @@ AUGMENT = {
 DATASET = {
     "name": Spec((str,), required=True),
     "type": Spec(
-        (str,), required=True, choices=("seg_folder", "coco", "nyu_depth", "rendered_depth")
+        (str,),
+        required=True,
+        choices=("seg_folder", "coco", "nyu_depth", "rendered_depth", "pose_keypoints"),
     ),
     "root": Spec((str,), required=True),
     "split_train": Spec((str,), required=True),
