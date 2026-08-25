@@ -99,6 +99,15 @@ class ExportWrapper(nn.Module):
         super().__init__()
         self.model = model
         self.seg_names = list(model.seg_heads.keys())
+        # The pose head is dense and resident: it produces [B, K, H/8, W/8] heatmap
+        # logits in the same forward pass, with no boxes and no dynamic shapes, so it
+        # belongs in the graph. It was silently dropped -- `flat` below carried
+        # segmentation and detection only -- which meant an engine built from a pose
+        # checkpoint contained no pose head and a throughput number taken from it
+        # described the model without one. Gate 3 asks for the figure *with* pose in
+        # the slot; this is the difference between measuring that and measuring the
+        # thing it replaced.
+        self.pose_names = list(getattr(model, "pose_heads", {}).keys())
         self.embed_preprocessing = embed_preprocessing
         self.argmax_seg = argmax_seg
         if argmax_seg:
@@ -133,6 +142,11 @@ class ExportWrapper(nn.Module):
         return INPUT_RAW if self.embed_preprocessing else INPUT_NORMALISED
 
     @property
+    def pose_output_names(self) -> list[str]:
+        """One binding per pose head, named for what it is: logits at P3, not keypoints."""
+        return [f"{n}_heatmap_p3" for n in self.pose_names]
+
+    @property
     def seg_output_names(self) -> list[str]:
         """Binding names for the segmentation heads.
 
@@ -158,6 +172,9 @@ class ExportWrapper(nn.Module):
         ]
         if self.model.det_head is not None:
             flat += list(out["det_cls"]) + list(out["det_reg"]) + list(out["det_ctr"])
+        # heatmap logits, not keypoints: `heads/pose.decode_boxes` groups them by the
+        # boxes host-side NMS produced, and the graph deliberately holds no NMS
+        flat += [out[n] for n in self.pose_names]
         return tuple(flat)
 
 
@@ -445,6 +462,7 @@ def main(argv: list[str] | None = None) -> None:
     out_names = list(wrapper.seg_output_names)
     if model.det_head is not None:
         out_names += det_output_names(n_lv, len(kept_names) if kept_names else None)
+    out_names += wrapper.pose_output_names
 
     torch.onnx.export(
         wrapper,
