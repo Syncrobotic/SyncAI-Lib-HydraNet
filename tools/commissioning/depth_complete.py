@@ -38,6 +38,8 @@ CLASS_NAMES = {1: "floor", 2: "wall", 3: "column", 4: "display_table", 5: "displ
 def run(camera: str):
     z = np.load(ROOT / f"runs/site30k_qa/geometry_cache/{camera}.npz")
     height, geom_ok = z["height"], z["geom_ok"]
+    rng = np.hypot(z["gx"], z["gz"])
+    tol = np.clip(0.06 + 0.035 * rng, None, 0.30)  # the recipe's own on-plane tolerance
     fh, fw = height.shape
     cf = CameraFile.load(ROOT / f"runs/commission01/{camera}.camera.json")
     w, h = cf.image_size_px
@@ -98,6 +100,21 @@ def run(camera: str):
             extras |= load(name)
 
     unclaimed = (combined == 0) & ~extras & geom_ok
+    # ORDER MATTERS: carve the on-plane pixels out FIRST. On Tao-Hsin-cam03 the white
+    # counters, the plank floor and the wall behind them form one unclaimed component
+    # whose p90 clears any height bar -- decided as a block, the floor drowns with it.
+    # Floor first splits the block, and the leftover pieces get judged on their own.
+    flat = unclaimed & (np.abs(height) <= tol)
+    flat = ndimage.binary_opening(flat, np.ones((5, 5)))  # depth speckle is not floor
+    if "floor_fill" in cf.mask_files:
+        ff = load("floor_fill")
+        # the SAM3 floor answer fills unclaimed pixels, and it also beats a WALL vote:
+        # on Tao-Hsin-cam03 the structure pass mis-voted the entire right aisle as wall
+        # (static == 2 over 100% of the plank floor). Floor is what the event layer
+        # consumes; wall is cosmetic; fixtures, door and product are never overridden.
+        combined[(combined == 2) & ff] = 1
+        flat |= unclaimed & ff
+    unclaimed &= ~flat
     # Component-level, not pixel-level: a wall's lower half measures under any pixel
     # threshold, but the component it belongs to reaches the ceiling. A merchandise
     # pile does not (p90 ~1.2 m), so the mid-band exclusion survives the change.
@@ -111,7 +128,6 @@ def run(camera: str):
         hs = hs[np.isfinite(hs)]
         if len(hs) > 200 and np.percentile(hs, 90) >= 1.5:
             tall |= sel
-    flat = unclaimed & ~tall & (np.abs(height) <= FLAT_M)
 
     # tall pixels inherit the nearest accepted structural class within reach
     structural = np.isin(combined, (2, 3, 4, 5))
@@ -141,6 +157,9 @@ def run(camera: str):
     rows_idx = np.arange(fh)[:, None]
     above = (rows_idx < top[None, :]) & col_has[None, :]
     shell = above & (combined == 0) & ~extras
+    # floor the depth still recognises must not become wall: the shell rule exists
+    # for pixels the depth cannot certify, not for on-plane ground past the boundary
+    shell &= ~(np.abs(height) <= tol)
     # only keep substantial components -- gaps between fixtures stay unclaimed
     lab_s, n_s = ndimage.label(shell, structure=np.ones((3, 3)))
     for k in range(1, n_s + 1):

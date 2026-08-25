@@ -52,6 +52,12 @@ def concepts():
         "product_boxed_stock": _Sub(
             ("stack of product boxes", "product box on a shelf", "boxed product")
         ),
+        # A third floor source. The commissioning vote is b03 + geometry, and on the
+        # Tao-Hsin plank floor both fail (b03 barely fires; DA-V2 reads the planks
+        # half a metre off the ground). Asked directly, SAM3 returns the whole floor
+        # with clean fixture-foot boundaries. Consumed by depth_complete, which only
+        # lets it fill UNCLAIMED pixels -- it can never overwrite an accepted class.
+        "floor_fill": _Sub(("floor", "wooden floor", "gray floor"), 0.3),
     }
 
 
@@ -71,7 +77,13 @@ def run_camera(camera, proc, model, device, table):
             for m, _s in SAM3.segment(
                 proc, model, img, prompt, concept.min_score, device, embeds
             ):
-                if m.sum() < (MIN_SUB_PX if name.startswith("product_") else MIN_PX):
+                if m.sum() < (
+                    MIN_SUB_PX
+                    if name.startswith("product_")
+                    else 5000
+                    if name == "floor_fill"
+                    else MIN_PX
+                ):
                     continue
                 union |= m
                 n += 1
