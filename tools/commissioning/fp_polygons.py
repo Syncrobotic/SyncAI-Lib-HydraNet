@@ -101,7 +101,12 @@ def hotspot_polygons(frames: dict, n_frames: int, size=(1920, 1080)):
 
 
 def main():
-    cameras = sys.argv[1:] or COMMISSIONED
+    # --accept-candidates: the human verdict on the 35-50% tier. Given 2026-08-25:
+    # "the orange boxes are all posters / hanging merchandise" -- every candidate on
+    # the reviewed sheets is a fixed object, so both tiers are written.
+    argv = [a for a in sys.argv[1:] if a != "--accept-candidates"]
+    accept_candidates = "--accept-candidates" in sys.argv[1:]
+    cameras = argv or COMMISSIONED
     centres, frames_per_cam = gray_centres_by_camera()
     for camera in cameras:
         frames = centres.get(camera, {})
@@ -131,7 +136,7 @@ def main():
                 (round(x0 * sx, 1), round(y1 * sy, 1)),
             )
             for (x0, y0, x1, y1), _, tier in polys
-            if tier == "strong"
+            if tier == "strong" or accept_candidates
         )
         import dataclasses
 
