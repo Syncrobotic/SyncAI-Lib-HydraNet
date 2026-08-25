@@ -333,11 +333,15 @@ def main(argv=None) -> int:
     # so a single-thread figure is NOT a ceiling: reporting one as though it were is how
     # a CPU leg gets declared the blocker when it needs four cores out of ninety-six.
     cores = os.cpu_count() or 1
-    rates = {
-        leg: float(results[leg]["frames_per_s"])  # type: ignore[index]
-        for leg in ("decode", "engine", "post", "track")
-        if leg in results
-    }
+
+    # the engine leg reports two figures and the difference between them IS the PCIe
+    # story, so it is named rather than averaged away: `compute` is the ceiling once
+    # frames arrive in device memory, which is what NVDEC decoding gives.
+    def _rate(leg: str) -> float:
+        r = results[leg]  # type: ignore[index]
+        return float(r["frames_per_s_compute"] if leg == "engine" else r["frames_per_s"])
+
+    rates = {leg: _rate(leg) for leg in ("decode", "engine", "post", "track") if leg in results}
     device_legs = {k: v for k, v in rates.items() if k in ("decode", "engine")}
     thread_legs = {k: v for k, v in rates.items() if k in ("post", "track")}
     if rates:

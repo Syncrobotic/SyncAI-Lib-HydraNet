@@ -108,6 +108,28 @@ def stature_m(x_m: float, z_m: float, v_top_px: float, cf: CameraFile) -> float:
     return float((a[1] - k * a[2]) / den)
 
 
+def facing_wedge(radius_m: float = 0.42, half_deg: float = 26.0, sides: int = 7):
+    """A compass wedge on the position disc, pointing +z like `human()` does.
+
+    The figure is rotated by its measured heading and this is what makes that visible.
+    Measured on this camera's own geometry: turning the mesh a full 180 degrees changes
+    0.14% of its pixels, and 90 degrees changes 1.4% -- `human()` is very nearly
+    rotationally symmetric at 1.70 m seen from 7 m, and its own docstring says the foot
+    is the only feature carrying a facing. A heading that cannot be seen is a heading
+    that was not drawn.
+
+    It sits inside the velocity arrow's tail radius so the two never overlap, and it is
+    drawn whenever a heading is known -- which includes a stopped shopper, where the
+    arrow is deliberately absent.
+    """
+    a = math.radians(half_deg)
+    pts = [(0.0, 0.0)]
+    for i in range(sides + 1):
+        t = -a + (2 * a) * i / sides
+        pts.append((radius_m * math.sin(t), radius_m * math.cos(t)))
+    return pts
+
+
 def velocity_arrow(length_m: float, width_m: float = 0.16, start_m: float = 0.45):
     """Floor arrow pointing +z, starting clear of the figure -- `human()` faces +z too.
 
@@ -400,6 +422,10 @@ def main() -> int:
             disc = place(ground_disc(0.45), at)
             figures.append((body, key, 255, True))
             figures.append((disc, key, 200, False))
+            if heading is not None:
+                wedge = place(extrude(facing_wedge(), 0.025), at)
+                figures.append((wedge, key, 255, False))
+                ghosts.append((wedge, col, 150))
             # faint on purpose: at alpha 105 a shopper standing *behind* the display
             # counter read as standing *on* it. A ghost has to look like a ghost.
             ghosts.append((body, col, 62))
