@@ -45,11 +45,16 @@ The boundary is the load-bearing design decision: **anything constant on a fixed
 computed once by `syncai_bev3d` and cached; only what changes frame-to-frame is computed by
 `syncai_hydranet`.** The contract between them is one `camera.json` per camera.
 
-**Dependency rule.** Offline code — training, commissioning, campaign tooling — may import
-`syncai_bev3d`: the teacher wrappers live there and also feed hydranet's pseudo-label
-pipeline (§4.2), so the "once vs every frame" story does not hold at the code level and is
-not pretended to. The **serving path must never import it**: at runtime, `camera.json` is
-the only thing that crosses the boundary.
+**Dependency rule — as built (2026-08-25).** `syncai_bev3d` imports `syncai_hydranet`'s
+core along four named edges: the labels contract (`IGNORE`), the runtime geometry it
+writes parameters for, the single `iou` in `analytics.tracker`, and the prompt tables in
+`data.sam3_prompts` (which stay in hydranet because the label maps read them too).
+Hydranet's offline CLI may import bev3d (`cli/scene.py` does, for the BEV renderer). The
+**serving path — `serving`, `analytics`, `models`, `engine`, `geometry` — never imports
+bev3d**: at runtime `camera.json` is the only crossing, and its loader lives in
+`syncai_hydranet.geometry.camera_json` because a reader barred from the producer's
+package still has to read the file. `tests/test_package_boundaries.py` enforces both
+directions, so the rule is a failing test rather than a memory.
 
 Why the boundary sits here — three measurements:
 
@@ -104,9 +109,13 @@ metres*, and the homography gives that exactly, in metric units, from 4 clicks. 
 depth head gives relative depth at per-frame GPU cost, needs a scale calibration anyway,
 and has no right-viewpoint training data.
 
-Code that moves into this package: `geometry/` (bev, bev3d, calibrate, plate_calibration,
-ground, depth_scene, meshes, shading, scene_types), `data/teachers/` (sam3, gdino, boxes,
-photometry), `scripts/static_plates.py`, the `tools/site30k` recipe.
+The package exists (2026-08-25): `syncai_bev3d` holds bev, bev3d, calibrate,
+plate_calibration, depth_scene, meshes, shading, scene_types and `teachers/` (sam3,
+gdino, boxes, photometry). The runtime side — `Camera`, `GroundPlane`, the projections,
+`undistort_points` and the `camera.json` loader — stayed in `syncai_hydranet.geometry`,
+because commissioning *fits* the parameters and serving *applies* them, and both sides
+sharing one definition is what keeps the metres honest. `scripts/static_plates.py` and
+the `tools/site30k` recipe remain thin front ends over the package.
 
 ### 2.2 `syncai_hydranet` — the per-frame network
 
@@ -288,7 +297,7 @@ than not at all.
 
 | # | step | artefact | gate |
 |---|---|---|---|
-| 1 | **package split** — create `src/syncai_bev3d`, move the §2.1 code, define the `camera.json` schema; archive non-current configs | two importable packages, green tests | no import cycles; no running training unit touched (check systemd units first) |
+| 1 | **package split** — create `src/syncai_bev3d`, move the §2.1 code, define the `camera.json` schema; archive non-current configs | two importable packages, green tests | **DONE 2026-08-25** (`64eafd8`, `6e0eb36`, `1395e2c`) — 1,824 tests green, boundary enforced by `test_package_boundaries.py`, GPU idle and no training unit running when the tree moved. Config archiving deferred: which of the 30 yamls are current needs a decision, not a guess |
 | 2 | **commission all 48 cameras** — build the 4-click tool and zone tool, run the pipeline | per-camera `camera.json` + a 1 m grid rendered on one real frame per camera | the grid looks right **to my own eyes on every camera** |
 | 3 | **pose head resident** | keypoint error vs ViTPose; throughput re-measured **end to end — NVDEC decode → engine → host NMS → tracker** — with pose in the slot and the ROI path at its 0.2–1 fps cadence | `reach_to_shelf` and `crouch` fire correctly on a watched clip; fps ≥ 1,440 stands end to end, not engine-only — 96 streams is a requirement now (§7.4), and decode/NMS/PCIe were named the real risk when the target was set |
 | 4 | **detection uplift at zero GPU** — temporal-consistency tiers from `instances_all_*.json`, FP polygons from the 37 hotspots; **plus the night pass**: measure whether FP polygons + temporal consistency remove the IR ghost persons | new Gold/Silver training set; night `person` precision figure | Gold precision ≥95%, Silver ≥85% on a 300-frame sample; `after_hours_person` stays on the VLM trigger list **only if** the night figure passes |

@@ -23,9 +23,9 @@ frame**: a shared RegNetX-800MF + BiFPN trunk with two heads — detection (`per
 `device`, `boxed_stock`) and pose (17 keypoints) — whose boxes become tracks *in metres*
 through the cached homography. Everything above that is rules, a tiny temporal model, and
 a VLM on trigger. Anything constant on a fixed camera is cached, never learned; only what
-changes frame-to-frame spends the GPU. (`syncai_bev3d` is build-order step 1 in the plan;
-its code currently lives in `syncai_hydranet.geometry`, `data/teachers` and
-`tools/site30k`.)
+changes frame-to-frame spends the GPU. The boundary is enforced, not remembered:
+`tests/test_package_boundaries.py` fails if a serving-path module ever imports
+`syncai_bev3d`.
 
 ## Install & run
 
@@ -45,7 +45,8 @@ Entry points: `hydranet-train`, `hydranet-eval`, `hydranet-infer-image`,
 
 | path | what |
 |---|---|
-| `src/syncai_hydranet/` | the package: models, training engine, data, teachers, geometry, serving, analytics |
+| `src/syncai_bev3d/` | commissioning: calibration fitting, plate pipeline, SAM 3 / Grounding DINO teachers, BEV & scene rendering — runs once per camera |
+| `src/syncai_hydranet/` | the per-frame side: models, training engine, data, runtime geometry + the `camera.json` contract, serving, analytics |
 | `configs/` | training configs — `config.yaml` inside a run directory is the only authoritative record of what a run trained on |
 | `docs/PLAN.md` | the plan; the single source of truth |
 | `tools/`, `scripts/` | commissioning recipe, static plates, campaign tooling |
