@@ -76,7 +76,13 @@ def cell_grids(camera):
     grids = {}
     for cid in xs:
         x, zz = xs[cid], zs[cid]
-        ok = np.isfinite(x) & np.isfinite(zz) & (np.abs(x) < 12) & (zz > 0) & (zz < 14)
+        ok = (
+            np.isfinite(x)
+            & np.isfinite(zz)
+            & (np.abs(x) < 12 - CELL)
+            & (zz > 0)
+            & (zz < 14 - CELL)
+        )
         x, zz = x[ok], zz[ok]
         g = np.zeros((int(14 / CELL), int(24 / CELL)), np.int32)
         np.add.at(g, ((zz / CELL).astype(int), ((x + 12) / CELL).astype(int)), 1)
