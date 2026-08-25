@@ -8,6 +8,7 @@ into metres. `tests/test_package_boundaries.py` holds the direction: `syncai_bev
 imports this module, and nothing on the serving path imports `syncai_bev3d`.
 """
 
+from .camera_json import CameraFile, Lens, Zone
 from .ground import (
     Camera,
     GroundPlane,
@@ -20,7 +21,10 @@ from .ground import (
 
 __all__ = [
     "Camera",
+    "CameraFile",
     "GroundPlane",
+    "Lens",
+    "Zone",
     "fit_ground_plane",
     "ground_to_pixel",
     "pixel_to_ground",
