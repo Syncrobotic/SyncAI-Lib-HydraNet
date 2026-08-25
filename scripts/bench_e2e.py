@@ -107,19 +107,45 @@ def bench_decode(clip: Path, streams: int, seconds: float, backend: str) -> dict
     Each worker decodes as fast as it can rather than being paced at 15 fps: the
     question is the ceiling, and a paced worker measures the pacing.
     """
-    from syncai_hydranet.data.video import frames as decode_frames
-
-    if backend != "ffmpeg-cpu":
-        raise SystemExit(f"decode backend {backend!r} is resolved but not implemented here")
-
     counts = [0] * streams
     stop = threading.Event()
 
-    def worker(i: int) -> None:
-        for _ in decode_frames(str(clip), 1920, 1080, None):
-            counts[i] += 1
-            if stop.is_set():
-                break
+    # Every worker REOPENS the clip when it runs out. Without this a fast backend
+    # finishes the 2,100-frame clip inside the window and the rate becomes
+    # clip_length / seconds -- which is what this measured on its first run: 1, 8 and 24
+    # streams returned exactly 1x, 8x and 24x the clip length, a straight line through
+    # numbers that describe the clip and not the decoder.
+    if backend == "ffmpeg-cpu":
+        from syncai_hydranet.data.video import frames as decode_frames
+
+        def worker(i: int) -> None:
+            # rgb24 over a pipe: 1920x1080x3 per frame, which is the cost this backend
+            # cannot get out of and the reason the NVDEC one exists
+            while not stop.is_set():
+                for _ in decode_frames(str(clip), 1920, 1080, None):
+                    counts[i] += 1
+                    if stop.is_set():
+                        break
+
+    elif backend == "pynvvideocodec":
+        import PyNvVideoCodec
+
+        def worker(i: int) -> None:
+            # device memory on purpose: the frame never crosses PCIe, which is the whole
+            # argument for NVDEC here. The engine reads it where the decoder left it.
+            while not stop.is_set():
+                dmx = PyNvVideoCodec.CreateDemuxer(str(clip))
+                dec = PyNvVideoCodec.CreateDecoder(
+                    gpuid=0, codec=dmx.GetNvCodecId(), usedevicememory=True
+                )
+                for pkt in dmx:
+                    for _ in dec.Decode(pkt):
+                        counts[i] += 1
+                    if stop.is_set():
+                        break
+
+    else:
+        raise SystemExit(f"decode backend {backend!r} is resolved but not implemented here")
 
     threads = [threading.Thread(target=worker, args=(i,), daemon=True) for i in range(streams)]
     t0 = time.time()
@@ -254,7 +280,8 @@ def main(argv=None) -> int:
     legs = [x.strip() for x in args.legs.split(",") if x.strip()]
     busy = gpu_occupants()
     contaminated = False
-    if busy and {"engine"} & set(legs):
+    gpu_legs = {"engine"} | ({"decode"} if args.decode != "ffmpeg-cpu" else set())
+    if busy and gpu_legs & set(legs):
         if not args.allow_busy_gpu:
             lines = "\n".join(f"  pid {b['pid']}  {b['memory']}  {b['process']}" for b in busy)
             raise SystemExit(
