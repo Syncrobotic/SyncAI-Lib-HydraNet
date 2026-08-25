@@ -36,6 +36,7 @@ import math
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -296,7 +297,13 @@ def main() -> int:
 
     panel_w, panel_h = 890, 540
     out_w, out_h = 960 + 8 + panel_w, 540
-    out_path = ROOT / f"assets/demo_{camera}.mp4"
+    # Every render keeps its own file and `demo_<camera>.mp4` points at the newest.
+    # One fixed name meant each render destroyed the last: a version the user had
+    # approved was overwritten by a worse one and there was nothing to go back to, and
+    # "which file is the newest" stopped being answerable from the filesystem.
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    out_path = ROOT / f"assets/demo_{camera}_{stamp}.mp4"
+    latest = ROOT / f"assets/demo_{camera}.mp4"
     part_path = out_path.with_suffix(".mp4.part")
     enc = subprocess.Popen(
         ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
@@ -485,7 +492,7 @@ def main() -> int:
         )
         enc.stdin.write(np.asarray(composite, np.uint8).tobytes())
         if n in checks:
-            composite.save(ROOT / f"assets/demo_{camera}_check{n:03d}.png")
+            composite.save(ROOT / f"assets/demo_{camera}_{stamp}_check{n:03d}.png")
         if n % 100 == 0:
             print(f"  {n}/{args.frames}", flush=True)
         n += 1
@@ -497,6 +504,9 @@ def main() -> int:
         print(f"ffmpeg exited {rc}; leaving {part_path}", file=sys.stderr)
         return 1
     part_path.replace(out_path)
+    # a copy, not a symlink: these get opened by players and copied to other machines,
+    # and a dangling link is a worse failure than a duplicated 7 MB
+    latest.write_bytes(out_path.read_bytes())
     # the track log makes the right-hand panel checkable instead of merely convincing:
     # every figure in the video has a frame, an id and a floor position in metres here
     log_path = ROOT / f"runs/commission01/{camera}.demo_tracks.json"
@@ -516,6 +526,7 @@ def main() -> int:
         + "\n"
     )
     print(f"wrote {out_path} ({n} frames @ {args.fps} fps)")
+    print(f"  newest also at {latest}")
     print(
         f"  person detections {n_det}, dropped by FP zone {n_fp}; "
         f"track placements {n_placed}, outside walkable+{PLACE_MARGIN_M:g}m {n_outside}; "

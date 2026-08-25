@@ -16,6 +16,7 @@ Usage:
 
 import argparse
 import subprocess
+import time
 from pathlib import Path
 
 import numpy as np
@@ -89,9 +90,15 @@ def main() -> int:
     person = classes.index("person")
 
     out_w, out_h = 1280, 720
+    # same rule as demo_video: every render keeps its own file and
+    # `<tag>_<camera>.mp4` points at the newest. A fixed name destroys the version
+    # someone just approved, and leaves no way to answer "which one is current".
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    final = ROOT / f"assets/{args.tag}_{args.camera}_{stamp}.mp4"
+    latest = ROOT / f"assets/{args.tag}_{args.camera}.mp4"
     enc = None
     if args.video:
-        part = ROOT / f"assets/{args.tag}_{args.camera}.mp4.part"
+        part = final.with_suffix(".mp4.part")
         enc = subprocess.Popen(
             ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
              "-s", f"{out_w}x{out_h}", "-framerate", str(args.fps), "-i", "-",
@@ -146,7 +153,7 @@ def main() -> int:
         if enc:
             enc.stdin.write(np.asarray(view, np.uint8).tobytes())
         if saved < args.stills:
-            view.save(ROOT / f"assets/{args.tag}_{args.camera}_{n:04d}.png")
+            view.save(ROOT / f"assets/{args.tag}_{args.camera}_{stamp}_{n:04d}.png")
             saved += 1
         if n % 100 == 0:
             print(f"  {n}/{args.frames}", flush=True)
@@ -155,8 +162,10 @@ def main() -> int:
     if enc:
         enc.stdin.close()
         if enc.wait() == 0:
-            part.replace(part.with_suffix(""))
-            print(f"wrote {part.with_suffix('')}")
+            part.replace(final)
+            latest.write_bytes(final.read_bytes())
+            print(f"wrote {final}")
+            print(f"  newest also at {latest}")
     print(f"{n} frames, {n_people} person detections, {n_joints} joints above {KP_MIN_CONF}")
     return 0
 
