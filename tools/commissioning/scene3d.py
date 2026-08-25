@@ -110,7 +110,11 @@ def run(camera: str):
         class_names=("void", *CLASSES.values()),
     )
 
-    plate = Image.open(ROOT / str(cf.plate_file)).convert("RGB").resize((w, h))
+    cleanest = str(cache["cleanest"])
+    plate_path = ROOT / "datasets/studioa_static" / camera / f"plate_{cleanest}.png"
+    if not plate_path.exists():
+        plate_path = ROOT / str(cf.plate_file)
+    plate = Image.open(plate_path).convert("RGB").resize((w, h))
     base = np.asarray(plate, dtype=np.float64)
     walk_small = (
         np.asarray(Image.open(ROOT / "runs/commission01" / cf.mask_files["walkable"])) > 127
