@@ -306,7 +306,26 @@ than not at all.
 | `best.pt` (E15, terrain-selected) | 0.840 | 13.8 px | 35.4 | 96.3 |
 | **`last.pt` (E60)** | **0.898** | **9.3 px** | **25.1** | **67.7** |
 
-**Use `last.pt`.** Taking the handoff's `best.pt` would have gated on a figure 5.8 points lower with 48% more error. Trajectory E15 → E29 → E60 is 0.840 → 0.882 → 0.898, still rising at the end. The run logs **no pose validation metric at all**, so there is no per-epoch curve and these two checkpoints are the only candidates that survive a run — fix the config's `primary_metric` before the next one (§7.9) | keypoint error vs ViTPose; throughput re-measured **end to end — NVDEC decode → engine → host NMS → tracker** — with pose in the slot and the ROI path at its 0.2–1 fps cadence | `reach_to_shelf` and `crouch` fire correctly on a watched clip; fps ≥ 1,440 stands end to end, not engine-only — 96 streams is a requirement now (§7.4), and decode/NMS/PCIe were named the real risk when the target was set |
+**Use `last.pt`.** Taking the handoff's `best.pt` would have gated on a figure 5.8 points lower with 48% more error. Trajectory E15 → E29 → E60 is 0.840 → 0.882 → 0.898, still rising at the end. The run logs **no pose validation metric at all**, so there is no per-epoch curve and these two checkpoints are the only candidates that survive a run — fix the config's `primary_metric` before the next one (§7.9).
+
+**Throughput, end to end, 2026-08-25 — the gate MISSES.** `cli/export_onnx.py` was
+dropping the pose head entirely (`a0c51de`), so every engine number before this described
+the model with pose replaced. With `pose_heatmap_p3` in the graph, E60 weights, batch 16,
+fp16, NVDEC decode into device memory, one small RL neighbour on the card:
+
+| leg | measured | against 1,440 f/s |
+|---|---|---|
+| decode (NVDEC, 16 streams) | 8,647 f/s | **6.01×** |
+| **engine (pose resident)** | **1,324 f/s** | **0.92× — binding** |
+| post (host FCOS decode + NMS) | 501 f/s/thread | 2.9 of 24 cores |
+| track | 7,969 f/s/thread | 0.2 cores |
+
+One card therefore holds **88 streams at 15 fps, not 96**. Levers measured, not guessed:
+batch 32 gives 1,300 f/s (*worse* — the card is saturated, so batch size is not a lever);
+pruning the terrain head from the graph gives 1,386 f/s (+4.7%, still 3.7% short). The
+1,552 f/s of 2026-08-24 that made the target look comfortable was engine-only *and*
+without pose. Remaining levers untested: int8/fp8 (`--best`), a narrower backbone, or
+re-opening §7.4's 96 | keypoint error vs ViTPose; throughput re-measured **end to end — NVDEC decode → engine → host NMS → tracker** — with pose in the slot and the ROI path at its 0.2–1 fps cadence | `reach_to_shelf` and `crouch` fire correctly on a watched clip; fps ≥ 1,440 stands end to end, not engine-only — 96 streams is a requirement now (§7.4), and decode/NMS/PCIe were named the real risk when the target was set |
 | 4 | **detection uplift at zero GPU** — temporal-consistency tiers from `instances_all_*.json`, FP polygons from the 37 hotspots; **plus the night pass**: measure whether FP polygons + temporal consistency remove the IR ghost persons | new Gold/Silver training set; night `person` precision figure | Gold precision ≥95%, Silver ≥85% on a 300-frame sample; `after_hours_person` stays on the VLM trigger list **only if** the night figure passes |
 | 5 | **L1 validation** — homography accuracy against WILDTRACK/MultiviewX ground-truth floor positions; tracking quality (ID switches) on in-domain clips watched end to end | position error in metres; ID-switch count per watched 10-minute clip | position error small enough that zone events land in the right zone; dwell/loiter durations survive — an ID switch mid-loiter resets the clock, so switches on the watched clips must be rare enough not to |
 | 6 | **L3 end to end, one camera** | an event log readable against its video | events match what the clip shows |
