@@ -108,6 +108,7 @@ dev = [
     # on the diagnostic count and a floating pre-1.0 checker would move that number on
     # its own schedule. Dependabot bumps it; the count moving is then a reviewed event.
     "ty>=0.0.72",
+    "trimesh>=5.0.0",
 ]
 
 [tool.hatch.version]

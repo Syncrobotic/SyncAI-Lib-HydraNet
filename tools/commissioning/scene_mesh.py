@@ -18,7 +18,17 @@ import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage
 
-from syncai_bev3d.meshes import Placement, _merge, extrude, ground_disc, place
+from syncai_bev3d.meshes import (
+    Placement,
+    _merge,
+    cabinet,
+    column,
+    extrude,
+    ground_disc,
+    place,
+    table,
+    wall,
+)
 from syncai_bev3d.shading import View, contact_shadows, draw_scene
 from syncai_hydranet.geometry.camera_json import CameraFile
 
@@ -187,6 +197,122 @@ def render(camera, items, heights, out_path, *, eye=None, target=None):
     return view
 
 
+def store_yaw(grids):
+    """Dominant fixture orientation, folded mod 90 deg -- the store's own axis."""
+    angles, weights = [], []
+    for cid in (2, 5, 4):
+        lab, n = ndimage.label(grids[cid], structure=np.ones((3, 3)))
+        for k in range(1, n + 1):
+            r, c = np.nonzero(lab == k)
+            if len(r) < 120:
+                continue
+            pts = np.stack([c.astype(float), r.astype(float)], 1)
+            pts -= pts.mean(0)
+            _, s_, vt = np.linalg.svd(pts, full_matrices=False)
+            if s_[0] < 2 * s_[1]:
+                continue  # not elongated: no orientation vote
+            angles.append(np.arctan2(vt[0, 1], vt[0, 0]) % (np.pi / 2))
+            weights.append(len(r))
+    if not angles:
+        return 0.0
+    # circular mean on the quadrant-folded angle
+    a = np.array(angles) * 4
+    m = (
+        np.arctan2(
+            np.average(np.sin(a), weights=weights), np.average(np.cos(a), weights=weights)
+        )
+        / 4
+    )
+    return float(m % (np.pi / 2))
+
+
+def build_scene_regular(camera):
+    """B-path: every fixture becomes a store-axis-aligned parametric mesh.
+
+    The depth-derived footprints are ragged; the furniture is not. Each component is
+    fitted with a robust axis-aligned box in the STORE frame (p3-p97 extents, snapped to
+    5 cm) and rendered as the parametric mesh its class names: cabinets with shelf
+    slabs, tables with legs, thin walls, columns.
+    """
+    cf, grids, heights = cell_grids(camera)
+    yaw = store_yaw(grids)
+    cy, sy = np.cos(yaw), np.sin(yaw)
+    items = [(floor_mesh(grids[1]), "floor", 150, False)]
+    for cid, name in CLASS_NAMES.items():
+        h = heights.get(cid, DRAWN_H[name])
+        lab, n = ndimage.label(grids[cid], structure=np.ones((3, 3)))
+        for k in range(1, n + 1):
+            r, c = np.nonzero(lab == k)
+            if len(r) < 60:
+                continue
+            x = c * CELL - 12 + CELL / 2
+            z = r * CELL + CELL / 2
+            # into the store frame, robust extents, snap to 5 cm
+            u = x * cy + z * sy
+            v = -x * sy + z * cy
+            u0, u1 = np.percentile(u, [3, 97])
+            v0, v1 = np.percentile(v, [3, 97])
+            w = max(round((u1 - u0) / 0.05) * 0.05, 0.3)
+            d = max(round((v1 - v0) / 0.05) * 0.05, 0.3)
+            um, vm = (u0 + u1) / 2, (v0 + v1) / 2
+            px, pz = um * cy - vm * sy, um * sy + vm * cy
+            at = Placement(px, pz, heading_rad=-yaw)
+            if name == "wall":
+                short = min(w, d)
+                if short > 0.4:  # a fat "wall" blob is a wall corner: thin it
+                    w, d = (w, 0.15) if w >= d else (0.15, d)
+                half = (w if w >= d else d) / 2
+                pts = [[-half, 0.0], [half, 0.0]] if w >= d else [[0.0, -half], [0.0, half]]
+                mesh = wall(pts, 2.4, thickness_m=max(min(w, d), 0.12))
+                items.append((place(mesh, at), name, 105, False))
+            elif name == "column":
+                mesh = column(min(w, 0.8), min(d, 0.8), max(h, 2.2))
+                items.append((place(mesh, at), name, 255, True))
+            elif name == "display_shelf":
+                mesh = cabinet(w, min(d, 0.8), h, shelves=max(2, int(h / 0.45)))
+                items.append((place(mesh, at), name, 255, True))
+            else:  # display_table
+                mesh = (
+                    table(w, d, h)
+                    if max(w, d) < 2.2
+                    else extrude(
+                        np.array(
+                            [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]
+                        ),
+                        h,
+                    )
+                )
+                items.append((place(mesh, at), name, 255, True))
+    items.append((place(ground_disc(0.35), Placement(0.0, 0.0)), "disc", 130, False))
+    return cf, items, heights
+
+
+def export_glb(camera, items):
+    """A-path: the same scene as a GLB any glTF viewer can orbit."""
+    import trimesh
+
+    scene = trimesh.Scene()
+    for i, (mesh, key, alpha, _s) in enumerate(items):
+        verts, faces = mesh
+        if len(faces) == 0:
+            continue
+        tm = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
+        rgba = [*PALETTE[key], alpha]
+        tm.visual = trimesh.visual.TextureVisuals(
+            material=trimesh.visual.material.PBRMaterial(
+                baseColorFactor=[c / 255 for c in rgba],
+                metallicFactor=0.05,
+                roughnessFactor=0.85,
+                alphaMode="BLEND" if alpha < 255 else "OPAQUE",
+                doubleSided=True,
+            )
+        )
+        scene.add_geometry(tm, node_name=f"{key}_{i}")
+    path = ROOT / "runs/commission01" / camera / "scene.glb"
+    scene.export(path)
+    return path
+
+
 def export_obj(camera, items):
     solids = [m for m, k, a, _ in items if a == 255]
     walls = [m for m, k, a, _ in items if a == 105]
@@ -199,14 +325,16 @@ def export_obj(camera, items):
 
 
 def main():
-    argv = [a for a in sys.argv[1:] if a != "--gif"]
+    argv = [a for a in sys.argv[1:] if not a.startswith("--")]
     gif = "--gif" in sys.argv[1:]
+    regular = "--regular" in sys.argv[1:]
     for camera in argv:
-        _cf, items, heights = build_scene(camera)
+        _cf, items, heights = (build_scene_regular if regular else build_scene)(camera)
         out = ROOT / f"assets/commission_mesh_{camera}.png"
         render(camera, items, heights, out)
         obj = export_obj(camera, items)
-        print(f"{camera}: {out.name}, {obj}")
+        glb = export_glb(camera, items)
+        print(f"{camera}: {out.name}, {obj.name}, {glb.name}")
         if gif:
             xs = np.concatenate([m[0][:, 0] for m, *_ in items])
             zs = np.concatenate([m[0][:, 2] for m, *_ in items])
