@@ -43,15 +43,16 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
+from syncai_bev3d import bev3d
+from syncai_bev3d.bev import IGNORE, BevGrid, free_space_map, project_mask, scene
+from syncai_bev3d.scene_types import PlaneScene
+
 from ..config import load_config
 from ..data.coco_subsets import COCO_NAMES, head_order, retail_box_label
 from ..data.label_maps import get_scheme, terrain_to_traversability
 from ..data.label_maps_retail_security import get_det_vocab
 from ..data.video import finish_encoder, frames, probe
-from ..geometry import bev3d
-from ..geometry.bev import IGNORE, BevGrid, free_space_map, project_mask, scene
 from ..geometry.ground import Camera, GroundPlane
-from ..geometry.scene_types import PlaneScene
 from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint, select_weights
 from ..utils.device import pick_device

@@ -10,21 +10,23 @@ import math
 import numpy as np
 import pytest
 
-from syncai_hydranet.geometry import (
-    IGNORE,
+from syncai_bev3d import (
     BevGrid,
-    Camera,
-    GroundPlane,
-    fit_ground_plane,
     free_space_map,
-    ground_to_pixel,
-    pixel_to_ground,
     place_boxes,
     project_mask,
     ray_reach,
     scene,
+)
+from syncai_hydranet.geometry import (
+    Camera,
+    GroundPlane,
+    fit_ground_plane,
+    ground_to_pixel,
+    pixel_to_ground,
     unproject,
 )
+from syncai_hydranet.labels import IGNORE
 
 CAM = Camera.from_vfov(512, 288, 65.0)
 PLANE = GroundPlane(height=1.2, pitch=math.radians(18))
@@ -264,7 +266,7 @@ def test_the_perspective_renderer_shares_the_ray_reduction():
     """`bev3d` draws the boundary the flat map filters on. Two implementations of "how
     far did the floor reach" would drift, and the picture would stop agreeing with the
     map it is drawn from."""
-    from syncai_hydranet.geometry import bev3d
+    from syncai_bev3d import bev3d
 
     bev = floor_out_to_2m5()
     angles, reach, _, _ = ray_reach(bev, FS_GRID, n_rays=64)

@@ -12,7 +12,7 @@ pytest tests/test_bev_scene.py -v
 import numpy as np
 import pytest
 
-from syncai_hydranet.geometry.depth_scene import (
+from syncai_bev3d.depth_scene import (
     BLOCKED,
     CELL_BLOCKED,
     CELL_EMPTY,
@@ -243,8 +243,8 @@ def test_the_two_scene_builders_share_one_vocabulary_and_declare_their_evidence(
     """
     import math
 
+    from syncai_bev3d import scene as plane_scene
     from syncai_hydranet.geometry import Camera, GroundPlane
-    from syncai_hydranet.geometry import scene as plane_scene
 
     trav = np.full((H, W), GO, np.uint8)
     depth = flat_depth(2.5)

@@ -11,8 +11,8 @@ import numpy as np
 import pytest
 from PIL import Image, ImageDraw
 
-from syncai_hydranet.geometry.meshes import box, smooth_normals
-from syncai_hydranet.geometry.shading import View, contact_shadows, draw_scene, shade
+from syncai_bev3d.meshes import box, smooth_normals
+from syncai_bev3d.shading import View, contact_shadows, draw_scene, shade
 
 BG = (7, 9, 13)
 

@@ -57,6 +57,7 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
+from syncai_bev3d.calibrate import Pose  # noqa: E402
 from syncai_hydranet.analytics import events as ev  # noqa: E402
 from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
 from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
@@ -64,7 +65,6 @@ from syncai_hydranet.analytics.dwell import track_ground_path  # noqa: E402
 from syncai_hydranet.analytics.tracker import SIMPLIFICATIONS, Tracker  # noqa: E402
 from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
-from syncai_hydranet.geometry.calibrate import Pose  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera, GroundPlane  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402

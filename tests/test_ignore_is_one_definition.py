@@ -25,7 +25,11 @@ from syncai_hydranet.labels import IGNORE
 from syncai_hydranet.preprocessing import PAD_LABEL
 
 REPO = Path(__file__).resolve().parent.parent
-SOURCES = sorted(REPO.glob("src/syncai_hydranet/**/*.py")) + sorted(REPO.glob("scripts/*.py"))
+SOURCES = (
+    sorted(REPO.glob("src/syncai_hydranet/**/*.py"))
+    + sorted(REPO.glob("src/syncai_bev3d/**/*.py"))
+    + sorted(REPO.glob("scripts/*.py"))
+)
 DEFINITION = REPO / "src" / "syncai_hydranet" / "labels.py"
 
 
@@ -69,7 +73,7 @@ def test_the_modules_that_mask_with_it_import_it():
         "src/syncai_hydranet/config_schema.py",
         "src/syncai_hydranet/models/losses.py",
         "src/syncai_hydranet/models/hydranet.py",
-        "src/syncai_hydranet/geometry/bev.py",
+        "src/syncai_bev3d/bev.py",
         "src/syncai_hydranet/cli/annotation.py",
         "src/syncai_hydranet/preprocessing.py",
         "src/syncai_hydranet/engine/confusion.py",

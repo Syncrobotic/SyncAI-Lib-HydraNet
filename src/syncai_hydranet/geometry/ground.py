@@ -1,12 +1,15 @@
-"""Camera geometry against the floor the robot is standing on.
+"""The runtime contract between pixels and floor metres, applied every frame.
 
-The pose of the camera above the floor is fitted to the depth return every frame rather
-than measured once. A wheeled robot's mount is a constant; a walking quadruped pitches
-and rolls with every step, so a fixed homography smears, and it smears more the further
-out you look -- which is exactly where a navigation stack is asking the question.
+This module is the part of the geometry a *serving* process needs: the camera model, the
+ground plane, the projections between them, and the lens undistortion those projections
+assume. Everything that **produces** those parameters -- plate calibration, k1 fitting,
+pose recovery, BEV rendering -- lives in `syncai_bev3d` and runs once per camera at
+commissioning. The dependency rule follows: `syncai_bev3d` imports this module; nothing
+on the serving path imports `syncai_bev3d` (`tests/test_package_boundaries.py` checks).
 
-Fitting also beats reading the IMU, which gives angles but not height, and height changes
-with gait too.
+The docstring this one replaced explained per-frame plane fitting for a walking
+quadruped. That line is history (`cc80fc3`); on a fixed CCTV camera the plane is a
+constant, fitted once and cached in `camera.json`.
 """
 
 from __future__ import annotations
@@ -171,3 +174,19 @@ def fit_ground_plane(
     roll = math.atan2(float(normal[0]), float(-normal[1]))
     residual = np.einsum("hwc,c->hw", pts, normal) + d
     return GroundPlane(height=height, pitch=pitch, roll=roll), residual
+
+
+def undistort_points(xy: np.ndarray, k1: float, centre, radius: float) -> np.ndarray:
+    """Fitzgibbon's one-parameter division model, applied to points rather than an image.
+
+    ``x_u = x_d / (1 + k1 * r^2)`` with ``r`` normalised by ``radius``, so ``k1`` is
+    dimensionless and comparable between cameras of different resolutions.
+
+    This lives here rather than with the k1 *fitting* in `syncai_bev3d.calibrate`
+    because it is the application side of the lens contract: commissioning fits ``k1``
+    once, and every runtime consumer of `camera.json` must undo the lens with the exact
+    same model or the metres drift silently. One definition, both sides import it.
+    """
+    centred = np.asarray(xy, float) - np.asarray(centre, float)
+    r2 = (centred**2).sum(axis=1) / (radius**2)
+    return centred / (1.0 + k1 * r2)[:, None] + np.asarray(centre, float)

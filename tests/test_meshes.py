@@ -18,7 +18,7 @@ import math
 import numpy as np
 import pytest
 
-from syncai_hydranet.geometry.meshes import (
+from syncai_bev3d.meshes import (
     Placement,
     box,
     cabinet,
@@ -227,7 +227,7 @@ def test_impossible_dimensions_are_refused(call, match):
 def test_a_person_becomes_a_person():
     """The join `bev3d` uses. Before it existed the mesh library had no consumer at all
     and every real render drew cuboids, which is indistinguishable from the outside."""
-    from syncai_hydranet.geometry.meshes import for_object
+    from syncai_bev3d.meshes import for_object
 
     verts, _ = for_object({"name": "person", "height_m": 1.63, "width_m": 0.5})
     assert np.ptp(verts[:, 1]) == pytest.approx(1.63)
@@ -237,7 +237,7 @@ def test_a_person_becomes_a_person():
 def test_a_person_with_no_measured_height_falls_back_rather_than_vanishing():
     """`bev.scene` emits height_m None when the box could not be placed against the ground
     plane. 1.70 m is the same assumption `fit_camera_from_people.py` fits pose against."""
-    from syncai_hydranet.geometry.meshes import for_object
+    from syncai_bev3d.meshes import for_object
 
     verts, _ = for_object({"name": "person", "height_m": None, "width_m": 0.5})
     assert np.ptp(verts[:, 1]) == pytest.approx(1.70)
@@ -246,7 +246,7 @@ def test_a_person_with_no_measured_height_falls_back_rather_than_vanishing():
 def test_an_implausible_person_height_is_not_believed():
     """A box whose bottom landed on a counter edge gives a 0.3 m person. Drawing that
     would put the projection error into the figure's stature, where it reads as a child."""
-    from syncai_hydranet.geometry.meshes import for_object
+    from syncai_bev3d.meshes import for_object
 
     verts, _ = for_object({"name": "person", "height_m": 0.31, "width_m": 0.4})
     assert np.ptp(verts[:, 1]) == pytest.approx(1.70)
@@ -256,7 +256,7 @@ def test_a_class_whose_name_does_not_determine_a_shape_stays_a_box():
     """The line the shape table draws. `potted plant` is any shape at all, and a viewer
     cannot tell a modelled silhouette from a measured one, so it keeps the extrusion the
     flat map already asserted."""
-    from syncai_hydranet.geometry.meshes import for_object
+    from syncai_bev3d.meshes import for_object
 
     verts, faces = for_object({"name": "potted plant", "width_m": 0.6, "height_m": 0.9})
     assert len(faces) == 12  # a box
@@ -267,7 +267,7 @@ def test_a_named_shape_carries_the_measured_height():
     """A box labelled `chair` already asserts "this is a chair", so drawing a chair adds
     nothing to the claim -- but it must not quietly change the two numbers that *were*
     measured."""
-    from syncai_hydranet.geometry.meshes import for_object
+    from syncai_bev3d.meshes import for_object
 
     verts, faces = for_object({"name": "chair", "width_m": 0.6, "height_m": 0.9})
     assert len(faces) > 12, "a chair drawn as a box has lost the seat, which is the point"
@@ -281,7 +281,7 @@ def test_a_terrain_class_name_does_not_reach_the_shape_table():
     with real data (0.336), whose failure is *which* object it is looking at. Either reason
     alone keeps it out of the table; a silhouette on that class is the shape being more
     confident than the label under it."""
-    from syncai_hydranet.geometry.meshes import _SHAPE, for_object
+    from syncai_bev3d.meshes import _SHAPE, for_object
 
     assert "display_fixture" not in _SHAPE
     _, faces = for_object({"name": "display_fixture", "width_m": 1.9, "height_m": 1.85})
@@ -292,7 +292,7 @@ def test_no_shape_is_deeper_than_its_measured_width():
     """Depth is the one dimension the payload never carries, so every shape invents it.
     A fixture drawn deeper than its own measured footprint contradicts the flat map
     underneath it, which is the one place a viewer could catch the invention."""
-    from syncai_hydranet.geometry.meshes import for_object
+    from syncai_bev3d.meshes import for_object
 
     for name, width in (("chair", 0.30), ("dining table", 0.5), ("refrigerator", 0.4)):
         verts, _ = for_object({"name": name, "width_m": width, "height_m": 1.2})
@@ -302,13 +302,13 @@ def test_no_shape_is_deeper_than_its_measured_width():
 def test_an_object_with_no_extent_gets_no_mesh():
     """`width_m`/`height_m` are None when they could not be measured, and `bev.scene` says
     so rather than substituting. A renderer must be able to say so too."""
-    from syncai_hydranet.geometry.meshes import for_object
+    from syncai_bev3d.meshes import for_object
 
     assert for_object({"name": "chair", "width_m": None, "height_m": None}) is None
 
 
 def test_smooth_normals_are_unit_and_one_per_face():
-    from syncai_hydranet.geometry.meshes import smooth_normals
+    from syncai_bev3d.meshes import smooth_normals
 
     verts, faces = human(1.70)
     n = smooth_normals(verts, faces)
@@ -319,7 +319,7 @@ def test_smooth_normals_are_unit_and_one_per_face():
 def test_smooth_normals_differ_from_flat_ones_on_a_curved_surface():
     """The whole reason they exist: with per-face geometric normals a 10-sided tube reads
     as a prism."""
-    from syncai_hydranet.geometry.meshes import smooth_normals
+    from syncai_bev3d.meshes import smooth_normals
 
     verts, faces = human(1.70)
     flat = np.cross(

@@ -12,8 +12,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from syncai_hydranet.geometry.bev import IGNORE, BevGrid
-from syncai_hydranet.geometry.bev3d import (
+from syncai_bev3d.bev import IGNORE, BevGrid
+from syncai_bev3d.bev3d import (
     CLASS_HEIGHT_M,
     VirtualCam,
     _perspective_coeffs,
@@ -258,7 +258,7 @@ def test_class_smoothing_never_votes_a_gap_onto_a_bearing_or_off_one():
 def test_the_label_carries_the_score_because_the_shape_cannot():
     """A chair mesh at 0.31 is the same silhouette as a chair at 0.95, so without the score
     on the label the panel is more confident than the run behind it."""
-    from syncai_hydranet.geometry.bev3d import _draw_annotations
+    from syncai_bev3d.bev3d import _draw_annotations
 
     obj = {"x_m": 0.0, "z_m": 2.0, "range_m": 2.0, "name": "chair", "width_m": 0.5,
            "height_m": 0.9, "score": 0.31}  # fmt: skip

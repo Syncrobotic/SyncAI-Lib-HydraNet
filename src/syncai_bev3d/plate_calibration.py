@@ -40,9 +40,15 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from syncai_hydranet.geometry.ground import (
+    Camera,
+    GroundPlane,
+    fit_ground_plane,
+    pixel_to_ground,
+    undistort_points,
+)
+
 from .bev import box_extents
-from .calibrate import undistort_points
-from .ground import Camera, GroundPlane, fit_ground_plane, pixel_to_ground
 
 MODEL = "depth-anything/Depth-Anything-V2-Metric-Indoor-Large-hf"
 ADULT_M = 1.70  # the standing-adult prior; pose bias makes it a ±11% systematic term

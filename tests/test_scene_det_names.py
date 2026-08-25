@@ -139,8 +139,8 @@ def test_a_renamed_label_still_finds_its_shape_and_its_colour():
     """The rename produces `fixture/chair`, and the shape table and the panel palette are
     keyed on `chair`. Without `detected_class` between them a `--vocab retail` run silently
     loses every mesh and every colour it had."""
-    from syncai_hydranet.geometry.bev3d import OBJECT_RGB
-    from syncai_hydranet.geometry.meshes import detected_class, for_object
+    from syncai_bev3d.bev3d import OBJECT_RGB
+    from syncai_bev3d.meshes import detected_class, for_object
 
     plain = for_object({"name": "chair", "width_m": 0.6, "height_m": 0.9})
     renamed = for_object({"name": "fixture/chair", "width_m": 0.6, "height_m": 0.9})

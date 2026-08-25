@@ -59,14 +59,14 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
-from syncai_hydranet.geometry.calibrate import undistort_points  # noqa: E402
+from syncai_bev3d.plate_calibration import undistort_image  # noqa: E402
 from syncai_hydranet.geometry.ground import (  # noqa: E402
     Camera,
     GroundPlane,
     ground_to_pixel,
     pixel_to_ground,
+    undistort_points,
 )
-from syncai_hydranet.geometry.plate_calibration import undistort_image  # noqa: E402
 from syncai_hydranet.utils.visualize import (  # noqa: E402
     crop_box,
     overlay,

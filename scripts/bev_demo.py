@@ -32,7 +32,7 @@ for candidate in (HERE.parent / "src", HERE / "src"):
 
 from bev_page import PAGE  # noqa: E402
 
-from syncai_hydranet.geometry.depth_scene import BLOCKED, GO, build_scene  # noqa: E402
+from syncai_bev3d.depth_scene import BLOCKED, GO, build_scene  # noqa: E402
 
 H, W = 240, 320
 K = np.array([[260.0, 0.0, W / 2], [0.0, 260.0, H / 2], [0.0, 0.0, 1.0]])

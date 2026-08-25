@@ -9,7 +9,7 @@ calib02 validated, strung into a repeatable pipeline.
 For every selling_floor camera (`datasets/studioa_clips/cameras.json`):
 
 1. **Orientation**: pick a daytime plate and reuse the calib01 pipeline from
-   `syncai_hydranet.geometry.plate_calibration` (the package module behind
+   `syncai_bev3d.plate_calibration` (the package module behind
    `calibrate_from_plate.py`; imported, not copied -- a second copy of the geometry
    arithmetic is a second chance to get it wrong): undistort (division model
    k1 = -0.225, a fleet-hardware assumption, tile-grid measured only on Taichung-cam01)
@@ -58,8 +58,8 @@ sys.path.insert(0, str(HERE.parent / "src"))
 # The geometry and its checks, all reused from the package -- not from
 # `calibrate_from_plate.py`, which is the same code's CLI (the pipeline moved into the
 # package on 2026-08-19 so a script would stop being another script's library).
-from syncai_hydranet.geometry import plate_calibration as pc  # noqa: E402
-from syncai_hydranet.geometry.calibrate import horizon_row  # noqa: E402
+from syncai_bev3d import plate_calibration as pc  # noqa: E402
+from syncai_bev3d.calibrate import horizon_row  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera  # noqa: E402
 
 SCHEMA = "hydranet-onboard-calib/v1"
@@ -184,7 +184,7 @@ def onboard_one(
             "status": "needs_visual_reference",
         },
         "provenance": {
-            "orientation_pipeline": "syncai_hydranet.geometry.plate_calibration (imported)",
+            "orientation_pipeline": "syncai_bev3d.plate_calibration (imported)",
             "depth_model": pc.MODEL,
             "person_boxes": str(PERSON_ANNS),
             "person_height_prior_m": pc.ADULT_M,

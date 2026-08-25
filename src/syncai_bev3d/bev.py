@@ -10,8 +10,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..labels import IGNORE
-from .ground import Camera, GroundPlane, pixel_to_ground
+from syncai_hydranet.geometry.ground import Camera, GroundPlane, pixel_to_ground
+from syncai_hydranet.labels import IGNORE
+
 from .scene_types import PlaneObject, PlaneScene
 
 
@@ -54,7 +55,7 @@ def project_mask(
     Maps backwards, from each cell to the pixel that sees it. Projecting forwards leaves
     holes in the far field, where one pixel covers many cells.
     """
-    from .ground import ground_to_pixel
+    from syncai_hydranet.geometry.ground import ground_to_pixel
 
     h, w = mask.shape
     xx, zz = grid.centres()

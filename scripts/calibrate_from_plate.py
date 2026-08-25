@@ -65,13 +65,12 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
-from syncai_hydranet.geometry.calibrate import horizon_row  # noqa: E402
-from syncai_hydranet.geometry.ground import Camera  # noqa: E402
+from syncai_bev3d.calibrate import horizon_row  # noqa: E402
 
 # The pipeline itself lives in the package (moved there 2026-08-19, when
 # onboard_camera.py became its second script consumer): the wheel, the type ratchet and
 # the coverage floor reach it there, and there is exactly one copy of every formula.
-from syncai_hydranet.geometry.plate_calibration import (  # noqa: E402
+from syncai_bev3d.plate_calibration import (  # noqa: E402
     MODEL,
     PLATES,
     choose_floor,
@@ -84,6 +83,7 @@ from syncai_hydranet.geometry.plate_calibration import (  # noqa: E402
     run_depth,
     undistort_image,
 )
+from syncai_hydranet.geometry.ground import Camera  # noqa: E402
 
 # Zero-shot NYUv2, 654-image official test split, Eigen crop: the global median of
 # gt/pred over the whole split. Applying it lifts delta-1 from 0.687 to 0.919 and drops

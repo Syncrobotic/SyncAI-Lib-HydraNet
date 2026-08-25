@@ -318,18 +318,18 @@ class GeomTeacher:
 
         from matplotlib.path import Path as MplPath
 
-        from syncai_hydranet.geometry.calibrate import undistort_points
+        from syncai_bev3d.plate_calibration import (
+            run_depth,
+            undistort_image,
+        )
         from syncai_hydranet.geometry.ground import (
             Camera as GCamera,
         )
         from syncai_hydranet.geometry.ground import (
             GroundPlane,
             pixel_to_ground,
+            undistort_points,
             unproject,
-        )
-        from syncai_hydranet.geometry.plate_calibration import (
-            run_depth,
-            undistort_image,
         )
 
         calib = json.loads((HERE.parent / f"runs/onboard01/{camera}.calib.json").read_text())

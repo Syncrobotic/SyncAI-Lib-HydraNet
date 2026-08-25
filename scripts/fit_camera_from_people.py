@@ -97,15 +97,15 @@ for candidate in (HERE.parent / "src", HERE / "src"):
 
 
 from syncai_hydranet.data.video import frames, probe  # noqa: E402  # isort: skip
-from syncai_hydranet.config import load_config  # noqa: E402
-from syncai_hydranet.data.coco_subsets import COCO_NAMES  # noqa: E402
 
 # The fit itself lives in the package (2026-08-19): `person_checks` in
 # `geometry/plate_calibration.py` runs it as the depth-free sanity bound, and a package
 # module cannot import a script. The 1.70 m prior moved with it, so it exists once.
-from syncai_hydranet.geometry.plate_calibration import (  # noqa: E402
+from syncai_bev3d.plate_calibration import (  # noqa: E402
     fit_pose_from_people as fit,
 )
+from syncai_hydranet.config import load_config  # noqa: E402
+from syncai_hydranet.data.coco_subsets import COCO_NAMES  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402

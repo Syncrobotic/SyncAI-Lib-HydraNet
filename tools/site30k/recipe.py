@@ -65,9 +65,12 @@ from syncai_hydranet.data.frame_selection import describe, farthest_first  # noq
 from syncai_hydranet.data.teachers import sam3 as SAM3  # noqa: E402
 from syncai_hydranet.data.video import frames as decode_frames  # noqa: E402
 from syncai_hydranet.data.video import probe  # noqa: E402
-from syncai_hydranet.geometry.calibrate import undistort_points  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera as GCamera  # noqa: E402
-from syncai_hydranet.geometry.ground import GroundPlane, pixel_to_ground  # noqa: E402
+from syncai_hydranet.geometry.ground import (  # noqa: E402
+    GroundPlane,
+    pixel_to_ground,
+    undistort_points,
+)
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
 # The pilot ran off datasets/studioa_clips; the campaign runs off the phase-2 pull. Both

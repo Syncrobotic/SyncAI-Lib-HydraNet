@@ -50,7 +50,7 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
-from syncai_hydranet.geometry.meshes import (  # noqa: E402
+from syncai_bev3d.meshes import (  # noqa: E402
     Placement,
     cabinet,
     column,
@@ -61,7 +61,7 @@ from syncai_hydranet.geometry.meshes import (  # noqa: E402
     table,
     wall,
 )
-from syncai_hydranet.geometry.shading import (  # noqa: E402
+from syncai_bev3d.shading import (  # noqa: E402
     View,
     contact_shadows,
     draw_scene,

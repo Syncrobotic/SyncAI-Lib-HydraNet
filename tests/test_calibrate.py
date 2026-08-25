@@ -24,7 +24,7 @@ import math
 import numpy as np
 import pytest
 
-from syncai_hydranet.geometry.calibrate import (
+from syncai_bev3d.calibrate import (
     Pose,
     concentration,
     fit_k1,
@@ -34,9 +34,9 @@ from syncai_hydranet.geometry.calibrate import (
     hough,
     is_interior_maximum,
     pose_from_vanishing_points,
-    undistort_points,
     vanishing_point,
 )
+from syncai_hydranet.geometry.ground import undistort_points
 
 H, W = 720, 1280
 CENTRE = np.array([W / 2.0, H / 2.0])

@@ -48,7 +48,7 @@ from PIL import Image
 
 from ..data.coco_subsets import COCO_NAMES
 from ..data.transforms import invert_geom
-from ..geometry.calibrate import undistort_points
+from ..geometry.ground import undistort_points
 
 # COCO's index for `person`, resolved from the name rather than written as an integer:
 # the head is trained on COCO's 80 and the number is a property of that list, not of this

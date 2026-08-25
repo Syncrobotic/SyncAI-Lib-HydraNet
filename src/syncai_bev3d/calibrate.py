@@ -46,6 +46,8 @@ from typing import NamedTuple
 
 import numpy as np
 
+from syncai_hydranet.geometry.ground import undistort_points
+
 
 @dataclass(frozen=True)
 class Pose:
@@ -156,20 +158,6 @@ def floor_edge_points(
     # The Hough normal direction, which is the gradient direction, folded onto [0, pi)
     # because a line and its reverse are the same line.
     return pts, np.mod(np.arctan2(gy[keep], gx[keep]), math.pi)
-
-
-def undistort_points(xy: np.ndarray, k1: float, centre, radius: float) -> np.ndarray:
-    """Fitzgibbon's one-parameter division model, applied to points rather than an image.
-
-    ``x_u = x_d / (1 + k1 * r^2)`` with ``r`` normalised by ``radius``, so ``k1`` is
-    dimensionless and comparable between cameras of different resolutions. Points, not an
-    image, because the objective below only ever looks at edge pixels and resampling the
-    whole frame per candidate ``k1`` would cost a hundred times as much to answer the same
-    question.
-    """
-    centred = np.asarray(xy, float) - np.asarray(centre, float)
-    r2 = (centred**2).sum(axis=1) / (radius**2)
-    return centred / (1.0 + k1 * r2)[:, None] + np.asarray(centre, float)
 
 
 def _renormalise(points: np.ndarray, centre, target_rms: float) -> np.ndarray:
