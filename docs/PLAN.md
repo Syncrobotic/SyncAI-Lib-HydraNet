@@ -86,8 +86,17 @@ Per camera, once, offline. Target under 20 minutes, of which ~4 are human.
 Output: `camera.json` — homography, structure masks, walkable polygon, zones in metres,
 shelf ROIs, FP polygons, plate reference. Valid until the camera moves **or the store
 does**: seasonal display resets invalidate the fixture masks, shelf ROIs and human-drawn
-zones while leaving the homography intact. Step (h)'s plate comparison is the trigger;
-masks re-run automatically, zones need a human redraw — who owns that loop is open (§7.7).
+zones while leaving the homography intact.
+
+**Decided 2026-08-25 — the refresh is a nightly job, not a person.** In closed-store
+hours the pipeline captures a clip (an empty store barely needs the temporal median),
+compares it against the stored plate, and on divergence re-runs the teachers and
+re-derives the masks, ROIs and walkable polygon. Zones follow automatically where they
+can: floor-anchored zones (entrance line, till) do not move with displays, and
+fixture-anchored zones (premium shelf) re-attach to the matched fixture in the new mask.
+A human sees only a **morning accept/reject when the diff exceeds a threshold** — fully
+silent zone drift is how a knocked zone raises wrong alerts for a month. A homography
+change (the camera itself moved) always escalates to re-commissioning, never auto-heals.
 
 **Depth lives here, not in a per-frame head.** Every spatial output the product sells
 (dwell, paths, heatmaps, queues, zone occupancy) needs *the person's floor position in
@@ -159,7 +168,14 @@ Two L1 rules that are cheap to write and expensive to discover missing:
   are config a manager can change, not classes.
 * **sit / crouch / fall** — a <100K-parameter temporal model over pose sequences, CPU.
   Training data is already on disk: **PoseLift** (real retail store, 6 indoor cameras,
-  pose sequences + person IDs + frame-level shoplifting labels). **Caveat, unmeasured:**
+  pose sequences + person IDs + frame-level shoplifting labels). For the actions PoseLift
+  lacks — fall, crouch — in-store staging is ruled out entirely (decided 2026-08-25,
+  off-hours included), so the source is **3D action / mocap data projected to the
+  measured store camera pose**: NTU RGB+D's falling and squatting classes, CMU MoCap
+  skeletons, projected through the same camera parameters `hm3d_cctv` renders at (height
+  2.38 m, pitch 50.2°, vfov 70.4°). The model consumes keypoint sequences, not pixels, so
+  the projection *is* the domain adaptation; sim-to-real transfer is **unmeasured** and
+  is checked at step 6 on watched clips. **Caveat, unmeasured:**
   PoseLift's sequences came from a different pose estimator whose noise (jitter spectrum,
   occlusion failure modes) differs from our distilled head's; train with noise
   augmentation matched to our head's error profile and measure the transfer after gate 3.
@@ -232,11 +248,11 @@ Both already live in the wheel (`data/teachers/`). Their jobs, in value order:
 * **Mixing rule, measured:** the COCO share is a monotonic trade — at `sample_ratio: 0.1`
   detection arrives free; above it, in-domain performance falls monotonically. Public data
   is a low-ratio trunk prior; in-domain is the body.
-* **Necessarily in-domain, no public source:** `staff/customer` (3 uniform reference photos
-  + per-track VLM voting), `fall`/`crouch` overhead (50–100 staged clips — data generation,
-  not annotation). **Open (§7.6):** staged *theft* tests were ruled out 2026-08-25; if
-  staging in the store is off the table entirely — off-hours included — fall/crouch has no
-  training source and the answer must come from somewhere else.
+* **Necessarily in-domain:** `staff/customer` (3 uniform reference photos + per-track VLM
+  voting). `fall`/`crouch` lost its planned staged-clip source — **all in-store staging is
+  ruled out (decided 2026-08-25, off-hours included)** — and moves to pose space: the
+  temporal model reads keypoints, not pixels, so public 3D action data projected to the
+  measured camera pose replaces staged clips entirely (§2.3).
 
 ### 4.4 Split discipline — binds every reported number
 
@@ -274,7 +290,7 @@ than not at all.
 |---|---|---|---|
 | 1 | **package split** — create `src/syncai_bev3d`, move the §2.1 code, define the `camera.json` schema; archive non-current configs | two importable packages, green tests | no import cycles; no running training unit touched (check systemd units first) |
 | 2 | **commission all 48 cameras** — build the 4-click tool and zone tool, run the pipeline | per-camera `camera.json` + a 1 m grid rendered on one real frame per camera | the grid looks right **to my own eyes on every camera** |
-| 3 | **pose head resident** | keypoint error vs ViTPose; throughput re-measured with pose in the slot **and the ROI path at its 0.2–1 fps cadence** | `reach_to_shelf` and `crouch` fire correctly on a watched clip; fps ≥ 1,440 stands with both accounted |
+| 3 | **pose head resident** | keypoint error vs ViTPose; throughput re-measured **end to end — NVDEC decode → engine → host NMS → tracker** — with pose in the slot and the ROI path at its 0.2–1 fps cadence | `reach_to_shelf` and `crouch` fire correctly on a watched clip; fps ≥ 1,440 stands end to end, not engine-only — 96 streams is a requirement now (§7.4), and decode/NMS/PCIe were named the real risk when the target was set |
 | 4 | **detection uplift at zero GPU** — temporal-consistency tiers from `instances_all_*.json`, FP polygons from the 37 hotspots; **plus the night pass**: measure whether FP polygons + temporal consistency remove the IR ghost persons | new Gold/Silver training set; night `person` precision figure | Gold precision ≥95%, Silver ≥85% on a 300-frame sample; `after_hours_person` stays on the VLM trigger list **only if** the night figure passes |
 | 5 | **L1 validation** — homography accuracy against WILDTRACK/MultiviewX ground-truth floor positions; tracking quality (ID switches) on in-domain clips watched end to end | position error in metres; ID-switch count per watched 10-minute clip | position error small enough that zone events land in the right zone; dwell/loiter durations survive — an ID switch mid-loiter resets the clock, so switches on the watched clips must be rare enough not to |
 | 6 | **L3 end to end, one camera** | an event log readable against its video | events match what the clip shows |
@@ -296,18 +312,23 @@ over unvalidated tracks cannot be attributed when it is wrong.
 3. **Pose distillation risk** (§2.2) — the claim the two-head architecture rests on.
    Answered by step 3's gate. The scope question above it is settled: **decided
    2026-08-25, fall/second-level behaviour is in v1**, so pose stays a per-frame L0 head.
-4. **Delivery target still undefined** — who receives v1, and whether 96 streams/card is
-   a requirement or headroom. Changes the commissioning-vs-trained-head threshold (§2).
+4. ~~Delivery target undefined~~ — **decided 2026-08-25: v1 is 96 concurrent streams
+   analysed on one RTX PRO 6000.** 96 × 15 fps = 1,440 frames/s is a **binding
+   requirement, not headroom** — so gate 3's re-measure is end-to-end (decode, NMS,
+   tracking, PCIe), and NVDEC capacity for 96 × h.264 joins the measurement list. At 96
+   cameras the commissioning cache remains the right answer; §2's ~1,000-camera
+   threshold is far away.
 5. **Retail dashboard surface unscoped** — the numbers fall out of L1 free; what a store
    manager opens, at what cadence, is a product question. Blocks nothing before step 6.
    One modelling gap hides inside it: **store-level footfall needs cross-camera dedup**
    (overlapping views double-count a person). Single-store re-linking is in scope,
    cross-store is banned; the mechanism is unscoped.
-6. **Fall/crouch training source** — staged theft tests were ruled out; if in-store
-   staging is entirely off the table (off-hours included), the 50–100 staged clips in
-   §4.3 have no source. Needs one answer from the store before step 3's events are
-   trainable.
-7. **Recommissioning ownership** — a seasonal display reset invalidates masks, ROIs and
-   zones (§2.1). Plate divergence triggers detection automatically; who redraws the zones
-   and approves the new masks is unassigned. Blocks nothing before step 2's rollout, then
-   recurs forever.
+6. ~~Fall/crouch training source~~ — **decided 2026-08-25: no in-store staging, ever.**
+   Resolved in pose space: the temporal model reads keypoint sequences, so public 3D
+   action data (NTU RGB+D fall/squat, CMU MoCap) projected to the measured camera pose
+   replaces staged clips (§2.3). What stays open is only the sim-to-real transfer
+   measurement, taken at step 6.
+7. ~~Recommissioning ownership~~ — **decided 2026-08-25: a nightly closed-hours job**
+   re-derives plate, masks, ROIs and re-anchors zones automatically; a human gets a
+   morning accept/reject only when the diff exceeds a threshold, and a moved camera
+   always escalates instead of auto-healing (§2.1). To build alongside step 2's tooling.
