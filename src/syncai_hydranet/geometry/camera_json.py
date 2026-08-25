@@ -10,9 +10,11 @@ the file means.
 Units are in the field names (`_m`, `_rad`, `_px`) because this file is edited and
 diffed by humans, and a bare `height: 2.38` invites the reader to guess. Two coordinate
 systems appear and are never mixed: **floor metres** (x lateral, z forward, origin under
-the camera -- what `pixel_to_ground` returns) for zones, and **pixels on the undistorted
-frame at `image_size_px`** for shelf ROIs, false-positive polygons and mask files, which
-exist to be compared against detections in image space.
+the camera -- what `pixel_to_ground` returns) for zones, and **pixels on the raw stream
+frame at `image_size_px`** for shelf ROIs, false-positive polygons and mask files --
+raw, not undistorted, because these exist to be compared against detections and to crop
+decoded frames, and both of those live in the raw frame. The lens applies to *points* on
+their way to the floor (`undistort_points`), never to the pixel-space artefacts.
 
 What is deliberately *not* here:
 
