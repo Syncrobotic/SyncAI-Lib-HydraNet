@@ -74,7 +74,9 @@ MODEL = {
 }
 
 HEAD_COMMON = {
-    "type": Spec((str,), required=True, choices=("semantic_fpn", "fcos", "depth_fpn")),
+    "type": Spec(
+        (str,), required=True, choices=("semantic_fpn", "fcos", "depth_fpn", "pose_p3")
+    ),
     "num_classes": Spec((int,), required=True),
     "in_levels": Spec((list,)),
     "channels": Spec((int,)),

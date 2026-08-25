@@ -20,7 +20,8 @@ from ..labels import IGNORE
 from .backbone import build_backbone
 from .heads.depth import SILogLoss, build_depth_head
 from .heads.detection import SCORE_THR_VIEW, FCOSHead, build_det_head
-from .heads.registry import DepthHead, DetectionHead, Head, SegmentationHead
+from .heads.pose import build_pose_head, build_pose_loss
+from .heads.registry import DepthHead, DetectionHead, Head, PoseHead, SegmentationHead
 from .heads.segmentation import build_seg_head
 from .heads.text_classifier import TextEmbeddingClassifier, load_matrix_file
 from .losses import FCOSLoss, FixedWeighting, SegLoss, UncertaintyWeighting
@@ -58,6 +59,10 @@ class HydraNet(nn.Module):
         # TensorRT conversions, which decide output handling from exactly that.
         self.depth_heads = nn.ModuleDict()
         self.depth_losses = nn.ModuleDict()
+        # Pose follows depth's precedent: its own pair, so `pose_heads.pose.*` names in
+        # the state_dict say what the module is.
+        self.pose_heads = nn.ModuleDict()
+        self.pose_losses = nn.ModuleDict()
         # Three attributes rather than one bundled object, because PyTorch registers
         # submodules by attribute assignment: a head parked inside a tuple or dataclass
         # would never reach `.parameters()`, `.to()` or the state_dict. What binds them
@@ -100,6 +105,9 @@ class HydraNet(nn.Module):
                     # masks away as invalid, and nothing would report it.
                     max_depth=hcfg.get("max_depth", 10.0),
                 )
+            elif hcfg["type"] == "pose_p3":
+                self.pose_heads[name] = build_pose_head(hcfg, ch)
+                self.pose_losses[name] = build_pose_loss(hcfg)
             else:
                 raise ValueError(f"unknown head type: {hcfg['type']}")
 
@@ -138,6 +146,11 @@ class HydraNet(nn.Module):
         det = self._detection()
         if det is not None:
             heads.append(DetectionHead(det.name, det.head, det.loss))
+        # after detection: pose decodes inside the boxes detection just produced
+        heads += [
+            PoseHead(name, self.pose_heads[name], self.pose_losses[name], self.det_head_name)
+            for name in self.pose_heads
+        ]
         return heads
 
     def _detection(self) -> Detection | None:

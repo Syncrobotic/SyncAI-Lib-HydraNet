@@ -26,7 +26,7 @@ def collate(batch: list[dict]) -> dict:
     keys = batch[0]["targets"].keys()
     for k in keys:
         vals = [b["targets"][k] for b in batch]
-        if k in ("boxes", "labels"):
+        if k in ("boxes", "labels", "pose"):
             targets[k] = vals  # variable length, keep as a list
         else:
             targets[k] = torch.stack(vals)  # segmentation masks

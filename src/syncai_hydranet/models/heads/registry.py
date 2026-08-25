@@ -169,3 +169,42 @@ class DetectionHead:
         result[self.name] = self.module.decode(
             out["det_cls"], out["det_reg"], out["det_ctr"], **kw
         )
+
+
+@dataclass(frozen=True)
+class PoseHead:
+    """Keypoint heatmaps at P3; decoding borrows the detection head's boxes.
+
+    `det_name` is the config name of the detection head, because the decoded boxes land
+    in `result` under that name and grouping-by-box is this head's whole design
+    (heads/pose.py). Ordered after detection in `HydraNet.heads()` for the same reason
+    -- decode order is data flow here, not cosmetics. With no detection head (or no
+    boxes in a frame) it decodes to empty keypoint sets rather than guessing.
+    """
+
+    name: str
+    module: torch.nn.Module
+    loss_fn: torch.nn.Module
+    det_name: str | None
+
+    def forward_into(self, out: dict, feats: list[torch.Tensor], _size) -> None:
+        out[self.name] = self.module(feats)  # [B, K, H/8, W/8] logits
+
+    def loss(self, out: dict, targets: dict) -> tuple[torch.Tensor, dict]:
+        return self.loss_fn(out[self.name], targets[self.name]), {}
+
+    def supervised_by(self, targets: dict) -> bool:
+        return self.name in targets
+
+    def decode_into(self, result: dict, out: dict, **_kw) -> None:
+        from .pose import decode_boxes
+
+        maps = out[self.name]
+        dets = result.get(self.det_name) if self.det_name else None
+        decoded = []
+        for i in range(maps.shape[0]):
+            if dets is not None and len(dets[i].get("boxes", ())):
+                decoded.append(decode_boxes(maps[i], dets[i]["boxes"]))
+            else:
+                decoded.append(torch.zeros((0, maps.shape[1], 3), device=maps.device))
+        result[self.name] = decoded
