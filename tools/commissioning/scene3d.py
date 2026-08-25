@@ -125,6 +125,7 @@ def run(camera: str):
         "column": (240, 200, 60),
         "display_table": (200, 90, 200),
         "display_shelf": (90, 140, 240),
+        "glass": (150, 220, 255),
         "door": (200, 120, 60),
         "product": (86, 214, 188),
         "product_boxed_stock": (190, 90, 235),

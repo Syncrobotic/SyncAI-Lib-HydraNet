@@ -58,9 +58,23 @@ def cell_grids(camera):
     """Per-class occupancy in floor metres, and per-class measured heights (p85)."""
     cf = CameraFile.load(ROOT / f"runs/commission01/{camera}.camera.json")
     z = np.load(ROOT / f"runs/site30k_qa/geometry_cache/{camera}.npz")
-    cache = np.load(ROOT / f"runs/commission01/{camera}/structure_cache.npz")
-    static = cache["static"]
     fh, fw = z["gx"].shape
+    # The mask PNGs are the artefact of record -- depth completion and the human zone
+    # stamps land there, not in the intermediate cache. Rebuild the class map from them.
+    static = np.full((fh, fw), 255, np.uint8)
+    cf_early = CameraFile.load(ROOT / f"runs/commission01/{camera}.camera.json")
+    for cid, cname in ((2, "wall"), (3, "column"), (4, "display_table"), (5, "display_shelf")):
+        f = cf_early.mask_files.get(cname)
+        if f and (ROOT / "runs/commission01" / f).exists():
+            m = (
+                np.asarray(
+                    Image.open(ROOT / "runs/commission01" / f).resize(
+                        (fw, fh), Image.Resampling.NEAREST
+                    )
+                )
+                > 127
+            )
+            static[m] = cid
     walk = (
         np.asarray(
             Image.open(ROOT / "runs/commission01" / cf.mask_files["walkable"]).resize(
