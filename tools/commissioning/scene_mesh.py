@@ -361,48 +361,6 @@ def store_yaw(grids):
     return float(m % (np.pi / 2))
 
 
-def store_rects(u: np.ndarray, v: np.ndarray, cell: float = CELL, min_cells: int = 18):
-    """One component's store-frame cells -> the rectangles it is actually made of.
-
-    `build_scene_regular` fitted ONE p3-p97 box per connected component, which is right
-    for a single boxy fixture and wrong for everything else: the left bar counter and the
-    front display counter touch in the mask, so one rectangle swallowed both and reached
-    the frame edge. `rect_decompose` already solves this and only the other builder used
-    it -- but it works on the camera-aligned grid, and this builder needs the store frame
-    to keep a fixture's heading. So the component is re-rasterised in store coordinates
-    and decomposed there, which keeps the size AND the orientation.
-
-    Yields (u_centre, v_centre, width, depth), snapped to 5 cm like the box fit it
-    replaces.
-    """
-    u0, v0 = float(u.min()), float(v.min())
-    iu = np.round((u - u0) / cell).astype(int)
-    iv = np.round((v - v0) / cell).astype(int)
-    grid = np.zeros((iv.max() + 1, iu.max() + 1), bool)
-    grid[iv, iu] = True
-    got = False
-    for rects in rect_decompose(grid, min_cells=min_cells):
-        for r0, r1, c0, c1 in rects:
-            w = max(round(((c1 - c0 + 1) * cell) / 0.05) * 0.05, 0.3)
-            d = max(round(((r1 - r0 + 1) * cell) / 0.05) * 0.05, 0.3)
-            yield (
-                u0 + (c0 + c1 + 1) / 2 * cell,
-                v0 + (r0 + r1 + 1) / 2 * cell,
-                w,
-                d,
-            )
-            got = True
-    if not got:  # too small to decompose: the old single-box fit, unchanged
-        a0, a1 = np.percentile(u, [3, 97])
-        b0, b1 = np.percentile(v, [3, 97])
-        yield (
-            (a0 + a1) / 2,
-            (b0 + b1) / 2,
-            max(round((a1 - a0) / 0.05) * 0.05, 0.3),
-            max(round((b1 - b0) / 0.05) * 0.05, 0.3),
-        )
-
-
 def build_scene_regular(camera):
     """B-path: every fixture becomes a store-axis-aligned parametric mesh.
 
@@ -417,37 +375,51 @@ def build_scene_regular(camera):
     items = [(floor_mesh(grids[1]), "floor", 150, False)]
     for cid, name in CLASS_NAMES.items():
         h = heights.get(cid, DRAWN_H[name])
-        lab, n = ndimage.label(grids[cid], structure=np.ones((3, 3)))
+        # Open first: a mask bridge a few cells wide welds neighbouring fixtures into one
+        # component and the p3-p97 box then spans both. 3 cells is 0.18 m at CELL=0.06 and
+        # it is the largest element that helps everything -- measured on this camera, it
+        # trims the front counter's fit from 2.89x1.61 m to 2.52x1.39 while leaving the
+        # 6.3 m shelf run whole. A 5-cell element fits the counter better still (1.20 m
+        # deep) and shatters that shelf run into five pieces, which is worse than the
+        # error it fixes: one box too big reads as one fixture, five read as five.
+        lab, n = ndimage.label(
+            ndimage.binary_opening(grids[cid], np.ones((3, 3))), structure=np.ones((3, 3))
+        )
         for k in range(1, n + 1):
             r, c = np.nonzero(lab == k)
             if len(r) < 60:
                 continue
             x = c * CELL - 12 + CELL / 2
             z = r * CELL + CELL / 2
+            # into the store frame, robust extents, snap to 5 cm
             u = x * cy + z * sy
             v = -x * sy + z * cy
-            for um, vm, w, d in store_rects(u, v):
-                px, pz = um * cy - vm * sy, um * sy + vm * cy
-                at = Placement(px, pz, heading_rad=-yaw)
-                if name == "wall":
-                    short = min(w, d)
-                    if short > 0.4:  # a fat "wall" blob is a wall corner: thin it
-                        w, d = (w, 0.15) if w >= d else (0.15, d)
-                    half = (w if w >= d else d) / 2
-                    pts = [[-half, 0.0], [half, 0.0]] if w >= d else [[0.0, -half], [0.0, half]]
-                    mesh = wall(pts, 2.4, thickness_m=max(min(w, d), 0.12))
-                    items.append((place(mesh, at), name, 105, False))
-                elif name == "column":
-                    mesh = column(min(w, 0.8), min(d, 0.8), max(h, 2.2))
-                    items.append((place(mesh, at), name, 255, True))
-                elif name == "display_shelf":
-                    mesh = cabinet(w, min(d, 0.8), h, shelves=max(2, int(h / 0.45)))
-                    items.append((place(mesh, at), name, 255, True))
-                else:  # display_table
-                    # a footprint too long for four legs is a counter, not a solid prism:
-                    # a slab on a recessed body, so the surface merchandise sits on exists
-                    mesh = table(w, d, h) if max(w, d) < 2.2 else counter(w, d, h)
-                    items.append((place(mesh, at), name, 255, True))
+            u0, u1 = np.percentile(u, [3, 97])
+            v0, v1 = np.percentile(v, [3, 97])
+            w = max(round((u1 - u0) / 0.05) * 0.05, 0.3)
+            d = max(round((v1 - v0) / 0.05) * 0.05, 0.3)
+            um, vm = (u0 + u1) / 2, (v0 + v1) / 2
+            px, pz = um * cy - vm * sy, um * sy + vm * cy
+            at = Placement(px, pz, heading_rad=-yaw)
+            if name == "wall":
+                short = min(w, d)
+                if short > 0.4:  # a fat "wall" blob is a wall corner: thin it
+                    w, d = (w, 0.15) if w >= d else (0.15, d)
+                half = (w if w >= d else d) / 2
+                pts = [[-half, 0.0], [half, 0.0]] if w >= d else [[0.0, -half], [0.0, half]]
+                mesh = wall(pts, 2.4, thickness_m=max(min(w, d), 0.12))
+                items.append((place(mesh, at), name, 105, False))
+            elif name == "column":
+                mesh = column(min(w, 0.8), min(d, 0.8), max(h, 2.2))
+                items.append((place(mesh, at), name, 255, True))
+            elif name == "display_shelf":
+                mesh = cabinet(w, min(d, 0.8), h, shelves=max(2, int(h / 0.45)))
+                items.append((place(mesh, at), name, 255, True))
+            else:  # display_table
+                # a footprint too long for four legs is a counter, not a solid prism:
+                # a slab on a recessed body, so the surface merchandise sits on exists
+                mesh = table(w, d, h) if max(w, d) < 2.2 else counter(w, d, h)
+                items.append((place(mesh, at), name, 255, True))
     # extras: doors as solid tall slabs, products as slabs at their measured height
     cy2, sy2 = np.cos(yaw), np.sin(yaw)
     for cid, name, hgt in (
