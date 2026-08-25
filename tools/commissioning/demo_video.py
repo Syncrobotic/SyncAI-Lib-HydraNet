@@ -61,6 +61,12 @@ def main() -> int:
     ap.add_argument("--clip", default=None)
     ap.add_argument("--frames", type=int, default=900)
     ap.add_argument("--fps", type=float, default=5.0)
+    # last.pt (epoch 60) not best.pt: best.pt is selected on terrain_mIoU and lands on
+    # epoch 9, the weakest person detector in the run (site_boxes mAP 0.054 vs 0.122).
+    ap.add_argument("--checkpoint", default="last.pt")
+    # the model scores people 0.34-0.59 on this camera; 0.5 keeps almost nothing and
+    # the tracker's 3-hit confirmation then never fires. Measured, not guessed.
+    ap.add_argument("--score-thr", type=float, default=0.35)
     args = ap.parse_args()
     camera = args.camera
 
@@ -68,13 +74,13 @@ def main() -> int:
         Path(args.clip)
         if args.clip
         else sorted((ROOT / "datasets/studioa_clips" / camera).glob("archive_*11*.mp4"))[0]
-    )  # a late-morning clip: the store is open and populated
+    )  # archive names are UTC: *11* is 19:29 local, an open and populated store
 
     cf = CameraFile.load(ROOT / f"runs/commission01/{camera}.camera.json")
     cfg = load_config(str(RUN / "config.yaml"), validate=False)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = build_model(cfg).to(device).eval()
-    model.load_state_dict(select_weights(load_checkpoint(RUN / "best.pt"), "ema"))
+    model.load_state_dict(select_weights(load_checkpoint(RUN / args.checkpoint), "ema"))
     size = cfg["data"]["input_size"]
     person_label = list(cfg["model"]["heads"]["detection"]["classes"]).index("person")
 
@@ -109,7 +115,7 @@ def main() -> int:
         img = Image.fromarray(frame)
         x, _canvas, region = preprocess(img, size)
         with torch.no_grad():
-            out = model.predict(x.to(device), score_thr=0.5)
+            out = model.predict(x.to(device), score_thr=args.score_thr)
         det = out.get("detection", [{}])[0]
         boxes_src = np.zeros((0, 4), np.float32)
         if det and len(det.get("boxes", [])):
@@ -161,8 +167,9 @@ def main() -> int:
         dd.rectangle([0, 524, 960, 540], fill=(0, 0, 0))
         dd.text(
             (6, 526),
-            f"{camera}  detections+tracks (FP zones applied)  |  right: commissioning "
-            f"mesh scene, figures at tracked floor positions  frame {n}",
+            f"{camera}  detections+tracks (FP zones applied)  {args.checkpoint} "
+            f"thr={args.score_thr}  |  right: commissioning mesh scene, figures at "
+            f"tracked floor positions  frame {n}",
             fill=(255, 255, 255),
         )
         enc.stdin.write(np.asarray(composite, np.uint8).tobytes())
