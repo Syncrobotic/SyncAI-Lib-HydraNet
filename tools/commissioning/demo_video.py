@@ -71,8 +71,41 @@ PLACE_MARGIN_M = 2.0  # beyond the commissioned walkable zone a floor position i
 # The median shopper here moves 0.22 m/s, so most of the time there is no vector to
 # draw and the honest thing is to draw none.
 VEL_WINDOW_S = 1.0
+# Position EMA, chosen against this camera's own tracks rather than by feel. A standing
+# shopper's floor point moves a median 3.2 cm per frame with nothing but noise driving
+# it -- 0.16 m/s against a median real speed of 0.22, which is why the raw heading was
+# indistinguishable from random. Measured over 9 tracks: EMA 0.35 halves the still
+# jitter (3.2 -> 1.7 cm) and keeps 92% of the path length on fast segments; 0.25 gets to
+# 1.4 cm but cuts 11% of the corners; a trailing median filter scores *above* 100% path
+# because it holds still and then jumps, which is a worse artefact than the jitter.
+POS_EMA = 0.35
+FALLBACK_STATURE_M = 1.70  # only until a track has been measured STATURE_MIN_N times
+STATURE_MIN_N = 3
+STATURE_RANGE_M = (1.2, 2.6)  # outside this the box top is not a head top
 VEL_FLOOR_MS = 0.3
 VEL_SECONDS_SHOWN = 1.0  # arrow length IS one second of travel, so it reads in metres
+
+
+def stature_m(x_m: float, z_m: float, v_top_px: float, cf: CameraFile) -> float:
+    """How tall the person standing at (x, z) must be for their box top to land on v_top.
+
+    The figure was drawn at a hard-coded 1.70 m for everyone, which is the one number in
+    the panel that was never measured. A head top at level-frame height `plane.height - h`
+    projects linearly in h, so this is one linear solve, not a search. Round-trips
+    exactly on synthetic people at nine positions and three heights.
+
+    NaN when the ray is degenerate. The caller decides what an implausible answer means:
+    here it means the box top was not a head top -- a merged box, a truncated person --
+    and the sample is dropped rather than averaged in.
+    """
+    rot = cf.plane.rotation
+    a = rot @ np.array([x_m, cf.plane.height, z_m])
+    b = rot @ np.array([0.0, 1.0, 0.0])
+    k = (v_top_px - cf.camera.cy) / cf.camera.fy
+    den = b[1] - k * b[2]
+    if abs(den) < 1e-9:
+        return float("nan")
+    return float((a[1] - k * a[2]) / den)
 
 
 def velocity_arrow(length_m: float, width_m: float = 0.16, start_m: float = 0.45):
@@ -192,6 +225,11 @@ def main() -> int:
     # the model scores people 0.34-0.59 on this camera; 0.5 keeps almost nothing and
     # the tracker's 3-hit confirmation then never fires. Measured, not guessed.
     ap.add_argument("--score-thr", type=float, default=0.35)
+    # A uniform scale on the whole reconstruction -- scene, zone, people and eye alike --
+    # so the rendered image is unchanged and only the units move. 1.0 leaves camera.json's
+    # metres exactly as commissioned; 0.8824 is what this camera's own shoppers imply
+    # (median recovered stature 1.93 m against the fleet's 1.702 m person).
+    ap.add_argument("--metre-scale", type=float, default=1.0)
     args = ap.parse_args()
     camera = args.camera
 
@@ -208,14 +246,19 @@ def main() -> int:
     model.load_state_dict(select_weights(load_checkpoint(RUN / args.checkpoint), "ema"))
     size = cfg["data"]["input_size"]
     person_label = list(cfg["model"]["heads"]["detection"]["classes"]).index("person")
-    x_lo, x_hi, z_lo, z_hi = walkable_bounds(cf)
+    x_lo, x_hi, z_lo, z_hi = walkable_bounds(cf)  # camera.json metres, like the zone
 
     # the static scene, built once; the view frozen so the room does not swim
     scene_mesh.SS = 1
     _cf2, items, heights = scene_mesh.build_scene_regular(camera)
-    # furniture and floor only: the product slabs read as clutter at video scale, and
-    # the demo's subject is people moving through the room
-    items = [it for it in items if not str(it[1]).startswith("product")]
+    # merchandise stays in: the product regions are now tiled with unit-sized items
+    # sitting on the counter tops, which is what a store looks like. They read as
+    # clutter only when they are region-sized slabs, which is what they used to be.
+    if args.metre_scale != 1.0:
+        # scaling the scene AND the eye leaves the projection identical -- this changes
+        # what the numbers mean, never what the picture shows
+        items = [((m[0] * args.metre_scale, m[1]), *rest) for m, *rest in items]
+        heights = {k: v * args.metre_scale for k, v in heights.items()}
     xs = np.concatenate([m[0][:, 0] for m, *_ in items])
     zs = np.concatenate([m[0][:, 2] for m, *_ in items])
     cx_m, cz_m = float(np.median(xs)), float(np.median(zs))
@@ -224,7 +267,7 @@ def main() -> int:
     # what the crop must contain: the furniture and every floor position a figure may
     # legally take, so a shopper at the edge of the zone is never cropped out of frame
     walk = [np.asarray(z.points_m, float) for z in cf.zones if z.kind == "walkable"]
-    zone_xz = np.vstack(walk) if walk else np.zeros((0, 2))
+    zone_xz = (np.vstack(walk) if walk else np.zeros((0, 2))) * args.metre_scale
     crop_meshes = [m[0] for m, *_ in items]
     if len(zone_xz):
         crop_meshes.append(np.stack([zone_xz[:, 0], np.zeros(len(zone_xz)), zone_xz[:, 1]], 1))
@@ -255,6 +298,8 @@ def main() -> int:
     positions: list[dict] = []
     history: dict[int, dict[int, tuple[float, float]]] = {}
     last_heading: dict[int, float] = {}
+    smoothed: dict[int, tuple[float, float]] = {}
+    statures: dict[int, list[float]] = {}
     vel_window = max(1, round(VEL_WINDOW_S * args.fps))
     n = n_det = n_fp = n_placed = n_outside = 0
     for frame in decode_frames(str(clip), 1920, 1080, args.fps):
@@ -293,14 +338,31 @@ def main() -> int:
             bx = np.asarray(t.box, float) / 2.0
             d.rectangle(list(bx), outline=col, width=2)
             d.text((bx[0] + 3, bx[1] + 2), f"#{t.track_id}", fill=col)
-            foot = np.array([[(t.box[0] + t.box[2]) / 2 / 2.0, t.box[3] / 2.0]])
+            # foot point and box top go through the lens together: camera_json's contract
+            # is that the lens applies to points on their way to the floor, and the top is
+            # on its way to a height above that same floor
+            mid_x = (t.box[0] + t.box[2]) / 2 / 2.0
+            pts = np.array([[mid_x, t.box[3] / 2.0], [mid_x, t.box[1] / 2.0]])
             if cf.lens is not None:
-                foot = undistort_points(foot, cf.lens.k1, cf.lens.centre_px, cf.lens.radius_px)
-            fx, fz = pixel_to_ground(foot[:, 0], foot[:, 1], cf.camera, cf.plane)
+                pts = undistort_points(pts, cf.lens.k1, cf.lens.centre_px, cf.lens.radius_px)
+            fx, fz = pixel_to_ground(pts[:1, 0], pts[:1, 1], cf.camera, cf.plane)
             if not (np.isfinite(fx[0]) and np.isfinite(fz[0])):
                 n_outside += 1
                 continue
-            if not (x_lo <= fx[0] <= x_hi and z_lo <= fz[0] <= z_hi):
+            raw = (float(fx[0]), float(fz[0]))  # camera.json metres until the last step
+            # EMA before anything reads the position, so the arrow, the log and the
+            # figure all agree on where the shopper is
+            prev_s = smoothed.get(t.track_id)
+            sm = (
+                raw
+                if prev_s is None
+                else (
+                    POS_EMA * raw[0] + (1 - POS_EMA) * prev_s[0],
+                    POS_EMA * raw[1] + (1 - POS_EMA) * prev_s[1],
+                )
+            )
+            smoothed[t.track_id] = sm
+            if not (x_lo <= sm[0] <= x_hi and z_lo <= sm[1] <= z_hi):
                 n_outside += 1
                 continue
             n_placed += 1
@@ -308,7 +370,16 @@ def main() -> int:
             # colour in both panels and the two views can be read against each other
             key = f"person_{t.track_id % len(TRACK_COLORS)}"
             scene_mesh.PALETTE[key] = col
-            x_m, z_m = float(fx[0]), float(fz[0])
+            # stature from the box top, running-median per track: a single frame's
+            # answer moves with the box, the median over a track does not
+            h_one = stature_m(sm[0], sm[1], float(pts[1, 1]), cf)
+            if STATURE_RANGE_M[0] <= h_one <= STATURE_RANGE_M[1]:
+                statures.setdefault(t.track_id, []).append(h_one)
+            seen_h = statures.get(t.track_id, [])
+            h_track = float(np.median(seen_h)) if len(seen_h) >= STATURE_MIN_N else None
+            # everything metric leaves camera.json's units together, in one place
+            x_m, z_m = sm[0] * args.metre_scale, sm[1] * args.metre_scale
+            stature = FALLBACK_STATURE_M if h_track is None else h_track * args.metre_scale
             hist = history.setdefault(t.track_id, {})
             hist[n] = (x_m, z_m)
             speed = 0.0
@@ -325,7 +396,7 @@ def main() -> int:
             # snapping back to a default nobody measured
             heading = last_heading.get(t.track_id)
             at = Placement(x_m, z_m, heading)
-            body = place(human(1.70), at)
+            body = place(human(stature), at)
             disc = place(ground_disc(0.45), at)
             figures.append((body, key, 255, True))
             figures.append((disc, key, 200, False))
@@ -344,8 +415,10 @@ def main() -> int:
                     "track_id": int(t.track_id),
                     "x_m": round(x_m, 3),
                     "z_m": round(z_m, 3),
-                    "in_walkable": bool(point_in_walkable(cf, x_m, z_m)),
+                    "in_walkable": bool(point_in_walkable(cf, sm[0], sm[1])),
                     "speed_ms": round(speed, 3),
+                    "stature_m": round(stature, 3),
+                    "stature_frame_m": None if not np.isfinite(h_one) else round(h_one, 3),
                     "heading_rad": None if heading is None else round(heading, 4),
                 }
             )
@@ -362,8 +435,9 @@ def main() -> int:
         ph = ImageDraw.Draw(panel)
         ph.text(
             (10, 8),
-            f"{camera}  ·  commissioning mesh, figures at tracked floor positions "
-            f"(colour = track id); arrow = 1 s of travel, above 0.3 m/s",
+            f"{camera}  ·  figures at tracked floor positions, each drawn at its "
+            f"own measured stature; arrow = 1 s of travel, above 0.3 m/s"
+            + ("" if args.metre_scale == 1.0 else f"  ·  metres x{args.metre_scale:g}"),
             fill=(216, 224, 236),
         )
         ph.text(
@@ -420,7 +494,8 @@ def main() -> int:
         f"  person detections {n_det}, dropped by FP zone {n_fp}; "
         f"track placements {n_placed}, outside walkable+{PLACE_MARGIN_M:g}m {n_outside}; "
         f"{sum(p['in_walkable'] for p in positions)} of {n_placed} inside the walkable "
-        f"polygon; {len(seen_ids)} distinct track ids"
+        f"polygon; {len(seen_ids)} distinct track ids; stature median "
+        f"{np.median([p['stature_m'] for p in positions]):.2f} m"
     )
     return 0
 

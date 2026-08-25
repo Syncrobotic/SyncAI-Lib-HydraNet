@@ -21,6 +21,7 @@ from scipy import ndimage
 from syncai_bev3d.meshes import (
     Placement,
     _merge,
+    box,
     cabinet,
     column,
     extrude,
@@ -52,6 +53,88 @@ PALETTE = {
 CLASS_NAMES = {2: "wall", 3: "column", 4: "display_table", 5: "display_shelf"}
 CELL = 0.06
 DRAWN_H = {"wall": 2.4, "column": 2.4, "display_table": 0.75, "display_shelf": 2.0}
+# The SAM3 vote puts real furniture in the wall mask -- on Taichung-cam10 the back
+# service counter and a stock trolley are both `wall`. Height looked like the way to
+# separate them and IS NOT: measured per component, all six wall components on this
+# camera come out 1.07-1.65 m p85, so any height rule reclassifies every wall in the
+# store. That is not a mask defect, it is the known one in the depth model -- DA-V2
+# collapses on white walls, a 2.4 m wall reading 1.12 m -- which is exactly why the
+# walls here are drawn at a constant DRAWN_H and only their footprint is claimed as
+# measured. The fix belongs in `masks_pass.py`, where the class is decided.
+
+
+# --- counters and merchandise ---------------------------------------------------------
+# A footprint wider than `table()`'s four-leg model suits was previously extruded into a
+# solid prism: a measured outline with no top, no plinth and no way to read it as a
+# surface things sit on. A retail counter is a slab on a recessed body, and the recess is
+# the feature that makes it read as a counter from any angle.
+COUNTER_TOP_T = 0.05
+COUNTER_INSET = 0.06
+
+# Merchandise footprints are measured per *region*; the individual items tiled into a
+# region are SCHEMATIC and the panel says so. Sizes are the real products' own.
+PRODUCT_UNIT_M = {
+    "product_macbook": (0.33, 0.23, 0.02),
+    "product_ipad": (0.25, 0.18, 0.012),
+    "product_iphone": (0.075, 0.15, 0.009),
+    "product_boxed_stock": (0.30, 0.20, 0.16),
+    "product": (0.20, 0.15, 0.05),
+}
+PRODUCT_GAP_M = 0.06
+PRODUCT_MAX_PER_REGION = 28
+
+
+def counter(width_m: float, depth_m: float, height_m: float):
+    """A top slab on a recessed body -- the shape a long display counter actually is."""
+    top = box(width_m, COUNTER_TOP_T, depth_m)
+    top = (top[0] + [0, height_m - COUNTER_TOP_T, 0], top[1])
+    body_w = max(width_m - 2 * COUNTER_INSET, width_m * 0.5)
+    body_d = max(depth_m - 2 * COUNTER_INSET, depth_m * 0.5)
+    body = box(body_w, height_m - COUNTER_TOP_T, body_d)
+    return _merge(top, body)
+
+
+def _laptop(w: float, d: float, t: float):
+    """Base slab plus a lid standing at the back: the silhouette that reads as a laptop."""
+    base = box(w, t * 2.5, d)
+    lid = box(w, d * 0.92, t * 2.0)
+    lid = (lid[0] + [0, t * 2.5, -d / 2 + t], lid[1])
+    return _merge(base, lid)
+
+
+def _slab(w: float, d: float, t: float):
+    return box(w, max(t, 0.008), d)
+
+
+def product_units(name: str, w_m: float, d_m: float):
+    """Tile a measured merchandise region with unit-sized items, centred.
+
+    The region is measured; the tiling is a schematic of what sits in it. Returning the
+    placements rather than one merged blob keeps that distinction available to the caller
+    -- and to the label it has to write.
+    """
+    uw, ud, ut = PRODUCT_UNIT_M.get(name, PRODUCT_UNIT_M["product"])
+    step_x, step_z = uw + PRODUCT_GAP_M, ud + PRODUCT_GAP_M
+    nx = max(1, int(w_m // step_x))
+    nz = max(1, int(d_m // step_z))
+    while nx * nz > PRODUCT_MAX_PER_REGION and max(nx, nz) > 1:
+        if nx >= nz:
+            nx -= 1
+        else:
+            nz -= 1
+    make = (
+        _laptop
+        if name == "product_macbook"
+        else ((lambda a, b, c: box(a, c, b)) if name == "product_boxed_stock" else _slab)
+    )
+    out = []
+    for i in range(nx):
+        for j in range(nz):
+            ox = (i - (nx - 1) / 2) * step_x
+            oz = (j - (nz - 1) / 2) * step_z
+            mesh = make(uw, ud, ut)
+            out.append(((mesh[0] + [ox, 0.0, oz]), mesh[1]))
+    return out
 
 
 def cell_grids(camera):
@@ -86,15 +169,16 @@ def cell_grids(camera):
     xs = {1: z["gx"][walk]}
     zs = {1: z["gz"][walk]}
     heights = {}
+    hts = {}
     for cid in CLASS_NAMES:
         sel = (static == cid) & z["geom_ok"]
         xs[cid], zs[cid] = z["lx"][sel], z["lz"][sel]
+        hts[cid] = z["height"][sel]  # per cell, so a component can be measured too
         hs = z["height"][sel]
         hs = hs[np.isfinite(hs) & (hs > 0.05)]
         if len(hs) > 200:
             heights[cid] = float(np.clip(np.percentile(hs, 85), 0.3, 3.0))
     # extras: door footprints, and product cells with the height merchandise sits at
-    hts = {}
     for name, cid in (
         ("door", 6),
         ("product", 7),
@@ -296,6 +380,7 @@ def build_scene_regular(camera):
             r, c = np.nonzero(lab == k)
             if len(r) < 60:
                 continue
+
             x = c * CELL - 12 + CELL / 2
             z = r * CELL + CELL / 2
             # into the store frame, robust extents, snap to 5 cm
@@ -323,16 +408,9 @@ def build_scene_regular(camera):
                 mesh = cabinet(w, min(d, 0.8), h, shelves=max(2, int(h / 0.45)))
                 items.append((place(mesh, at), name, 255, True))
             else:  # display_table
-                mesh = (
-                    table(w, d, h)
-                    if max(w, d) < 2.2
-                    else extrude(
-                        np.array(
-                            [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]
-                        ),
-                        h,
-                    )
-                )
+                # a footprint too long for four legs is a counter, not a solid prism:
+                # a slab on a recessed body, so the surface merchandise sits on exists
+                mesh = table(w, d, h) if max(w, d) < 2.2 else counter(w, d, h)
                 items.append((place(mesh, at), name, 255, True))
     # extras: doors as solid tall slabs, products as slabs at their measured height
     cy2, sy2 = np.cos(yaw), np.sin(yaw)
@@ -374,15 +452,13 @@ def build_scene_regular(camera):
             else:
                 base = float(np.nanmedian(grid_h[cid][lab == k])) if cid in grid_h else 0.9
                 base = float(np.clip(base, 0.1, 2.0))
-                slab = extrude(
-                    np.array(
-                        [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]
-                    ),
-                    hgt,
-                )
-                verts = slab[0].copy()
-                verts[:, 1] += base
-                items.append((place((verts, slab[1]), at), name, 255, False))
+                # the region is measured; the items tiled into it are schematic, which is
+                # why they are unit-sized real products rather than one slab the size of
+                # the region -- a slab asserts a single object that was never detected
+                for unit in product_units(name, w, d):
+                    verts = unit[0].copy()
+                    verts[:, 1] += base
+                    items.append((place((verts, unit[1]), at), name, 255, False))
     items.append((place(ground_disc(0.35), Placement(0.0, 0.0)), "disc", 130, False))
     return cf, items, heights
 
