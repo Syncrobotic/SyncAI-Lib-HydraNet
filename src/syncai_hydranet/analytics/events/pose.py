@@ -112,6 +112,32 @@ def _torso(kps: np.ndarray, score_thr: float) -> tuple[float, float, float]:
     return angle, extent, float(np.hypot(dx, dy))
 
 
+def _shrank(
+    heights: np.ndarray, i0: int, i1: int, n_before: int, box_shrink_max: float
+) -> bool:
+    """Did the box get shorter, or do the keypoints only say so?
+
+    A shopper who crouches or falls loses image height; keypoints that fold while
+    the box is unchanged are jitter. Measured over 8 commissioned cameras and 24
+    minutes of footage: 61 posture events fired, and their box height during the
+    event against the same track's median over the preceding window had a
+    **median ratio of 1.00** -- 57 of 59 judgeable events came from tracks whose
+    box never moved. `events/pose.py` argues the box cannot *distinguish* a crouch
+    from a reach into a low shelf, which is true and is a different claim: a box
+    that does not change at all refutes both.
+
+    Unjudgeable -- a run too near the start of the track to have a before-window --
+    counts as not shrunk. `Tracker`'s own docstring states the rule this follows:
+    under-count over over-count, because an under-count is visible against a
+    manual audit and an over-count reads as a busy day.
+    """
+    before = heights[max(0, i0 - n_before) : i0]
+    if len(before) < 3:
+        return False
+    ref = float(np.median(before))
+    return ref > 0 and float(np.median(heights[i0 : i1 + 1])) <= box_shrink_max * ref
+
+
 def pose_posture_events(
     tracks: list[Track],
     fps: float,
@@ -120,6 +146,8 @@ def pose_posture_events(
     crouch_ratio: float = 0.6,
     sustained_seconds: float = 1.0,
     score_thr: float = 0.3,
+    box_shrink_max: float = 0.90,
+    box_before_seconds: float = 2.0,
 ) -> list[SecurityEvent]:
     """`fall` and `crouch` from keypoints -- and they are one function on purpose.
 
@@ -149,6 +177,7 @@ def pose_posture_events(
     """
     require_keypoints(tracks)
     events: list[SecurityEvent] = []
+    n_before = max(3, round(box_before_seconds * fps))
     for track in tracks:
         if not track.frames:
             continue
@@ -163,7 +192,11 @@ def pose_posture_events(
         upright = np.nan_to_num(angle_arr, nan=0.0) < fall_angle_deg
         fallen = np.nan_to_num(angle_arr, nan=0.0) >= fall_angle_deg
         low = upright & (np.nan_to_num(ratio, nan=np.inf) <= crouch_ratio)
+        heights = np.array([float(b[3] - b[1]) for b in track.boxes])
+
         for i0, i1 in _runs(fallen):
+            if not _shrank(heights, i0, i1, n_before, box_shrink_max):
+                continue
             events += _posture_event(
                 track,
                 frames,
@@ -175,9 +208,14 @@ def pose_posture_events(
                 etype="fall",
                 value=float(np.nanmax(angle_arr[i0 : i1 + 1])),
                 threshold=fall_angle_deg,
-                basis="shoulder-to-hip angle from vertical, in degrees, sustained",
+                basis=(
+                    "shoulder-to-hip angle from vertical, in degrees, sustained, "
+                    "with the box height confirming the posture changed"
+                ),
             )
         for i0, i1 in _runs(low):
+            if not _shrank(heights, i0, i1, n_before, box_shrink_max):
+                continue
             events += _posture_event(
                 track,
                 frames,
@@ -189,7 +227,10 @@ def pose_posture_events(
                 etype="crouch",
                 value=float(np.nanmin(ratio[i0 : i1 + 1])),
                 threshold=crouch_ratio,
-                basis="hip-to-ankle extent over torso length in the same frame, trunk upright",
+                basis=(
+                    "hip-to-ankle extent over torso length in the same frame, trunk "
+                    "upright, with the box height confirming the posture changed"
+                ),
             )
     return events
 

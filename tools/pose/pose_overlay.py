@@ -15,6 +15,7 @@ Usage:
 """
 
 import argparse
+import json
 import subprocess
 import time
 from pathlib import Path
@@ -25,6 +26,7 @@ from PIL import Image, ImageDraw
 
 from syncai_hydranet.analytics import Tracker
 from syncai_hydranet.analytics.events import pose_posture_events
+from syncai_hydranet.analytics.events.pose import _torso
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.models.hydranet import build_model
@@ -83,6 +85,13 @@ def main() -> int:
     )
     ap.add_argument("--video", action="store_true")
     ap.add_argument("--tag", default="pose")
+    ap.add_argument(
+        "--events-json",
+        default=None,
+        help="write the events, and the per-frame box height and keypoint "
+        "geometry behind each one, as JSON. A printed repr answers 'did it "
+        "fire'; measuring whether it should have fired needs the numbers",
+    )
     ap.add_argument(
         "--events",
         action="store_true",
@@ -206,6 +215,54 @@ def main() -> int:
             print("no fall or crouch cleared its sustained threshold on this clip")
         for e in events:
             print(f"  {e}")
+        if args.events_json:
+            by_id = {t.track_id: t for t in tracks}
+            payload = []
+            for e in events:
+                rows = []
+                for tid in e.track_ids:
+                    t = by_id.get(tid)
+                    if t is None:
+                        continue
+                    for f, box, kp in zip(t.frames, t.boxes, t.keypoints, strict=True):
+                        ang, ext, torso = _torso(kp, 0.3)
+                        rows.append(
+                            {
+                                "frame": int(f),
+                                "track_id": int(tid),
+                                "box_h": round(float(box[3] - box[1]), 1),
+                                "torso_angle_deg": None
+                                if not np.isfinite(ang)
+                                else round(ang, 1),
+                                "hip_ankle_over_torso": (
+                                    None
+                                    if not (np.isfinite(ext) and torso > 0)
+                                    else round(float(ext / torso), 3)
+                                ),
+                                "in_event": bool(e.frame_start <= f <= e.frame_end),
+                            }
+                        )
+                payload.append(
+                    {
+                        "type": e.type,
+                        "camera": e.camera,
+                        "clip": clip.name,
+                        "frame_start": e.frame_start,
+                        "frame_end": e.frame_end,
+                        "track_ids": list(e.track_ids),
+                        "value": e.value,
+                        "threshold": e.threshold,
+                        "track_rows": rows,
+                    }
+                )
+            Path(args.events_json).write_text(
+                json.dumps(
+                    {"camera": args.camera, "clip": clip.name, "frames": n, "events": payload},
+                    indent=2,
+                )
+                + "\n"
+            )
+            print(f"wrote {args.events_json}")
     return 0
 
 

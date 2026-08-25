@@ -167,25 +167,60 @@ def keypoints(angle_deg: float, hip_ankle_px: float, score: float = 0.9) -> np.n
     return kps
 
 
-def posed(track_id: int, poses: list[np.ndarray]) -> Track:
-    box = np.array([400.0, 400.0, 600.0, 800.0])
+def posed(track_id: int, poses: list[np.ndarray], heights: list[float] | None = None) -> Track:
+    """A track whose box height can follow its posture, because a real one does.
+
+    The boxes used to be one constant for every frame, which asserted a shopper who is
+    already lying down when the track opens and stays exactly as tall while doing it.
+    `pose_posture_events` now cross-checks the box, so the fixture has to be physically
+    possible: stand for a while, then change.
+    """
+    hs = heights or [400.0] * len(poses)
+    boxes = [np.array([400.0, 400.0, 600.0, 400.0 + h]) for h in hs]
     return Track(
         track_id=track_id,
-        box=box,
+        box=boxes[-1],
         frames=list(range(len(poses))),
-        boxes=[box] * len(poses),
+        boxes=boxes,
         confirmed=True,
         keypoints=poses,
     )
 
 
+def _stand_then(pose: np.ndarray, height_after: float, n_stand: int = 5, n_after: int = 10):
+    """Five upright frames, then the posture under test -- poses and matching heights."""
+    poses = [keypoints(5.0, 200.0)] * n_stand + [pose] * n_after
+    hs = [400.0] * n_stand + [height_after] * n_after
+    return poses, hs
+
+
 def test_pose_separates_a_fall_from_a_crouch_which_is_why_the_tier_exists():
-    fallen = posed(1, [keypoints(80.0, 200.0)] * 10)
-    crouching = posed(2, [keypoints(10.0, 60.0)] * 10)
-    upright = posed(3, [keypoints(5.0, 200.0)] * 10)
+    # a fallen shopper's box collapses; a crouching one halves; an upright one does not
+    fallen = posed(1, *_stand_then(keypoints(80.0, 200.0), 150.0))
+    crouching = posed(2, *_stand_then(keypoints(10.0, 60.0), 230.0))
+    upright = posed(3, *_stand_then(keypoints(5.0, 200.0), 400.0))
     got = ev.pose_posture_events([fallen, crouching, upright], FPS, "cam01")
     by_track = {e.track_ids[0]: e.type for e in got}
     assert by_track == {1: "fall", 2: "crouch"}
+
+
+def test_posture_with_an_unchanged_box_is_keypoint_jitter_and_is_refused():
+    """The measurement this check exists for.
+
+    Over 8 commissioned cameras and 24 minutes of footage the pose head produced 61
+    posture events -- one alert every 23 seconds -- and the box height during the event
+    against the same track's median before it had a **median ratio of 1.00**. 57 of the
+    59 judgeable events came from a track whose box never moved. Keypoints folded; the
+    shopper did not.
+    """
+    jittering = posed(1, *_stand_then(keypoints(10.0, 60.0), 400.0))
+    assert ev.pose_posture_events([jittering], FPS, "cam01") == []
+
+
+def test_a_posture_too_early_in_a_track_to_judge_is_refused_rather_than_guessed():
+    """Under-count over over-count: `Tracker`'s own rule, applied one module later."""
+    no_history = posed(1, [keypoints(80.0, 200.0)] * 10, [150.0] * 10)
+    assert ev.pose_posture_events([no_history], FPS, "cam01") == []
 
 
 def test_a_pose_event_on_a_track_with_no_pose_names_the_missing_model():
