@@ -1,0 +1,221 @@
+# pose02 -- pose01 continued to 120 epochs. pose01's keypoint agreement was still
+# rising when it stopped (PCK@0.2h E15 0.840 -> E29 0.882 -> E60 0.898), so the
+# run ended before the curve did.
+#
+# `primary_metric` is left on terrain deliberately: this run has no pose validation
+# metric to select on either (open question 9), and the gate reads `last.pt`, which
+# no selection rule touches. Changing it here would only move which useless best.pt
+# gets written.
+#
+# `output_dir` is fixed: pose01 inherited the security run's directory and the
+# trainer had to append a timestamp to avoid overwriting it, leaving the pose run
+# in a directory named for a different model.
+# The pose pilot: the xl detection recipe, plus the third head (PLAN 6 step 3).
+#
+# Identical to hydranet_retail_security_b03_cw_xl in trunk, terrain and detection --
+# the deltas are exactly two: the pose_p3 head (17 keypoint heatmaps at stride 8,
+# box-conditioned decode; models/heads/pose.py) and the site_pose dataset (ViTPose
+# teacher keypoints over the Gold boxes, tools/pose/vitpose_teacher.py, 13,930 train /
+# 8,479 val images). Trained from ImageNet like the xl run: the trainer's --load is
+# strict about head sets, and a warm start that silently dropped a head would be worse
+# than the epochs it saves.
+#
+# num_classes on the pose head is the keypoint count -- the schema requires the field
+# and 17 is the honest value for it. The head must be NAMED "pose": the collate keeps
+# that key un-stacked (variable persons per image), and the dataset addresses it by
+# that name.
+seed: 42
+model:
+  backbone:
+    name: regnet_x_800mf
+    pretrained: true
+    frozen_stages: 0
+  neck:
+    name: bifpn
+    out_channels: 96
+    num_repeats: 2
+    num_levels: 5
+  heads:
+    terrain:
+      type: semantic_fpn
+      num_classes: 6
+      in_levels:
+      - 0
+      - 1
+      - 2
+      channels: 64
+      dropout: 0.1
+      loss:
+        ce_weight: 1.0
+        dice_weight: 1.5
+        ignore_index: 255
+        class_weights:
+        - 0.0
+        - 0.54
+        - 0.66
+        - 1.6
+        - 0.46
+        - 1.73
+    detection:
+      type: fcos
+      num_classes: 4
+      in_levels:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      channels: 96
+      num_convs: 4
+      strides:
+      - 8
+      - 16
+      - 32
+      - 64
+      - 128
+      loss:
+        cls_weight: 1.0
+        reg_weight: 1.0
+        centerness_weight: 1.0
+      classes:
+      - person
+      - bag
+      - boxed_stock
+      - device
+    pose:
+      type: pose_p3
+      num_classes: 17
+      channels: 96
+      num_convs: 3
+      sigma_cells: 1.5
+      teacher_min_conf: 0.3
+  loss_balancing: uncertainty
+  fixed_weights:
+    traversability: 1.0
+    terrain: 1.0
+    detection: 1.0
+    pose: 1.0
+data:
+  input_size:
+  - 640
+  - 1120
+  workers: 8
+  augment:
+    scale_range:
+    - 0.75
+    - 1.5
+    flip_p: 0.5
+    brightness: 0.3
+    contrast: 0.3
+    saturation: 0.3
+  letterbox: true
+  terrain_classes:
+  - void
+  - floor
+  - wall
+  - column
+  - fixture
+  - person
+  datasets:
+  - name: ade20k
+    type: seg_folder
+    root: datasets/ADE20K
+    split_train: train
+    split_val: val
+    split_test: test
+    label_map: ade20k_retail_surfaces
+    sample_ratio: 0.15
+    supervises:
+    - terrain
+  - name: site_seg
+    type: seg_folder
+    root: datasets/retail_objects_batch02
+    split_train: train
+    split_val: val
+    split_test: test
+    label_map: retail_surfaces_from_objects
+    sample_ratio: 2.0
+    supervises:
+    - terrain
+  - name: site_seg03
+    type: seg_folder
+    root: datasets/retail_objects_batch03
+    split_train: train
+    split_val: val
+    split_test: test
+    label_map: retail_surfaces_from_objects
+    sample_ratio: 2.0
+    supervises:
+    - terrain
+  - name: site_boxes
+    type: coco
+    root: datasets/retail_objects_batch02
+    split_train: train
+    split_val: val
+    split_test: test
+    det_vocab: retail_security
+    sample_ratio: 3.0
+    supervises:
+    - detection
+  - name: site_boxes03
+    type: coco
+    root: datasets/retail_objects_batch03
+    split_train: train
+    split_val: val
+    split_test: test
+    det_vocab: retail_security
+    sample_ratio: 1.0
+    supervises:
+    - detection
+  - name: site_pose
+    type: pose_keypoints
+    root: datasets/site30k_v1
+    split_train: train
+    split_val: val
+    split_test: test
+    sample_ratio: 0.3
+    supervises:
+    - pose
+  - name: coco_person
+    type: coco
+    root: datasets/coco
+    split_train: train2017
+    split_val: val2017
+    classes:
+    - person
+    - backpack
+    - handbag
+    - suitcase
+    det_vocab: retail_security
+    sample_ratio: 0.05
+    supervises:
+    - detection
+train:
+  epochs: 120
+  batch_size: 32
+  optimizer: adamw
+  lr: 0.0004
+  backbone_lr_mult: 0.1
+  weight_decay: 0.05
+  warmup_iters: 1000
+  scheduler: cosine
+  amp: true
+  amp_dtype: bfloat16
+  grad_clip: 10.0
+  ema: true
+  ema_decay: 0.9998
+  log_interval: 50
+  val_interval: 1
+  primary_metric: terrain_mIoU/site_seg03
+  channels_last: true
+  early_stop_patience: 0
+  detection_val_interval: 5
+export:
+  opset: 17
+  # No `input_size` override on purpose: the export inherits `data.input_size`.
+  # It carried 512x640 from an ancestor config until 2026-08-24 -- the exact canvas
+  # this file's header argues is unusable (8.0-12.5% of boxes under FCOS's stride-8
+  # cell, "not hard to learn, unlearnable"). Training at 640x1120 and exporting at
+  # 512x640 puts every deployed object at 0.57x the scale the weights learned.
+experiment: hydranet_retail_security_b03_cw_xl
+output_dir: runs/hydranet_retail_pose02
