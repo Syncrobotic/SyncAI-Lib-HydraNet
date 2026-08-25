@@ -8,15 +8,31 @@ metres in the same picture that shows the furniture they walk between. The camer
 false-positive polygons are applied to the detections before tracking, which is those
 polygons doing their production job for the first time.
 
+A figure standing behind a 2 m shelf is *correctly* invisible from any one fixed
+viewpoint -- three eye positions were rendered and the far shopper hid behind the same
+shelf in all three. So each figure is drawn twice: once in depth order, and once as a
+translucent x-ray pass over the top. Occlusion still reads, but a tracked person is
+never absent from the panel that exists to show tracked people.
+
+Known limit of the fixed 3/4 view, and it is perspective rather than a bug: a floor
+position *behind* a waist-high counter projects onto that counter's top face, and the
+figure is genuinely nearer the eye than those faces, so it reads as standing on the
+counter. Rendered at ghost alpha 0 it reads the same way. Disambiguating it wants
+per-pixel depth or a drop-line to the floor; `<camera>.demo_tracks.json` carries the
+metre position of every figure meanwhile, which is what settles such a question.
+
 Usage:
   uv run python tools/commissioning/demo_video.py <camera> [--clip PATH]
-      [--frames 900] [--fps 5]
+      [--frames 900] [--fps 5] [--checkpoint last.pt] [--score-thr 0.35]
 
 Writes assets/demo_<camera>.mp4 (gitignored -- customer footage) and three sample
-frames for the frame-check.
+frames for the frame-check. The mp4 is written to `.part` and renamed on success, so a
+killed render leaves no file rather than a truncated one that ffprobe cannot open.
 """
 
 import argparse
+import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -28,7 +44,8 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, str(Path(__file__).parent))
 import scene_mesh
 
-from syncai_bev3d.meshes import Placement, human, place
+from syncai_bev3d.meshes import Placement, ground_disc, human, place
+from syncai_bev3d.shading import draw_scene
 from syncai_hydranet.analytics.tracker import Tracker
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
@@ -44,15 +61,92 @@ TRACK_COLORS = [
     (255, 99, 71), (65, 180, 255), (255, 200, 60), (120, 220, 120),
     (220, 120, 255), (255, 150, 100), (100, 230, 210), (250, 100, 160),
 ]  # fmt: skip
+PLACE_MARGIN_M = 2.0  # beyond the commissioned walkable zone a floor position is a guess
+
+
+def _point_in_poly(px: float, py: float, poly) -> bool:
+    """Ray-cast containment. Shared so pixel zones and metre zones agree on `inside`."""
+    inside = False
+    j = len(poly) - 1
+    for i, (xi, yi) in enumerate(poly):
+        xj, yj = poly[j]
+        if (yi > py) != (yj > py) and px < (xj - xi) * (py - yi) / (yj - yi) + xi:
+            inside = not inside
+        j = i
+    return inside
+
+
+def point_in_walkable(cf: CameraFile, x_m: float, z_m: float) -> bool:
+    """Is this floor position inside a zone the commissioning actually walked?
+
+    Recorded per placement rather than enforced: a tracked shopper standing outside the
+    walkable polygon is evidence about the polygon, not a reason to hide the shopper.
+    """
+    return any(_point_in_poly(x_m, z_m, z.points_m) for z in cf.zones if z.kind == "walkable")
 
 
 def in_fp_zone(cf: CameraFile, cx: float, cy: float) -> bool:
-    for poly in cf.false_positive_polygons_px:
-        xs = [p[0] for p in poly]
-        ys = [p[1] for p in poly]
-        if min(xs) <= cx <= max(xs) and min(ys) <= cy <= max(ys):
-            return True
-    return False
+    """Ray-cast point-in-polygon, not the polygon's bounding box.
+
+    Today's polygons are axis-aligned 64 px grid cells, for which a bbox test is exactly
+    equivalent -- so this changes no current result. It is here because the zone tool
+    will draw arbitrary polygons, and a bbox test would then quietly veto detections
+    outside the shape the operator drew.
+    """
+    return any(_point_in_poly(cx, cy, poly) for poly in cf.false_positive_polygons_px)
+
+
+def walkable_bounds(cf: CameraFile) -> tuple[float, float, float, float]:
+    """(x_min, x_max, z_min, z_max) of the commissioned walkable zone, plus a margin.
+
+    Replaces a hard-coded `0 < z < 14, |x| < 12`, which was a guess wide enough to
+    admit positions this camera was never commissioned for. On Taichung-cam10 the
+    walkable zone is x[-5.8, 3.7] z[0.55, 10.3]; the old constants dropped nothing at
+    all over 900 frames, so this tightens a gate rather than opening one.
+    """
+    pts = [np.asarray(z.points_m, float) for z in cf.zones if z.kind == "walkable"]
+    if not pts:
+        return (-12.0, 12.0, 0.0, 14.0)
+    p = np.vstack(pts)
+    m = PLACE_MARGIN_M
+    return (
+        float(p[:, 0].min()) - m,
+        float(p[:, 0].max()) + m,
+        max(0.0, float(p[:, 1].min()) - m),
+        float(p[:, 1].max()) + m,
+    )
+
+
+def content_crop(view, meshes, img_size, aspect, pad=26.0):
+    """Fixed crop onto the projected scene, so the panel is room and not dead space.
+
+    Computed once from the static scene plus the walkable zone -- the region a figure
+    can legally occupy -- and then reused for every frame, because a crop recomputed
+    per frame would make the room swim behind the people.
+    """
+    us, vs = [], []
+    for verts in meshes:
+        uv, depth = view.project_points(np.asarray(verts, float))
+        keep = depth > 0
+        if keep.any():
+            us.append(uv[keep, 0])
+            vs.append(uv[keep, 1])
+    if not us:
+        return (0, 0, img_size[0], img_size[1])
+    u, v = np.concatenate(us), np.concatenate(vs)
+    x0, x1 = float(u.min()) - pad, float(u.max()) + pad
+    y0, y1 = float(v.min()) - pad, float(v.max()) + pad
+    w, h = x1 - x0, y1 - y0
+    if w / h < aspect:  # too tall: widen
+        need = h * aspect
+        cx = (x0 + x1) / 2
+        x0, x1 = cx - need / 2, cx + need / 2
+    else:  # too wide: heighten
+        need = w / aspect
+        cy = (y0 + y1) / 2
+        y0, y1 = cy - need / 2, cy + need / 2
+    w_px, h_px = img_size
+    return (max(0, int(x0)), max(0, int(y0)), min(w_px, int(x1)), min(h_px, int(y1)))
 
 
 def main() -> int:
@@ -83,6 +177,7 @@ def main() -> int:
     model.load_state_dict(select_weights(load_checkpoint(RUN / args.checkpoint), "ema"))
     size = cfg["data"]["input_size"]
     person_label = list(cfg["model"]["heads"]["detection"]["classes"]).index("person")
+    x_lo, x_hi, z_lo, z_hi = walkable_bounds(cf)
 
     # the static scene, built once; the view frozen so the room does not swim
     scene_mesh.SS = 1
@@ -95,20 +190,39 @@ def main() -> int:
     cx_m, cz_m = float(np.median(xs)), float(np.median(zs))
     eye = [cx_m + 7.5, 5.6, cz_m - 6.5]
     target = [cx_m, 0.6, cz_m]
+    # what the crop must contain: the furniture and every floor position a figure may
+    # legally take, so a shopper at the edge of the zone is never cropped out of frame
+    walk = [np.asarray(z.points_m, float) for z in cf.zones if z.kind == "walkable"]
+    zone_xz = np.vstack(walk) if walk else np.zeros((0, 2))
+    crop_meshes = [m[0] for m, *_ in items]
+    if len(zone_xz):
+        crop_meshes.append(np.stack([zone_xz[:, 0], np.zeros(len(zone_xz)), zone_xz[:, 1]], 1))
 
     panel_w, panel_h = 890, 540
     out_w, out_h = 960 + 8 + panel_w, 540
     out_path = ROOT / f"assets/demo_{camera}.mp4"
+    part_path = out_path.with_suffix(".mp4.part")
     enc = subprocess.Popen(
         ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
          "-s", f"{out_w}x{out_h}", "-framerate", str(args.fps), "-i", "-",
-         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "23", str(out_path)],
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "23",
+         "-f", "mp4", str(part_path)],
         stdin=subprocess.PIPE,
     )  # fmt: skip
 
     tracker = Tracker()
-    checks = {0, args.frames // 2, args.frames - 1}
-    n = 0
+    # frame 0 can never show a track -- the tracker confirms at 3 hits -- so the
+    # frame-check samples land where there is something to check
+    checks = {args.frames // 8, args.frames // 2, args.frames - 1}
+    tmp = ROOT / f"assets/_demo_panel_{camera}_{os.getpid()}.png"
+    crop = None
+    header = "  ".join(
+        f"{scene_mesh.CLASS_NAMES[k].replace('display_', '')} {v:.2f}m"
+        for k, v in sorted(heights.items())
+    )
+    seen_ids: set[int] = set()
+    positions: list[dict] = []
+    n = n_det = n_fp = n_placed = n_outside = 0
     for frame in decode_frames(str(clip), 1920, 1080, args.fps):
         if n >= args.frames:
             break
@@ -124,19 +238,22 @@ def main() -> int:
             x0, y0, cw, _ch = region
             b = (b - np.array([x0, y0, x0, y0])) * (1920.0 / cw)
             b = b[lab == person_label]
+            n_det += len(b)
             keep = [
                 i
                 for i, bb in enumerate(b)
                 if not in_fp_zone(cf, (bb[0] + bb[2]) / 4, (bb[1] + bb[3]) / 4)
             ]
+            n_fp += len(b) - len(keep)
             boxes_src = b[keep]
         tracks = [t for t in tracker.update(boxes_src, n) if t.hits >= 3]
 
         # left: source view with boxes and ids
-        view = img.resize((960, 540))
-        d = ImageDraw.Draw(view)
-        figures = []
+        view_img = img.resize((960, 540))
+        d = ImageDraw.Draw(view_img)
+        figures, ghosts = [], []
         for t in tracks:
+            seen_ids.add(t.track_id)
             col = TRACK_COLORS[t.track_id % len(TRACK_COLORS)]
             bx = np.asarray(t.box, float) / 2.0
             d.rectangle(list(bx), outline=col, width=2)
@@ -145,31 +262,67 @@ def main() -> int:
             if cf.lens is not None:
                 foot = undistort_points(foot, cf.lens.k1, cf.lens.centre_px, cf.lens.radius_px)
             fx, fz = pixel_to_ground(foot[:, 0], foot[:, 1], cf.camera, cf.plane)
-            if np.isfinite(fx[0]) and 0 < fz[0] < 14 and abs(fx[0]) < 12:
-                figures.append(
-                    (
-                        place(human(1.70), Placement(float(fx[0]), float(fz[0]))),
-                        "person",
-                        255,
-                        True,
-                    )
-                )
+            if not (np.isfinite(fx[0]) and np.isfinite(fz[0])):
+                n_outside += 1
+                continue
+            if not (x_lo <= fx[0] <= x_hi and z_lo <= fz[0] <= z_hi):
+                n_outside += 1
+                continue
+            n_placed += 1
+            # the figure carries its track's colour, so the same shopper is the same
+            # colour in both panels and the two views can be read against each other
+            key = f"person_{t.track_id % len(TRACK_COLORS)}"
+            scene_mesh.PALETTE[key] = col
+            at = Placement(float(fx[0]), float(fz[0]))
+            body = place(human(1.70), at)
+            disc = place(ground_disc(0.45), at)
+            figures.append((body, key, 255, True))
+            figures.append((disc, key, 200, False))
+            # faint on purpose: at alpha 105 a shopper standing *behind* the display
+            # counter read as standing *on* it. A ghost has to look like a ghost.
+            ghosts.append((body, col, 62))
+            ghosts.append((disc, col, 80))  # the disc is the position; never hide it
+            positions.append(
+                {
+                    "frame": n,
+                    "track_id": int(t.track_id),
+                    "x_m": round(float(fx[0]), 3),
+                    "z_m": round(float(fz[0]), 3),
+                    "in_walkable": bool(point_in_walkable(cf, float(fx[0]), float(fz[0]))),
+                }
+            )
 
-        scene_mesh.PALETTE.setdefault("person", (168, 208, 250))
-        tmp = ROOT / "assets/_demo_panel.png"
-        scene_mesh.render(camera, items + figures, heights, tmp, eye=eye, target=target)
-        panel = Image.open(tmp).resize((panel_w, panel_h))
+        view3d = scene_mesh.render(
+            camera, items + figures, heights, tmp, eye=eye, target=target
+        )
+        pan = Image.open(tmp).convert("RGB")
+        if ghosts:  # x-ray pass: an occluded shopper still reads, over the furniture
+            draw_scene(ImageDraw.Draw(pan, "RGBA"), view3d, ghosts, bg=scene_mesh.BG, fog=False)
+        if crop is None:
+            crop = content_crop(view3d, crop_meshes, pan.size, panel_w / panel_h)
+        panel = pan.crop(crop).resize((panel_w, panel_h))
+        ph = ImageDraw.Draw(panel)
+        ph.text(
+            (10, 8),
+            f"{camera}  ·  commissioning mesh, figures at tracked floor "
+            f"positions (colour = track id)",
+            fill=(216, 224, 236),
+        )
+        ph.text(
+            (10, 26),
+            f"measured p85: {header}  |  walls translucent (drawn 2.4 m)",
+            fill=(170, 182, 200),
+        )
 
         composite = Image.new("RGB", (out_w, out_h), (7, 9, 13))
-        composite.paste(view, (0, 0))
+        composite.paste(view_img, (0, 0))
         composite.paste(panel, (968, 0))
         dd = ImageDraw.Draw(composite)
         dd.rectangle([0, 524, 960, 540], fill=(0, 0, 0))
         dd.text(
             (6, 526),
             f"{camera}  detections+tracks (FP zones applied)  {args.checkpoint} "
-            f"thr={args.score_thr}  |  right: commissioning mesh scene, figures at "
-            f"tracked floor positions  frame {n}",
+            f"thr={args.score_thr}  |  frame {n}  tracks {len(tracks)}",
             fill=(255, 255, 255),
         )
         enc.stdin.write(np.asarray(composite, np.uint8).tobytes())
@@ -180,9 +333,37 @@ def main() -> int:
         n += 1
 
     enc.stdin.close()
-    enc.wait()
-    (ROOT / "assets/_demo_panel.png").unlink(missing_ok=True)
+    rc = enc.wait()
+    tmp.unlink(missing_ok=True)
+    if rc != 0:
+        print(f"ffmpeg exited {rc}; leaving {part_path}", file=sys.stderr)
+        return 1
+    part_path.replace(out_path)
+    # the track log makes the right-hand panel checkable instead of merely convincing:
+    # every figure in the video has a frame, an id and a floor position in metres here
+    log_path = ROOT / f"runs/commission01/{camera}.demo_tracks.json"
+    log_path.write_text(
+        json.dumps(
+            {
+                "camera": camera,
+                "clip": clip.name,
+                "checkpoint": args.checkpoint,
+                "score_thr": args.score_thr,
+                "fps": args.fps,
+                "frames": n,
+                "positions": positions,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
     print(f"wrote {out_path} ({n} frames @ {args.fps} fps)")
+    print(
+        f"  person detections {n_det}, dropped by FP zone {n_fp}; "
+        f"track placements {n_placed}, outside walkable+{PLACE_MARGIN_M:g}m {n_outside}; "
+        f"{sum(p['in_walkable'] for p in positions)} of {n_placed} inside the walkable "
+        f"polygon; {len(seen_ids)} distinct track ids"
+    )
     return 0
 
 
