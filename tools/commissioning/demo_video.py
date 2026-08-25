@@ -32,6 +32,7 @@ killed render leaves no file rather than a truncated one that ffprobe cannot ope
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
@@ -44,7 +45,7 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, str(Path(__file__).parent))
 import scene_mesh
 
-from syncai_bev3d.meshes import Placement, ground_disc, human, place
+from syncai_bev3d.meshes import Placement, extrude, ground_disc, human, place
 from syncai_bev3d.shading import draw_scene
 from syncai_hydranet.analytics.tracker import Tracker
 from syncai_hydranet.config import load_config
@@ -62,6 +63,36 @@ TRACK_COLORS = [
     (220, 120, 255), (255, 150, 100), (100, 230, 210), (250, 100, 160),
 ]  # fmt: skip
 PLACE_MARGIN_M = 2.0  # beyond the commissioned walkable zone a floor position is a guess
+# Velocity is measured over a WINDOW, not between adjacent frames, and only asserted
+# above a floor. Both numbers come from this camera's own tracks (1,607 steps):
+# frame-to-frame heading below 0.1 m/s turns a mean of 92.5 deg per step with 51% of
+# turns past 90 -- that is uniform noise, an arrow drawn from it points nowhere. A
+# 1.0 s window brings the median turn to 16.9 deg; 2.0 s gives 16.3 and only adds lag.
+# The median shopper here moves 0.22 m/s, so most of the time there is no vector to
+# draw and the honest thing is to draw none.
+VEL_WINDOW_S = 1.0
+VEL_FLOOR_MS = 0.3
+VEL_SECONDS_SHOWN = 1.0  # arrow length IS one second of travel, so it reads in metres
+
+
+def velocity_arrow(length_m: float, width_m: float = 0.16, start_m: float = 0.45):
+    """Floor arrow pointing +z, starting clear of the figure -- `human()` faces +z too.
+
+    Returned as a footprint for `extrude`, because that is how every other object in
+    this scene is built and an arrow that is a decal on the floor cannot be mistaken
+    for a measured piece of furniture. `start_m` is the position disc's radius: an
+    arrow drawn from the figure's own feet is under the figure and invisible from the
+    one fixed viewpoint, which is the mistake this argument exists to correct.
+    """
+    length = max(float(length_m), 0.30)
+    head = min(0.26, length * 0.5)
+    tip = start_m + length
+    shoulder = tip - head
+    w, hw = width_m / 2, width_m
+    return [
+        (-w, start_m), (w, start_m), (w, shoulder), (hw, shoulder),
+        (0.0, tip), (-hw, shoulder), (-w, shoulder),
+    ]  # fmt: skip
 
 
 def _point_in_poly(px: float, py: float, poly) -> bool:
@@ -222,6 +253,9 @@ def main() -> int:
     )
     seen_ids: set[int] = set()
     positions: list[dict] = []
+    history: dict[int, dict[int, tuple[float, float]]] = {}
+    last_heading: dict[int, float] = {}
+    vel_window = max(1, round(VEL_WINDOW_S * args.fps))
     n = n_det = n_fp = n_placed = n_outside = 0
     for frame in decode_frames(str(clip), 1920, 1080, args.fps):
         if n >= args.frames:
@@ -252,6 +286,7 @@ def main() -> int:
         view_img = img.resize((960, 540))
         d = ImageDraw.Draw(view_img)
         figures, ghosts = [], []
+        moving = 0
         for t in tracks:
             seen_ids.add(t.track_id)
             col = TRACK_COLORS[t.track_id % len(TRACK_COLORS)]
@@ -273,7 +308,23 @@ def main() -> int:
             # colour in both panels and the two views can be read against each other
             key = f"person_{t.track_id % len(TRACK_COLORS)}"
             scene_mesh.PALETTE[key] = col
-            at = Placement(float(fx[0]), float(fz[0]))
+            x_m, z_m = float(fx[0]), float(fz[0])
+            hist = history.setdefault(t.track_id, {})
+            hist[n] = (x_m, z_m)
+            speed = 0.0
+            prev = hist.get(n - vel_window)
+            if prev is not None:
+                dx, dz = x_m - prev[0], z_m - prev[1]
+                speed = math.hypot(dx, dz) / (vel_window / args.fps)
+                if speed >= VEL_FLOOR_MS:
+                    # the figure's own facing is +z and place() sends +z to (sin, cos),
+                    # so the heading that aims it along (dx, dz) is atan2(dx, dz) --
+                    # not the atan2(dz, dx) of the usual maths convention
+                    last_heading[t.track_id] = math.atan2(dx, dz)
+            # a stopped shopper keeps the facing it was last measured at, rather than
+            # snapping back to a default nobody measured
+            heading = last_heading.get(t.track_id)
+            at = Placement(x_m, z_m, heading)
             body = place(human(1.70), at)
             disc = place(ground_disc(0.45), at)
             figures.append((body, key, 255, True))
@@ -282,13 +333,20 @@ def main() -> int:
             # counter read as standing *on* it. A ghost has to look like a ghost.
             ghosts.append((body, col, 62))
             ghosts.append((disc, col, 80))  # the disc is the position; never hide it
+            if speed >= VEL_FLOOR_MS and heading is not None:
+                arrow = place(extrude(velocity_arrow(speed * VEL_SECONDS_SHOWN), 0.02), at)
+                figures.append((arrow, key, 235, False))
+                ghosts.append((arrow, col, 150))
+                moving += 1
             positions.append(
                 {
                     "frame": n,
                     "track_id": int(t.track_id),
-                    "x_m": round(float(fx[0]), 3),
-                    "z_m": round(float(fz[0]), 3),
-                    "in_walkable": bool(point_in_walkable(cf, float(fx[0]), float(fz[0]))),
+                    "x_m": round(x_m, 3),
+                    "z_m": round(z_m, 3),
+                    "in_walkable": bool(point_in_walkable(cf, x_m, z_m)),
+                    "speed_ms": round(speed, 3),
+                    "heading_rad": None if heading is None else round(heading, 4),
                 }
             )
 
@@ -304,8 +362,8 @@ def main() -> int:
         ph = ImageDraw.Draw(panel)
         ph.text(
             (10, 8),
-            f"{camera}  ·  commissioning mesh, figures at tracked floor "
-            f"positions (colour = track id)",
+            f"{camera}  ·  commissioning mesh, figures at tracked floor positions "
+            f"(colour = track id); arrow = 1 s of travel, above 0.3 m/s",
             fill=(216, 224, 236),
         )
         ph.text(
@@ -322,7 +380,7 @@ def main() -> int:
         dd.text(
             (6, 526),
             f"{camera}  detections+tracks (FP zones applied)  {args.checkpoint} "
-            f"thr={args.score_thr}  |  frame {n}  tracks {len(tracks)}",
+            f"thr={args.score_thr}  |  frame {n}  tracks {len(tracks)}  moving {moving}",
             fill=(255, 255, 255),
         )
         enc.stdin.write(np.asarray(composite, np.uint8).tobytes())
