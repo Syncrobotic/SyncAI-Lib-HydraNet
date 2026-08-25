@@ -65,16 +65,16 @@ for candidate in (HERE.parent / "src", HERE / "src"):
         sys.path.insert(0, str(candidate))
 sys.path.insert(0, str(HERE))
 
-from syncai_hydranet.data.teachers.boxes import (  # noqa: E402
+from syncai_bev3d.teachers.boxes import (  # noqa: E402
     boxes_from_masks,
     drop_static,
 )
-from syncai_hydranet.data.teachers.photometry import (  # noqa: E402
+from syncai_bev3d.teachers.photometry import (  # noqa: E402
     MIN_CHROMA,
     MIN_LUMA,
     is_daylight,
 )
-from syncai_hydranet.data.teachers.sam3 import load_sam3, segment  # noqa: E402
+from syncai_bev3d.teachers.sam3 import load_sam3, segment  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
 
 
@@ -88,7 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--frames", type=int, default=12, help="frames sampled per clip")
     ap.add_argument("--min-score", type=float, default=0.50)
     # Daylight gate. Both are properties of the pixels, and both defaults are measured
-    # over all 48 cameras -- `data/teachers/photometry.py` carries the distribution and
+    # over all 48 cameras -- `syncai_bev3d/teachers/photometry.py` carries the distribution and
     # why 1.0 sits where it does.
     ap.add_argument("--min-luma", type=float, default=MIN_LUMA)
     ap.add_argument("--min-chroma", type=float, default=MIN_CHROMA)

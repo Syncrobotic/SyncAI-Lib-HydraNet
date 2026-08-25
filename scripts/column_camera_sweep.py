@@ -93,13 +93,13 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
-from syncai_hydranet.data import sam3_prompts_objects as _objects  # noqa: E402
-from syncai_hydranet.data.teachers.sam3 import (  # noqa: E402
+from syncai_bev3d.teachers.sam3 import (  # noqa: E402
     MODEL_ID,
     load_sam3,
     segment,
     vision_features,
 )
+from syncai_hydranet.data import sam3_prompts_objects as _objects  # noqa: E402
 from syncai_hydranet.data.video import frames as video_frames  # noqa: E402
 from syncai_hydranet.data.video import probe  # noqa: E402
 

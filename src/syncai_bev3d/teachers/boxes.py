@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...analytics.tracker import iou
+from syncai_hydranet.analytics.tracker import iou
 
 
 def boxes_from_masks(pairs) -> np.ndarray:

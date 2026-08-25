@@ -60,8 +60,8 @@ from scipy import ndimage
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
 sys.path.insert(0, str(ROOT / "src"))
 
-from syncai_hydranet.data.teachers import boxes as B  # noqa: E402
-from syncai_hydranet.data.teachers import gdino as G  # noqa: E402
+from syncai_bev3d.teachers import boxes as B  # noqa: E402
+from syncai_bev3d.teachers import gdino as G  # noqa: E402
 
 SCORE_FLOOR = 0.10  # keep both score populations visible; see the module docstring
 NMS_IOU = 0.55

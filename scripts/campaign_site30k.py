@@ -42,7 +42,7 @@ TEACHERS AND MERGE
 ------------------
 * SAM 3 static classes are consensus-voted across the clip (0.9): the camera does not
   move, so disagreement across frames is SAM 3 guessing. Machinery imported from
-  syncai_hydranet.data.teachers (sam3 / gdino / boxes / photometry), not copied.
+  syncai_bev3d.teachers (sam3 / gdino / boxes / photometry), not copied.
 * `person` pixels are composited per frame after the vote (people move).
 * A third opinion from runs/hydranet_retail_security_b03_gdino/best.pt vetoes
   floor/wall/column/person: where the model's terrain head disagrees with the voted
@@ -78,22 +78,22 @@ sys.path.insert(0, str(HERE))
 # DINO, 95d816a the clip-list refusals): scripts/sam3_prelabel.py and
 # scripts/gdino_person_boxes.py are CLI front ends over these modules now and re-export
 # only part of the surface, so this imports the package directly rather than through them.
-from syncai_hydranet.data import sam3_prompts_objects as OBJ  # noqa: E402
-from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
-from syncai_hydranet.data.sam3_prompts import Concept  # noqa: E402
-from syncai_hydranet.data.teachers.boxes import drop_static  # noqa: E402
-from syncai_hydranet.data.teachers.boxes import nms as gdino_nms  # noqa: E402
-from syncai_hydranet.data.teachers.gdino import detect as gdino_detect  # noqa: E402
-from syncai_hydranet.data.teachers.gdino import load_gdino  # noqa: E402
-from syncai_hydranet.data.teachers.photometry import is_daylight, luma_chroma  # noqa: E402
-from syncai_hydranet.data.teachers.sam3 import (  # noqa: E402
+from syncai_bev3d.teachers.boxes import drop_static  # noqa: E402
+from syncai_bev3d.teachers.boxes import nms as gdino_nms  # noqa: E402
+from syncai_bev3d.teachers.gdino import detect as gdino_detect  # noqa: E402
+from syncai_bev3d.teachers.gdino import load_gdino  # noqa: E402
+from syncai_bev3d.teachers.photometry import is_daylight, luma_chroma  # noqa: E402
+from syncai_bev3d.teachers.sam3 import (  # noqa: E402
     MAX_BOX_FRAC,
     consensus,
     frame_boxes,
     frame_masks,
     load_sam3,
 )
-from syncai_hydranet.data.teachers.sam3 import MODEL_ID as SAM3_MODEL_ID  # noqa: E402
+from syncai_bev3d.teachers.sam3 import MODEL_ID as SAM3_MODEL_ID  # noqa: E402
+from syncai_hydranet.data import sam3_prompts_objects as OBJ  # noqa: E402
+from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
+from syncai_hydranet.data.sam3_prompts import Concept  # noqa: E402
 from syncai_hydranet.data.video import frames as decode_frames  # noqa: E402
 from syncai_hydranet.data.video import (  # noqa: E402
     probe,

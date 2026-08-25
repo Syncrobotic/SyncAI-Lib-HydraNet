@@ -17,9 +17,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from syncai_hydranet.data.sam3_prompts import Concept
-from syncai_hydranet.data.teachers import sam3
-from syncai_hydranet.data.teachers.sam3 import (
+from syncai_bev3d.teachers import sam3
+from syncai_bev3d.teachers.sam3 import (
     MAX_BOX_FRAC,
     _probe_image,
     compose,
@@ -27,6 +26,7 @@ from syncai_hydranet.data.teachers.sam3 import (
     frame_boxes,
     frame_masks,
 )
+from syncai_hydranet.data.sam3_prompts import Concept
 from syncai_hydranet.labels import IGNORE
 
 TAXONOMY = {"void": 0, "floor": 1, "wall": 2, "person": 3}

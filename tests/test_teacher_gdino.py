@@ -15,7 +15,7 @@ import pytest
 import torch
 from PIL import Image
 
-from syncai_hydranet.data.teachers.gdino import MODEL_ID, PERSON_THRESHOLD, detect
+from syncai_bev3d.teachers.gdino import MODEL_ID, PERSON_THRESHOLD, detect
 
 
 class _Inputs(dict):

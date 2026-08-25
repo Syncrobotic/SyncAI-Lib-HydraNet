@@ -77,10 +77,7 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
-from syncai_hydranet.data import sam3_prompts as _retail_prompts  # noqa: E402
-from syncai_hydranet.data import sam3_prompts_objects as _object_prompts  # noqa: E402
-from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
-from syncai_hydranet.data.teachers.sam3 import (  # noqa: E402
+from syncai_bev3d.teachers.sam3 import (  # noqa: E402
     MAX_BOX_FRAC,
     MODEL_ID,
     consensus,
@@ -88,6 +85,9 @@ from syncai_hydranet.data.teachers.sam3 import (  # noqa: E402
     frame_masks,
     load_sam3,
 )
+from syncai_hydranet.data import sam3_prompts as _retail_prompts  # noqa: E402
+from syncai_hydranet.data import sam3_prompts_objects as _object_prompts  # noqa: E402
+from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
 from syncai_hydranet.data.video import (  # noqa: E402
     frames,
     probe,

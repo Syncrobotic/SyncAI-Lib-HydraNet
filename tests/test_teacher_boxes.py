@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from syncai_bev3d.teachers.boxes import boxes_from_masks, dedupe, drop_static, nms
 from syncai_hydranet.analytics.tracker import iou
-from syncai_hydranet.data.teachers.boxes import boxes_from_masks, dedupe, drop_static, nms
 
 
 def _iou_xywh(a, b) -> float:

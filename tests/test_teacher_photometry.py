@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from syncai_hydranet.data.teachers.photometry import (
+from syncai_bev3d.teachers.photometry import (
     MIN_CHROMA,
     MIN_LUMA,
     is_daylight,

@@ -27,7 +27,7 @@ Two deliberate differences from the SAM 3 script:
 2. **Scores are kept down to a floor of 0.10** in `instances_all.json`, so the two
    populations stay visible in full. `--train-thr` additionally writes
    `instances_train.json` filtered at the working threshold with per-frame greedy
-   NMS (IoU 0.55, `data/teachers/boxes.py`) for training consumption.
+   NMS (IoU 0.55, `syncai_bev3d/teachers/boxes.py`) for training consumption.
 
 What survives is still a teacher's opinion and not ground truth.
 """
@@ -49,13 +49,13 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
-from syncai_hydranet.data.teachers.boxes import nms  # noqa: E402
-from syncai_hydranet.data.teachers.gdino import (  # noqa: E402
+from syncai_bev3d.teachers.boxes import nms  # noqa: E402
+from syncai_bev3d.teachers.gdino import (  # noqa: E402
     MODEL_ID,
     detect,
     load_gdino,
 )
-from syncai_hydranet.data.teachers.photometry import luma_chroma  # noqa: E402
+from syncai_bev3d.teachers.photometry import luma_chroma  # noqa: E402
 
 THRESHOLD_LADDER = (0.25, 0.35, 0.50)  # reported per camera; nothing is filtered by them
 

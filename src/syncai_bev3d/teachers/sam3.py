@@ -3,7 +3,7 @@
 Written as `scripts/sam3_prelabel.py`, which is still the command line around it. What
 lives here is the part three other callers had a reason to import, and the part whose
 output is a training set -- so it belongs where the wheel, the type ratchet and the
-coverage floor reach it. `data/teachers/__init__.py` says why that mattered enough to
+coverage floor reach it. `teachers/__init__.py` says why that mattered enough to
 move.
 
 `transformers` is imported inside `load_sam3` and nowhere else, so this module stays
@@ -24,8 +24,9 @@ import numpy as np
 import torch
 from PIL import Image
 
-from ...labels import IGNORE
-from ..sam3_prompts import DEFAULT_MIN_SCORE
+from syncai_hydranet.data.sam3_prompts import DEFAULT_MIN_SCORE
+from syncai_hydranet.labels import IGNORE
+
 from .boxes import dedupe
 
 CONTESTED = -1

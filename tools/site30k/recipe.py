@@ -61,8 +61,8 @@ spec = importlib.util.spec_from_file_location(
 )
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
+from syncai_bev3d.teachers import sam3 as SAM3  # noqa: E402
 from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
-from syncai_hydranet.data.teachers import sam3 as SAM3  # noqa: E402
 from syncai_hydranet.data.video import frames as decode_frames  # noqa: E402
 from syncai_hydranet.data.video import probe  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera as GCamera  # noqa: E402
