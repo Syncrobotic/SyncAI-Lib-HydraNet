@@ -78,7 +78,9 @@ def _tracked_scripts() -> list[Path]:
 # same script *by path* to stay out of this count, and said in its own docstring that a
 # third caller wanting `segment` was the signal to move it into the package. That caller
 # arrived.
-BASELINE_PAIRS = 5
+# 5 -> 4: `bev_demo -> bev_page` left in the 2026-08-25 cleanup -- the robot dashboard's
+# 3D page, superseded by tools/commissioning/scene_mesh.py.
+BASELINE_PAIRS = 4
 
 
 def _script_to_script_imports() -> list[tuple[str, str]]:
@@ -118,9 +120,11 @@ def test_the_measurement_still_finds_the_pairs_it_was_written_against():
     The two it was written against -- both `-> sam3_prelabel` -- are gone, into
     `syncai_bev3d/teachers/sam3.py`, which is the outcome this test exists to produce. Re-pinned
     on the two remaining kinds rather than deleted, because the *forms* are what the scan
-    can lose: `bev_demo -> bev_page` is `from x import Y` and `stable_infer ->
-    flicker_baseline` is a plain `import x`, and an AST walk that stops seeing one of
-    those goes quiet rather than red.
+    can lose: `eval_attributes -> train_attributes` is `from x import Y` and
+    `stable_infer -> flicker_baseline` is a plain `import x`, and an AST walk that stops
+    seeing one of those goes quiet rather than red. (The from-form witness was
+    `bev_demo -> bev_page` until the robot dashboard scripts left in the 2026-08-25
+    cleanup.)
 
     `live_view_orin -> bench_camera_orin` is deliberately not pinned here even though it
     is the most durable pair in the list: it is exempt for a reason
@@ -128,5 +132,5 @@ def test_the_measurement_still_finds_the_pairs_it_was_written_against():
     """
     pairs = _script_to_script_imports()
     assert pairs, "the scan found no imports at all — has scripts/ moved?"
-    assert ("bev_demo.py", "bev_page") in pairs
+    assert ("eval_attributes.py", "train_attributes") in pairs
     assert ("stable_infer.py", "flicker_baseline") in pairs

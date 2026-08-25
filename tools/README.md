@@ -4,13 +4,32 @@ Everything here sits *upstream* of training: it makes the data and checks the in
 depends on. It is not a deployment surface — that is [`../deploy/`](../deploy/), the
 downstream end. Filing these under `deploy/` would confuse an input with an output.
 
+## [`commissioning/`](commissioning/) — the per-camera pipeline (PLAN §2.1)
+
+Everything that turns one camera's plates into its `camera.json` and its 3D scene:
+`masks_pass.py` (structure vote), `extras_pass.py` (door / product subclasses / the SAM3
+floor source), `depth_complete.py` (geometry fills what the teachers miss),
+`fp_polygons.py` (derived false-positive zones, human accept/reject),
+`scene3d.py` / `scene_mesh.py` (the flat diagnostic panel and the solid-mesh scene with
+GLB/OBJ export). Each is idempotent from the caches; re-runs cost no GPU except the two
+teacher passes.
+
+## [`pose/`](pose/) — the pose head's teacher
+
+`vitpose_teacher.py` labels the Gold person boxes with ViTPose keypoints — the
+distillation source for the bottom-up P3 head (PLAN §2.2).
+
+## [`site30k/`](site30k/) — the campaign toolchain
+
+The 2026-08-20 campaign's orchestration, kept exactly as it ran; `recipe.py`'s
+per-camera pre-pass is also the engine `commissioning/masks_pass.py` drives.
+
 ## [`annotation/`](annotation/) — the CVAT stack
 
-A version-pinned CVAT deployment (`cvat.sh` + an override over upstream's compose) that
-produces the training labels for **both** products — the robot and retail-security train on
-the same annotation pipeline. Full operator guide: [`docs/METHODOLOGY.md`](../docs/METHODOLOGY.md).
-Site footage is customer premises, which is why the stack binds to loopback and is reached
-through a tunnel, never a published port.
+A version-pinned CVAT deployment (`cvat.sh` + an override over upstream's compose) for
+the accept/reject passes. The operator guide lived in METHODOLOGY.md, now in git history
+(`git show b7457c2:docs/METHODOLOGY.md`). Site footage is customer premises, which is
+why the stack binds to loopback and is reached through a tunnel, never a published port.
 
 **Taxonomies the tooling actually gates.** `hydranet-annotation labels|check` (the
 machine-checked half of the setup doc, `src/syncai_hydranet/cli/annotation.py`) validates

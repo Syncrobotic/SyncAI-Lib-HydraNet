@@ -732,8 +732,7 @@ def main():
         if geo.lx is None:
             # level-frame X/Z from the same depth the teacher used, for footprints
             calib = json.loads((ROOT / f"runs/onboard01/{camera}.calib.json").read_text())
-            from calibrate_from_plate import run_depth, undistort_image
-
+            from syncai_bev3d.plate_calibration import run_depth, undistort_image
             from syncai_hydranet.geometry.ground import unproject
 
             k1 = float(calib.get("k1_division_model") or 0.0)
