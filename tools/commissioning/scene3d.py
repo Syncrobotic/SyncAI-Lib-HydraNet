@@ -116,11 +116,24 @@ def run(camera: str):
         plate_path = ROOT / str(cf.plate_file)
     plate = Image.open(plate_path).convert("RGB").resize((w, h))
     base = np.asarray(plate, dtype=np.float64)
-    walk_small = (
-        np.asarray(Image.open(ROOT / "runs/commission01" / cf.mask_files["walkable"])) > 127
-    )
     over = base.copy()
-    over[walk_small] = 0.55 * base[walk_small] + 0.45 * np.array([60, 200, 90])
+    # the FULL segmentation, not walkable alone -- a viewer reading this panel should
+    # see everything the commissioning knows, in the same colours as the mask sheets
+    overlay_rgb = {
+        "walkable": (60, 200, 90),
+        "wall": (150, 150, 160),
+        "column": (240, 200, 60),
+        "display_table": (200, 90, 200),
+        "display_shelf": (90, 140, 240),
+        "door": (200, 120, 60),
+        "product": (86, 214, 188),
+    }
+    for name, col in overlay_rgb.items():
+        f = cf.mask_files.get(name)
+        if not f:
+            continue
+        m = np.asarray(Image.open(ROOT / "runs/commission01" / f)) > 127
+        over[m] = 0.55 * over[m] + 0.45 * np.array(col)
     view = Image.fromarray(over.astype(np.uint8))
 
     out = Image.new("RGB", (w + 8 + panel_w, panel_h), (7, 9, 13))

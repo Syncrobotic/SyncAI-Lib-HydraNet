@@ -42,6 +42,8 @@ PALETTE = {
     "display_table": (172, 162, 148),
     "floor": (52, 96, 66),
     "disc": (242, 180, 78),
+    "door": (176, 126, 88),
+    "product": (86, 214, 188),
 }
 CLASS_NAMES = {2: "wall", 3: "column", 4: "display_table", 5: "display_shelf"}
 CELL = 0.06
@@ -73,7 +75,19 @@ def cell_grids(camera):
         hs = hs[np.isfinite(hs) & (hs > 0.05)]
         if len(hs) > 200:
             heights[cid] = float(np.clip(np.percentile(hs, 85), 0.3, 3.0))
+    # extras: door footprints, and product cells with the height merchandise sits at
+    hts = {}
+    for name, cid in (("door", 6), ("product", 7)):
+        f = ROOT / "runs/commission01" / camera / "masks" / f"{name}.png"
+        if not f.exists():
+            continue
+        m = np.asarray(Image.open(f).resize((fw, fh), Image.Resampling.NEAREST)) > 127
+        sel = m & z["geom_ok"]
+        xs[cid], zs[cid] = z["lx"][sel], z["lz"][sel]
+        if name == "product":
+            hts[cid] = z["height"][sel]
     grids = {}
+    grid_h = {}
     for cid in xs:
         x, zz = xs[cid], zs[cid]
         ok = (
@@ -85,9 +99,15 @@ def cell_grids(camera):
         )
         x, zz = x[ok], zz[ok]
         g = np.zeros((int(14 / CELL), int(24 / CELL)), np.int32)
-        np.add.at(g, ((zz / CELL).astype(int), ((x + 12) / CELL).astype(int)), 1)
+        rows, cols = (zz / CELL).astype(int), ((x + 12) / CELL).astype(int)
+        np.add.at(g, (rows, cols), 1)
         grids[cid] = g >= (2 if cid == 1 else 3)
-    return cf, grids, heights
+        if cid in hts:
+            hh = hts[cid][ok]  # heights follow the exact same filter as the coordinates
+            hsum = np.zeros_like(g, float)
+            np.add.at(hsum, (rows, cols), np.nan_to_num(hh))
+            grid_h[cid] = hsum / np.maximum(g, 1)
+    return cf, grids, heights, grid_h
 
 
 def rect_decompose(grid, min_cells):
@@ -145,7 +165,7 @@ def floor_mesh(grid):
 
 
 def build_scene(camera):
-    cf, grids, heights = cell_grids(camera)
+    cf, grids, heights, _grid_h = cell_grids(camera)
     items = []  # (mesh, colour_key, alpha, casts_shadow)
     items.append((floor_mesh(grids[1]), "floor", 150, False))
     for cid, name in CLASS_NAMES.items():
@@ -240,7 +260,7 @@ def build_scene_regular(camera):
     5 cm) and rendered as the parametric mesh its class names: cabinets with shelf
     slabs, tables with legs, thin walls, columns.
     """
-    cf, grids, heights = cell_grids(camera)
+    cf, grids, heights, grid_h = cell_grids(camera)
     yaw = store_yaw(grids)
     cy, sy = np.cos(yaw), np.sin(yaw)
     items = [(floor_mesh(grids[1]), "floor", 150, False)]
@@ -289,6 +309,49 @@ def build_scene_regular(camera):
                     )
                 )
                 items.append((place(mesh, at), name, 255, True))
+    # extras: doors as solid tall slabs, products as slabs at their measured height
+    cy2, sy2 = np.cos(yaw), np.sin(yaw)
+    for cid, name, hgt in ((6, "door", 2.05), (7, "product", 0.15)):
+        if cid not in grids:
+            continue
+        lab, n = ndimage.label(grids[cid], structure=np.ones((3, 3)))
+        for k in range(1, n + 1):
+            r, c = np.nonzero(lab == k)
+            if len(r) < (20 if name == "product" else 40):
+                continue
+            x = c * CELL - 12 + CELL / 2
+            zz2 = r * CELL + CELL / 2
+            u = x * cy2 + zz2 * sy2
+            v = -x * sy2 + zz2 * cy2
+            u0, u1 = np.percentile(u, [3, 97])
+            v0, v1 = np.percentile(v, [3, 97])
+            w = max(round((u1 - u0) / 0.05) * 0.05, 0.2)
+            d = max(round((v1 - v0) / 0.05) * 0.05, 0.2)
+            um, vm = (u0 + u1) / 2, (v0 + v1) / 2
+            at = Placement(um * cy2 - vm * sy2, um * sy2 + vm * cy2, heading_rad=-yaw)
+            if name == "door":
+                short = min(w, d)
+                if short > 0.3:
+                    w, d = (w, 0.12) if w >= d else (0.12, d)
+                mesh = extrude(
+                    np.array(
+                        [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]
+                    ),
+                    hgt,
+                )
+                items.append((place(mesh, at), name, 255, True))
+            else:
+                base = float(np.nanmedian(grid_h[cid][lab == k])) if cid in grid_h else 0.9
+                base = float(np.clip(base, 0.1, 2.0))
+                slab = extrude(
+                    np.array(
+                        [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]
+                    ),
+                    hgt,
+                )
+                verts = slab[0].copy()
+                verts[:, 1] += base
+                items.append((place((verts, slab[1]), at), name, 255, False))
     items.append((place(ground_disc(0.35), Placement(0.0, 0.0)), "disc", 130, False))
     return cf, items, heights
 
