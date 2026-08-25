@@ -9,6 +9,9 @@ that commit.
 Every number below is **measured** (and says where) or marked **unmeasured**. Nothing here
 is an estimate presented as a fact.
 
+Amended the same day after an adversarial self-review; choices made with the user in that
+review are marked **decided 2026-08-25** in place.
+
 ---
 
 ## 1. What this is
@@ -42,6 +45,12 @@ The boundary is the load-bearing design decision: **anything constant on a fixed
 computed once by `syncai_bev3d` and cached; only what changes frame-to-frame is computed by
 `syncai_hydranet`.** The contract between them is one `camera.json` per camera.
 
+**Dependency rule.** Offline code — training, commissioning, campaign tooling — may import
+`syncai_bev3d`: the teacher wrappers live there and also feed hydranet's pseudo-label
+pipeline (§4.2), so the "once vs every frame" story does not hold at the code level and is
+not pretended to. The **serving path must never import it**: at runtime, `camera.json` is
+the only thing that crosses the boundary.
+
 Why the boundary sits here — three measurements:
 
 * A trained dense head does not generalise across these cameras: `column` scored 0.86–0.88
@@ -65,7 +74,7 @@ Per camera, once, offline. Target under 20 minutes, of which ~4 are human.
 | step | what | human? | status |
 |---|---|---|---|
 | a | temporal-median **static plate** — people and moving stock disappear | no | ✅ `scripts/static_plates.py` |
-| b | **4 ground points** on the undistorted plate → homography, pixels ↔ floor metres | **~4 clicks** | ❌ tool to build |
+| b | **4+ ground points** on the undistorted plate → homography by least squares. Four is the minimum, not the target: a 4-point fit has zero redundancy and its error grows unquantified toward the frame edges, exactly where speed rules read it | **~4–8 clicks** | ❌ tool to build |
 | c | **SAM 3 + Grounding DINO, one pass on the plate** → structure masks: `floor`, `wall`, `column`, `door`, `glass`, `display_table`, `display_shelf` | no | ✅ `tools/site30k/recipe.py` |
 | d | **walkable / non-walkable** = floor mask − fixture masks − forbidden zones; indoor/outdoor split is a polygon where a camera sees through the shopfront | no | derived from c |
 | e | **zone polygons in metres** — entrance line, till, premium shelf, stockroom door | drawn once | ❌ tool to build |
@@ -75,7 +84,10 @@ Per camera, once, offline. Target under 20 minutes, of which ~4 are human.
 | i | **3D scene / BEV render** for verification: a 1 m floor grid drawn on a real frame | checked by eye | partial — `geometry/bev3d.py`, `geometry/depth_scene.py` |
 
 Output: `camera.json` — homography, structure masks, walkable polygon, zones in metres,
-shelf ROIs, FP polygons, plate reference. Valid until the camera moves.
+shelf ROIs, FP polygons, plate reference. Valid until the camera moves **or the store
+does**: seasonal display resets invalidate the fixture masks, shelf ROIs and human-drawn
+zones while leaving the homography intact. Step (h)'s plate comparison is the trigger;
+masks re-run automatically, zones need a human redraw — who owns that loop is open (§7.7).
 
 **Depth lives here, not in a per-frame head.** Every spatial output the product sells
 (dwell, paths, heatmaps, queues, zone occupancy) needs *the person's floor position in
@@ -102,7 +114,13 @@ boxes under 8 px do not span a stride-8 cell and are unlearnable, not merely har
 
 **Two-scale inference for small objects:** full frame at 640×1120 for `person`/`bag`/
 `stack`; shelf-ROI crops at native 1080p for `device`/`boxed_stock`. The ROIs come free
-from commissioning (§2.1f). **Unmeasured:** `device` mAP at native-ROI vs whole-frame.
+from commissioning (§2.1f). **Decided 2026-08-25: the ROI path polls at 0.2–1 fps per
+camera, not frame rate** — shelf stock is a slow variable and the stock-removal alarm
+tolerates tens of seconds of latency. This matters for the budget: the 1.08× throughput
+margin was measured **whole-frame only** — the ROI passes were never in it, and at frame
+rate they would multiply the per-camera load past the margin. **Unmeasured:** `device` mAP
+at native-ROI vs whole-frame, and the ROI path's cost at the chosen cadence — both taken
+in gate 3's re-measure.
 
 **No dense segmentation head, no depth head, no behaviour head.** The static structure
 those would predict is a per-camera constant (§2.1); single-frame behaviour classification
@@ -124,11 +142,27 @@ L3  facts   →  events                 rules in metres and seconds, CPU
 L4  events  →  judgement              VLM on trigger, GPU queue
 ```
 
+Two L1 rules that are cheap to write and expensive to discover missing:
+
+* **Floor position is the foot point through the homography — except under fixture
+  occlusion.** A person behind a display table has their bbox cut at the table edge; the
+  naive foot point lands metres off, and the bias concentrates exactly at the
+  highest-value positions (table-edge dwell, shelf reach). When ankle keypoints are
+  missing or low-confidence, L1 falls back to head/shoulder keypoints plus a height prior
+  — the pose head pays for itself here a second time.
+* **The time base is PTS, never frame index.** Measured: every clip in
+  `gs://studioa-recording` writes `30/1` into `r_frame_rate` regardless of the true,
+  variable rate. Speeds in m/s over nominal fps silently misclassify walk as run on a
+  slow stream, and the failure surfaces only as unexplainable run alerts.
+
 * **walk / stand / run** — speed thresholds over L1 tracks. CPU, free, and the thresholds
   are config a manager can change, not classes.
 * **sit / crouch / fall** — a <100K-parameter temporal model over pose sequences, CPU.
   Training data is already on disk: **PoseLift** (real retail store, 6 indoor cameras,
-  pose sequences + person IDs + frame-level shoplifting labels).
+  pose sequences + person IDs + frame-level shoplifting labels). **Caveat, unmeasured:**
+  PoseLift's sequences came from a different pose estimator whose noise (jitter spectrum,
+  occlusion failure modes) differs from our distilled head's; train with noise
+  augmentation matched to our head's error profile and measure the transfer after gate 3.
 * **loiter, intrusion, line-cross, queue, dwell, tailgating** — rules over tracks in
   metres. `analytics/events/zones.py` is already built this way.
 * **intent / concealment** — VLM on trigger only.
@@ -200,7 +234,9 @@ Both already live in the wheel (`data/teachers/`). Their jobs, in value order:
   is a low-ratio trunk prior; in-domain is the body.
 * **Necessarily in-domain, no public source:** `staff/customer` (3 uniform reference photos
   + per-track VLM voting), `fall`/`crouch` overhead (50–100 staged clips — data generation,
-  not annotation).
+  not annotation). **Open (§7.6):** staged *theft* tests were ruled out 2026-08-25; if
+  staging in the store is off the table entirely — off-hours included — fall/crouch has no
+  training source and the answer must come from somewhere else.
 
 ### 4.4 Split discipline — binds every reported number
 
@@ -214,6 +250,13 @@ count. One fixed camera is one scene measured N times, not N samples.
 proposals, and **shadow-mode grading**: the system runs live raising no alerts, an operator
 grades what it would have raised. That grading is the human test set — free,
 in-distribution, accumulating, and it produces the success number itself.
+
+**Shadow grading measures precision only.** A missed theft never becomes an alert to
+grade, so recall has no instrument in that loop. Decided 2026-08-25 (staged in-store
+theft tests are not an option): recall is measured by **reconciliation against the
+store's shrinkage counts and incident reports**, weekly. The signal is weak and delayed
+by weeks — it is also the only one available, so it is reported with that caveat rather
+than not at all.
 
 ## 5. What it must never do
 
@@ -231,26 +274,40 @@ in-distribution, accumulating, and it produces the success number itself.
 |---|---|---|---|
 | 1 | **package split** — create `src/syncai_bev3d`, move the §2.1 code, define the `camera.json` schema; archive non-current configs | two importable packages, green tests | no import cycles; no running training unit touched (check systemd units first) |
 | 2 | **commission all 48 cameras** — build the 4-click tool and zone tool, run the pipeline | per-camera `camera.json` + a 1 m grid rendered on one real frame per camera | the grid looks right **to my own eyes on every camera** |
-| 3 | **pose head resident** | keypoint error vs ViTPose; throughput re-measured with pose in the slot | `reach_to_shelf` and `crouch` fire correctly on a watched clip; fps ≥ 1,440 stands |
-| 4 | **detection uplift at zero GPU** — temporal-consistency tiers from `instances_all_*.json`, FP polygons from the 37 hotspots | new Gold/Silver training set | Gold precision ≥95%, Silver ≥85% on a 300-frame sample |
-| 5 | **L3 end to end, one camera** | an event log readable against its video | events match what the clip shows |
-| 6 | **shadow mode, one store** | alerts/camera/day + operator accept/reject log | single-digit rate; rejects show an actionable pattern |
+| 3 | **pose head resident** | keypoint error vs ViTPose; throughput re-measured with pose in the slot **and the ROI path at its 0.2–1 fps cadence** | `reach_to_shelf` and `crouch` fire correctly on a watched clip; fps ≥ 1,440 stands with both accounted |
+| 4 | **detection uplift at zero GPU** — temporal-consistency tiers from `instances_all_*.json`, FP polygons from the 37 hotspots; **plus the night pass**: measure whether FP polygons + temporal consistency remove the IR ghost persons | new Gold/Silver training set; night `person` precision figure | Gold precision ≥95%, Silver ≥85% on a 300-frame sample; `after_hours_person` stays on the VLM trigger list **only if** the night figure passes |
+| 5 | **L1 validation** — homography accuracy against WILDTRACK/MultiviewX ground-truth floor positions; tracking quality (ID switches) on in-domain clips watched end to end | position error in metres; ID-switch count per watched 10-minute clip | position error small enough that zone events land in the right zone; dwell/loiter durations survive — an ID switch mid-loiter resets the clock, so switches on the watched clips must be rare enough not to |
+| 6 | **L3 end to end, one camera** | an event log readable against its video | events match what the clip shows |
+| 7 | **shadow mode, one store** | alerts/camera/day + operator accept/reject log + **the first shrinkage reconciliation** | single-digit rate; rejects show an actionable pattern |
 
 Throughput ceiling: already passed 2026-08-24 (1,552 fps TRT, batch 16) — but engine-only
 and with terrain in slot 2, which is why step 3 re-takes it. Steps 1 and 2 are independent;
-nothing after 5 starts until 5 passes.
+nothing after 6 starts until 6 passes, and 6 is not attempted before 5 — an L3 event log
+over unvalidated tracks cannot be attributed when it is wrong.
 
 ## 7. Open questions — each blocks a specific step
 
 1. **`stack` as a 5th detection class** invalidates checkpoint comparability, and a
    vocabulary change silently empties `analytics/events/zones.py:346`'s default class list
    — the stock-removal alarm stops firing without an exception. Decide at step 4.
-2. **Night is unscoped.** Measured: 14 false people on one empty IR frame from hanging
-   packets; consensus voting cannot remove them. Yet `after_hours_person` heads the VLM
-   trigger list. Night enters with a measurement or the trigger comes off.
+2. ~~Night is unscoped~~ — **decided 2026-08-25: night is in v1, gated on a measurement.**
+   Step 4 carries the night pass (14 IR ghost persons on one empty frame, measured);
+   `after_hours_person` triggers only if the night precision figure passes.
 3. **Pose distillation risk** (§2.2) — the claim the two-head architecture rests on.
-   Answered by step 3's gate.
-4. **Delivery target undefined** — who receives v1, and whether 96 streams/card is a
-   requirement or headroom. Changes the commissioning-vs-trained-head threshold (§2).
+   Answered by step 3's gate. The scope question above it is settled: **decided
+   2026-08-25, fall/second-level behaviour is in v1**, so pose stays a per-frame L0 head.
+4. **Delivery target still undefined** — who receives v1, and whether 96 streams/card is
+   a requirement or headroom. Changes the commissioning-vs-trained-head threshold (§2).
 5. **Retail dashboard surface unscoped** — the numbers fall out of L1 free; what a store
-   manager opens, at what cadence, is a product question. Blocks nothing before step 5.
+   manager opens, at what cadence, is a product question. Blocks nothing before step 6.
+   One modelling gap hides inside it: **store-level footfall needs cross-camera dedup**
+   (overlapping views double-count a person). Single-store re-linking is in scope,
+   cross-store is banned; the mechanism is unscoped.
+6. **Fall/crouch training source** — staged theft tests were ruled out; if in-store
+   staging is entirely off the table (off-hours included), the 50–100 staged clips in
+   §4.3 have no source. Needs one answer from the store before step 3's events are
+   trainable.
+7. **Recommissioning ownership** — a seasonal display reset invalidates masks, ROIs and
+   zones (§2.1). Plate divergence triggers detection automatically; who redraws the zones
+   and approves the new masks is unassigned. Blocks nothing before step 2's rollout, then
+   recurs forever.
