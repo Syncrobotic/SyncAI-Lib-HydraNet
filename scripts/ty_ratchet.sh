@@ -89,7 +89,7 @@ TARGET="${1:-src/}"
 # a review that has not happened.
 case "$TARGET" in
   scripts/|scripts) DEFAULT_BASELINE=18 ;;
-  *)                DEFAULT_BASELINE=12 ;;
+  *)                DEFAULT_BASELINE=11 ;;
 esac
 BASELINE="${TY_BASELINE:-$DEFAULT_BASELINE}"
 

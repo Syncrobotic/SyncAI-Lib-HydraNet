@@ -130,7 +130,9 @@ class FCOSHead(nn.Module):
         else:
             self.cls_pred = nn.Conv2d(channels, num_classes, 3, 1, 1)
             # Focal loss prior: start with a positive probability around 0.01.
-            nn.init.constant_(self.cls_pred.bias, -math.log((1 - 0.01) / 0.01))
+            bias = self.cls_pred.bias
+            assert bias is not None  # nn.Conv2d carries a bias unless bias=False is asked for
+            nn.init.constant_(bias, -math.log((1 - 0.01) / 0.01))
         self.reg_pred = nn.Conv2d(channels, 4, 3, 1, 1)
         self.ctr_pred = nn.Conv2d(channels, 1, 3, 1, 1)
         self.scales = nn.ModuleList(Scale(1.0) for _ in self.in_levels)

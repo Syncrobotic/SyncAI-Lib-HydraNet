@@ -52,7 +52,9 @@ class PoseP3Head(nn.Module):
         self.predictor = nn.Conv2d(channels, NUM_KEYPOINTS, 1)
         # Heatmaps are almost entirely background: bias the logits so training starts
         # from "nothing anywhere" instead of spending its first epochs learning that.
-        nn.init.constant_(self.predictor.bias, -4.0)
+        bias = self.predictor.bias
+        assert bias is not None  # nn.Conv2d carries a bias unless bias=False is asked for
+        nn.init.constant_(bias, -4.0)
 
     def forward(self, feats: list[torch.Tensor]) -> torch.Tensor:
         return self.predictor(self.tower(feats[0]))  # [B, K, H/8, W/8] logits
