@@ -238,6 +238,7 @@ def world_frames(
     times_s: Mapping[int, float] | None = None,
     fps: float | None = None,
     source_size_px: tuple[int, int] | None = None,
+    confirmed_only: bool = True,
 ) -> list[WorldFrame]:
     """Finished tracks -> one `WorldFrame` per frame they cover, in frame order.
 
@@ -255,12 +256,27 @@ def world_frames(
 
     Each frame's objects are built from the track truncated at that frame, so a velocity
     is the one that was knowable then rather than the one the whole clip ended with.
+
+    **The second divergence, and it cannot be removed here.** A sliced track carries the
+    `confirmed` flag the whole track ended with, so a track that the tracker confirmed on
+    its third observation appears in this replay from its first. `Track` records no moment
+    of confirmation -- `min_hits` lives on the `Tracker`, not on what it produced -- so a
+    replay cannot reconstruct the two frames the live producer would have withheld.
+    Stated rather than silently corrected: a caller comparing a replay against a live
+    capture will find those frames and should not read them as a bug in either.
+
+    ``confirmed_only`` matches `world_frame`'s gate and is applied **before** the frame
+    list is built, not after. Filtering afterwards is what the first version did, and it
+    emitted a `WorldFrame` with an empty `objects` for every frame that only unconfirmed
+    tracks appeared in -- a frame that says the floor was empty when what happened is that
+    nothing on it had earned a place yet.
     """
-    frames = sorted({int(f) for t in tracks for f in t.frames})
+    live_tracks = [t for t in tracks if t.confirmed or not confirmed_only]
+    frames = sorted({int(f) for t in live_tracks for f in t.frames})
     out: list[WorldFrame] = []
     for f in frames:
         live: list[Track] = []
-        for t in tracks:
+        for t in live_tracks:
             if f not in t.frames:
                 continue
             i = t.frames.index(f)
@@ -286,6 +302,7 @@ def world_frames(
                 times_s=times_s,
                 fps=fps,
                 source_size_px=source_size_px,
+                confirmed_only=confirmed_only,
             )
         )
     return out

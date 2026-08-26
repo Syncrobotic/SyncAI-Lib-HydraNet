@@ -383,3 +383,31 @@ def test_no_tracks_is_no_frames_rather_than_one_empty_one():
     """A clip with nothing in it has no frames to replay -- `Track.frames` is the only
     thing that says which frame indices existed, and there are none."""
     assert world_frames([], a_camera_file(), name="person") == []
+
+
+def test_an_unconfirmed_track_does_not_produce_an_empty_frame():
+    """An empty `objects` says the floor was empty; the truth is nothing had earned a place.
+
+    The gate was applied after the frame list was built, so a frame that only unconfirmed
+    tracks appeared in came back as a `WorldFrame` with no objects -- indistinguishable,
+    to any consumer, from a frame in which the shop was genuinely empty.
+    """
+    cam_file = a_camera_file()
+    confirmed = a_track((0.5, 3.0), (0.6, 3.0), track_id=1)
+    unconfirmed = a_track((1.5, 4.0), (1.6, 4.0), (1.7, 4.0), track_id=2)
+    unconfirmed.confirmed = False
+    unconfirmed.frames = [5, 6, 7]  # frames the confirmed track never appears in
+
+    frames = world_frames([confirmed, unconfirmed], cam_file, name="person")
+    assert [f["frame_index"] for f in frames] == [0, 1]
+    assert all(f["objects"] for f in frames)
+
+
+def test_the_gate_can_be_opened_and_then_the_frames_appear():
+    cam_file = a_camera_file()
+    unconfirmed = a_track((1.5, 4.0), (1.6, 4.0), track_id=2)
+    unconfirmed.confirmed = False
+    assert world_frames([unconfirmed], cam_file, name="person") == []
+    opened = world_frames([unconfirmed], cam_file, name="person", confirmed_only=False)
+    assert [f["frame_index"] for f in opened] == [0, 1]
+    assert all(len(f["objects"]) == 1 for f in opened)
