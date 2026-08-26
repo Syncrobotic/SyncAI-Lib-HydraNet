@@ -351,6 +351,8 @@ than not at all.
 
 **Use `last.pt`.** Taking the handoff's `best.pt` would have gated on a figure 5.8 points lower with 48% more error. Trajectory E15 → E29 → E60 is 0.840 → 0.882 → 0.898, still rising at the end. The run logs **no pose validation metric at all**, so there is no per-epoch curve and these two checkpoints are the only candidates that survive a run — fix the config's `primary_metric` before the next one (§7.9).
 
+**pose02 is running as of 2026-08-26 14:08** — `hydranet-pose02.service`, `runs/hydranet_retail_pose02`, 120 epochs, ~7 min/epoch. The 2026-08-25 overnight attempt **never started**: the trainer refused a dirty tree over another session's uncommitted `analytics/world.py`, the two eval steps behind it then failed on a checkpoint that was never written, and the card sat idle for 17 hours. It selects on `pose_PCK@0.2h` (§7.9), so this run leaves a per-epoch pose curve and a `best.pt` chosen by the head it exists to train.
+
 **Throughput, end to end, 2026-08-25 — the gate MISSES.** `cli/export_onnx.py` was
 dropping the pose head entirely (`a0c51de`), so every engine number before this described
 the model with pose replaced. With `pose_heatmap_p3` in the graph, E60 weights, batch 16,
@@ -412,14 +414,24 @@ over unvalidated tracks cannot be attributed when it is wrong.
    `data/video.py` is still the CPU pipe: migrating the *serving* path to NVDEC is the
    work this decision authorises, and is not done.
 
-9. **The pose run has no pose validation metric** — raised 2026-08-25. `metrics.jsonl`
-   for `hydranet_retail_pose01` carries terrain IoU and detection mAP and nothing about
-   pose, while `primary_metric` is `terrain_mIoU/site_seg03`. So a 60-epoch pose run
-   selects `best.pt` on segmentation and leaves no per-epoch pose curve behind; the only
-   checkpoints that survive are `best.pt` and `last.pt`. Gate 3's number has to be
-   produced post hoc by `eval_student.py` over those two. The config change — a pose
-   metric logged per epoch and named as the primary — cannot be made while the unit
-   runs, and applies to the *next* run either way.
+9. ~~The pose run has no pose validation metric~~ — **closed 2026-08-26** (`cf1ddfb`).
+   Raised because `hydranet_retail_pose01`'s `metrics.jsonl` carried terrain IoU and
+   detection mAP and nothing about pose, while `primary_metric` was
+   `terrain_mIoU/site_seg03` — so a 60-epoch pose run selected `best.pt` on segmentation
+   and left no per-epoch pose curve, and the selected checkpoint turned out to be the
+   run's *worst* pose model (PCK 0.840 against `last.pt`'s 0.898). Validation now emits
+   `pose_PCK@0.2h`, `pose_L2_p50` and `pose_L2_p90` per pose head, computed the way gate
+   3 computes them and decoded from the **teacher's own boxes** — pose is a
+   box-conditioned head, so scoring it against predicted boxes would move the pose curve
+   whenever detection moved. That required `PoseKeypointsDataset` to emit
+   `targets["boxes"]`, which made keypoints and boxes parallel arrays through the
+   transforms and surfaced a real bug: `_paste` dropped a cropped-away person's box and
+   kept their skeleton, after which person i's heatmap window was read from person i+1's
+   box. `train.pose_val_max_persons` (default 4,000 of the val split's 22,241) caps the
+   per-epoch cost at ~7 s. Sanity check against pose01's E60 weights: PCK 0.925 / p50
+   8.8 px on a 1,501-person val prefix, next to `eval_student.py`'s 0.898 / 9.3 px on
+   test. **The number that gates is still `eval_student.py` over the whole test split**;
+   this is the curve that says when to stop.
 
 5. **Retail dashboard surface unscoped** — the numbers fall out of L1 free; what a store
    manager opens, at what cadence, is a product question. Blocks nothing before step 6.
