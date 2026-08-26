@@ -25,7 +25,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from syncai_hydranet.analytics import Tracker
-from syncai_hydranet.analytics.events import pose_posture_events
+from syncai_hydranet.analytics.events import pose_posture_events, reach_to_shelf_events
 from syncai_hydranet.analytics.events.pose import _torso
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
@@ -123,7 +123,9 @@ def main() -> int:
     size = cfg["data"]["input_size"]
     classes = list(cfg["model"]["heads"]["detection"]["classes"])
     person = classes.index("person")
-    seg_person = list(cfg["data"].get("terrain_classes") or []).index("person")
+    terrain_names = list(cfg["data"].get("terrain_classes") or [])
+    seg_person = terrain_names.index("person")
+    seg_fixture = terrain_names.index("fixture") if "fixture" in terrain_names else None
 
     out_w, out_h = 1280, 720
     # same rule as demo_video: every render keeps its own file and
@@ -145,6 +147,14 @@ def main() -> int:
 
     saved = n = n_people = n_joints = n_unconfirmed = 0
     tracker = Tracker() if args.events else None
+    # The dense map per frame, at SOURCE resolution, for `reach_to_shelf_events`.
+    # `_require_terrain_in_image_space` refuses a map at the model canvas, and it is
+    # right to: the wrist test indexes terrain[y, x] in image pixels, so a 640x1120 map
+    # against 1920x1080 keypoints puts almost every wrist off its edge, and the earlier
+    # code skipped out-of-bounds wrists -- turning a unit mismatch into "nobody reached".
+    # Nearest-neighbour on purpose: these are class ids and interpolating them invents
+    # classes that no head ever predicted.
+    terrain_frames: list[dict] = []
     want = {int(x) for x in args.still_frames.split(",") if x.strip()}
     for frame in decode_frames(str(clip), 1920, 1080, args.fps):
         if n >= args.frames:
@@ -214,6 +224,12 @@ def main() -> int:
                     kp[:, 1] = (kp[:, 1] - y0) * to_view
                     n_joints += draw_person(d, kp, float(bb[3] - bb[1]))
                     people += 1
+        if args.events and seg_fixture is not None:
+            cls_map = res["terrain"][0].cpu().numpy().astype(np.uint8)
+            full = np.asarray(
+                Image.fromarray(cls_map).resize((1920, 1080), Image.NEAREST), dtype=np.uint8
+            )
+            terrain_frames.append({"frame_index": n, "terrain": full})
         if tracker is not None and not people:
             tracker.update(
                 np.zeros((0, 4)), n, keypoints=np.zeros((0, 17, 3)), scores=np.zeros(0)
@@ -249,8 +265,24 @@ def main() -> int:
         tracks = [t for t in tracker.tracks + tracker.retired if t.confirmed]
         print(f"{len(tracks)} confirmed tracks, all carrying one keypoint set per frame")
         events = pose_posture_events(tracks, args.fps, args.camera)
+        if seg_fixture is not None and terrain_frames:
+            # The one output where the retail model and the security model are the same
+            # model: the terrain head's `fixture` channel and the pose head's wrist both
+            # have to agree before a row exists. Never run on real footage until now --
+            # it had tests and no production call site, which is the state gate 3's third
+            # condition was actually in.
+            reaches = reach_to_shelf_events(
+                tracks,
+                terrain_frames,
+                args.fps,
+                args.camera,
+                fixture_id=seg_fixture,
+                person_id=seg_person,
+            )
+            print(f"{len(reaches)} reach_to_shelf events")
+            events = events + reaches
         if not events:
-            print("no fall or crouch cleared its sustained threshold on this clip")
+            print("no fall, crouch or reach cleared its sustained threshold on this clip")
         for e in events:
             print(f"  {e}")
         if args.events_json:
@@ -300,6 +332,7 @@ def main() -> int:
                         "track_rows": rows,
                     }
                 )
+            Path(args.events_json).parent.mkdir(parents=True, exist_ok=True)
             Path(args.events_json).write_text(
                 json.dumps(
                     {"camera": args.camera, "clip": clip.name, "frames": n, "events": payload},
