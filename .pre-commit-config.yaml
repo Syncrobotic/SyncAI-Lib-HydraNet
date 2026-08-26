@@ -47,3 +47,45 @@ repos:
       - id: conventional-pre-commit
         stages: [commit-msg]
         args: [feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert]
+
+  # The type ratchet, which until now ran nowhere a commit could see.
+  #
+  # `d9e3cca` is the cost of that, written down the day it was found: `src/` had been over
+  # its baseline since `ef9b53c` and **every commit for a full day landed on a red tree**,
+  # including the session that eventually noticed. Its own commit message names the cause
+  # -- "nobody saw it because the ratchet is not in `.pre-commit-config.yaml`" -- and the
+  # reason the CI job did not catch it either is structural: `ci.yml` triggers on
+  # `pull_request`, and this project's work goes straight onto `dev`. A gate that only a PR
+  # can run is not a gate on a branch nobody opens a PR against.
+  #
+  # `repo: local` + `language: system` rather than a pre-commit-managed environment, and
+  # this is not a style choice. `scripts/ty_ratchet.sh` pins its own interpreter and calls
+  # `uv run --isolated` because the baselines are meaningless otherwise -- the count reports
+  # what the installed *stubs* say, and the same tree measured 8 on one interpreter and 12
+  # on another. A managed environment would install a second `ty` against a third dependency
+  # set and hand back a number that matches neither the script's table nor CI's.
+  #
+  # `pass_filenames: false` because the baseline is a whole-tree count: a diagnostic in a
+  # file this commit did not stage is still one of the eleven, and checking only the staged
+  # subset would report zero on most commits and never ratchet anything. `files:` keeps it
+  # off commits that touch neither tree instead -- a docs or config commit pays nothing, and
+  # a run costs ~0.8 s when it does fire.
+  #
+  # Two hooks and not one sum: src/ is what ships, scripts/ is dev-side, and the script's
+  # header explains why letting one hide behind the other defeats the point.
+  - repo: local
+    hooks:
+      - id: ty-ratchet-src
+        name: ty ratchet (src/)
+        entry: scripts/ty_ratchet.sh
+        args: ["src/"]
+        language: system
+        pass_filenames: false
+        files: ^(src/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml)$
+      - id: ty-ratchet-scripts
+        name: ty ratchet (scripts/)
+        entry: scripts/ty_ratchet.sh
+        args: ["scripts/"]
+        language: system
+        pass_filenames: false
+        files: ^(scripts/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml)$
