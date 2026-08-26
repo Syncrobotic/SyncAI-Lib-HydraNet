@@ -235,9 +235,38 @@ foot point. `world_frame` undistorts. `track_ground_path` is deliberately left a
 fixing it moves every dwell, path and heatmap number already reported, which is a
 re-baseline and belongs in its own commit next to a measurement of what moved.
 
-**State: one producer, no consumer.** `dwell` and `events/zones.py` still take `Track` and
-keep taking it until moving them is measured to change no number. Adopting it is step 5's
-work, not this commit's.
+**State 2026-08-26: adopted.** `analytics/journey.py` is the first consumer, and `dwell`
+and `events/zones.py` still take `Track` — moving *them* stays measured-first, but the
+payload is no longer a contract nobody reads.
+
+**`journeys()` — what L1 actually answers.** One `Journey` per track: an ordered list of
+`Visit`s with durations, the `transitions` between them, the floor distance walked, and
+the detector confidence the positions were built from. That is the "walked from A to B and
+stood at C for how long" question, in metres, and it is the shape the retail dashboard
+(open question 5) and step 6's event log both read. Four refusals are built in, each one a
+measurement this project already paid for: two cameras' floors are not one route (`space`
+must match, since every origin is under its own camera); a position `pixel_to_ground`
+declined to measure is not a place and adds no distance; a *missed observation* does not
+end a visit but a sustained observation outside does; and no clock means `seconds` is
+`None`, never a nominal 30/1. It is a **track's** journey, not a customer's — the events
+package measures 1,234 tracks in a 4.6-minute clip — so `track_id` is the field name and
+nothing merges two journeys. Association is step 5.
+
+**A defect the first real run found, and it produced numbers rather than errors.**
+Taichung-cam01's intrinsics are fitted on 960×540 and its clips decode at 1920×1080, while
+`clip_tracks.track_clip` returns boxes in the decoded stream's pixels. Feeding those
+straight in put three shoppers at x 0.4–8.8 m — metres outside the commissioned walkable
+polygon — with a 38 m walk in 60 s, and **nothing was NaN**. `camera_json.py`'s header had
+always stated the contract ("pixels on the raw stream frame at `image_size_px`") and
+nothing enforced it. `world_frame`/`world_frames` now take `source_size_px`: stating it
+scales the points, omitting it is checked, and a point more than 1.5× outside the
+calibrated canvas is refused with the mismatch named. Corrected, the same clip reads
+x −1.9…1.0 m, z 1.6…5.1 m — inside the commissioned floor — and one shopper stands 20.2 s
+in one 1.5 m cell and 23.4 s in the next (`assets/journey_cam01_frame150.png`).
+
+**Confidence travels with the position.** `WorldObject` carries `score`, and
+`Journey.score_p50` reports it, for the reason §4/step 4's sweep established: a track
+built from 0.15 boxes is not the claim a 0.6 track is.
 
 ## 3. The requirements → where each one lands
 
