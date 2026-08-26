@@ -14,7 +14,7 @@ import numpy as np
 from ..stage import TerrainFrame
 from ..tracker import Track
 from ._geometry import _runs
-from ._types import SecurityEvent
+from ._types import SecurityEvent, support_for
 
 # ------------------------------------------------------- behaviour, tier 2: pose
 #
@@ -269,6 +269,10 @@ def _posture_event(
             value=value,
             threshold=threshold,
             basis=basis,
+            # The sweep that motivated this measured posture events specifically: at
+            # 0.15 the fleet's fall/crouch count quadrupled and the extra events were
+            # real people at low confidence. So this producer is the first to carry it.
+            support=support_for(track, i0, i1),
         )
     ]
 

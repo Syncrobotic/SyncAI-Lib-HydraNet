@@ -124,6 +124,83 @@ class CountingLine:
 
 
 @dataclass(frozen=True)
+class TrackSupport:
+    """How much detector confidence stands behind one event, over its own frames.
+
+    **Why an event needs this at all**, measured 2026-08-26. Lowering the person birth
+    threshold from 0.35 to 0.15 bought +51% detections and +141% tracks on seven healthy
+    cameras -- real recall, on shoppers whose lower body is behind a counter -- and it
+    also multiplied posture events by four. Making the dense head vouch for the low
+    boxes did not help: it dropped 12-14% of them and produced *exactly* the unfiltered
+    arm's events, because the boxes it removed were never the ones firing. The extra
+    events come from real people detected at low confidence, whose keypoints are noisier
+    and so produce more posture runs. A better box filter cannot reach that. What reaches
+    it is a consumer that can see a 0.15-built track is not a 0.6-built one, which is
+    what this carries.
+
+    **It is not a confidence for the event.** The package docstring's rule stands -- an
+    event is a threshold crossing and inventing a probability for it would be a number
+    whose production nobody can name. These are the detector's own scores, reported as
+    what they are, next to how much of the event the detector actually saw.
+
+    `observed` counts the frames in the span the tracker matched a detection to; `span`
+    counts the frames the event covers. They differ when a track coasted, and the
+    difference is the point: a two-second `fall` seen in three frames out of ten is a
+    different claim from one seen in all ten, and nothing before this could tell a
+    consumer which it was holding.
+    """
+
+    score_p50: float
+    score_min: float
+    observed: int
+    span: int
+
+    def __post_init__(self):
+        if self.observed < 1 or self.span < self.observed:
+            raise ValueError(
+                f"need 1 <= observed <= span, got observed={self.observed} span={self.span}"
+            )
+
+    @property
+    def seen_fraction(self) -> float:
+        """Frames of this event the detector actually produced a box for."""
+        return self.observed / self.span
+
+
+def support_for(track: Any, i0: int, i1: int) -> TrackSupport | None:
+    """The detection support behind ``track``'s observations ``i0..i1`` inclusive.
+
+    ``i0``/``i1`` index the track's *observed* frames -- `Track.frames`, `Track.boxes`
+    and `Track.scores` are all in that space -- while `span` is computed in frame
+    numbers, so a track that coasted through the middle of an event reports it.
+
+    Returns None when the track carries no scores. That is legal and it is the state of
+    every track this repository produced before 2026-08-26: `Tracker.update` takes them
+    and does not require them. None means "not recorded", never "low" -- the distinction
+    this project keeps everywhere, and the one a defaulted 0.0 would destroy.
+    """
+    scores = list(getattr(track, "scores", ()))
+    if not scores:
+        return None
+    frames = list(track.frames)
+    if len(scores) != len(frames):
+        raise ValueError(
+            f"track {getattr(track, 'track_id', '?')} has {len(scores)} scores for "
+            f"{len(frames)} observed frames; they are index-aligned by contract, so a "
+            "mismatch has no safe interpretation"
+        )
+    window = [float(x) for x in scores[i0 : i1 + 1]]
+    if not window:
+        return None
+    return TrackSupport(
+        score_p50=float(np.median(window)),
+        score_min=float(min(window)),
+        observed=len(window),
+        span=int(frames[i1] - frames[i0] + 1),
+    )
+
+
+@dataclass(frozen=True)
 class SecurityEvent:
     """One row of the security output. Stable across versions; new fields append.
 
@@ -142,6 +219,10 @@ class SecurityEvent:
     value: float | None = None
     threshold: float | None = None
     basis: str = ""
+    # The detector confidence behind this event's own frames, or None when the producer
+    # had none to give. See `TrackSupport` -- it is deliberately not a score for the
+    # event, and `None` means "not recorded" rather than "low".
+    support: TrackSupport | None = None
     extra: dict[str, Any] = field(default_factory=dict)
     # When the clip's first frame was recorded, timezone-aware. Optional and defaulted so
     # no builder signature changes: the wall clock is not something an event *detector*
@@ -201,6 +282,13 @@ class SecurityEvent:
             "value": None if self.value is None else float(self.value),
             "threshold": None if self.threshold is None else float(self.threshold),
             "basis": self.basis,
+            # Flattened with a prefix rather than nested, because `as_row` promises a
+            # flat dict a database column can be made from. The keys are always present
+            # so the shape does not depend on whether the producer had scores.
+            "support_score_p50": None if self.support is None else self.support.score_p50,
+            "support_score_min": None if self.support is None else self.support.score_min,
+            "support_observed": None if self.support is None else self.support.observed,
+            "support_span": None if self.support is None else self.support.span,
             **dict(self.extra),
         }
 

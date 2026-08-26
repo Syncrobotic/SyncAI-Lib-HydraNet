@@ -191,6 +191,7 @@ def main() -> int:
             # indexes both or neither
             b = det["boxes"].cpu().numpy()[keep]
             kps = pose_rows.cpu().numpy()[keep]
+            scr = det["scores"].cpu().numpy()[keep]
             if len(b):
                 # source pixels for the tracker and the events: `Track.keypoints` is
                 # specified in image pixels, and a view-space copy would make every
@@ -201,7 +202,10 @@ def main() -> int:
                 kps_src[:, :, 0] = (kps_src[:, :, 0] - x0) * src_scale
                 kps_src[:, :, 1] = (kps_src[:, :, 1] - y0) * src_scale
                 if tracker is not None:
-                    tracker.update(boxes_src, n, keypoints=kps_src)
+                    # scores as well as keypoints: this is the tool that measured the
+                    # threshold sweep, so it is the one whose events have to say what
+                    # confidence they were built from (`events.TrackSupport`)
+                    tracker.update(boxes_src, n, keypoints=kps_src, scores=scr)
                 for bi, kp in zip(b, kps, strict=True):
                     bb = (bi - np.array([x0, y0, x0, y0])) * to_view
                     d.rectangle(list(bb), outline=BOX_COLOR, width=2)
@@ -211,7 +215,9 @@ def main() -> int:
                     n_joints += draw_person(d, kp, float(bb[3] - bb[1]))
                     people += 1
         if tracker is not None and not people:
-            tracker.update(np.zeros((0, 4)), n, keypoints=np.zeros((0, 17, 3)))
+            tracker.update(
+                np.zeros((0, 4)), n, keypoints=np.zeros((0, 17, 3)), scores=np.zeros(0)
+            )
         n_people += people
         d.rectangle([0, out_h - 18, out_w, out_h], fill=(0, 0, 0))
         d.text(
@@ -256,12 +262,15 @@ def main() -> int:
                     t = by_id.get(tid)
                     if t is None:
                         continue
-                    for f, box, kp in zip(t.frames, t.boxes, t.keypoints, strict=True):
+                    for f, box, kp, sc in zip(
+                        t.frames, t.boxes, t.keypoints, t.scores, strict=True
+                    ):
                         ang, ext, torso = _torso(kp, 0.3)
                         rows.append(
                             {
                                 "frame": int(f),
                                 "track_id": int(tid),
+                                "score": round(float(sc), 3),
                                 "box_h": round(float(box[3] - box[1]), 1),
                                 "torso_angle_deg": None
                                 if not np.isfinite(ang)
@@ -284,6 +293,10 @@ def main() -> int:
                         "track_ids": list(e.track_ids),
                         "value": e.value,
                         "threshold": e.threshold,
+                        "support_score_p50": None if e.support is None else e.support.score_p50,
+                        "support_score_min": None if e.support is None else e.support.score_min,
+                        "support_observed": None if e.support is None else e.support.observed,
+                        "support_span": None if e.support is None else e.support.span,
                         "track_rows": rows,
                     }
                 )

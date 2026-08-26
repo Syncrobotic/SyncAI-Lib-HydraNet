@@ -47,6 +47,25 @@ def iou(a: np.ndarray, b: np.ndarray) -> np.ndarray:
         return np.where(union > 0, inter / union, 0.0)
 
 
+def _latch(seen: bool | None, now: bool, what: str) -> bool:
+    """Hold a tracker to its first answer about whether it is given ``what``.
+
+    One helper for keypoints and scores because the failure is identical and it is not a
+    failure that announces itself: a list that skipped three frames still zips against
+    `frames` without error, it just describes different frames than it claims to.
+    """
+    if seen is None:
+        return now
+    if seen != now:
+        raise ValueError(
+            f"this tracker was updated {'with' if seen else 'without'} {what} and is now "
+            f"being updated {'with' if now else 'without'} them. `Track.{what}` has to stay "
+            "index-aligned with `Track.frames`; a gap cannot be recovered later, so it is "
+            "refused here rather than found by a consumer."
+        )
+    return now
+
+
 @dataclass
 class Track:
     """One identity. ``confirmed`` gates whether it is allowed to count."""
@@ -72,6 +91,23 @@ class Track:
     # `require_keypoints` in events.py is that refusal, in one place, naming the missing
     # model rather than returning no events as if none had happened.
     keypoints: list[np.ndarray] = field(default_factory=list)
+    # The detector score of each observed box, index-aligned with `frames` and `boxes`
+    # for the same reason `keypoints` is a field rather than a parallel structure.
+    #
+    # **This is the quantity the event layer had no way to see.** The 2026-08-26 threshold
+    # sweep lowered the person birth threshold 0.35 -> 0.15 and measured +51% detections
+    # and +141% tracks on seven healthy cameras, at four times the posture events -- and
+    # the extra events were not false boxes. They were real people detected at low
+    # confidence, whose keypoints are noisier and so produce more posture runs. Filtering
+    # the boxes harder does not reach that: the dense-head confirmation dropped 12-14% of
+    # boxes and produced *exactly* the unfiltered arm's events. What reaches it is a
+    # consumer that can tell a track built from 0.15 boxes from one built from 0.6 boxes,
+    # and until this field existed nothing downstream could.
+    #
+    # Empty when the caller did not supply scores, which is legal and is the state of
+    # every track produced before 2026-08-26. A consumer that needs it says so; see
+    # `events.support_for`.
+    scores: list[float] = field(default_factory=list)
 
     @property
     def centre(self) -> np.ndarray:
@@ -127,15 +163,17 @@ class Tracker:
         # shopper who left the frame is exactly the one whose visit is complete.
         self.retired: list[Track] = []
         self._next_id = 1
-        # None until the first update decides. See `update` -- keypoints are all
-        # frames or none, because a gap in them cannot be recovered afterwards.
+        # None until the first update decides. See `update` -- keypoints and scores are
+        # all frames or none, because a gap in either cannot be recovered afterwards.
         self._keypoints_seen: bool | None = None
+        self._scores_seen: bool | None = None
 
     def update(
         self,
         boxes: np.ndarray,
         frame_idx: int,
         keypoints: np.ndarray | None = None,
+        scores: np.ndarray | None = None,
     ) -> list[Track]:
         """Advance one frame. ``boxes`` is (N,4) xyxy for one class. Returns live tracks.
 
@@ -146,11 +184,17 @@ class Tracker:
         disagree. Until the pose head existed nothing could fill it and the refusal was
         the whole story; now the producer exists and this is the wire.
 
-        **All frames or none, per tracker.** Passing keypoints on some calls and not
-        others silently misaligns the two lists against `frames`, which is exactly the
-        drift `Track.keypoints` documents as its reason for being a field. A tracker that
-        has seen keypoints refuses a later call without them, and the reverse, rather
-        than producing a track whose pose belongs to different frames than it claims.
+        ``scores`` is (N,) detector confidences, one per box in the same order. It is
+        recorded rather than used: nothing here associates on score -- that is
+        `bytetrack`'s two-band mechanism and this tracker deliberately has no equivalent
+        -- and the reason to carry it is stated on `Track.scores`.
+
+        **All frames or none, per tracker**, for keypoints and for scores independently.
+        Passing either on some calls and not others silently misaligns its list against
+        `frames`, which is exactly the drift `Track.keypoints` documents as its reason for
+        being a field. A tracker that has seen keypoints refuses a later call without
+        them, and the reverse, rather than producing a track whose pose belongs to
+        different frames than it claims.
         """
         boxes = np.asarray(boxes, dtype=float).reshape(-1, 4)
         if keypoints is not None:
@@ -160,16 +204,15 @@ class Tracker:
                     f"{len(keypoints)} keypoint sets for {len(boxes)} boxes: they are "
                     "matched by position, so a mismatch has no safe interpretation"
                 )
-        if self._keypoints_seen is None:
-            self._keypoints_seen = keypoints is not None
-        elif self._keypoints_seen != (keypoints is not None):
-            had, now = self._keypoints_seen, keypoints is not None
-            raise ValueError(
-                f"this tracker was updated {'with' if had else 'without'} keypoints and is "
-                f"now being updated {'with' if now else 'without'} them. `Track.keypoints` "
-                "has to stay index-aligned with `Track.frames`; a gap cannot be recovered "
-                "later, so it is refused here rather than found by a pose event."
-            )
+        if scores is not None:
+            scores = np.asarray(scores, dtype=float).reshape(-1)
+            if len(scores) != len(boxes):
+                raise ValueError(
+                    f"{len(scores)} scores for {len(boxes)} boxes: they are matched by "
+                    "position, so a mismatch has no safe interpretation"
+                )
+        self._keypoints_seen = _latch(self._keypoints_seen, keypoints is not None, "keypoints")
+        self._scores_seen = _latch(self._scores_seen, scores is not None, "scores")
 
         # Predict: constant velocity on the box centre, size held.
         for t in self.tracks:
@@ -189,6 +232,8 @@ class Tracker:
             t.boxes.append(new.copy())
             if keypoints is not None:
                 t.keypoints.append(keypoints[di].copy())
+            if scores is not None:
+                t.scores.append(float(scores[di]))
             if t.hits >= self.min_hits:
                 t.confirmed = True
 
@@ -199,6 +244,7 @@ class Tracker:
                 frames=[frame_idx],
                 boxes=[boxes[di].copy()],
                 keypoints=[] if keypoints is None else [keypoints[di].copy()],
+                scores=[] if scores is None else [float(scores[di])],
             )
             t.confirmed = self.min_hits <= 1
             self.tracks.append(t)

@@ -95,9 +95,11 @@ from ._types import (
     UNBUILT,
     CountingLine,
     SecurityEvent,
+    TrackSupport,
     Zone,
     clip_start_from_name,
     require_buildable,
+    support_for,
     with_clip_start,
 )
 from .behaviour import crowd_events, fall_candidates, speed_events, tailgating_events
@@ -127,6 +129,7 @@ __all__ = [
     "UNBUILT",
     "CountingLine",
     "SecurityEvent",
+    "TrackSupport",
     "Zone",
     "clip_start_from_name",
     "crowd_events",
@@ -140,6 +143,7 @@ __all__ = [
     "require_keypoints",
     "speed_events",
     "stock_removed_events",
+    "support_for",
     "tailgating_events",
     "with_clip_start",
     "zone_events",
