@@ -8,12 +8,14 @@ are caught at load rather than discovered as NaN metres or a zone that never fir
 from __future__ import annotations
 
 import dataclasses
+import json
 import math
 
 import pytest
 
 from syncai_hydranet.geometry.camera_json import (
     SCHEMA_VERSION,
+    ZONE_KINDS,
     CameraFile,
     Lens,
     Zone,
@@ -99,3 +101,36 @@ def test_lens_is_optional_and_survives_absence(tmp_path):
     no_lens = dataclasses.replace(a_camera_file(), lens=None)
     no_lens.save(path)
     assert CameraFile.load(path).lens is None
+
+
+# ------------------------------------------------------- the v1 -> v2 widening
+
+
+def test_display_is_a_kind_because_a_shop_is_mostly_neither_till_nor_premium():
+    """Added 2026-08-26 when the fixture footprints reached their accept/reject pass."""
+    assert "display" in ZONE_KINDS
+    cf = dataclasses.replace(
+        a_camera_file(),
+        zones=(Zone("left_tables", "display", ((0.0, 1.0), (1.0, 1.0), (1.0, 2.0))),),
+    )
+    cf.validate()  # would raise on an unknown kind
+
+
+def test_a_v1_file_is_read_without_re_commissioning(tmp_path):
+    """v2 only widened the kind set, so nothing a v1 file can contain changed meaning."""
+    path = tmp_path / "cam.json"
+    a_camera_file().save(path)
+    raw = json.loads(path.read_text())
+    raw["schema_version"] = 1
+    path.write_text(json.dumps(raw))
+    assert CameraFile.load(path).camera_id == "Tao-Hsin-cam03"
+
+
+def test_a_version_this_reader_does_not_know_is_still_refused(tmp_path):
+    path = tmp_path / "cam.json"
+    a_camera_file().save(path)
+    raw = json.loads(path.read_text())
+    raw["schema_version"] = 99
+    path.write_text(json.dumps(raw))
+    with pytest.raises(ValueError, match="Re-commission"):
+        CameraFile.load(path)

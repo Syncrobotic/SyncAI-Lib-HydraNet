@@ -38,14 +38,41 @@ from pathlib import Path
 from ..labels import IGNORE
 from .ground import Camera, GroundPlane
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+# Versions this reader accepts, and why each older one is safe to read rather than
+# re-commission. A refusal is the default -- "schema_version 3" from a newer writer means
+# fields whose meaning this code does not know -- so an entry here is a claim that nothing
+# a file of that version can contain has changed meaning.
+READABLE_VERSIONS = {
+    # v1 -> v2 added the `display` zone kind and changed nothing else. Every v1 file is a
+    # valid v2 file: no field moved, no unit changed, and the widened set can only make a
+    # kind legal that was previously refused. Re-commissioning 8 cameras to gain a word
+    # would be a cost with no measurement behind it.
+    1: "v2 only widened ZONE_KINDS; no field changed meaning",
+    2: "current",
+}
 
 # The zone kinds the event layer knows how to consume (`analytics/events/zones.py`).
 # A kind outside this set is refused at load: a typo'd kind would not raise downstream,
 # the zone would simply never fire, which is the silent-failure mode this file exists to
 # prevent.
+#
+# `display` was added 2026-08-26, when the fixture footprints from `propose_zones.py`
+# reached their accept/reject pass and the shop turned out to be mostly neither tills nor
+# premium shelves: a STUDIO A floor is display tables. Forcing them into `premium_shelf`
+# would have made the kind mean "a fixture", after which no rule could key on it -- the
+# same failure this set exists to prevent, arrived at from the other direction.
 ZONE_KINDS = frozenset(
-    {"entrance_line", "till", "premium_shelf", "stockroom_door", "forbidden", "walkable"}
+    {
+        "entrance_line",
+        "till",
+        "display",
+        "premium_shelf",
+        "stockroom_door",
+        "forbidden",
+        "walkable",
+    }
 )
 
 
@@ -96,10 +123,11 @@ class CameraFile:
     def load(cls, path: str | Path) -> CameraFile:
         raw = json.loads(Path(path).read_text())
         version = raw.pop("schema_version", None)
-        if version != SCHEMA_VERSION:
+        if version not in READABLE_VERSIONS:
             raise ValueError(
-                f"{path}: schema_version {version!r}, this reader speaks {SCHEMA_VERSION}. "
-                "Re-commission the camera rather than guessing at field meanings."
+                f"{path}: schema_version {version!r}, this reader speaks "
+                f"{sorted(READABLE_VERSIONS)}. Re-commission the camera rather than "
+                "guessing at field meanings."
             )
         out = cls(
             camera_id=raw["camera_id"],

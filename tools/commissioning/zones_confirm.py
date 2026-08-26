@@ -55,7 +55,7 @@ import json
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from syncai_hydranet.geometry.camera_json import ZONE_KINDS, CameraFile, Zone
 from syncai_hydranet.geometry.ground import ground_to_pixel
@@ -64,6 +64,24 @@ ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
 PROPOSED = ROOT / "runs/zones01"
 COMMISSIONED = ROOT / "runs/commission01"
 OUT = ROOT / "runs/zones_confirm01"
+SHEET_SCALE = 2  # the plate is 960x540; a footprint label has to survive being looked at
+
+
+def _font(size: int):
+    """A real TrueType face if the box has one, PIL's bitmap default if it does not.
+
+    The default font ignores `size`, so a sheet rendered on a box without DejaVu is
+    legible-ish rather than illegible; it is not worth a dependency to make it exact.
+    """
+    for path in (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ):
+        if Path(path).exists():
+            return ImageFont.truetype(path, size)
+    return ImageFont.load_default()
+
+
 PALETTE = [
     (255, 96, 64), (90, 220, 130), (255, 205, 70), (120, 170, 255),
     (235, 120, 235), (110, 230, 230), (255, 150, 90), (170, 200, 90),
@@ -129,22 +147,36 @@ def render(camera: str) -> None:
     cam_file = CameraFile.load(COMMISSIONED / f"{camera}.camera.json")
     props = fixtures(camera)
     img = _plate(cam_file)
+    # Upscaled before anything is drawn: the plate is 960x540 and a footprint is a few
+    # dozen pixels across, so the labels and the outlines have to be drawn at the size
+    # they will be read at rather than resized afterwards into mush.
+    img = img.resize((img.width * SHEET_SCALE, img.height * SHEET_SCALE), Image.LANCZOS)
     scale = img.width / cam_file.image_size_px[0]
     d = ImageDraw.Draw(img, "RGBA")
 
     for z in cam_file.zones:
         if z.kind == "walkable":
             d.polygon([tuple(p) for p in _to_px(z.points_m, cam_file, scale)],
-                      outline=(90, 200, 255), width=3)  # fmt: skip
+                      outline=(90, 200, 255), width=4)  # fmt: skip
 
     rows = []
     for i, p in enumerate(props):
         col = PALETTE[i % len(PALETTE)]
         poly = _to_px(p["polygon_m"], cam_file, scale)
-        d.polygon([tuple(q) for q in poly], fill=(*col, 60), outline=col, width=3)
+        d.polygon([tuple(q) for q in poly], fill=(*col, 60), outline=col, width=4)
         c = poly.mean(axis=0)
-        d.text((c[0] - 6, c[1] - 7), str(i), fill=(0, 0, 0))
-        d.text((c[0] - 5, c[1] - 8), str(i), fill=col)
+        # A filled chip, not bare text: a numeral drawn straight onto shop shelving is
+        # unreadable at the size a footprint occupies, and a sheet whose labels cannot be
+        # read is a sheet nobody can return a verdict on.
+        label = str(i)
+        r = 20 if len(label) == 1 else 26
+        d.ellipse(
+            [c[0] - r, c[1] - r, c[0] + r, c[1] + r],
+            fill=(*col, 235),
+            outline=(0, 0, 0),
+            width=2,
+        )
+        d.text((c[0], c[1]), label, fill=(0, 0, 0), anchor="mm", font=_font(30))
         area = np.asarray(p["polygon_m"], dtype=float)
         rows.append(
             {
@@ -159,12 +191,12 @@ def render(camera: str) -> None:
             }
         )
 
-    d.rectangle([0, 0, img.width, 26], fill=(0, 0, 0))
+    d.rectangle([0, 0, img.width, 44], fill=(0, 0, 0))
     caption = (
-        f"{camera}  {len(props)} fixture footprints proposed  "
-        f"blue = walkable floor  numbers index the verdict file"
+        f"{camera}   {len(props)} fixture footprints proposed   "
+        f"blue outline = walkable floor   numbers index {camera}.verdicts.json"
     )
-    d.text((8, 7), caption, fill=(255, 255, 255))
+    d.text((14, 8), caption, fill=(255, 255, 255), font=_font(24))
     OUT.mkdir(parents=True, exist_ok=True)
     png = OUT / f"{camera}.png"
     img.save(png)
