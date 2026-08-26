@@ -59,6 +59,11 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
+from syncai_bev3d.floorplan import (  # noqa: E402
+    BevGrid,
+    shoelace,
+    simplify_ring,
+)
 from syncai_bev3d.plate_calibration import undistort_image  # noqa: E402
 from syncai_hydranet.geometry.ground import (  # noqa: E402
     Camera,
@@ -144,37 +149,6 @@ def run_terrain(model, cfg: dict, device, img: Image.Image) -> np.ndarray:
 # polygons on a BEV grid
 
 
-class BevGrid:
-    """A binary occupancy raster over ground coordinates (x lateral, z forward)."""
-
-    def __init__(self, x: np.ndarray, z: np.ndarray, cell: float, pad: float = 1.0):
-        self.cell = cell
-        self.x0 = float(np.floor((x.min() - pad) / cell) * cell)
-        self.z0 = float(np.floor((max(z.min() - pad, 0.0)) / cell) * cell)
-        self.nx = int(np.ceil((x.max() + pad - self.x0) / cell))
-        self.nz = int(np.ceil((z.max() + pad - self.z0) / cell))
-
-    def raster(self, x: np.ndarray, z: np.ndarray) -> np.ndarray:
-        cols = ((x - self.x0) / self.cell).astype(int)
-        rows = ((z - self.z0) / self.cell).astype(int)
-        ok = (cols >= 0) & (cols < self.nx) & (rows >= 0) & (rows < self.nz)
-        grid = np.zeros((self.nz, self.nx), dtype=bool)
-        grid[rows[ok], cols[ok]] = True
-        return grid
-
-    def to_units(self, contour_cells: np.ndarray) -> np.ndarray:
-        """contourpy index coordinates (x=col, y=row, cell centres at integers) -> units."""
-        out = np.empty_like(contour_cells)
-        out[:, 0] = self.x0 + (contour_cells[:, 0] + 0.5) * self.cell
-        out[:, 1] = self.z0 + (contour_cells[:, 1] + 0.5) * self.cell
-        return out
-
-
-def shoelace(poly: np.ndarray) -> float:
-    x, z = poly[:, 0], poly[:, 1]
-    return 0.5 * float(np.sum(x * np.roll(z, -1) - z * np.roll(x, -1)))
-
-
 def outer_contour(grid: np.ndarray) -> np.ndarray | None:
     """Largest closed contour of a binary grid, in cell-index coordinates."""
     import contourpy
@@ -191,55 +165,6 @@ def outer_contour(grid: np.ndarray) -> np.ndarray | None:
     if best is None:
         return None
     return best[:-1] - 1.0  # drop the closing repeat and the padding offset
-
-
-def _dp(points: np.ndarray, first: int, last: int, tol: float, keep: np.ndarray) -> None:
-    """Douglas-Peucker over an open chain, marking kept indices."""
-    stack = [(first, last)]
-    while stack:
-        a, b = stack.pop()
-        if b <= a + 1:
-            continue
-        seg = points[b] - points[a]
-        norm = math.hypot(*seg)
-        rel = points[a + 1 : b] - points[a]
-        # 2-D scalar cross product, written out: np.cross on 2-D inputs is deprecated.
-        dist = (
-            np.abs(seg[0] * rel[:, 1] - seg[1] * rel[:, 0]) / norm
-            if norm > 1e-12
-            else np.hypot(rel[:, 0], rel[:, 1])
-        )
-        i = int(dist.argmax())
-        if dist[i] > tol:
-            keep[a + 1 + i] = True
-            stack += [(a, a + 1 + i), (a + 1 + i, b)]
-
-
-def simplify_closed(poly: np.ndarray, tol: float, max_vertices: int) -> np.ndarray:
-    """Douglas-Peucker on a closed polygon, tightening until under the vertex budget."""
-    n = len(poly)
-    if n <= 3:
-        return poly
-    # Split at two far-apart anchors so the closed ring becomes two open chains.
-    a = 0
-    b = int(np.hypot(*(poly - poly[a]).T).argmax())
-    if b == a:
-        b = n // 2
-    lo, hi = min(a, b), max(a, b)
-    while True:
-        keep = np.zeros(n, dtype=bool)
-        keep[[lo, hi]] = True
-        _dp(poly, lo, hi, tol, keep)
-        rolled = np.vstack([poly[hi:], poly[: lo + 1]])
-        keep_r = np.zeros(len(rolled), dtype=bool)
-        keep_r[[0, len(rolled) - 1]] = True
-        _dp(rolled, 0, len(rolled) - 1, tol, keep_r)
-        idx = set(np.flatnonzero(keep).tolist())
-        idx |= {(hi + i) % n for i in np.flatnonzero(keep_r)}
-        out = poly[sorted(idx)]
-        if len(out) <= max_vertices:
-            return out
-        tol *= 1.5
 
 
 def bisect_mask(mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -269,7 +194,7 @@ def close_and_trace(
     contour = outer_contour(g)
     if contour is None:
         return None, g
-    poly = simplify_closed(bev.to_units(contour), tol=bev.cell, max_vertices=max_vertices)
+    poly = simplify_ring(bev.to_metres(contour), tol=bev.cell, max_vertices=max_vertices)
     return poly, g
 
 

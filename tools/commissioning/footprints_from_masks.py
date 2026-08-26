@@ -91,6 +91,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
+from syncai_bev3d.floorplan import polygon_area, simplify_chain
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 
@@ -142,31 +143,6 @@ def to_metres(pts_px: np.ndarray, cam_file: CameraFile) -> np.ndarray:
     return out[np.isfinite(out).all(axis=1)]
 
 
-def _simplify(chain: np.ndarray, tol: float) -> np.ndarray:
-    """Douglas-Peucker over an open chain. Iterative, so a long base cannot blow the stack."""
-    if len(chain) < 3:
-        return chain
-    keep = np.zeros(len(chain), dtype=bool)
-    keep[0] = keep[-1] = True
-    stack = [(0, len(chain) - 1)]
-    while stack:
-        a, b = stack.pop()
-        if b <= a + 1:
-            continue
-        seg = chain[b] - chain[a]
-        norm = float(np.hypot(*seg))
-        rel = chain[a + 1 : b] - chain[a]
-        if norm < 1e-9:
-            d = np.hypot(rel[:, 0], rel[:, 1])
-        else:
-            d = np.abs(rel[:, 0] * seg[1] - rel[:, 1] * seg[0]) / norm
-        i = int(d.argmax())
-        if d[i] > tol:
-            keep[a + 1 + i] = True
-            stack += [(a, a + 1 + i), (a + 1 + i, b)]
-    return chain[keep]
-
-
 def segments(base_m: np.ndarray, max_step_m: float) -> list[np.ndarray]:
     """Split a base line where consecutive points jump, which means it left the surface.
 
@@ -200,7 +176,7 @@ def footprint(chain: np.ndarray, depth: float) -> np.ndarray | None:
     Which normal is the far one is decided per point by the camera: the one whose dot
     product with the outward radial direction is positive.
     """
-    chain = _simplify(chain, SIMPLIFY_M)
+    chain = simplify_chain(chain, SIMPLIFY_M)
     if len(chain) < 2:
         return None
     tangent = np.gradient(chain, axis=0)
@@ -213,11 +189,6 @@ def footprint(chain: np.ndarray, depth: float) -> np.ndarray | None:
     flip = np.where(flip == 0, 1.0, flip)
     far = chain + depth * normal * flip[:, None]
     return np.concatenate([chain, far[::-1]])
-
-
-def _area(poly: np.ndarray) -> float:
-    x, z = poly[:, 0], poly[:, 1]
-    return 0.5 * abs(float(np.dot(x, np.roll(z, 1)) - np.dot(z, np.roll(x, 1))))
 
 
 def derive(camera: str, depth: float) -> dict:
@@ -239,7 +210,7 @@ def derive(camera: str, depth: float) -> dict:
             base = to_metres(px, cam_file)
             for part_i, seg in enumerate(segments(base, MAX_BASE_STEP_M)):
                 poly = footprint(seg, depth)
-                if poly is None or _area(poly) < 0.10:
+                if poly is None or polygon_area(poly) < 0.10:
                     continue
                 props.append(
                     {
@@ -248,7 +219,7 @@ def derive(camera: str, depth: float) -> dict:
                         "source_mask": cls,
                         "contact_points": len(seg),
                         "component_area_px": int(part.sum()),
-                        "bev_area_m2": round(_area(poly), 2),
+                        "bev_area_m2": round(polygon_area(poly), 2),
                         "polygon_m": [
                             [round(float(a), 3), round(float(b), 3)] for a, b in poly
                         ],

@@ -57,6 +57,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
+from syncai_bev3d.floorplan import BevGrid, polygon_area, simplify_chain
 from syncai_bev3d.teachers.sam3 import MODEL_ID, load_sam3, segment, vision_features
 from syncai_hydranet.data.sam3_prompts import DEFAULT_MIN_SCORE
 from syncai_hydranet.geometry.camera_json import CameraFile, Zone
@@ -179,41 +180,27 @@ def to_metres(px: np.ndarray, cam_file: CameraFile) -> np.ndarray:
     return out[np.isfinite(out).all(axis=1)]
 
 
-class FloorGrid:
-    """A BEV raster of this camera's floor, shared by every zone on it.
+class FloorGrid(BevGrid):
+    """This camera's floor raster: a  over the projected floor, closed once.
 
-    One grid rather than one per fixture, because the zones have to **partition** the
-    floor: a shopper standing between two display tables is at one of them, and a set of
-    overlapping bands makes `journeys` report a route through three zones without anyone
-    moving. Overlap was the first version's real defect, visible on Taichung-cam01 as
-    three zones covering the same aisle.
+    The extent, the rasterisation and the cell->metres conversion are 's and are
+    shared with . What is this tool's own is the binary closing:
+    a projected floor mask is speckled with one-cell holes where a fixture leg or a
+    reflection interrupted it, and a hole is a place a shopper reads as outside every zone.
     """
 
     def __init__(self, floor_m: np.ndarray):
-        self.lo = floor_m.min(axis=0) - 1.0
-        hi = floor_m.max(axis=0) + 1.0
-        self.nx = int(np.ceil((hi[0] - self.lo[0]) / CELL_M))
-        self.nz = int(np.ceil((hi[1] - self.lo[1]) / CELL_M))
         from scipy import ndimage
 
-        self.floor = ndimage.binary_closing(self.raster(floor_m), iterations=2)
-
-    def raster(self, pts: np.ndarray) -> np.ndarray:
-        c = ((pts[:, 0] - self.lo[0]) / CELL_M).astype(int)
-        r = ((pts[:, 1] - self.lo[1]) / CELL_M).astype(int)
-        ok = (c >= 0) & (c < self.nx) & (r >= 0) & (r < self.nz)
-        g = np.zeros((self.nz, self.nx), dtype=bool)
-        g[r[ok], c[ok]] = True
-        return g
-
-    def to_metres(self, cells: np.ndarray) -> np.ndarray:
-        return np.stack(
-            [
-                self.lo[0] + (cells[:, 0] + 0.5) * CELL_M,
-                self.lo[1] + (cells[:, 1] + 0.5) * CELL_M,
-            ],
-            axis=1,
+        grid = BevGrid.over(floor_m, CELL_M)
+        self.cell, self.x0, self.z0, self.nx, self.nz = (
+            grid.cell,
+            grid.x0,
+            grid.z0,
+            grid.nx,
+            grid.nz,
         )
+        self.floor = ndimage.binary_closing(self.raster_points(floor_m), iterations=2)
 
 
 def assign(grid: FloorGrid, contacts: list[np.ndarray]) -> list[np.ndarray]:
@@ -228,7 +215,7 @@ def assign(grid: FloorGrid, contacts: list[np.ndarray]) -> list[np.ndarray]:
 
     dists = []
     for pts in contacts:
-        seed = grid.raster(pts) if len(pts) else np.zeros((grid.nz, grid.nx), dtype=bool)
+        seed = grid.raster_points(pts) if len(pts) else np.zeros((grid.nz, grid.nx), dtype=bool)
         if not seed.any():
             dists.append(np.full((grid.nz, grid.nx), np.inf))
             continue
@@ -268,39 +255,14 @@ def polygons(grid: FloorGrid, cells: np.ndarray) -> list[np.ndarray]:
             if a > best_a:
                 best, best_a = line[:-1] - 1.0, a
         if best is not None:
-            out.append(_simplify(grid.to_metres(best), 0.08))
-    out.sort(key=lambda poly: -_area(poly))
+            ring = grid.to_metres(best)
+            # A 3-point ring is all vertex: `simplify_chain`'s open-chain rule would drop
+            # the middle one and leave a 2-point zone with no area. Guarded here rather
+            # than in the shared helper, because `< 3` is the correct rule for the open
+            # chains `footprints_from_masks` simplifies.
+            out.append(simplify_chain(ring, 0.08) if len(ring) >= 4 else ring)
+    out.sort(key=lambda poly: -polygon_area(poly))
     return out
-
-
-def _simplify(chain: np.ndarray, tol: float) -> np.ndarray:
-    if len(chain) < 4:
-        return chain
-    keep = np.zeros(len(chain), dtype=bool)
-    keep[0] = keep[-1] = True
-    stack = [(0, len(chain) - 1)]
-    while stack:
-        a, b = stack.pop()
-        if b <= a + 1:
-            continue
-        seg = chain[b] - chain[a]
-        norm = float(np.hypot(*seg))
-        rel = chain[a + 1 : b] - chain[a]
-        d = (
-            np.hypot(rel[:, 0], rel[:, 1])
-            if norm < 1e-9
-            else np.abs(rel[:, 0] * seg[1] - rel[:, 1] * seg[0]) / norm
-        )
-        i = int(d.argmax())
-        if d[i] > tol:
-            keep[a + 1 + i] = True
-            stack += [(a, a + 1 + i), (a + 1 + i, b)]
-    return chain[keep]
-
-
-def _area(poly: np.ndarray) -> float:
-    x, z = poly[:, 0], poly[:, 1]
-    return 0.5 * abs(float(np.dot(x, np.roll(z, 1)) - np.dot(z, np.roll(x, 1))))
 
 
 def derive(camera: str, device: str) -> dict:
@@ -320,7 +282,7 @@ def derive(camera: str, device: str) -> dict:
     zones = []
     for inst, contact, cells in zip(found, contacts, regions, strict=True):
         for side, poly in enumerate(polygons(grid, cells)):
-            if _area(poly) < MIN_ZONE_M2:
+            if polygon_area(poly) < MIN_ZONE_M2:
                 continue
             zones.append(
                 {
@@ -332,7 +294,7 @@ def derive(camera: str, device: str) -> dict:
                     "contact_points": len(contact),
                     # Which piece of this fixture's service floor: 0 is the largest.
                     "side": side,
-                    "area_m2": round(_area(poly), 2),
+                    "area_m2": round(polygon_area(poly), 2),
                     "polygon_m": [[round(float(a), 2), round(float(b), 2)] for a, b in poly],
                 }
             )
