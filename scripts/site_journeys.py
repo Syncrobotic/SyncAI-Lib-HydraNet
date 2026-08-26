@@ -64,21 +64,16 @@ from syncai_hydranet.utils.device import pick_device  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
 COMMISSIONED = ROOT / "runs/commission01"
-CLIPS = ROOT / "datasets/studioa_clips"
 
-# The eight clips the threshold sweep and the pose-event pass ran on. Named rather than
-# globbed: a run that silently picks a different clip is a run whose numbers cannot be
-# compared with the ones already recorded.
-SWEEP_CLIPS = {
-    "Kaohsiung-cam04": "archive_20260816-112757_20260816-113301.mp4",
-    "Taichung-cam01": "archive_20260816-113024_20260816-113528.mp4",
-    "Taichung-cam04": "archive_20260816-113005_20260816-113509.mp4",
-    "Taichung-cam07": "archive_20260816-113047_20260816-113551.mp4",
-    "Taichung-cam10": "archive_20260816-112916_20260816-113416.mp4",
-    "Taichung-cam11": "archive_20260816-113146_20260816-113647.mp4",
-    "Tao-Hsin-cam03": "archive_20260816-063115_20260816-063619.mp4",
-    "Tao-Hsin-cam04": "archive_20260816-112911_20260816-113415.mp4",
-}
+# The eight clips every fleet measurement of 2026-08-26 ran on. Read from
+# `configs/sweep_clips.json` rather than written here, and rather than imported from a
+# neighbouring script: what is shared is a corpus *selection*, which is data, and
+# `tests/test_scripts_are_not_libraries.py` refuses one script importing another for the
+# reason `clip_tracks.py` records -- four copies of one loop that stopped agreeing. A
+# dataset path has no business in the wheel either, so the file is the right home for it.
+_SWEEP = json.loads((ROOT / "configs/sweep_clips.json").read_text())
+CLIPS = ROOT / _SWEEP["corpus_root"]
+SWEEP_CLIPS: dict[str, str] = _SWEEP["clips"]
 
 
 def run_camera(camera: str, model, cfg, device, args) -> dict:

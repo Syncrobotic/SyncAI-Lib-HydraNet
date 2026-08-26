@@ -55,8 +55,17 @@ from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # 
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
-sys.path.insert(0, str(ROOT / "scripts"))
-from site_journeys import CLIPS, COMMISSIONED, SWEEP_CLIPS  # noqa: E402
+COMMISSIONED = ROOT / "runs/commission01"
+
+# The eight clips every fleet measurement of 2026-08-26 ran on. Read from
+# `configs/sweep_clips.json` rather than written here, and rather than imported from a
+# neighbouring script: what is shared is a corpus *selection*, which is data, and
+# `tests/test_scripts_are_not_libraries.py` refuses one script importing another for the
+# reason `clip_tracks.py` records -- four copies of one loop that stopped agreeing. A
+# dataset path has no business in the wheel either, so the file is the right home for it.
+_SWEEP = json.loads((ROOT / "configs/sweep_clips.json").read_text())
+CLIPS = ROOT / _SWEEP["corpus_root"]
+SWEEP_CLIPS: dict[str, str] = _SWEEP["clips"]
 
 
 class Recording(Tracker):
