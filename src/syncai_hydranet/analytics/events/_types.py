@@ -123,6 +123,52 @@ class CountingLine:
     b: np.ndarray  # (2,)
 
 
+def zones_from_camera(cam_file: Any, kinds: Sequence[str] | None = None) -> list[Zone]:
+    """A commissioned camera's polygon zones, as the event layer's `Zone`.
+
+    `camera.json` and this module both call a floor region a "zone" and they are not the
+    same object: `camera_json.Zone` is what the *camera* is -- a named polygon in metres,
+    valid until the mount or the store moves -- and `Zone` here carries the thresholds a
+    store manager changes on a Tuesday. The package docstring's third reason for keeping
+    events out of the weights is the same reason for keeping policy out of `camera.json`,
+    so this bridge deliberately carries **geometry only**: every policy field comes back
+    at its default and the caller sets it.
+
+    `entrance_line` is skipped because it is a line, not a region -- `counting_lines`
+    below returns those. Without the split, a two-point polyline would arrive here as a
+    degenerate polygon that `contains` calls False for every point on the floor, which is
+    a zone that never fires and never errors.
+    """
+    wanted = None if kinds is None else set(kinds)
+    return [
+        Zone(name=z.name, polygon=np.asarray(z.points_m, dtype=float))
+        for z in cam_file.zones
+        if z.kind != "entrance_line" and (wanted is None or z.kind in wanted)
+    ]
+
+
+def counting_lines(cam_file: Any) -> list[CountingLine]:
+    """A commissioned camera's `entrance_line` zones, as directed segments.
+
+    A polyline with more than two points is refused rather than truncated: which pair a
+    crossing test should use is a decision, and taking the first two silently would make
+    a three-point entrance mean whatever its first segment happens to mean.
+    """
+    out = []
+    for z in cam_file.zones:
+        if z.kind != "entrance_line":
+            continue
+        if len(z.points_m) != 2:
+            raise ValueError(
+                f"entrance_line {z.name!r} has {len(z.points_m)} points; a counting line "
+                "is one directed segment, and choosing which pair of a polyline to cross "
+                "against is a decision this function must not make silently"
+            )
+        a, b = (np.asarray(pt, dtype=float) for pt in z.points_m)
+        out.append(CountingLine(name=z.name, a=a, b=b))
+    return out
+
+
 @dataclass(frozen=True)
 class TrackSupport:
     """How much detector confidence stands behind one event, over its own frames.

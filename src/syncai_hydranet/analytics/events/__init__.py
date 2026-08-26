@@ -98,9 +98,11 @@ from ._types import (
     TrackSupport,
     Zone,
     clip_start_from_name,
+    counting_lines,
     require_buildable,
     support_for,
     with_clip_start,
+    zones_from_camera,
 )
 from .behaviour import crowd_events, fall_candidates, speed_events, tailgating_events
 from .pose import (
@@ -132,6 +134,7 @@ __all__ = [
     "TrackSupport",
     "Zone",
     "clip_start_from_name",
+    "counting_lines",
     "crowd_events",
     "fall_candidates",
     "line_events",
@@ -148,4 +151,5 @@ __all__ = [
     "with_clip_start",
     "zone_events",
     "zone_stock_counts",
+    "zones_from_camera",
 ]
