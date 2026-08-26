@@ -30,6 +30,7 @@ from syncai_hydranet.analytics.events.pose import _torso
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.models.hydranet import build_model
+from syncai_hydranet.serving.decode import MIN_PERSON_FRACTION, person_pixel_fraction
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
 from syncai_hydranet.utils.visualize import preprocess
 
@@ -75,6 +76,14 @@ def main() -> int:
     ap.add_argument("--frames", type=int, default=1)
     ap.add_argument("--fps", type=float, default=5.0)
     ap.add_argument("--score-thr", type=float, default=0.35)
+    ap.add_argument(
+        "--dense-confirm",
+        action="store_true",
+        help="admit low-scoring boxes only where the dense head puts person pixels "
+        "under them. The point of pairing it with a low --score-thr: the box head "
+        "finds the shoppers behind counters and scores them below 0.35",
+    )
+    ap.add_argument("--min-person-fraction", type=float, default=MIN_PERSON_FRACTION)
     ap.add_argument("--stills", type=int, default=1, help="how many frames to also save as png")
     ap.add_argument(
         "--still-frames",
@@ -114,6 +123,7 @@ def main() -> int:
     size = cfg["data"]["input_size"]
     classes = list(cfg["model"]["heads"]["detection"]["classes"])
     person = classes.index("person")
+    seg_person = list(cfg["data"].get("terrain_classes") or []).index("person")
 
     out_w, out_h = 1280, 720
     # same rule as demo_video: every render keeps its own file and
@@ -133,7 +143,7 @@ def main() -> int:
             stdin=subprocess.PIPE,
         )  # fmt: skip
 
-    saved = n = n_people = n_joints = 0
+    saved = n = n_people = n_joints = n_unconfirmed = 0
     tracker = Tracker() if args.events else None
     want = {int(x) for x in args.still_frames.split(",") if x.strip()}
     for frame in decode_frames(str(clip), 1920, 1080, args.fps):
@@ -149,6 +159,26 @@ def main() -> int:
             res = model.predict(x.to(device), score_thr=args.score_thr)
         det = res.get("detection", [{}])[0]
         pose_rows = res.get("pose", [None])[0]
+        n_dropped = 0
+        if args.dense_confirm and det and len(det.get("boxes", [])):
+            # the pose rows are aligned to the detection rows, so the same mask has to
+            # index both -- filtering boxes alone would hand every skeleton to the wrong
+            # shopper from the first dropped box onwards
+            cls_map = res["terrain"][0].cpu().numpy()
+            lab_np = det["labels"].cpu().numpy()
+            bx_np = det["boxes"].cpu().numpy()
+            keep = np.ones(len(lab_np), dtype=bool)
+            for i in np.nonzero(lab_np == person)[0]:
+                keep[i] = (
+                    person_pixel_fraction(bx_np[i], cls_map, seg_person)
+                    >= args.min_person_fraction
+                )
+            n_dropped = int((~keep).sum())
+            n_unconfirmed += n_dropped
+            kt = torch.from_numpy(keep).to(det["boxes"].device)
+            det = {k: v[kt] for k, v in det.items()}
+            if pose_rows is not None:
+                pose_rows = pose_rows[kt]
         view = img.resize((out_w, out_h))
         d = ImageDraw.Draw(view)
         x0, y0, cw, _ch = region
@@ -207,6 +237,8 @@ def main() -> int:
             print(f"wrote {final}")
             print(f"  newest also at {latest}")
     print(f"{n} frames, {n_people} person detections, {n_joints} joints above {KP_MIN_CONF}")
+    if args.dense_confirm:
+        print(f"  {n_unconfirmed} boxes dropped for want of dense person pixels")
     if tracker is not None:
         tracks = [t for t in tracker.tracks + tracker.retired if t.confirmed]
         print(f"{len(tracks)} confirmed tracks, all carrying one keypoint set per frame")
