@@ -196,6 +196,49 @@ Invariants already enforced in the tree: nothing crosses from L3/L4 down into L0
 read only the neck, never each other (`models/hydranet.py`), so `forward` stays pure
 convolution and the ONNX/TensorRT export stays clean.
 
+#### 2.3.1 What L1 emits — the vector space, as a contract
+
+**Built 2026-08-25: `analytics/world.py` (`WorldFrame`, `WorldObject`, `world_frame`).**
+`analytics/stage.py` typed what enters the second stage and typed it in **pixels**; the
+metre side had no type, so `dwell.track_ground_path`, `events/zones.py` and `cli/scene.py`
+each called `pixel_to_ground` and kept the answer in a private shape — the same failure
+`stage.py` records as its own reason for existing, one coordinate system later.
+
+`WorldFrame` is one camera's floor at one instant: `frame_index`, PTS `time_s`, `space`,
+and a list of `WorldObject{track_id, name, x_m, z_m, vx_ms, vz_ms, yaw_rad, height_m,
+observed, basis}`. Four decisions carry it:
+
+* **It lives in `syncai_hydranet.analytics`, not `syncai_bev3d.scene_types`**, even though
+  `PlaneObject`/`DepthObject` already describe almost this shape and `DepthObject` already
+  carries `yaw_rad`. The serving path may not import bev3d (§2), and this is produced every
+  frame on the serving path. Same precedent as `geometry/camera_json.py`.
+* **`space` names which metric frame the coordinates live in**, carried per frame rather
+  than assumed — the rule `BoxFrame.class_names` exists for. Today the only value is
+  `camera_floor(<camera_id>)`, because **there is no store frame**: nothing in `CameraFile`
+  maps a camera's metres onto a store plan, so two cameras' `x_m` are two different x. That
+  is open question 5's missing piece and it is a commissioning artefact (a 2D similarity
+  transform per camera, 2–3 correspondences against a store plan), not a model change. It
+  needs a `SCHEMA_VERSION` bump, so the 8 shipped `camera.json` get regenerated.
+* **Every key is required and unfillable values are `None`**, so "not supplied" and "not
+  measured" stay different claims. `yaw_rad` is `None` until the pose head lands (shoulder
+  line → body yaw, which is what §1's "which display draws attention" actually needs);
+  `height_m` is `None` until a serving-side producer exists.
+* **`basis` names the instrument**, as `SecurityEvent.basis` does: `foot_point` today,
+  `keypoint_ankle` / `keypoint_prior` reserved for the occlusion fallback above,
+  `above_horizon` for the refusal `pixel_to_ground` already makes.
+
+**A correction it carries and `dwell` does not.** `camera_json.py` states that the lens
+applies to points on their way to the floor, and `undistort_points` states that a runtime
+consumer that skips it makes the metres drift silently. Nothing on the serving path did:
+the only callers are two commissioning modules, and `track_ground_path` projects the raw
+foot point. `world_frame` undistorts. `track_ground_path` is deliberately left alone —
+fixing it moves every dwell, path and heatmap number already reported, which is a
+re-baseline and belongs in its own commit next to a measurement of what moved.
+
+**State: one producer, no consumer.** `dwell` and `events/zones.py` still take `Track` and
+keep taking it until moving them is measured to change no number. Adopting it is step 5's
+work, not this commit's.
+
 ## 3. The requirements → where each one lands
 
 The four capability families this plan must deliver, and their placement:

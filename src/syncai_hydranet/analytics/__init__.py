@@ -23,5 +23,15 @@ against a manual audit and an over-count looks like a good day's trading.
 
 from .dwell import GroundMap, dwell_table, track_ground_path
 from .tracker import Track, Tracker
+from .world import WorldFrame, WorldObject, world_frame
 
-__all__ = ["GroundMap", "Track", "Tracker", "dwell_table", "track_ground_path"]
+__all__ = [
+    "GroundMap",
+    "Track",
+    "Tracker",
+    "WorldFrame",
+    "WorldObject",
+    "dwell_table",
+    "track_ground_path",
+    "world_frame",
+]
