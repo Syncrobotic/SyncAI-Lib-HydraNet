@@ -4,6 +4,7 @@ thresholds, and track-box consumption."""
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -14,6 +15,7 @@ from syncai_hydranet.serving.camera import (
     CameraState,
     ClassThresholds,
     confirmed_track_boxes,
+    load_thresholds,
 )
 
 HW = (8, 10)
@@ -202,3 +204,109 @@ def test_incremental_ema_matches_the_naive_recursion_over_a_long_sequence():
             naive[flat, np.arange(labels.size)] += alpha
         expected = naive.argmax(axis=0).astype(np.uint8).reshape(HW)
         np.testing.assert_array_equal(s.ema_labels(labels), expected)
+
+
+# ----------------------------------------------------- the threshold book, per camera
+
+
+def _book(tmp_path, cameras: dict) -> Path:
+    body = {
+        "schema": "hydranet-thresholds/v1",
+        "checkpoint": "runs/whatever/last.pt",
+        "default": {
+            "person": {"birth": 0.15, "keep": 0.10},
+            "bag": {"birth": 0.35, "keep": 0.20},
+        },
+        "cameras": cameras,
+    }
+    p = tmp_path / "thresholds.json"
+    p.write_text(json.dumps(body))
+    return p
+
+
+def test_a_camera_without_an_entry_runs_the_fleet_default(tmp_path):
+    book = load_thresholds(_book(tmp_path, {}))
+    assert book.for_camera("Taichung-cam01")["person"].birth == pytest.approx(0.15)
+    assert book.basis_for("Taichung-cam01") is None
+
+
+def test_an_override_replaces_only_the_classes_it_names(tmp_path):
+    """Kaohsiung-cam04's person calibration is under investigation; its bag is not."""
+    book = load_thresholds(
+        _book(
+            tmp_path,
+            {
+                "Kaohsiung-cam04": {
+                    "basis": "runs/thr_sweep01: 3,353 -> 13,595 detections at 0.15",
+                    "person": {"birth": 0.35, "keep": 0.20},
+                }
+            },
+        )
+    )
+    cam = book.for_camera("Kaohsiung-cam04")
+    assert cam["person"].birth == pytest.approx(0.35)  # held back
+    assert cam["bag"].birth == pytest.approx(0.35)  # inherited, not copied
+    assert book.for_camera("Taichung-cam01")["person"].birth == pytest.approx(0.15)
+
+
+def test_the_default_is_not_mutated_by_reading_a_camera(tmp_path):
+    book = load_thresholds(
+        _book(tmp_path, {"cam": {"basis": "measured", "person": {"birth": 0.9, "keep": 0.5}}})
+    )
+    book.for_camera("cam")
+    assert book.default["person"].birth == pytest.approx(0.15)
+
+
+def test_an_override_without_a_stated_measurement_is_refused(tmp_path):
+    p = _book(tmp_path, {"cam": {"person": {"birth": 0.5, "keep": 0.3}}})
+    with pytest.raises(ValueError, match="without a `basis`"):
+        load_thresholds(p)
+
+
+def test_a_blank_basis_is_not_a_basis(tmp_path):
+    p = _book(tmp_path, {"cam": {"basis": "   ", "person": {"birth": 0.5, "keep": 0.3}}})
+    with pytest.raises(ValueError, match="without a `basis`"):
+        load_thresholds(p)
+
+
+def test_a_basis_that_overrides_nothing_is_refused(tmp_path):
+    p = _book(tmp_path, {"cam": {"basis": "measured somewhere"}})
+    with pytest.raises(ValueError, match="overrides nothing"):
+        load_thresholds(p)
+
+
+def test_a_book_of_overrides_alone_is_not_a_book(tmp_path):
+    p = tmp_path / "t.json"
+    p.write_text(json.dumps({"schema": "hydranet-thresholds/v1", "cameras": {}}))
+    with pytest.raises(ValueError, match="no default thresholds"):
+        load_thresholds(p)
+
+
+def test_an_unknown_schema_is_refused(tmp_path):
+    p = tmp_path / "t.json"
+    p.write_text(json.dumps({"schema": "something-else/v9", "default": {}}))
+    with pytest.raises(ValueError, match="unexpected thresholds schema"):
+        load_thresholds(p)
+
+
+def test_a_class_missing_half_its_hysteresis_is_refused(tmp_path):
+    p = tmp_path / "t.json"
+    p.write_text(
+        json.dumps({"schema": "hydranet-thresholds/v1", "default": {"person": {"birth": 0.35}}})
+    )
+    with pytest.raises(ValueError, match="needs both birth and keep"):
+        load_thresholds(p)
+
+
+def test_the_shipped_book_loads_and_holds_cam04_at_the_shipped_working_point():
+    """The file that actually ships, read as a test rather than trusted."""
+    book = load_thresholds("configs/serving/thresholds_retail_security.json")
+    assert book.for_camera("Kaohsiung-cam04")["person"].birth == pytest.approx(0.35)
+    basis = book.basis_for("Kaohsiung-cam04")
+    assert basis is not None and "13,595" in basis
+
+
+def test_a_camera_state_takes_one_camera_s_thresholds():
+    book = load_thresholds("configs/serving/thresholds_retail_security.json")
+    s = make_state(thresholds=book.for_camera("Kaohsiung-cam04"))
+    assert s.thresholds["person"].birth == pytest.approx(0.35)

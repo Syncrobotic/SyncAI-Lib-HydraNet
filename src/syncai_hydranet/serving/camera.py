@@ -20,6 +20,12 @@ Design notes, each tied to a measurement:
   fixed 0.30 render threshold with mAP unchanged (0.1174 -> 0.1179). A score
   calibration is a property of one checkpoint, so thresholds ship as per-class
   config beside the engine, never as a constant in code.
+* **And per camera, where a camera has earned an exception.** The 2026-08-26 sweep
+  lowered person's birth threshold to 0.15 fleet-wide: seven healthy cameras gained
+  +51% detections, Kaohsiung-cam04 went 3,353 -> 13,595, which is its open
+  person-score investigation and not recall. `ThresholdBook` carries the fleet
+  default plus per-camera overrides, each of which must state the measurement that
+  produced it -- see its docstring for why a blank basis is refused at load.
 * **Tracker is injected.** The measured tracker is
   ``analytics.bytetrack.OfflineForward`` (the mechanism stable_infer decided into
   the main path). The state object takes a factory rather than importing it, so a
@@ -30,8 +36,8 @@ Design notes, each tied to a measurement:
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -69,6 +75,95 @@ DEFAULT_THRESHOLDS: dict[str, ClassThresholds] = {
     "boxed_stock": ClassThresholds(birth=0.35, keep=0.20),
     "device": ClassThresholds(birth=0.35, keep=0.20),
 }
+
+THRESHOLD_SCHEMA = "hydranet-thresholds/v1"
+
+
+@dataclass(frozen=True)
+class ThresholdBook:
+    """Per-class working thresholds, with per-camera overrides that state their evidence.
+
+    **Why per camera, measured 2026-08-26.** The three-arm threshold sweep lowered the
+    person birth threshold to 0.15 across the fleet. On seven healthy cameras that bought
+    +51% detections and +141% tracks. On Kaohsiung-cam04 it took detections from 3,353 to
+    **13,595** -- four times the fleet's factor -- which is that camera's open
+    person-score investigation surfacing, not recall. One number cannot serve both, and
+    the module already argued the shape of the answer: a working point is a property of a
+    calibration, not a constant in code. A camera is another axis of that calibration.
+
+    **An override must name what measured it.** `basis` is required on every camera entry
+    and a blank one is refused at load. A per-camera threshold with no stated reason is
+    indistinguishable from a number somebody tuned until the alerts stopped, and this
+    repository's standing rule is to check what produced a number before attributing it
+    to a mechanism. The fleet default carries the same obligation in
+    `DEFAULT_THRESHOLDS`' comment, which is where its 0.35/0.20 hysteresis is sourced.
+    """
+
+    default: dict[str, ClassThresholds]
+    cameras: dict[str, dict[str, ClassThresholds]] = field(default_factory=dict)
+    bases: dict[str, str] = field(default_factory=dict)
+
+    def for_camera(self, camera: str) -> dict[str, ClassThresholds]:
+        """This camera's thresholds: the fleet default with its own overrides applied.
+
+        Per class, not per camera wholesale -- a camera whose `person` calibration is
+        under investigation has no reason to opt out of the fleet's `bag` working point,
+        and copying every class into its entry to change one is how the two drift.
+        """
+        merged = dict(self.default)
+        merged.update(self.cameras.get(camera, {}))
+        return merged
+
+    def basis_for(self, camera: str) -> str | None:
+        """What measured this camera's override, or None when it has none."""
+        return self.bases.get(camera)
+
+
+def _class_thresholds(raw: Mapping[str, Any], where: str) -> dict[str, ClassThresholds]:
+    out: dict[str, ClassThresholds] = {}
+    for cls, spec in raw.items():
+        try:
+            out[cls] = ClassThresholds(birth=float(spec["birth"]), keep=float(spec["keep"]))
+        except KeyError as exc:
+            raise ValueError(f"{where}: class {cls!r} needs both birth and keep") from exc
+    return out
+
+
+def load_thresholds(path: str | Path) -> ThresholdBook:
+    """Read a threshold book from disk. Ships beside the engine, not in code.
+
+    The file names the checkpoint it was derived from, because a score calibration is a
+    property of one set of weights -- the b03_gdino retrain moved `boxed_stock` from 5.5
+    to 0.12 boxes/frame at a fixed threshold with mAP unchanged. Nothing here enforces
+    that the running engine matches; it is recorded so a reader can check, which is the
+    same bargain `camera.json` makes with its own provenance fields.
+    """
+    p = Path(path)
+    book = json.loads(p.read_text())
+    if book.get("schema") != THRESHOLD_SCHEMA:
+        raise ValueError(f"{p}: unexpected thresholds schema {book.get('schema')!r}")
+    default = _class_thresholds(book.get("default", {}), f"{p}: default")
+    if not default:
+        raise ValueError(f"{p}: no default thresholds -- a book of overrides alone is not one")
+    cameras: dict[str, dict[str, ClassThresholds]] = {}
+    bases: dict[str, str] = {}
+    for name, entry in book.get("cameras", {}).items():
+        basis = str(entry.get("basis", "")).strip()
+        if not basis:
+            raise ValueError(
+                f"{p}: camera {name!r} overrides a threshold without a `basis`. A "
+                "per-camera working point with no stated measurement cannot be told "
+                "apart from a number tuned until the alerts stopped."
+            )
+        classes = _class_thresholds(
+            {k: v for k, v in entry.items() if k != "basis"}, f"{p}: camera {name}"
+        )
+        if not classes:
+            raise ValueError(f"{p}: camera {name!r} has a basis and overrides nothing")
+        cameras[name] = classes
+        bases[name] = basis
+    return ThresholdBook(default=default, cameras=cameras, bases=bases)
+
 
 # The reference edge the injected tracker's single hysteresis is built on. A
 # detection's score is rescaled by (BIRTH_REF / its class's birth) before the

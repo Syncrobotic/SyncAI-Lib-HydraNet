@@ -39,7 +39,7 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from syncai_hydranet.data.label_maps_retail_security import get_det_vocab  # noqa: E402
-from syncai_hydranet.serving.camera import DEFAULT_THRESHOLDS, CameraState  # noqa: E402
+from syncai_hydranet.serving.camera import CameraState, load_thresholds  # noqa: E402
 from syncai_hydranet.serving.decode import FcosDecoder  # noqa: E402
 from syncai_hydranet.serving.engine import (  # noqa: E402
     TrtExecutor,
@@ -305,6 +305,8 @@ def cmd_run(args) -> int:
     cfg = yaml.safe_load(Path(args.config).read_text())
     terrain_classes = cfg["data"]["terrain_classes"]
 
+    book = load_thresholds(args.thresholds)
+    overridden = sorted(book.cameras)
     streams = discover_streams(ROOT / "datasets/studioa_clips", args.streams)
     factory = make_tracker_factory(vel_scale=25.0 / args.assumed_fps)
     cameras = {}
@@ -314,12 +316,18 @@ def cmd_run(args) -> int:
             num_terrain_classes=len(terrain_classes),
             canvas_hw=(CANVAS_H, CANVAS_W),
             det_classes=det_classes,
-            thresholds=DEFAULT_THRESHOLDS,
+            # Per camera, not one dict for the fleet: Kaohsiung-cam04's person score
+            # calibration is under investigation and the book holds it at the shipped
+            # working point while the rest of the fleet moves.
+            thresholds=book.for_camera(name),
             calib_path=ROOT / f"runs/onboard01/{name}.calib.json",
             tracker_factory=factory,
         )
     calibrated = sorted(c for c, s in cameras.items() if s.calib is not None)
     print(f"{len(streams)} streams; {len(calibrated)} with calibration")
+    for name in overridden:
+        if name in cameras:
+            print(f"  {name}: threshold override -- {book.basis_for(name)}")
 
     ex = TrtExecutor(plan, enable_d2h=True)
     if ex.batch != args.streams:
@@ -507,7 +515,7 @@ def cmd_run(args) -> int:
             "NVDEC TODO: system ffmpeg has no cuvid/nvdec build, so hardware decode is "
             "an increment-2 dependency decision",
             "per-class score table exists to set boxed_stock's working threshold per "
-            "checkpoint -- see camera.DEFAULT_THRESHOLDS",
+            "checkpoint -- see the threshold book passed as --thresholds",
         ],
     }
     out = args.out / "pilot.json"
@@ -542,6 +550,10 @@ def build_parser() -> argparse.ArgumentParser:
                    "CPU and measures the no-NVDEC worst case")  # fmt: skip
     r.add_argument("--assumed-fps", type=float, default=8.0,
                    help="Kalman noise scale assumes this consumption rate")  # fmt: skip
+    r.add_argument("--thresholds", type=Path,
+                   default=Path("configs/serving/thresholds_retail_security.json"),
+                   help="the threshold book: fleet defaults plus per-camera overrides, "
+                   "each of which states the measurement that produced it")  # fmt: skip
     r.add_argument("--post-workers", type=int, default=16)
     r.add_argument("--torch-threads", type=int, default=2,
                    help="intra-op threads per torch op; post overlaps 16 camera "
