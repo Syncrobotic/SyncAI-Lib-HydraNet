@@ -76,6 +76,16 @@ OUT = ROOT / "runs/service_zones01"
 # ones from `data/sam3_prompts.py`; what is new is keeping them apart instead of merging
 # them into one `display_fixture` region, because a till and a display table are the same
 # class to the terrain head and different zones to a store.
+# Every zone ships as `display`. The prompt that found each fixture is recorded and the
+# groups below are kept, because the grouping is real information -- but `till` is a fact
+# about where a store takes money, and on this camera the prompts got it backwards:
+# `retail counter` at 0.745 named the left demo-table aisle a till and `display table` at
+# 0.523 named the counter's own aisle a display. A 0.745 from a shape-shaped prompt is
+# not a store's till. The adjudication belongs to something that can look at one crop and
+# answer one question -- the VLM tier PLAN already carries -- and until then a wrong kind
+# would fire the wrong rule while looking decided.
+KIND_IS_DEFERRED = "display"
+
 GROUPS = (
     # `display counter` started in this group and had to be moved: on Taichung-cam01 it
     # claimed seven of nine fixtures, including both left-hand demo tables and the wall
@@ -137,11 +147,26 @@ def instances(plate: Image.Image, device: str) -> list[dict]:
 
 
 def contact_points_px(inst: np.ndarray, floor: np.ndarray) -> np.ndarray:
-    """Floor pixels within TOUCH_PX of this instance: the fixture's visible floor edge."""
+    """Floor pixels within TOUCH_PX of this instance: the fixture's visible floor edge.
+
+    **The instance is cut against the floor mask first, and that is not a tidy-up.**
+    Measured on Taichung-cam01: `merchandise rack` at 0.90 and `display counter` at 0.50
+    both returned the entire right-hand side of the frame -- 100,366 px, a fifth of the
+    image -- with the aisle in front of the shelving inside the blob. Excluding the
+    instance's own pixels then left 25 and 83 contact points, the wall got no zone, and a
+    tracked shopper standing in front of it fell outside every zone in the room.
+
+    A fixture is not floor. `floor.png` is a separate, reviewed artefact from the same
+    masks pass, so `inst & ~floor` is one segmentation correcting another rather than a
+    threshold: whatever SAM 3 swept up that the floor mask calls floor is floor.
+    """
     from scipy import ndimage
 
-    near = ndimage.binary_dilation(inst, iterations=TOUCH_PX)
-    ys, xs = np.nonzero(near & floor & ~inst)
+    solid = inst & ~floor
+    if not solid.any():
+        return np.zeros((0, 2), dtype=float)
+    near = ndimage.binary_dilation(solid, iterations=TOUCH_PX)
+    ys, xs = np.nonzero(near & floor & ~solid)
     return np.stack([xs.astype(float), ys.astype(float)], axis=1)
 
 
@@ -215,29 +240,37 @@ def assign(grid: FloorGrid, contacts: list[np.ndarray]) -> list[np.ndarray]:
     return [keep & (nearest == i) for i in range(len(contacts))]
 
 
-def polygon(grid: FloorGrid, cells: np.ndarray) -> np.ndarray | None:
-    """The outer contour of one assigned region, in metres."""
+def polygons(grid: FloorGrid, cells: np.ndarray) -> list[np.ndarray]:
+    """Every connected piece of one fixture's assigned region, in metres.
+
+    **Every piece, not the largest.** Keeping only the largest is what hid the failure
+    this tool was measured against: an island counter's service floor is genuinely two
+    pieces -- the customer aisle on one side, the staff aisle on the other -- and dropping
+    one left a tracked shopper standing in a part of the room no zone covered. A fixture
+    reachable from two sides is two zones, because standing at one of them is not standing
+    at the other.
+    """
     import contourpy
     from scipy import ndimage
 
     if not cells.any():
-        return None
+        return []
     lab, n = ndimage.label(cells)
-    if n > 1:  # the largest piece only: the rest are slivers the reach clipped off
-        sizes = [int((lab == i).sum()) for i in range(1, n + 1)]
-        cells = lab == (1 + int(np.argmax(sizes)))
-    padded = np.pad(cells.astype(float), 1)
-    best, best_a = None, 0.0
-    for line in contourpy.contour_generator(z=padded, name="serial").lines(0.5):
-        if len(line) < 4:
-            continue
-        x, y = line[:-1, 0], line[:-1, 1]
-        a = 0.5 * abs(float(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1))))
-        if a > best_a:
-            best, best_a = line[:-1] - 1.0, a
-    if best is None:
-        return None
-    return _simplify(grid.to_metres(best), 0.08)
+    out: list[np.ndarray] = []
+    for i in range(1, n + 1):
+        padded = np.pad((lab == i).astype(float), 1)
+        best, best_a = None, 0.0
+        for line in contourpy.contour_generator(z=padded, name="serial").lines(0.5):
+            if len(line) < 4:
+                continue
+            x, y = line[:-1, 0], line[:-1, 1]
+            a = 0.5 * abs(float(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1))))
+            if a > best_a:
+                best, best_a = line[:-1] - 1.0, a
+        if best is not None:
+            out.append(_simplify(grid.to_metres(best), 0.08))
+    out.sort(key=lambda poly: -_area(poly))
+    return out
 
 
 def _simplify(chain: np.ndarray, tol: float) -> np.ndarray:
@@ -286,23 +319,27 @@ def derive(camera: str, device: str) -> dict:
 
     zones = []
     for inst, contact, cells in zip(found, contacts, regions, strict=True):
-        poly = polygon(grid, cells)
-        if poly is None or _area(poly) < MIN_ZONE_M2:
-            continue
-        zones.append(
-            {
-                "kind": inst["kind"],
-                "prompt": inst["prompt"],
-                "score": round(float(inst["score"]), 3),
-                "instance_px": int(inst["mask"].sum()),
-                "contact_points": len(contact),
-                "area_m2": round(_area(poly), 2),
-                "polygon_m": [[round(float(a), 2), round(float(b), 2)] for a, b in poly],
-            }
-        )
+        for side, poly in enumerate(polygons(grid, cells)):
+            if _area(poly) < MIN_ZONE_M2:
+                continue
+            zones.append(
+                {
+                    "kind": KIND_IS_DEFERRED,
+                    "prompt_group": inst["kind"],
+                    "prompt": inst["prompt"],
+                    "score": round(float(inst["score"]), 3),
+                    "instance_px": int(inst["mask"].sum()),
+                    "contact_points": len(contact),
+                    # Which piece of this fixture's service floor: 0 is the largest.
+                    "side": side,
+                    "area_m2": round(_area(poly), 2),
+                    "polygon_m": [[round(float(a), 2), round(float(b), 2)] for a, b in poly],
+                }
+            )
     zones.sort(key=lambda z: -z["area_m2"])
     for i, z in enumerate(zones, start=1):
-        z["name"] = f"{z['kind']}_{i:02d}"
+        # Named for the fixture it serves and its rank, not for a kind nobody has decided.
+        z["name"] = f"fixture_{i:02d}"
     return {
         "schema": "hydranet-service-zones/v1",
         "camera": camera,
@@ -386,8 +423,8 @@ def main() -> int:
         (OUT / f"{camera}.service_zones.json").write_text(json.dumps(book, indent=1) + "\n")
         png = render(camera, book)
         for z in book["zones"]:
-            print(f"  {z['name']:<12} {z['kind']:<8} {z['area_m2']:>5} m2  "
-                  f"<- {z['prompt']!r} {z['score']}")  # fmt: skip
+            print(f"  {z['name']:<12} {z['area_m2']:>5} m2  "
+                  f"<- {z['prompt']!r} {z['score']} ({z['prompt_group']})")  # fmt: skip
         print(f"{camera}: {len(book['zones'])} zones -> {png.name}")
         if args.apply:
             apply(camera, book)
