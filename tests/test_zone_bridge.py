@@ -12,6 +12,7 @@ pytest tests/test_zone_bridge.py -v
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -78,9 +79,41 @@ def test_a_camera_with_no_zones_yields_nothing_rather_than_failing():
     assert ev.counting_lines(cf) == []
 
 
-def test_the_shipped_camera_bridges_and_journeys_can_read_it():
-    """The real commissioned file, not a fixture -- it is the input this exists for."""
-    cf = CameraFile.load("runs/commission01/Taichung-cam01.camera.json")
+SHIPPED = Path(__file__).resolve().parents[1] / "runs/commission01/Taichung-cam01.camera.json"
+
+
+@pytest.mark.skipif(not SHIPPED.exists(), reason="needs the commissioned camera.json")
+def test_the_shipped_camera_bridges():
+    """The real commissioned file, not a fixture -- it is the input this exists for.
+
+    Two things were wrong with the first version of this test and both are the same
+    mistake, which is why it is worth a paragraph rather than a diff.
+
+    It read `runs/commission01/...` as a bare relative path. `runs/` is gitignored, so a
+    fresh checkout does not have it and CI would have raised `FileNotFoundError` here --
+    green only because a direct push to `dev` runs no workflow. `test_indoor25_baseline`
+    already carries the pattern for an artefact the repository does not ship, and this
+    now uses it: anchored to the repo root, skipped when the artefact is absent.
+
+    And it asserted `== ["walkable_floor"]` against a file that commissioning **rewrites**.
+    `tools/commissioning/service_zones.py --apply` added nine `fixture_NN` zones to that
+    exact camera on 2026-08-26 and this test went red -- for doing its job, on a file whose
+    zone list is an output. What the bridge promises is that every zone in the file crosses
+    as a region with geometry and no policy; the *contents* of one camera's zone list are a
+    fact about a store on a Wednesday. So the count is not pinned and the property is.
+    """
+    cf = CameraFile.load(SHIPPED)
     zones = ev.zones_from_camera(cf)
-    assert [z.name for z in zones] == ["walkable_floor"]
-    assert zones[0].polygon.shape[1] == 2 and len(zones[0].polygon) >= 3
+    regions = [z.name for z in cf.zones if z.kind != "entrance_line"]
+    assert [z.name for z in zones] == regions, (
+        "every region in the file bridges; a kind this camera holds and the bridge drops "
+        "would be a zone that silently stops existing at the event layer. `entrance_line` "
+        "is the one deliberate omission and `counting_lines` is where it goes instead"
+    )
+    assert "walkable_floor" in {z.name for z in zones}, (
+        "every commissioned camera carries the walkable outline -- if this one does not, "
+        "the file was written by something other than the commissioning pipeline"
+    )
+    for z in zones:
+        assert z.polygon.ndim == 2 and z.polygon.shape[1] == 2 and len(z.polygon) >= 3
+        assert (z.max_occupancy, z.loiter_seconds, z.restricted) == (None, None, False)
