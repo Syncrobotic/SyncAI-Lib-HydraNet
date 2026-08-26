@@ -349,6 +349,25 @@ Both already live in the wheel (`data/teachers/`). Their jobs, in value order:
   anatomy, not a normalised constant). The floor is recoverable from the feet: a standing
   clip's foot height has std **4.4 mm**. So we supply the floor position and the camera,
   the file supplies the body, which is exactly what §2.3 asks for.
+* **The licensed copy landed 2026-08-26 and it carries what the mirror had removed.**
+  The ROSE Lab application came through, so `datasets/_incoming/ntu_rose/` now holds
+  `nturgbd_skeletons_s001_to_s017.zip` (6.18 GB, **56,880** `.skeleton` files, NTU-60) and
+  `nturgbd_skeletons_s018_to_s032.zip` (4.78 GB, 57,600 files, the NTU-120 extension) —
+  skeletons only; the RGB is ~1.3 TB and this project reads keypoints, not pixels. The
+  raw files are in **absolute Kinect camera coordinates**: spine base measures z = 2.84 to
+  3.78 m across samples, where the Kaggle mirror had centred it to 0.065. Three things
+  follow that the mirror could not give:
+  - the person's real distance and pose *relative to a camera*, which is the quantity
+    §2.3's projection route re-imposes and the one a view-normalised tensor has already
+    thrown away;
+  - **the same action from three cameras at once** — `S001C001P001R001A043`,
+    `...C002...`, `...C003...` are one fall recorded simultaneously at z 3.78 / 3.51 /
+    3.32 m — so a projection can be *validated* rather than assumed: project one view's
+    skeleton through another view's parameters and check it reproduces that recording;
+  - per joint, the Kinect's own `depthX/depthY` and `colorX/colorY`, which is a free
+    ground truth for any projection code written here.
+  25 joints per frame, as the survey found. `tools/temporal/ntu_survey.py` measured the
+  mirror; the same instrument should be re-run against these before either is trained on.
 * **And the survey refuted a per-frame feature before it was trained on.** In NTU's own
   ground-truth 3D, peak shoulder-to-hip angle from vertical: `A43 falling down` **74.5°**
   median with **38/40** clips over `events/pose.py`'s shipped 55° threshold — and
