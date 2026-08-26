@@ -30,7 +30,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, str(Path(__file__).parent))
 import scene_mesh
@@ -73,14 +73,35 @@ SKELETON = (
     (0, 1), (0, 2), (1, 3), (2, 4),
 )  # fmt: skip
 KP_MIN_CONF = 0.2
+# A 2 px stroke and an 11 px default-bitmap label survive a full-resolution still and do
+# not survive the thing this video actually is: a 960x540 panel, h.264 at crf 22, watched
+# scaled down. The first render drew every box correctly and was reported as having none.
+BOX_W = 3
+FONT = ImageFont.truetype("DejaVuSans-Bold.ttf", 17)
+FONT_SMALL = ImageFont.truetype("DejaVuSans.ttf", 15)
+
+
+def chip(d: ImageDraw.ImageDraw, xy, text: str, rgb) -> None:
+    """A filled label chip. Coloured text on the frame competes with the frame."""
+    x, y = xy
+    w = d.textlength(text, font=FONT_SMALL)
+    # keep the chip inside the panel: a label that runs off the edge is the one thing
+    # in the frame that is not a model output, so it must not look like clipping
+    x = min(max(0.0, x), PANEL[0] - w - 9)
+    y = max(0, y - 18)
+    d.rectangle([x, y, x + w + 8, y + 18], fill=(*rgb, 235))
+    lum = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]
+    d.text(
+        (x + 4, y + 1), text, fill=(0, 0, 0) if lum > 140 else (255, 255, 255), font=FONT_SMALL
+    )
 
 
 def label(img: Image.Image, text: str, sub: str = "") -> None:
     d = ImageDraw.Draw(img, "RGBA")
-    d.rectangle([0, 0, PANEL[0], 34 if sub else 20], fill=(0, 0, 0, 170))
-    d.text((8, 4), text, fill=(255, 255, 255))
+    d.rectangle([0, 0, PANEL[0], 46 if sub else 26], fill=(0, 0, 0, 190))
+    d.text((10, 3), text, fill=(255, 255, 255), font=FONT)
     if sub:
-        d.text((8, 19), sub, fill=(180, 190, 205))
+        d.text((10, 24), sub, fill=(185, 195, 210), font=FONT_SMALL)
 
 
 def main() -> int:
@@ -164,7 +185,7 @@ def main() -> int:
 
         # --- 1. detection, every class the head has ---------------------------------
         p_det = img.resize(PANEL)
-        d = ImageDraw.Draw(p_det)
+        d = ImageDraw.Draw(p_det, "RGBA")
         counts: dict[str, int] = {}
         boxes_src = np.zeros((0, 4), np.float32)
         if det and len(det.get("boxes", [])):
@@ -175,8 +196,8 @@ def main() -> int:
                 counts[name] = counts.get(name, 0) + 1
                 bb = (bi - np.array([x0, y0, x0, y0])) * to_panel
                 col = DET_COLORS.get(name, (200, 200, 200))
-                d.rectangle(list(bb), outline=col, width=2)
-                d.text((bb[0] + 2, max(0, bb[1] - 11)), name, fill=col)
+                d.rectangle(list(bb), outline=col, width=BOX_W)
+                chip(d, (bb[0], bb[1]), name, col)
             keep = lab == person
             pb = (b[keep] - np.array([x0, y0, x0, y0])) * (1920.0 / cw)
             boxes_src = pb[
@@ -305,12 +326,13 @@ def main() -> int:
         canvas.paste(p_pose, (0, PANEL[1]))
         canvas.paste(p_m, (PANEL[0], PANEL[1]))
         dd = ImageDraw.Draw(canvas)
-        dd.rectangle([0, out_h - 20, out_w, out_h], fill=(0, 0, 0))
+        dd.rectangle([0, out_h - 28, out_w, out_h], fill=(0, 0, 0))
         dd.text(
-            (6, out_h - 16),
+            (10, out_h - 23),
             f"{camera}  ·  one HydraNet forward pass per frame, three heads off one trunk  ·  "
             f"{Path(args.checkpoint).name}  thr={args.score_thr}  frame {n}",
             fill=(255, 255, 255),
+            font=FONT_SMALL,
         )
         enc.stdin.write(np.asarray(canvas, np.uint8).tobytes())
         if n % 100 == 0:
