@@ -128,3 +128,65 @@ class FcosDecoder:
                 }
             )
         return results
+
+
+# The dense head already runs on every frame and scores `person` at IoU 0.885 while this
+# one's boxes score mAP@50 0.302. Measured 2026-08-26 over four commissioned cameras,
+# 40 frames each: at the shipped 0.35 score threshold the dense map carried **73 person
+# regions with no box at all -- 20% more people than the box head returned** -- and
+# cropping every one of them showed the same population: shoppers whose lower body is
+# behind a counter or a display table. Truncated, not absent.
+#
+# Dropping the score threshold finds them (73 uncovered at 0.35, 3 at 0.15) and admits
+# false ones with them. So admit the low-scoring boxes and make the dense head vouch:
+#
+#     min person-pixel fraction    of score >= 0.35 boxes    of score < 0.35 boxes
+#                          0.40                     100%                      71%
+#
+# 0.40 is the largest fraction that costs nothing on the set already trusted -- every box
+# today's threshold accepts clears it -- which is why it is the default rather than a
+# number picked to make a graph look good.
+MIN_PERSON_FRACTION = 0.40
+
+
+def person_pixel_fraction(box, class_map: np.ndarray, person_id: int) -> float:
+    """Fraction of a box's pixels the dense head calls `person`. 0.0 for an empty box.
+
+    One number per box and no connected components: serving cannot afford a labelling
+    pass per frame, and it does not need one -- the question is whether *this* box has
+    person underneath it, not which person.
+    """
+    h, w = class_map.shape[-2:]
+    x0 = max(0, round(float(box[0])))
+    y0 = max(0, round(float(box[1])))
+    x1 = min(w, round(float(box[2])))
+    y1 = min(h, round(float(box[3])))
+    if x1 <= x0 or y1 <= y0:
+        return 0.0
+    return float((class_map[y0:y1, x0:x1] == person_id).mean())
+
+
+def confirm_with_dense(
+    result: dict[str, np.ndarray],
+    class_map: np.ndarray,
+    person_label: int,
+    person_id: int,
+    min_fraction: float = MIN_PERSON_FRACTION,
+) -> dict[str, np.ndarray]:
+    """Keep a `person` box only where the dense head puts person pixels under it.
+
+    Applied to one decoded frame, in place of nothing -- today the score threshold is the
+    only filter, and it is the one throwing away the truncated shoppers. Other classes
+    pass through untouched: `bag`, `boxed_stock` and `device` have no dense channel to
+    vouch for them in the `retail_surfaces` taxonomy.
+
+    Returns a new dict; the input is not modified.
+    """
+    labels = np.asarray(result["labels"])
+    if not len(labels):
+        return dict(result)
+    boxes = np.asarray(result["boxes"])
+    keep = np.ones(len(labels), dtype=bool)
+    for i in np.nonzero(labels == person_label)[0]:
+        keep[i] = person_pixel_fraction(boxes[i], class_map, person_id) >= min_fraction
+    return {k: np.asarray(v)[keep] for k, v in result.items()}
