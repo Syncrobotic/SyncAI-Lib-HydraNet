@@ -33,6 +33,7 @@ from syncai_hydranet.analytics.world import (
     WorldObject,
     as_rows,
     world_frame,
+    world_frames,
 )
 from syncai_hydranet.geometry.camera_json import CameraFile, Lens
 from syncai_hydranet.geometry.ground import (
@@ -276,3 +277,109 @@ def test_a_box_clipped_at_the_frame_edge_still_projects():
         name="person",
     )
     assert frame["objects"][0]["basis"] == "foot_point"
+
+
+# ------------------------------------------- the offline replay, `world_frames`
+
+
+def a_finished_track(
+    positions: dict[int, tuple[float, float]], *, track_id: int = 1, confirmed: bool = True
+) -> Track:
+    """A track as `Tracker.finished()` hands one back: observed frames only, in order.
+
+    Keyed by frame index rather than built from `range`, because the property the replay
+    exists to get right is what happens on the frames a track was *not* seen in, and a
+    contiguous fixture cannot express one.
+    """
+    frames = sorted(positions)
+    boxes = [_box_with_foot_at(*positions[f]) for f in frames]
+    return Track(
+        track_id=track_id,
+        box=boxes[-1].copy(),
+        hits=len(boxes),
+        age=0,
+        frames=frames,
+        boxes=boxes,
+        confirmed=confirmed,
+    )
+
+
+def test_the_replay_covers_every_frame_any_track_was_seen_in_and_no_others():
+    """The union, in frame order -- not one track's range and not a contiguous span."""
+    a = a_finished_track({0: (0.0, 3.0), 4: (0.2, 3.0)}, track_id=1)
+    b = a_finished_track({2: (1.0, 4.0), 4: (1.1, 4.0), 9: (1.4, 4.0)}, track_id=2)
+    frames = world_frames([a, b], a_camera_file(), name="person")
+    assert [f["frame_index"] for f in frames] == [0, 2, 4, 9]
+    assert [sorted(o["track_id"] for o in f["objects"]) for f in frames] == [
+        [1],
+        [2],
+        [1, 2],
+        [2],
+    ]
+
+
+def test_a_frame_a_track_was_not_seen_in_carries_no_row_for_it():
+    """The docstring's construction, and the thing a consumer must not read as absence.
+
+    `Track.frames` records matched frames only, so a replay has no way to place the
+    shopper on the frames the tracker coasted through. Frame 2 below exists -- another
+    track was seen in it -- and track 1 is simply not in it.
+    """
+    a = a_finished_track({0: (0.0, 3.0), 4: (0.0, 2.0)}, track_id=1)
+    b = a_finished_track({0: (2.0, 5.0), 2: (2.0, 5.0), 4: (2.0, 5.0)}, track_id=2)
+    (_f0, f2, _f4) = world_frames([a, b], a_camera_file(), name="person")
+    assert f2["frame_index"] == 2
+    assert [o["track_id"] for o in f2["objects"]] == [2]
+
+
+def test_a_replay_never_reports_an_unobserved_object():
+    """`world.py` states this rather than letting a consumer count `observed=False` and
+    find none: coasting is invisible to a replay, and `Visit.observed` against
+    `Visit.span` is the instrument that does see the gap."""
+    a = a_finished_track({0: (0.0, 3.0), 3: (0.0, 2.4), 7: (0.0, 2.0)})
+    frames = world_frames([a], a_camera_file(), name="person")
+    assert all(o["observed"] is True for f in frames for o in f["objects"])
+
+
+def test_a_velocity_is_the_one_that_was_knowable_at_that_frame():
+    """Not the whole clip's. The track below walks, then stops; if the replay differenced
+    the finished track the first frame would already know about the stop."""
+    track = a_finished_track({0: (0.0, 3.0), 1: (0.0, 2.6), 2: (0.0, 2.55)})
+    frames = world_frames([track], a_camera_file(), name="person", fps=5.0)
+    speeds = [f["objects"][0]["vz_ms"] for f in frames]
+    assert speeds[0] is None  # one observation is not a velocity
+    assert speeds[1] == pytest.approx(-2.0, abs=1e-3)  # 0.4 m over 1/5 s
+    assert speeds[2] == pytest.approx(-0.25, abs=1e-3)  # 0.05 m over 1/5 s
+
+
+def test_the_last_frame_of_a_replay_is_what_the_live_producer_would_have_emitted():
+    """The replay is one shape, not a second implementation: at the final frame the
+    truncated track is the whole track, so the two must agree exactly."""
+    track = a_finished_track({0: (0.5, 3.0), 1: (0.4, 2.8)})
+    replayed = world_frames([track], a_camera_file(), name="person", fps=5.0)[-1]
+    live = world_frame([track], a_camera_file(), 1, name="person", fps=5.0)
+    assert replayed == live
+
+
+def test_pts_seconds_reach_every_frame_of_the_replay():
+    track = a_finished_track({0: (0.0, 3.0), 1: (0.0, 2.6)})
+    times = {0: 10.0, 1: 10.2}
+    frames = world_frames([track], a_camera_file(), name="person", times_s=times)
+    assert [f["time_s"] for f in frames] == [10.0, 10.2]
+    assert frames[1]["objects"][0]["vz_ms"] == pytest.approx(-2.0, abs=1e-3)
+
+
+def test_the_source_frame_guard_still_fires_through_the_replay():
+    """The defect `dfdcb41` was written for reaches offline callers through this function,
+    and a guard that only the live shape enforced would be a guard with a way around it."""
+    cam_file = _half_res_camera_file()
+    box = _foot_box(1400.0, 1000.0)  # a 1920x1080 pixel against a 960x540 calibration
+    track = Track(1, box, hits=3, age=0, frames=[0], boxes=[box.copy()], confirmed=True)
+    with pytest.raises(ValueError, match="calibrated on"):
+        world_frames([track], cam_file, name="person")
+
+
+def test_no_tracks_is_no_frames_rather_than_one_empty_one():
+    """A clip with nothing in it has no frames to replay -- `Track.frames` is the only
+    thing that says which frame indices existed, and there are none."""
+    assert world_frames([], a_camera_file(), name="person") == []
