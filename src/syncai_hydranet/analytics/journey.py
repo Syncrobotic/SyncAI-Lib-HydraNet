@@ -154,6 +154,7 @@ def journeys(
     *,
     name: str = "person",
     fps: float | None = None,
+    min_seconds: float = 1.0,
 ) -> list[Journey]:
     """Vector-space frames -> one `Journey` per track, ordered by first appearance.
 
@@ -163,6 +164,15 @@ def journeys(
 
     ``fps`` is used only where a frame has no `time_s`, and it is the caller's knowing
     trade -- see the module docstring on why a nominal rate is not a clock.
+
+    ``min_seconds`` is the hysteresis, and it is `zone_events`' argument applied to the
+    same measurement: "a foot point jitters across a boundary... It is a *duration*, not
+    a smoothing constant". It was not a hypothesis here. The first real run --
+    Taichung-cam01, 300 frames, its own commissioned geometry -- put one shopper on a
+    cell edge and returned that cell eleven times: a 0.2 s visit, then 1.8 s, then more,
+    each break a single frame on the far side of a line. Both directions are filtered
+    because both are the same jitter: an excursion shorter than this does not end a
+    visit, and a visit shorter than this is not one. Pass 0 to see every crossing.
     """
     if not frames:
         return []
@@ -191,7 +201,7 @@ def journeys(
 
     out: list[Journey] = []
     for track_id, rows in sorted(seen.items(), key=lambda kv: kv[1][0][0]):
-        out.append(_journey(track_id, camera_id, space, rows, zones, fps))
+        out.append(_journey(track_id, camera_id, space, rows, zones, fps, min_seconds))
     return out
 
 
@@ -207,7 +217,7 @@ def _seconds(f0: int, f1: int, t0: float | None, t1: float | None, fps: float | 
     return None
 
 
-def _journey(track_id, camera_id, space, rows, zones, fps) -> Journey:
+def _journey(track_id, camera_id, space, rows, zones, fps, min_seconds) -> Journey:
     frames = [r[0] for r in rows]
     times = {r[0]: r[1] for r in rows}
     scores = [r[3] for r in rows if r[3] is not None]
@@ -224,8 +234,11 @@ def _journey(track_id, camera_id, space, rows, zones, fps) -> Journey:
             for fi, pos in measured
             if bool(zone.contains(np.asarray(pos, dtype=float).reshape(1, 2))[0])
         ]
-        for start, end in _contiguous(inside, frames):
+        for start, end in _contiguous(inside, frames, times, fps, min_seconds):
             span_frames = [fi for fi in frames if start <= fi <= end]
+            seconds = _seconds(start, end, times.get(start), times.get(end), fps)
+            if min_seconds and seconds is not None and seconds < min_seconds:
+                continue
             visits.append(
                 Visit(
                     zone=zone.name,
@@ -233,7 +246,7 @@ def _journey(track_id, camera_id, space, rows, zones, fps) -> Journey:
                     frame_end=end,
                     span=end - start + 1,
                     observed=len(span_frames),
-                    seconds=_seconds(start, end, times.get(start), times.get(end), fps),
+                    seconds=seconds,
                 )
             )
     visits.sort(key=lambda v: (v.frame_start, v.zone))
@@ -254,13 +267,22 @@ def _journey(track_id, camera_id, space, rows, zones, fps) -> Journey:
     )
 
 
-def _contiguous(inside: list[int], frames: list[int]) -> list[tuple[int, int]]:
-    """Group frames inside a zone into stays, breaking only where the track was seen out.
+def _contiguous(
+    inside: list[int],
+    frames: list[int],
+    times: dict[int, float | None],
+    fps: float | None,
+    min_seconds: float,
+) -> list[tuple[int, int]]:
+    """Group frames inside a zone into stays.
 
-    A frame the track was not seen in does **not** end a visit: a tracker that missed one
-    observation has not reported the shopper leaving, and splitting there would turn one
-    40-second dwell into two 20-second ones. A frame where it *was* seen and was outside
-    does end it, because that is an observation of leaving.
+    Two things do **not** end a visit. A frame the track was not seen in: a tracker that
+    missed one observation has not reported the shopper leaving, and splitting there
+    would turn one 40-second dwell into two 20-second ones. And an excursion outside
+    shorter than ``min_seconds``: on the first real clip a shopper standing on a cell
+    edge crossed it eleven times without going anywhere.
+
+    A sustained observation outside does end it, because that is the shopper leaving.
     """
     if not inside:
         return []
@@ -268,10 +290,18 @@ def _contiguous(inside: list[int], frames: list[int]) -> list[tuple[int, int]]:
     runs: list[tuple[int, int]] = []
     start = prev = inside[0]
     for fi in inside[1:]:
-        left = any(f > prev and f < fi and f not in inside_set for f in frames)
-        if left:
-            runs.append((start, prev))
-            start = fi
+        out_frames = [f for f in frames if prev < f < fi and f not in inside_set]
+        if out_frames:
+            gap = _seconds(
+                out_frames[0],
+                out_frames[-1],
+                times.get(out_frames[0]),
+                times.get(out_frames[-1]),
+                fps,
+            )
+            if gap is None or not min_seconds or gap >= min_seconds:
+                runs.append((start, prev))
+                start = fi
         prev = fi
     runs.append((start, prev))
     return runs

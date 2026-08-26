@@ -77,12 +77,12 @@ def _walk(positions, *, track_id=1, scores=None, camera="Tao-Hsin-cam03", times=
 
 def test_a_track_that_walks_a_to_b_to_c_reports_that_route():
     """The literal question: walked from A to B, then to C, and stayed how long."""
-    path = [(-2.0, 3.0)] * 2 + [(0.0, 3.0)] * 6 + [(2.0, 3.0)] * 3
+    path = [(-2.0, 3.0)] * 5 + [(0.0, 3.0)] * 30 + [(2.0, 3.0)] * 10
     (j,) = journeys(_walk(path), ZONES, fps=FPS)
     assert j.route == ("A_aisle", "B_till", "C_display")
     assert j.transitions == (("A_aisle", "B_till"), ("B_till", "C_display"))
-    assert j.time_in("B_till") == pytest.approx(6 / FPS)
-    assert j.time_in("A_aisle") == pytest.approx(2 / FPS)
+    assert j.time_in("B_till") == pytest.approx(30 / FPS)
+    assert j.time_in("A_aisle") == pytest.approx(5 / FPS)
 
 
 def test_the_floor_distance_is_metres_walked_not_pixels():
@@ -92,11 +92,32 @@ def test_the_floor_distance_is_metres_walked_not_pixels():
 
 
 def test_a_re_entry_is_a_second_visit_and_the_total_is_their_sum():
-    path = [(0.0, 3.0)] * 3 + [(2.0, 3.0)] * 2 + [(0.0, 3.0)] * 4
+    """Away long enough to be away -- ten frames at the display, not a boundary wobble."""
+    path = [(0.0, 3.0)] * 10 + [(2.0, 3.0)] * 10 + [(0.0, 3.0)] * 10
     (j,) = journeys(_walk(path), ZONES, fps=FPS)
     tills = [v for v in j.visits if v.zone == "B_till"]
     assert len(tills) == 2, "leaving and coming back is two things, not one longer one"
-    assert j.time_in("B_till") == pytest.approx((3 + 4) / FPS)
+    assert j.time_in("B_till") == pytest.approx(20 / FPS)
+    assert j.route == ("B_till", "C_display", "B_till")
+
+
+def test_a_boundary_wobble_is_not_a_departure():
+    """The first real clip's failure, in a test.
+
+    Taichung-cam01, 300 frames: a shopper standing on a 1.5 m cell edge produced eleven
+    visits to the same cell -- 0.2 s, then 1.8 s, then more, each break one frame on the
+    far side of the line. One stay, eleven rows, and the route unreadable.
+    """
+    path = [(0.0, 3.0)] * 8 + [(2.0, 3.0)] + [(0.0, 3.0)] * 8  # one frame over the line
+    (j,) = journeys(_walk(path), ZONES, fps=FPS)
+    tills = [v for v in j.visits if v.zone == "B_till"]
+    assert len(tills) == 1, "a one-frame excursion is jitter, not leaving"
+    assert j.route == ("B_till",), "and the display is not a visit either"
+
+
+def test_the_hysteresis_can_be_switched_off_to_see_every_crossing():
+    path = [(0.0, 3.0)] * 8 + [(2.0, 3.0)] + [(0.0, 3.0)] * 8
+    (j,) = journeys(_walk(path), ZONES, fps=FPS, min_seconds=0.0)
     assert j.route == ("B_till", "C_display", "B_till")
 
 
@@ -152,7 +173,8 @@ def test_a_position_the_geometry_refused_is_not_a_place_in_a_zone():
     ]
     assert frames[0]["objects"][0]["basis"] == "foot_point"
     assert frames[1]["objects"][0]["basis"] == "above_horizon"
-    (j,) = journeys(frames, ZONES, fps=FPS)
+    # min_seconds=0: this test is about the refusal, not about how long anyone stood
+    (j,) = journeys(frames, ZONES, fps=FPS, min_seconds=0.0)
     assert j.path_m == pytest.approx(0.0), "a refusal is not a distance walked"
     # One measured position, inside the till, and the refusal added no second place.
     assert [v.zone for v in j.visits] == ["B_till"]
@@ -196,8 +218,8 @@ def test_a_journey_without_scores_says_none_rather_than_zero():
 def test_the_row_is_flat_and_json_safe():
     import json
 
-    path = [(-2.0, 3.0)] * 2 + [(0.0, 3.0)] * 3
-    (j,) = journeys(_walk(path, scores=[0.5] * 5), ZONES, fps=FPS)
+    path = [(-2.0, 3.0)] * 6 + [(0.0, 3.0)] * 8
+    (j,) = journeys(_walk(path, scores=[0.5] * 14), ZONES, fps=FPS)
     row = j.as_row()
     assert row["route"] == ["A_aisle", "B_till"]
     assert row["space"] == "camera_floor(Tao-Hsin-cam03)"

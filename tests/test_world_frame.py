@@ -210,3 +210,69 @@ def test_an_empty_frame_is_a_frame_and_not_an_absence():
     frame = world_frame([], a_camera_file(), 12, name="person")
     assert frame["objects"] == [] and frame["frame_index"] == 12
     assert as_rows(frame) == []
+
+
+# ------------------------------------------- the pixel frame the intrinsics were fitted on
+
+
+def _half_res_camera_file() -> CameraFile:
+    """Taichung-cam01's real shape: intrinsics fitted on 960x540, clips decode at 1920x1080."""
+    return CameraFile(
+        camera_id="Taichung-cam01",
+        image_size_px=(960, 540),
+        camera=Camera(fx=382.7, fy=382.7, cx=480.0, cy=270.0),
+        plane=GroundPlane(height=2.49, pitch=math.radians(49.5)),
+    )
+
+
+def _foot_box(u: float, v: float) -> np.ndarray:
+    return np.array([u - 30.0, v - 178.0, u + 30.0, v])
+
+
+def test_source_pixels_against_a_smaller_calibration_are_refused_not_projected():
+    """The failure found on the first real run, 2026-08-26.
+
+    `clip_tracks.track_clip` returns boxes in the decoded stream's pixels; several
+    commissioned cameras are calibrated on half that frame. Projecting anyway returned
+    metres -- three shoppers several metres outside the commissioned walkable polygon,
+    a 38 m walk in 60 seconds, and no NaN anywhere to say the frame was wrong.
+    """
+    cam_file = _half_res_camera_file()
+    box = _foot_box(1400.0, 1000.0)  # a 1920x1080 pixel
+    track = Track(1, box, hits=3, frames=[0], boxes=[box.copy()], confirmed=True)
+    with pytest.raises(ValueError, match="calibrated on"):
+        world_frame([track], cam_file, 0, name="person")
+
+
+def test_stating_the_source_frame_scales_the_points_into_the_calibrated_one():
+    cam_file = _half_res_camera_file()
+    full = _foot_box(1400.0, 1000.0)
+    half = _foot_box(700.0, 500.0)
+    stated = world_frame(
+        [Track(1, full, hits=3, frames=[0], boxes=[full.copy()], confirmed=True)],
+        cam_file,
+        0,
+        name="person",
+        source_size_px=(1920, 1080),
+    )
+    native = world_frame(
+        [Track(1, half, hits=3, frames=[0], boxes=[half.copy()], confirmed=True)],
+        cam_file,
+        0,
+        name="person",
+    )
+    assert stated["objects"][0]["x_m"] == pytest.approx(native["objects"][0]["x_m"], abs=1e-9)
+    assert stated["objects"][0]["z_m"] == pytest.approx(native["objects"][0]["z_m"], abs=1e-9)
+
+
+def test_a_box_clipped_at_the_frame_edge_still_projects():
+    """The guard must not fire on the legitimate case it sits next to."""
+    cam_file = _half_res_camera_file()
+    edge = _foot_box(958.0, 538.0)
+    frame = world_frame(
+        [Track(1, edge, hits=3, frames=[0], boxes=[edge.copy()], confirmed=True)],
+        cam_file,
+        0,
+        name="person",
+    )
+    assert frame["objects"][0]["basis"] == "foot_point"

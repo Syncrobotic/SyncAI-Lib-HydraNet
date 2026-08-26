@@ -173,6 +173,7 @@ def world_frame(
     times_s: Mapping[int, float] | None = None,
     fps: float | None = None,
     confirmed_only: bool = True,
+    source_size_px: tuple[int, int] | None = None,
 ) -> WorldFrame:
     """Live tracks -> the vector space, in metres on this camera's floor.
 
@@ -188,6 +189,12 @@ def world_frame(
     is used only when ``times_s`` is absent. With neither, velocities are ``None`` --
     not zero, and not a number derived from a rate nobody measured.
 
+    ``source_size_px`` is the frame the boxes are in, when that is not the frame
+    `camera.json` was calibrated on -- `clip_tracks.track_clip` returns boxes in the
+    decoded stream's pixels and several commissioned cameras are calibrated at half that.
+    See `_to_calibrated_pixels`: stating it scales the points, and omitting it is checked
+    rather than trusted.
+
     ``confirmed_only`` keeps the tracker's own gate: `Tracker.min_hits` defaults high
     because "a track confirmed on its first detection turns every one-frame false
     positive into a shopper", and a vector space that shows them has undone that.
@@ -196,9 +203,9 @@ def world_frame(
     live = [t for t in tracks if t.confirmed or not confirmed_only]
     if live:
         feet = np.stack([t.foot for t in live])
-        x, z = _to_ground(feet, cam_file)
+        x, z = _to_ground(feet, cam_file, source_size_px)
         for i, t in enumerate(live):
-            vx, vz = _velocity_ms(t, cam_file, times_s, fps)
+            vx, vz = _velocity_ms(t, cam_file, times_s, fps, source_size_px)
             objects.append(
                 WorldObject(
                     track_id=t.track_id,
@@ -221,6 +228,67 @@ def world_frame(
         space=camera_floor_space(cam_file.camera_id),
         objects=objects,
     )
+
+
+def world_frames(
+    tracks: Sequence[Track],
+    cam_file: CameraFile,
+    *,
+    name: str,
+    times_s: Mapping[int, float] | None = None,
+    fps: float | None = None,
+    source_size_px: tuple[int, int] | None = None,
+) -> list[WorldFrame]:
+    """Finished tracks -> one `WorldFrame` per frame they cover, in frame order.
+
+    `world_frame` above is the live shape: called once a frame with whatever the tracker
+    currently holds. This is the offline one, for a clip that has already been tracked --
+    `clip_tracks.track_clip` returns `Tracker.finished()`, and every consumer of the
+    vector space would otherwise have to rebuild this replay itself.
+
+    **A replay cannot show coasting, and says so by construction.** `Track.frames` records
+    only the frames a detection was matched in, so every object here has `observed=True`
+    and a frame the track coasted through simply has no row for it. That is not the same
+    payload the live producer emits and the difference is not cosmetic: a consumer
+    counting `observed=False` to find extrapolated positions finds none here, and
+    `Visit.observed` against `Visit.span` is where the gap shows up instead.
+
+    Each frame's objects are built from the track truncated at that frame, so a velocity
+    is the one that was knowable then rather than the one the whole clip ended with.
+    """
+    frames = sorted({int(f) for t in tracks for f in t.frames})
+    out: list[WorldFrame] = []
+    for f in frames:
+        live: list[Track] = []
+        for t in tracks:
+            if f not in t.frames:
+                continue
+            i = t.frames.index(f)
+            live.append(
+                Track(
+                    track_id=t.track_id,
+                    box=np.asarray(t.boxes[i]).copy(),
+                    hits=i + 1,
+                    age=0,
+                    frames=list(t.frames[: i + 1]),
+                    boxes=[np.asarray(b).copy() for b in t.boxes[: i + 1]],
+                    keypoints=list(t.keypoints[: i + 1]),
+                    scores=list(t.scores[: i + 1]),
+                    confirmed=t.confirmed,
+                )
+            )
+        out.append(
+            world_frame(
+                live,
+                cam_file,
+                f,
+                name=name,
+                times_s=times_s,
+                fps=fps,
+                source_size_px=source_size_px,
+            )
+        )
+    return out
 
 
 def as_rows(frame: WorldFrame) -> list[dict]:
@@ -262,14 +330,64 @@ def _finite(value: float | None) -> float | None:
     return v if math.isfinite(v) else None
 
 
-def _to_ground(points_px: np.ndarray, cam_file: CameraFile) -> tuple[np.ndarray, np.ndarray]:
+def _to_calibrated_pixels(
+    points_px: np.ndarray, cam_file: CameraFile, source_size_px: tuple[int, int] | None
+) -> np.ndarray:
+    """Put pixels into the frame `camera.json`'s intrinsics were fitted on.
+
+    **The failure this exists for, found 2026-08-26 on the first real run.**
+    `Taichung-cam01.camera.json` declares `image_size_px` (960, 540) and its clips decode
+    at 1920x1080. `clip_tracks.track_clip` returns boxes in *source* pixels, so feeding
+    them straight to `pixel_to_ground` used a calibration at half the scale of the boxes
+    -- and produced metres. Not an error, not a NaN: three shoppers standing on the shop
+    floor came back at x 0.4 to 8.8 m, several metres outside the commissioned walkable
+    polygon, with a 38 m walk in 60 seconds and nothing anywhere saying the frame was
+    wrong. `camera_json.py`'s header states the contract ("pixels on the raw stream frame
+    at `image_size_px`") and nothing enforced it.
+
+    So a caller may state the frame its pixels are in and get them scaled, and a caller
+    who states nothing is checked: points far outside the calibrated canvas cannot be a
+    lens correction or a clipped box, and are refused with the resolution mismatch named
+    rather than projected into confident nonsense.
+    """
+    pts = np.asarray(points_px, dtype=float).reshape(-1, 2)
+    w, h = cam_file.image_size_px
+    if source_size_px is not None:
+        sw, sh = source_size_px
+        if (sw, sh) != (w, h):
+            pts = pts * np.array([w / float(sw), h / float(sh)])
+        return pts
+    if len(pts):
+        # 1.5x the canvas: undistortion moves an edge point by pixels and a clipped box
+        # sits on the boundary, while a 2x or 4x decode mismatch lands here every time.
+        over_x = float(np.nanmax(np.abs(pts[:, 0]))) / max(w, 1)
+        over_y = float(np.nanmax(np.abs(pts[:, 1]))) / max(h, 1)
+        if max(over_x, over_y) > 1.5:
+            raise ValueError(
+                f"{cam_file.camera_id}: a point at "
+                f"({np.nanmax(pts[:, 0]):.0f}, {np.nanmax(pts[:, 1]):.0f}) px is outside "
+                f"the {w}x{h} frame this camera.json was calibrated on, by more than a "
+                "lens correction or a clipped box can explain. The usual cause is boxes "
+                "in the decoded stream's pixels against intrinsics fitted on a smaller "
+                "frame -- pass `source_size_px` to say which frame these pixels are in. "
+                "Projecting them anyway would return metres, and they would be wrong "
+                "without being NaN."
+            )
+    return pts
+
+
+def _to_ground(
+    points_px: np.ndarray,
+    cam_file: CameraFile,
+    source_size_px: tuple[int, int] | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
     """(N,2) raw-frame pixels -> floor metres, undoing the lens first if there is one.
 
     The order is the contract `camera_json.py` states and it is not interchangeable: the
     lens model is defined on raw pixels, so undistorting after projecting corrects the
     wrong quantity.
     """
-    pts = np.asarray(points_px, dtype=float).reshape(-1, 2)
+    pts = _to_calibrated_pixels(points_px, cam_file, source_size_px)
     lens = cam_file.lens
     if lens is not None:
         pts = undistort_points(pts, lens.k1, lens.centre_px, lens.radius_px)
@@ -281,6 +399,7 @@ def _velocity_ms(
     cam_file: CameraFile,
     times_s: Mapping[int, float] | None,
     fps: float | None,
+    source_size_px: tuple[int, int] | None = None,
 ) -> tuple[float | None, float | None]:
     """Floor velocity from the last two **observed** boxes, or (None, None).
 
@@ -295,7 +414,7 @@ def _velocity_ms(
     if dt is None or dt <= 0:
         return None, None
     feet = np.stack([[(b[0] + b[2]) / 2, b[3]] for b in (track.boxes[-2], track.boxes[-1])])
-    x, z = _to_ground(feet, cam_file)
+    x, z = _to_ground(feet, cam_file, source_size_px)
     if not (math.isfinite(x[0]) and math.isfinite(x[1])):
         return None, None
     return float((x[1] - x[0]) / dt), float((z[1] - z[0]) / dt)
