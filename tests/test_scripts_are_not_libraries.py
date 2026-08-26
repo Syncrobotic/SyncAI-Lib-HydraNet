@@ -14,6 +14,23 @@ coverage. A coverage floor was the obvious guard and is the wrong one: most of t
 legitimately have no tests, and a gate that demands them gets deleted. This measures the
 thing that has actually gone wrong twice instead.
 
+**`tools/` is measured too, since 2026-08-26, and for the same reason word for word.**
+The argument above is about *where the code sits*, not about the directory's name: at
+7,671 lines across 29 files it is outside the wheel (`[tool.hatch.build.targets.wheel]`
+names `src/` only), outside the type ratchet (`ci.yml` runs `ty_ratchet.sh` on `src/` and
+`scripts/`, and nothing on `tools/`) and outside the coverage floor, exactly as `scripts/`
+is. It was left unmeasured because it did not exist when this test was written, and in the
+meantime it grew the failure verbatim: `service_zones.py` and `footprints_from_masks.py`
+both reach into `zones_confirm.py` for `_font`, `_plate` and `_to_px` -- *private* names,
+by a bare module import that only resolves because Python puts the entry script's own
+directory on `sys.path`. Six pairs on the day the gate was extended, against `scripts/`'s
+four.
+
+Grouped **per directory**, because `tools/` has subdirectories and a bare `import boxes`
+in `tools/site30k/` can only ever find its own neighbour. `tools/site30k/recipe.py`
+reaching `scripts/` is a different (and worse) thing that this test does not measure; it
+does it with an absolute `/home/paul/...` path insert, which is its own problem.
+
 **Tracked files only.** This measures what the gate that blocks a merge measures; an
 untracked script is not in the repository yet and its author is still writing it.
 
@@ -34,11 +51,10 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
-SCRIPTS = REPO / "scripts"
 
 
-def _tracked_scripts() -> list[Path]:
-    """The scripts git knows about, which is what the gate that blocks a merge sees.
+def _tracked(pathspec: str) -> list[Path]:
+    """The files git knows about, which is what the gate that blocks a merge sees.
 
     Scanning the filesystem instead was the first version and it was wrong in the way this
     repository keeps writing about: an untracked file mid-edit tripped the ratchet, so the
@@ -50,7 +66,7 @@ def _tracked_scripts() -> list[Path]:
     first point its author can act on it and before it can reach anyone else.
     """
     out = subprocess.run(
-        ["git", "ls-files", "scripts/*.py"],
+        ["git", "ls-files", pathspec],
         cwd=REPO,
         capture_output=True,
         text=True,
@@ -83,12 +99,20 @@ def _tracked_scripts() -> list[Path]:
 BASELINE_PAIRS = 4
 
 
-def _script_to_script_imports() -> list[tuple[str, str]]:
-    """Every `scripts/a.py` that imports `scripts/b.py` by bare module name."""
-    tracked = _tracked_scripts()
-    modules = {f.stem for f in tracked}
+def _sibling_imports(pathspec: str) -> list[tuple[str, str]]:
+    """Every tracked `a.py` that imports a **sibling** `b.py` by bare module name.
+
+    Sibling and not "anywhere under the pathspec": a bare `import boxes` resolves against
+    the entry script's own directory, so `tools/site30k/boxes.py` and a hypothetical
+    `tools/pose/boxes.py` are two unrelated names and pairing them would be a false find.
+    """
+    tracked = _tracked(pathspec)
+    by_dir: dict[Path, set[str]] = {}
+    for f in tracked:
+        by_dir.setdefault(f.parent, set()).add(f.stem)
     found: list[tuple[str, str]] = []
     for f in sorted(tracked):
+        modules = by_dir[f.parent]
         try:
             tree = ast.parse(f.read_text(encoding="utf-8"))
         except SyntaxError:  # a script mid-edit is not this test's business
@@ -99,6 +123,11 @@ def _script_to_script_imports() -> list[tuple[str, str]]:
             elif isinstance(node, ast.ImportFrom) and not node.level and node.module in modules:
                 found.append((f.name, node.module))
     return found
+
+
+def _script_to_script_imports() -> list[tuple[str, str]]:
+    """Every `scripts/a.py` that imports `scripts/b.py` by bare module name."""
+    return _sibling_imports("scripts/*.py")
 
 
 def test_no_new_script_becomes_a_library_for_another():
@@ -134,3 +163,55 @@ def test_the_measurement_still_finds_the_pairs_it_was_written_against():
     assert pairs, "the scan found no imports at all — has scripts/ moved?"
     assert ("eval_attributes.py", "train_attributes") in pairs
     assert ("stable_infer.py", "flicker_baseline") in pairs
+
+
+# ---------------------------------------------------------------- the same rule, `tools/`
+
+# Measured 2026-08-26, the day `tools/` was brought into this gate. Lower it when a pair is
+# moved into `src/`; never raise it. The six:
+#
+#   footprints_from_masks -> zones_confirm    `_font`, `_plate`, `_to_px`, `PALETTE`
+#   service_zones         -> zones_confirm    `_font`
+#   demo_video            -> scene_mesh
+#   heads_video           -> scene_mesh
+#   heads_video           -> demo_video
+#   scene_overlay         -> scene_mesh
+#
+# The first two are the ones with a name on them. `zones_confirm.py` is a confirm-sheet
+# renderer and three underscore-prefixed names in it are now the drawing convention every
+# commissioning sheet shares -- which makes them an interface, and an interface spelled
+# with a leading underscore is one nobody can change without breaking a caller they were
+# never told about. The `scene_mesh` three are a renderer being reused, the same shape one
+# step earlier.
+BASELINE_TOOL_PAIRS = 6
+
+
+def _tool_to_tool_imports() -> list[tuple[str, str]]:
+    return _sibling_imports("tools/*.py")
+
+
+def test_no_new_tool_becomes_a_library_for_another():
+    pairs = _tool_to_tool_imports()
+    assert len(pairs) <= BASELINE_TOOL_PAIRS, (
+        f"{len(pairs)} tool-to-tool imports, up from {BASELINE_TOOL_PAIRS}:\n"
+        + "\n".join(f"  {a} -> {b}" for a, b in pairs)
+        + "\n\n`tools/` is outside the wheel, the type ratchet and the coverage floor for "
+        "exactly the same reasons `scripts/` is, so whatever is being shared belongs in "
+        "`src/`. It resolves at all only because Python puts the entry script's directory "
+        "on `sys.path`, which means it works when the tool is run and not when anything "
+        "else imports it."
+    )
+
+
+def test_the_tools_measurement_still_finds_the_pairs_it_was_written_against():
+    """Same guard as above: a scan that goes quiet passes forever.
+
+    Both forms are pinned here rather than one, because `tools/` is where the from-form
+    matters most -- `from zones_confirm import _font, _plate, _to_px` is the pair that
+    reaches for another module's *private* names, and it is the one an AST walk that
+    stopped reading `ImportFrom` would silently lose.
+    """
+    pairs = _tool_to_tool_imports()
+    assert pairs, "the scan found no imports at all -- has tools/ moved?"
+    assert ("footprints_from_masks.py", "zones_confirm") in pairs
+    assert ("scene_overlay.py", "scene_mesh") in pairs
