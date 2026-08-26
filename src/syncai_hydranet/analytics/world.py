@@ -130,6 +130,13 @@ class WorldObject(TypedDict):
     height_m: float | None  # None until a serving-side producer exists
     observed: bool  # False when this frame's box is the tracker's prediction, not a detection
     basis: str  # one of BASES
+    # The detector score behind this frame's box, or None when the producer had none.
+    # Present for the reason `events.TrackSupport` states: the 2026-08-26 sweep measured
+    # that a track built from 0.15 boxes is not the same claim as one built from 0.6, and
+    # a consumer of this payload has exactly the same need as a consumer of an event.
+    # None is "not recorded" and never "low"; a coasting frame has no score at all,
+    # which is `observed=False` saying it in the other field.
+    score: float | None
 
 
 class WorldFrame(TypedDict):
@@ -204,6 +211,7 @@ def world_frame(
                     height_m=None,
                     observed=t.age == 0,
                     basis="above_horizon" if not math.isfinite(x[i]) else "foot_point",
+                    score=float(t.scores[-1]) if t.scores and t.age == 0 else None,
                 )
             )
     return WorldFrame(
@@ -241,6 +249,7 @@ def as_rows(frame: WorldFrame) -> list[dict]:
                 "height_m": _finite(o["height_m"]),
                 "observed": bool(o["observed"]),
                 "basis": o["basis"],
+                "score": _finite(o["score"]),
             }
         )
     return rows
