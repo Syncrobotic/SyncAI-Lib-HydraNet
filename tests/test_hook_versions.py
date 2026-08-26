@@ -21,16 +21,40 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import yaml
+
 REPO = Path(__file__).resolve().parent.parent
 
 
 def _hook_rev(repo_substring: str) -> str:
-    """The `rev:` pinned for the first hook repo whose URL contains `repo_substring`."""
-    text = (REPO / ".pre-commit-config.yaml").read_text(encoding="utf-8")
-    blocks = re.findall(r"- repo: (\S+)\n(?:\s+.*\n)*?\s+rev: (\S+)", text)
-    for url, rev in blocks:
+    r"""The `rev:` pinned for the first hook repo whose URL contains `repo_substring`.
+
+    Read as YAML, not with a regex, and the difference is not tidiness. The regex this
+    replaces was `- repo: (\S+)\n(?:\s+.*\n)*?\s+rev: (\S+)` -- a lazy repetition of a
+    greedy `.*`, which is the classic catastrophic-backtracking shape. Every block in this
+    file happened to be followed by a `rev:`, so it always terminated and nobody saw it.
+
+    Add one `- repo: local` block at the end of the config -- which has no `rev:`, because
+    a local hook has no version to pin -- and there is no match to find, so the engine
+    explores every way of splitting the remaining lines and never returns. Measured
+    2026-08-26 while wiring the type ratchet in: this function span at 100% CPU for 35
+    minutes before it was killed, and it takes the whole suite with it.
+
+    **A hang is strictly worse than a failure here.** A red test names itself in one line;
+    this burns CI's 20-minute job timeout and reports only that the step was cancelled, on
+    a config change the author has no reason to connect to a test about version pins.
+
+    `pyyaml` is a hard dependency of this project, the file is already `check-yaml`ed by
+    the hook set it describes, and `local`/`meta` pseudo-repos are skipped by name because
+    they legitimately carry no rev.
+    """
+    config = yaml.safe_load((REPO / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
+    for repo in config["repos"]:
+        url = str(repo.get("repo", ""))
+        if url in {"local", "meta"}:
+            continue
         if repo_substring in url:
-            return rev.lstrip("v")
+            return str(repo["rev"]).lstrip("v")
     raise AssertionError(f"no hook repo matching {repo_substring!r} in .pre-commit-config.yaml")
 
 
