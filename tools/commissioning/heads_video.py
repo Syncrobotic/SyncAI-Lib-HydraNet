@@ -60,6 +60,22 @@ from syncai_hydranet.utils.visualize import preprocess, terrain_palette
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
 PANEL = (960, 540)
+# Commissioning's taxonomy, drawn in `scene_mesh`'s own colours so the mask panel and the
+# 3D panel name the same thing the same way. Order is paint order: surfaces, then the
+# things that sit on them.
+MASK_ORDER = (
+    "floor",
+    "wall",
+    "column",
+    "display_table",
+    "display_shelf",
+    "door",
+    "product",
+    "product_boxed_stock",
+    "product_macbook",
+    "product_ipad",
+    "product_iphone",
+)
 DET_COLORS = {
     "person": (120, 220, 120),
     "bag": (255, 190, 60),
@@ -94,6 +110,66 @@ def chip(d: ImageDraw.ImageDraw, xy, text: str, rgb) -> None:
     d.text(
         (x + 4, y + 1), text, fill=(0, 0, 0) if lum > 140 else (255, 255, 255), font=FONT_SMALL
     )
+
+
+def commissioning_overlay(camera: str, plate: Image.Image) -> tuple[Image.Image, list[str]]:
+    """The masks `camera.json` carries, on the plate they were computed from.
+
+    This panel exists because the two taxonomies get confused for each other. The dense
+    head runs every frame and knows six surface classes; these masks are computed **once
+    per camera, offline, by the SAM 3 teacher** and are what `camera.json` ships. Door,
+    display_table, display_shelf and the four product subclasses live only here -- and
+    `product` is absent from the dense head on purpose, having been handed to detection.
+    """
+    base = np.asarray(plate.convert("RGB").resize(PANEL)).astype(float)
+    out = base.copy()
+    present: list[str] = []
+    for name in MASK_ORDER:
+        f = ROOT / "runs/commission01" / camera / "masks" / f"{name}.png"
+        if not f.exists():
+            continue
+        m = np.asarray(Image.open(f).convert("L").resize(PANEL, Image.Resampling.NEAREST)) > 127
+        if not m.any():
+            continue
+        rgb = np.array(scene_mesh.PALETTE.get(name, (200, 200, 200)), float)
+        out[m] = 0.42 * out[m] + 0.58 * rgb
+        present.append(name)
+    return Image.fromarray(out.astype(np.uint8)), present
+
+
+def legend_panel(net_names: list[str], net_palette, mask_names: list[str]) -> Image.Image:
+    """Which colour means what, in both taxonomies, side by side.
+
+    The whole point of the mask panel is the comparison, and a comparison nobody can read
+    the keys of is a picture of two colourful rooms.
+    """
+    img = Image.new("RGB", PANEL, (14, 17, 22))
+    d = ImageDraw.Draw(img)
+    d.text((14, 16), "dense head, every frame", fill=(255, 255, 255), font=FONT)
+    y = 46
+    for i, n in enumerate(net_names):
+        d.rectangle([14, y, 40, y + 18], fill=tuple(int(c) for c in net_palette[i]))
+        d.text((48, y + 1), n, fill=(225, 230, 238), font=FONT_SMALL)
+        y += 24
+    d.text((360, 16), "commissioning masks, once per camera", fill=(255, 255, 255), font=FONT)
+    y = 46
+    for n in mask_names:
+        d.rectangle([360, y, 386, y + 18], fill=scene_mesh.PALETTE.get(n, (200, 200, 200)))
+        d.text((394, y + 1), n, fill=(225, 230, 238), font=FONT_SMALL)
+        y += 24
+    d.text(
+        (14, PANEL[1] - 70),
+        "`product` is absent from the dense head on purpose: it was moved to detection.",
+        fill=(170, 180, 195),
+        font=FONT_SMALL,
+    )
+    d.text(
+        (14, PANEL[1] - 48),
+        "display_table / display_shelf are one class, `fixture`, to the network.",
+        fill=(170, 180, 195),
+        font=FONT_SMALL,
+    )
+    return img
 
 
 def label(img: Image.Image, text: str, sub: str = "") -> None:
@@ -133,6 +209,15 @@ def main() -> int:
     terrain_names = list(cfg["data"].get("terrain_classes") or [])
     palette = terrain_palette(terrain_names, cfg["model"]["heads"]["terrain"]["num_classes"])
 
+    plate = Image.open(ROOT / cf.plate_file).convert("RGB")
+    p_masks, mask_names = commissioning_overlay(camera, plate)
+    label(
+        p_masks,
+        "commissioning masks - SAM 3, once per camera, offline",
+        "  ".join(n.replace("product_", "") for n in mask_names),
+    )
+    p_legend = legend_panel(terrain_names, palette, mask_names)
+
     scene_mesh.SS = 1
     _cf2, items, heights = scene_mesh.build_scene_regular(camera)
     if args.metre_scale != 1.0:
@@ -150,7 +235,7 @@ def main() -> int:
         crop_meshes.append(np.stack([zone_xz[:, 0], np.zeros(len(zone_xz)), zone_xz[:, 1]], 1))
     x_lo, x_hi, z_lo, z_hi = walkable_bounds(cf)
 
-    out_w, out_h = PANEL[0] * 2, PANEL[1] * 2
+    out_w, out_h = PANEL[0] * 2, PANEL[1] * 3
     stamp = time.strftime("%Y%m%d-%H%M%S")
     final = ROOT / f"assets/heads_{camera}_{stamp}.mp4"
     latest = ROOT / f"assets/heads_{camera}.mp4"
@@ -325,6 +410,8 @@ def main() -> int:
         canvas.paste(p_seg, (PANEL[0], 0))
         canvas.paste(p_pose, (0, PANEL[1]))
         canvas.paste(p_m, (PANEL[0], PANEL[1]))
+        canvas.paste(p_masks, (0, PANEL[1] * 2))
+        canvas.paste(p_legend, (PANEL[0], PANEL[1] * 2))
         dd = ImageDraw.Draw(canvas)
         dd.rectangle([0, out_h - 28, out_w, out_h], fill=(0, 0, 0))
         dd.text(
