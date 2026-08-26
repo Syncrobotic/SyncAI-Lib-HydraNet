@@ -97,13 +97,24 @@ def main() -> int:
     ap.add_argument("--split", default="test")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--render", type=int, default=0)
+    ap.add_argument(
+        "--input-size",
+        nargs=2,
+        type=int,
+        metavar=("H", "W"),
+        help="evaluate at a canvas other than the config's. The throughput gate's only "
+        "untested lever is a smaller input (576x1008 measures 1,622 f/s against the "
+        "config's 1,325), and its accuracy cost has been carried as 'unmeasured' since "
+        "the target was set. This is how it stops being unmeasured.",
+    )
     args = ap.parse_args()
 
     device = pick_device(None)
     cfg = load_config(args.config)
     model = build_model(cfg).to(device).eval()
     model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), args.weights))
-    input_size = cfg["data"]["input_size"]
+    input_size = list(args.input_size) if args.input_size else cfg["data"]["input_size"]
+    print(f"evaluating at {input_size[0]}x{input_size[1]}")
 
     data = json.loads(
         (ROOT / f"datasets/site30k_v1/annotations/keypoints_{args.split}.json").read_text()

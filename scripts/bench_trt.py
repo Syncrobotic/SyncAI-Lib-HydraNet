@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import time
 from pathlib import Path
 
@@ -141,6 +140,32 @@ def bench(plan: Path, batch: int, seconds: float) -> dict:
     }
 
 
+def onnx_batch(path: Path) -> int:
+    """The batch this graph was exported at, read from the graph.
+
+    **It used to be read from the filename** -- `re.search(r"_b(\\d+)", stem)`, defaulting
+    to 1 -- and the 2026-08-25 resolution sweep is what that costs. Its files were named
+    `res_640x1120.onnx`, exported with `--batch 16`, so every row divided the true
+    throughput by sixteen: the log says 82.8 f/s where the engine does 1,325, and
+    `meets_target_compute` compared the sixteenth against 1,440. At 576x1008 that recorded
+    a **False** for an engine measuring 1,622 f/s, which clears the target.
+
+    A file knows its own batch. Falling back to the filename, or to 1, is guessing about
+    the one number every other number here is divided by.
+    """
+    import onnx
+
+    graph = onnx.load(str(path), load_external_data=False).graph
+    dim = graph.input[0].type.tensor_type.shape.dim[0]
+    if dim.HasField("dim_value") and dim.dim_value > 0:
+        return int(dim.dim_value)
+    raise SystemExit(
+        f"{path.name}: its first input's batch dimension is "
+        f"{dim.dim_param or 'unset'!r} rather than a number. A dynamic-batch engine has "
+        "to be told which batch to bench; this script divides every measurement by it."
+    )
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -154,8 +179,7 @@ def main(argv=None) -> int:
 
     results = []
     for path in sorted(Path(p) for p in args.onnx):
-        m = re.search(r"_b(\d+)", path.stem)
-        batch = int(m.group(1)) if m else 1
+        batch = onnx_batch(path)
         for fp16 in [True, False] if args.fp32 else [True]:
             plan = build_engine(path, fp16)
             r = bench(plan, batch, args.seconds)

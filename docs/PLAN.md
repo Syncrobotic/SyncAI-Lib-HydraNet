@@ -428,7 +428,35 @@ than not at all.
 
 **pose02 FINISHED 2026-08-26 19:19, and the accuracy leg of this gate is met.** 120/120 epochs. On the full test split (2,862 images / 6,360 persons / 93,967 judged joints) `eval_student.py` reads **PCK@0.2h 0.915, L2 p50 7.7 px** (mean 21.5, p90 54.7), against pose01's `last.pt` at 0.898 / 9.3 px. **`best.pt` and `last.pt` return identical figures** this time -- the run selected on `pose_PCK@0.2h`, which picked epoch 119 -- so pose01's trap, where a terrain-selected checkpoint was the run's *worst* pose model, is structurally gone rather than avoided by hand. **The curve is flat at the end**: 0.9339, 0.9344, 0.9345, 0.9345, 0.9345 over the last five epochs on the val prefix, so 120 epochs was enough, which is precisely the question pose01 could not answer about itself. The cost of selecting on pose is on the record in `selection.json`: terrain mIoU was 0.698 at epoch 17 and is 0.637 at the selected epoch. Superseded note: **pose02 was running as of 2026-08-26 14:08** — `hydranet-pose02.service`, `runs/hydranet_retail_pose02`, 120 epochs, ~7 min/epoch. The 2026-08-25 overnight attempt **never started**: the trainer refused a dirty tree over another session's uncommitted `analytics/world.py`, the two eval steps behind it then failed on a checkpoint that was never written, and the card sat idle for 17 hours. It selects on `pose_PCK@0.2h` (§7.9), so this run leaves a per-epoch pose curve and a `best.pt` chosen by the head it exists to train.
 
-**Throughput, end to end, 2026-08-25 — the gate MISSES.** `cli/export_onnx.py` was
+**Throughput re-measured 2026-08-26 on an idle card — the gate PASSES at the shipped
+canvas, and the margin is 3.7%.** The 1,324 f/s below was pose01's weights *with an RL
+neighbour on the card*; with pose02's `last.pt`, batch 16, fp16 and nothing else on the
+GPU the engine measures **1,494 f/s = 100 streams**, against 1,440 required. So the leg
+that was 8% short was 8% short of a *shared* card. Read the two together rather than
+either alone: a co-tenant costs 11%, and 3.7% of headroom does not survive one.
+
+Found on the way, and it invalidated the 2026-08-25 resolution sweep: `bench_trt.py`
+read the batch from the **filename** (`_b(\d+)`, else 1). That sweep's files were named
+`res_640x1120.onnx` and exported at batch 16, so every row divided the true throughput by
+sixteen and `meets_target_compute` compared the sixteenth against 1,440 — recording a
+**False** for a 576x1008 engine that clears the target. It now reads the batch from the
+graph and refuses a dynamic-batch one rather than guessing.
+
+**The resolution trade is measured now, both halves, on the same weights** (`runs/res_trade01/`,
+`eval_student.py --input-size`). It has been carried as "an unmeasured accuracy cost" since
+the target was set:
+
+| input | engine f/s | streams | PCK@0.2h | vs shipped | L2 p50 |
+|---|---|---|---|---|---|
+| **640x1120 (shipped)** | **1,494** | **100** | **0.915** | — | 7.7 px |
+| 576x1008 | 1,806 | 120 | 0.911 | −0.004 | 8.3 px |
+| 512x896 | 2,314 | 154 | 0.908 | −0.007 | 9.2 px |
+| 448x784 | 3,010 | 201 | 0.897 | −0.018 | 10.7 px |
+
+Every canvas clears the target, so none of them is needed to pass — they are headroom, and
+now priced. The bottom row is the one to keep in mind: **448x784 doubles the throughput
+for 0.018 PCK, and 0.897 is exactly the accuracy pose01's `last.pt` was about to ship
+yesterday.** Superseded: **Throughput, end to end, 2026-08-25 — the gate MISSES.** `cli/export_onnx.py` was
 dropping the pose head entirely (`a0c51de`), so every engine number before this described
 the model with pose replaced. With `pose_heatmap_p3` in the graph, E60 weights, batch 16,
 fp16, NVDEC decode into device memory, one small RL neighbour on the card:
