@@ -334,6 +334,33 @@ Both already live in the wheel (`data/teachers/`). Their jobs, in value order:
   ruled out (decided 2026-08-25, off-hours included)** — and moves to pose space: the
   temporal model reads keypoints, not pixels, so public 3D action data projected to the
   measured camera pose replaces staged clips entirely (§2.3).
+* **NTU RGB+D 60 is on disk and surveyed, 2026-08-26.** `datasets/_incoming/ntu60/NTU60_CS.npz`,
+  the Kaggle mirror (`jarex616/ntu-rgb-d-60-skeleton-data-npz`) — a third-party
+  redistribution, taken at the user's instruction while the ROSE Lab application is still
+  queued; the licence *purpose* is satisfied (research, non-commercial) and the per-researcher
+  agreement is not. 40,091 train / 16,487 test sequences, `(N, 300, 150)` float32 = 300
+  frames × 2 bodies × 25 Kinect joints × 3D, one-hot over 60 balanced classes (271–276
+  each in test). `tools/temporal/ntu_survey.py` is the instrument; `runs/ntu_survey01/`
+  the numbers. **The projection route survives the file**: coordinates are *centred* —
+  frame-0 spine base sits at (0.00, −0.295, 0.065) m in every sample, std ~0.03, so the
+  Kinect's absolute distance is gone — but they are **not** canonically rotated (the
+  facing direction still varies sample to sample) and **not** rescaled (torso length
+  median **0.482 m**, std 0.026; shoulder width **0.336 m**, std 0.035 — between-subject
+  anatomy, not a normalised constant). The floor is recoverable from the feet: a standing
+  clip's foot height has std **4.4 mm**. So we supply the floor position and the camera,
+  the file supplies the body, which is exactly what §2.3 asks for.
+* **And the survey refuted a per-frame feature before it was trained on.** In NTU's own
+  ground-truth 3D, peak shoulder-to-hip angle from vertical: `A43 falling down` **74.5°**
+  median with **38/40** clips over `events/pose.py`'s shipped 55° threshold — and
+  `A06 pick up` **76.3°** with **35/40** over it. `A08 sit down` is 67.3°/30. The controls
+  behave: `A42 staggering` 28.2°/3, `A27 jump up` 27.3°/1, `A01 drink water` 12.8°/1.
+  **The torso angle does not separate a fall from a shopper reaching a bottom shelf** —
+  it separates "bent" from "upright", which is a different question. What must carry the
+  distinction is what happens *after* the peak: a fall stays down. `pose_posture_events`
+  already encodes that as `sustained_seconds` plus the box-height cross-check, and the
+  temporal model must be trained on the sequence for the same reason rather than on a
+  per-frame posture score. **NTU has no crouch/squat class**; the nearest retail posture
+  is `A06 pick up`, and it is the class a fall detector must not fire on.
 
 ### 4.4 Split discipline — binds every reported number
 
