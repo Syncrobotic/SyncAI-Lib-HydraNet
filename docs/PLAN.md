@@ -473,7 +473,34 @@ batch 32 gives 1,300 f/s (*worse* — the card is saturated, so batch size is no
 pruning the terrain head from the graph gives 1,386 f/s (+4.7%, still 3.7% short). The
 1,552 f/s of 2026-08-24 that made the target look comfortable was engine-only *and*
 without pose. Remaining levers untested: int8/fp8 (`--best`), a narrower backbone, or
-re-opening §7.4's 96 | keypoint error vs ViTPose; throughput re-measured **end to end — NVDEC decode → engine → host NMS → tracker** — with pose in the slot and the ROI path at its 0.2–1 fps cadence | `reach_to_shelf` and `crouch` fire correctly on a watched clip; fps ≥ 1,440 stands end to end, not engine-only — 96 streams is a requirement now (§7.4), and decode/NMS/PCIe were named the real risk when the target was set |
+re-opening §7.4's 96 **Gate 3's third condition met 2026-08-26, and one thing it does not cover is worse than
+the things it does** (`runs/pose_events03/`, pose02 `last.pt`, the eight sweep clips, 24
+minutes). `reach_to_shelf_events` had never run outside a test; wired into
+`pose_overlay.py` it produces **280 reach, 4 crouch, 3 fall**. Verified the way this gate
+says — by looking:
+
+* **`reach_to_shelf` fires correctly.** Two firing frames read by eye, both right, wrist
+  genuinely over the counter at fixture fractions 0.66 and 1.00 against 0.35.
+* **`crouch` fires correctly.** Taichung-cam01 frame 810, ratio 0.30 against a 0.60
+  threshold: a member of staff folded down at a low cabinet, exactly what the type means.
+* **So the gate passes as written** — and the alert is not usable, for a reason the clip
+  makes plain. 280 reaches is 11.7 a minute, 36.7 on Kaohsiung-cam04, and every person in
+  the Taichung-cam01 clip wears the shop's blue polo: there is no customer in it. Staff
+  working a till reach over a fixture every few seconds. `staff/customer` is already
+  listed in §4.3 as necessarily in-domain, and this is the first measurement of what a
+  specific output costs without it.
+* **`fall` is not in this gate's wording and it is the one that would wake somebody.**
+  Three in 24 minutes of a phone shop. Both Kaohsiung-cam04 cases were read by eye and
+  **both are false**, with the cause visible in the frame and predicted in
+  `models/heads/pose.py` before any of it ran: "two people whose boxes overlap can steal
+  each other's peaks inside the intersection". At a crowded counter the overlapping boxes
+  tangle their skeletons into a horizontal torso. The same frames show the detector
+  finding **3 people in a frame holding about ten** — that camera's open person-score
+  investigation, in a second symptom. A safety alert at one false alarm per eight minutes
+  does not ship, and the fix is not a threshold: it is the crop-stage fallback
+  `models/heads/pose.py` reserved for exactly this case.
+
+| keypoint error vs ViTPose; throughput re-measured **end to end — NVDEC decode → engine → host NMS → tracker** — with pose in the slot and the ROI path at its 0.2–1 fps cadence | `reach_to_shelf` and `crouch` fire correctly on a watched clip; fps ≥ 1,440 stands end to end, not engine-only — 96 streams is a requirement now (§7.4), and decode/NMS/PCIe were named the real risk when the target was set |
 | 4 | **detection uplift at zero GPU** — ~~temporal-consistency tiers~~ **REFUTED for `person`, 2026-08-26, measured**: `instances_all_train.json` is not a pool of unused good labels, it is the same Grounding DINO teacher dumped at 0.10 instead of 0.35 — median score 0.149, and `instances_train` is simply that pool thresholded (48,005 vs 47,465 at 0.35). Worse, persistence is the wrong signal here and it is wrong in the dangerous direction: score vs run-length correlation is **+0.006**, the 0.10–0.20 band moves a median **0.3 px per frame**, and **41,160 sub-threshold boxes persist ≥8 frames** — posters, mannequins and hanging packets are the most persistent things in a store. A consistency tier would promote exactly them. The measured detection problem is **recall, not label count**: on one clip the trunk's own dense head marks **1.30× as many people as the box head returns** (146 blobs vs 112 boxes over 60 frames) while scoring `person` IoU 0.885 against detection mAP@50 0.302 — the features find people the box head cannot emit. **Re-scoped and then measured on the fleet, 2026-08-26**: `serving.decode.confirm_with_dense` admits low-scoring boxes where the dense head puts person pixels under them. Three arms over the same eight clips — A shipped 0.35, B threshold-only 0.15, C 0.15 + confirmation:
 
 | arm | person dets | tracks | boxes dropped | fall | crouch |
