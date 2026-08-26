@@ -162,14 +162,24 @@ def track_clip(
         det = res["detection"][0]
         if len(det.get("labels", [])):
             lab = det["labels"].cpu().numpy()
-            box = det["boxes"].cpu().numpy()[lab == person_label]
+            keep = lab == person_label
+            box = det["boxes"].cpu().numpy()[keep]
+            # The same mask on both, or a box gets another box's score from the first
+            # non-person detection onwards.
+            sc = det["scores"].cpu().numpy()[keep]
             box = to_source_pixels(box, region, src_w, src_h)
             if k1 is not None:
                 box = undistort_boxes(box, k1, src_w, src_h)
         else:
             box = np.zeros((0, 4))
+            sc = np.zeros(0)
         detections += len(box)
-        tracker.update(box, n)
+        # Scores on every call including the empty ones: `Tracker.update` latches on the
+        # first frame and refuses a later one that disagrees, because a list that skipped
+        # a frame still zips against `frames` while describing different frames. Feeding
+        # them here is what puts confidence on every track the four callers of this loop
+        # produce -- see `events.TrackSupport` for the measurement that made it necessary.
+        tracker.update(box, n, scores=sc)
         n += 1
         if max_frames and n >= max_frames:
             break

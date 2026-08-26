@@ -18,6 +18,7 @@ from syncai_hydranet.analytics.clip_tracks import (
     track_clip,
     undistort_boxes,
 )
+from syncai_hydranet.analytics.tracker import Tracker
 
 
 class _Tracker:
@@ -25,9 +26,11 @@ class _Tracker:
 
     def __init__(self):
         self.seen: list[np.ndarray] = []
+        self.scores: list[np.ndarray] = []
 
-    def update(self, boxes, _frame_index):
+    def update(self, boxes, _frame_index, scores=None):
         self.seen.append(np.asarray(boxes, dtype=float).copy())
+        self.scores.append(np.asarray([] if scores is None else scores, dtype=float))
 
     def finished(self):
         return [f"track-{len(self.seen)}"]
@@ -50,16 +53,20 @@ class _Det:
 
 
 class _Model:
-    def __init__(self, boxes_per_frame):
+    def __init__(self, boxes_per_frame, scores_per_frame=None):
         self._boxes = boxes_per_frame
+        self._scores = scores_per_frame
 
     def predict(self, x, score_thr):  # noqa: ARG002  (stub returns fixed boxes)
-        boxes = self._boxes[int(x)]
+        i = int(x)
+        boxes = self._boxes[i]
+        scores = self._scores[i] if self._scores is not None else np.full(len(boxes), 0.9)
         return {
             "detection": [
                 {
                     "labels": _Det(np.full(len(boxes), PERSON)),
                     "boxes": _Det(np.asarray(boxes, dtype=float).reshape(-1, 4)),
+                    "scores": _Det(np.asarray(scores, dtype=float).reshape(-1)),
                 }
             ]
         }
@@ -99,12 +106,12 @@ class _Canvas:
         return self.i
 
 
-def _run(boxes_per_frame, *, k1, max_frames=0):
+def _run(boxes_per_frame, *, k1, max_frames=0, scores_per_frame=None, tracker=None):
     frames, preprocess, probe = _harness(boxes_per_frame)
-    tracker = _Tracker()
+    tracker = _Tracker() if tracker is None else tracker
     out = track_clip(
         "clip.mp4",
-        _Model(boxes_per_frame),
+        _Model(boxes_per_frame, scores_per_frame),
         (512, 640),
         "cpu",
         tracker,
@@ -204,3 +211,36 @@ def test_undistortion_keeps_a_box_a_box():
     out = undistort_boxes(boxes, -0.225, 1920, 1080)
     assert (out[:, 2] > out[:, 0]).all()
     assert (out[:, 3] > out[:, 1]).all()
+
+
+def test_every_track_carries_the_score_of_each_box_it_was_built_from():
+    """The shared loop is where four callers get confidence for free, or none of them do.
+
+    `events.TrackSupport` records the measurement: at a 0.15 birth threshold the fleet's
+    posture events quadrupled and the extra ones were real people detected at low
+    confidence. A consumer can only tell those apart if the score survived association,
+    and this loop is the only place all four call sites pass through. The real `Tracker`
+    runs here rather than the recording stub, because what is being checked is that the
+    score reaches a `Track`.
+    """
+    boxes = [[[100.0, 100.0, 160.0, 300.0]], [[104.0, 100.0, 164.0, 300.0]]]
+    out, _ = _run(
+        boxes,
+        k1=None,
+        scores_per_frame=[[0.16], [0.62]],
+        tracker=Tracker(min_hits=1),
+    )
+    (track,) = out.tracks
+    assert track.scores == pytest.approx([0.16, 0.62])
+    assert len(track.scores) == len(track.frames) == len(track.boxes)
+
+
+def test_a_frame_with_no_person_still_passes_scores_so_the_latch_holds():
+    """An empty frame must pass an empty score array, not nothing.
+
+    `Tracker.update` latches on the first call and refuses a later one that disagrees, so
+    a loop that skipped `scores=` whenever a frame was empty would raise on the first
+    quiet frame -- which on this footage is most of them.
+    """
+    out, _ = _run([[[100.0, 100.0, 160.0, 300.0]], []], k1=None, tracker=Tracker(min_hits=1))
+    assert out.frames == 2
