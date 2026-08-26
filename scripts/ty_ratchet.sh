@@ -84,11 +84,33 @@ TARGET="${1:-src/}"
 # touched, and editing six unrelated modules to chase a number is how a fix becomes a
 # regression.
 #
-# scripts/ 19, measured on the day the gate was extended. No breakdown here on purpose:
-# unlike src/'s, this number has never been paid down, so naming its members would imply
-# a review that has not happened.
+# scripts/ 19 on the day the gate was extended, then 18 when the interpreter was pinned
+# (a7d8410, 08-19). It sat at 18 until 2026-08-26 and the tree had long since moved: nothing
+# in `scripts/` was ever *fixed* for this number, but twelve scripts left in `500cdd2` and
+# the plate-calibration, SAM 3 and photometry code moved into the packages. The count went
+# with them and the baseline did not follow, because a fall is a notice here rather than a
+# failure and nobody spent the notice.
+#
+# **A baseline above the true count is not a safe margin, it is a hole.** At 18 against a
+# real 17, a change introducing one new diagnostic passes green -- which is the exact
+# failure this ratchet exists to catch, arrived at from the loose side rather than the
+# red side.
+#
+# scripts/ 17, measured 2026-08-26. The breakdown, which was previously withheld on the
+# grounds that naming the members of a never-reviewed number would imply a review:
+#
+#   campaign_site30k.py   7
+#   site_events.py        3
+#   track_review.py       2
+#   render_demo.py        2
+#   bench_e2e.py          2
+#   live_view_orin.py     1
+#
+# It is here now because a number being lowered has been looked at, which is the whole
+# difference. Still not a backlog: six files, none of them paid down, and the header's
+# rule applies -- they come down as those files are touched.
 case "$TARGET" in
-  scripts/|scripts) DEFAULT_BASELINE=18 ;;
+  scripts/|scripts) DEFAULT_BASELINE=17 ;;
   *)                DEFAULT_BASELINE=11 ;;
 esac
 BASELINE="${TY_BASELINE:-$DEFAULT_BASELINE}"
