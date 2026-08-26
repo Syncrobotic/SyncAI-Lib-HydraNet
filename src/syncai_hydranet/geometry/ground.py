@@ -190,3 +190,38 @@ def undistort_points(xy: np.ndarray, k1: float, centre, radius: float) -> np.nda
     centred = np.asarray(xy, float) - np.asarray(centre, float)
     r2 = (centred**2).sum(axis=1) / (radius**2)
     return centred / (1.0 + k1 * r2)[:, None] + np.asarray(centre, float)
+
+
+def distort_points(xy: np.ndarray, k1: float, centre, radius: float) -> np.ndarray:
+    """The exact inverse of `undistort_points`: ideal pixels -> the raw frame's pixels.
+
+    Needed by everything that draws a metre-space object back onto a real frame.
+    `ground_to_pixel` returns *ideal* pixels -- the lens has been divided out of the
+    camera model -- while a decoded frame, a commissioning plate and every mask beside it
+    are raw. Overlaying one on the other without this puts a zone outline a few pixels off
+    its own floor, which reads as "the calibration is a bit loose" and is nothing of the
+    kind. It is the same silent drift `undistort_points` warns about, in the other
+    direction, and the reason both halves live in one file.
+
+    The division model ``x_u = x_d / (1 + k1 |x_d|^2 / R^2)`` inverts in closed form.
+    Writing ``a = |x_u|`` and ``b = |x_d|`` gives ``(k1 a / R^2) b^2 - b + a = 0``; the
+    root taken is the one that tends to ``a`` as ``k1`` tends to zero, which is the
+    physical branch -- the other runs off to infinity and describes no lens.
+
+    ``q < 0`` is beyond the model's turning point: no real pre-image exists, and inventing
+    one would move a point to a place the lens cannot map from. Those come back NaN, which
+    every consumer of this module already reads as "not measured".
+    """
+    xy = np.asarray(xy, float)
+    if abs(k1) < 1e-12:
+        return xy.copy()
+    centre_a = np.asarray(centre, float)
+    centred = xy - centre_a
+    a = np.hypot(centred[:, 0], centred[:, 1])
+    q = 1.0 - 4.0 * k1 * a**2 / (radius**2)
+    safe_a = np.where(a > 1e-9, a, 1.0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        b = (1.0 - np.sqrt(np.clip(q, 0.0, None))) * radius**2 / (2.0 * k1 * safe_a)
+    scale = np.where(a > 1e-9, b / safe_a, 1.0)
+    scale = np.where(q >= 0, scale, np.nan)
+    return centred * scale[:, None] + centre_a

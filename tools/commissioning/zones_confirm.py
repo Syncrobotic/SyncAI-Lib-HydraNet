@@ -58,7 +58,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from syncai_hydranet.geometry.camera_json import ZONE_KINDS, CameraFile, Zone
-from syncai_hydranet.geometry.ground import ground_to_pixel
+from syncai_hydranet.geometry.ground import distort_points, ground_to_pixel
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
 PROPOSED = ROOT / "runs/zones01"
@@ -104,9 +104,19 @@ def _plate(cam_file: CameraFile) -> Image.Image:
 
 
 def _to_px(points_m, cam_file: CameraFile, scale: float) -> np.ndarray:
+    """Floor metres -> pixels on the RAW plate this sheet is drawn on.
+
+    `ground_to_pixel` returns ideal pixels; the plate is a decoded frame with the lens
+    still in it. Skipping `distort_points` puts every outline a few pixels off its own
+    floor, which reads as a loose calibration and is not one.
+    """
     a = np.asarray(points_m, dtype=float).reshape(-1, 2)
     u, v, _ = ground_to_pixel(a[:, 0], a[:, 1], cam_file.camera, cam_file.plane)
-    return np.stack([u * scale, v * scale], axis=1)
+    px = np.stack([u, v], axis=1)
+    lens = cam_file.lens
+    if lens is not None:
+        px = distort_points(px, lens.k1, lens.centre_px, lens.radius_px)
+    return px * scale
 
 
 def _hull(points_m: np.ndarray) -> np.ndarray:

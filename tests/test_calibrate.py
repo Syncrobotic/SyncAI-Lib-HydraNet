@@ -383,3 +383,49 @@ def test_edge_points_can_return_their_gradient_direction():
     assert len(pts) == len(ang)
     assert ((ang < 0.3) | (ang > math.pi - 0.3)).mean() > 0.9
     assert np.array_equal(pts, floor_edge_points(grey, mask)), "default return unchanged"
+
+
+# ---------------------------------------------- the lens, in the drawing direction
+
+
+def test_distort_points_is_the_exact_inverse_of_undistort_points():
+    """Every overlay in the tree draws metre-space objects onto a raw frame.
+
+    `ground_to_pixel` returns ideal pixels and a decoded frame still has its lens, so an
+    outline drawn without this lands a few pixels off its own floor -- which reads as a
+    loose calibration and is not one.
+    """
+    from syncai_hydranet.geometry.ground import distort_points, undistort_points
+
+    rng = np.random.default_rng(0)
+    pts = rng.uniform([0.0, 0.0], [960.0, 540.0], size=(2000, 2))
+    for k1 in (-0.225, -0.05, 0.0, 0.08):
+        ideal = undistort_points(pts, k1, (480.0, 270.0), 480.0)
+        back = distort_points(ideal, k1, (480.0, 270.0), 480.0)
+        assert np.nanmax(np.abs(back - pts)) < 1e-8, f"k1={k1}"
+        assert not np.isnan(back).any()
+
+
+def test_a_zero_coefficient_is_the_identity_rather_than_a_division_by_zero():
+    from syncai_hydranet.geometry.ground import distort_points
+
+    pts = np.array([[10.0, 20.0], [480.0, 270.0]])
+    assert np.allclose(distort_points(pts, 0.0, (480.0, 270.0), 480.0), pts)
+
+
+def test_the_centre_of_distortion_is_a_fixed_point():
+    from syncai_hydranet.geometry.ground import distort_points
+
+    centre = np.array([[480.0, 270.0]])
+    got = distort_points(centre, -0.225, (480.0, 270.0), 480.0)
+    assert np.allclose(got, centre)
+
+
+def test_beyond_the_model_s_turning_point_there_is_no_pre_image_and_it_says_so():
+    """A positive k1 has a radius past which no real point maps forward. Inventing one
+    would move a vertex to a place the lens cannot see from."""
+    from syncai_hydranet.geometry.ground import distort_points
+
+    far = np.array([[480.0 + 5000.0, 270.0]])
+    got = distort_points(far, 0.5, (480.0, 270.0), 480.0)
+    assert np.isnan(got).all()
