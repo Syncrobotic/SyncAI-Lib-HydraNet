@@ -288,6 +288,10 @@ TRAIN = {
     # old behaviour. The last epoch always scores it whatever this says, so a run never
     # ends reporting an mAP from several epochs earlier.
     "detection_val_interval": Spec((int,)),
+    # How many persons the pose metric decodes per validation. `decode_boxes` is a
+    # per-box Python loop, so the whole val split costs ~30 s an epoch and a fixed
+    # prefix of it costs seconds for the same curve. 0 means every person.
+    "pose_val_max_persons": Spec((int,)),
     # Stop after this many validations with no new best `primary_metric`. 0 disables.
     "early_stop_patience": Spec((int,)),
     "primary_metric": Spec((str,)),

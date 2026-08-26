@@ -133,6 +133,13 @@ def _paste(sample: Sample, size: tuple[int, int], x0: int, y0: int) -> Sample:
         b[:, [0, 2]] = b[:, [0, 2]].clip(0, w)
         b[:, [1, 3]] = b[:, [1, 3]].clip(0, h)
         keep = (b[:, 2] - b[:, 0] > 2) & (b[:, 3] - b[:, 1] > 2)
+        # A source that carries both boxes and poses carries them as parallel arrays,
+        # one row per person. A crop that drops a box must drop its skeleton with it, or
+        # the arrays stop describing the same people and every consumer that zips them --
+        # the pose validation metric decodes person i's heatmap window from box i --
+        # silently scores one person against another's geometry.
+        if "pose" in sample and len(sample["pose"]) == len(b):
+            sample["pose"] = sample["pose"][keep]
         sample["boxes"], sample["labels"] = b[keep], sample["labels"][keep]
     _pose_shift_clip(sample, x0, y0, w, h)
     return sample

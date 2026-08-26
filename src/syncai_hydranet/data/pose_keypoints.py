@@ -6,6 +6,13 @@ carries over without a second bookkeeping system. Keypoints ride the same geomet
 boxes do (`transforms.py` scales, shifts and flips them together), and arrive at the
 loss in network-input pixels, which is the coordinate frame `PoseHeatmapLoss.render`
 expects.
+
+The teacher's boxes ride along as `targets["boxes"]`. They supervise nothing -- this
+dataset declares `pose` alone -- but validation cannot score keypoints without them:
+`decode_boxes` reads person i's heatmap window out of box i, and scoring against boxes
+the detection head produced would move the pose curve every time detection moved. They
+are parallel arrays with the keypoints, one row per person, and `transforms._paste`
+drops both together when a crop loses a person.
 """
 
 from __future__ import annotations
@@ -44,11 +51,20 @@ class PoseKeypointsDataset(Dataset[dict[str, Any]]):
         self.img_dir = self.root / "images"
         by_image: dict[int, list] = {}
         for a in data["annotations"]:
+            x, y, w, h = a["bbox"]
             by_image.setdefault(a["image_id"], []).append(
-                np.asarray(a["keypoints"], dtype=np.float32).reshape(17, 3)
+                (
+                    np.asarray(a["keypoints"], dtype=np.float32).reshape(17, 3),
+                    np.asarray([x, y, x + w, y + h], dtype=np.float32),
+                )
             )
         self.entries = [
-            (im["file_name"], np.stack(by_image[im["id"]]), im["id"])
+            (
+                im["file_name"],
+                np.stack([kp for kp, _ in by_image[im["id"]]]),
+                np.stack([bx for _, bx in by_image[im["id"]]]),
+                im["id"],
+            )
             for im in data["images"]
             if im["id"] in by_image
         ]
@@ -62,13 +78,24 @@ class PoseKeypointsDataset(Dataset[dict[str, Any]]):
         return len(self.entries)
 
     def __getitem__(self, index: int):
-        file_name, kps, img_id = self.entries[index]
+        file_name, kps, boxes, img_id = self.entries[index]
         img = Image.open(self.img_dir / file_name).convert("RGB")
-        s = Sample(image=img, pose=kps.copy())
+        # `labels` is all zeros and means nothing: the transforms index it alongside
+        # `boxes` when a crop drops a person, so the pair has to exist even though this
+        # dataset supervises no detection head.
+        s = Sample(
+            image=img,
+            pose=kps.copy(),
+            boxes=boxes.copy(),
+            labels=np.zeros(len(boxes), dtype=np.int64),
+        )
         s = self.transform(s)
         return {
             "image": s["image"],
-            "targets": {self.head_name: torch.from_numpy(s["pose"]).float()},
+            "targets": {
+                self.head_name: torch.from_numpy(s["pose"]).float(),
+                "boxes": torch.from_numpy(np.asarray(s["boxes"], dtype=np.float32)),
+            },
             "supervises": self.supervises,
             "image_id": img_id,
             "geom": s.get("geom", GEOM_IDENTITY),

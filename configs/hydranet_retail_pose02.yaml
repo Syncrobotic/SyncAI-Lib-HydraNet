@@ -2,10 +2,12 @@
 # rising when it stopped (PCK@0.2h E15 0.840 -> E29 0.882 -> E60 0.898), so the
 # run ended before the curve did.
 #
-# `primary_metric` is left on terrain deliberately: this run has no pose validation
-# metric to select on either (open question 9), and the gate reads `last.pt`, which
-# no selection rule touches. Changing it here would only move which useless best.pt
-# gets written.
+# `primary_metric` is `pose_PCK@0.2h` -- the validation pass now produces one (open
+# question 9 is closed). pose01 had no pose number at all, so it selected `best.pt` on
+# terrain, terrain peaked at epoch 15, and the run's best checkpoint was its worst pose
+# model by 5.8 PCK points. This run selects on the head it exists to train; terrain and
+# detection stay in metrics.jsonl, and the shipped weights for those heads come from
+# their own runs.
 #
 # `output_dir` is fixed: pose01 inherited the security run's directory and the
 # trainer had to append a timestamp to avoid overwriting it, leaving the pose run
@@ -206,7 +208,11 @@ train:
   ema_decay: 0.9998
   log_interval: 50
   val_interval: 1
-  primary_metric: terrain_mIoU/site_seg03
+  primary_metric: pose_PCK@0.2h
+  # 4,000 persons out of the val split's 22,241: decode is a per-box Python loop, the
+  # whole split costs ~30 s an epoch and a deterministic prefix costs ~7 s for the same
+  # curve. The number that GATES is still eval_student.py over the whole test split.
+  pose_val_max_persons: 4000
   channels_last: true
   early_stop_patience: 0
   detection_val_interval: 5

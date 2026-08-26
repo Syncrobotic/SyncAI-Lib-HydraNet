@@ -1,4 +1,4 @@
-"""Validation: per-head segmentation mIoU and COCO detection mAP."""
+"""Validation: per-head segmentation mIoU, COCO detection mAP, depth error, pose PCK."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from ..data.multitask import collate
 from ..data.transforms import invert_geom
 from ..labels import IGNORE
 from ..models.heads.detection import SCORE_THR_EVAL
+from ..models.heads.pose import decode_boxes
 from ..utils.seeding import model_memory_format
 
 
@@ -470,6 +471,118 @@ def _depth_metrics(accs: dict, logger) -> dict[str, float]:
     return metrics
 
 
+class PoseAccumulator:
+    """Keypoint agreement with the teacher, accumulated over the validation pass.
+
+    The measurement is the one gate 3 reads: per-joint L2 in ORIGINAL image pixels and
+    PCK@0.2*box_height, both counted only where the teacher was confident -- a joint
+    ViTPose could not see is not a truth to be measured against. Decoding uses the
+    teacher's own boxes, so grouping is held fixed: a pose curve that moved because the
+    detection head moved would not be a pose curve.
+
+    `max_persons` caps the pass because `decode_boxes` is a per-box Python loop --
+    the whole 22,241-person val split costs ~30 s an epoch, a fixed prefix of it costs
+    seconds and answers the same question. The prefix is deterministic, so epoch N and
+    epoch N+1 are compared over the same people. The number that GATES still comes from
+    `tools/pose/eval_student.py` over the whole test split; this is the curve that says
+    when to stop, which pose01 ran 60 epochs without.
+    """
+
+    def __init__(self, conf_min: float = 0.3, pck_frac: float = 0.2, max_persons: int = 4000):
+        self.conf_min = float(conf_min)
+        self.pck_frac = float(pck_frac)
+        self.max_persons = int(max_persons)
+        self.persons = 0
+        self.hits = 0
+        self.judged = 0
+        self.errs: list[np.ndarray] = []
+
+    @property
+    def full(self) -> bool:
+        return self.max_persons > 0 and self.persons >= self.max_persons
+
+    def update(self, heatmaps, poses, boxes, geoms) -> None:
+        """One batch: `heatmaps` [B,K,h,w], `poses`/`boxes` per-image tensors, `geoms` the
+        letterbox parameters that map network pixels back to the original image."""
+        for i, (kp, bx) in enumerate(zip(poses, boxes, strict=True)):
+            if self.full:
+                return
+            if kp is None or len(kp) == 0 or bx is None or len(bx) == 0:
+                continue
+            if len(kp) != len(bx):
+                # The two arrays stopped describing the same people. Silently zipping
+                # them would score person 0's skeleton against person 1's box.
+                raise ValueError(
+                    f"pose validation got {len(kp)} skeletons and {len(bx)} boxes for one "
+                    f"image; they are parallel arrays and a transform has desynchronised them"
+                )
+            kp = kp.to(heatmaps.device)
+            bx = bx.to(heatmaps.device)
+            student = decode_boxes(heatmaps[i], bx)
+            d = torch.linalg.vector_norm(student[:, :, :2] - kp[:, :, :2], dim=-1)
+            judge = kp[:, :, 2] >= self.conf_min
+            box_h = (bx[:, 3] - bx[:, 1]).clamp(min=1.0)
+            # PCK is a ratio of two lengths in the same frame, so the letterbox scale
+            # cancels and it needs no geometry. The pixel error does not: it is reported
+            # in original-image pixels, which is what eval_student.py prints.
+            self.hits += int(((d <= self.pck_frac * box_h[:, None]) & judge).sum())
+            self.judged += int(judge.sum())
+            sx = float(geoms[i][0]) if geoms is not None else 1.0
+            self.errs.append((d[judge] / max(sx, 1e-6)).float().cpu().numpy())
+            self.persons += len(kp)
+
+    def metrics(self) -> dict[str, float]:
+        if not self.judged:
+            return {}
+        err = np.concatenate(self.errs) if self.errs else np.zeros(0, dtype=np.float32)
+        return {
+            "PCK@0.2h": self.hits / self.judged,
+            "L2_p50": float(np.percentile(err, 50)) if err.size else float("nan"),
+            "L2_p90": float(np.percentile(err, 90)) if err.size else float("nan"),
+        }
+
+
+def _update_pose_heads(
+    model, out: dict, batch: dict, sup, accs: dict, max_persons: int
+) -> None:
+    """Fold one batch into the per-head pose accumulators.
+
+    Needs the teacher's boxes as well as its keypoints: `PoseKeypointsDataset` emits
+    both, and a pose source that carries keypoints alone cannot be scored here at all --
+    decoding without boxes would measure the detection head instead.
+    """
+    for head in getattr(model, "pose_heads", {}):
+        if head not in sup or head not in batch["targets"]:
+            continue
+        boxes = batch["targets"].get("boxes")
+        if boxes is None:
+            continue
+        if head not in accs:
+            accs[head] = PoseAccumulator(
+                conf_min=getattr(model.pose_losses[head], "min_conf", 0.3),
+                max_persons=max_persons,
+            )
+        if accs[head].full:
+            continue
+        accs[head].update(out[head].detach(), batch["targets"][head], boxes, batch.get("geoms"))
+
+
+def _pose_metrics(accs: dict, logger) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    for head, acc in accs.items():
+        m = acc.metrics()
+        if not m:
+            continue
+        for k, v in m.items():
+            metrics[f"{head}_{k}"] = float(v)
+        logger.info(
+            f"[val] {head} PCK@0.2h = {m['PCK@0.2h']:.4f} | L2 p50 = {m['L2_p50']:.1f} px "
+            f"| p90 = {m['L2_p90']:.1f} px  ({acc.judged:,} judged joints on "
+            f"{acc.persons:,} persons)"
+        )
+    return metrics
+
+
 def evaluate(
     model, val_sets, cfg, device, logger, samples: dict | None = None, loaders=None
 ) -> dict:
@@ -506,6 +619,9 @@ def evaluate(
     # not over all 80 with the untrained ones counted as misses.
     det_cat_ids: dict[str, list] = {}
     depth_accs: dict[str, DepthAccumulator] = {}
+    pose_accs: dict[str, PoseAccumulator] = {}
+    # A prefix rather than the whole pose val split: see PoseAccumulator. 0 means all.
+    pose_max = int(cfg.get("train", {}).get("pose_val_max_persons", 4000))
     disagree = disagree_total = 0
     if loaders is None:
         loaders = build_val_loaders(val_sets, cfg, device)
@@ -544,6 +660,7 @@ def evaluate(
                 disagree_total += n
 
             _update_depth_heads(model, out, batch, sup, device, depth_accs)
+            _update_pose_heads(model, out, batch, sup, pose_accs, pose_max)
 
             if model.det_head is not None and model.det_head_name in sup:
                 coco_gts[name] = ds.coco
@@ -556,6 +673,7 @@ def evaluate(
     metrics.update(_seg_metrics_per_dataset(seg_cms_by_ds, cfg, logger))
     metrics.update(_det_metrics(det_results, coco_gts, det_cat_ids, logger))
     metrics.update(_depth_metrics(depth_accs, logger))
+    metrics.update(_pose_metrics(pose_accs, logger))
 
     if disagree_total:
         frac = disagree / disagree_total
