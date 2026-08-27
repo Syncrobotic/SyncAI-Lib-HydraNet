@@ -36,15 +36,26 @@ merges a human writes back. It stops exactly where judgement starts and does not
 consume. A format invented here and converted later is a second place for a frame index
 to go wrong.
 
-**It refuses any detection head that is not the 80-class COCO space.** `PERSON` here is
-`COCO_NAMES.index("person")`, which is **0**, and a label of 0 exists in every detection
-head this repo trains. `configs/hydranet_retail_products.yaml` says so itself: its two
-classes are `boxed_stock` and `device`, and its own comment notes that both taxonomies
-"produce a label `0`". Pointing this script at that checkpoint would not error -- it would
-track shelf stock, lay it out as shoppers, and hand back a ground-truth file. The pairing
-in this docstring's own example was one such mistake: a 2-class config against an 80-class
-checkpoint, which at least fails loudly on a shape mismatch. The refusal below covers the
-case that does not.
+**It refuses any detection head whose label `PERSON` does not mean a person**, and it
+decides that by reading the head's declared class names rather than by counting them.
+`PERSON` here is `COCO_NAMES.index("person")`, which is **0**, and a label of 0 exists in
+every detection head this repo trains. `configs/hydranet_retail_openvocab.yaml` is the
+case that matters: its two classes are `boxed_stock` and `device`, so label 0 is shelf
+stock. Pointing this script at that checkpoint would not error -- it would track stock,
+lay it out as shoppers, and hand back a ground-truth file. The pairing in this docstring's
+own example was one such mistake: a 2-class config against an 80-class checkpoint, which
+at least fails loudly on a shape mismatch. The refusal below covers the case that does not.
+
+**This refusal used to be `n_classes != 80`, and that was wrong in the direction that
+costs work.** Every checkpoint in this repo that detects people is the 4-class retail head
+`(person, bag, boxed_stock, device)` -- pose01, pose02 and the security runs -- where
+label 0 *is* person, and `analytics/clip_tracks.py` has been tracking shoppers with the
+same `PERSON` constant on those checkpoints all along. So the count test refused the only
+checkpoints this script could ever be pointed at, while its error message asserted that
+label 0 meant `boxed_stock` on a head where it does not. Found 2026-08-27, when the whole
+reason to run this -- the IDF1 ground truth decision 1 needs (PLAN §7.18) -- ran into it.
+Reading the names is also strictly the safer test: it still refuses the openvocab head,
+which counting to 80 would have refused only by accident of arity.
 
 **What this does not do: it does not add missing people.** A shopper the detector never
 saw is absent from the proposal and stays absent from the ground truth, so recall against
@@ -69,6 +80,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from syncai_hydranet.analytics import Tracker
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.coco_subsets import COCO_NAMES
+from syncai_hydranet.data.label_maps_retail_security import get_det_vocab
 from syncai_hydranet.data.transforms import invert_geom
 from syncai_hydranet.data.video import frames, probe
 from syncai_hydranet.models.hydranet import build_model
@@ -81,21 +93,51 @@ CROP_W, CROP_H = 48, 96
 MAX_CROPS = 12
 
 
-def check_person_class_space(n_classes: int) -> None:
+def head_class_names(cfg: dict) -> tuple[str, ...] | None:
+    """What the detection head's channels are called, or `None` if the config cannot say.
+
+    Three sources, in the order a config states them: the head's own `classes` list, a
+    `det_vocab` shared with the datasets, and -- only for a head of exactly 80 channels --
+    the COCO space, which this repo's 80-class configs name by omission rather than by
+    listing. `None` means "unknown", which the caller must treat as a refusal: a head whose
+    channels have no names is exactly the head nobody can check.
+    """
+    head = cfg.get("model", {}).get("heads", {}).get("detection", {})
+    if head.get("classes"):
+        return tuple(head["classes"])
+    datasets = cfg.get("data", {}).get("datasets", [])
+    vocabs = {d["det_vocab"] for d in datasets if d.get("det_vocab")}
+    if len(vocabs) == 1:
+        return tuple(get_det_vocab(next(iter(vocabs))).classes)
+    if head.get("num_classes") == len(COCO_NAMES):
+        return tuple(COCO_NAMES)
+    return None
+
+
+def check_person_class_space(n_classes: int, names: tuple[str, ...] | None = None) -> None:
     """Refuse a detection head in which label `PERSON` does not mean a person.
 
     Raises rather than warns. A warning is the wrong instrument here: the failure produces
     a complete, well-formed `tracks.json` and a review sheet full of crops, so nothing
     downstream can tell the difference and the reviewer is looking at the crops rather
     than at the scrollback.
+
+    `names` defaults to the COCO space so the historical single-argument call still means
+    what it did: "this head has `n_classes` channels and they are COCO's".
     """
-    if n_classes != len(COCO_NAMES):
+    names = tuple(COCO_NAMES) if names is None else names
+    if len(names) != n_classes:
         raise SystemExit(
-            f"This detection head has {n_classes} classes, not {len(COCO_NAMES)}. "
-            f"`PERSON` is COCO index {PERSON}, which is a valid label in that head and "
-            f"means something else -- `boxed_stock` in the retail-products taxonomy. "
-            f"Nothing would error; the tracks would just not be people. Use a checkpoint "
-            f"whose detection head is the 80-class COCO space."
+            f"The config names {len(names)} detection classes and the checkpoint's head "
+            f"has {n_classes} channels. One of them is not the model you meant; the "
+            f"tracks would be labelled by a taxonomy the weights were not trained on."
+        )
+    if len(names) <= PERSON or names[PERSON] != "person":
+        got = names[PERSON] if len(names) > PERSON else "nothing"
+        raise SystemExit(
+            f"In this detection head label {PERSON} is {got!r}, not 'person'. Nothing "
+            f"would error; the tracks would just not be people. Its classes are "
+            f"{', '.join(names)} -- use a checkpoint whose head detects people."
         )
 
 
@@ -224,7 +266,7 @@ def cmd_propose(args) -> int:
     device = pick_device(cfg.get("device"))
     model = build_model(cfg).to(device).eval()
     model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), args.weights))
-    check_person_class_space(int(model.det_head.cls_pred.bias.shape[0]))
+    check_person_class_space(int(model.det_head.cls_pred.bias.shape[0]), head_class_names(cfg))
     size = cfg["data"]["input_size"]
 
     src_w, src_h, _ = probe(args.clip)

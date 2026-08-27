@@ -18,7 +18,12 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from track_review import _sheet as sheet
-from track_review import apply_merges, check_person_class_space, tracks_to_json
+from track_review import (
+    apply_merges,
+    check_person_class_space,
+    head_class_names,
+    tracks_to_json,
+)
 
 from syncai_hydranet.analytics.reid_metrics import idf1
 
@@ -115,14 +120,55 @@ def test_a_sheet_with_no_crops_is_not_reported_as_a_sheet(tmp_path):
     assert int((np.abs(page[:, 170:, :].astype(int) - BG).sum(2) > 6).sum()) == 0
 
 
+RETAIL = ("person", "bag", "boxed_stock", "device")
+
+
 def test_it_refuses_a_head_in_which_label_zero_is_not_a_person():
     """`PERSON` is COCO index 0, and 0 is a valid label in every detection head this repo
-    trains -- `boxed_stock` in the retail-products taxonomy. Pointing the proposal at that
-    checkpoint tracks shelf stock and hands back a well-formed ground-truth file of
-    shoppers. Nothing else in the pipeline can tell, which is why this raises."""
+    trains -- `boxed_stock` in `configs/hydranet_retail_openvocab.yaml`. Pointing the
+    proposal at that checkpoint tracks shelf stock and hands back a well-formed
+    ground-truth file of shoppers. Nothing else in the pipeline can tell, which is why
+    this raises."""
     check_person_class_space(80)  # the COCO space: allowed, no exception
     with pytest.raises(SystemExit, match="boxed_stock"):
-        check_person_class_space(2)
+        check_person_class_space(2, ("boxed_stock", "device"))
+
+
+def test_it_admits_the_retail_head_this_repo_actually_detects_people_with():
+    """The refusal used to be `n_classes != 80`, and it refused every checkpoint this
+    script could be pointed at. Every person-detecting model here is the 4-class retail
+    head, where label 0 *is* person -- `analytics/clip_tracks.py` has tracked shoppers on
+    those checkpoints with the same `PERSON` constant all along. Counting was the wrong
+    test; reading the names refuses the openvocab head above and admits this one."""
+    check_person_class_space(4, RETAIL)
+
+
+def test_a_config_and_a_checkpoint_that_disagree_are_refused_before_the_names():
+    """Both are wrong to proceed on, and this one is wrong first: if the config names four
+    classes and the weights have eighty channels, the names say nothing about the
+    channels and `names[PERSON]` is a coincidence rather than a fact."""
+    with pytest.raises(SystemExit, match="80 channels"):
+        check_person_class_space(80, RETAIL)
+
+
+def test_class_names_come_from_the_head_then_the_vocab_then_cocos_arity():
+    """Three sources in the order a config states them, and `None` for a head whose
+    channels have no names -- which the caller has to treat as a refusal, because a head
+    nobody can name is exactly the head nobody can check."""
+    assert (
+        head_class_names({"model": {"heads": {"detection": {"classes": list(RETAIL)}}}})
+        == RETAIL
+    )
+    from_vocab = head_class_names(
+        {
+            "model": {"heads": {"detection": {"num_classes": 4}}},
+            "data": {"datasets": [{"det_vocab": "retail_security"}]},
+        }
+    )
+    assert from_vocab == RETAIL
+    coco = head_class_names({"model": {"heads": {"detection": {"num_classes": 80}}}})
+    assert coco is not None and coco[0] == "person"
+    assert head_class_names({"model": {"heads": {"detection": {"num_classes": 7}}}}) is None
 
 
 def test_a_merge_file_written_against_a_different_proposal_is_refused():
