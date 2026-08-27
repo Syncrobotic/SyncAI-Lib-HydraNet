@@ -90,11 +90,27 @@ def read_member(zf: zipfile.ZipFile, name: str) -> np.ndarray:
         return np.lib.format.read_array(f)
 
 
+# The public per-version header readers. `np.lib.format._read_array_header` does the same
+# job in one call and is what this file used until 2026-08-27, but it is private: a numpy
+# that drops it breaks this script at *runtime*, with no deprecation warning ahead of it,
+# and `uv.lock` already resolves three different numpy versions across the test matrix.
+# Checked byte-for-byte against the private call on both header versions before the swap.
+_HEADER_READERS = {
+    (1, 0): np.lib.format.read_array_header_1_0,
+    (2, 0): np.lib.format.read_array_header_2_0,
+}
+
+
+def _read_header(f) -> tuple:
+    """`(shape, dtype)` from an open .npy, leaving the file positioned at the first row."""
+    ver = np.lib.format.read_magic(f)
+    shape, _, dtype = _HEADER_READERS[ver](f)
+    return shape, dtype
+
+
 def header(zf: zipfile.ZipFile, name: str) -> tuple:
     with zf.open(name) as f:
-        ver = np.lib.format.read_magic(f)
-        shape, _, dtype = np.lib.format._read_array_header(f, ver)
-    return shape, dtype
+        return _read_header(f)
 
 
 def main() -> int:
@@ -131,8 +147,11 @@ def main() -> int:
     held: dict[int, np.ndarray] = {}
     two_body = 0
     with zf.open(f"x_{args.split}.npy") as f:
-        np.lib.format.read_magic(f)
-        np.lib.format._read_array_header(f, (1, 0))
+        # Consumed for its side effect: this leaves `f` at the first row, which the
+        # sequential reads below depend on. The version comes from the file's own magic
+        # rather than the (1, 0) this hardcoded -- same bytes for a 1.0 member, and a 2.0
+        # member no longer misparses.
+        _read_header(f)
         pos = 0
         for i in keep:
             while pos < i:
