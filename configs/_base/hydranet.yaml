@@ -97,4 +97,16 @@ train:
 
 export:
   opset: 17
-  input_size: [512, 640]
+  # No `input_size` here on purpose. `cli/export_onnx.py` falls back to
+  # `data.input_size` when the key is absent, and its comment says why that is the
+  # right default: "a TensorRT engine built for the wrong input size is a much later
+  # and much more confusing failure than a missing config key". `export` is a dict and
+  # dicts merge key by key, so a value here reaches every inheriting config whether it
+  # wants one or not, and `or` then takes the inherited size over the trained one.
+  # Measured 2026-08-27 with this line present: six configs resolved to an export size
+  # they never trained at -- retail_cctv, retail_cocostuff and the three
+  # b03_cw_hires variants at 512x896, and hm3d_cctv at 480x640, all exporting 512x640.
+  # The rest were right by coincidence rather than by design: they happen to train at
+  # 512x640, so any one of them changing its training resolution would have joined the
+  # six silently. A config that genuinely wants a different export canvas states it
+  # itself, which is still supported and still tested.
