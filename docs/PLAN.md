@@ -61,10 +61,16 @@ Why the boundary sits here — three measurements:
 * A trained dense head does not generalise across these cameras: `column` scored 0.86–0.88
   on cameras it trained on and **0.00–0.51 on cameras it never saw**. A commissioning cache
   never has to generalise — it is fitted to its camera by construction.
-* The throughput margin is thin: **1,552 fps under TensorRT against the 1,440 target
-  (1.08×, measured 2026-08-24)** — engine-only, and with the cheaper terrain head in the
-  second slot. Every per-frame head spends this margin; a head whose answer never changes
-  spends it on nothing.
+* ~~The throughput margin is thin~~ — **this leg of the argument no longer carries
+  weight, and saying so is cheaper than letting it be quoted.** It read: 1,552 fps under
+  TensorRT against the 1,440 target (1.08×, measured 2026-08-24), engine-only and with
+  the cheaper terrain head in the second slot; every per-frame head spends that margin
+  and a head whose answer never changes spends it on nothing. **§7.4 revised the target
+  to 96 × 5 fps = 480 f/s on 2026-08-26**, and at 480 the shipped engine's 1,494 f/s is
+  **3.1× the requirement, not 1.08×**. The margin is not thin. The boundary still stands
+  on the other two reasons — the `column` generalisation failure and the +3% vs +74%
+  trunk-sharing measurement — so it is now a two-legged argument and should be argued as
+  one.
 * A shared trunk buys a second task for **+3% cost; two separate networks cost +74%**
   (941 vs 541 fps eager, batch 16, 640×1120 FP16). The trunk is worth sharing only between
   tasks that genuinely need to run every frame.
@@ -431,7 +437,7 @@ than not at all.
 **Throughput re-measured 2026-08-26 on an idle card — the gate PASSES at the shipped
 canvas, and the margin is 3.7%.** The 1,324 f/s below was pose01's weights *with an RL
 neighbour on the card*; with pose02's `last.pt`, batch 16, fp16 and nothing else on the
-GPU the engine measures **1,494 f/s = 100 streams**, against 1,440 required. So the leg
+GPU the engine measures **1,494 f/s = 100 streams**, against the 1,440 then required (**§7.4 revised the requirement to 480 f/s the same day, so read this as 3.1× rather than 3.7% of margin**). So the leg
 that was 8% short was 8% short of a *shared* card. Read the two together rather than
 either alone: a co-tenant costs 11%, and 3.7% of headroom does not survive one.
 
@@ -461,7 +467,7 @@ dropping the pose head entirely (`a0c51de`), so every engine number before this 
 the model with pose replaced. With `pose_heatmap_p3` in the graph, E60 weights, batch 16,
 fp16, NVDEC decode into device memory, one small RL neighbour on the card:
 
-| leg | measured | against 1,440 f/s |
+| leg | measured | against 1,440 f/s (the target of the day; §7.4 revised it to 480) |
 |---|---|---|
 | decode (NVDEC, 16 streams) | 8,647 f/s | **6.01×** |
 | **engine (pose resident)** | **1,324 f/s** | **0.92× — binding** |
@@ -500,7 +506,7 @@ says — by looking:
   does not ship, and the fix is not a threshold: it is the crop-stage fallback
   `models/heads/pose.py` reserved for exactly this case.
 
-| keypoint error vs ViTPose; throughput re-measured **end to end — NVDEC decode → engine → host NMS → tracker** — with pose in the slot and the ROI path at its 0.2–1 fps cadence | `reach_to_shelf` and `crouch` fire correctly on a watched clip; fps ≥ 1,440 stands end to end, not engine-only — 96 streams is a requirement now (§7.4), and decode/NMS/PCIe were named the real risk when the target was set |
+| keypoint error vs ViTPose; throughput re-measured **end to end — NVDEC decode → engine → host NMS → tracker** — with pose in the slot and the ROI path at its 0.2–1 fps cadence | `reach_to_shelf` and `crouch` fire correctly on a watched clip; fps ≥ **480** stands end to end, not engine-only (the gate was written at 1,440 and §7.4 revised it to 96 × 5 fps on 2026-08-26; the leg passed either way, at 1,494 f/s) — 96 streams is a requirement now (§7.4), and decode/NMS/PCIe were named the real risk when the target was set |
 | 4 | **detection uplift at zero GPU** — ~~temporal-consistency tiers~~ **REFUTED for `person`, 2026-08-26, measured**: `instances_all_train.json` is not a pool of unused good labels, it is the same Grounding DINO teacher dumped at 0.10 instead of 0.35 — median score 0.149, and `instances_train` is simply that pool thresholded (48,005 vs 47,465 at 0.35). Worse, persistence is the wrong signal here and it is wrong in the dangerous direction: score vs run-length correlation is **+0.006**, the 0.10–0.20 band moves a median **0.3 px per frame**, and **41,160 sub-threshold boxes persist ≥8 frames** — posters, mannequins and hanging packets are the most persistent things in a store. A consistency tier would promote exactly them. The measured detection problem is **recall, not label count**: on one clip the trunk's own dense head marks **1.30× as many people as the box head returns** (146 blobs vs 112 boxes over 60 frames) while scoring `person` IoU 0.885 against detection mAP@50 0.302 — the features find people the box head cannot emit. **Re-scoped and then measured on the fleet, 2026-08-26**: `serving.decode.confirm_with_dense` admits low-scoring boxes where the dense head puts person pixels under them. Three arms over the same eight clips — A shipped 0.35, B threshold-only 0.15, C 0.15 + confirmation:
 
 | arm | person dets | tracks | boxes dropped | fall | crouch |
