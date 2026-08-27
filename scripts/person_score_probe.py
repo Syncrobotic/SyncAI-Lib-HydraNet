@@ -57,6 +57,7 @@ from scipy import ndimage
 
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
+from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.models.hydranet import build_model
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
 from syncai_hydranet.utils.visualize import preprocess
@@ -125,6 +126,20 @@ def _pct(v, p):
     return float(np.percentile(v, p)) if len(v) else float("nan")
 
 
+def _read(clip: str, fps: float):
+    """Frames from a clip at its **own** resolution.
+
+    `data.video.frames` does not scale -- the caller's width and height size the reads on
+    a rawvideo pipe carrying the source resolution. Hardcoding 1920x1080, which several
+    scripts do, misparses the byte stream on any camera that is not 1080p, and this fleet
+    has at least one: Kaohsiung-cam03 is a 704x480 sub-stream. `DecodeError` catches it
+    rather than returning nonsense, which is exactly what that guard exists for, but the
+    caller has no business making it fire.
+    """
+    w, h, _ = probe_video(clip)
+    return decode_frames(clip, w, h, fps)
+
+
 # ------------------------------------------------------------------ solo
 
 
@@ -134,7 +149,7 @@ def run_solo(a) -> dict:
     for cam in a.cameras:
         best, blob_px = [], []
         for clip in sorted((CLIPS / cam).glob("archive_*.mp4")):
-            for i, frame in enumerate(decode_frames(str(clip), 1920, 1080, a.fps)):
+            for i, frame in enumerate(_read(str(clip), a.fps)):
                 if i >= a.frames:
                     break
                 f = probe.forward(frame)
@@ -205,7 +220,7 @@ def run_standing(a) -> dict:
     for cam in a.cameras:
         rows[cam] = {k: [] for k in STANDING_BINS}
         for clip in sorted((CLIPS / cam).glob("archive_*.mp4")):
-            for i, frame in enumerate(decode_frames(str(clip), 1920, 1080, a.fps)):
+            for i, frame in enumerate(_read(str(clip), a.fps)):
                 if i >= a.frames:
                     break
                 f = probe.forward(frame)
@@ -273,7 +288,7 @@ def run_density(a) -> dict:
     clips = a.clip or [str(p) for p in sorted((CLIPS / a.camera).glob("archive_*.mp4"))]
     rows = []
     for clip in clips:
-        for i, frame in enumerate(decode_frames(clip, 1920, 1080, a.fps)):
+        for i, frame in enumerate(_read(clip, a.fps)):
             if i >= a.frames:
                 break
             f = probe.forward(frame)
@@ -316,7 +331,7 @@ def run_factors(a) -> dict:
     report = {}
     for clip, name in zip(a.clip, labels, strict=True):
         cls_v, ctr_v, nms_counts = [], [], {t: [] for t in a.nms}
-        for i, frame in enumerate(decode_frames(clip, 1920, 1080, a.fps)):
+        for i, frame in enumerate(_read(clip, a.fps)):
             if i >= a.frames:
                 break
             f = probe.forward(frame)
