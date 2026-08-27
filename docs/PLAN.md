@@ -1006,3 +1006,59 @@ something it does not support.
    run a median 2.42 s and keep recording a median **1.50 s past the end of the low
    spell**, with **0%** stopping within 0.3 s of it. The 42% is a property of falls in
    this data, not of the recording.
+
+15. **`staff/customer` has its first measurement, and nine colour numbers beat every
+   embedding in the tree.** 421 crops from 142 people were extracted by
+   `scripts/staff_crops.py` and sorted by hand into 154 staff / 223 customer / 44
+   unclear — 54, 75 and 16 people. Probed by `scripts/staff_probe.py`,
+   `runs/staff_probe01/`, **leave one camera out** over the 16 cameras carrying both
+   classes, 230 held-out crops:
+
+   | frozen feature | balanced accuracy | staff precision | recall |
+   |---|---|---|---|
+   | colour + ImageNet backbone | **0.893** | — | — |
+   | **torso colour, 9 numbers** | **0.880** | 0.867 | 0.848 |
+   | ImageNet backbone, 512-d, no person training | 0.850 | 0.824 | 0.815 |
+   | `rapv2_crop01` (RAP v2, 256-d) | 0.777 | 0.703 | 0.772 |
+   | `crop_encoder01` (PA-100K, 256-d) | 0.723 | 0.612 | 0.772 |
+
+   **Both attribute-trained encoders are worse than untrained ImageNet features**, which
+   is the Market-1501 result of `runs/rapv2_eval01` arriving on a second task: that
+   fine-tune took association from the ImageNet floor's mAP 0.0318 to 0.0113, and it
+   costs here too. **The production signal is a colour, not an embedding** — nine
+   statistics over the chest band match a 512-d backbone to within 3 points and beat both
+   fine-tunes by 10 and 16. A per-store colour reference is also cheaper, interpretable,
+   and re-fittable from three photographs when the shop changes its shirts, which an
+   embedding is not.
+
+   **0.893 does not gate anything yet.** `reach_to_shelf` at 11.7 alerts a minute needs
+   staff removed reliably, and one in nine wrong is not that. What it establishes is the
+   shape of the answer and the two things standing in the way, both visible by eye on the
+   worst cameras:
+
+   * **Tao-Hsin-cam01 (0.40–0.60): the uniform is not in the crop.** It is an entrance
+     camera in blown-out daylight and its staff wear jackets over the polo. The labeller
+     could tell from context; the crop cannot, and the model only ever sees the crop.
+   * **Taichung-cam08 (0.27 on the RAP features): viewpoint.** Near top-down over a
+     counter, so a crop is mostly hair and shoulders while the 15 training cameras see
+     people from the side.
+
+   Neither is fixed by a better model. The first wants the **three uniform reference
+   photos per store** already on the waiting list; the second wants top-down cameras in
+   the training set, and `pool/` holds **1,181 further crops** already extracted.
+
+   **Two defects found by running it rather than by reading it.** One person in the batch
+   is a tracker identity switch — Kaohsiung-cam04 t0002 is a customer at 14:30:27 and a
+   member of staff at 14:32:25 under one id — which the labeller correctly sorted into two
+   folders and which is an extraction fault. The single-stage tracker was chosen precisely
+   to avoid merges, so the **measured merge rate is at least 1 in 142**, and only
+   cross-class merges are detectable at all. And the first version of the probe reported
+   an "ImageNet floor" that was a **random projection**: `CropEncoder.embed` is an
+   untrained `nn.Linear` on a checkpoint-free encoder, so two runs of identical code on
+   identical data gave 0.757 and 0.839. It reads the pooled backbone now and reproduces
+   exactly.
+
+   **What the split cannot measure.** 16 of the 32 labelled cameras carry exactly one
+   class — three all-staff, six all-customer among them — so on those "which camera" *is*
+   "which class". They are excluded from the fold rather than averaged in, which means
+   this number describes the 16 mixed cameras and says nothing about the other half.
