@@ -565,13 +565,18 @@ def _check_fixed_weights(rep: _Report, cfg: dict) -> None:
     heads for exactly the same reason. This closes the other half.
 
     Checked only under ``loss_balancing: fixed``, and that restriction is the point.
-    ``fixed_weights`` is set once in ``_base/hydranet.yaml`` for all three heads, so a
-    derived config that removes a head -- ``hydranet_retail_objects.yaml`` sets
+    ``fixed_weights`` is set once in ``_base/hydranet.yaml`` for the three heads that base
+    declares, so a derived config that removes one -- ``hydranet_retail_objects.yaml`` sets
     ``traversability: null`` -- inherits a weight naming a head it does not have. Under
     ``uncertainty`` the table is never read, so that stray key is the *normal* result of
     a correct config and warning about it would train people to ignore warnings. Under
     ``fixed`` the same key means a number the author wrote is silently discarded, which
     is worth refusing the run over.
+
+    Pose is a fourth head family and the base does not declare it, so the stray key can
+    also arrive the other way: ``hydranet_retail_pose02.yaml`` inherits nothing and writes
+    all four weights itself, including ``traversability`` for a head it does not build.
+    Same key, same silence, same rule -- it is ``uncertainty``, so it is fine.
     """
     model = cfg.get("model")
     if not isinstance(model, dict) or model.get("loss_balancing") != "fixed":
