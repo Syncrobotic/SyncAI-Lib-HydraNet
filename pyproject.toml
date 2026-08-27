@@ -72,10 +72,19 @@ export = ["onnx>=1.15", "onnxsim>=0.4", "onnxruntime>=1.17,<1.23"]
 # not carry a 6.5 GB checkpoint it never runs. `facebook/sam3` is a gated repo, so this
 # installs the code and leaves the weights to `hf auth login`.
 annotate = ["transformers>=5.0"]
+# Benchmarking on an NVIDIA box. Two of these were installed by hand and imported by
+# `scripts/` for weeks without ever being declared, which `uv sync` is entitled to undo:
+# `bench_trt.py`'s fp16 conversion needs `onnxconverter_common`, and `bench_e2e.py`'s
+# NVDEC leg needs `PyNvVideoCodec` -- the decode backend PLAN §7 decision 8 chose on
+# 2026-08-25, which took decode from 63-69 streams to ~520 and stopped it being the
+# binding leg. An undeclared dependency that a sync can prune is a measurement that
+# stops reproducing for no reason anyone can see.
 bench = [
     "matplotlib>=3.10.9",
     "scipy>=1.15.3",
     "tensorrt>=11.2.1.2",
+    "onnxconverter-common>=1.16",
+    "pynvvideocodec>=2.2.1",
 ]
 
 [project.scripts]
