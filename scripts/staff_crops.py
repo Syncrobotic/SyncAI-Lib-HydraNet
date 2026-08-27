@@ -104,6 +104,72 @@ def _read(clip: str, fps: float):
     return decode_frames(clip, w, h, fps)
 
 
+def curate(out: Path, target: int) -> int:
+    """Leave about `target` crops to sort and put the rest in `pool/`.
+
+    Extraction over the whole corpus produces thousands of crops, and handing a person
+    thousands of files is how a labelling task does not get done. This picks a set that
+    is worth the first hour instead.
+
+    Two rules, both about not biasing what gets labelled:
+
+    * **Round-robin over cameras.** Taking the first N alphabetically, or the N with the
+      most crops, would fill the set from the busiest counters -- which is exactly where
+      staff outnumber customers, so the class balance would be an artefact of the sort
+      order.
+    * **A person is never split.** All crops of one `camera__clip__track` move together,
+      so no shopper ends up half in the set being labelled and half in the pool, which is
+      the same split discipline the filenames exist for.
+
+    Nothing is deleted. `pool/` is where a second pass looks after the first model exists
+    and can propose labels for a human to correct rather than make.
+    """
+    unsorted = out / "unsorted"
+    pool = out / "pool"
+    pool.mkdir(parents=True, exist_ok=True)
+    people: dict[tuple[str, str], list[Path]] = defaultdict(list)
+    for f in sorted(unsorted.glob("*.jpg")):
+        camera, clip, track, _frame = f.stem.split("__")
+        people[(camera, f"{clip}__{track}")].append(f)
+
+    by_camera: dict[str, list[tuple[str, list[Path]]]] = defaultdict(list)
+    for (camera, key), files in people.items():
+        by_camera[camera].append((key, files))
+    for camera in by_camera:
+        # longer tracks first within a camera: more usable crops means a clearer person
+        by_camera[camera].sort(key=lambda kv: (-len(kv[1]), kv[0]))
+
+    kept: set[Path] = set()
+    cameras = sorted(by_camera)
+    idx = dict.fromkeys(cameras, 0)
+    n_people = 0
+    while len(kept) < target:
+        moved_any = False
+        for camera in cameras:
+            i = idx[camera]
+            if i >= len(by_camera[camera]):
+                continue
+            kept.update(by_camera[camera][i][1])
+            idx[camera] = i + 1
+            n_people += 1
+            moved_any = True
+            if len(kept) >= target:
+                break
+        if not moved_any:
+            break
+
+    moved = 0
+    for f in sorted(unsorted.glob("*.jpg")):
+        if f not in kept:
+            f.rename(pool / f.name)
+            moved += 1
+    print(
+        f"unsorted: {len(kept)} crops from {n_people} people across {len(cameras)} cameras\n"
+        f"pool:     {moved} crops held back"
+    )
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -121,9 +187,18 @@ def main() -> int:
     ap.add_argument("--min-height", type=int, default=90, help="source px")
     ap.add_argument("--edge-px", type=float, default=6.0)
     ap.add_argument("--crop-height", type=int, default=320)
+    ap.add_argument(
+        "--curate",
+        type=int,
+        metavar="N",
+        help="do not extract: split an existing --out so `unsorted/` holds about N crops "
+        "spread evenly over the cameras and `pool/` holds the rest",
+    )
     a = ap.parse_args()
 
     out = Path(a.out)
+    if a.curate:
+        return curate(out, a.curate)
     for sub in ("unsorted", "staff", "customer", "unclear"):
         (out / sub).mkdir(parents=True, exist_ok=True)
 
