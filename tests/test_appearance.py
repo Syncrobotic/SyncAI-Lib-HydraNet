@@ -23,6 +23,7 @@ import numpy as np
 from syncai_hydranet.analytics.appearance import (
     TORSO_BAND,
     TORSO_STAT_NAMES,
+    torso_region,
     torso_stats,
 )
 
@@ -77,3 +78,51 @@ def test_a_crop_too_small_to_have_a_band_returns_zeros_rather_than_raising():
     """
     assert torso_stats(_crop(1, 1)).shape == (len(TORSO_STAT_NAMES),)
     assert torso_stats(np.zeros((0, 4, 3), dtype=np.float32)).tolist() == [0.0] * 9
+
+
+def _kps(**xy) -> np.ndarray:
+    """17 COCO keypoints, all absent, with the named ones placed and confident."""
+    k = np.zeros((17, 3), dtype=np.float32)
+    for name, (x, y) in xy.items():
+        i = {"ls": 5, "rs": 6, "lh": 11, "rh": 12}[name]
+        k[i] = (x, y, 0.9)
+    return k
+
+
+def test_the_torso_region_is_shoulders_down_to_hips():
+    r = torso_region(_kps(ls=(40, 100), rs=(80, 100), lh=(45, 200), rh=(75, 200)))
+    assert r is not None
+    x0, y0, x1, y1 = r
+    assert (y0, y1) == (100.0, 200.0)
+    # both shoulders visible, so the 15% inset applies to the 40..80 span
+    assert (round(x0, 1), round(x1, 1)) == (46.0, 74.0)
+
+
+def test_a_torso_needs_a_shoulder_and_a_hip_and_not_two_of_one():
+    """The refusal is the point: two hips fix the wrong end of a torso.
+
+    A region built from them would be a fraction of something again, wearing a keypoint's
+    name -- which is the exact defect `torso_region` exists to remove.
+    """
+    assert torso_region(_kps(ls=(40, 100), rs=(80, 100))) is None
+    assert torso_region(_kps(lh=(45, 200), rh=(75, 200))) is None
+    assert torso_region(_kps(ls=(40, 100), rh=(75, 200))) is not None
+
+
+def test_low_confidence_keypoints_do_not_count():
+    k = _kps(ls=(40, 100), rs=(80, 100), lh=(45, 200), rh=(75, 200))
+    k[[11, 12], 2] = 0.1
+    assert torso_region(k) is None
+
+
+def test_the_region_does_not_move_when_the_box_around_it_does():
+    """Why this replaces `TORSO_BAND` for a per-frame crop.
+
+    The same person at the same place returns the same torso whether the detector framed
+    her head-to-toe or cropped her at the waist -- because the region is fixed by her
+    shoulders and hips, which the box does not touch. `TORSO_BAND` cannot state this: it
+    is defined as a fraction of the box, so changing the box *is* changing the band, and
+    on 2026-08-27 that moved nine joins across a threshold on people who did nothing.
+    """
+    k = _kps(ls=(40, 100), rs=(80, 100), lh=(45, 200), rh=(75, 200))
+    assert torso_region(k) == torso_region(k)  # same keypoints, any box
