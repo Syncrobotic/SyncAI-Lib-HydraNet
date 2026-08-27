@@ -231,7 +231,7 @@ def test_a_deep_object_is_not_trimmed_to_its_front_face():
 def test_the_two_scene_builders_share_one_vocabulary_and_declare_their_evidence():
     """Two payloads, two kinds of evidence, one set of names.
 
-    `geometry.bev.scene` places objects on a ground plane -- assumed from flags, or fitted
+    `syncai_bev3d.bev.scene` places objects on a ground plane -- assumed from flags, or fitted
     to depth. This module back-projects registered metric depth and fits no plane. Both
     are called a scene, both carry `grid` and `objects`, and that is exactly enough
     overlap for a renderer handed the wrong one to draw something plausible out of it.

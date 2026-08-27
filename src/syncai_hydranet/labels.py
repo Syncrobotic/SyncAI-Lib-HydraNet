@@ -6,7 +6,8 @@ two different systems agreeing on one number, which is exactly the kind of agree
 rots quietly -- nothing crashes when they disagree, the loss simply starts treating
 unlabelled pixels as a trainable class and every metric stays plausible.
 
-It was defined four times before this module existed -- `geometry/bev.py`,
+It was defined four times before this module existed -- `geometry/bev.py` (now
+`syncai_bev3d/bev.py`, moved in `64eafd8`),
 `cli/annotation.py`, `scripts/sam3_prelabel.py`, `scripts/annotation_batch.py` -- written
 twice more as a literal default in `models/losses.py` and `models/hydranet.py`, and
 repeated in eight configs as `ignore_index: 255`. Fourteen places, no check.

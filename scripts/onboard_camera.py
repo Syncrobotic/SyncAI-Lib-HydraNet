@@ -397,7 +397,7 @@ def write_report(out_dir: Path, cameras: list[str]) -> None:
     lines.append("# onboard01 — fleet onboarding calibration sweep (23 selling_floor)\n")
     lines.append(
         f"Generated: {_dt.date.today().isoformat()} - `scripts/onboard_camera.py` - "
-        "orientation pipeline imported from `geometry/plate_calibration.py` "
+        "orientation pipeline imported from `syncai_bev3d/plate_calibration.py` "
         "(calib01-validated: "
         "pitch ±0.7° of the anchor, provided the vfov is pinned) - automated scale subset "
         "= the person-height statistic (calib02's validated visual-prior method, ±5-8%, "

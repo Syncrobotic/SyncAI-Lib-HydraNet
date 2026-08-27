@@ -45,7 +45,7 @@ code it was written for.
 ---------------------------------------------------------------------------
 WHY A TypedDict AND NOT A DATACLASS
 
-The same reason `geometry/scene_types.py` gives for the scene payloads: this describes a
+The same reason `syncai_bev3d/scene_types.py` gives for the scene payloads: this describes a
 dict that already flows between functions, and a dataclass would require every producer to
 construct it. A `TypedDict` is a statement about the dict that exists, checkable by `ty`,
 costing nothing at runtime -- so it can be adopted incrementally and by parts rather than

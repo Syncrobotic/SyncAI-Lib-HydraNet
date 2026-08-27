@@ -79,7 +79,9 @@ def _tracked(pathspec: str) -> list[Path]:
 
 # Measured 2026-08-19. Lower it when a pair is moved into the package; never raise it.
 # 10 -> 9 same day: the plate-calibration pipeline moved to
-# `geometry/plate_calibration.py`, which removed `calibrate_from_plate ->
+# `geometry/plate_calibration.py` (now `syncai_bev3d/plate_calibration.py`; the paths in
+# this log are the ones that were current on the day each line was written), which
+# removed `calibrate_from_plate ->
 # fit_camera_from_people` (and kept `onboard_camera` from becoming the 11th pair).
 # 9 -> 8: the day/night pixel test moved to `syncai_bev3d/teachers/photometry.py`, which removed
 # `sam3_product_coverage -> sam3_person_boxes`. It was two copies of one formula, one
