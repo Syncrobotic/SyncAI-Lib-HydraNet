@@ -482,7 +482,11 @@ def main() -> int:
     c.set_defaults(fn=run_check)
 
     e = sub.add_parser("eval", parents=[common], help="metres of error in our own chain")
-    e.add_argument("--grid", nargs="+", default=["wildtrack"])
+    # Measured by `check`, not chosen: over 60 frames and seven views the row-major
+    # reading reprojects to the foot of the annotated box at a median 24.1 px, against
+    # 1,399.9 px and 1,507.4 px for the other two. The default was one of the losers
+    # until that run, which is the whole argument for `check` existing.
+    e.add_argument("--grid", nargs="+", default=["wildtrack_rowmajor"])
     e.add_argument("--floor-z", type=float, default=0.0)
     e.add_argument(
         "--k1", type=float, default=0.0, help="apply our lens model before projecting"
