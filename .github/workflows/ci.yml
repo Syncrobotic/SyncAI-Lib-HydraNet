@@ -12,12 +12,36 @@ name: CI (dev)
 # take ~2 min on random weights and no dataset, so there is no cost argument for
 # deferring them either.
 #
-# PR-only: promotion is strictly PR-based and the PR already tests the merge
-# result, so a post-merge `push` re-run would just duplicate this gate. The old
-# `on.push.branches: [main, stage, dev]` also meant `feat/*` — where the flow
-# actually starts — got no CI at all until a PR was opened.
+# Both triggers, and the `push` one is here because the `pull_request` one alone let
+# `dev` sit red for a day. Twice.
+#
+# The argument this comment used to make -- "promotion is strictly PR-based and the PR
+# already tests the merge result, so a post-merge push re-run would just duplicate this
+# gate" -- is sound and does not describe how this repository is worked. Sessions commit
+# straight onto `dev`; there is frequently no PR into `dev` at all, so there was nothing
+# for a push run to duplicate and the gate simply never ran. `e2dfb3d` landed a test
+# importing another test module, which fails under `uv run pytest` and passes under
+# `python -m pytest`, and the suite was red by the documented command for a full day while
+# being reported green. `.pre-commit-config.yaml`'s ty-ratchet block records the identical
+# shape from the other direction -- `src/` over its baseline since `ef9b53c`, every commit
+# for a day on a red tree -- and names this same cause verbatim. A gate only a PR can run
+# is not a gate on a branch nobody opens a PR against.
+#
+# An ADDITION, not a replacement. The `pull_request` trigger stays: a PR into `dev` still
+# has to gate before it merges, and swapping the trigger would move the hole rather than
+# close it. `feat/*` still gets CI the moment a PR is opened, which is the property the
+# old `on.push.branches: [main, stage, dev]` lacked.
+#
+# The whole workflow runs on a push, not a fast subset. A push run blocks nothing -- there
+# is no merge for anyone to be tempted to bypass -- so the "fast job people do not route
+# around" argument does not apply, and a `dev` push whose green means something narrower
+# than a PR's green would be two meanings for one badge. The heavy leg is export parity at
+# ~2 min, jobs run in parallel, and `cancel-in-progress` keeps a burst of commits to one
+# run: the tip is what gets tested, which is what the badge claims.
 on:
   pull_request:
+    branches: [dev]
+  push:
     branches: [dev]
 
 # Least-privilege default: jobs only check out code.
