@@ -22,6 +22,13 @@ those tests were widened before this file was written.
 **Ground-truth boxes, not detections.** Feeding this the detector would measure detection
 and projection together and report the sum as geometry.
 
+**WILDTRACK is a harder regime than the fleet, and the number does not transfer as-is.**
+Its seven cameras sit at 8.7-20.1 degrees of pitch (measured, see `selfcheck`'s sibling
+walk-through in the commit); the shipped fleet sits at 38.8-52.3. A shallower pitch grazes
+the floor, so the same pitch error buys more metres of position error. The gate is
+therefore conservative, which is the right direction, but "our cameras are X metres out"
+is not a sentence this file's output supports.
+
 **The scale must not be fitted, and this is the decision the whole gate turns on.**
 `GroundPlane` carries height, pitch and roll and no yaw, so `pixel_to_ground` answers in
 the camera's own level frame: a floor position is (lateral, forward) *from this camera*,
@@ -70,14 +77,22 @@ from syncai_hydranet.geometry.ground import (  # noqa: E402
     undistort_points,
 )
 
-# WILDTRACK's published layout: 480 x 1440 cells of 2.5 cm, origin at (-3.0, -9.0) m.
-# Candidates rather than a constant, because `check` decides between them -- see the
-# header. Each entry is (n_cols, step_m, origin_x, origin_y, row_major).
+# WILDTRACK's published layout: 480 x 1440 cells of 2.5 cm, origin at (-300, -900) cm.
+#
+# **The dataset's world frame is centimetres**, which is not a detail: `extr_*.xml` gives
+# tvec as (-525.89, 45.41, 986.72) for CVLab1, i.e. a camera 9.87 m up. Everything here
+# converts to metres at the boundary and stays in metres, because a hundredfold unit slip
+# would be absorbed by a similarity fit and would show up under the rigid fit this gate
+# uses as a huge residual -- readable as "the calibration is terrible" when it is a units
+# bug. Candidates rather than a constant, because `check` decides between them.
+# Each entry is (n_cols, step_m, origin_x_m, origin_y_m, row_major).
 GRID_CANDIDATES = {
     "wildtrack": (480, 0.025, -3.0, -9.0, False),
     "wildtrack_rowmajor": (480, 0.025, -3.0, -9.0, True),
     "wildtrack_origin0": (480, 0.025, 0.0, 0.0, False),
 }
+# `extr_*.xml` tvec is in centimetres; every consumer here wants metres.
+CM_TO_M = 0.01
 
 
 @dataclass(frozen=True)
@@ -122,10 +137,16 @@ def grid_to_metres(position_id: np.ndarray, convention: str) -> np.ndarray:
 
 
 def project_world(points_xy: np.ndarray, cam: WtCamera, z: float = 0.0) -> np.ndarray:
-    """World floor points -> pixels, through WILDTRACK's own calibration.
+    """World floor points (metres) -> pixels, through WILDTRACK's own calibration.
 
     Used only by `check`. `eval` deliberately does not touch this: validating our chain
     with their projection would validate theirs.
+
+    **The distortion is applied, and leaving it out was a real bug in this file.** The
+    annotated boxes are drawn on the *original* frames, so a pinhole reprojection lands
+    tens of pixels away at the edges -- which reads as "the grid convention is wrong",
+    which is the one thing `check` exists to decide. OpenCV's 5-coefficient model, the
+    same one `intr_*.xml` publishes.
     """
     pts = np.concatenate(
         [np.asarray(points_xy, float), np.full((len(points_xy), 1), z)], axis=1
@@ -134,8 +155,15 @@ def project_world(points_xy: np.ndarray, cam: WtCamera, z: float = 0.0) -> np.nd
     with np.errstate(divide="ignore", invalid="ignore"):
         xn = cam_pts[:, 0] / cam_pts[:, 2]
         yn = cam_pts[:, 1] / cam_pts[:, 2]
-    u = cam.k[0, 0] * xn + cam.k[0, 2]
-    v = cam.k[1, 1] * yn + cam.k[1, 2]
+    d = np.zeros(5)
+    d[: min(5, len(cam.dist))] = cam.dist[: min(5, len(cam.dist))]
+    k1, k2, p1, p2, k3 = d
+    r2 = xn**2 + yn**2
+    radial = 1 + k1 * r2 + k2 * r2**2 + k3 * r2**3
+    xd = xn * radial + 2 * p1 * xn * yn + p2 * (r2 + 2 * xn**2)
+    yd = yn * radial + p1 * (r2 + 2 * yn**2) + 2 * p2 * xn * yn
+    u = cam.k[0, 0] * xd + cam.k[0, 2]
+    v = cam.k[1, 1] * yd + cam.k[1, 2]
     return np.stack([u, v], axis=1)
 
 
@@ -193,30 +221,47 @@ def rigid_fit(
 # --------------------------------------------------------------------- loading
 
 
-def load_calibration(root: Path) -> dict[str, WtCamera]:
-    """Read WILDTRACK's intrinsic and extrinsic XML for every view."""
+def load_calibration(root: Path, intrinsics: str = "intrinsic_original") -> dict[str, WtCamera]:
+    """Read WILDTRACK's intrinsic and extrinsic XML for every view.
+
+    Two shapes in one format, and assuming the wrong one is a crash rather than a wrong
+    number, which is the good case. `camera_matrix` and `distortion_coefficients` are
+    `opencv-matrix` nodes with rows/cols/data; **`rvec` and `tvec` are plain text nodes**
+    with the numbers and nothing else.
+
+    `intrinsic_original` is the default because the annotated boxes are drawn on the
+    original frames. `intrinsic_zero` describes the undistorted ones and pairing it with
+    those boxes would put every reprojection a few tens of pixels out at the edges.
+    """
     import xml.etree.ElementTree as ET
 
-    def matrix(node) -> np.ndarray:
-        rows = int(node.findtext("rows"))
-        cols = int(node.findtext("cols"))
-        data = [float(x) for x in node.findtext("data").split()]
-        return np.array(data).reshape(rows, cols)
+    def numbers(node, name: str) -> np.ndarray:
+        if node is None:
+            raise ValueError(f"{name}: node missing")
+        data = node.findtext("data")
+        if data is None:  # a plain text node, which is how rvec and tvec are written
+            return np.array([float(x) for x in (node.text or "").split()])
+        rows, cols = int(node.findtext("rows")), int(node.findtext("cols"))
+        return np.array([float(x) for x in data.split()]).reshape(rows, cols)
 
-    intr_dir = root / "calibrations" / "intrinsic_zero"
+    intr_dir = root / "calibrations" / intrinsics
     extr_dir = root / "calibrations" / "extrinsic"
+    if not extr_dir.is_dir() or not intr_dir.is_dir():
+        raise FileNotFoundError(f"expected {extr_dir} and {intr_dir}")
     cams: dict[str, WtCamera] = {}
     for extr in sorted(extr_dir.glob("*.xml")):
         name = extr.stem
         tree = ET.parse(extr)
-        rvec = matrix(tree.find(".//rvec")).reshape(3)
-        tvec = matrix(tree.find(".//tvec")).reshape(3)
-        matches = sorted(intr_dir.glob(f"*{name.split('_')[-1]}*.xml"))
+        rvec = numbers(tree.find(".//rvec"), f"{name}:rvec").reshape(3)
+        # centimetres in the file, metres everywhere here
+        tvec = numbers(tree.find(".//tvec"), f"{name}:tvec").reshape(3) * CM_TO_M
+        view = name.split("_")[-1]
+        matches = sorted(intr_dir.glob(f"*{view}*.xml"))
         if not matches:
-            raise FileNotFoundError(f"no intrinsic file for {name} in {intr_dir}")
+            raise FileNotFoundError(f"no intrinsic file for {view} in {intr_dir}")
         itree = ET.parse(matches[0])
-        k = matrix(itree.find(".//camera_matrix"))
-        dist = matrix(itree.find(".//distortion_coefficients")).reshape(-1)
+        k = numbers(itree.find(".//camera_matrix"), f"{view}:camera_matrix")
+        dist = numbers(itree.find(".//distortion_coefficients"), f"{view}:dist").reshape(-1)
         cams[name] = WtCamera(name=name, k=k, dist=dist, rvec=rvec, tvec=tvec)
     return cams
 
@@ -249,7 +294,7 @@ def run_unpack(a) -> None:
 def run_check(a) -> None:
     """Decide the grid convention by reprojection, and say how well it agrees."""
     root = Path(a.root)
-    cams = load_calibration(root)
+    cams = load_calibration(root, a.intrinsics)
     frames = load_annotations(root, limit=a.frames)
     print(f"cameras {len(cams)}  frames {len(frames)}")
     names = sorted(cams)
@@ -282,7 +327,7 @@ def run_check(a) -> None:
 
 def run_eval(a) -> None:
     root = Path(a.root)
-    cams = load_calibration(root)
+    cams = load_calibration(root, a.intrinsics)
     frames = load_annotations(root, limit=a.frames)
     names = sorted(cams)
     left = f"{'view':>10s} {'n':>6s} {'rigid p50':>10s} {'p90':>8s}"
@@ -413,6 +458,12 @@ def main() -> int:
     )
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--root", default="datasets/wildtrack")
+    common.add_argument(
+        "--intrinsics",
+        default="intrinsic_original",
+        choices=("intrinsic_original", "intrinsic_zero"),
+        help="the annotated boxes are on the original frames",
+    )
     common.add_argument("--frames", type=int, default=0, help="0 = every annotated frame")
     common.add_argument("--out")
     sub = ap.add_subparsers(dest="mode", required=True)
