@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "syncai-hydranet"
 # Single source of truth: src/syncai_hydranet/__init__.py
 dynamic = ["version"]
-description = "Multi-head perception network for fixed store CCTV: terrain segmentation, traversability and object detection in a single forward pass."
+description = "Multi-head perception network for fixed store CCTV: person and product detection, pose, and terrain segmentation in a single forward pass."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
@@ -16,16 +16,17 @@ authors = [{ name = "SYNCROBOTIC" }]
 # things someone would type when they do not yet know this project exists: the task,
 # the architecture parts, and the hardware it deploys to.
 keywords = [
-    "robotics",
     "computer-vision",
     "perception",
     "multi-task-learning",
     "semantic-segmentation",
     "object-detection",
-    "traversability",
+    "pose-estimation",
+    "keypoint-detection",
     "terrain-classification",
     "cctv",
     "retail-analytics",
+    "loss-prevention",
     "video-surveillance",
     "hydranet",
     "bifpn",
@@ -33,7 +34,6 @@ keywords = [
     "pytorch",
     "onnx",
     "tensorrt",
-    "jetson",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",

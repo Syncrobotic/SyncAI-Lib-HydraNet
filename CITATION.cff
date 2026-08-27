@@ -8,20 +8,23 @@ repository-code: "https://github.com/Syncrobotic/SyncAI-Lib-HydraNet"
 abstract: >-
   A multi-head perception network for fixed store CCTV, answering retail analytics and
   security questions off one camera and one forward pass. A shared RegNetX backbone and
-  BiFPN neck feed independent heads — terrain segmentation, traversability, anchor-free
-  FCOS object detection and monocular depth — of which each deployment config trains the
-  subset it needs. Trained in PyTorch under partial supervision across datasets, so no
-  single dataset has to label every task, and exported to ONNX for TensorRT on a Jetson
-  Orin. Host-side second-stage analytics turn the boxes into tracks and the tracks into
-  events on the floor in metres.
+  BiFPN neck feed independent heads — anchor-free FCOS object detection, bottom-up pose
+  heatmaps decoded inside the detection boxes, and terrain segmentation — of which each
+  deployment config trains the subset it needs; traversability and monocular depth heads
+  remain available to configs that ask for them. Trained in PyTorch under partial
+  supervision across datasets, so no single dataset has to label every task, and exported
+  to ONNX for TensorRT. Anything constant on a fixed camera is measured once at
+  commissioning and cached rather than learned; host-side second-stage analytics turn the
+  boxes into tracks and the tracks into events on the floor in metres.
 keywords:
   - computer vision
   - multi-task learning
-  - semantic segmentation
   - object detection
-  - traversability
+  - pose estimation
+  - semantic segmentation
   - cctv
   - retail analytics
+  - loss prevention
   - video surveillance
 license: Apache-2.0
 version: 0.1.0 # x-release-please-version
