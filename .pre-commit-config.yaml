@@ -14,8 +14,11 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=1024]   # datasets and checkpoints stay out of git entirely
         # README figures are animations and do not fit in 1 MB at a size worth looking
-        # at; assets/retail_cctv_3heads.gif is 3.9 MB. Narrow on purpose -- the guard
+        # at; assets/retail_cctv_scene.gif is 2.6 MB. Narrow on purpose -- the guard
         # is here for datasets and checkpoints, and this does not loosen it for those.
+        # (The gif this named until 2026-08-27, retail_cctv_3heads.gif, was deleted in
+        # f9d4fcf and is not coming back -- so the exclude was justified by a file that
+        # no longer existed, which is the state a reader cannot check.)
         exclude: ^assets/.*\.gif$
 
   # Pinned to the same ruff `uv.lock` gives CI. They drifted once -- v0.13.0 here against
