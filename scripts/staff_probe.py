@@ -60,6 +60,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from syncai_hydranet.analytics.appearance import torso_stats  # noqa: E402
 from syncai_hydranet.data.attributes import ATTRIBUTES  # noqa: E402
 from syncai_hydranet.models.crop_encoder import CropEncoder  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint  # noqa: E402
@@ -137,38 +138,25 @@ def torso_colour(files: list[Path]) -> np.ndarray:
     three photographs when the shop changes its shirts. Running it through the *same*
     leave-one-camera-out protocol is what makes the comparison mean anything.
 
-    The band is rows 18-55% and columns 25-75% of the crop: the chest and upper arms of a
-    standing person, excluding the head (hair and skin), the legs (trousers vary per
-    person) and the background at the edges.
+    The nine statistics moved to `analytics/appearance.py` on 2026-08-27 when a second
+    caller needed them; the numbers are unchanged. **The standardisation stayed here**,
+    because it is a property of the set being fitted rather than of a crop, and a probe
+    is what needs its features on one scale.
     """
-    out = []
-    for f in files:
-        img = Image.open(f).convert("RGB").resize((SIZE[1], SIZE[0]), Image.Resampling.BILINEAR)
-        a = np.asarray(img, dtype=np.float32) / 255.0
-        band = a[
-            int(0.18 * SIZE[0]) : int(0.55 * SIZE[0]), int(0.25 * SIZE[1]) : int(0.75 * SIZE[1])
+    x = np.stack(
+        [
+            torso_stats(
+                np.asarray(
+                    Image.open(f)
+                    .convert("RGB")
+                    .resize((SIZE[1], SIZE[0]), Image.Resampling.BILINEAR),
+                    dtype=np.float32,
+                )
+                / 255.0
+            )
+            for f in files
         ]
-        px = band.reshape(-1, 3)
-        r, g, b = px[:, 0], px[:, 1], px[:, 2]
-        mx, mn = px.max(1), px.min(1)
-        sat = np.where(mx > 1e-6, (mx - mn) / np.maximum(mx, 1e-6), 0.0)
-        # "blueness" two ways: blue over the other channels, and blue-dominant saturated
-        # pixels as a fraction -- a polo fills the band, a blue carrier bag does not.
-        blue_frac = float(np.mean((b > r + 0.06) & (b > g + 0.02) & (sat > 0.25)))
-        out.append(
-            [
-                float(r.mean()),
-                float(g.mean()),
-                float(b.mean()),
-                float(b.mean() - r.mean()),
-                float(b.mean() - g.mean()),
-                float(sat.mean()),
-                float(mx.mean()),
-                blue_frac,
-                float(np.percentile(b - r, 75)),
-            ]
-        )
-    x = np.asarray(out, dtype=np.float32)
+    )
     return (x - x.mean(0)) / (x.std(0) + 1e-6)
 
 
