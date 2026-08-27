@@ -691,7 +691,42 @@ over unvalidated tracks cannot be attributed when it is wrong.
    matter" — the independent variable did not move. The pooled three-clip run above is
    the one that has a gradient.
 
-   **What this does not touch: Tao-Hsin-cam03.** Its cls p90 of 0.45 with one person in
-   an empty shop is the same factor failing for a different reason, and that reason is
-   not measured. It, not Kaohsiung-cam04, is the fleet's worst mid-view track death at
-   83%.
+   **Tao-Hsin-cam03, and a fleet-wide effect found while chasing it.** Its cls p90 of
+   0.45 with one person in an empty shop is the same factor failing for a different
+   reason. Looking at one frame gave the reason: it holds a **0.60** shopper in the open
+   aisle and a **0.06 / 0.07 / 0.10** pair at the right-hand counter, all four segmented
+   cleanly by the dense head. So the fault is positional, and the position is a counter.
+
+   Split without any human labels, using the terrain head's own `floor` / `fixture` /
+   `person` classes to say what the strip under each person blob stands on — feet on the
+   floor, cut off by a fixture, or standing behind someone (`scratchpad truncation.py`,
+   6 cameras x 4 clips x 200 frames at 1 fps). The student's terrain was rendered and
+   eyeballed on the deciding frame first: it does call those white counters `fixture`,
+   so the bins are real on the camera that matters:
+
+   | camera | grounded ≥0.35 | cut by a fixture ≥0.35 | drop |
+   |---|---|---|---|
+   | Taichung-cam11 | 0.98 (n 372) | **0.14** (n 222) | −0.84 |
+   | **Tao-Hsin-cam03** | 0.64 (n 544) | **0.16** (n 196) | −0.48 |
+   | Taichung-cam10 | 0.81 (n 1043) | 0.59 (n 694) | −0.22 |
+   | Taichung-cam01 | 0.95 (n 839) | 0.75 (n 445) | −0.20 |
+   | Kaohsiung-cam04 | 0.92 (n 766) | 0.75 (n 173) | −0.17 |
+   | Taichung-cam04 | 0.62 (n 867) | 0.50 (n 911) | −0.12 |
+
+   **A person a fixture cuts off scores worse on every camera in the fleet, six for six**,
+   and that is new. **Tao-Hsin-cam03's failure lives in that bin**: 0.64 grounded against
+   0.16 cut, which is what drags its solo median to 0.26.
+
+   **It does not unify the two cameras, and two things refuse it separately.**
+   Taichung-cam11 has the *steepest* cut penalty in the fleet and only **17%** mid-view
+   track death, so the penalty does not predict fragmentation. And Tao-Hsin-cam03 is only
+   0.64 even when grounded, against 0.95 and 0.98 on cam01 and cam11 — a second, smaller
+   deficit that has nothing to do with counters and is **not explained**.
+
+   **What this measurement cannot see, stated because its table looks complete.** It cuts
+   people apart with connected components, so a crowd merges into one blob and counts
+   once: Kaohsiung-cam04 contributes 992 people over 800 frames, about 1.2 per frame,
+   while its evening clip holds twelve. **It says nothing about that camera's crowd**, and
+   its comfortable 0.92 / 0.75 there is a statement about its quiet frames only.
+
+   Tao-Hsin-cam03, not Kaohsiung-cam04, is the fleet's worst mid-view track death at 83%.
