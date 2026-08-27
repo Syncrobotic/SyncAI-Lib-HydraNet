@@ -527,11 +527,28 @@ over unvalidated tracks cannot be attributed when it is wrong.
 2. ~~Night is unscoped~~ — **decided 2026-08-25: night is in v1, gated on a measurement.**
    Step 4 carries the night pass (14 IR ghost persons on one empty frame, measured);
    `after_hours_person` triggers only if the night precision figure passes.
-3. **Pose distillation risk** (§2.2) — the claim the two-head architecture rests on.
-   Answered by step 3's gate. The scope question above it is settled: **decided
+3. ~~Pose distillation risk~~ (§2.2) — **closed 2026-08-26 by step 3's gate.** The
+   student agrees with ViTPose at **PCK@0.2h 0.915 / L2 p50 7.7 px** on the full test
+   split, and both consumers were verified firing correctly on real footage by eye:
+   `crouch` on a member of staff folded at a low cabinet, `reach_to_shelf` on a wrist over
+   a counter. The two-head architecture's claim holds. What did *not* hold is `fall`,
+   and that is a grouping failure in crowds rather than a distillation one -- see gate 3.
+   Original: the claim the two-head architecture rests on. Answered by step 3's gate. The scope question above it is settled: **decided
    2026-08-25, fall/second-level behaviour is in v1**, so pose stays a per-frame L0 head.
-4. ~~Delivery target undefined~~ — **decided 2026-08-25: v1 is 96 concurrent streams
-   analysed on one RTX PRO 6000.** 96 × 15 fps = 1,440 frames/s is a **binding
+4. ~~Delivery target undefined~~ — **decided 2026-08-25, and the frame rate revised
+   2026-08-26: v1 is 96 concurrent streams on one RTX PRO 6000, analysed at 5 fps.**
+   **96 × 5 = 480 frames/s**, not the 1,440 first written down, and the revision is not a
+   relaxation of ambition — it is the target catching up with the system. Every
+   measurement this project has made of its own analytics runs at 5 fps: the journey run,
+   the ending analysis, the pose events, `retail_flow`, `site_events`. Nothing downstream
+   consumes 15.
+
+   **The card is exclusive and the headroom is spoken for.** The engine measures 1,494
+   f/s at the shipped canvas, so analytics needs **32% of it** and the rest is budgeted
+   for a **VLM on the same card** (§4.3's `staff/customer` voting, the `after_hours_person`
+   trigger list, and whatever adjudicates a zone's kind). That is why no resolution
+   reduction is taken: 448x784 would double analytics throughput nobody needs and cost
+   0.018 PCK. Superseded: 96 × 15 fps = 1,440 frames/s was a **binding
    requirement, not headroom** — so gate 3's re-measure is end-to-end (decode, NMS,
    tracking, PCIe), and NVDEC capacity for 96 × h.264 joins the measurement list. At 96
    cameras the commissioning cache remains the right answer; §2's ~1,000-camera
@@ -544,7 +561,12 @@ over unvalidated tracks cannot be attributed when it is wrong.
    `data/video.py` is still the CPU pipe: migrating the *serving* path to NVDEC is the
    work this decision authorises, and is not done.
 
-10. **Taichung-cam10's metres are ~1.21x too large.** Recovered stature median 1.96 m with
+10. ~~Taichung-cam10's metres are ~1.21x too large~~ — **decided 2026-08-26: do not
+   re-pin.** Re-pinning would invalidate every metre already reported for that camera; the
+   cost of not re-pinning is that **cam10 can never appear in a table beside another
+   camera** — its areas, path lengths and speeds are inflated by 1.21x and its durations
+   are not. Any fleet aggregate must exclude it or scale it explicitly. Original:
+   **Taichung-cam10's metres are ~1.21x too large.** Recovered stature median 1.96 m with
    nobody under 1.72; `--metre-scale 0.8824` renders true metres. `camera.json` is
    **untouched** because re-pinning changes every metre already reported for that camera --
    its 13 service zones, their 48.4 m2 of area, every path length and every speed in
