@@ -1123,3 +1123,44 @@ something it does not support.
    clipped** — a clipped skeleton is a different posture, not the same one at the edge.
    The pinhole is the shipped one: `_project` generalises `ground_to_pixel` by a single
    term and the tool asserts on every run that the two agree exactly at zero height.
+
+17. **Step 8 has a model, and it passes — after failing first, which is the useful half.**
+   `tools/temporal/train_posture.py`, two 1-D convolutions over time with masked mean and
+   max pooling, **32,933 parameters** against §2.3's 100K budget, trained on NTU projected
+   through our camera pose, **held out by performer**, no early stopping on the held-out
+   fold.
+
+   **First run, 505 sequences: it failed.** 0.931 on `fall` against `pick_up` where a
+   linear model on time-pooled features read 0.944, and below that floor on three of five
+   pairs. Reported as a failure rather than smoothed, because step 8's gate was written as
+   a number and not as "it fires correctly on a watched clip" — under the usual wording
+   0.931 would have been a success.
+
+   **Second run, 2,925 sequences from 24 performers: it passes all five**, and against the
+   like-for-like linear baseline on the *same* data rather than the smaller one:
+
+   | pair | temporal model | linear, same data | linear floor §7.16 |
+   |---|---|---|---|
+   | **fall vs pick_up** | **0.963** | 0.926 | 0.944 |
+   | fall vs stand_still | 0.966 | 0.965 | 0.932 |
+   | pick_up vs sit_down | 0.952 | 0.940 | 0.932 |
+   | fall vs stagger | 0.929 | 0.897 | 0.923 |
+   | fall vs sit_down | 0.902 | 0.858 | 0.835 |
+
+   Multi-class recall held out by performer: fall 0.853, pick_up 0.904, sit_down 0.845,
+   stagger 0.841, stand_still 0.948. **So the first failure was data volume and not
+   architecture, and the bar is what told those apart** — a demonstration gate would have
+   accepted the first model and never asked.
+
+   **A frame-rate correction sits underneath all of it.** NTU records at 30 fps, this
+   fleet analyses at 5 (§7.4), and `sequence_features` takes a **per-frame** difference for
+   its velocity term — so the rate is inside the features and a 2.4 s fall is 72 frames at
+   one and 12 at the other. Resampling at the source moved the linear floor from 0.896 to
+   0.944, which is the direction that makes sense: a 33 ms difference is mostly noise and a
+   200 ms one is the movement.
+
+   **What is still not true.** No site footage is in any of this. The model has never seen
+   a real shopper, PLAN §2.3's sim-to-real transfer is untouched, and it is **not wired
+   into the serving path** — `events/pose.py` still decides `fall` by geometry, now with
+   §7.14's measured 0.7 s sustain. Step 6 is where a projected-data model meets a real one,
+   and until then this is a number about NTU.
