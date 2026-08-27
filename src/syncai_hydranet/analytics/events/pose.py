@@ -188,6 +188,7 @@ def pose_posture_events(
     cam_file: Any | None = None,
     source_size_px: tuple[int, int] | None = None,
     fall_head_height_m: float = 0.80,
+    fall_head_seconds: float = 0.7,
 ) -> list[SecurityEvent]:
     """`fall` and `crouch` from keypoints -- and they are one function on purpose.
 
@@ -262,11 +263,17 @@ def pose_posture_events(
                 head = _head_heights_m(track, i0, i1, cam_file, source_size_px)
                 finite = head[np.isfinite(head)]
                 if len(finite):
-                    if float(np.nanmin(head)) > fall_head_height_m:
-                        # Bent, not down. The lowest the head got is still counter height.
+                    low_s = _longest_low_seconds(head, fall_head_height_m, fps)
+                    if low_s < fall_head_seconds:
+                        # Bent, not down. Measured on NTU RGB+D's ground-truth 3D
+                        # (PLAN section 7.14): the head merely *reaching* below 0.80 m
+                        # happens in 99% of falls and 92% of `A06 pick up`, so the
+                        # instantaneous test this replaced separated nothing. How long it
+                        # stays there does: at 0.7 s, 96% of falls and 29% of pick-ups.
                         continue
                     on_floor = (
-                        f"the head reaching {float(np.nanmin(head)):.2f} m above the floor"
+                        f"the head at {float(np.nanmin(head)):.2f} m above the floor "
+                        f"for {low_s:.1f} s"
                     )
             events += _posture_event(
                 track,
@@ -304,6 +311,21 @@ def pose_posture_events(
                 ),
             )
     return events
+
+
+def _longest_low_seconds(head: np.ndarray, limit_m: float, fps: float) -> float:
+    """The longest unbroken spell the head spends at or below `limit_m`, in seconds.
+
+    Unbroken rather than total: a shopper who dips under the line twice while working a
+    bottom shelf has not fallen, and summing the dips would say they had. Frames whose
+    height could not be measured break the run rather than extending it -- a gap is not
+    evidence that the head stayed down.
+    """
+    best = run = 0
+    for h in head:
+        run = run + 1 if (np.isfinite(h) and h <= limit_m) else 0
+        best = max(best, run)
+    return best / fps
 
 
 def _posture_event(

@@ -491,6 +491,45 @@ def test_a_torso_that_reaches_the_floor_still_fires_and_says_how_low():
     assert "above the floor" in event.basis and "0.4" in event.basis
 
 
+def test_a_head_that_only_dips_below_the_line_is_a_bend_and_not_a_fall():
+    """Measured on NTU RGB+D's ground-truth 3D, PLAN section 7.14.
+
+    The head *reaching* below 0.80 m happens in 99% of `A43 falling down` and in 92% of
+    `A06 pick up`, so the instantaneous test separated nothing -- and a shopper at a
+    bottom shelf is the posture that must not alarm. How long it stays there does
+    separate them: at 0.7 s it is 96% of falls against 29% of pick-ups.
+
+    Two frames at 5 fps is 0.4 s, under the threshold, and the torso is horizontal the
+    whole time -- so everything except the new condition says fall.
+    """
+    poses, _ = _stand_then(keypoints(80.0, 200.0), 150.0)
+    boxes = _boxes_at(1.70, 5) + _boxes_at(0.40, 2) + _boxes_at(1.30, 8)
+    track = Track(1, boxes[-1], frames=list(range(15)), boxes=boxes, confirmed=True,
+                  keypoints=poses)  # fmt: skip
+    kw = {"cam_file": _cam_file(), "source_size_px": (960, 540)}
+    assert ev.pose_posture_events([track], FPS, "cam01", **kw) == []
+    relaxed = ev.pose_posture_events([track], FPS, "cam01", fall_head_seconds=0.3, **kw)
+    assert [e.type for e in relaxed] == ["fall"], "0.4 s clears a 0.3 s requirement"
+
+
+def test_two_separate_dips_do_not_add_up_to_a_fall():
+    """A shopper working a bottom shelf goes under the line more than once.
+
+    Summing the frames below would call that a fall; the spell has to be unbroken.
+    Six low frames in total here, in two runs of three -- 0.6 s each, under 0.7.
+    """
+    poses, _ = _stand_then(keypoints(80.0, 200.0), 150.0)
+    boxes = _boxes_at(1.70, 3) + _boxes_at(0.40, 3) + _boxes_at(1.30, 3) + _boxes_at(0.40, 3)
+    track = Track(1, boxes[-1], frames=list(range(12)), boxes=boxes, confirmed=True,
+                  keypoints=poses[:12])  # fmt: skip
+    assert (
+        ev.pose_posture_events(
+            [track], FPS, "cam01", cam_file=_cam_file(), source_size_px=(960, 540)
+        )
+        == []
+    )
+
+
 def test_without_geometry_the_check_is_skipped_rather_than_failing_closed():
     """40 of this fleet's 48 cameras have no commissioned geometry. They keep reporting
     what they can, and the basis says which test was applied."""
