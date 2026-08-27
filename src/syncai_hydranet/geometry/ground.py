@@ -225,3 +225,41 @@ def distort_points(xy: np.ndarray, k1: float, centre, radius: float) -> np.ndarr
     scale = np.where(a > 1e-9, b / safe_a, 1.0)
     scale = np.where(q >= 0, scale, np.nan)
     return centred * scale[:, None] + centre_a
+
+
+def height_above_floor_m(
+    x_m: float, z_m: float, v_px: float, camera: Camera, plane: GroundPlane
+) -> float:
+    """How high above the floor a pixel row is, for a thing standing at ``(x_m, z_m)``.
+
+    Given the floor position of an object and the image row of its topmost pixel, this
+    returns the height that top must be at. Applied to a person box it is the top of the
+    head: **a standing adult reads ~1.7 m, a person bent over a counter ~1.2 m, and a
+    person on the floor under 0.5 m.**
+
+    That last separation is the reason this is in the wheel rather than in the
+    commissioning tool where it started. Two independent measurements say the posture
+    angle cannot do it alone: NTU RGB+D's own ground-truth 3D puts `A43 falling down` at a
+    74.5 deg median peak torso angle and `A06 pick up` at 76.3 deg, and on
+    Kaohsiung-cam04 a shopper leaning over a counter produced a `fall` with a torso at
+    69 deg and a box 21% shorter -- a bend passes every image-space test a fall passes.
+    Height above the floor is what separates them, and it needs the camera pose that
+    commissioning already measured.
+
+    A head top at level-frame height ``plane.height - h`` projects linearly in ``h``, so
+    this is one linear solve rather than a search. ``v_px`` must be in the pixel space
+    `camera` was calibrated on -- several of this project's cameras are fitted at half
+    the resolution their clips decode at.
+
+    NaN when the ray is degenerate. The caller decides what an implausible answer means:
+    for a person box it usually means the top was not a head top -- a merged box, or one
+    truncated by the frame edge.
+    """
+    rot = plane.rotation
+    a = rot @ np.array([x_m, plane.height, z_m])
+    b = rot @ np.array([0.0, 1.0, 0.0])
+    k = (v_px - camera.cy) / camera.fy
+    den = b[1] - k * b[2]
+    if abs(den) < 1e-9:
+        return float("nan")
+    return float((a[1] - k * a[2]) / den)

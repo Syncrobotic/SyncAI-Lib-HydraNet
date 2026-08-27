@@ -479,3 +479,70 @@ def test_no_start_is_a_no_op_rather_than_an_error():
     """A clip from outside the corpus still produces events, correct in frames."""
     rows = [_event(), _event(frame_start=10, frame_end=19)]
     assert [e.as_row() for e in ev.with_clip_start(rows, None)] == [e.as_row() for e in rows]
+
+
+# ------------------------------------------------- a fall has to reach the floor
+
+
+def _cam_file(camera_id="Kaohsiung-cam04"):
+    from syncai_hydranet.geometry.camera_json import CameraFile
+    from syncai_hydranet.geometry.ground import Camera, GroundPlane
+
+    return CameraFile(
+        camera_id=camera_id,
+        image_size_px=(960, 540),
+        camera=Camera(fx=382.7, fy=382.7, cx=480.0, cy=270.0),
+        plane=GroundPlane(height=2.49, pitch=math.radians(49.5)),
+    )
+
+
+def _boxes_at(height_m: float, n: int, x_m: float = 0.0, z_m: float = 3.0):
+    """Person boxes for someone of ``height_m`` standing at a fixed floor point."""
+    import numpy as np
+
+    from syncai_hydranet.geometry.ground import ground_to_pixel
+
+    cf = _cam_file()
+    u, v, _ = ground_to_pixel(np.array([x_m]), np.array([z_m]), cf.camera, cf.plane)
+    rot = cf.plane.rotation
+    top = rot @ np.array([x_m, cf.plane.height - height_m, z_m])
+    v_top = cf.camera.cy + cf.camera.fy * top[1] / top[2]
+    return [np.array([u[0] - 30.0, v_top, u[0] + 30.0, v[0]]) for _ in range(n)]
+
+
+def test_a_horizontal_torso_at_standing_height_is_not_a_fall():
+    """The measured failure: two Kaohsiung-cam04 `fall` events whose subjects were at
+    **1.76 m**. The torso angle said horizontal, the box shortened, and the person was
+    standing the whole time -- so the image-space tests both passed."""
+    poses, _ = _stand_then(keypoints(80.0, 200.0), 150.0)
+    boxes = _boxes_at(1.70, 5) + _boxes_at(1.55, 10)
+    track = Track(1, boxes[-1], frames=list(range(15)), boxes=boxes, confirmed=True,
+                  keypoints=poses)  # fmt: skip
+    assert [e.type for e in ev.pose_posture_events([track], FPS, "cam01")] == ["fall"]
+    with_geometry = ev.pose_posture_events(
+        [track], FPS, "cam01", cam_file=_cam_file(), source_size_px=(960, 540)
+    )
+    assert with_geometry == [], "a head at 1.55 m is not a person on the floor"
+
+
+def test_a_torso_that_reaches_the_floor_still_fires_and_says_how_low():
+    poses, _ = _stand_then(keypoints(80.0, 200.0), 150.0)
+    boxes = _boxes_at(1.70, 5) + _boxes_at(0.40, 10)
+    track = Track(1, boxes[-1], frames=list(range(15)), boxes=boxes, confirmed=True,
+                  keypoints=poses)  # fmt: skip
+    (event,) = ev.pose_posture_events(
+        [track], FPS, "cam01", cam_file=_cam_file(), source_size_px=(960, 540)
+    )
+    assert event.type == "fall"
+    assert "above the floor" in event.basis and "0.4" in event.basis
+
+
+def test_without_geometry_the_check_is_skipped_rather_than_failing_closed():
+    """40 of this fleet's 48 cameras have no commissioned geometry. They keep reporting
+    what they can, and the basis says which test was applied."""
+    poses, _ = _stand_then(keypoints(80.0, 200.0), 150.0)
+    boxes = _boxes_at(1.70, 5) + _boxes_at(1.55, 10)
+    track = Track(1, boxes[-1], frames=list(range(15)), boxes=boxes, confirmed=True,
+                  keypoints=poses)  # fmt: skip
+    (event,) = ev.pose_posture_events([track], FPS, "cam01")
+    assert "box height confirming" in event.basis

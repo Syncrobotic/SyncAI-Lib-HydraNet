@@ -8,6 +8,7 @@ way down a long module.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 
@@ -138,6 +139,42 @@ def _shrank(
     return ref > 0 and float(np.median(heights[i0 : i1 + 1])) <= box_shrink_max * ref
 
 
+def _head_heights_m(
+    track: Track, i0: int, i1: int, cam_file: Any, source_size_px
+) -> np.ndarray:
+    """Metres above the floor for the box top, over observations ``i0..i1``.
+
+    The foot point supplies the floor position and the box top supplies the row, which is
+    the pair `height_above_floor_m` solves. Both come from the same box, so a box that is
+    wrong is wrong in one direction rather than two.
+
+    NaN where `pixel_to_ground` declined the foot point (at or above the horizon) or the
+    solve is degenerate; the caller treats an all-NaN span as "not measured" and keeps the
+    event rather than dropping it on a refusal.
+    """
+    from ...geometry.ground import height_above_floor_m, pixel_to_ground, undistort_points
+
+    out = []
+    w, h = cam_file.image_size_px
+    sx, sy = (w / source_size_px[0], h / source_size_px[1]) if source_size_px else (1.0, 1.0)
+    for box in track.boxes[i0 : i1 + 1]:
+        b = np.asarray(box, dtype=float) * np.array([sx, sy, sx, sy])
+        foot = np.array([[(b[0] + b[2]) / 2, b[3]]])
+        lens = cam_file.lens
+        if lens is not None:
+            foot = undistort_points(foot, lens.k1, lens.centre_px, lens.radius_px)
+        x, z = pixel_to_ground(foot[:, 0], foot[:, 1], cam_file.camera, cam_file.plane)
+        if not (np.isfinite(x[0]) and np.isfinite(z[0])):
+            out.append(np.nan)
+            continue
+        out.append(
+            height_above_floor_m(
+                float(x[0]), float(z[0]), b[1], cam_file.camera, cam_file.plane
+            )
+        )
+    return np.asarray(out, dtype=float)
+
+
 def pose_posture_events(
     tracks: list[Track],
     fps: float,
@@ -148,6 +185,9 @@ def pose_posture_events(
     score_thr: float = 0.3,
     box_shrink_max: float = 0.90,
     box_before_seconds: float = 2.0,
+    cam_file: Any | None = None,
+    source_size_px: tuple[int, int] | None = None,
+    fall_head_height_m: float = 0.80,
 ) -> list[SecurityEvent]:
     """`fall` and `crouch` from keypoints -- and they are one function on purpose.
 
@@ -170,6 +210,26 @@ def pose_posture_events(
     and it does not go blind when the posture fills the track. A self-baseline over a
     9-16 frame fragment -- the measured median track length -- compares a crouch against a
     crouch and reports nothing, which is precisely the case that matters.
+
+    **`fall` additionally requires the person to be ON THE FLOOR, when the camera's
+    geometry is available.** A bend passes every image-space test a fall passes, and two
+    independent measurements say so rather than one: NTU RGB+D's ground-truth 3D puts
+    `A43 falling down` at a 74.5 deg median peak torso angle against `A06 pick up` at
+    76.3 deg, with 38/40 and 35/40 of clips over this function's own 55 deg threshold; and
+    on Kaohsiung-cam04 a shopper leaning over a counter fired a `fall` at 69 deg with a box
+    21% shorter -- the box-height cross-check does not separate them either, because
+    bending forward shortens a box exactly as collapsing does.
+
+    What separates them is height above the floor. `geometry.ground.height_above_floor_m`
+    turns the box top and the foot position into metres through the pose commissioning
+    already measured: a standing adult reads ~1.7 m, a bend over a counter ~1.2 m, someone
+    on the floor under 0.5 m. Pass `cam_file` and, when the boxes are in the decoded
+    stream's pixels rather than the calibrated frame, `source_size_px`.
+
+    **Without `cam_file` the check is skipped and the old behaviour stands**, because most
+    of this fleet has no commissioned geometry yet and a camera that cannot measure metres
+    should keep reporting what it can rather than go silent. A run that skips it says so
+    in the event's `basis`.
 
     Every threshold here is a default and none is measured. They are stated as arguments
     for the reason RETAIL.md gives about the 5 m rule: a number that belongs to a
@@ -197,6 +257,17 @@ def pose_posture_events(
         for i0, i1 in _runs(fallen):
             if not _shrank(heights, i0, i1, n_before, box_shrink_max):
                 continue
+            on_floor = "the box height confirming the posture changed"
+            if cam_file is not None:
+                head = _head_heights_m(track, i0, i1, cam_file, source_size_px)
+                finite = head[np.isfinite(head)]
+                if len(finite):
+                    if float(np.nanmin(head)) > fall_head_height_m:
+                        # Bent, not down. The lowest the head got is still counter height.
+                        continue
+                    on_floor = (
+                        f"the head reaching {float(np.nanmin(head)):.2f} m above the floor"
+                    )
             events += _posture_event(
                 track,
                 frames,
@@ -209,8 +280,8 @@ def pose_posture_events(
                 value=float(np.nanmax(angle_arr[i0 : i1 + 1])),
                 threshold=fall_angle_deg,
                 basis=(
-                    "shoulder-to-hip angle from vertical, in degrees, sustained, "
-                    "with the box height confirming the posture changed"
+                    "shoulder-to-hip angle from vertical, in degrees, sustained, with "
+                    + on_floor
                 ),
             )
         for i0, i1 in _runs(low):

@@ -27,8 +27,10 @@ from PIL import Image, ImageDraw
 from syncai_hydranet.analytics import Tracker
 from syncai_hydranet.analytics.events import pose_posture_events, reach_to_shelf_events
 from syncai_hydranet.analytics.events.pose import _torso
+from syncai_hydranet.analytics.tracker import iou
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
+from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.models.hydranet import build_model
 from syncai_hydranet.serving.decode import MIN_PERSON_FRACTION, person_pixel_fraction
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
@@ -102,6 +104,15 @@ def main() -> int:
         "fire'; measuring whether it should have fired needs the numbers",
     )
     ap.add_argument(
+        "--fall-head-height",
+        type=float,
+        default=0.80,
+        metavar="M",
+        help="a fall must bring the head below this many metres above the floor. "
+        "Raise it to read what a candidate actually measured -- the event basis "
+        "prints the number it reached.",
+    )
+    ap.add_argument(
         "--events",
         action="store_true",
         help="track the detections, feed the keypoints through, and run "
@@ -155,6 +166,11 @@ def main() -> int:
     # Nearest-neighbour on purpose: these are class ids and interpolating them invents
     # classes that no head ever predicted.
     terrain_frames: list[dict] = []
+    # Every frame's person boxes. A posture event in a crowd is the failure
+    # `models/heads/pose.py` forecast before any of this ran -- two overlapping boxes
+    # stealing each other's peaks inside the intersection -- and the way to tell that
+    # from a real fall is whether anybody else's box was on top of this one.
+    boxes_by_frame: dict[int, np.ndarray] = {}
     want = {int(x) for x in args.still_frames.split(",") if x.strip()}
     for frame in decode_frames(str(clip), 1920, 1080, args.fps):
         if n >= args.frames:
@@ -224,6 +240,16 @@ def main() -> int:
                     kp[:, 1] = (kp[:, 1] - y0) * to_view
                     n_joints += draw_person(d, kp, float(bb[3] - bb[1]))
                     people += 1
+        if args.events:
+            lab_all = (
+                det["labels"].cpu().numpy() if det and len(det.get("labels", [])) else None
+            )
+            if lab_all is not None and (lab_all == person).any():
+                b_all = det["boxes"].cpu().numpy()[lab_all == person]
+                src_scale = 1920.0 / region[2]
+                boxes_by_frame[n] = (
+                    b_all - np.array([region[0], region[1], region[0], region[1]])
+                ) * src_scale
         if args.events and seg_fixture is not None:
             cls_map = res["terrain"][0].cpu().numpy().astype(np.uint8)
             full = np.asarray(
@@ -264,7 +290,23 @@ def main() -> int:
     if tracker is not None:
         tracks = [t for t in tracker.tracks + tracker.retired if t.confirmed]
         print(f"{len(tracks)} confirmed tracks, all carrying one keypoint set per frame")
-        events = pose_posture_events(tracks, args.fps, args.camera)
+        # The camera's own commissioned geometry, when it has any: `fall` then requires
+        # the head to reach the floor rather than merely the torso to go horizontal. A
+        # camera without a camera.json keeps the image-space behaviour and says so in the
+        # event's basis -- 40 of this fleet's 48 have no geometry yet.
+        cam_json = ROOT / f"runs/commission01/{args.camera}.camera.json"
+        cam_file = CameraFile.load(cam_json) if cam_json.exists() else None
+        if cam_file is None:
+            print(f"no commissioned geometry for {args.camera}: fall stays image-space")
+        events = pose_posture_events(
+            tracks,
+            args.fps,
+            args.camera,
+            cam_file=cam_file,
+            source_size_px=(1920, 1080),
+            fall_head_height_m=args.fall_head_height,
+        )
+        crowding: dict = {}
         if seg_fixture is not None and terrain_frames:
             # The one output where the retail model and the security model are the same
             # model: the terrain head's `fixture` channel and the pose head's wrist both
@@ -281,6 +323,38 @@ def main() -> int:
             )
             print(f"{len(reaches)} reach_to_shelf events")
             events = events + reaches
+        for e in events:
+            if e.type not in ("fall", "crouch"):
+                continue
+            t = next((x for x in tracks if x.track_id in e.track_ids), None)
+            worst = 0.0
+            for fi, box in zip(t.frames, t.boxes, strict=True) if t else []:
+                if not (e.frame_start <= fi <= e.frame_end):
+                    continue
+                others = boxes_by_frame.get(fi)
+                if others is None or len(others) < 2:
+                    continue
+                ov = iou(np.asarray(box)[None], others)[0]
+                ov.sort()
+                worst = max(worst, float(ov[-2]))  # the best overlap that is not itself
+            crowding[(e.type, e.frame_start)] = round(worst, 3)
+            # The box's own trajectory, because the other candidate mechanism is
+            # occlusion rather than crowding: a shopper walking behind a counter has
+            # their box truncated from below, which `_shrank` reads as the collapse a
+            # real fall produces. The two are told apart by where the box bottom sits.
+            if t:
+                spans = [
+                    (fi, [round(float(v), 0) for v in b])
+                    for fi, b in zip(t.frames, t.boxes, strict=True)
+                    if e.frame_start - 6 <= fi <= e.frame_end
+                ]
+                for fi, b in spans:
+                    mark = "*" if e.frame_start <= fi <= e.frame_end else " "
+                    print(f"      {mark}f{fi:>4} box {b} h={b[3] - b[1]:.0f}")
+            print(
+                f"  crowding for {e.type} at {e.frame_start}: "
+                f"max IoU with another box {worst:.2f}"
+            )
         if not events:
             print("no fall, crouch or reach cleared its sustained threshold on this clip")
         for e in events:
