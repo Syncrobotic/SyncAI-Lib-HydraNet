@@ -22,8 +22,8 @@ def _view(focal=600.0, cx=0.0, cy=0.0):
 
 
 def test_world_x_is_screen_right():
-    """The mirror this module was written to settle. `scripts/mesh_preview.py` built its
-    basis the other way round and put world +x on the left; nothing caught it because the
+    """The mirror this module was written to settle. `scripts/mesh_preview.py` (deleted in
+    `500cdd2`) built its basis the other way round and put world +x on the left; nothing caught it because the
     scene it drew was hand-authored. A mirrored panel is a map that sends a robot the
     wrong way."""
     v = _view()

@@ -84,10 +84,13 @@ That is now a package `__init__`, so it parses the package directory. The test s
 what the code does rather than what a second copy of the key list claims.
 """
 
-# Private, and re-exported anyway: `scripts/pose_pilot.py` reads `ev._torso` to plot the
-# torso-angle distribution the fall detector would see. The script is measuring the
+# Private, and re-exported anyway: `scripts/pose_pilot.py` read `ev._torso` to plot the
+# torso-angle distribution the fall detector would see. The script was measuring the
 # instrument rather than calling it, which is a fair use of a private helper -- and the
 # underscore still says it is not the contract, which is why it stays out of `__all__`.
+# The pilot went in `500cdd2` once its verdict was recorded; `tools/pose/pose_overlay.py`
+# is the live reader of `_torso`, so the export is still load-bearing rather than a
+# leftover. `git show 500cdd2^:scripts/pose_pilot.py`.
 from ._types import (
     CLIP_NAME,
     EVENT_TYPES,

@@ -135,7 +135,8 @@ class StageFrame(_StageFrameRequired, total=False):
     across the module that declares it: `zone_stock_counts` reads five of its six required
     keys and never `image`; `reach_to_shelf_events` reads two, of which only
     `frame_index` is required here; and the only producer of a real payload
-    (`scripts/pose_pilot.py`) builds `{frame_index, terrain}`, which satisfies none of it.
+    (`scripts/pose_pilot.py`, since deleted in `500cdd2`) built `{frame_index, terrain}`,
+    which satisfies none of it.
     A contract that no consumer needs in full and no producer can supply is not a
     contract -- it is a comment that type-checks, and annotating a signature with it would
     have made a working caller an error.

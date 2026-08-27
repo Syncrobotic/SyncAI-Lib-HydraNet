@@ -9,7 +9,7 @@ calib02 validated, strung into a repeatable pipeline.
 For every selling_floor camera (`datasets/studioa_clips/cameras.json`):
 
 1. **Orientation**: pick a daytime plate and reuse the calib01 pipeline from
-   `syncai_bev3d.plate_calibration` (the package module behind
+   `syncai_bev3d.plate_calibration` (the package module extracted from the since-deleted
    `calibrate_from_plate.py`; imported, not copied -- a second copy of the geometry
    arithmetic is a second chance to get it wrong): undistort (division model
    k1 = -0.225, a fleet-hardware assumption, tile-grid measured only on Taichung-cam01)
@@ -56,8 +56,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "src"))
 
 # The geometry and its checks, all reused from the package -- not from
-# `calibrate_from_plate.py`, which is the same code's CLI (the pipeline moved into the
-# package on 2026-08-19 so a script would stop being another script's library).
+# `calibrate_from_plate.py`, which was the same code's CLI: the pipeline moved into the
+# package on 2026-08-19 so a script would stop being another script's library, and
+# `500cdd2` deleted the emptied CLI on 2026-08-25.
 from syncai_bev3d import plate_calibration as pc  # noqa: E402
 from syncai_bev3d.calibrate import horizon_row  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera  # noqa: E402

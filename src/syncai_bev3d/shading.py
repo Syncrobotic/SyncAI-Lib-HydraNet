@@ -1,7 +1,9 @@
 """One camera and one light rig, shared by everything in this package that draws a mesh.
 
-`bev3d.py` renders the panel a person actually looks at; `scripts/mesh_preview.py` renders
-the mesh library on a hand-authored scene. Both had grown their own projection and their
+`bev3d.py` renders the panel a person actually looks at; `scripts/mesh_preview.py`
+rendered the mesh library on a hand-authored scene until `500cdd2` removed it
+(`git show 500cdd2^:scripts/mesh_preview.py`; `tools/commissioning/scene_mesh.py`
+succeeded it). Both had grown their own projection and their
 own shading, and the two had drifted apart: the preview had a three-light rig, a depth
 fade and grouped contact shadows while the panel still lit its meshes with two terms and
 no shadow at all, so the same `meshes.human()` came out looking like two different objects

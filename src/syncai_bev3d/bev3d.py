@@ -96,8 +96,9 @@ class VirtualCam:
     Unrelated to the camera that took the frame. The parameters are the ones that describe
     a view of a floor -- how high the eye is, how far back it starts, how far it tilts down
     and how far round it swings -- and `view()` turns them into the `shading.View` that
-    every other surface in this package is projected through, so the panel and
-    `scripts/mesh_preview.py` cannot end up with two different cameras again.
+    every other surface in this package is projected through, so the panel and the mesh
+    renderers cannot end up with two different cameras again -- which is what the panel
+    and `scripts/mesh_preview.py` had done before `shading.py` settled it.
 
     ``pitch_deg`` and ``orbit_deg`` are what make this read as a room rather than a plot.
     Straight down a floor plan is a diagram; the pitch tilts it until surfaces have faces,

@@ -363,7 +363,8 @@ def _require_terrain_in_image_space(
     **The caller owns the resize**, because only the caller knows which space the
     keypoints were measured in: upsample the terrain map back to the image resolution
     before building the frame payloads -- nearest-neighbour, since these are class ids
-    and interpolating them invents classes. `scripts/pose_pilot.py` shows the two lines.
+    and interpolating them invents classes. `tools/pose/pose_overlay.py` shows the two lines;
+    `scripts/pose_pilot.py` did before `500cdd2` removed it.
     """
     th, tw = (int(s) for s in terrain.shape[-2:])
     ih, iw = (int(s) for s in image_hw)

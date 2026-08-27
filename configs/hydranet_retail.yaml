@@ -105,7 +105,9 @@ data:
       # 0.279 understates it, while the segmentation cost was already fully paid.
       sample_ratio: 0.1
 
-  # `scripts/bench_batch_size.py` on an RTX PRO 6000 (24 cores), loader alone, batch 32:
+  # Measured by `scripts/bench_batch_size.py` (deleted in `500cdd2`, which is why the
+  # table is here rather than behind it) on an RTX PRO 6000 (24 cores), loader alone,
+  # batch 32:
   #
   #     workers    4      8     12     16
   #     img/s  172.4  361.3  322.6  312.2
@@ -154,7 +156,8 @@ train:
 
   # +26% from batch 16 up on this card (399.3 vs 318.1 at 16, 433.9 vs 345.5 at 32),
   # and only +3.5% at batch 8 -- NHWC needs a batch to pay off. Note this contradicts
-  # the -33% recorded by scripts/bench_channels_last.py on older hardware: the flag is
+  # the -33% that scripts/bench_channels_last.py recorded on older hardware (the script
+  # went in `500cdd2`; the figure is the whole of what it said): the flag is
   # architecture-dependent, so re-measure it per box rather than inheriting the verdict.
   channels_last: true
 

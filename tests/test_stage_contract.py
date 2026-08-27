@@ -7,8 +7,9 @@ when the type was finally checked against the code it describes.
 
 **The contract was wrong, not merely unadopted.** As one TypedDict, `StageFrame` required
 six keys. `zone_stock_counts` reads five of them and never `image`; `reach_to_shelf_events`
-reads two, of which one is required; and the only real producer, `scripts/pose_pilot.py`,
-builds `{frame_index, terrain}` and satisfies none of it. Annotating either signature with
+reads two, of which one is required; and the only real producer at the time,
+`scripts/pose_pilot.py` (deleted in `500cdd2`), built `{frame_index, terrain}` and
+satisfied none of it. Annotating either signature with
 it would have turned a working caller into a type error -- which is why "adopt the
 contract" was never as simple as adding an annotation, and why nobody had.
 
@@ -115,7 +116,8 @@ def test_image_is_required_of_a_full_payload_and_optional_of_a_terrain_one():
 
 def test_a_terrain_payload_that_the_old_contract_rejected_still_works():
     """`scripts/pose_pilot.py`'s shape, end to end. Under the single six-key StageFrame
-    this was a type error, while being the only real payload anyone had built."""
+    this was a type error, while being the only real payload anyone had built. The script
+    is gone; the shape it produced is pinned here, which is the point of pinning it."""
     fixture_id = 4
     terrain = np.zeros((240, 320), dtype=np.int64)
     terrain[150:200, 120:200] = fixture_id

@@ -7,8 +7,10 @@
 Every public indoor dataset is shot from where a person holds a camera. Neither of this
 repo's two products looks at the world from there: product B is a store CCTV on a ceiling
 bracket, and product A is a quadruped with a lens 25 cm off the floor. That mismatch is
-not a detail -- `scripts/eprep_teacher_nyuv2.py` measured what a domain change costs a
-"metric" model, and it was a flat 15% of scale.
+not a detail -- a domain change costs a "metric" model a flat 15% of scale, measured on
+Depth-Anything V2 Metric-Indoor against NYUv2 and written out in full in
+`data/nyu_depth.py`. The script that measured it, `scripts/eprep_teacher_nyuv2.py`, went
+with the quadruped line on 2026-08-19.
 
 HM3D is 1,000 building-scale scans, so it can be rendered from *any* pose, including the
 one `scripts/fit_camera_from_people.py` actually measured on Taichung-cam01 (the script
