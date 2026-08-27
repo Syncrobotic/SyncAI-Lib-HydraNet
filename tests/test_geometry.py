@@ -41,6 +41,15 @@ PLANE = GroundPlane(height=1.2, pitch=math.radians(18))
         GroundPlane(1.2, math.radians(18)),
         GroundPlane(0.4, math.radians(35)),
         GroundPlane(1.5, math.radians(22), math.radians(7)),  # a quadruped mid-stride
+        # The shipped CCTV fleet, from `runs/commission01/*.camera.json`. The three above
+        # are the robot line's geometry and none of them reaches this range: the fleet
+        # sits at 2.17-2.91 m and 38.8-52.3 deg, and Kaohsiung-cam04 banks -12.9 deg,
+        # which is the largest roll in the fleet and the opposite sign to the case above.
+        # PLAN step 5 is about to charge metre errors to the calibration, so the
+        # round-trip has to be known-good at the poses that are actually deployed.
+        GroundPlane(2.17, math.radians(52.3), math.radians(-12.9)),  # Kaohsiung-cam04
+        GroundPlane(2.91, math.radians(42.7), math.radians(0.5)),  # Tao-Hsin-cam04
+        GroundPlane(2.77, math.radians(38.8), math.radians(-8.3)),  # Taichung-cam07
     ],
 )
 def test_pixel_and_ground_are_inverses(plane):
