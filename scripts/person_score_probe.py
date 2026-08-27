@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Why a camera's `person` boxes score what they score, in three modes.
+"""Why a camera's `person` boxes score what they score, in four modes.
 
 Opened for §7.11 -- step 2's "Kaohsiung person-score investigation" -- and kept because
 each mode answers a question that a raw score histogram cannot.
@@ -7,7 +7,7 @@ each mode answers a question that a raw score histogram cannot.
 A per-camera score histogram is not comparable across cameras: a busy camera emits more
 low-scoring duplicates and fragments, so its median falls for a reason that has nothing
 to do with how well it sees a person. Every mode here controls for that differently, and
-the control in all three is the **dense head** -- the same trunk, not box-conditioned,
+the control in all four is the **dense head** -- the same trunk, not box-conditioned,
 not the head under test. What it marks as `person` pixels is used to decide which boxes
 are on people and how many people are in a frame; it never decides a score.
 
@@ -30,9 +30,16 @@ are on people and how many people are in a frame; it never decides a score.
              person, and sweeps the NMS IoU threshold in the same pass so that "NMS is
              eating the crowd" is answered by the same run rather than by argument.
 
+    standing what the strip under a person blob stands on, from the terrain head's own
+             floor / fixture / person classes: feet visible, cut off by a counter, or
+             behind somebody. Answers "does a fixture crossing a shopper cost score".
+             It cannot see a crowd -- connected components merge touching people into
+             one blob -- so read it beside `density`, never instead of it.
+
 Usage:
     uv run python scripts/person_score_probe.py solo --cameras Kaohsiung-cam04 ...
     uv run python scripts/person_score_probe.py density --camera Kaohsiung-cam04
+    uv run python scripts/person_score_probe.py standing --cameras Tao-Hsin-cam03 ...
     uv run python scripts/person_score_probe.py factors --clip A.mp4 B.mp4 --label a b
 """
 
@@ -171,6 +178,93 @@ def run_solo(a) -> dict:
     return rows
 
 
+# -------------------------------------------------------------- standing
+
+
+STANDING_BINS = ("grounded", "cut", "behind", "other")
+
+
+def run_standing(a) -> dict:
+    """Score against what the person is standing on, or cut off by.
+
+    The terrain head names `floor`, `fixture` and `person`, so the strip immediately
+    under a person blob says whether the shopper's feet are visible (`grounded`), a
+    counter crosses the body (`cut`), or somebody else is in front (`behind`). The
+    dense head decides the bin and the box head is scored on it, so the head under test
+    never chooses where it lands.
+
+    **This mode cannot see a crowd.** Connected components merge touching people into
+    one blob, which then counts once -- on a camera whose clip holds a dozen shoppers at
+    a counter it reports about one person per frame, and every number it prints for that
+    camera is a statement about its quiet frames. Use `density` for the crowd.
+    """
+    probe = Probe(a.config, a.checkpoint, a.device)
+    terrain = list(probe.cfg["data"]["terrain_classes"])
+    seg_floor, seg_fixture = terrain.index("floor"), terrain.index("fixture")
+    rows: dict[str, dict[str, list]] = {}
+    for cam in a.cameras:
+        rows[cam] = {k: [] for k in STANDING_BINS}
+        for clip in sorted((CLIPS / cam).glob("archive_*.mp4")):
+            for i, frame in enumerate(decode_frames(str(clip), 1920, 1080, a.fps)):
+                if i >= a.frames:
+                    break
+                f = probe.forward(frame)
+                cmap = f["out"]["terrain"].argmax(dim=1)[0].cpu().numpy()
+                mask = cmap == probe.seg_person
+                lab, n = ndimage.label(mask)
+                if n == 0:
+                    continue
+                sizes = ndimage.sum(mask, lab, range(1, n + 1))
+                boxes, scores = _person_boxes(probe, f["out"])
+                if not len(boxes):
+                    continue
+                cx = (boxes[:, 0] + boxes[:, 2]) / 2
+                cy = (boxes[:, 1] + boxes[:, 3]) / 2
+                for b in np.nonzero(sizes >= a.min_blob)[0]:
+                    ys, xs = np.nonzero(lab == b + 1)
+                    y0 = min(int(ys.max()) + 1, cmap.shape[0] - 1)
+                    y1 = min(int(ys.max()) + 1 + a.band, cmap.shape[0])
+                    kind = "other"
+                    if y1 > y0:
+                        strip = cmap[y0:y1, xs.min() : xs.max() + 1]
+                        counts = {
+                            "grounded": int((strip == seg_floor).sum()),
+                            "cut": int((strip == seg_fixture).sum()),
+                            "behind": int((strip == probe.seg_person).sum()),
+                        }
+                        kind = max(counts, key=lambda k: counts[k])
+                        if counts[kind] == 0:
+                            kind = "other"
+                    inside = (
+                        (cx >= xs.min())
+                        & (cx <= xs.max())
+                        & (cy >= ys.min())
+                        & (cy <= ys.max())
+                    )
+                    if inside.any():
+                        rows[cam][kind].append(float(scores[inside].max()))
+
+    print(
+        f"{'camera':18s} {'bin':>9s} {'people':>7s} {'p50':>6s} {'p90':>6s} {'frac>=0.35':>11s}"
+    )
+    report: dict[str, dict] = {}
+    for cam in a.cameras:
+        report[cam] = {}
+        for kind in STANDING_BINS:
+            v = np.array(rows[cam][kind])
+            if not len(v):
+                continue
+            frac = float((v >= 0.35).mean())
+            report[cam][kind] = {
+                "n": len(v), "p50": _pct(v, 50), "p90": _pct(v, 90), "frac_ge035": frac
+            }  # fmt: skip
+            print(
+                f"{cam:18s} {kind:>9s} {len(v):7d} {_pct(v, 50):6.2f} {_pct(v, 90):6.2f} "
+                f"{frac:11.2f}"
+            )
+    return report
+
+
 # --------------------------------------------------------------- density
 
 
@@ -304,6 +398,14 @@ def main() -> None:
     s.add_argument("--frames", type=int, default=300, help="per clip")
     s.add_argument("--min-blob", type=int, default=MIN_BLOB_PX)
     s.set_defaults(fn=run_solo)
+
+    t = sub.add_parser("standing", help="score against what the person stands on or is cut by")
+    t.add_argument("--cameras", nargs="+", required=True)
+    t.add_argument("--fps", type=float, default=1.0)
+    t.add_argument("--frames", type=int, default=200, help="per clip")
+    t.add_argument("--min-blob", type=int, default=MIN_BLOB_PX)
+    t.add_argument("--band", type=int, default=6, help="rows under the blob to classify")
+    t.set_defaults(fn=run_standing)
 
     d = sub.add_parser("density", help="score against crowd size, pooled over a camera's clips")
     d.add_argument("--camera")

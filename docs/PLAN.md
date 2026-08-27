@@ -699,7 +699,7 @@ over unvalidated tracks cannot be attributed when it is wrong.
 
    Split without any human labels, using the terrain head's own `floor` / `fixture` /
    `person` classes to say what the strip under each person blob stands on — feet on the
-   floor, cut off by a fixture, or standing behind someone (`scratchpad truncation.py`,
+   floor, cut off by a fixture, or standing behind someone (`scripts/person_score_probe.py standing`,
    6 cameras x 4 clips x 200 frames at 1 fps). The student's terrain was rendered and
    eyeballed on the deciding frame first: it does call those white counters `fixture`,
    so the bins are real on the camera that matters:
