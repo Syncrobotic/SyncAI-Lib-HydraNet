@@ -3,10 +3,23 @@
 47,584 train / 654 official-test indoor frames, RGB plus dense metric Kinect depth, stored
 one `.h5` per frame. It is here to train the depth head (`models/heads/depth.py`) on real
 metric ground truth, because the public teacher we measured does not transfer its metres:
-zero-shot on this same split it over-predicts by a flat 15% while keeping its geometry
-(measured on the 654-image official test split; the script that measured it went with
-the quadruped line on 2026-08-19, and `scripts/calibrate_from_plate.py` carries the
-derivation).
+zero-shot on this same split, Depth-Anything V2 Metric-Indoor over-predicts by a flat 15%
+while keeping its geometry.
+
+**The measurement, written out rather than cited.** Zero-shot NYUv2, the 654-image
+official test split, Eigen crop; the correction is the global median of gt/pred over the
+whole split, **0.847**. Applying it lifts delta-1 from 0.687 to 0.919 and drops AbsRel
+from 0.212 to 0.101 -- which is what makes it a scale error rather than a shape error, and
+therefore what a head of our own has to supply. Re-deriving it needs only NYUv2 and that
+checkpoint.
+
+It is spelled out here because it has now lost its home twice. `eprep_teacher_nyuv2.py`,
+which produced it, went with the quadruped line on 2026-08-19, and `eca3814` moved the
+derivation into `scripts/calibrate_from_plate.py` *for exactly that reason* -- its message
+says a constant whose provenance is a dead path is a magic number one commit later.
+`500cdd2` then deleted that script too, on 2026-08-25, and for two days the number existed
+nowhere in the tree: not here, not in PLAN. A pointer is fine for prose. A measurement's
+provenance should not need a time machine.
 
 ---------------------------------------------------------------------------
 WHY THIS DOES NOT USE THE SHARED TRANSFORM PIPELINE

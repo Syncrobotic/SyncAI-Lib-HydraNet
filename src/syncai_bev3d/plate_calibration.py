@@ -3,15 +3,20 @@
 Extracted from ``scripts/calibrate_from_plate.py`` on 2026-08-19, when
 ``scripts/onboard_camera.py`` became its second script consumer and tripped
 ``tests/test_scripts_are_not_libraries.py`` -- shared code belongs where the wheel, the
-type ratchet and the coverage floor reach it, not behind a ``sys.path`` insert. The CLI
-keeps the experiment's full rationale (what is deliberately not fitted, the vfov trap,
-the cross-check design); this module holds the arithmetic both callers must agree on.
+type ratchet and the coverage floor reach it, not behind a ``sys.path`` insert. This
+module holds the arithmetic both callers must agree on.
+
+**That CLI is gone.** ``500cdd2`` removed it on 2026-08-25, so the experiment's full
+rationale -- what is deliberately not fitted, the vfov trap, the cross-check design -- is
+readable only at ``git show 500cdd2^:scripts/calibrate_from_plate.py``. The one part of it
+that is a *measurement* rather than an argument, the 0.847 NYUv2 scale factor, is written
+out in ``data/nyu_depth.py`` rather than left behind that pointer.
 
 The pipeline, in order:
 
 1. **Undistort the plate** with the one-parameter division model
    (:func:`undistort_image`), using the same half-diagonal-normalised ``k1`` the
-   tile-grid fit in ``geometry/calibrate.py`` measures, so the two stay one number.
+   tile-grid fit in ``syncai_bev3d/calibrate.py`` measures, so the two stay one number.
 2. **Depth once** (:func:`run_depth`, Depth-Anything V2 Metric-Indoor) on the
    undistorted plate -- a fixed camera's geometry is a constant, not a per-frame head.
 3. **Floor selection is "lowest plausible horizontal surface", not "biggest plane"**
@@ -26,9 +31,10 @@ The pipeline, in order:
 
 :func:`fit_pose_from_people` moved here with :func:`person_checks`, from
 ``scripts/fit_camera_from_people.py``: the package cannot import a script, and the
-1.70 m prior (:data:`ADULT_M`) must exist exactly once. That script's docstring records
-the method's measured limitation -- with a free vfov every pinhole parameter absorbs
-lens distortion -- which is why the vfov is an input everywhere in this module.
+1.70 m prior (:data:`ADULT_M`) must exist exactly once. That script was removed in the
+same commit; its docstring recorded the method's measured limitation -- with a free vfov
+every pinhole parameter absorbs lens distortion -- which is why the vfov is an input
+everywhere in this module, and is at ``git show 500cdd2^:scripts/fit_camera_from_people.py``.
 """
 
 from __future__ import annotations
@@ -80,7 +86,7 @@ def undistort_image(img: np.ndarray, k1: float) -> np.ndarray:
 
     `undistort_points` maps distorted->undistorted; an image warp needs the inverse, and
     for the one-parameter division model it is closed-form: with radii normalised by the
-    half-diagonal (the `geometry/calibrate.py` convention, which is what makes this k1
+    half-diagonal (the `syncai_bev3d/calibrate.py` convention, which is what makes this k1
     the same k1 the tile fit measured), r_u = r_d / (1 + k1 r_d^2) inverts to
     r_d = (1 - sqrt(1 - 4 k1 r_u^2)) / (2 k1 r_u).
     """
