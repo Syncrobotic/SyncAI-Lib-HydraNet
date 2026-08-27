@@ -1078,3 +1078,48 @@ something it does not support.
    class — three all-staff, six all-customer among them — so on those "which camera" *is*
    "which class". They are excluded from the fold rather than averaged in, which means
    this number describes the 16 mixed cameras and says nothing about the other half.
+
+16. **Step 8's precondition holds: the features separate the classes, and they beat the
+   geometric rule they would replace.** Asked before a trainer was written, because
+   `analytics/pose_sequence.py` has been in the tree tested and with **zero consumers**,
+   so nothing had ever measured what its features can tell apart, and building a pipeline
+   first and discovering the features were the problem is the expensive order.
+
+   `tools/temporal/ntu_project.py` (`runs/ntu_project01/`) takes NTU's official skeletons
+   in real metres, gravity-aligns each clip by the subject's own standing pose, spins it
+   to a sampled yaw, stands it at a sampled floor position inside our camera's view
+   (height 2.38 m, pitch 50.2°, vfov 70.4° — the parameters `hm3d_cctv` renders at), maps
+   Kinect's 25 joints to COCO's 17 and projects. **The projection is the domain
+   adaptation**: the model consumes keypoints, so once the viewpoint is re-imposed there
+   is no appearance gap left to cross. Linear model, features pooled over time by mean and
+   max, **held out by performer** — NTU repeats each action per subject, and a clip-level
+   split puts the same body on both sides:
+
+   | pair | balanced accuracy | n | performers |
+   |---|---|---|---|
+   | pick_up vs sit_down | 0.924 | 137 | 11 |
+   | **fall vs pick_up** | **0.896** | 137 | 11 |
+   | fall vs stand_still | 0.892 | 148 | 11 |
+   | fall vs stagger | 0.871 | 139 | 10 |
+   | fall vs sit_down | 0.838 | 148 | 11 |
+
+   **`fall` against `pick_up` is the pair both shipped geometric conditions fail** — 0.99
+   against 0.92 on height (§7.14), 0.60 against 0.62 on angle (§7.11) — and the features
+   read **0.896** on it. §7.14's tuned rule, at 96% recall and a 29% false rate, implies a
+   balanced accuracy near 0.835, so a **linear** model on **time-pooled** features already
+   sits above the rule before any temporal model exists. That is the floor step 8 has to
+   beat, not the target.
+
+   **What this is not.** It is not a trained behaviour head and not a transfer measurement:
+   every number here is NTU projected into our geometry, and no site footage is in it. The
+   sim-to-real question PLAN §2.3 leaves open — whether a model trained this way fires
+   correctly on a real shopper — is still open and is step 6's to answer.
+
+   **Three things the projection has to get right, each checked rather than assumed.**
+   Gravity comes from the subject, not the sensor, because a Kinect's +y sits a median
+   13.8° off vertical (§7.14). Yaw and floor position are sampled, because a model trained
+   at one heading learns that heading and foreshortening is not uniform across a frame.
+   And a placement that puts any joint outside the frame is **dropped rather than
+   clipped** — a clipped skeleton is a different posture, not the same one at the edge.
+   The pinhole is the shipped one: `_project` generalises `ground_to_pixel` by a single
+   term and the tool asserts on every run that the two agree exactly at zero height.
