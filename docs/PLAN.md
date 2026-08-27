@@ -932,3 +932,60 @@ over unvalidated tracks cannot be attributed when it is wrong.
    truth position and reads off the distance to the annotated box foot: **24.1 px** for the
    row-major reading against **1,399.9** and **1,507.4** for the alternatives. The script's
    own default had been one of the losers until that run.
+
+14. **The `fall` height threshold is measured now, and on its own it does not work.**
+   `analytics/events/pose.py` says of its own defaults that "none is measured", and
+   `fall_head_height_m = 0.80` was added 2026-08-26 on the evidence of one 24-minute clip
+   where it took the fleet from 3 false falls to 0. Measured against NTU RGB+D's official
+   3D skeletons — real camera-frame metres, read by `data/ntu_skeletons.py`, 120 clips per
+   class, `tools/temporal/ntu_fall_discriminator.py`, `runs/ntu_fall01/`:
+
+   | class | n | min head above floor, p50 | **below 0.80 m** | peak torso p50 | over 55° |
+   |---|---|---|---|---|---|
+   | **A43 falling down** | 120 | 0.47 m | **0.99** | 60.9° | 0.60 |
+   | **A06 pick up** | 119 | 0.64 m | **0.92** | 58.8° | 0.62 |
+   | A08 sit down | 119 | 0.86 m | 0.34 | 47.3° | 0.30 |
+   | A42 staggering | 120 | 1.25 m | 0.03 | 20.3° | 0.06 |
+   | A27 jump up | 120 | 1.18 m | 0.03 | 16.5° | 0.01 |
+   | A01 drink water | 120 | 1.34 m | 0.03 | 8.2° | 0.01 |
+
+   **99% of falls put the head below 0.80 m and so do 92% of pick-ups.** The height test
+   separates a fall from staggering, jumping and standing still — all at 3% — and does
+   **not** separate it from the one posture that matters, a shopper reaching a bottom
+   shelf. §7.11's torso-angle result was the same shape (0.60 against 0.62), so *both*
+   published conditions of the shipped rule fail the control on their own.
+
+   **What separates them is how long the head stays low, and the shipped rule does not
+   test that.** `sustained_seconds = 1.0` is applied to the *angle*; the height is
+   instantaneous. The longest run below 0.80 m, per class:
+
+   | sustain required | fall recall | pick-up false rate | sit | others |
+   |---|---|---|---|---|
+   | instantaneous (shipped) | 0.99 | **0.92** | 0.34 | 0.03 |
+   | 0.5 s | 0.98 | 0.61 | 0.11 | 0.02 |
+   | **0.7 s** | **0.96** | **0.29** | 0.04 | 0.02 |
+   | 0.8 s | 0.85 | 0.15 | 0.03 | 0.02 |
+   | 1.0 s | 0.42 | 0.03 | 0.01 | 0.02 |
+
+   The knee is at **0.7 s: 96% of falls kept, 71% of the pick-up false rate removed.**
+   For a safety alarm recall is the side to protect — a missed fall costs more than an
+   extra alert — so 0.7 s is the defensible point and 1.0 s is not, because at 1.0 s the
+   rule misses more falls than it catches.
+
+   **This does not make the alarm shippable and the honest reading is that it moves it
+   from unusable to marginal.** 29% of bottom-shelf reaches still alarming is too many for
+   a room where that is the commonest posture there is. What it does is replace two
+   unmeasured defaults with one measured one and say where the remaining gap is.
+
+   **Two things this cannot show.** NTU's `A06 pick up` lifts from the **floor**; a shop's
+   lowest merchandise sits at roughly 0.4 m, so a real bottom-shelf reach spends less time
+   under 0.80 m and the real false rate is probably lower than 29% — **unmeasured**. And
+   the vertical is estimated per clip from the subject's own standing pose, because a
+   Kinect's +y is only gravity if that Kinect was level; it sits a median **13.8°** off
+   the camera axis, so the estimate is doing work rather than reproducing one.
+
+   **A hypothesis raised and refuted rather than left standing**: the 42% recall at 1.0 s
+   looked like it might be NTU clips ending shortly after the fall. It is not. A43 clips
+   run a median 2.42 s and keep recording a median **1.50 s past the end of the low
+   spell**, with **0%** stopping within 0.3 s of it. The 42% is a property of falls in
+   this data, not of the recording.
