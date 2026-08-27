@@ -1,7 +1,7 @@
 # SyncAI-Lib-HydraNet — security & retail analytics for fixed store CCTV
 
 [![CI](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/actions/workflows/ci.yml)
-[![Python 3.10 – 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](pyproject.toml)
+[![Python 3.10 – 3.13](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](pyproject.toml)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.1%2B-ee4c2c)](https://pytorch.org/)
 [![Licence Apache-2.0](https://img.shields.io/badge/licence-Apache--2.0-green)](LICENSE)
 
@@ -41,9 +41,9 @@ classic failure this architecture exists to prevent:
 | | the **teachers** (`syncai_bev3d`) | the **student** (`syncai_hydranet`) |
 |---|---|---|
 | models | SAM 3, Grounding DINO, Depth-Anything V2, ViTPose — hundreds of millions to billions of parameters | one HydraNet, **~8 M parameters** |
-| when | **once per camera** (commissioning) and **once per dataset** (labelling) | **every frame, 96 streams × 15 fps** |
+| when | **once per camera** (commissioning) and **once per dataset** (labelling) | **every frame, 96 streams × 5 fps** |
 | where the answers go | cached: `camera.json`, masks, keypoint files | inferred: boxes + keypoints per frame |
-| allowed to be slow | yes — 40 s per plate is fine | no — the whole budget is 1,440 frames/s |
+| allowed to be slow | yes — 40 s per plate is fine | no — the whole budget is 480 frames/s (PLAN §7.4) |
 
 ```mermaid
 flowchart LR
@@ -106,7 +106,8 @@ flowchart TB
 Measured (PLAN §2.2): the shared trunk buys a second per-frame task for **+3%
 throughput**; two separate networks cost **+74%**. The forward graph is pure
 convolution — NMS and keypoint decoding live in post-processing, which is what keeps
-the ONNX → TensorRT export clean (1,552 fps engine-only at batch 16 on the PRO 6000).
+the ONNX → TensorRT export clean: **1,494 fps** at batch 16, fp16, pose resident, on an
+idle PRO 6000 — 3.1× the 480 f/s the delivery target asks for (PLAN §6 step 3, §7.4).
 
 ## Install & run
 
