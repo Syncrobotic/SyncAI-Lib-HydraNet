@@ -268,6 +268,24 @@ def classify(track, tracker: Recording | RecordingByteTrack, cam_file, src, args
     return {"why": "gone"}
 
 
+def witness_verdict(
+    *, best_assoc: float, best_score: float, dense: bool, score_thr: float, witness_thr: float
+) -> str:
+    """The four-way rule, as a function so it can be tested without a model or a clip.
+
+    The order is the argument. `available` is checked first and against `best_assoc`,
+    which is measured at the **tracker's own** IoU: a box the tracker could have taken and
+    did not is a tracker failure, and it outranks every detector verdict because no
+    detector change would have saved that track. Everything below it is measured at the
+    looser presence IoU, where the question is only whether somebody was there.
+    """
+    if best_assoc >= score_thr:
+        return "available"
+    if best_score >= witness_thr:
+        return "demoted"
+    return "boxless" if dense else "vacated"
+
+
 def witness(clip: str, model, cfg, device, args, targets: dict, k1: float | None) -> dict:
     """A second pass that asks, at each mid-view death, whether anybody was still there.
 
@@ -356,14 +374,13 @@ def witness(clip: str, model, cfg, device, args, targets: dict, k1: float | None
                 rec["dense"] = True
 
     for rec in out.values():
-        if rec["best_assoc"] >= args.score_thr:
-            rec["verdict"] = "available"
-        elif rec["best_score"] >= args.witness_thr:
-            rec["verdict"] = "demoted"
-        elif rec["dense"]:
-            rec["verdict"] = "boxless"
-        else:
-            rec["verdict"] = "vacated"
+        rec["verdict"] = witness_verdict(
+            best_assoc=rec["best_assoc"],
+            best_score=rec["best_score"],
+            dense=rec["dense"],
+            score_thr=args.score_thr,
+            witness_thr=args.witness_thr,
+        )
         for k in ("best_score", "best_assoc", "best_iou"):
             rec[k] = round(rec[k], 3)
     return out
