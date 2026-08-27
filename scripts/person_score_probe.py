@@ -386,20 +386,35 @@ def main() -> None:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
+    # A parent parser rather than top-level flags: argparse accepts a top-level option
+    # only *before* the subcommand, so `... solo --cameras X --out F` fails with an
+    # unrecognised-argument error that names the flag it just documented. Inheriting them
+    # makes both positions work.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--config", default=DEFAULT_CONFIG)
+    common.add_argument("--checkpoint", default=DEFAULT_CHECKPOINT)
+    common.add_argument("--device", default="cuda")
+    common.add_argument("--out")
     ap.add_argument("--config", default=DEFAULT_CONFIG)
     ap.add_argument("--checkpoint", default=DEFAULT_CHECKPOINT)
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out")
     sub = ap.add_subparsers(dest="mode", required=True)
 
-    s = sub.add_parser("solo", help="score on frames holding exactly one person")
+    s = sub.add_parser(
+        "solo", parents=[common], help="score on frames holding exactly one person"
+    )
     s.add_argument("--cameras", nargs="+", required=True)
     s.add_argument("--fps", type=float, default=1.0)
     s.add_argument("--frames", type=int, default=300, help="per clip")
     s.add_argument("--min-blob", type=int, default=MIN_BLOB_PX)
     s.set_defaults(fn=run_solo)
 
-    t = sub.add_parser("standing", help="score against what the person stands on or is cut by")
+    t = sub.add_parser(
+        "standing",
+        parents=[common],
+        help="score against what the person stands on or is cut by",
+    )
     t.add_argument("--cameras", nargs="+", required=True)
     t.add_argument("--fps", type=float, default=1.0)
     t.add_argument("--frames", type=int, default=200, help="per clip")
@@ -407,14 +422,22 @@ def main() -> None:
     t.add_argument("--band", type=int, default=6, help="rows under the blob to classify")
     t.set_defaults(fn=run_standing)
 
-    d = sub.add_parser("density", help="score against crowd size, pooled over a camera's clips")
+    d = sub.add_parser(
+        "density",
+        parents=[common],
+        help="score against crowd size, pooled over a camera's clips",
+    )
     d.add_argument("--camera")
     d.add_argument("--clip", nargs="+", help="explicit clips instead of --camera's whole set")
     d.add_argument("--fps", type=float, default=2.0)
     d.add_argument("--frames", type=int, default=400, help="per clip")
     d.set_defaults(fn=run_density)
 
-    f = sub.add_parser("factors", help="split score into cls * centerness, and sweep NMS")
+    f = sub.add_parser(
+        "factors",
+        parents=[common],
+        help="split score into cls * centerness, and sweep NMS",
+    )
     f.add_argument("--clip", nargs="+", required=True)
     f.add_argument("--label", nargs="+")
     f.add_argument("--fps", type=float, default=1.0)
