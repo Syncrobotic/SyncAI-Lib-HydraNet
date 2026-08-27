@@ -81,6 +81,12 @@ COCO_FROM_NTU = {
     16: "r_ankle",
 }
 CLASSES = {43: "fall", 6: "pick_up", 8: "sit_down", 1: "stand_still", 42: "stagger"}
+# NTU records at 30 fps and this fleet's analytics runs at 5 (PLAN §7.4). `sequence_
+# features` takes a **per-frame** difference for its velocity term, so the frame rate is
+# inside the features: a 2.4 s fall is 72 frames at 30 and 12 at 5, and a model trained
+# on one and run on the other sees a sixfold different dynamics. Resampled at the source
+# rather than corrected later, because the velocity is computed from whatever arrives.
+NTU_FPS = 30.0
 FEET = ("l_foot", "r_foot", "l_ankle", "r_ankle")
 
 
@@ -235,6 +241,12 @@ def main() -> int:
     ap.add_argument("--per-class", type=int, default=80)
     ap.add_argument("--placements", type=int, default=4, help="yaw/position samples per clip")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument(
+        "--fps", type=float, default=5.0,
+        help="resample NTU to the rate the analytics runs at; the velocity feature is a "
+        "per-frame difference, so this is not cosmetic",
+    )  # fmt: skip
+    ap.add_argument("--sequences", help="npz of the per-frame features, for the trainer")
     ap.add_argument("--out")
     a = ap.parse_args()
 
@@ -251,6 +263,10 @@ def main() -> int:
                 clip = read_clip(zf, member)
                 body = clip.joints[:, 0]
                 if np.isnan(body).any():
+                    continue
+                step = max(1, round(NTU_FPS / a.fps))
+                body = body[::step]
+                if len(body) < 4:
                     continue
                 rot = gravity_frame(body)
                 for _ in range(a.placements):
@@ -272,6 +288,7 @@ def main() -> int:
                             # mean and max over time: the model will be temporal, this is
                             # only asking whether the information is present at all
                             "x": np.concatenate([feats.mean(0), feats.max(0)]).tolist(),
+                            "seq": feats.astype(np.float32),
                         }
                     )
 
@@ -284,8 +301,26 @@ def main() -> int:
     if a.out:
         out = Path(a.out)
         out.mkdir(parents=True, exist_ok=True)
-        (out / "projected.json").write_text(json.dumps(kept) + "\n")
+        (out / "projected.json").write_text(
+            json.dumps([{k: v for k, v in r.items() if k != "seq"} for r in kept]) + "\n"
+        )
         print(f"-> {out}/projected.json")
+    if a.sequences and kept:
+        t_max = max(len(r["seq"]) for r in kept)
+        x = np.zeros((len(kept), t_max, kept[0]["seq"].shape[1]), dtype=np.float32)
+        length = np.zeros(len(kept), dtype=np.int32)
+        for i, r in enumerate(kept):
+            x[i, : len(r["seq"])] = r["seq"]
+            length[i] = len(r["seq"])
+        np.savez_compressed(
+            a.sequences,
+            x=x,
+            length=length,
+            label=np.array([r["label"] for r in kept]),
+            performer=np.array([r["performer"] for r in kept]),
+            fps=np.array([a.fps]),
+        )
+        print(f"-> {a.sequences}  {x.shape}, lengths {length.min()}-{length.max()}")
     return 0
 
 
