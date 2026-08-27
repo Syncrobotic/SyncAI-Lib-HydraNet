@@ -527,20 +527,24 @@ over unvalidated tracks cannot be attributed when it is wrong.
 
 ## 7. Open questions — each blocks a specific step
 
+### 7a. Still open
+
 1. **`stack` as a 5th detection class** invalidates checkpoint comparability, and a
    vocabulary change silently empties `analytics/events/zones.py:346`'s default class list
    — the stock-removal alarm stops firing without an exception. Decide at step 4.
+
+5. **Retail dashboard surface unscoped** — the numbers fall out of L1 free; what a store
+   manager opens, at what cadence, is a product question. Blocks nothing before step 6.
+   One modelling gap hides inside it: **store-level footfall needs cross-camera dedup**
+   (overlapping views double-count a person). Single-store re-linking is in scope,
+   cross-store is banned; the mechanism is unscoped.
+
+### 7b. Decided — the answer, and what it cost
+
 2. ~~Night is unscoped~~ — **decided 2026-08-25: night is in v1, gated on a measurement.**
    Step 4 carries the night pass (14 IR ghost persons on one empty frame, measured);
    `after_hours_person` triggers only if the night precision figure passes.
-3. ~~Pose distillation risk~~ (§2.2) — **closed 2026-08-26 by step 3's gate.** The
-   student agrees with ViTPose at **PCK@0.2h 0.915 / L2 p50 7.7 px** on the full test
-   split, and both consumers were verified firing correctly on real footage by eye:
-   `crouch` on a member of staff folded at a low cabinet, `reach_to_shelf` on a wrist over
-   a counter. The two-head architecture's claim holds. What did *not* hold is `fall`,
-   and that is a grouping failure in crowds rather than a distillation one -- see gate 3.
-   Original: the claim the two-head architecture rests on. Answered by step 3's gate. The scope question above it is settled: **decided
-   2026-08-25, fall/second-level behaviour is in v1**, so pose stays a per-frame L0 head.
+
 4. ~~Delivery target undefined~~ — **decided 2026-08-25, and the frame rate revised
    2026-08-26: v1 is 96 concurrent streams on one RTX PRO 6000, analysed at 5 fps.**
    **96 × 5 = 480 frames/s**, not the 1,440 first written down, and the revision is not a
@@ -559,6 +563,18 @@ over unvalidated tracks cannot be attributed when it is wrong.
    tracking, PCIe), and NVDEC capacity for 96 × h.264 joins the measurement list. At 96
    cameras the commissioning cache remains the right answer; §2's ~1,000-camera
    threshold is far away.
+
+6. ~~Fall/crouch training source~~ — **decided 2026-08-25: no in-store staging, ever.**
+   Resolved in pose space: the temporal model reads keypoint sequences, so public 3D
+   action data (NTU RGB+D fall/squat, CMU MoCap) projected to the measured camera pose
+   replaces staged clips (§2.3). What stays open is only the sim-to-real transfer
+   measurement, taken at step 6.
+
+7. ~~Recommissioning ownership~~ — **decided 2026-08-25: a nightly closed-hours job**
+   re-derives plate, masks, ROIs and re-anchors zones automatically; a human gets a
+   morning accept/reject only when the diff exceeds a threshold, and a moved camera
+   always escalates instead of auto-healing (§2.1). To build alongside step 2's tooling.
+
 8. ~~No NVDEC backend exists on this box~~ — **decided 2026-08-25: PyNvVideoCodec.**
    Raised because gate 3 names NVDEC and the box had nothing to run it on (no
    PyNvVideoCodec, no DALI, no PyAV, and the only ffmpeg on PATH offering `vdpau`
@@ -567,18 +583,14 @@ over unvalidated tracks cannot be attributed when it is wrong.
    `data/video.py` is still the CPU pipe: migrating the *serving* path to NVDEC is the
    work this decision authorises, and is not done.
 
-10. ~~Taichung-cam10's metres are ~1.21x too large~~ — **decided 2026-08-26: do not
-   re-pin.** Re-pinning would invalidate every metre already reported for that camera; the
-   cost of not re-pinning is that **cam10 can never appear in a table beside another
-   camera** — its areas, path lengths and speeds are inflated by 1.21x and its durations
-   are not. Any fleet aggregate must exclude it or scale it explicitly. Original:
-   **Taichung-cam10's metres are ~1.21x too large.** Recovered stature median 1.96 m with
-   nobody under 1.72; `--metre-scale 0.8824` renders true metres. `camera.json` is
-   **untouched** because re-pinning changes every metre already reported for that camera --
-   its 13 service zones, their 48.4 m2 of area, every path length and every speed in
-   `runs/journeys01`. Durations are unaffected. Raised 2026-08-26 and still undecided; it
-   blocks nothing today and it invalidates a comparison the moment two cameras' metres are
-   put in one table.
+3. ~~Pose distillation risk~~ (§2.2) — **closed 2026-08-26 by step 3's gate.** The
+   student agrees with ViTPose at **PCK@0.2h 0.915 / L2 p50 7.7 px** on the full test
+   split, and both consumers were verified firing correctly on real footage by eye:
+   `crouch` on a member of staff folded at a low cabinet, `reach_to_shelf` on a wrist over
+   a counter. The two-head architecture's claim holds. What did *not* hold is `fall`,
+   and that is a grouping failure in crowds rather than a distillation one -- see gate 3.
+   Original: the claim the two-head architecture rests on. Answered by step 3's gate. The scope question above it is settled: **decided
+   2026-08-25, fall/second-level behaviour is in v1**, so pose stays a per-frame L0 head.
 
 9. ~~The pose run has no pose validation metric~~ — **closed 2026-08-26** (`cf1ddfb`).
    Raised because `hydranet_retail_pose01`'s `metrics.jsonl` carried terrain IoU and
@@ -599,20 +611,25 @@ over unvalidated tracks cannot be attributed when it is wrong.
    test. **The number that gates is still `eval_student.py` over the whole test split**;
    this is the curve that says when to stop.
 
-5. **Retail dashboard surface unscoped** — the numbers fall out of L1 free; what a store
-   manager opens, at what cadence, is a product question. Blocks nothing before step 6.
-   One modelling gap hides inside it: **store-level footfall needs cross-camera dedup**
-   (overlapping views double-count a person). Single-store re-linking is in scope,
-   cross-store is banned; the mechanism is unscoped.
-6. ~~Fall/crouch training source~~ — **decided 2026-08-25: no in-store staging, ever.**
-   Resolved in pose space: the temporal model reads keypoint sequences, so public 3D
-   action data (NTU RGB+D fall/squat, CMU MoCap) projected to the measured camera pose
-   replaces staged clips (§2.3). What stays open is only the sim-to-real transfer
-   measurement, taken at step 6.
-7. ~~Recommissioning ownership~~ — **decided 2026-08-25: a nightly closed-hours job**
-   re-derives plate, masks, ROIs and re-anchors zones automatically; a human gets a
-   morning accept/reject only when the diff exceeds a threshold, and a moved camera
-   always escalates instead of auto-healing (§2.1). To build alongside step 2's tooling.
+10. ~~Taichung-cam10's metres are ~1.21x too large~~ — **decided 2026-08-26: do not
+   re-pin.** Re-pinning would invalidate every metre already reported for that camera; the
+   cost of not re-pinning is that **cam10 can never appear in a table beside another
+   camera** — its areas, path lengths and speeds are inflated by 1.21x and its durations
+   are not. Any fleet aggregate must exclude it or scale it explicitly. Original:
+   **Taichung-cam10's metres are ~1.21x too large.** Recovered stature median 1.96 m with
+   nobody under 1.72; `--metre-scale 0.8824` renders true metres. `camera.json` is
+   **untouched** because re-pinning changes every metre already reported for that camera --
+   its 13 service zones, their 48.4 m2 of area, every path length and every speed in
+   `runs/journeys01`. Durations are unaffected. Raised 2026-08-26 and still undecided; it
+   blocks nothing today and it invalidates a comparison the moment two cameras' metres are
+   put in one table.
+
+### 7c. Investigations — finished, and kept for their chains
+
+Answered work, not open questions. Each entry is kept whole because its number is a
+measurement and its prose is what that measurement cannot show, and the pair is what a
+decision rests on -- reading either half alone is how a figure gets quoted for
+something it does not support.
 
 11. **The Kaohsiung person-score investigation is two investigations, and the fix is not
    on the inference side.** Opened 2026-08-27 from step 2's blocker list and step 5's
