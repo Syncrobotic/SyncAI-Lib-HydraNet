@@ -18,10 +18,16 @@ for an idle card in a comment; a comment did not stop a throughput number being 
 against a training job. `--allow-busy-gpu` exists for deliberate exploratory runs and
 stamps every result it produces as contaminated.
 
-Decode backends are resolved and *named*: this box has no NVDEC path at all today
-(no PyNvVideoCodec, no DALI, no PyAV, and the only ffmpeg on PATH reports `vdpau` as
-its sole hwaccel with no cuvid decoders), so `--decode nvdec` fails with that list
-rather than silently measuring a CPU pipe and calling it NVDEC.
+Decode backends are resolved and *named* rather than assumed, so `--decode nvdec` fails
+with the list of what is missing rather than silently measuring a CPU pipe and calling it
+NVDEC. That resolution is done at runtime by `resolve_backends` below, which is the only
+statement about this box worth trusting -- when this file was written it said the box had
+no NVDEC path at all (no PyNvVideoCodec, no DALI, no PyAV, and the only ffmpeg on PATH
+offering `vdpau` alone), and that stopped being true on 2026-08-25: PLAN 7 decision 8
+installed PyNvVideoCodec, decode went from 63-69 streams to ~520 and stopped being the
+binding leg. It is a declared dependency as of `fc902e5`, so `uv sync --extra bench` has
+it; the system ffmpeg still has no cuvid build, which is why the probe reports the two
+separately.
 
   python3 scripts/bench_e2e.py --plan exports/pro6000/xl_b16.fp16.plan \\
       --clip datasets/studioa_clips/Taichung-cam10/archive_*.mp4 --streams 16

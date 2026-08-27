@@ -512,8 +512,10 @@ def cmd_run(args) -> int:
         "notes": [
             "decode is CPU ffmpeg free-running over looping clips; per_stream.decode_fps "
             "is the CPU decode ceiling per stream, consumed_fps what the ticks took",
-            "NVDEC TODO: system ffmpeg has no cuvid/nvdec build, so hardware decode is "
-            "an increment-2 dependency decision",
+            "decode is still the CPU pipe: PyNvVideoCodec (PLAN 7 decision 8, ~520 "
+            "streams against this pipe's 63-69) is installed and declared, and porting "
+            "the serving path to it is authorised work that is not done -- the system "
+            "ffmpeg's missing cuvid build is no longer the reason",
             "per-class score table exists to set boxed_stock's working threshold per "
             "checkpoint -- see the threshold book passed as --thresholds",
         ],
