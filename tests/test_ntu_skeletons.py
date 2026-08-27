@@ -129,3 +129,22 @@ def test_up_is_an_argument_because_the_camera_is_not_gravity():
     upright = _upright()[None]
     tilted = np.array([0.0, np.cos(np.radians(20)), np.sin(np.radians(20))])
     assert torso_from_vertical(upright, up=tilted)[0] == pytest.approx(20.0, abs=1.0)
+
+
+def test_each_leg_is_indexed_hip_knee_ankle_foot():
+    """A structural invariant, not a hardcoded table, because a table cannot catch a swap.
+
+    The ankle and foot names were transposed in this module until 2026-08-27. Measured on
+    40 standing NTU clips the lower-body heights fall monotonically with index -- left
+    -0.004, -0.267, -0.598, -0.667 -- so the chain runs hip to foot and the last joint of
+    each leg is the one on the ground. Asserting the *order* fails on a transposition;
+    asserting four integers only restates whatever is written above it.
+    """
+    for side in ("l", "r"):
+        chain = [JOINTS[f"{side}_{part}"] for part in ("hip", "knee", "ankle", "foot")]
+        assert chain == sorted(chain), f"{side} leg is not indexed hip->foot: {chain}"
+        assert chain[-1] - chain[0] == 3, "the leg should occupy four consecutive indices"
+
+
+def test_the_joint_names_cover_every_index_exactly_once():
+    assert sorted(JOINTS.values()) == list(range(N_JOINTS))

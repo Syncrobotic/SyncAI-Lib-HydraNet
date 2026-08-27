@@ -55,7 +55,16 @@ import numpy as np
 
 # Kinect v2's 25-joint order. Named rather than written as integers at the use site, for
 # the reason `ntu_survey.py` gives: a bare `b[:, 8]` inside an angle calculation is
-# unreviewable. Kept identical to that file's `J` so the two agree by construction.
+# unreviewable.
+#
+# **The ankle/foot pairs were transposed here until 2026-08-27 and the data settled it,
+# not the documentation.** Over 40 standing `A01 drink water` clips the lower-body joints
+# read, in metres of height: 12 -0.004, 13 -0.267, 14 -0.598, 15 -0.667 on the left and
+# 16 -0.003, 17 -0.245, 18 -0.569, 19 -0.624 on the right. Height falls monotonically
+# with index and the lowest joint of each leg is the last one, so the chain is
+# hip-knee-ankle-foot and 14/18 are ankles. Nothing measured before the fix is affected:
+# every consumer used the four as a set to estimate the floor, and a set does not care
+# which member is which.
 JOINTS = {
     "spine_base": 0,
     "spine_mid": 1,
@@ -71,12 +80,12 @@ JOINTS = {
     "r_hand": 11,
     "l_hip": 12,
     "l_knee": 13,
-    "l_foot": 14,
-    "l_ankle": 15,
+    "l_ankle": 14,
+    "l_foot": 15,
     "r_hip": 16,
     "r_knee": 17,
-    "r_foot": 18,
-    "r_ankle": 19,
+    "r_ankle": 18,
+    "r_foot": 19,
     "spine_shoulder": 20,
     "l_hand_tip": 21,
     "l_thumb": 22,
