@@ -56,6 +56,36 @@ appearance model is for; `reid_metrics.cmc_map` is the metric for one and PLAN s
 where it belongs. `lost` and `gone` are still reported, and `lost_detail` carries every
 gap, IoU and floor distance, so a later rule can be tried against the same endings -- but
 nothing should be concluded from that split until something can tell two shoppers apart.
+
+---------------------------------------------------------------------------
+THE WITNESS PASS: A QUESTION THAT NEEDS NO IDENTITY
+
+Added 2026-08-27, and the reason it is a different question rather than a fourth matching
+rule: `lost`/`gone` asks *who* reappeared, and that is what moved 72/39 to 101/10. This
+asks only **whether anybody was still standing where the track died**, over the three
+frames after it -- short on purpose, because a long window finds a different shopper
+walking into the spot and calls it the same one.
+
+A second pass runs the model at 0.03 over exactly those frames. Pass one is untouched, so
+`exit` still reproduces; the two passes are separate because `decode` thresholds *before*
+NMS, and filtering a 0.03 decode down to 0.35 afterwards is not the same set of survivors.
+
+    available   a box at or above the shipped threshold overlapped the dead track by the
+                **tracker's own** IoU rule and was still not associated. Judged at
+                `--iou`, not at the looser `--witness-iou` the other bins use: a box the
+                tracker legitimately refused is not a tracker failure, and scoring this
+                bin loosely turns a threshold difference into an accusation.
+    demoted     a box is there, below the threshold. The person was seen; the score was
+                not enough. The fix is whatever depressed that score -- PLAN section 7.11.
+    boxless     the dense head still marks a person and the box head emits nothing at all,
+                even at 0.03. No threshold reaches this one.
+    vacated     the dense head sees nobody either, so the ending is not a detection
+                failure: the shopper stepped behind a fixture or out of view.
+
+Everything is compared in the undistorted source pixels the tracker itself used. Dense
+components reach that space through the same `to_source_pixels` -> `undistort_boxes` chain
+the boxes take, because a mask resized into distorted pixels and compared against
+undistorted boxes lands plausibly and is wrong by the lens.
 """
 
 from __future__ import annotations
@@ -66,11 +96,19 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import torch
+from PIL import Image
+from scipy import ndimage
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
+from syncai_hydranet.analytics.clip_tracks import (  # noqa: E402
+    PERSON,
+    to_source_pixels,
+    track_clip,
+    undistort_boxes,
+)
 from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
 from syncai_hydranet.analytics.tracker import Tracker, iou  # noqa: E402
 from syncai_hydranet.config import load_config  # noqa: E402
@@ -172,6 +210,107 @@ def classify(track, tracker: Recording, cam_file, src, args) -> dict:
     return {"why": "gone"}
 
 
+def witness(clip: str, model, cfg, device, args, targets: dict, k1: float | None) -> dict:
+    """A second pass that asks, at each mid-view death, whether anybody was still there.
+
+    The `lost` / `gone` split above is undecidable from geometry because it needs an
+    identity: "is the person a metre away the same person". This asks a **local** question
+    instead, which needs no identity at all -- at the frames right after a track died, was
+    a person still standing where it died, and did the box head emit anything on them?
+
+    Three verdicts, and they have three different fixes:
+
+      demoted   a box is there, below the shipped threshold. The person was seen and the
+                score was not enough, so the fix is whatever is depressing that score.
+      boxless   the dense head still marks a person and the box head emits nothing at all,
+                even at 0.03. A threshold cannot reach this one.
+      vacated   the dense head does not see a person either. The track ending is then not
+                a detection failure -- the shopper is behind a fixture, or out of view.
+
+    `available` is the fourth and is a tracker failure rather than a detector one: a box at
+    or above the shipped threshold was sitting on the dead track and was not associated.
+
+    Everything is compared in the **undistorted source pixels the tracker itself used**.
+    Dense components are put there by the same `to_source_pixels` -> `undistort_boxes`
+    chain the boxes take, rather than by a second copy of that arithmetic: a mask resized
+    into distorted pixels and compared against undistorted boxes lands plausibly and is
+    wrong by the lens.
+    """
+    src_w, src_h, _ = probe(clip)
+    seg_person = list(cfg["data"]["terrain_classes"]).index("person")
+    person_label = PERSON
+    out: dict[int, dict] = {}
+    n = 0
+    for frame in frames(clip, src_w, src_h, args.fps):
+        if args.frames and n >= args.frames:
+            break
+        want = targets.get(n)
+        n += 1
+        if not want:
+            continue
+        x, _canvas, region = preprocess(Image.fromarray(frame), cfg["data"]["input_size"])
+        with torch.no_grad():
+            res = model.predict(x.to(device), score_thr=args.witness_thr)
+        det = res["detection"][0]
+        low = np.zeros((0, 4))
+        low_sc = np.zeros(0)
+        if len(det.get("labels", [])):
+            lab = det["labels"].cpu().numpy()
+            keep = lab == person_label
+            low = to_source_pixels(det["boxes"].cpu().numpy()[keep], region, src_w, src_h)
+            low_sc = det["scores"].cpu().numpy()[keep]
+            if k1 is not None and len(low):
+                low = undistort_boxes(low, k1, src_w, src_h)
+        cmap = res["terrain"][0].cpu().numpy()
+        lab_img, ncomp = ndimage.label(cmap == seg_person)
+        dense = np.zeros((0, 4))
+        if ncomp:
+            sizes = ndimage.sum(cmap == seg_person, lab_img, range(1, ncomp + 1))
+            boxes_c = []
+            for c in np.nonzero(sizes >= args.witness_blob)[0]:
+                ys, xs = np.nonzero(lab_img == c + 1)
+                boxes_c.append([xs.min(), ys.min(), xs.max(), ys.max()])
+            if boxes_c:
+                dense = to_source_pixels(np.array(boxes_c, dtype=float), region, src_w, src_h)
+                if k1 is not None:
+                    dense = undistort_boxes(dense, k1, src_w, src_h)
+
+        for tid, box in want:
+            rec = out.setdefault(
+                tid, {"best_score": 0.0, "best_assoc": 0.0, "best_iou": 0.0,
+                      "dense": False, "frames": 0}
+            )  # fmt: skip
+            rec["frames"] += 1
+            if len(low):
+                ov = iou(box[None], low)[0]
+                # Two thresholds on purpose. The loose one asks whether anybody is there;
+                # the tracker's own asks whether the tracker could have taken this box.
+                # Judging the second with the first turns a threshold difference into an
+                # accusation, which is what an earlier revision of this pass did.
+                hit = ov >= args.witness_iou
+                if hit.any():
+                    rec["best_score"] = max(rec["best_score"], float(low_sc[hit].max()))
+                    rec["best_iou"] = max(rec["best_iou"], float(ov[hit].max()))
+                assoc = ov >= args.iou
+                if assoc.any():
+                    rec["best_assoc"] = max(rec["best_assoc"], float(low_sc[assoc].max()))
+            if len(dense) and (iou(box[None], dense)[0] >= args.witness_iou).any():
+                rec["dense"] = True
+
+    for rec in out.values():
+        if rec["best_assoc"] >= args.score_thr:
+            rec["verdict"] = "available"
+        elif rec["best_score"] >= args.witness_thr:
+            rec["verdict"] = "demoted"
+        elif rec["dense"]:
+            rec["verdict"] = "boxless"
+        else:
+            rec["verdict"] = "vacated"
+        for k in ("best_score", "best_assoc", "best_iou"):
+            rec[k] = round(rec[k], 3)
+    return out
+
+
 def run_camera(camera: str, model, cfg, device, args) -> dict:
     cam_file = CameraFile.load(COMMISSIONED / f"{camera}.camera.json")
     tracker = Recording(iou_threshold=args.iou, max_age=args.max_age, min_hits=args.min_hits)
@@ -193,6 +332,9 @@ def run_camera(camera: str, model, cfg, device, args) -> dict:
     counts = {"exit": 0, "lost": 0, "gone": 0}
     lost: list[dict] = []
     lengths: dict[str, list[int]] = {k: [] for k in counts}
+    # Every mid-view death, and the frames the witness pass has to look at for it.
+    targets: dict[int, list] = {}
+    mid_view: list[int] = []
     for t in out.tracks:
         if not t.frames:
             continue
@@ -204,6 +346,23 @@ def run_camera(camera: str, model, cfg, device, args) -> dict:
         lengths[v["why"]].append(len(t.frames))
         if v["why"] == "lost":
             lost.append({"track_id": t.track_id, **{k: v[k] for k in ("gap", "iou", "metres")}})
+        if v["why"] != "exit":
+            mid_view.append(t.track_id)
+            box = np.asarray(t.boxes[-1], dtype=float)
+            for f in range(t.frames[-1] + 1, t.frames[-1] + 1 + args.witness_frames):
+                targets.setdefault(f, []).append((t.track_id, box))
+
+    seen = witness(
+        str(CLIPS / camera / SWEEP_CLIPS[camera]), model, cfg, device, args, targets,
+        cam_file.lens.k1 if cam_file.lens else None,
+    ) if targets else {}  # fmt: skip
+    verdicts: dict[str, int] = {}
+    for tid in mid_view:
+        # A track whose death is past the end of the clip has no frames to witness; it is
+        # counted separately rather than folded into `vacated`, which would read as
+        # "nobody was there" when the truth is that nobody looked.
+        v = seen.get(tid, {}).get("verdict", "unwitnessed")
+        verdicts[v] = verdicts.get(v, 0) + 1
     return {
         "camera": camera,
         "tracks": len(out.tracks),
@@ -214,6 +373,10 @@ def run_camera(camera: str, model, cfg, device, args) -> dict:
         # a detection available on the next frame that the tracker did not match, against
         # a detector outage longer than `max_age` that no matching rule could reach.
         "lost_detail": lost,
+        # What was still standing where each mid-view death happened. Unlike lost/gone this
+        # needs no identity rule, so it does not move when the matching rule moves.
+        "witness": verdicts,
+        "witness_detail": {str(tid): seen[tid] for tid in seen},
         "max_age": args.max_age,
     }
 
@@ -242,6 +405,16 @@ def main() -> int:
         help="how far a person may have walked between frames; 0.35 at 5 fps is 1.75 m/s",
     )
     ap.add_argument("--edge-px", type=float, default=8.0)
+    ap.add_argument(
+        "--witness-frames",
+        type=int,
+        default=3,
+        help="frames after a mid-view death to look at; short on purpose, because a "
+        "different shopper walking into the spot is what a long window would find",
+    )
+    ap.add_argument("--witness-thr", type=float, default=0.03, help="the witness pass floor")
+    ap.add_argument("--witness-iou", type=float, default=0.2)
+    ap.add_argument("--witness-blob", type=int, default=400, help="dense person px, canvas")
     args = ap.parse_args()
 
     args.out.mkdir(parents=True, exist_ok=True)
@@ -251,24 +424,39 @@ def main() -> int:
     model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), "ema"))
 
     fleet, tot = [], {"exit": 0, "lost": 0, "gone": 0}
+    wit: dict[str, int] = {}
     for camera in args.cameras:
         row = run_camera(camera, model, cfg, device, args)
         for k, v in row["counts"].items():
             tot[k] += v
+        for k, v in row["witness"].items():
+            wit[k] = wit.get(k, 0) + v
         fleet.append(row)
         c = row["counts"]
         print(
             f"{camera:<18} {row['endings_judged']:>3} endings   "
-            f"exit {c['exit']:>3}   lost {c['lost']:>3}   gone {c['gone']:>3}"
+            f"exit {c['exit']:>3}   lost {c['lost']:>3}   gone {c['gone']:>3}   "
+            + " ".join(f"{k} {v}" for k, v in sorted(row["witness"].items()))
         )
     n = max(sum(tot.values()), 1)
     print(
         f"\nfleet: {n} endings   "
         + "   ".join(f"{k} {v} ({100 * v / n:.0f}%)" for k, v in tot.items())
     )
+    m = max(sum(wit.values()), 1)
+    print(
+        f"mid-view deaths witnessed: {m}   "
+        + "   ".join(f"{k} {v} ({100 * v / m:.0f}%)" for k, v in sorted(wit.items()))
+    )
     (args.out / "fleet.json").write_text(
         json.dumps(
-            {"settings": report_settings(args), "cameras": fleet, "total": tot}, indent=1
+            {
+                "settings": report_settings(args),
+                "cameras": fleet,
+                "total": tot,
+                "witness_total": wit,
+            },
+            indent=1,
         )
         + "\n"
     )
