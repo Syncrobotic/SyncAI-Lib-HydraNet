@@ -416,7 +416,7 @@ than not at all.
 | # | step | artefact | gate |
 |---|---|---|---|
 | 1 | **package split** — create `src/syncai_bev3d`, move the §2.1 code, define the `camera.json` schema; archive non-current configs | two importable packages, green tests | **DONE 2026-08-25** (`64eafd8`, `6e0eb36`, `1395e2c`) — 1,824 tests green, boundary enforced by `test_package_boundaries.py`, GPU idle and no training unit running when the tree moved. Config archiving deferred: which of the 30 yamls are current needs a decision, not a guess |
-| 2 | **commission all 48 cameras** — build the 4-click tool and zone tool, run the pipeline | per-camera `camera.json` + a 1 m grid rendered on one real frame per camera | the grid looks right **to my own eyes on every camera**. **In progress 2026-08-25**: geometry pass done for the 9 scale-measured cameras of the 2026-08-19 onboard scan — 8 `camera.json` shipped (grids eyeballed per camera, `runs/commission01/REVIEW.md`), Taichung-cam05 withdrawn (two furniture checks agree its cells are over-scaled). **Masks + 3D scenes done 2026-08-25 for all 8** (`tools/commissioning/masks_pass.py`, `scene3d.py`): structure masks, walkable, shelf ROIs written into each camera.json; commissioning-only 3D scenes with depth-measured fixture heights (tables 0.78–0.97 m fleet-wide). 5 mask sets clean, Tao-Hsin pair partial (white-fixture teacher blindness — iteration item), Kaohsiung-cam04 misses its pillar. Blocked on the physical world for the rest: 14 cameras need a per-store visual reference, 4 need mount-type triage, 7 Kaohsiung cameras need the person-score investigation; Taichung-cam05 needs its NVR stream setting. **Zones answered 2026-08-26, and not by drawing them.** `tools/commissioning/service_zones.py`: SAM 3 instances on the plate (the prompts `data/sam3_prompts.py` already measured), the floor pixels touching each instance, projected to metres, then every floor cell within 0.9 m of a fixture given to its nearest one. Fully automatic, and it corrects a mistake worth recording -- two earlier attempts chased fixture *footprints*, hit the fact that one camera cannot see behind a counter, and concluded a human must draw the far edge. **A footprint is a region no shopper can ever occupy**, so as a zone it never fires; what a zone is for is the floor *beside* the fixture, which is entirely in view. **Applied to all 8 commissioned cameras 2026-08-26: 71 service zones**, 6-13 per camera, written into `camera.json` beside the walkable outline (`runs/service_zones01/`, per-camera renders eyeballed). On a real 60 s clip of Taichung-cam01 the three tracks read `fixture_02, 60.0 s, 298/300` (the shopper at the left counter), `fixture_06, 60.0 s, 300/300` (the one at the right-hand shelving) and a route for the member of staff who walks. Two defects were found and fixed by that measurement, not by inspection: an instance mask can swallow the floor in front of it (`merchandise rack` at 0.90 returned a fifth of the frame), so an instance is cut against the floor mask before its contact ring is taken; and **a counter has two sides** -- keeping only the largest connected piece of a fixture's service floor discarded the staff aisle every run, which is exactly where the track that fell outside every zone was standing. Caveat inherited: Taichung-cam10's metres are 1.21x too large (§7.10), so its 48.4 m2 of zone area is inflated by the same factor. Two gaps stated: the right-hand accessory wall got no zone (and a track stands there), and prompt-to-kind attribution is weak -- which fixture is the till is a store fact, not a 0.745 from a shape-shaped prompt. Remaining tools: the 4-point ground-calibration click tool (§2.1b) and the tamper reference (§2.1h) — the last two ❌ in that table |
+| 2 | **commission all 48 cameras** — build the 4-click tool and zone tool, run the pipeline | per-camera `camera.json` + a 1 m grid rendered on one real frame per camera | the grid looks right **to my own eyes on every camera**. **In progress 2026-08-25**: geometry pass done for the 9 scale-measured cameras of the 2026-08-19 onboard scan — 8 `camera.json` shipped (grids eyeballed per camera, `runs/commission01/REVIEW.md`), Taichung-cam05 withdrawn (two furniture checks agree its cells are over-scaled). **Masks + 3D scenes done 2026-08-25 for all 8** (`tools/commissioning/masks_pass.py`, `scene3d.py`): structure masks, walkable, shelf ROIs written into each camera.json; commissioning-only 3D scenes with depth-measured fixture heights (tables 0.78–0.97 m fleet-wide). 5 mask sets clean, Tao-Hsin pair partial (white-fixture teacher blindness — iteration item), Kaohsiung-cam04 misses its pillar. Blocked on the physical world for the rest: 14 cameras need a per-store visual reference, 4 need mount-type triage, 7 Kaohsiung cameras need the person-score investigation (**re-scoped 2026-08-27, §7.11: it is two faults, and Kaohsiung-cam04 scores 0.50 / 99% above threshold with one person in frame**); Taichung-cam05 needs its NVR stream setting. **Zones answered 2026-08-26, and not by drawing them.** `tools/commissioning/service_zones.py`: SAM 3 instances on the plate (the prompts `data/sam3_prompts.py` already measured), the floor pixels touching each instance, projected to metres, then every floor cell within 0.9 m of a fixture given to its nearest one. Fully automatic, and it corrects a mistake worth recording -- two earlier attempts chased fixture *footprints*, hit the fact that one camera cannot see behind a counter, and concluded a human must draw the far edge. **A footprint is a region no shopper can ever occupy**, so as a zone it never fires; what a zone is for is the floor *beside* the fixture, which is entirely in view. **Applied to all 8 commissioned cameras 2026-08-26: 71 service zones**, 6-13 per camera, written into `camera.json` beside the walkable outline (`runs/service_zones01/`, per-camera renders eyeballed). On a real 60 s clip of Taichung-cam01 the three tracks read `fixture_02, 60.0 s, 298/300` (the shopper at the left counter), `fixture_06, 60.0 s, 300/300` (the one at the right-hand shelving) and a route for the member of staff who walks. Two defects were found and fixed by that measurement, not by inspection: an instance mask can swallow the floor in front of it (`merchandise rack` at 0.90 returned a fifth of the frame), so an instance is cut against the floor mask before its contact ring is taken; and **a counter has two sides** -- keeping only the largest connected piece of a fixture's service floor discarded the staff aisle every run, which is exactly where the track that fell outside every zone was standing. Caveat inherited: Taichung-cam10's metres are 1.21x too large (§7.10), so its 48.4 m2 of zone area is inflated by the same factor. Two gaps stated: the right-hand accessory wall got no zone (and a track stands there), and prompt-to-kind attribution is weak -- which fixture is the till is a store fact, not a 0.745 from a shape-shaped prompt. Remaining tools: the 4-point ground-calibration click tool (§2.1b) and the tamper reference (§2.1h) — the last two ❌ in that table |
 | 3 | **pose head resident** — **IN PROGRESS 2026-08-25**: the box-conditioned P3 head is built and tested (`ef9b53c`), ViTPose labelled the Gold boxes (train 13,930 / val 8,479 / test 2,862 images), and `hydranet_retail_pose01` is training under systemd (60 epochs, pose loss 0.47 → 0.10 by epoch 2). **Its run directory is `runs/hydranet_retail_security_b03_cw_xl-20260825-162131`** — the pose config inherited `output_dir` from the security run and the trainer appended a timestamp rather than overwrite it, so the directory is named for a different model and only the `config.yaml` inside it is authoritative. `tools/pose/eval_student.py` had never been executed (it died on `torch.from_numpy` over an already-tensor) — **fixed and run 2026-08-25** (`2fb6f0c`), and `--render` now writes per-person crops with both skeletons, because a gate decided by eye has to be lookable-at. **Throughput: `scripts/bench_e2e.py` (`65ce3b5`) is the end-to-end instrument** and it refuses a busy GPU. First legs, measured while training shared the box so they are lower bounds: host NMS 450 fps/thread (3.2 of 24 cores at target — not a risk), tracker 7,694 fps/thread (0.2 cores), **CPU decode saturates at ~950–1,030 fps = 63–69 streams against the 96 required**. **Decode resolved 2026-08-25**: the box had no NVDEC path at all; PyNvVideoCodec 2.2.1 installed (user's call, §7.8) and wired into the harness with `usedevicememory=True`, so frames never cross PCIe. Measured with training still on the card, i.e. lower bounds: **NVDEC saturates ~7,800 fps ≈ 520 streams at 15 fps, 5.4× the target**, against the CPU pipe's 63–69 streams. Decode is no longer the binding leg. **Still open: the exporter drops the pose head** — `cli/export_onnx.py`'s `ExportWrapper` emits segmentation and detection outputs only, so an engine built today measures a model without pose and reports it as the model with pose. Must be fixed before the engine leg is measured; blocked until the training unit stops (never edit `src/` under a running job). **Training finished 2026-08-25 20:01**, 60/60 epochs, final val `coco_person` mAP 0.2022 / mAP@50 0.3891. The checkpoint trap fired exactly as forecast: `primary_metric` is `terrain_mIoU/site_seg03`, so `best.pt` is **epoch 15**. Both candidates run on the full test split (2,862 images / 6,360 persons / 93,967 judged joints):
 
 | checkpoint | PCK@0.2h | L2 p50 | mean | p90 |
@@ -607,3 +607,91 @@ over unvalidated tracks cannot be attributed when it is wrong.
    re-derives plate, masks, ROIs and re-anchors zones automatically; a human gets a
    morning accept/reject only when the diff exceeds a threshold, and a moved camera
    always escalates instead of auto-healing (§2.1). To build alongside step 2's tooling.
+
+11. **The Kaohsiung person-score investigation is two investigations, and the fix is not
+   on the inference side.** Opened 2026-08-27 from step 2's blocker list and step 5's
+   "two cameras carry the fragmentation". The name was wrong on both counts: it is not
+   one fault, and on the camera it is named after the scores are fine.
+
+   **The split.** Measured on *solo frames* — frames where the dense head, the head not
+   under test, finds exactly one person-sized blob — over all four clips of each camera
+   (`scripts/person_score_probe.py solo`, 4 clips x 300 frames at 1 fps):
+
+   | camera | solo best-box score p50 | solo ≥0.35 | mid-view track death (§6 step 5) |
+   |---|---|---|---|
+   | Taichung-cam04 | 0.55 | 96% | 13% |
+   | Taichung-cam01 | 0.54 | 95% | — |
+   | **Kaohsiung-cam04** | **0.50** | **99%** | **78%** |
+   | Taichung-cam07 | 0.43 | 80% | — |
+   | Tao-Hsin-cam04 | 0.42 | 80% | — |
+   | Taichung-cam11 | 0.39 | 63% | 17% |
+   | Taichung-cam10 | 0.27 | 43% | 14% |
+   | **Tao-Hsin-cam03** | **0.26** | **32%** | **83%** |
+
+   **Kaohsiung-cam04 is one of the fleet's best cameras with one person in it** and
+   collapses to 0.19 / 20% in its evening counter crowd. **Tao-Hsin-cam03 fails with one
+   person in an empty shop**, and it is the camera whose commissioning masks already
+   record the white-fixture / plank-floor teacher blindness. One fix applied to both
+   would miss cam03's fault entirely.
+
+   **Crowding is the cause on Kaohsiung-cam04, measured with the gradient it needs.**
+   Pooling that camera's quiet, mid and busy clips and binning by dense person pixels
+   (`scripts/person_score_probe.py density`, 3 clips x 400 frames at 2 fps): recall at the shipped
+   0.35 goes **1 detection at ~1 person → 2 at ~7 → 4 at ~13**, while at 0.15 it goes
+   **1 → 5 → 15**. The boxes are present the whole way; they sit between 0.15 and 0.35.
+   The **top score never moves** (0.55 / 0.44 / 0.50 across the bands), so this is not a
+   frame-wide depression — one or two people per cluster keep their score and the rest
+   are demoted. This is also *why* §6 step 4's arm B recovered people and made the event
+   layer worse: at 0.15 the demoted people and the duplicate fragments arrive together.
+
+   **The demotion is in the classifier, not in centerness, and not in NMS**
+   (`scripts/person_score_probe.py factors`, `score = sigmoid(cls) * sigmoid(centerness)` split at
+   every location the dense head calls person, 100 frames each):
+
+   | | cls p90 | centerness p50/p90 | ≥0.35 at NMS 0.6 / 0.75 / 0.9 |
+   |---|---|---|---|
+   | Kaohsiung-cam04 quiet | 0.61 | 0.38 / 0.62 | 1 / 1 / 1 |
+   | Kaohsiung-cam04 crowd | **0.44** | 0.39 / 0.59 | 4 / 4 / 5 |
+   | Tao-Hsin-cam03 solo | **0.45** | 0.38 / 0.58 | 2 / 2 / 3 |
+   | Taichung-cam01 | 0.67 | 0.38 / 0.58 | 3 / 3 / 3 |
+
+   Centerness is **identical in all four** — quiet, crowded, good camera, bad camera —
+   so the "a crowd steals a shopper's central locations and centerness punishes what is
+   left" hypothesis is refuted. Opening the NMS IoU from 0.6 to 0.9 moves the crowded
+   count from 4 to 5, so NMS is not suppressing the crowd either. **Both inference-side
+   fixes are closed.** What moves is `cls`: the network is less sure those pixels are a
+   person when there are many people.
+
+   **The candidate cause, and it is a training-time one.** FCOS assigns a location to the
+   smallest box containing it, so a shopper standing in front takes the locations of the
+   shopper behind. Measured on the teacher labels, Kaohsiung-cam04 loses **a median 10.1%
+   of a person's area to smaller boxes (every other camera: 0.0%) and 22.9% of its people
+   lose more than 25%** (others 6.5–12.5%); person-on-person max IoU p90 is 0.302 against
+   0.192–0.257. The same appearance is therefore labelled positive in one frame and
+   negative in the next, and an unsure classifier is what that trains. Centerness is
+   untouched because it is regressed only on the positives that survived — which is
+   exactly the asymmetry the table above shows. **Untested.** The fix it implies is a
+   crowd-aware assigner (ATSS/OTA) and that is a retrain; **no run has been started.**
+
+   **Refuted on the way, each single-variable, so none of these is worth re-opening:**
+   *stream spec* — h264 / 1920x1080 / 30 fps on all 8, cam04 at 583 kb/s against a fleet
+   range of 453–600; *roll* — de-rotating the frame by the camera's own +12.9° gives
+   ≥0.35 counts of 3→3, 3→2, 3→3; *teacher quality* — cam04 has the fleet's **largest**
+   teacher boxes (p50 425 px against 168–306) and its second-highest teacher score
+   (0.616), and the teacher's score *rises* with person size fleet-wide (0.42 at <60 px
+   to 0.65 at 460–660); *training representation* — cam04 is in the training set with
+   10,744 person boxes over 3,198 images, second most in the fleet; *time-of-day
+   coverage* — 1,092 of those are 19h store-local and their labels hold p90 9 and max 14
+   people, so crowded frames were labelled and trained on.
+
+   **And one measurement that answered nothing, recorded because it looks like it did.**
+   Binning the *evening clip's own* frames by crowd size is null: that clip never holds
+   fewer than about twelve people, its person pixels move only 120k→213k, and top score
+   is flat at 0.46–0.51 across every band. It cannot be read as "crowding does not
+   matter" — the independent variable did not move. The pooled three-clip run above is
+   the one that has a gradient.
+
+   **What this does not touch: Tao-Hsin-cam03.** Its cls p90 of 0.45 with one person in
+   an empty shop is the same factor failing for a different reason, and that reason is
+   not measured. It, not Kaohsiung-cam04, is the fleet's worst mid-view track death at
+   83%.
