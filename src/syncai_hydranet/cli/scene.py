@@ -7,25 +7,42 @@
     hydranet-scene --config ... --checkpoint ... --input frame.jpg --json scene.json
 
 For footage with **no depth and no calibration** -- an archived site clip, a phone video.
-The depth path (`geometry/depth_scene.build_scene`, driven on the robot by
-`live/render.py` and reviewable without one through `scripts/bev_demo.py`) cannot run on
-these, so the floor comes from geometry instead: assume a vertical field of view, a
-camera height and a down-pitch, and
-every walkable pixel has exactly one place it can be on that plane.
+The depth path (`syncai_bev3d/depth_scene.build_scene`) cannot run on these, so the floor
+comes from geometry instead: assume a vertical field of view, a camera height and a
+down-pitch, and every walkable pixel has exactly one place it can be on that plane.
+
+Its two former front ends are gone: `live/render.py`, which drove it on the quadruped,
+went with that line on 2026-08-19 (`eca3814`), and `scripts/bev_demo.py`, which reviewed
+it without one, went in `500cdd2`. The commissioning renders in
+`tools/commissioning/scene_mesh.py` are what replaced the second.
+
+**The rule that sentence is a worked example of.** It named three things and all three had
+stopped resolving, but for two different reasons, and the reasons want different
+treatment. Something that **moved** gets re-aimed at where it now lives -- a reader wants
+the code, and it exists. Something that was **deleted** gets `git show <commit>^:<path>`,
+because there is nothing to re-aim at and a pointer that merely looks plausible is worse
+than one that is obviously historical. What is never right is leaving either in the
+present tense.
 
 That makes the metric scale an *assumption*, and the panel says so rather than implying a
 measurement. Get the height or the pitch wrong and the map is wrong by a smooth factor
 that looks entirely plausible -- which is why the numbers used are printed on the frame,
-and why the robot build fits the plane from depth instead of assuming it.
+and why the commissioning path fits the plane from depth instead of assuming it. That
+contrast is the whole reason this CLI is separate: `syncai_bev3d` gets to measure a fixed
+camera once; this has to work on a clip that arrives with nothing.
 
 What survives the assumption: the *shape* of the free space, where its boundary is
-relative to the robot, and whether an obstacle sits left or right. What does not: any
+relative to the camera, and whether an obstacle sits left or right. What does not: any
 absolute distance, to better than the error in the assumed height.
 
-``--json`` writes the scene payload -- metres and class ids, no colours -- which is the
-handoff format for anything that renders: an RViz overlay, a costmap publisher, the 3D
-page. For a clip it is one JSON object per line, because a scene is per-frame and an
-array would make a reader load the whole clip to see the first frame of it.
+``--json`` writes the scene payload -- metres and class ids, no colours -- one JSON object
+per line for a clip, because a scene is per-frame and an array would make a reader load the
+whole clip to see the first frame of it. **Nothing in this repository reads it.** It was
+the handoff format for an RViz overlay, a costmap publisher and the robot dashboard's 3D
+page, and all three went with the quadruped line on 2026-08-19 (`eca3814`, `500cdd2`). The
+format is kept because it is the one output of this CLI that is not a picture, and an
+unused output whose consumers were *deleted* is a different thing from one whose consumers
+were never written -- but a reader looking for the code that eats this will not find any.
 """
 
 from __future__ import annotations
@@ -77,7 +94,7 @@ class SceneReport(PlaneScene):
     """A `PlaneScene` plus what this renderer measured about its own output.
 
     These two fields are written into the JSON `hydranet-scene` emits but are not part of
-    what `geometry.bev.scene` produces, so they belong here rather than in the geometry
+    what `syncai_bev3d.bev.scene` produces, so they belong here rather than in the geometry
     layer's type. The distinction is not academic: a consumer reading the geometry
     payload directly will not have them, and before this class the only way to learn that
     was to notice two subscript assignments at the end of `compose`.
@@ -228,7 +245,7 @@ def compose(
         fill=(120, 136, 156),
     )
     # Built as one dict rather than assigned onto `payload`, because these two fields are
-    # not part of what `geometry.bev.scene` produces -- they are what *this* renderer
+    # not part of what `syncai_bev3d.bev.scene` produces -- they are what *this* renderer
     # measured about its own output. `SceneReport` is where that difference is written
     # down; before it, the JSON this CLI writes had a shape no type described and the
     # only way to learn about these keys was to read this function.
@@ -378,7 +395,7 @@ def apply_vocab(names: tuple[str, ...] | None, vocab: str) -> tuple[str, ...] | 
 
     The group keeps the COCO word beside it -- `fixture/oven` -- because the COCO word is
     the evidence for the grouping, and hiding it makes a wrong grouping unfalsifiable from
-    the frame. `geometry.meshes.detected_class` is what reads the class back out.
+    the frame. `syncai_bev3d.meshes.detected_class` is what reads the class back out.
     """
     if vocab != "retail":
         return names
