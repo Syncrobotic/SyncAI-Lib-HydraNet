@@ -2,7 +2,7 @@
 
 A shop's floor grout lines are straight by manufacture and its tiles are a known size.
 That makes every frame its own calibration target, which matters because these are ceiling
-cameras: nobody is walking a checkerboard under 24 of them, and a camera that never moves
+cameras: nobody is walking a checkerboard under 48 of them, and a camera that never moves
 only has to be solved once.
 
 **The order is not a preference.** `scripts/fit_camera_from_people.py` recorded what
@@ -85,7 +85,7 @@ class Pose:
         at row 1425 of 1080 -- outside the frame, and therefore "pass" -- when outside
         *below* means ``tan(pitch) < 0`` means the camera is pitched **up**. That was a
         ceiling camera pointed at a floor, and `[pass]` was what a fleet report would have
-        printed for it in a table of 24.
+        printed for it in a table of 48.
 
         `GroundPlane` fixes the sign: pitch is positive when the camera looks down. So
         there are two distinct failures either side of the frame, and they are different
