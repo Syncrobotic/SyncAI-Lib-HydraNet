@@ -422,7 +422,7 @@ than not at all.
 | # | step | artefact | gate |
 |---|---|---|---|
 | 1 | **package split** — create `src/syncai_bev3d`, move the §2.1 code, define the `camera.json` schema; archive non-current configs | two importable packages, green tests | **DONE 2026-08-25** (`64eafd8`, `6e0eb36`, `1395e2c`) — 1,824 tests green, boundary enforced by `test_package_boundaries.py`, GPU idle and no training unit running when the tree moved. Config archiving deferred: which of the 30 yamls are current needs a decision, not a guess |
-| 2 | **commission all 48 cameras** — build the 4-click tool and zone tool, run the pipeline | per-camera `camera.json` + a 1 m grid rendered on one real frame per camera | the grid looks right **to my own eyes on every camera**. **In progress 2026-08-25**: geometry pass done for the 9 scale-measured cameras of the 2026-08-19 onboard scan — 8 `camera.json` shipped (grids eyeballed per camera, `runs/commission01/REVIEW.md`), Taichung-cam05 withdrawn (two furniture checks agree its cells are over-scaled). **Masks + 3D scenes done 2026-08-25 for all 8** (`tools/commissioning/masks_pass.py`, `scene3d.py`): structure masks, walkable, shelf ROIs written into each camera.json; commissioning-only 3D scenes with depth-measured fixture heights (tables 0.78–0.97 m fleet-wide). 5 mask sets clean, Tao-Hsin pair partial (white-fixture teacher blindness — iteration item), Kaohsiung-cam04 misses its pillar. Blocked on the physical world for the rest: 14 cameras need a per-store visual reference, 4 need mount-type triage, 7 Kaohsiung cameras need the person-score investigation (**answered per camera 2026-08-27, §7.12 — they do not behave as a group and one of them is not a people camera at all**); Taichung-cam05 needs its NVR stream setting. **Zones answered 2026-08-26, and not by drawing them.** `tools/commissioning/service_zones.py`: SAM 3 instances on the plate (the prompts `data/sam3_prompts.py` already measured), the floor pixels touching each instance, projected to metres, then every floor cell within 0.9 m of a fixture given to its nearest one. Fully automatic, and it corrects a mistake worth recording -- two earlier attempts chased fixture *footprints*, hit the fact that one camera cannot see behind a counter, and concluded a human must draw the far edge. **A footprint is a region no shopper can ever occupy**, so as a zone it never fires; what a zone is for is the floor *beside* the fixture, which is entirely in view. **Applied to all 8 commissioned cameras 2026-08-26: 71 service zones**, 6-13 per camera, written into `camera.json` beside the walkable outline (`runs/service_zones01/`, per-camera renders eyeballed). On a real 60 s clip of Taichung-cam01 the three tracks read `fixture_02, 60.0 s, 298/300` (the shopper at the left counter), `fixture_06, 60.0 s, 300/300` (the one at the right-hand shelving) and a route for the member of staff who walks. Two defects were found and fixed by that measurement, not by inspection: an instance mask can swallow the floor in front of it (`merchandise rack` at 0.90 returned a fifth of the frame), so an instance is cut against the floor mask before its contact ring is taken; and **a counter has two sides** -- keeping only the largest connected piece of a fixture's service floor discarded the staff aisle every run, which is exactly where the track that fell outside every zone was standing. Caveat inherited: Taichung-cam10's metres are 1.21x too large (§7.10), so its 48.4 m2 of zone area is inflated by the same factor. Two gaps stated: the right-hand accessory wall got no zone (and a track stands there), and prompt-to-kind attribution is weak -- which fixture is the till is a store fact, not a 0.745 from a shape-shaped prompt. Remaining tools: the 4-point ground-calibration click tool (§2.1b) and the tamper reference (§2.1h) — the last two ❌ in that table |
+| 2 | **commission all 48 cameras** — build the 4-click tool and zone tool, run the pipeline | per-camera `camera.json` + a 1 m grid rendered on one real frame per camera | the grid looks right **to my own eyes on every camera**. **In progress 2026-08-25**: geometry pass done for the 9 scale-measured cameras of the 2026-08-19 onboard scan (**and "scale-measured" means the 1.70 m person-height prior, not a tape measure — see §7.19; every shipped `scale_source` reads `person_height_median_vs_1.7m_prior_nNN`, on 15–37 boxes**) — 8 `camera.json` shipped (grids eyeballed per camera, `runs/commission01/REVIEW.md`), Taichung-cam05 withdrawn (two furniture checks agree its cells are over-scaled). **Masks + 3D scenes done 2026-08-25 for all 8** (`tools/commissioning/masks_pass.py`, `scene3d.py`): structure masks, walkable, shelf ROIs written into each camera.json; commissioning-only 3D scenes with depth-measured fixture heights (tables 0.78–0.97 m fleet-wide). 5 mask sets clean, Tao-Hsin pair partial (white-fixture teacher blindness — iteration item), Kaohsiung-cam04 misses its pillar. Blocked on the physical world for the rest: 14 cameras need a per-store visual reference, 4 need mount-type triage, 7 Kaohsiung cameras need the person-score investigation (**answered per camera 2026-08-27, §7.12 — they do not behave as a group and one of them is not a people camera at all**); Taichung-cam05 needs its NVR stream setting. **Zones answered 2026-08-26, and not by drawing them.** `tools/commissioning/service_zones.py`: SAM 3 instances on the plate (the prompts `data/sam3_prompts.py` already measured), the floor pixels touching each instance, projected to metres, then every floor cell within 0.9 m of a fixture given to its nearest one. Fully automatic, and it corrects a mistake worth recording -- two earlier attempts chased fixture *footprints*, hit the fact that one camera cannot see behind a counter, and concluded a human must draw the far edge. **A footprint is a region no shopper can ever occupy**, so as a zone it never fires; what a zone is for is the floor *beside* the fixture, which is entirely in view. **Applied to all 8 commissioned cameras 2026-08-26: 71 service zones**, 6-13 per camera, written into `camera.json` beside the walkable outline (`runs/service_zones01/`, per-camera renders eyeballed). On a real 60 s clip of Taichung-cam01 the three tracks read `fixture_02, 60.0 s, 298/300` (the shopper at the left counter), `fixture_06, 60.0 s, 300/300` (the one at the right-hand shelving) and a route for the member of staff who walks. Two defects were found and fixed by that measurement, not by inspection: an instance mask can swallow the floor in front of it (`merchandise rack` at 0.90 returned a fifth of the frame), so an instance is cut against the floor mask before its contact ring is taken; and **a counter has two sides** -- keeping only the largest connected piece of a fixture's service floor discarded the staff aisle every run, which is exactly where the track that fell outside every zone was standing. Caveat inherited: Taichung-cam10's metres are 1.21x too large (§7.10), so its 48.4 m2 of zone area is inflated by the same factor. Two gaps stated: the right-hand accessory wall got no zone (and a track stands there), and prompt-to-kind attribution is weak -- which fixture is the till is a store fact, not a 0.745 from a shape-shaped prompt. Remaining tools: the 4-point ground-calibration click tool (§2.1b) and the tamper reference (§2.1h) — the last two ❌ in that table |
 | 3 | **pose head resident** — **IN PROGRESS 2026-08-25**: the box-conditioned P3 head is built and tested (`ef9b53c`), ViTPose labelled the Gold boxes (train 13,930 / val 8,479 / test 2,862 images), and `hydranet_retail_pose01` is training under systemd (60 epochs, pose loss 0.47 → 0.10 by epoch 2). **Its run directory is `runs/hydranet_retail_security_b03_cw_xl-20260825-162131`** — the pose config inherited `output_dir` from the security run and the trainer appended a timestamp rather than overwrite it, so the directory is named for a different model and only the `config.yaml` inside it is authoritative. `tools/pose/eval_student.py` had never been executed (it died on `torch.from_numpy` over an already-tensor) — **fixed and run 2026-08-25** (`2fb6f0c`), and `--render` now writes per-person crops with both skeletons, because a gate decided by eye has to be lookable-at. **Throughput: `scripts/bench_e2e.py` (`65ce3b5`) is the end-to-end instrument** and it refuses a busy GPU. First legs, measured while training shared the box so they are lower bounds: host NMS 450 fps/thread (3.2 of 24 cores at target — not a risk), tracker 7,694 fps/thread (0.2 cores), **CPU decode saturates at ~950–1,030 fps = 63–69 streams against the 96 required**. **Decode resolved 2026-08-25**: the box had no NVDEC path at all; PyNvVideoCodec 2.2.1 installed (user's call, §7.8) and wired into the harness with `usedevicememory=True`, so frames never cross PCIe. Measured with training still on the card, i.e. lower bounds: **NVDEC saturates ~7,800 fps ≈ 520 streams at 15 fps, 5.4× the target**, against the CPU pipe's 63–69 streams. Decode is no longer the binding leg. **Still open: the exporter drops the pose head** — `cli/export_onnx.py`'s `ExportWrapper` emits segmentation and detection outputs only, so an engine built today measures a model without pose and reports it as the model with pose. Must be fixed before the engine leg is measured; blocked until the training unit stops (never edit `src/` under a running job). **Training finished 2026-08-25 20:01**, 60/60 epochs, final val `coco_person` mAP 0.2022 / mAP@50 0.3891. The checkpoint trap fired exactly as forecast: `primary_metric` is `terrain_mIoU/site_seg03`, so `best.pt` is **epoch 15**. Both candidates run on the full test split (2,862 images / 6,360 persons / 93,967 judged joints):
 
 | checkpoint | PCK@0.2h | L2 p50 | mean | p90 |
@@ -1262,3 +1262,74 @@ something it does not support.
    exists to make that labelling minutes of judgement rather than hours of drawing. **That
    is the measurement decision 1 should be settled on**; this one narrows what has to be
    labelled and has already removed the reason to think two-stage is unsafe.
+
+19. **"Scale-measured" meant the person-height prior all along, and a second fleet arrived
+   that has more of it than the first.** Opened 2026-08-27 when a new corpus —
+   `gs://syncai-rtsp-recordings`, ten RTSP channels of a second store, wood floor, not
+   STUDIO A — was asked for 3D scenes and the first answer given was "these need a
+   physical reference first". **That answer was wrong, and checking it corrected this
+   plan rather than the new cameras.**
+
+   **Every shipped camera's scale comes from the 1.70 m adult prior.** Read straight out
+   of `runs/onboard01/*.calib.json`:
+
+   | camera | height | `scale_source` |
+   |---|---|---|
+   | Taichung-cam01 | 2.49 m | `person_height_median_vs_1.7m_prior_n37` |
+   | Taichung-cam10 | 2.87 m | `..._n31` |
+   | Tao-Hsin-cam04 | 2.91 m | `..._n22` |
+   | Tao-Hsin-cam03 | 2.61 m | `..._n21` |
+   | Taichung-cam04 | 2.30 m | `..._n19` |
+   | Kaohsiung-cam04 | 2.17 m | `..._n15` |
+   | Taichung-cam11 | 2.29 m | `..._n15` |
+
+   And **vfov is a fleet assumption on 22 of 23**: `vfov_source: fleet_hardware_assumed`
+   at 70.4°, pinned by tile grid on Taichung-cam01 alone. The 14 cameras "blocked on a
+   visual reference" are `scale_source: unmeasured`, which `onboard_camera.py` emits when
+   **fewer than 10 person boxes** pass its gates — they are short of people, not short of
+   a tape measure. `visual_reference.status` is `needs_visual_reference` on cam01 too,
+   the camera whose numbers everything else is compared against.
+
+   **So the new fleet is not held to a bar the old one clears.** People-only pose fitting
+   over `plate_calibration.fit_pose_from_people`, with the shop-ceiling prior 2.2–3.6 m
+   and vfov 70.4:
+
+   | ch | person boxes | fit | note |
+   |---|---|---|---|
+   | ch2 | **1,425** | 2.47 m / 35.5°, spread 0.043 | interior solution |
+   | ch3 | **468** | 2.58 m / 36.5°, spread 0.081 | interior solution |
+   | ch8 | 838 | 2.20 m / 32.0° | **on the 2.2 m bound** |
+   | ch5 | 37 | 2.22 m / 38.0° | on the bound, 37 boxes |
+   | ch6 | 27 | 2.27 m / 50.5° | 27 boxes |
+   | ch1 | 33 | no fit | floor only in one corner |
+   | ch4 | 405 | no fit | people stand behind a counter, so box bottoms are not feet |
+   | ch7 | 1,251 | no fit | same, and 1,251 boxes do not fix it |
+   | ch9, ch10 | **0** | — | near top-down; the detector finds nobody in 300 frames |
+
+   ch2 and ch3 rest on more evidence than **any** shipped camera. Three cautions kept
+   because they are what the table cannot show: **a fit pinned to the bound of a prior is
+   the prior, not a measurement** (ch5, ch6, ch8); ch2 is the doorway camera, so its plane
+   is the pavement rather than the selling floor; and pitch is coupled to vfov — 65° vs
+   70.4° moves ch3 to 34.0°/2.66 m, about **2% of scale**, which is fine for a layout and
+   not fine for a claim at §7.13's 7.3 cm.
+
+   **The prior did all the work and the first run had it wrong.** The first sweep passed
+   `heights=(1.0, 8.0)` and returned 1.0–1.2 m at 5–9.5° for every vfov — a camera sitting
+   on a table — with pitch pinned at the search's own lower bound and the objective flat
+   across vfov 50–80. That was read as "these cameras cannot be calibrated from video".
+   It was the range being wrong: with 2.2–3.6 m, **all 468 boxes enter the fit** instead
+   of 318–348, and height comes out stable across every vfov. A boundary solution is not
+   a failed camera, it is a question asked with the wrong prior.
+
+   **One check attempted and void, recorded so it is not retried.** The vertical vanishing
+   point of standing people would confirm pitch independently — but a detector box is
+   *axis-aligned*, so its side edges are exactly vertical in the image by construction,
+   every such line is parallel, and the least-squares intersection is degenerate. The
+   working version of that check needs **keypoints** (mid-ankle to mid-shoulder leans; a
+   box does not), and the pose head is resident.
+
+   Corpus facts found on the way: hevc, 1920x1080, **6 fps**, 10-minute files. **Some are
+   never finalised** — `moov atom not found`, identical after a clean re-download, so the
+   file in the bucket is broken rather than the transfer. ch7's 10:00, 12:00 and 14:00 are
+   three in a row; ch5's 14:00, ch3's and ch9's 16:00 are singles. The rate over a whole
+   day is not measured and matters for whether this corpus can be trained on.

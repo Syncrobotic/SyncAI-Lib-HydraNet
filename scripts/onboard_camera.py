@@ -64,6 +64,11 @@ from syncai_bev3d.calibrate import horizon_row  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera  # noqa: E402
 
 SCHEMA = "hydranet-onboard-calib/v1"
+# Defaults, not constants. A second fleet arrived 2026-08-27 -- ten RTSP channels with
+# their own corpus and their own person boxes -- and these two paths were the only reason
+# this sweep was single-corpus; every other input was already a flag. They are threaded
+# as arguments rather than rebound as globals, because `provenance` records the path the
+# run actually used and a global would record whichever one was set last.
 CAMERAS_JSON = Path("datasets/studioa_clips/cameras.json")
 PERSON_ANNS = Path("datasets/retail_person_gdino01/annotations/instances_all.json")
 PLATE_MODEL_CONFIG = Path("configs/hydranet_retail_security_b03_cw_xl.yaml")
@@ -143,8 +148,8 @@ class PlatePersonMeter:
 # One camera
 
 
-def selling_floor_cameras() -> list[str]:
-    d = json.loads(CAMERAS_JSON.read_text())
+def selling_floor_cameras(cameras_json: Path = CAMERAS_JSON) -> list[str]:
+    d = json.loads(Path(cameras_json).read_text())
     return sorted(c for c, v in d["cameras"].items() if v.get("role") == "selling_floor")
 
 
@@ -161,6 +166,7 @@ def onboard_one(
     k1: float,
     meter: PlatePersonMeter | None,
     plates_root: Path,
+    person_anns: Path = PERSON_ANNS,
 ) -> dict:
     now = _dt.date.today().isoformat()
     is_pinned = camera == "Taichung-cam01"  # tile grid: k1 and vfov both measured
@@ -187,7 +193,7 @@ def onboard_one(
         "provenance": {
             "orientation_pipeline": "syncai_bev3d.plate_calibration (imported)",
             "depth_model": pc.MODEL,
-            "person_boxes": str(PERSON_ANNS),
+            "person_boxes": str(person_anns),
             "person_height_prior_m": pc.ADULT_M,
             "plate_person_model": f"{PLATE_MODEL_CONFIG} + {PLATE_MODEL_CKPT} (ema)",
         },
@@ -229,7 +235,7 @@ def onboard_one(
     rgb_u = pc.undistort_image(rgb, k1)
     depth = pc.run_depth(rgb_u)
 
-    boxes = pc.load_person_boxes(PERSON_ANNS, camera, w, h, k1)
+    boxes = pc.load_person_boxes(person_anns, camera, w, h, k1)
     result["person_boxes_after_gates"] = len(boxes)
 
     by_vfov: list[dict] = []
@@ -536,10 +542,17 @@ def main(argv=None) -> int:
     ap.add_argument("--k1", type=float, default=K1_FLEET)
     ap.add_argument("--vfovs", default="55,70.4,85")
     ap.add_argument("--skip-person-frac", action="store_true")
+    ap.add_argument("--cameras-json", type=Path, default=CAMERAS_JSON)
+    ap.add_argument(
+        "--person-anns",
+        type=Path,
+        default=PERSON_ANNS,
+        help="COCO boxes whose image file_names start with `<camera>__`",
+    )
     ap.add_argument("--report-only", action="store_true")
     args = ap.parse_args(argv)
 
-    fleet = selling_floor_cameras()
+    fleet = selling_floor_cameras(args.cameras_json)
     cameras = args.camera or fleet
     args.out.mkdir(parents=True, exist_ok=True)
 
@@ -556,7 +569,7 @@ def main(argv=None) -> int:
     for i, cam in enumerate(cameras, 1):
         print(f"[{i}/{len(cameras)}] {cam}")
         try:
-            result = onboard_one(cam, vfovs, args.k1, meter, args.plates_root)
+            result = onboard_one(cam, vfovs, args.k1, meter, args.plates_root, args.person_anns)
         except Exception:
             traceback.print_exc()
             result = {
