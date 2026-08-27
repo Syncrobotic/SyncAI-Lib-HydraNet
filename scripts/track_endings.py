@@ -93,6 +93,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -103,6 +104,7 @@ from scipy import ndimage
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from syncai_hydranet.analytics.bytetrack import OfflineForward  # noqa: E402
 from syncai_hydranet.analytics.clip_tracks import (  # noqa: E402
     PERSON,
     to_source_pixels,
@@ -150,6 +152,62 @@ class Recording(Tracker):
         return super().update(boxes, frame_idx, keypoints=keypoints, scores=scores)
 
 
+@dataclass(frozen=True)
+class Ended:
+    """The three fields an ending is judged from, for either tracker."""
+
+    track_id: int
+    frames: list[int]
+    boxes: list[np.ndarray]
+
+
+class RecordingByteTrack:
+    """`bytetrack.OfflineForward` behind the interface `track_clip` calls.
+
+    Wrapped rather than subclassed, the opposite of `Recording` above, because the two
+    disagree about argument order -- `OfflineForward.update` takes `(boxes, scores,
+    frame_idx)` and `track_clip` calls `update(boxes, frame_idx, scores=...)`. A subclass
+    would have to override `update` to swap them, which is a wrapper with extra steps and
+    an inherited method that silently means something else.
+
+    **This changes two things at once and the comparison has to say so.** `bytetrack.py`
+    brings a high/low band *and* a Kalman filter, and `tracker.py` refuses the Kalman on
+    stated grounds (no measured noise model on this footage). So a run with this tracker
+    is not "the same tracker with hysteresis"; it is the second tracker, and what it
+    measures is the comparison `bytetrack.py`'s own header calls open and unmeasured.
+
+    `seen` records the **high band only**, so the `lost`/`gone` split stays comparable
+    with a single-threshold run. Feeding it the low band as well would grow the
+    reappearance population and move that split for a reason that is not the tracker.
+    """
+
+    def __init__(
+        self, *, high_thr, low_thr, iou_thr, iou_thr_low, max_age, min_hits, vel_scale
+    ):
+        self.inner = OfflineForward(
+            high_thr=high_thr, low_thr=low_thr, iou_thr=iou_thr, iou_thr_low=iou_thr_low,
+            max_age=max_age, min_hits=min_hits, vel_scale=vel_scale,
+        )  # fmt: skip
+        self.high_thr = high_thr
+        self.seen: dict[int, np.ndarray] = {}
+
+    def update(self, boxes, frame_idx, keypoints=None, scores=None):  # noqa: ARG002
+        # `keypoints` is part of the interface `track_clip` may call with and this
+        # tracker has nothing to do with them; naming it is what keeps the two
+        # implementations substitutable.
+        b = np.asarray(boxes, dtype=float).reshape(-1, 4)
+        s = np.zeros(len(b)) if scores is None else np.asarray(scores, dtype=float).reshape(-1)
+        self.seen[int(frame_idx)] = b[s >= self.high_thr].copy()
+        self.inner.update(b, s, int(frame_idx))
+
+    def finished(self) -> list[Ended]:
+        # A `Fragment` names its id `frag_id`, and everything downstream reads
+        # `track_id`. Rebuilt rather than assigned onto the Fragment: setting an
+        # attribute a dataclass does not declare is invisible to the type checker and to
+        # the next reader, and only the three fields below are ever used.
+        return [Ended(f.frag_id, f.frames, f.boxes) for f in self.inner.finished()]
+
+
 def foot_m(boxes: np.ndarray, cam_file: CameraFile, src) -> np.ndarray:
     """Box bottom-centres to floor metres, through this camera's own calibration."""
     if not len(boxes):
@@ -164,7 +222,7 @@ def foot_m(boxes: np.ndarray, cam_file: CameraFile, src) -> np.ndarray:
     return np.stack([x, z], axis=1)
 
 
-def classify(track, tracker: Recording, cam_file, src, args) -> dict:
+def classify(track, tracker: Recording | RecordingByteTrack, cam_file, src, args) -> dict:
     """The ending, plus what a `lost` one costs to recover.
 
     A `lost` ending is two different failures wearing one label, and they have different
@@ -313,7 +371,27 @@ def witness(clip: str, model, cfg, device, args, targets: dict, k1: float | None
 
 def run_camera(camera: str, model, cfg, device, args) -> dict:
     cam_file = CameraFile.load(COMMISSIONED / f"{camera}.camera.json")
-    tracker = Recording(iou_threshold=args.iou, max_age=args.max_age, min_hits=args.min_hits)
+    if args.two_stage:
+        tracker: Recording | RecordingByteTrack = RecordingByteTrack(
+            high_thr=args.score_thr,
+            low_thr=args.low_thr,
+            iou_thr=args.iou,
+            iou_thr_low=args.iou_low,
+            max_age=args.max_age,
+            min_hits=args.min_hits,
+            # MOT17's velocity prior is for 25 fps; these clips sample at args.fps.
+            vel_scale=25.0 / args.fps,
+        )
+        # The low band has to reach the tracker, so the decode floor drops to it. Births
+        # still happen at `--score-thr` inside the tracker, which is the whole point: a
+        # looser decode alone would also invent tracks, and that arm was measured on
+        # 2026-08-26 and made the event layer worse.
+        decode_thr = args.low_thr
+    else:
+        tracker = Recording(
+            iou_threshold=args.iou, max_age=args.max_age, min_hits=args.min_hits
+        )
+        decode_thr = args.score_thr
     out = track_clip(
         str(CLIPS / camera / SWEEP_CLIPS[camera]),
         model,
@@ -324,7 +402,7 @@ def run_camera(camera: str, model, cfg, device, args) -> dict:
         preprocess=preprocess,
         probe=probe,
         fps=args.fps,
-        score_thr=args.score_thr,
+        score_thr=decode_thr,
         k1=cam_file.lens.k1 if cam_file.lens else None,
         max_frames=args.frames,
     )
@@ -415,6 +493,15 @@ def main() -> int:
     ap.add_argument("--witness-thr", type=float, default=0.03, help="the witness pass floor")
     ap.add_argument("--witness-iou", type=float, default=0.2)
     ap.add_argument("--witness-blob", type=int, default=400, help="dense person px, canvas")
+    ap.add_argument(
+        "--two-stage",
+        action="store_true",
+        help="track with analytics.bytetrack instead: births at --score-thr, survival "
+        "down to --low-thr. Moves the Kalman filter as well as the band -- see "
+        "RecordingByteTrack",
+    )
+    ap.add_argument("--low-thr", type=float, default=0.20, help="two-stage survival band")
+    ap.add_argument("--iou-low", type=float, default=0.5, help="two-stage low-band IoU")
     args = ap.parse_args()
 
     args.out.mkdir(parents=True, exist_ok=True)

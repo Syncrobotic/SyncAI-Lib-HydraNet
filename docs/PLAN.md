@@ -774,3 +774,49 @@ over unvalidated tracks cannot be attributed when it is wrong.
    absence: in a crowd the components merge and the merged bounding box cannot reach IoU
    0.2 against one shopper. It does not weaken the verdict — `demoted` is decided on the
    box, and only the single `vacated` case turned on the dense signal at all.
+
+   **AND THE FIX MAY ALREADY BE IN THE TREE, UNUSED.** If tracks die at 0.338 against a
+   0.35 threshold, what is needed is not a lower birth threshold — that arm was measured
+   on 2026-08-26 and made the event layer worse — but a **survival** band under an
+   unchanged birth threshold. `analytics/bytetrack.py` is exactly that (births at the high
+   band, survives down to the low one) and its own header says the comparison against the
+   shipped `analytics/tracker.py` **has never been run on this footage**. It has now
+   (`runs/endings05/`, `scripts/track_endings.py --two-stage`, same eight clips, same
+   weights, births still at 0.35, survival to 0.20):
+
+   | | shipped `tracker.py` | `bytetrack` two-stage |
+   |---|---|---|
+   | tracks | 202 | **100** |
+   | endings judged | 191 | 83 |
+   | **mid-view deaths** | **111 (58%)** | **38 (46%)** |
+   | Kaohsiung-cam04 tracks | 87 | 29 |
+   | median exit-track length, Kaohsiung-cam04 | 15 frames | **61** |
+   | median exit-track length, Taichung-cam04 | 11 | **40** |
+   | median exit-track length, Tao-Hsin-cam03 | 10 | **20** |
+   | median exit-track length, Taichung-cam01 | 38 | **492** |
+
+   **Half the tracks and each 2–4× longer is the signature of fragments being joined**;
+   people being dropped would halve the tracks and leave the lengths where they were.
+
+   **It moves two things at once and the comparison must not be quoted as one.**
+   `bytetrack` brings a Kalman filter as well as the band, and `tracker.py` refuses that
+   filter on stated grounds — no measured noise model exists for this footage. So this is
+   the second tracker, not the first with hysteresis added.
+
+   **And no metric here can see an ID switch**, which produces the same shape: fewer,
+   longer tracks. `reid_metrics.py` records that no labelled site clip exists, so it was
+   settled the way everything else today was — by looking. The three longest
+   Taichung-cam01 tracks, sampled twelve times each across their lives:
+
+   * **711 observations (142 s): one person in all twelve.** Same blue polo, grey
+     wide-leg trousers, lanyard, black waist bag. The identity genuinely held.
+   * 551 observations: the same man in eleven of twelve, and **the twelfth is a different
+     person** — somebody crossed in front and the box went with them.
+   * 433 observations: the same person in eleven of twelve, and **the twelfth is an empty
+     counter** — the box coasted off after they left.
+
+   **So the joining is real and the tails are not.** The Kalman coasts past a departure,
+   onto a neighbour or onto a fixture. That is not free: **a track that coasts forty
+   frames onto a counter inflates dwell**, and dwell is a number the retail half sells.
+   Adopting two-stage tracking therefore trades fragmentation against dwell accuracy and
+   is a decision, not a patch. **Not adopted; nothing in the serving path changed.**
