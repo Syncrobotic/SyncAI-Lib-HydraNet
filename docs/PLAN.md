@@ -1304,7 +1304,10 @@ something it does not support.
    | ch1 | 33 | no fit | floor only in one corner |
    | ch4 | 405 | no fit | people stand behind a counter, so box bottoms are not feet |
    | ch7 | 1,251 | no fit | same, and 1,251 boxes do not fix it |
-   | ch9, ch10 | **0** | — | near top-down; the detector finds nobody in 300 frames |
+   | ch9, ch10 | 22, 45 | — | near top-down; **0 in a first 300-frame sample, which was the
+     sample and not the camera** — over 6 clips x 720 frames they yield 22 and 45, against
+     ch2's 1,394. Whether that clears `onboard_camera.py`'s ten-usable-heights floor is the
+     tool's answer, not a judgement made here |
 
    ch2 and ch3 rest on more evidence than **any** shipped camera. Three cautions kept
    because they are what the table cannot show: **a fit pinned to the bound of a prior is

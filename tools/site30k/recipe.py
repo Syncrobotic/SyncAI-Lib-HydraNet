@@ -276,6 +276,7 @@ class CameraGeometry:
     """Per-camera geometry, built once: heights, ground points, and the invalid ring."""
 
     CACHE = ROOT / "runs/site30k_qa/geometry_cache"
+    CALIB_ROOT = ROOT / "runs/onboard01"
 
     def __init__(self, camera, third):
         self.camera = camera
@@ -298,7 +299,11 @@ class CameraGeometry:
             )
             return
         self.geom = M.GeomTeacher(camera, third)
-        calib = json.loads((ROOT / f"runs/onboard01/{camera}.calib.json").read_text())
+        # A default, not a constant: a second fleet was onboarded to `runs/onboard02`
+        # on 2026-08-27 and its cameras carry the same schema. Rebindable by a caller
+        # (`CameraGeometry.CALIB_ROOT = ...`) the same way `CACHE` above already is,
+        # so a tool can point at another sweep without a second copy of this loader.
+        calib = json.loads((self.CALIB_ROOT / f"{camera}.calib.json").read_text())
         k1 = float(calib.get("k1_division_model") or 0.0)
         vfov = float(calib["vfov_assumed_deg"])
         plane = GroundPlane(

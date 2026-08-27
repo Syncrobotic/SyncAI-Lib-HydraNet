@@ -6,8 +6,8 @@ camera: class masks + walkable + shelf ROIs, written into runs/commission01/<cam
 and referenced from its camera.json.
 """
 
+import argparse
 import importlib.util
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -33,9 +33,11 @@ OVERLAY_RGB = {
 }
 
 
-def run_camera(camera, third, proc, model, static_concepts):
+def run_camera(camera, third, proc, model, static_concepts, plates_root=None, out_root=None):
+    plates_root = plates_root or ROOT / "datasets/studioa_static"
+    out_root = out_root or ROOT / "runs/commission01"
     geo = R.CameraGeometry(camera, third)
-    plate_dir = ROOT / "datasets/studioa_static" / camera
+    plate_dir = Path(plates_root) / camera
     slots = [p.stem.split("_", 1)[1] for p in sorted(plate_dir.glob("plate_*.png"))]
     plate_imgs, plate_cache = {}, {}
     for slot in slots:
@@ -79,10 +81,10 @@ def run_camera(camera, third, proc, model, static_concepts):
         f"  [{camera}] {len(smasks)} instances -> {len(cl_masks)} objects, {acc} accepted; "
         f"floor {100 * floor.mean():.1f}% of frame"
     )
-    (ROOT / "runs/commission01" / camera).mkdir(parents=True, exist_ok=True)
+    (Path(out_root) / camera).mkdir(parents=True, exist_ok=True)
     cleanest = min(slots, key=lambda s: float((plate_cache[(camera, s)] == 5).mean()))
     np.savez(
-        ROOT / "runs/commission01" / camera / "structure_cache.npz",
+        Path(out_root) / camera / "structure_cache.npz",
         static=static_map,
         floor=floor,
         cleanest=cleanest,
@@ -118,9 +120,9 @@ def run_camera(camera, third, proc, model, static_concepts):
         combined[static_map == cid] = cid
     combined[floor_clip & (combined == 0)] = 1
 
-    out = ROOT / "runs/commission01" / camera
+    out = Path(out_root) / camera
     (out / "masks").mkdir(parents=True, exist_ok=True)
-    cf = CameraFile.load(ROOT / f"runs/commission01/{camera}.camera.json")
+    cf = CameraFile.load(Path(out_root) / f"{camera}.camera.json")
     w, h = cf.image_size_px
 
     mask_files = {}
@@ -161,7 +163,7 @@ def run_camera(camera, third, proc, model, static_concepts):
 
     cf = dataclasses.replace(cf, mask_files=mask_files, shelf_rois_px=tuple(rois))
     cf.validate()
-    cf.save(ROOT / f"runs/commission01/{camera}.camera.json")
+    cf.save(Path(out_root) / f"{camera}.camera.json")
 
     # Overlay preview on the cleanest plate.
     base = np.asarray(plate_imgs[(camera, cleanest)], dtype=np.float64)
@@ -187,13 +189,26 @@ def run_camera(camera, third, proc, model, static_concepts):
 
 
 def main():
-    cameras = sys.argv[1:]
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("cameras", nargs="+")
+    ap.add_argument("--plates-root", type=Path, default=ROOT / "datasets/studioa_static")
+    ap.add_argument("--out-root", type=Path, default=ROOT / "runs/commission01")
+    ap.add_argument(
+        "--calib-root",
+        type=Path,
+        default=None,
+        help="onboarding sweep whose `<camera>.calib.json` gives the geometry "
+        "(default: the recipe's own runs/onboard01)",
+    )
+    a = ap.parse_args()
+    if a.calib_root is not None:
+        R.CameraGeometry.CALIB_ROOT = a.calib_root
     third = R.M.ThirdOpinion(R.M.THIRD_OPINION_RUN, R.device)
     proc, model = R.M.load_sam3(R.SAM3.MODEL_ID, R.device)
     static_concepts, _moving = R.M.build_concepts_v2()
-    for camera in cameras:
+    for camera in a.cameras:
         print(f"== {camera}")
-        run_camera(camera, third, proc, model, static_concepts)
+        run_camera(camera, third, proc, model, static_concepts, a.plates_root, a.out_root)
 
 
 if __name__ == "__main__":
