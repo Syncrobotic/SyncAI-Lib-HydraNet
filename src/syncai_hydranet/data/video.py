@@ -2,7 +2,8 @@
 
 `probe` and `frames` lived in `cli/infer_video.py` and were imported from there by seven
 scripts -- `sam3_prelabel`, `mine_fall_candidates`, `retail_flow`, `annotation_batch`,
-`site_events`, `track_review`, `fit_camera_from_people`. Seven consumers reaching up into
+`site_events`, `track_review`, `fit_camera_from_people` (the last of those has since been
+deleted, in `500cdd2`). Seven consumers reaching up into
 a command-line entry point for a primitive is the one layering violation the package
 graph had: `cli` is the top layer and nothing should depend on it.
 

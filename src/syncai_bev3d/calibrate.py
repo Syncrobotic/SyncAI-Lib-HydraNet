@@ -5,12 +5,18 @@ That makes every frame its own calibration target, which matters because these a
 cameras: nobody is walking a checkerboard under 24 of them, and a camera that never moves
 only has to be solved once.
 
-**The order is not a preference.** `scripts/fit_camera_from_people.py` records what happens
-without it, measured on Taichung-cam01 on 2026-08-16: a pinhole fit to the tile vanishing
-points gave 92.5 deg vfov and 65.4 deg pitch -- clean, prior-free, and it measured 142
-people at 1.0-1.2 m tall. **Every pinhole parameter was absorbing barrel distortion, and
-the residual stayed healthy while it did**, so "lowest residual" selects the most extreme
-lens rather than the real one. Undistorted first, the same tiles give 70.4 deg and 50.2 deg.
+**The order is not a preference.** `scripts/fit_camera_from_people.py` recorded what
+happens without it, measured on Taichung-cam01 on 2026-08-16: a pinhole fit to the tile
+vanishing points gave 92.5 deg vfov and 65.4 deg pitch -- clean, prior-free, and it
+measured 142 people at 1.0-1.2 m tall. **Every pinhole parameter was absorbing barrel
+distortion, and the residual stayed healthy while it did**, so "lowest residual" selects
+the most extreme lens rather than the real one. Undistorted first, the same tiles give
+70.4 deg and 50.2 deg.
+
+That script went in `500cdd2` and is at
+`git show 500cdd2^:scripts/fit_camera_from_people.py`. Every number it is cited for in
+this file is repeated above rather than left behind that pointer, which is the rule
+`cli/scene.py` states: inline the measurement, point at the argument.
 
 So:
 

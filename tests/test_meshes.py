@@ -236,7 +236,8 @@ def test_a_person_becomes_a_person():
 
 def test_a_person_with_no_measured_height_falls_back_rather_than_vanishing():
     """`bev.scene` emits height_m None when the box could not be placed against the ground
-    plane. 1.70 m is the same assumption `fit_camera_from_people.py` fits pose against."""
+    plane. 1.70 m is the same assumption `fit_camera_from_people.py` fitted pose against,
+    before `500cdd2` removed it."""
     from syncai_bev3d.meshes import for_object
 
     verts, _ = for_object({"name": "person", "height_m": None, "width_m": 0.5})

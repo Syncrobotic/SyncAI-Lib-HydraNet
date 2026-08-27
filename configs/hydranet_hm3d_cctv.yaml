@@ -5,7 +5,8 @@
 # WHY THIS MATTERS MORE THAN A DEPTH NUMBER
 #
 # Every L1/L2 event in RETAIL_SECURITY.md is a polygon in metres on the floor, so no
-# pose means no events. `scripts/fit_camera_from_people.py` fitted exactly one camera
+# pose means no events. `scripts/fit_camera_from_people.py` (deleted in `500cdd2`)
+# fitted exactly one camera
 # by hand -- Taichung-cam01, k1=-0.225, vfov 70.4, pitch 50.2, height 2.38 -- out of 48.
 # If a network can read the plane off a single frame, that backlog stops being 47 manual
 # fits and becomes one inference pass.

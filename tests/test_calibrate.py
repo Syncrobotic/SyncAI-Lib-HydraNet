@@ -1,7 +1,8 @@
 """Calibration from floor tiles: recovering a known lens, and refusing an unknown one.
 
 Every camera fit this project has made before ran to its search boundary and was reported
-as a result anyway. `fit_camera_from_people.py` records the shape: the residual fell
+as a result anyway. `fit_camera_from_people.py` recorded the shape, and is at
+`git show 500cdd2^:scripts/fit_camera_from_people.py`: the residual fell
 *monotonically* with the assumed vfov -- 4.9% at 55 degrees, 0.7% at 150 -- so "lowest
 residual" chose the most extreme lens available rather than the real one, and the fitted
 camera height slid from 1.87 m to 2.98 m underneath it.

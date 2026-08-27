@@ -147,8 +147,10 @@ class Placement:
 def human(height_m: float = 1.70, sides: int = 10) -> Mesh:
     """A standing human figure of the given height, feet at y = 0.
 
-    1.70 m is the same assumption `scripts/fit_camera_from_people.py` fits camera pose
-    against, and it is an assumption there too. Passing a height through rather than
+    1.70 m is the same assumption `scripts/fit_camera_from_people.py` fitted camera pose
+    against -- the script went in `500cdd2`, readable at
+    `git show 500cdd2^:scripts/fit_camera_from_people.py` -- and it was an assumption
+    there too. Passing a height through rather than
     hardcoding one means a scene that later measures stature can render it.
     """
     if height_m <= 0:
@@ -554,7 +556,7 @@ def for_object(obj: dict) -> Mesh | None:
     Heights follow the payload where it has one. `height_m` is None when the box could not
     be placed against the ground plane (`bev.scene` says so explicitly rather than
     substituting a number), and a person then falls back to 1.70 m -- the same assumption
-    `fit_camera_from_people.py` fits camera pose against, and an assumption there too.
+    `fit_camera_from_people.py` fitted camera pose against, and an assumption there too.
 
     **A shape carries no confidence, so whoever draws it has to.** `score` is in the
     payload and is not read here: a chair at 0.31 gets exactly the mesh a chair at 0.95

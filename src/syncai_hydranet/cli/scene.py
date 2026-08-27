@@ -24,6 +24,15 @@ because there is nothing to re-aim at and a pointer that merely looks plausible 
 than one that is obviously historical. What is never right is leaving either in the
 present tense.
 
+**And the same rule again, arriving from the other side: inline the measurement, point at
+the argument.** A number cited through a pointer dies with the file it points at, and that
+is not hypothetical -- the 0.847 NYUv2 scale factor was lost for two days in exactly that
+way, because `data/nyu_depth.py` delegated it to a script instead of stating it. An
+*argument* survives a `git show` because a reader who follows it gets the reasoning
+intact; a *measurement* does not, because nobody follows a pointer to check a number they
+have no reason to doubt. So a deleted file's reasoning gets a pointer and its numbers get
+copied out.
+
 That makes the metric scale an *assumption*, and the panel says so rather than implying a
 measurement. Get the height or the pitch wrong and the map is wrong by a smooth factor
 that looks entirely plausible -- which is why the numbers used are printed on the frame,

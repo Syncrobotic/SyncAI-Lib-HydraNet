@@ -243,7 +243,7 @@ def floor_scale(cam: Camera, plane: GroundPlane, h: int, w: int) -> dict:
 def load_person_boxes(anns: Path, camera: str, plate_w: int, plate_h: int, k1: float):
     """COCO boxes for this camera, scaled to the plate frame and undistorted with it.
 
-    Same gates as the video-based collector in fit_camera_from_people.py: edge boxes are
+    Same gates as the video-based collector in fit_camera_from_people.py had: edge boxes are
     crops, extreme aspect ratios are not standing people.
     """
     d = json.loads(anns.read_text())
@@ -276,9 +276,10 @@ def load_person_boxes(anns: Path, camera: str, plate_w: int, plate_h: int, k1: f
 def fit_pose_from_people(boxes: np.ndarray, shape, vfov: float, heights, pitches):
     """(spread, pitch_deg, height_m, n) fitted from person boxes alone -- no depth model.
 
-    Moved verbatim from ``scripts/fit_camera_from_people.py``, whose docstring records
-    the method's measured limitation: it recovers a *family* of poses, and the vfov must
-    be an input because a free one absorbs lens distortion. Here it serves as the
+    Moved verbatim from ``scripts/fit_camera_from_people.py``, whose docstring recorded
+    the method's measured limitation (the module docstring says where to read it now):
+    it recovers a *family* of poses, and the vfov must be an input because a free one
+    absorbs lens distortion. Here it serves as the
     depth-free sanity bound in :func:`person_checks`.
 
     Raises ``SystemExit`` (not ``ValueError``) when no pitch fits, preserved from the

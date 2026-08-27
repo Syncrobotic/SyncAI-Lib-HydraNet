@@ -11,7 +11,8 @@ not a detail -- `scripts/eprep_teacher_nyuv2.py` measured what a domain change c
 "metric" model, and it was a flat 15% of scale.
 
 HM3D is 1,000 building-scale scans, so it can be rendered from *any* pose, including the
-one `scripts/fit_camera_from_people.py` actually measured on Taichung-cam01:
+one `scripts/fit_camera_from_people.py` actually measured on Taichung-cam01 (the script
+went in `500cdd2`; `git show 500cdd2^:scripts/fit_camera_from_people.py`):
 
     k1 = -0.225   vfov 70.4 deg   pitch 50.2 deg   height 2.38 m
 
@@ -225,7 +226,7 @@ def camera_rays(size, vfov_deg: float, position, yaw_deg: float, pitch_deg: floa
     y, p = np.radians(yaw_deg), np.radians(pitch_deg)
     horizon = np.cos(y) * ea + np.sin(y) * eb
     # +pitch looks down, which is how a CCTV bracket is described and how
-    # fit_camera_from_people.py reports it.
+    # fit_camera_from_people.py reported it.
     fwd = np.cos(p) * horizon - np.sin(p) * u
     fwd /= np.linalg.norm(fwd)
     right = np.cross(fwd, u)

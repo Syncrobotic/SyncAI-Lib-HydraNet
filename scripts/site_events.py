@@ -12,8 +12,10 @@ metres on the floor and there was no fitted pose on disk for any camera.
 ---------------------------------------------------------------------------
 THE POSE, AND WHY IT IS TAICHUNG-CAM01
 
-`fit_camera_from_people.py` records a tile-grid fit for exactly one camera, and records why
-it should be trusted over the people-based fit its own filename promises: a manufactured
+`fit_camera_from_people.py` recorded a tile-grid fit for exactly one camera, and why it
+should be trusted over the people-based fit its own filename promised (deleted in
+`500cdd2`; `git show 500cdd2^:scripts/fit_camera_from_people.py`; the numbers it is
+cited for are below): a manufactured
 grid has no posture floor, while 142 detections of staff bent over counters and customers
 on stools measured 1.0-1.2 m tall and drove every pinhole parameter to its search boundary.
 

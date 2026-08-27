@@ -14,7 +14,8 @@ that was deprioritised when 3D was dropped is the prerequisite for the retail nu
 What the projection assumes, and where it fails in a shop:
 
 * the floor is flat and the camera pose is known. `scripts/fit_camera_from_people.py`
-  estimates the pose, and docs/journal/2026-08-14 records that fitting lens distortion
+  estimated the pose until it was removed in `500cdd2`, and `syncai_bev3d.plate_calibration`
+  does it now, and docs/journal/2026-08-14 records that fitting lens distortion
   first is not optional -- a pinhole fit absorbed barrel distortion and put 142 people
   at 1.0-1.2 m tall.
 * a person's box bottom is on the floor. **This is the one that breaks indoors**: a

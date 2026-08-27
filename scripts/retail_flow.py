@@ -29,8 +29,10 @@ The camera pose is per-camera and it is the largest source of error in the metri
 output. docs/journal/2026-08-14 records what happens when it is guessed: a pinhole fit
 absorbed the lens's barrel distortion and put 142 detected people at 1.0-1.2 m tall,
 and at the wrong pitch one image column spanned 0.07 to 3543 m of floor. Fit the lens
-first, then the pose -- `scripts/fit_camera_from_people.py`, and prefer floor tiles to
-people.
+first, then the pose -- `syncai_bev3d.plate_calibration`, which absorbed
+`scripts/fit_camera_from_people.py` before `500cdd2` deleted it
+(`git show 500cdd2^:scripts/fit_camera_from_people.py`) -- and prefer floor tiles
+to people.
 """
 
 from __future__ import annotations
@@ -88,7 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--pitch", type=float, default=50.2, metavar="DEG")
     # 70.4, not 55. The comment above says these defaults are Taichung-cam01's corrected
     # fit and two of the three were: the tile-grid fit in
-    # `fit_camera_from_people.py`'s docstring reads "70.4 deg vfov and 50.2 deg pitch",
+    # `fit_camera_from_people.py`'s docstring read "70.4 deg vfov and 50.2 deg pitch",
     # and quotes `f 766` for the result. 55 deg on a 1080-row frame is f 1037 -- 35%
     # longer -- so every metre this script printed under its own defaults was wrong by
     # that factor, with nothing in the output looking wrong. The stale value is the one
