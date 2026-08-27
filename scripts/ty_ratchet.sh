@@ -62,6 +62,15 @@ TARGET="${1:-src/}"
 # Lower these when you fix things. Raising one needs a reason, and the reason goes here
 # rather than only in a PR body, because this file is what the next person reads.
 #
+# src/ 11, and this paragraph said 8 until 2026-08-27 while the case statement below
+# enforced 11 and the tree measured 11. The 8 was real: `e468209` paid the debt back past
+# where it started. Then `d9e3cca` raised the baseline to 11 when the pose head landed and
+# left this prose at 8 -- so the file that closes with "a comment that excuses debt is
+# itself a claim, and nothing was checking this one" had the failure in its own header,
+# three revisions deep. Nothing broke, which is why it survived: the gate was right the
+# whole time and only its description was wrong.
+#
+# The history below is kept because it is how the number got to 8, and how it left.
 # src/ 8, down from 11. It rose to 14 with the crop encoder in `e79421d` and was paid
 # back past where it started rather than absorbed. What was fixed, by category:
 #
@@ -134,6 +143,13 @@ BASELINE="${TY_BASELINE:-$DEFAULT_BASELINE}"
 # 3.12 rather than the 3.10 floor because it is what a fresh `uv sync` resolves today and
 # what the test matrix's upper row uses, so the gate measures the environment contributors
 # actually get. Override for a one-off with TY_PYTHON=3.10.
+#
+# **A second reason a hand-run count does not compare, independent of the interpreter.**
+# This script counts `error[` lines; `ty`'s own trailing "Found N diagnostics" counts
+# warnings too. Measured on `tools/` on 2026-08-27: ty said 65, this says 63. So a reader
+# who runs the checker directly and reads its summary line is comparing a different
+# quantity against the baselines below, and it is the larger one -- which fails in the
+# direction that looks like a regression that is not there.
 TY_PYTHON="${TY_PYTHON:-3.12}"
 # `--isolated` is load-bearing -- warning 1 in the header says why. Do not drop it.
 RUNNER=(uv run --isolated --python "$TY_PYTHON" ty check "$TARGET" --output-format=concise)
