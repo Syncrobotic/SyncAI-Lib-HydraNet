@@ -31,7 +31,7 @@ environment where generic web-trained models fail hardest.
 **Success is one number:** actionable alerts per camera per day, and the incidents missed.
 Model metrics (mAP, IoU) are debugging instruments, never the reported result. And no site
 figure is an *accuracy* until a human has graded it — until then it is an *agreement* with
-the teacher models (§5.5 resolves this via shadow mode).
+the teacher models (§4.5 resolves this via shadow mode).
 
 ## 2. The two packages
 
