@@ -90,7 +90,8 @@ class Pose(NamedTuple):
 
 PRESETS = {
     # Taichung-cam01 as fitted by scripts/fit_camera_from_people.py -- the tile-grid fit,
-    # not the people-based one, for the reason that file's docstring gives.
+    # not the people-based one, for the reason this file's docstring gives above. (That
+    # script is deleted; the docstring says where to read it.)
     "cctv": Pose(height=2.38, pitch=50.2, vfov=70.4, size=(480, 640)),
     # The Lite3's forward camera. Height is from the first robot capture, where the
     # forward cone put floor at 0.34 m; pitch is the mount tilt hydra_infer.py assumes.
