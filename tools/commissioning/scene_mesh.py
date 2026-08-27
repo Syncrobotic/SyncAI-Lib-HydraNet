@@ -53,6 +53,9 @@ PALETTE = {
 CLASS_NAMES = {2: "wall", 3: "column", 4: "display_table", 5: "display_shelf"}
 CELL = 0.06
 DRAWN_H = {"wall": 2.4, "column": 2.4, "display_table": 0.75, "display_shelf": 2.0}
+# A column runs floor to ceiling. The depth model reads 1.07-1.65 m for one (see the
+# block below), so the drawn height is floored here rather than taken from the depth.
+COLUMN_MIN_H = 2.2
 # The SAM3 vote puts real furniture in the wall mask -- on Taichung-cam10 the back
 # service counter and a stock trolley are both `wall`. Height looked like the way to
 # separate them and IS NOT: measured per component, all six wall components on this
@@ -291,6 +294,39 @@ def build_scene(camera):
     return cf, items, heights
 
 
+def height_caption(heights: dict[int, float]) -> str:
+    """The second caption line: what was measured, and what was drawn to a convention.
+
+    **`wall` and `column` must never appear as measured heights.** They are drawn at
+    `DRAWN_H["wall"]` and `COLUMN_MIN_H`, for the reason stated above `CLASS_NAMES`:
+    DA-V2 collapses on white surfaces, so every wall component on Taichung-cam10
+    measures 1.07-1.65 m against a real 2.4 and Taichung-cam01's column reads 1.16 m for
+    something that runs floor to ceiling. This line used to print those numbers as
+    "measured p85" beside a picture drawn at the constants -- a caption asserting a
+    height the render did not use and the code already knew was wrong.
+
+    They still appear, because deleting a measurement is not the same as labelling it:
+    the collapse is a real property of the depth model on this fleet and a reader who
+    sees it named is a reader who will not re-derive it. It is labelled as what it is.
+    """
+    drawn = {k for k, v in CLASS_NAMES.items() if v in ("wall", "column")}
+
+    def part(keys):
+        return "  ".join(
+            f"{CLASS_NAMES[k].replace('display_', '')} {v:.2f}m"
+            for k, v in sorted(heights.items())
+            if k in keys
+        )
+
+    measured = part(set(CLASS_NAMES) - drawn)
+    seen = part(drawn)
+    line = (
+        f"measured p85: {measured}  |  wall drawn at {DRAWN_H['wall']:.1f} m and column "
+        f"at {COLUMN_MIN_H:.1f} m min -- footprint only"
+    )
+    return line + (f"; depth saw {seen}, which is the white-surface collapse" if seen else "")
+
+
 def render(camera, items, heights, out_path, *, eye=None, target=None):
     xs = np.concatenate([m[0][:, 0] for m, *_ in items])
     zs = np.concatenate([m[0][:, 2] for m, *_ in items])
@@ -315,19 +351,12 @@ def render(camera, items, heights, out_path, *, eye=None, target=None):
     draw_scene(draw, view, [(m, PALETTE[k], a) for m, k, a, _ in items], bg=BG)
     img = img.resize((W, H), Image.Resampling.LANCZOS)
     text = ImageDraw.Draw(img)
-    hm = "  ".join(
-        f"{CLASS_NAMES[k].replace('display_', '')} {v:.2f}m" for k, v in sorted(heights.items())
-    )
     text.text(
         (18, 16),
-        f"{camera}  ·  commissioning mesh: footprints extruded to measured heights",
+        f"{camera}  ·  commissioning mesh: footprints measured, heights where the depth holds",
         fill=(216, 224, 236),
     )
-    text.text(
-        (18, 36),
-        f"measured p85: {hm}  |  walls translucent (drawn 2.4 m), amber disc = camera point",
-        fill=(170, 182, 200),
-    )
+    text.text((18, 36), height_caption(heights), fill=(170, 182, 200))
     img.save(out_path)
     return view
 
@@ -410,7 +439,7 @@ def build_scene_regular(camera):
                 mesh = wall(pts, 2.4, thickness_m=max(min(w, d), 0.12))
                 items.append((place(mesh, at), name, 105, False))
             elif name == "column":
-                mesh = column(min(w, 0.8), min(d, 0.8), max(h, 2.2))
+                mesh = column(min(w, 0.8), min(d, 0.8), max(h, COLUMN_MIN_H))
                 items.append((place(mesh, at), name, 255, True))
             elif name == "display_shelf":
                 mesh = cabinet(w, min(d, 0.8), h, shelves=max(2, int(h / 0.45)))
