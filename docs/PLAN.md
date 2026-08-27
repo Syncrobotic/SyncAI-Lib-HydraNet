@@ -1164,3 +1164,101 @@ something it does not support.
    into the serving path** — `events/pose.py` still decides `fall` by geometry, now with
    §7.14's measured 0.7 s sustain. Step 6 is where a projected-data model meets a real one,
    and until then this is a number about NTU.
+
+18. **Two-stage tracking's identity was measured, the instrument was wrong first, and
+   fixing it is a component step 9 also needs.** Opened 2026-08-27 against decision 1:
+   `runs/endings05/` cuts mid-view track deaths 111 → 38 and doubles track length, and the
+   objection to adopting it was that the Kalman coasts onto neighbours and inflates dwell.
+   **Length cannot tell those apart — recovering a chopped-up shopper and merging two
+   shoppers produce the same number.** Only identity can, which is what §6 step 5 already
+   says: "distinguishing 'the same person, a metre on' from 'a different person, a metre
+   away' is what an appearance model is for."
+
+   **The design, and it needs no chosen threshold.** `scripts/track_identity.py` runs both
+   trackers over the **same detections** in one inference pass. A **join** is where a
+   two-stage track changes single-stage identity — it stitched fragment A to B — and the
+   distance between their mean torso colours is read against two references built from the
+   same statistic on the same clip: `within`, one single-stage track's first half against
+   its second (**same person by construction**: the shipped tracker never associates across
+   the low band, so it cannot make this mistake), and `between`, two single-stage tracks
+   **co-present in a frame** (**different people by construction**). The overlap of the two
+   is itself part of the answer.
+
+   **First run (`runs/identity01/`, 8 cameras, 7,200 frames): 127 joins, 124 with a usable
+   reference, `pct_between` median 0.03, nine past the between-person median.** The
+   references separated best exactly where they had to — Kaohsiung-cam04, the crowded
+   camera with 78% mid-view deaths, went 87 → 29 tracks over **69 joins with none flagged**
+   at `within` p50 0.413 against `between` p50 4.401 over 312 pairs; Tao-Hsin-cam03 (83%)
+   ran 18 joins with one flagged. Three cameras have no usable `between` population at all
+   (n = 0, 1, 1) and were not read; all three are near-empty shops, so **the instrument
+   fails where it does not matter.**
+
+   **Then the nine were looked at, and all nine are one person each** (`runs/identity02/`,
+   crop strips either side of each join, read by eye). The cause is the same in all nine
+   and it is in the instrument: **`TORSO_BAND` is a fraction of the detected box**, and a
+   box reframes along a track — full body at the back of a shop, tight upper body walking
+   under the camera, clipped at an edge. When it reframes, 18–55% of the box moves off the
+   shirt onto hair or trousers and the nine statistics change completely for somebody who
+   did nothing. The chain that looked most like the feared failure — Taichung-cam01's
+   `3→6→7→9`, 565 observations absorbing three more tracks — **is one member of staff in a
+   blue polo walking toward the camera and away again.**
+
+   `tests/test_appearance.py` had already written down the risk in the abstract ("where the
+   window sits is not something a reader can check, and it silently stops meaning anything
+   if a crop convention changes"). What it did not anticipate is that the convention
+   changes **inside one clip**, which is the case that costs something.
+
+   **The fix is `appearance.torso_region`**: shoulders and hips from the resident pose head
+   (PCK@0.2h 0.915) bound an actual torso, which the box cannot move. It refuses — returns
+   `None` — on anything less than **one shoulder and one hip**, because two hips fix the
+   wrong end of a torso and a region built from them is a fraction of something again
+   wearing a keypoint's name; a caller that falls back to the band **records that it did**,
+   since the fallback is a different measurement rather than a degraded one. Fleet fallback
+   rate: **20,217 of 21,473 detections anchored, 94.2%**, lowest on Taichung-cam11 (88.1%)
+   and Kaohsiung-cam04 (91.1%) — the near-empty camera and the crowded one.
+
+   **The re-run is a controlled comparison and it was predicted wrongly.**
+   `runs/identity03/` (and `runs/identity04/`, which adds the split below to the artefact
+   and reproduces all 127 distances exactly) produces **the same 127 joins** as
+   `runs/identity01/`, because the
+   tracker did not change and only the statistic did. The prediction written down before it
+   ran was that Taichung-cam01's chain would stop being flagged; **two of its four flags
+   survived, and Kaohsiung-cam04 and Taichung-cam04 each grew a new one**. Flags went 9 → 8,
+   which read at first as the fix having achieved nothing.
+
+   **It had, and the count was the wrong statistic.** Read as distances rather than
+   percentiles, the fix separates the references it should: `within` p50 / `between` p50
+   improves on five of the seven cameras that have a reference, and **Tao-Hsin-cam04, where
+   the instrument had been inverted — one person reading *further apart* than two people,
+   1.996 — comes back to 0.317**. Then the survivors have one thing in common:
+
+   | | joins | flagged, box band | flagged, keypoints |
+   |---|---|---|---|
+   | **both sides ≥ 6 observations** | **67** | **3** | **0** |
+   | one side a 2–5 observation stub | 57 | 6 | 8 |
+
+   Zero on **every camera separately**, not only in the total, and the largest share of it
+   is Kaohsiung-cam04's — **35 well-observed joins on the crowded camera, none flagged**.
+
+   **Every surviving flag is a stub join**, and the floor that exposes it was already in the
+   code: `within` is built from halves of tracks with at least `MIN_OBS_FOR_HALVES = 6`
+   observations, and joins were being read against it with no floor at all. A 2-observation
+   mean colour is one moment's lighting. That inconsistency was mine, built in when the
+   reference was written, and the script now reports the two populations as a split rather
+   than filtering the short ones away — **"46% of joins cannot be judged this way" is a
+   result, and a silently shorter list is not.**
+
+   So the measurement, stated at the end of both fixes: **of the 67 joins where two-stage
+   association stitched two well-observed fragments, none joins two people the appearance
+   can tell apart.** The three that the box band flagged among those 67 are exactly the
+   three read by eye in `runs/identity02/` and found to be one person each, so the two
+   corrections agree.
+
+   **What this still does not decide.** A colour proves a join wrong and cannot certify one
+   right: two shoppers in the same colour are the same nine numbers, and `between` is what
+   prices how often that happens in these shops. The industry answer to decision 1 is
+   IDF1/HOTA against hand-labelled track IDs, `analytics/reid_metrics.idf1` has been armed
+   since it was written and has never run on a site clip, and `scripts/track_review.py`
+   exists to make that labelling minutes of judgement rather than hours of drawing. **That
+   is the measurement decision 1 should be settled on**; this one narrows what has to be
+   labelled and has already removed the reason to think two-stage is unsafe.
