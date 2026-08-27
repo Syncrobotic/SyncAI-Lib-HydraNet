@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 import pytest
 
+from _posture import _stand_then, keypoints, posed
 from syncai_hydranet.analytics import events as ev
 from syncai_hydranet.analytics.tracker import Track
 from syncai_hydranet.geometry.ground import Camera, GroundPlane, ground_to_pixel
@@ -145,53 +146,6 @@ def test_the_fall_proxy_is_named_a_candidate_and_fires_on_bending_too():
     got = ev.fall_candidates([track], FPS, "cam01")
     assert [e.type for e in got] == ["fall_candidate"]
     assert "cannot separate a fall from bending" in got[0].basis
-
-
-def keypoints(angle_deg: float, hip_ankle_px: float, score: float = 0.9) -> np.ndarray:
-    """A synthetic person: torso at ``angle_deg`` from vertical, legs ``hip_ankle_px`` long."""
-    kps = np.zeros((17, 3))
-    kps[:, 2] = score
-    hip = np.array([500.0, 600.0])
-    torso = 150.0
-    dx = torso * math.sin(math.radians(angle_deg))
-    dy = torso * math.cos(math.radians(angle_deg))
-    shoulder = hip - np.array([dx, dy])
-    for i in (ev.KP["left_hip"], ev.KP["right_hip"]):
-        kps[i, :2] = hip
-    for i in (ev.KP["left_shoulder"], ev.KP["right_shoulder"]):
-        kps[i, :2] = shoulder
-    for i in (ev.KP["left_ankle"], ev.KP["right_ankle"]):
-        kps[i, :2] = hip + np.array([0.0, hip_ankle_px])
-    for i in (ev.KP["left_wrist"], ev.KP["right_wrist"]):
-        kps[i, :2] = shoulder + np.array([60.0, 40.0])
-    return kps
-
-
-def posed(track_id: int, poses: list[np.ndarray], heights: list[float] | None = None) -> Track:
-    """A track whose box height can follow its posture, because a real one does.
-
-    The boxes used to be one constant for every frame, which asserted a shopper who is
-    already lying down when the track opens and stays exactly as tall while doing it.
-    `pose_posture_events` now cross-checks the box, so the fixture has to be physically
-    possible: stand for a while, then change.
-    """
-    hs = heights or [400.0] * len(poses)
-    boxes = [np.array([400.0, 400.0, 600.0, 400.0 + h]) for h in hs]
-    return Track(
-        track_id=track_id,
-        box=boxes[-1],
-        frames=list(range(len(poses))),
-        boxes=boxes,
-        confirmed=True,
-        keypoints=poses,
-    )
-
-
-def _stand_then(pose: np.ndarray, height_after: float, n_stand: int = 5, n_after: int = 10):
-    """Five upright frames, then the posture under test -- poses and matching heights."""
-    poses = [keypoints(5.0, 200.0)] * n_stand + [pose] * n_after
-    hs = [400.0] * n_stand + [height_after] * n_after
-    return poses, hs
 
 
 def test_pose_separates_a_fall_from_a_crouch_which_is_why_the_tier_exists():

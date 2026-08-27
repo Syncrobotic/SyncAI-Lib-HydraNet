@@ -12,6 +12,7 @@ pytest tests/test_track_support.py -v
 import numpy as np
 import pytest
 
+from _posture import _stand_then, keypoints, posed
 from syncai_hydranet.analytics import events as ev
 from syncai_hydranet.analytics.tracker import Track, Tracker
 
@@ -143,14 +144,12 @@ def test_support_refuses_an_impossible_span():
 def test_a_posture_event_carries_the_confidence_of_its_own_frames():
     """A fall on a track whose boxes scored 0.16-0.18 during it says so.
 
-    The fixture is `test_security_events.posed`'s shape -- stand, then change, because
+    The fixture is `_posture.posed`'s shape -- stand, then change, because
     the box-height cross-check refuses a track that is already down when it opens. The
     scores follow the same story: a shopper detected confidently while upright and only
     marginally once they are on the floor, which is exactly the case the threshold sweep
     found and the case a consumer must be able to tell from a 0.6 fall.
     """
-    from tests.test_security_events import _stand_then, keypoints, posed
-
     poses, heights = _stand_then(keypoints(80.0, 200.0), 150.0)
     track = posed(1, poses, heights)
     track.scores = [0.8] * 5 + [0.16, 0.18, 0.17, 0.16, 0.18, 0.17, 0.16, 0.18, 0.17, 0.16]
@@ -167,8 +166,6 @@ def test_a_posture_event_carries_the_confidence_of_its_own_frames():
 
 def test_the_same_fall_at_high_confidence_reports_the_difference():
     """Same posture, same boxes, different detector -- and the row now shows it."""
-    from tests.test_security_events import _stand_then, keypoints, posed
-
     poses, heights = _stand_then(keypoints(80.0, 200.0), 150.0)
     track = posed(1, poses, heights)
     track.scores = [0.8] * 15
