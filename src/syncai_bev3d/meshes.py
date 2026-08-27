@@ -468,8 +468,24 @@ def place(mesh: Mesh, at: Placement) -> Mesh:
     return verts, faces
 
 
+# **The crease angle: smooth across a curve, never across a hard edge.**
+#
+# 40 degrees, and the margin either side is what makes it a threshold rather than a tuned
+# number. The two shapes this has to separate are measured, not guessed:
+#
+#   * a round column is 20 side facets, so neighbouring facets meet at **18 degrees** and
+#     must keep sharing normals or the cylinder reads as a prism;
+#   * a box's faces meet at **90 degrees** and must not, or the two triangles of one flat
+#     top get different normals and the quad is painted in two brightnesses.
+#
+# An earlier attempt thresholded the *smoothed* normal against the face's own, which put
+# the box at 21.6 degrees against the tube's 18 -- 3.6 degrees apart, and no threshold on
+# that statistic is safe. Comparing neighbours instead puts them 72 degrees apart.
+CREASE_COS = math.cos(math.radians(40.0))
+
+
 def smooth_normals(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
-    """One shading normal per face, averaged through the vertices its neighbours share.
+    """One shading normal per face, averaged over its neighbours across smooth joins only.
 
     Geometry rather than rendering, which is why it lives here: it is a property of the
     mesh and any renderer wants the same answer. It is also **most of the difference
@@ -477,6 +493,14 @@ def smooth_normals(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
     tube reads as a prism, and with these it reads as a cylinder. PIL cannot interpolate
     across a polygon, so this is the cheap stand-in for Gouraud: adjacent faces differ by
     a little instead of a lot.
+
+    **A face only borrows from neighbours it agrees with.** Averaging through every shared
+    vertex was right for the tube and wrong for everything boxy: a box corner belongs to
+    three perpendicular faces, so the two triangles of one flat top averaged to different
+    normals and every cabinet, counter and slab in the commissioning renders carried a
+    diagonal seam down it. A reviewer reading those images on 2026-08-27 called it a tent
+    roof and, on a thin slab, a "45-degree tilted panel, physically impossible" -- a
+    shading artefact read as a geometry failure, which is the expensive kind of wrong.
     """
     if len(faces) == 0:
         return np.zeros((0, 3))
@@ -484,12 +508,20 @@ def smooth_normals(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
         verts[faces[:, 1]] - verts[faces[:, 0]], verts[faces[:, 2]] - verts[faces[:, 0]]
     )
     fn = fn / np.maximum(np.linalg.norm(fn, axis=1, keepdims=True), 1e-12)
-    vn = np.zeros_like(verts)
-    for k in range(3):
-        np.add.at(vn, faces[:, k], fn)
-    vn /= np.maximum(np.linalg.norm(vn, axis=1, keepdims=True), 1e-12)
-    out = vn[faces].mean(axis=1)
-    return out / np.maximum(np.linalg.norm(out, axis=1, keepdims=True), 1e-12)
+    incident: dict[int, list[int]] = {}
+    for fi, tri in enumerate(faces):
+        for v in tri:
+            incident.setdefault(int(v), []).append(fi)
+    out = np.empty_like(fn)
+    for fi, tri in enumerate(faces):
+        acc = np.zeros(3)
+        for v in tri:
+            for fj in incident[int(v)]:
+                if float(fn[fi] @ fn[fj]) >= CREASE_COS:
+                    acc += fn[fj]
+        norm = float(np.linalg.norm(acc))
+        out[fi] = acc / norm if norm > 1e-12 else fn[fi]
+    return out
 
 
 # Nominal depth in metres, per class that gets a shape. **Depth is the one dimension the

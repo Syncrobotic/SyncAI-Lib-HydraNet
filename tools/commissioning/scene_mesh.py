@@ -140,6 +140,32 @@ def product_units(name: str, w_m: float, d_m: float):
     return out
 
 
+# **The estimator is chosen per class, and p85 for everything was the bug.**
+#
+# p85 answers "85% of what I saw of this thing is below here". For a fixture with a flat
+# top -- a display table -- that IS its height, and the fleet agrees: 0.78-0.97 m across
+# eight cameras, tight and right. For a surface that runs from the floor to its top --
+# a wall, a column, a merchandise shelf -- it answers how much of it the camera saw, and
+# under-reads by however much is above the 85th percentile of visible pixels.
+#
+# Measured 2026-08-27, `display_shelf` p85 against p99 on the same pixels:
+#
+#     Taichung-cam01   1.69 -> 2.08     Taichung-cam10   1.82 -> 2.38
+#     Taichung-cam11   1.73 -> 2.04     Tao-Hsin-cam04   1.17 -> 1.32
+#     Kaohsiung-cam04  0.93 -> 1.21
+#
+# The first three land on believable merchandise-wall heights, so those cameras were
+# never a depth failure -- they were this estimator. Kaohsiung-cam04 is low at p99 too,
+# and that one **is** the white-surface collapse the block above `CLASS_NAMES` describes.
+# Separating the two is the whole point of changing the estimator: with p85 everywhere,
+# a wrong estimator and a broken depth model produced the same symptom and nothing could
+# tell them apart.
+#
+# p99 rather than max: a mask's top row picks up the ceiling or a smear, and one bad
+# pixel would set the height of the fixture.
+HEIGHT_PCT = {2: 99, 3: 99, 4: 85, 5: 99}
+
+
 def cell_grids(camera):
     """Per-class occupancy in floor metres, and per-class measured heights (p85)."""
     cf = CameraFile.load(ROOT / f"runs/commission01/{camera}.camera.json")
@@ -180,7 +206,7 @@ def cell_grids(camera):
         hs = z["height"][sel]
         hs = hs[np.isfinite(hs) & (hs > 0.05)]
         if len(hs) > 200:
-            heights[cid] = float(np.clip(np.percentile(hs, 85), 0.3, 3.0))
+            heights[cid] = float(np.clip(np.percentile(hs, HEIGHT_PCT[cid]), 0.3, 3.0))
     # extras: door footprints, and product cells with the height merchandise sits at
     for name, cid in (
         ("door", 6),
@@ -313,7 +339,7 @@ def height_caption(heights: dict[int, float]) -> str:
 
     def part(keys):
         return "  ".join(
-            f"{CLASS_NAMES[k].replace('display_', '')} {v:.2f}m"
+            f"{CLASS_NAMES[k].replace('display_', '')} {v:.2f}m(p{HEIGHT_PCT[k]})"
             for k, v in sorted(heights.items())
             if k in keys
         )
@@ -321,18 +347,32 @@ def height_caption(heights: dict[int, float]) -> str:
     measured = part(set(CLASS_NAMES) - drawn)
     seen = part(drawn)
     line = (
-        f"measured p85: {measured}  |  wall drawn at {DRAWN_H['wall']:.1f} m and column "
+        f"measured: {measured}  |  wall drawn at {DRAWN_H['wall']:.1f} m and column "
         f"at {COLUMN_MIN_H:.1f} m min -- footprint only"
     )
     return line + (f"; depth saw {seen}, which is the white-surface collapse" if seen else "")
 
 
 def render(camera, items, heights, out_path, *, eye=None, target=None):
-    xs = np.concatenate([m[0][:, 0] for m, *_ in items])
-    zs = np.concatenate([m[0][:, 2] for m, *_ in items])
+    # The *furniture* sets the frame, not the floor. The walkable carpet is drawn out to
+    # the edge of the projectable area, so including it made the span the room's reach
+    # rather than the room's contents and every scene came out small and far away.
+    solid = [m for m, name, _a, _s in items if name != "floor"] or [m for m, *_ in items]
+    xs = np.concatenate([m[0][:, 0] for m in solid])
+    zs = np.concatenate([m[0][:, 2] for m in solid])
     cx_m, cz_m = float(np.median(xs)), float(np.median(zs))
+    # **Frame the scene, do not frame a fixed distance.** The eye used to sit at a
+    # constant offset whatever the room measured, so a 6 m shop filled the canvas and a
+    # 12 m one sat in the middle of it at a third of the width -- and an unreadable render
+    # is not a neutral cost. On 2026-08-27 a reviewer reading these images called a
+    # foreshortened 1 cm iPad slab a "45-degree tilted panel, physically impossible" and
+    # correct product placement "floating"; both readings were of the framing, not of the
+    # reconstruction. Distance scales with the scene's own diagonal.
+    span = max(float(xs.max() - xs.min()), float(zs.max() - zs.min()), 2.0)
+    cx_m = float((xs.min() + xs.max()) / 2)
+    cz_m = float((zs.min() + zs.max()) / 2)
     target = target or [cx_m, 0.6, cz_m]
-    eye = eye or [cx_m + 7.5, 5.6, cz_m - 6.5]
+    eye = eye or [cx_m + 0.62 * span, 0.46 * span, cz_m - 0.54 * span]
     view = View(eye, target, 620.0 * SS, W * SS / 2, H * SS / 2)
     img = Image.new("RGB", (W * SS, H * SS), BG)
     img = Image.alpha_composite(

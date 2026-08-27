@@ -27,6 +27,7 @@ from syncai_bev3d.meshes import (
     ground_disc,
     human,
     place,
+    smooth_normals,
     table,
     to_obj,
     wall,
@@ -328,3 +329,47 @@ def test_smooth_normals_differ_from_flat_ones_on_a_curved_surface():
     )
     flat /= np.maximum(np.linalg.norm(flat, axis=1, keepdims=True), 1e-12)
     assert not np.allclose(smooth_normals(verts, faces), flat, atol=1e-3)
+
+
+def test_a_flat_face_is_shaded_as_one_face_and_not_as_two_triangles():
+    """The crease threshold in `smooth_normals`, and the artefact it removes.
+
+    Averaging normals through shared vertices makes a ten-sided tube read as a cylinder,
+    which is why it is there. On a box it does the opposite: each corner belongs to three
+    perpendicular faces, so the two triangles of one flat top average to different
+    normals and the quad is painted in two brightnesses. Every cabinet, counter and slab
+    in the commissioning renders carried that diagonal seam, and a reviewer reading those
+    images on 2026-08-27 called it a tent roof and a physically impossible tilted panel.
+
+    A box's faces are flat, so every triangle of one face must shade identically.
+    """
+    verts, faces = box(1.0, 1.0, 1.0)
+    n = smooth_normals(verts, faces)
+    # group faces by their geometric normal; a cube has exactly six such groups
+    geo = np.cross(
+        verts[faces[:, 1]] - verts[faces[:, 0]], verts[faces[:, 2]] - verts[faces[:, 0]]
+    )
+    geo = geo / np.linalg.norm(geo, axis=1, keepdims=True)
+    seen = []
+    for g in geo:
+        if not any(np.allclose(g, s, atol=1e-6) for s in seen):
+            seen.append(g)
+    assert len(seen) == 6
+    for s in seen:
+        same = np.array([np.allclose(g, s, atol=1e-6) for g in geo])
+        assert np.allclose(n[same], n[same][0], atol=1e-6), "one flat face, two shadings"
+
+
+def test_a_round_column_keeps_its_smoothing():
+    """The other half: the crease rule must not turn the tube back into a prism.
+
+    `column(..., round_=True)` is many narrow facets around a curve, and adjacent facets
+    differ by far less than the crease angle -- so their normals must still vary smoothly
+    rather than snapping to the flat geometric ones.
+    """
+    verts, faces = column(0.4, 0.4, 2.2, round_=True)
+    n = smooth_normals(verts, faces)
+    side = n[np.abs(n[:, 1]) < 0.3]  # the barrel, not the end caps
+    assert len(side) > 12
+    # many distinct directions, none of them equal to its neighbour
+    assert len(np.unique(np.round(side, 3), axis=0)) > len(side) // 2
