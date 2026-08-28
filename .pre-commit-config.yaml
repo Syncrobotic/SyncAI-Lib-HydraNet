@@ -154,6 +154,20 @@ repos:
       # nearly all of that is interpreter and collection rather than the four tests, which
       # take 0.17 s between them. `files:` keeps it off every commit that touches neither
       # tree, which is most of them.
+      #
+      # **`--no-verify` defeats this, and on a shared checkout that is not an exotic state.**
+      # pre-commit refuses to run at all while this file is unstaged -- "Your pre-commit
+      # configuration is unstaged", the commit is blocked, and the only way through is
+      # `--no-verify`, which skips every hook here. Verified 2026-08-28 in a detached
+      # worktree: an unstaged edit to this file blocks an unrelated commit outright, and
+      # `--no-verify` lands it. So whenever one session is editing this file, every other
+      # session in the tree is committing with no hooks at all -- which is exactly what
+      # happened on the evening `b8abfb5` went out, and `pre-commit run --files <paths>`
+      # run by hand does not substitute: it only runs hooks whose `files:` pattern matches
+      # what is listed, so a whole-tree hook nobody names is skipped the same way.
+      #
+      # CI is the backstop and it works -- run 33169830273 caught `b8abfb5` on push. This
+      # hook buys the ~5 minutes between the commit and that result, not correctness.
       - id: tool-import-ratchet
         name: script/tool import ratchet
         entry: uv run --frozen pytest tests/test_scripts_are_not_libraries.py -q -p no:cacheprovider
