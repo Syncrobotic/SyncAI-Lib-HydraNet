@@ -55,6 +55,14 @@ class MultiTaskLoader:
         seed: int = 0,
         pin_memory: bool = True,
     ):
+        # Pinning without an accelerator is not merely useless, it warns -- and the test
+        # suite turns warnings into errors, so `test_multitask_ratio` was red on every CI
+        # row and green on every developer's GPU box. `Trainer._build_data` already asks
+        # `supports_pinned_memory(device)` before passing this; the default here said
+        # `True` regardless and so contradicted its own caller on a CPU-only machine.
+        # Clamped rather than re-defaulted, because a caller that asked for pinning on a
+        # machine that cannot pin wants the answer, not the warning.
+        pin_memory = bool(pin_memory) and torch.cuda.is_available()
         self.names = names
         # Kept, not merely iterated: `detection_class_steps` below is the only place the
         # step share can be computed at all, because it needs both the schedule (here)
