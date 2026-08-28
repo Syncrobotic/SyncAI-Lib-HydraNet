@@ -15,7 +15,7 @@ THE CHECK, AND ONE THAT WAS TRIED AND DOES NOT WORK
 The bar is the one the 2026-08-28 README figure was held to: every frame of the gif read
 by eye on contact sheets, and **the detector re-run on the SOURCE frames at a threshold
 far below the render's, with every person it finds required to fall inside a region the
-render blurred.** That is what this reproduces, using `demo_video.blur_rect` rather than a
+render blurred.** That is what this reproduces, using `utils.face_blur.blur_rect` rather than a
 second copy of the rectangle arithmetic -- a copy would answer the question about itself.
 
 **What was tried first and measured wrong, because it is the kind of check that looks
@@ -58,7 +58,6 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src"))
 
-import demo_video
 
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
@@ -66,6 +65,11 @@ from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.models.hydranet import build_model
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
+from syncai_hydranet.utils.face_blur import (
+    BLUR_THR,
+    blur_rect,
+    plate_person_boxes,
+)
 from syncai_hydranet.utils.visualize import preprocess
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
@@ -104,7 +108,7 @@ def head_uncovered(box, rects, w: int, h: int) -> float:
     overlapping rectangles and neither covers it alone -- which is the case a per-rectangle
     test reports as a naked face.
     """
-    head = demo_video.blur_rect(w, h, *box)
+    head = blur_rect(w, h, *box)
     if head is None:
         return 0.0  # too small to carry a readable face; `blur_rect` declines it too
     hx0, hy0, hx1, hy1 = head
@@ -280,17 +284,13 @@ def main() -> int:
                 continue
             # exactly what `demo_video` blurs: its detector set at BLUR_THR, plus the
             # static-plate instrument. Neither is re-derived here; both are imported.
-            b_blur, _ = person_boxes(
-                frame, model, device, size, person_label, demo_video.BLUR_THR
-            )
-            rects = [
-                r for bb in b_blur if (r := demo_video.blur_rect(src_w, src_h, *bb)) is not None
-            ]
+            b_blur, _ = person_boxes(frame, model, device, size, person_label, BLUR_THR)
+            rects = [r for bb in b_blur if (r := blur_rect(src_w, src_h, *bb)) is not None]
             if plate_arr is not None:
                 rects += [
                     r
-                    for bb in demo_video.plate_person_boxes(frame, plate_arr)
-                    if (r := demo_video.blur_rect(src_w, src_h, *bb)) is not None
+                    for bb in plate_person_boxes(frame, plate_arr)
+                    if (r := blur_rect(src_w, src_h, *bb)) is not None
                 ]
             b_audit, sc = person_boxes(frame, model, device, size, person_label, AUDIT_THR)
             for bb, s0 in zip(b_audit, sc, strict=True):
