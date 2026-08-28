@@ -273,7 +273,7 @@ def main() -> int:
 
     # the static scene, built once; the view frozen so the room does not swim
     scene_mesh.SS = 1
-    _cf2, items, heights = scene_mesh.build_scene_regular(camera)
+    _cf2, items, heights, _shapes = scene_mesh.build_scene_regular(camera)
     # merchandise stays in: the product regions are now tiled with unit-sized items
     # sitting on the counter tops, which is what a store looks like. They read as
     # clutter only when they are region-sized slabs, which is what they used to be.

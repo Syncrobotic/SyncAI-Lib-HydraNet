@@ -430,6 +430,78 @@ def store_yaw(grids):
     return float(m % (np.pi / 2))
 
 
+# **Plausibility intervals per class, in metres.** Not a filter and not a fit: a
+# component outside its own class's interval is a component the mask welded together or
+# the depth got wrong, and the point is to *say so* rather than to draw it as if it were
+# a fixture. A display table 3.5 m deep and 0.97 m high is two tables joined by a mask
+# bridge; drawn silently it reads as one enormous table, and every number taken off it
+# afterwards is wrong in a way the picture does not show.
+#
+# The intervals are shop facts, and they are wide on purpose -- this is a tripwire for
+# "that is not furniture", not a shape prior that pulls a fitted box toward a mean.
+# `span` is the longer horizontal side, `short` the other.
+PLAUSIBLE_M = {
+    "display_table": {"height": (0.55, 1.15), "span": (0.4, 3.2), "short": (0.3, 1.6)},
+    "display_shelf": {"height": (0.90, 2.60), "span": (0.4, 9.0), "short": (0.2, 1.4)},
+    "column": {"height": (1.60, 3.20), "span": (0.15, 1.30), "short": (0.15, 1.30)},
+    "wall": {"height": (1.80, 3.20), "span": (0.3, 20.0), "short": (0.05, 0.6)},
+}
+
+# How far above a fixture's top a product may sit and still count as resting on it. A
+# cabinet's merchandise sits on shelves *inside* it, so the test is "inside the footprint
+# and not floating above the top", not "level with the top".
+SUPPORT_TOL_M = 0.25
+
+
+def footprint_of(mesh):
+    """World-axis-aligned `(x0, x1, z0, z1, top_y)` of one emitted mesh.
+
+    Axis-aligned rather than the true rotated rectangle, and that is a real
+    approximation: at the store yaw a rotated box's AABB is larger than the box. It is
+    used only for the support test, where over-covering means a product is *kept* rather
+    than dropped -- the direction that does not delete geometry on a technicality.
+    """
+    v = mesh[0]
+    return (
+        float(v[:, 0].min()),
+        float(v[:, 0].max()),
+        float(v[:, 2].min()),
+        float(v[:, 2].max()),
+        float(v[:, 1].max()),
+    )
+
+
+def implausible(shapes) -> list[str]:
+    """Every emitted fixture outside its class's interval, named.
+
+    `shapes` is `(name, width_m, depth_m, height_m)` **as the fixture was built**, in the
+    store frame. It is not derived from the mesh, and that is the whole reason this takes
+    an argument instead of reading `items`: a first version measured the world
+    axis-aligned bound of the placed mesh, and at a 37-degree store yaw the AABB of a
+    2.59 x 2.46 m counter is 3.55 x 3.53 -- so every rotated fixture in the shop reported
+    as implausible, and a 0.15 m wall came back 1.60 m thick. The same confusion had
+    already produced a false "footprints are systematically too large" finding earlier
+    the same day. A box's dimensions are its own, not its shadow's.
+
+    Returned rather than raised, and rather than silently skipped: this is a
+    commissioning render whose job is to be looked at, and a component that is not
+    furniture is exactly what the person looking needs told.
+    """
+    out = []
+    for name, w, d, h in shapes:
+        rule = PLAUSIBLE_M.get(name)
+        if rule is None:
+            continue
+        for label, value in (("height", h), ("span", max(w, d)), ("short", min(w, d))):
+            lo, hi = rule[label]
+            if not (lo <= value <= hi):
+                out.append(
+                    f"{name}: {label} {value:.2f} m outside {lo:.2f}-{hi:.2f} "
+                    f"(built {max(w, d):.2f}x{min(w, d):.2f} m, height {h:.2f} m)"
+                )
+    return out
+
+
 def build_scene_regular(camera):
     """B-path: every fixture becomes a store-axis-aligned parametric mesh.
 
@@ -442,6 +514,7 @@ def build_scene_regular(camera):
     yaw = store_yaw(grids)
     cy, sy = np.cos(yaw), np.sin(yaw)
     items = [(floor_mesh(grids[1]), "floor", 150, False)]
+    shapes: list[tuple] = []  # (name, w, d, h) as built, for `implausible`
     for cid, name in CLASS_NAMES.items():
         h = heights.get(cid, DRAWN_H[name])
         # Open first: a mask bridge a few cells wide welds neighbouring fixtures into one
@@ -474,21 +547,32 @@ def build_scene_regular(camera):
                 short = min(w, d)
                 if short > 0.4:  # a fat "wall" blob is a wall corner: thin it
                     w, d = (w, 0.15) if w >= d else (0.15, d)
+                shapes.append((name, w, d, DRAWN_H["wall"]))
                 half = (w if w >= d else d) / 2
                 pts = [[-half, 0.0], [half, 0.0]] if w >= d else [[0.0, -half], [0.0, half]]
                 mesh = wall(pts, 2.4, thickness_m=max(min(w, d), 0.12))
                 items.append((place(mesh, at), name, 105, False))
             elif name == "column":
+                shapes.append((name, min(w, 0.8), min(d, 0.8), max(h, COLUMN_MIN_H)))
                 mesh = column(min(w, 0.8), min(d, 0.8), max(h, COLUMN_MIN_H))
                 items.append((place(mesh, at), name, 255, True))
             elif name == "display_shelf":
+                shapes.append((name, w, min(d, 0.8), h))
                 mesh = cabinet(w, min(d, 0.8), h, shelves=max(2, int(h / 0.45)))
                 items.append((place(mesh, at), name, 255, True))
             else:  # display_table
                 # a footprint too long for four legs is a counter, not a solid prism:
                 # a slab on a recessed body, so the surface merchandise sits on exists
+                shapes.append((name, w, d, h))
                 mesh = table(w, d, h) if max(w, d) < 2.2 else counter(w, d, h)
                 items.append((place(mesh, at), name, 255, True))
+    # Every fixture that can hold merchandise, as a world AABB plus its top.
+    supports = [
+        footprint_of(m)
+        for m, name, _a, _s in items
+        if name in ("display_table", "display_shelf")
+    ]
+    unsupported: list[tuple] = []
     # extras: doors as solid tall slabs, products as slabs at their measured height
     cy2, sy2 = np.cos(yaw), np.sin(yaw)
     for cid, name, hgt in (
@@ -532,12 +616,32 @@ def build_scene_regular(camera):
                 # the region is measured; the items tiled into it are schematic, which is
                 # why they are unit-sized real products rather than one slab the size of
                 # the region -- a slab asserts a single object that was never detected
+                # **Support: merchandise rests on a fixture or it is not drawn.**
+                # `base` is the region's measured height, so where the fixture holding
+                # it was never reconstructed the products hang in the air at a metre --
+                # one of Taichung-cam07's 24 product groups did exactly that, over a
+                # shelf whose class that camera never detected. A floating product is
+                # not a small cosmetic error: it is the render asserting merchandise at
+                # a position with nothing under it, which is the one thing a scene of
+                # fixtures exists to deny.
+                px, pz = at.x_m, at.z_m
+                if not any(
+                    x0 <= px <= x1 and z0 <= pz <= z1 and base <= top + SUPPORT_TOL_M
+                    for x0, x1, z0, z1, top in supports
+                ):
+                    unsupported.append((name, float(base), px, pz))
+                    continue
                 for unit in product_units(name, w, d):
                     verts = unit[0].copy()
                     verts[:, 1] += base
                     items.append((place((verts, unit[1]), at), name, 255, False))
     items.append((place(ground_disc(0.35), Placement(0.0, 0.0)), "disc", 130, False))
-    return cf, items, heights
+    for name, base, px, pz in unsupported:
+        print(
+            f"  {camera}: dropped {name} at {base:.2f} m, "
+            f"({px:.2f}, {pz:.2f}) -- nothing under it"
+        )
+    return cf, items, heights, shapes
 
 
 def export_glb(camera, items):
@@ -582,7 +686,10 @@ def main():
     gif = "--gif" in sys.argv[1:]
     regular = "--regular" in sys.argv[1:]
     for camera in argv:
-        _cf, items, heights = (build_scene_regular if regular else build_scene)(camera)
+        built = (build_scene_regular if regular else build_scene)(camera)
+        _cf, items, heights = built[:3]
+        for line in implausible(built[3] if len(built) > 3 else []):
+            print(f"  {camera}: implausible {line}")
         out = ROOT / f"assets/commission_mesh_{camera}.png"
         render(camera, items, heights, out)
         obj = export_obj(camera, items)

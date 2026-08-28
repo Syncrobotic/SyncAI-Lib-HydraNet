@@ -61,7 +61,7 @@ def main() -> int:
     plate = plate.resize((w_px, h_px))
 
     scene_mesh.SS = 1
-    _cf, items, _heights = scene_mesh.build_scene_regular(args.camera)
+    _cf, items, _heights, _shapes = scene_mesh.build_scene_regular(args.camera)
     if args.metre_scale != 1.0:
         items = [((m[0] * args.metre_scale, m[1]), *rest) for m, *rest in items]
 

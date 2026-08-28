@@ -219,7 +219,7 @@ def main() -> int:
     p_legend = legend_panel(terrain_names, palette, mask_names)
 
     scene_mesh.SS = 1
-    _cf2, items, heights = scene_mesh.build_scene_regular(camera)
+    _cf2, items, heights, _shapes = scene_mesh.build_scene_regular(camera)
     if args.metre_scale != 1.0:
         items = [((m[0] * args.metre_scale, m[1]), *rest) for m, *rest in items]
         heights = {k: v * args.metre_scale for k, v in heights.items()}

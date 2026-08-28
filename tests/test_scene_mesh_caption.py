@@ -17,7 +17,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/commissioning"))
-from scene_mesh import CLASS_NAMES, COLUMN_MIN_H, DRAWN_H, height_caption
+from scene_mesh import (
+    CLASS_NAMES,
+    COLUMN_MIN_H,
+    DRAWN_H,
+    height_caption,
+    implausible,
+)
 
 WALL, COLUMN, TABLE, SHELF = 2, 3, 4, 5
 COLLAPSED = {WALL: 1.54, COLUMN: 1.16, TABLE: 0.79, SHELF: 1.69}
@@ -58,3 +64,46 @@ def test_every_drawn_constant_class_is_one_the_caption_knows_about():
     by default, which is right for a fixture with a top surface and wrong for another
     vertical one. This is the tripwire for that day."""
     assert set(CLASS_NAMES.values()) == {"wall", "column", "display_table", "display_shelf"}
+
+
+# --------------------------------------------------------------------------- plausibility
+
+TABLE_NAME = "display_table"
+
+
+def test_a_table_two_and_a_half_metres_deep_is_reported():
+    """The case that prompted this: a mask bridge welds two counters into one component,
+    the p3-p97 box spans both, and the render draws one enormous table. Taichung-cam01
+    built a 2.60 x 2.45 m `display_table` at 0.79 m -- a plausible height on a footprint
+    no table has. Drawn silently it reads as furniture and every metre taken off it
+    afterwards is wrong in a way the picture does not show."""
+    out = implausible([(TABLE_NAME, 2.60, 2.45, 0.79)])
+    assert len(out) == 1
+    assert "short 2.45" in out[0] and TABLE_NAME in out[0]
+
+
+def test_an_ordinary_counter_is_not_reported():
+    assert implausible([(TABLE_NAME, 2.60, 0.90, 0.79)]) == []
+    assert implausible([("display_shelf", 6.30, 0.45, 2.08)]) == []
+    assert implausible([("wall", 4.00, 0.15, 2.40)]) == []
+
+
+def test_it_reads_the_built_dimensions_and_not_the_placed_mesh():
+    """A 0.15 m wall is 0.15 m thick however the store frame is rotated.
+
+    The first version of this check measured the world axis-aligned bound of the placed
+    mesh. At Taichung-cam01's 37-degree store yaw the AABB of a 2.59 x 2.46 m counter is
+    3.55 x 3.53, so every rotated fixture in the shop reported as implausible and a
+    0.15 m wall came back 1.60 m thick. `implausible` takes the built dimensions for
+    exactly this reason, and the argument type is the guard against it coming back.
+    """
+    assert implausible([("wall", 4.00, 0.15, 2.40)]) == []
+    # the AABB of that same wall at 37 degrees would be ~3.3 x 2.5, which does trip
+    assert implausible([("wall", 3.30, 2.50, 2.40)])
+
+
+def test_a_class_with_no_interval_is_not_judged():
+    """`product_ipad`, `door`, `floor`: nothing here knows what shape they should be, and
+    a silent pass is honest where an invented interval would not be."""
+    assert implausible([("product_ipad", 0.30, 0.30, 0.01)]) == []
+    assert implausible([("door", 1.00, 0.12, 2.05)]) == []
