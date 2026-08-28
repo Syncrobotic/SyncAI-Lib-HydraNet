@@ -60,7 +60,12 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from syncai_hydranet.analytics.appearance import torso_stats  # noqa: E402
+from syncai_hydranet.analytics.staff import (  # noqa: E402
+    crop_features,
+    fit_logreg,
+    fit_staff_model,
+    predict,
+)
 from syncai_hydranet.data.attributes import ATTRIBUTES  # noqa: E402
 from syncai_hydranet.models.crop_encoder import CropEncoder  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint  # noqa: E402
@@ -139,24 +144,28 @@ def torso_colour(files: list[Path]) -> np.ndarray:
     leave-one-camera-out protocol is what makes the comparison mean anything.
 
     The nine statistics moved to `analytics/appearance.py` on 2026-08-27 when a second
-    caller needed them; the numbers are unchanged. **The standardisation stayed here**,
-    because it is a property of the set being fitted rather than of a crop, and a probe
-    is what needs its features on one scale.
+    caller needed them, and the resize in front of them moved to `analytics.staff` on
+    2026-08-28 when a *deployed* model needed the identical transform -- if the probe and
+    the artefact resize differently they are measuring and shipping different features,
+    and neither would say so. The numbers are unchanged: all sixteen per-camera
+    accuracies still reproduce the `probe.json` that predates both moves.
+
+    **The standardisation stays here**, because it is a property of the set being fitted
+    rather than of a crop, and a probe is what needs its features on one scale. Note that
+    it is taken over the *whole* set, held-out camera included. That is transductive, and
+    for comparing four sources against each other under one protocol it is harmless; it
+    is not acceptable in an artefact, so `analytics.staff.fit_staff_model` standardises
+    on the fitted half only and its accuracy is reported separately below.
     """
-    x = np.stack(
-        [
-            torso_stats(
-                np.asarray(
-                    Image.open(f)
-                    .convert("RGB")
-                    .resize((SIZE[1], SIZE[0]), Image.Resampling.BILINEAR),
-                    dtype=np.float32,
-                )
-                / 255.0
-            )
-            for f in files
-        ]
-    )
+    return standardise(raw_torso_colour(files))
+
+
+def raw_torso_colour(files: list[Path]) -> np.ndarray:
+    """The nine statistics in their own units, one row per crop."""
+    return np.stack([crop_features(np.asarray(Image.open(f).convert("RGB"))) for f in files])
+
+
+def standardise(x: np.ndarray) -> np.ndarray:
     return (x - x.mean(0)) / (x.std(0) + 1e-6)
 
 
@@ -174,35 +183,21 @@ def encoder(path: str | None, device):
     return model.to(device).eval()
 
 
-def fit_logreg(x: np.ndarray, y: np.ndarray, *, iters: int = 400, l2: float = 1e-2):
-    """Balanced logistic regression, full-batch, no sklearn dependency for 40 lines.
-
-    Class-balanced because the batch is not: the loss weights each class by its inverse
-    frequency, so a probe cannot score well by answering "customer" to everything.
-    """
-    xb = np.concatenate([x, np.ones((len(x), 1), dtype=x.dtype)], axis=1)
-    w = np.zeros(xb.shape[1], dtype=np.float64)
-    n_pos, n_neg = max(int(y.sum()), 1), max(int((1 - y).sum()), 1)
-    weight = np.where(y == 1, 0.5 / n_pos, 0.5 / n_neg) * len(y)
-    for _ in range(iters):
-        p = 1.0 / (1.0 + np.exp(-xb @ w))
-        grad = xb.T @ (weight * (p - y)) / len(y) + l2 * w
-        hess_diag = xb.T @ (weight * p * (1 - p) * xb.T).T / len(y) + l2 * np.eye(len(w))
-        w -= np.linalg.solve(hess_diag + 1e-6 * np.eye(len(w)), grad)
-    return w
-
-
-def predict(w: np.ndarray, x: np.ndarray) -> np.ndarray:
-    xb = np.concatenate([x, np.ones((len(x), 1), dtype=x.dtype)], axis=1)
-    return 1.0 / (1.0 + np.exp(-xb @ w))
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("--batch", default="datasets/staff_customer_batch01")
     ap.add_argument("--out", default="runs/staff_probe01")
+    ap.add_argument(
+        "--fit-for",
+        action="append",
+        default=[],
+        metavar="CAMERA",
+        help="also SAVE a deployable torso-colour model licensed for CAMERA: fitted on "
+        "every other labelled camera and scored on this one, written to "
+        "<out>/model_<CAMERA>.json. Repeatable. Without this the script only measures.",
+    )
     a = ap.parse_args()
 
     device = pick_device(None)
@@ -302,6 +297,24 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     (out / "probe.json").write_text(json.dumps(report, indent=1) + "\n")
     print(f"\n-> {out}/probe.json")
+
+    # A measurement nothing can load is not a classifier. `--fit-for` is what turns the
+    # torso-colour arm above into an artefact `analytics.staff` can apply, one per
+    # camera, each carrying the accuracy it was scored at on that camera and refusing
+    # every other one. Colour alone rather than the combined arm on purpose: the
+    # combination's 0.893 has no per-camera breakdown, so it cannot answer "may this
+    # store be coloured" for any store. See `analytics/staff.py`.
+    if a.fit_for:
+        raw = raw_torso_colour(files)
+        print()
+        for cam in a.fit_for:
+            model = fit_staff_model(raw, y, cams, held_out=cam)
+            path = model.save(out / f"model_{cam}.json")
+            print(
+                f"{cam}: held-out accuracy {model.accuracy:.3f} on {model.held_out_n} "
+                f"crops, fitted on {model.n_crops} crops from "
+                f"{len(model.trained_cameras)} cameras -> {path}"
+            )
     return 0
 
 
