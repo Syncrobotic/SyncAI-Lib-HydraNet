@@ -1619,3 +1619,43 @@ something it does not support.
    `fixture` family names a chair or a stool, so a chair can only be picked up by the
    `column` prompts and is then rejected by the column gate. Fleet-wide that reason
    accounts for 14 of the 52 rejections.
+
+22. **A merchandise wall was being drawn as a small cabinet on every camera turned the
+   other way, and the tripwire could not see it.** Found 2026-08-28 by a reviewer asking
+   why the README figure's fixtures were placed as they were — the render, not a number,
+   which is the third time today that a defect surfaced only when somebody opened the
+   picture (§7.21, and the p85 wall heights before it).
+
+   `scene_mesh.build_scene_regular` fits each component's extents in the store frame and
+   then caps the shelving depth: `min(d, SHELF_MAX_DEPTH_M)`, where `d` is the extent
+   along **v**. That is the depth only if the run lies along **u**. Taichung-cam10's three
+   shelf components measure **u1.33 x v6.29, u0.97 x v2.70 and u0.55 x v1.08** — so the cap
+   took a **6.29 m accessory wall down to 0.45 m** and left its 1.33 m depth untouched. The
+   store's whole merchandise run arrived in the scene as a **1.35 x 0.45 m cabinet standing
+   in the aisle**, and the same happened on Tao-Hsin-cam04 (2.74 m -> 1.38).
+
+   **`PLAUSIBLE_M` is why it survived a round that added a tripwire.** `display_shelf`
+   allows span (0.4, 9.0) and short (0.2, 1.4); 1.35 x 0.45 sits inside it exactly as
+   6.30 x 0.45 does. A truncated run is a plausible small unit, so the check that exists
+   to say "that is not furniture" had nothing to say. **A plausibility interval catches a
+   shape that is impossible and never one that is merely wrong.**
+
+   **And the camera it was measured on could not show it.** The 0.45 m cap was read off
+   cam11's plates in the same round that introduced it, and cam11's runs are
+   u4.02 x v0.40 and u2.36 x v0.42 — long side on `u`, where the cap is a no-op. One
+   camera's orientation was enough to make the parameter look right.
+
+   Fixed by capping whichever side is shorter, which the `wall` branch fifteen lines above
+   has always done, plus a quarter turn of the placement when the run lies along v.
+   Fitted shelving before -> after: **cam10 1.35/0.95/0.55 -> 6.30/2.70/1.10**,
+   Tao-Hsin-cam04 1.38 -> 2.75, **cam11 4.02/2.36 unchanged** — which is the regression
+   check that matters. The back panel now also faces away from the room's centre; nothing
+   had asked where `shelving`'s back pointed, and on cam10 it pointed into the aisle.
+
+   **Found underneath it and NOT fixed: the eye is a fixed (+x, -z) diagonal and nothing
+   asks whether something tall lies along it.** With the 6.3 m wall restored, the
+   commissioning still for cam10 is taken from behind it. Scoring the four diagonals by
+   occlusion was tried and reverted the same hour — it fixes cam10 and makes cam11 worse,
+   so which corner to stand in is a composition decision rather than a scoring one. The
+   demo video's panel is unaffected, because `demo_video.content_crop` reframes on the
+   content after rendering.
