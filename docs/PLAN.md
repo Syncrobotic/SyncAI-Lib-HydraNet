@@ -1349,6 +1349,25 @@ something it does not support.
    measurement that prices it — 26 to 49 IDF1 points of headroom, against the 0.3 to 3.6
    that association tuning returned.
 
+   **Two more clips were proposed for this and neither could be labelled, which is itself
+   a measurement about the fix above.** `runs/gt_cam04_v3` (Kaohsiung-cam04, 300 frames,
+   **45 tracks**) and `runs/gt_tc04` (Taichung-cam04, 900 frames, **26 tracks**) are both
+   built with the shipped detector and both instrumented, and both were abandoned at the
+   reading stage: on the first, four tracks wear the same maroon top, two the same black
+   vest and ponytail, two the same cream ruffles, under a near-top-down view; on the
+   second, **nearly every track is a blue polo torso at the same scale** — `19, 21, 22, 23,
+   25, 27, 28` are not separable by eye at all. A ground truth that over-fragments
+   penalises the tracker that correctly merges, which is the direction that would flatter
+   the conclusion above, so guessing was refused rather than hedged.
+
+   **That failure is evidence about the appearance model, not only about the labeller.**
+   The 26-49 points priced above are priced for something that has to tell these people
+   apart, and in these stores the staff wear one shirt — the same fact §7.15 measures as
+   `staff/customer` being carried by nine torso-colour statistics that fail on the camera
+   whose staff wear jackets, and the same fact §7.18's `between` reference exists to price.
+   **Whatever bridges a twelve-second absence here cannot be torso colour**, and the two
+   clips that could be labelled are the two where people happened to look different.
+
    Caveats, all of them: **two clips, two cameras, nine identities**, and the labels were
    read by a model rather than by a person (both `provenance.json` files say so in their
    own words). The labels cover the detector's boxes only, so this measures association and
