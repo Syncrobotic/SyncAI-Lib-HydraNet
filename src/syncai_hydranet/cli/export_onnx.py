@@ -23,6 +23,7 @@ rather than misreading them.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -434,14 +435,54 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def weights_provenance(checkpoint: str | None, prefer: str) -> dict[str, str]:
+    """What produced the weights in this graph, for the artefact to carry.
+
+    Nothing recorded it. The ONNX metadata named the preprocessing contract, the input
+    range, the layout, the channel order and the class list; the sidecar named the class
+    mapping and the input size. Between them a reader could reconstruct how to feed the
+    graph and how to read its outputs, and not **which training run it came from** -- so
+    an engine built from `best.pt` and one built from the initialisation were the same
+    artefact as far as anything downstream could tell, and `--check-parity` passes on
+    both.
+
+    The digest is of the checkpoint file, not of the tensors, because that is what a
+    reader can reproduce: `sha256sum runs/<run>/best.pt` against this string is a
+    one-command check that the engine on a board came from the run someone thinks it did.
+    ~130 MB hashes in well under a second and the export already spends seconds on the
+    graph.
+
+    `weights` is the `--weights` choice as resolved, not as requested: `select_weights`
+    falls back to the raw tensors when a checkpoint carries no EMA, and a run short
+    enough for that is precisely one where the two are different models.
+    """
+    if checkpoint is None:
+        return {"weights": "random", "checkpoint": "none", "checkpoint_sha256": "none"}
+    digest = hashlib.sha256()
+    with Path(checkpoint).open("rb") as fh:
+        for block in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(block)
+    return {
+        "weights": prefer,
+        "checkpoint": str(checkpoint),
+        "checkpoint_sha256": digest.hexdigest(),
+    }
+
+
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     cfg = load_config(args.config, args.set)
     check_heads_are_trained(cfg, args.allow_untrained_heads)
     model = build_model(cfg).eval()
+    provenance = weights_provenance(args.checkpoint, args.weights)
     if args.checkpoint:
         ckpt = load_checkpoint(args.checkpoint)
-        model.load_state_dict(select_weights(ckpt, args.weights))
+        chosen = select_weights(ckpt, args.weights)
+        # `select_weights` silently falls back to the raw tensors when a checkpoint has
+        # no EMA, and on a short run those are a different model -- so record what was
+        # taken rather than what was asked for.
+        provenance["weights"] = "ema" if chosen is ckpt.get("ema") else "model"
+        model.load_state_dict(chosen)
     elif not args.allow_random_weights:
         raise SystemExit(
             "no --checkpoint: this would export the ImageNet-initialised model, whose "
@@ -547,6 +588,7 @@ def main(argv: list[str] | None = None) -> None:
                     "source_indices": kept_idx,
                     "cls_outputs": out_names[len(wrapper.seg_names) :][:n_lv],
                     "input_size": [h, w],
+                    **provenance,
                 },
                 indent=2,
             )
@@ -572,6 +614,7 @@ def main(argv: list[str] | None = None) -> None:
             "input_range": "0-255" if embed else "imagenet-normalised",
             "input_layout": "NCHW",
             "channel_order": "RGB",
+            **provenance,
         }
         if kept_names is not None:
             props["detection_classes"] = ",".join(kept_names)

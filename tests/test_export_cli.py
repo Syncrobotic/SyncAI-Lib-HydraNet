@@ -423,3 +423,92 @@ def test_the_shape_only_escape_hatch_exports(tmp_path):
     out = tmp_path / "m.onnx"
     _main("--config", _write_cfg(tmp_path), "--output", str(out))
     assert out.exists()
+
+
+# ------------------------------------------- which run these weights came from
+
+
+def test_a_shape_only_export_says_so_in_the_artefact(tmp_path, exported):
+    """`weights=random` is the marker that makes the escape hatch auditable.
+
+    Refusing the unflagged case stops the accident; this stops the deliberate one being
+    mistaken for a trained export later. A benchmarking ONNX is a legitimate artefact and
+    it has to be one a reader can identify.
+    """
+    _main("--config", _write_cfg(tmp_path), "--output", str(tmp_path / "m.onnx"))
+    assert exported.props["weights"] == "random"
+    assert exported.props["checkpoint"] == "none"
+    assert exported.props["checkpoint_sha256"] == "none"
+
+
+def test_the_artefact_carries_the_checkpoint_it_was_exported_from(tmp_path, exported):
+    """The digest is of the file, so `sha256sum` against it is the whole verification.
+
+    Not a hash of the tensors: a reader holding an engine and a `runs/` directory can run
+    one command and learn whether they match. Verified against the real CLI on
+    `runs/hydranet_retail_pose02/best.pt`, where this string equals `sha256sum`'s.
+    """
+    import hashlib
+
+    ckpt = tmp_path / "best.pt"
+    torch.save({"model": {}, "ema": {}}, ckpt)
+    expected = hashlib.sha256(ckpt.read_bytes()).hexdigest()
+
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(export_onnx, "load_checkpoint", lambda _p: {"model": {}, "ema": {}})
+    monkey.setattr(export_onnx, "select_weights", lambda ck, _prefer: ck["ema"])
+    monkey.setattr(torch.nn.Module, "load_state_dict", lambda _self, _sd, **_kw: None)
+    try:
+        export_onnx.main(
+            [
+                "--config",
+                _write_cfg(tmp_path),
+                "--output",
+                str(tmp_path / "m.onnx"),
+                "--checkpoint",
+                str(ckpt),
+            ]
+        )
+    finally:
+        monkey.undo()
+
+    assert exported.props["checkpoint"] == str(ckpt)
+    assert exported.props["checkpoint_sha256"] == expected
+    assert exported.props["weights"] == "ema"
+
+
+def test_weights_records_what_was_taken_not_what_was_asked(tmp_path, exported):
+    """`--weights ema` against a checkpoint with no EMA silently gets the raw tensors.
+
+    `select_weights` falls back on purpose -- and `utils/checkpoint.py` records why it
+    matters: a run scoring 0.16 mIoU on EMA weights and 0.95 on the raw ones from the
+    same training, because the average starts at the initialisation. On a short run the
+    two are different models, so an artefact claiming the flag rather than the outcome
+    would name the wrong one.
+    """
+    ckpt = tmp_path / "last.pt"
+    torch.save({"model": {}}, ckpt)
+
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(export_onnx, "load_checkpoint", lambda _p: {"model": {}})
+    monkey.setattr(torch.nn.Module, "load_state_dict", lambda _self, _sd, **_kw: None)
+    try:
+        export_onnx.main(
+            [
+                "--config",
+                _write_cfg(tmp_path),
+                "--output",
+                str(tmp_path / "m.onnx"),
+                "--checkpoint",
+                str(ckpt),
+                "--weights",
+                "ema",
+            ]
+        )
+    finally:
+        monkey.undo()
+
+    assert exported.props["weights"] == "model", (
+        "asked for ema, got the raw tensors because there is no ema in this checkpoint; "
+        "the artefact must say which it actually holds"
+    )
