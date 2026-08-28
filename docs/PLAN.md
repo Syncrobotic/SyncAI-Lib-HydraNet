@@ -1298,82 +1298,64 @@ something it does not support.
    fix is not a threshold: it is that `within` should be built from labelled identities
    where they exist, which for the first time they do.
 
-   **~~Decision 1 is settled~~ — WITHDRAWN THE SAME DAY, see the second clip below. What
-   follows was measured on one camera and does not hold on the next one.** Read the two
-   together or neither.
+   **Decision 1 is answered, 2026-08-28, on two labelled clips — and the answer took three
+   goes, two of which were the instrument rather than the trackers.** The false starts are
+   kept because the last one is the reusable lesson: *first* it was called settled on
+   Taichung-cam01 alone; *then* Tao-Hsin-cam03 appeared to reverse it, two-stage identity
+   precision collapsing 0.508 to 0.235; *then* the reversal turned out to be
+   `track_idf1.py`'s own doing. The ground truth is labelled from a proposal made at
+   `score_thr 0.25`, the two-stage tracker's entire mechanism is the band underneath it,
+   and **196 of its 443 observations on that clip (44%) sat below 0.25 against 0 of the
+   single-stage arm's 238.** A box the labels cannot contain is an identity false positive
+   *by construction*, so two-stage was losing twenty IDF1 points for doing the thing it
+   exists to do. `high_band_only()` now drops every observation below the labelled band
+   from both arms before scoring — tracking still uses the low band, which is its job, and
+   scoring uses the band the labels cover, which is also the band a serving path emits.
 
-   **Decision 1's first measurement, 2026-08-28, on the instrument this section named**
-   (`scripts/track_idf1.py`, `runs/gt_cam01/idf1.json`). Both trackers over the same
-   detections from one inference pass, against 5 labelled identities and 2,343 boxes on
-   Taichung-cam01's 900-frame clip. The single-stage arm reproduces `tracks.json`
-   byte-for-byte, which is what licenses reading the other:
+   With that fixed, both clips agree and the self-check passes on both (the single-stage
+   arm reproduces `tracks.json` exactly, which is what licenses reading the other):
 
-   | | tracks | IDF1 | IDP | IDR | switches | tracks/identity | mostly tracked |
+   | | tracks | IDF1 | IDP | IDR | switches | tracks/identity | low band dropped |
    |---|---|---|---|---|---|---|---|
-   | single-stage (shipped) | 10 | 0.7388 | 0.7388 | 0.7388 | 6 | 2.20 | 4/5 |
-   | **two-stage** | 8 | **0.7408** | **0.7399** | 0.7418 | **3** | **1.60** | 4/5 |
+   | **Taichung-cam01** (5 identities, 42% mid-view deaths) | | | | | | | |
+   | single-stage (shipped) | 10 | 0.7388 | 0.7388 | 0.7388 | 6 | 2.20 | 0 / 2,343 |
+   | **two-stage** | 8 | **0.7418** | 0.7418 | 0.7418 | **3** | **1.60** | 6 / 2,349 (0.3%) |
+   | **Tao-Hsin-cam03** (4 identities, 83%) | | | | | | | |
+   | single-stage (shipped) | 18 | 0.5095 | 0.5084 | 0.5105 | 14 | 4.50 | 0 / 238 |
+   | **two-stage** | 15 | **0.5455** | **0.5344** | **0.5570** | **7** | **2.50** | 196 / 443 (44%) |
 
-   **The objection is not observed.** It was that the Kalman coasts onto a neighbour and
-   joins two shoppers, which shows up as identity *precision* falling. IDP rose, 0.7388 to
-   0.7399. Switches halve and fragmentation falls 2.20 to 1.60 tracks per identity. So
-   two-stage is safe to adopt and mildly better, which is what §7.11 and `runs/endings05/`
-   have been waiting on.
+   **Two-stage wins on both, and wins by more where fragmentation is worse** — +0.003 IDF1
+   on the mild camera, **+0.036** on the severe one — with identity precision up rather
+   than down on both. The objection this section was written to test is not observed. The
+   dropped-band column is the mechanism in one number: on Tao-Hsin-cam03 the low band
+   carries 44% of the two-stage arm's observations and on Taichung-cam01 it carries 0.3%,
+   which is why the gain follows fragmentation.
 
-   **And the number that matters more is the one that did not move.** `idfn` is 612 for
-   the shipped tracker and 605 for two-stage: **26% of the labelled boxes are lost to
-   fragmentation under a one-to-one identity mapping, and two-stage recovers seven
-   frames of it.** The loss decomposes exactly — identity 1 has 873 frames split across
-   `#1` (433), `#5` (363), `#8b` (56) and `#13` (21), so a one-to-one mapping keeps 433
-   and charges 440; identity 3 charges 172 the same way; 440 + 172 = 612. The gaps
-   responsible are **24 frames** (`#1`→`#5`) and **61** (`#5`→`#13`) against
-   `max_age = 5`. No association over a five-frame coasting window can bridge a
-   twelve-second absence, and two-stage does not change that window — it changes which
-   detections are eligible inside it.
+   **And what neither tracker touches is still the larger figure.** `idfn` is 612 → 605 on
+   cam01 and 116 → 105 on cam03: **26% and 49% of the labelled boxes lost to fragmentation
+   under a one-to-one identity mapping**, of which association tuning recovers 7 frames and
+   11. The loss decomposes exactly on cam01 — identity 1 is 873 frames split across `#1`
+   (433), `#5` (363), `#8b` (56) and `#13` (21), so a one-to-one mapping keeps 433 and
+   charges 440; identity 3 charges 172 the same way; 440 + 172 = 612 — and the gaps
+   responsible are **24 frames** (`#1`→`#5`) and **61** (`#5`→`#13`) against `max_age = 5`.
+   No association over a five-frame coasting window bridges a twelve-second absence.
+   Tao-Hsin-cam03 makes the point without arithmetic: its dominant identity is a member of
+   staff leaning on a counter for 58 s **in thirteen fragments**, all at the same image
+   position, with **no box at all** in the gaps while the blue sleeve is plainly on the
+   counter (`assets/gt_th03_podium.png`).
 
-   **So the fragmentation figure this project has been quoting is not a tracker-tuning
-   problem.** Bridging 5-12 second absences is what §6 step 5 already names an appearance
-   model for, and this is the first measurement that prices it: 26 IDF1 points on this
-   clip, against the 0.2 that association tuning returned.
+   **So: adopt two-stage, and do not expect it to fix fragmentation.** Bridging 5–12 second
+   absences is what §6 step 5 already names an appearance model for, and this is the first
+   measurement that prices it — 26 to 49 IDF1 points of headroom, against the 0.3 to 3.6
+   that association tuning returned.
 
-   Caveats, all of them: **one clip, one camera, five identities**, and the labels were
-   read by a model rather than by a person (`runs/gt_cam01/provenance.json` says so in its
-   own words). The labels also cover the detector's boxes only, so this measures
-   association and not detection.
-
-   **The second clip reverses it, and the caveat above is why this section is not a
-   decision.** `runs/gt_th03/` labels 900 frames of Tao-Hsin-cam03 -- the camera with 83%
-   mid-view track deaths -- as **4 identities from 18 proposed tracks**, and the dominant
-   one is a member of staff leaning on a counter for 58 s **in thirteen fragments**, every
-   one at the same image position, with no box at all in the gaps while the blue sleeve is
-   plainly on the counter (`assets/gt_th03_podium.png`). Same instrument, same self-check,
-   which passed:
-
-   | Tao-Hsin-cam03 | tracks | IDF1 | IDP | IDR | switches | tracks/identity | mostly tracked |
-   |---|---|---|---|---|---|---|---|
-   | single-stage (shipped) | 18 | **0.5095** | **0.5084** | 0.5105 | 14 | 4.50 | 2/4 |
-   | two-stage | 15 | 0.3059 | **0.2348** | 0.4388 | 7 | 2.50 | 1/4 |
-
-   **Identity precision collapses, 0.508 to 0.235, and IDF1 falls twenty points.** That is
-   the objection this section was written to test, observed: the low band gives the Kalman
-   something to coast onto, and on a camera where one person is invisible for stretches it
-   coasts onto somebody else. Note that the *tracker-shaped* numbers still improve —
-   switches 14 to 7, fragmentation 4.50 to 2.50 — which is exactly why they cannot be read
-   as quality. **Fewer, longer tracks that are the wrong people.**
-
-   A third reading points the same way and is not quotable: `runs/gt_cam11` labels an
-   older proposal built from `configs/hydranet_indoor.yaml`, a different detector, so its
-   ground truth does not describe the shipped model's boxes and `track_idf1.py`'s
-   self-check refuses it. Its arms ran 0.976 -> 0.910 with IDP 0.975 -> 0.836 before the
-   file was deleted. Same direction, no standing.
-
-   **So decision 1 is open, and it is now a per-camera question rather than a yes/no.**
-   Two-stage helped slightly where fragmentation was mild (Taichung-cam01, 42% mid-view
-   deaths) and hurt badly where it is severe (Tao-Hsin-cam03, 83%) — which is the opposite
-   of the way it was expected to earn its place, and it is the same shape as §7.11's
-   finding that the 0.15 detection threshold has to be a per-camera decision. What both
-   clips agree on is the thing neither tracker addresses: **26% of cam01's labelled boxes
-   and 49% of cam03's are lost to fragmentation under a one-to-one mapping**, and the gaps
-   responsible are seconds long against a five-frame `max_age`.
+   Caveats, all of them: **two clips, two cameras, nine identities**, and the labels were
+   read by a model rather than by a person (both `provenance.json` files say so in their
+   own words). The labels cover the detector's boxes only, so this measures association and
+   not detection — which bites hardest exactly where the fragmentation is, since a shopper
+   the detector never saw is absent from the truth as well as from the prediction. A third
+   clip, `runs/gt_cam11`, is labelled against `configs/hydranet_indoor.yaml` — a different
+   detector — so `track_idf1.py` refuses it and it is not quoted here.
 
 19. **"Scale-measured" meant the person-height prior all along, and a second fleet arrived
    that has more of it than the first.** Opened 2026-08-27 when a new corpus —

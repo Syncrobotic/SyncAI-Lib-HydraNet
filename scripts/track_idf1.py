@@ -70,13 +70,38 @@ def as_metric_input(d: dict) -> dict[int, dict[int, np.ndarray]]:
     }
 
 
-def detections(prov: dict, low_thr: float) -> list[dict]:
+def detections(prov: dict, low_thr: float, cache: Path | None = None) -> list[dict]:
     """One inference pass, kept down to `low_thr` so both trackers can be fed from it.
 
     `propose` thresholds inside `model.predict`; this cannot, because the two-stage
     tracker's whole mechanism is the band below the high threshold. The single-stage arm
     is given `scores >= provenance.score_thr` and so sees exactly what `propose` saw.
+
+    Cached, because the pass is fifteen minutes on a shared card and nothing about it
+    changes when a question about the tracking does. The cache records the threshold it
+    was taken at and is refused if a run asks for a lower one -- a cache that quietly
+    answers a different question is the failure this whole file is written against.
     """
+    if cache is not None and cache.exists():
+        z = np.load(cache, allow_pickle=False)
+        # 1e-6 because the threshold round-trips through float32: np.float32(0.20) comes
+        # back as 0.20000000298, and a cache taken at exactly the threshold asked for was
+        # rejecting itself and re-running fifteen minutes of inference.
+        if float(z["low_thr"]) <= low_thr + 1e-6:
+            n = int(z["n_frames"])
+            idx = z["index"]
+            boxes, scores = z["boxes"], z["scores"]
+            out = []
+            for i in range(n):
+                lo, hi = idx[i], idx[i + 1]
+                keep = scores[lo:hi] >= low_thr
+                out.append({"boxes": boxes[lo:hi][keep], "scores": scores[lo:hi][keep]})
+            print(f"  detections from cache ({n} frames, taken at {float(z['low_thr']):.2f})")
+            return out
+        print(
+            f"  cache was taken at {float(z['low_thr']):.2f} and this run needs "
+            f"{low_thr:.2f}; re-running inference"
+        )
     cfg = load_config(prov["config"], validate=False)
     device = pick_device(cfg.get("device"))
     model = build_model(cfg).to(device).eval()
@@ -110,7 +135,68 @@ def detections(prov: dict, low_thr: float) -> list[dict]:
         per_frame.append({"boxes": box, "scores": sc})
         if (n + 1) % 100 == 0:
             print(f"  frame {n + 1}", flush=True)
+    if cache is not None:
+        counts = [len(f["boxes"]) for f in per_frame]
+        index = np.concatenate([[0], np.cumsum(counts)]).astype(np.int64)
+        np.savez_compressed(
+            cache,
+            # float64, not float32. The single-stage arm has to reproduce tracks.json
+            # exactly, and a cache that rounds the boxes breaks that by the last few
+            # digits -- which the self-check caught, and which is the whole reason it is
+            # there: a cache is only sound if it cannot change the answer.
+            boxes=np.concatenate([f["boxes"] for f in per_frame]).astype(np.float64),
+            scores=np.concatenate([f["scores"] for f in per_frame]).astype(np.float64),
+            index=index,
+            n_frames=np.int64(len(per_frame)),
+            low_thr=np.float64(low_thr),
+        )
     return per_frame
+
+
+def observation_scores(per_frame: list[dict]) -> dict[tuple[int, tuple], float]:
+    """`(frame, box) -> detection score`, for reading a track's observations back.
+
+    Exact key rather than IoU: a track's boxes ARE detections, unchanged, so anything
+    that does not match exactly is a bug rather than a near miss.
+    """
+    out = {}
+    for n, f in enumerate(per_frame):
+        for b, sc in zip(f["boxes"], f["scores"], strict=True):
+            out[(n, tuple(round(float(v), 4) for v in b))] = float(sc)
+    return out
+
+
+def high_band_only(tracks: dict, scores: dict, thr: float) -> tuple[dict, int, int]:
+    """Drop each track's observations below `thr`. Returns (tracks, kept, dropped).
+
+    **Without this the comparison is rigged and it took a reversed result to notice.**
+    The ground truth is labelled from a proposal made at `score_thr`, so a box below that
+    threshold is not in the labels and cannot be: it is an identity false positive by
+    construction, whatever it is actually on. The two-stage tracker's entire mechanism is
+    the band underneath, and on Tao-Hsin-cam03 **196 of its 443 observations (44%)** sit
+    there against **0 of the single-stage arm's 238**. Scored raw, it loses twenty IDF1
+    points for doing the thing it exists to do.
+
+    What the low band is for is keeping a track alive across a gap, not emitting boxes.
+    So both arms track with everything and are scored on the band the labels cover, which
+    is also the band a serving path would output. A track that survives only on low-band
+    observations still counts here -- through the high-band boxes on either side of the
+    gap it bridged, which is exactly the credit it should get.
+    """
+    out, kept, dropped = {}, 0, 0
+    for tid, byframe in tracks.items():
+        keep = {}
+        for f, b in byframe.items():
+            key = (int(f), tuple(round(float(v), 4) for v in b))
+            sc = scores.get(key)
+            if sc is None or sc >= thr:
+                keep[f] = b
+                kept += 1
+            else:
+                dropped += 1
+        if keep:
+            out[tid] = keep
+    return out, kept, dropped
 
 
 def to_json(tracks) -> dict[str, dict[str, list[float]]]:
@@ -149,7 +235,7 @@ def main() -> int:
     proposed = json.loads((a.gt / "tracks.json").read_text())
     high = float(prov["score_thr"])
 
-    per_frame = detections(prov, a.low_thr)
+    per_frame = detections(prov, a.low_thr, a.gt / "detections.npz")
 
     single = Tracker(iou_threshold=a.iou, max_age=a.max_age, min_hits=a.min_hits)
     two = OfflineForward(
@@ -174,10 +260,21 @@ def main() -> int:
     if not same:
         print("  ^ the numbers below are NOT comparable with the labels; stop and find out why")
 
-    gt = as_metric_input(gt_raw)
-    report = {"gt_identities": len(gt), "clip": prov["clip"], "arms": {}}
-    print(f"\nground truth: {len(gt)} identities over {prov['max_frames']} frames")
+    obs = observation_scores(per_frame)
+    banded = {}
     for name, tr in arms.items():
+        tr2, kept, dropped = high_band_only(tr, obs, high)
+        banded[name] = tr2
+        print(
+            f"  {name:24s} {kept + dropped:4d} observations, {dropped:4d} below "
+            f"{high:.2f} dropped before scoring ({100 * dropped / max(kept + dropped, 1):.1f}%)"
+        )
+
+    gt = as_metric_input(gt_raw)
+    report = {"gt_identities": len(gt), "clip": prov["clip"], "score_thr": high, "arms": {}}
+    print(f"\nground truth: {len(gt)} identities over {prov['max_frames']} frames")
+    print("scored on the high band only -- see high_band_only()")
+    for name, tr in banded.items():
         pred = as_metric_input(tr)
         f1 = idf1(gt, pred)
         sw = id_switches(gt, pred)
@@ -188,6 +285,9 @@ def main() -> int:
             f"switches {int(sw['switches'])}  tracks/identity {sw['tracks_per_identity']:.2f}  "
             f"mostly-tracked {int(sw['mostly_tracked'])}/{len(gt)}"
         )
+    for name, tr in arms.items():
+        stem = "single" if name.startswith("single") else "two_stage"
+        (a.gt / f"arm_{stem}.json").write_text(json.dumps(tr, indent=1) + "\n")
     (a.gt / "idf1.json").write_text(json.dumps(report, indent=1) + "\n")
     print(f"\n-> {a.gt / 'idf1.json'}")
     return 0
