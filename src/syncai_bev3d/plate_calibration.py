@@ -57,6 +57,15 @@ from syncai_hydranet.geometry.ground import (
 from .bev import box_extents
 
 MODEL = "depth-anything/Depth-Anything-V2-Metric-Indoor-Large-hf"
+# The revision this project's numbers were measured on, pinned rather than floating.
+# `from_pretrained` with no `revision=` resolves whatever `main` points at today, so an
+# upstream push silently changes what a teacher produces -- and for the models here that
+# means different masks, different boxes and different metres, under artefacts that look
+# identical. Taken from the local cache on 2026-08-28, i.e. the commit every measurement
+# already in PLAN was actually made with; bumping it is then a reviewed event with a
+# re-measure attached, which is what `.github/dependabot.yml` says about torch for the
+# same reason.
+MODEL_REVISION = "d2fc6a93601aabb1139a3bf0ebfcb4e89c67817f"
 ADULT_M = 1.70  # the standing-adult prior; pose bias makes it a ±11% systematic term
 PLATES = Path("datasets/studioa_static")
 
@@ -126,7 +135,10 @@ def run_depth(rgb: np.ndarray) -> np.ndarray:
     from transformers import pipeline
 
     pipe = pipeline(
-        "depth-estimation", model=MODEL, device=0 if torch.cuda.is_available() else -1
+        "depth-estimation",
+        model=MODEL,
+        revision=MODEL_REVISION,
+        device=0 if torch.cuda.is_available() else -1,
     )
     pred = pipe(Image.fromarray(rgb))["predicted_depth"]
     depth = np.asarray(pred, dtype=np.float64).squeeze()

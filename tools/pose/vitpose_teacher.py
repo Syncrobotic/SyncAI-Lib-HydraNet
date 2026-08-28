@@ -33,6 +33,15 @@ ANN_DIR = ROOT / "datasets/site30k_v1/annotations"
 IMG_DIR = ROOT / "datasets/site30k_v1/images"
 GOLD_MIN = 0.50
 POSE_MODEL = "usyd-community/vitpose-base-simple"
+# The revision this project's numbers were measured on, pinned rather than floating.
+# `from_pretrained` with no `revision=` resolves whatever `main` points at today, so an
+# upstream push silently changes what a teacher produces -- and for the models here that
+# means different masks, different boxes and different metres, under artefacts that look
+# identical. Taken from the local cache on 2026-08-28, i.e. the commit every measurement
+# already in PLAN was actually made with; bumping it is then a reviewed event with a
+# re-measure attached, which is what `.github/dependabot.yml` says about torch for the
+# same reason.
+POSE_MODEL_REVISION = "a93ac0c67e0b7e2c55287d21d4c460c8f3c54d45"
 
 
 def gold_boxes(split: str) -> tuple[list[dict], dict[int, list]]:
@@ -77,8 +86,12 @@ def main() -> int:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     from transformers import AutoProcessor, VitPoseForPoseEstimation
 
-    processor = AutoProcessor.from_pretrained(POSE_MODEL)
-    model = VitPoseForPoseEstimation.from_pretrained(POSE_MODEL).to(device).eval()
+    processor = AutoProcessor.from_pretrained(POSE_MODEL, revision=POSE_MODEL_REVISION)
+    model = (
+        VitPoseForPoseEstimation.from_pretrained(POSE_MODEL, revision=POSE_MODEL_REVISION)
+        .to(device)
+        .eval()
+    )
     id2label = model.config.id2label
     got = tuple(
         id2label[i].lower().replace("l_", "left_").replace("r_", "right_") for i in range(17)

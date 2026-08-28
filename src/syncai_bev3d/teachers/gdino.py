@@ -23,6 +23,15 @@ import torch
 from PIL import Image
 
 MODEL_ID = "IDEA-Research/grounding-dino-base"
+# The revision this project's numbers were measured on, pinned rather than floating.
+# `from_pretrained` with no `revision=` resolves whatever `main` points at today, so an
+# upstream push silently changes what a teacher produces -- and for the models here that
+# means different masks, different boxes and different metres, under artefacts that look
+# identical. Taken from the local cache on 2026-08-28, i.e. the commit every measurement
+# already in PLAN was actually made with; bumping it is then a reviewed event with a
+# re-measure attached, which is what `.github/dependabot.yml` says about torch for the
+# same reason.
+MODEL_REVISION = "12bdfa3120f3e7ec7b434d90674b3396eccf88eb"
 
 # The measured day/night gap; see the module docstring. A working threshold, not a floor:
 # a run that wants both score populations visible passes something far lower and splits
@@ -30,11 +39,15 @@ MODEL_ID = "IDEA-Research/grounding-dino-base"
 PERSON_THRESHOLD = 0.35
 
 
-def load_gdino(model_id: str, device: str):
+def load_gdino(model_id: str, device: str, revision: str = MODEL_REVISION):
     from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
 
-    proc = AutoProcessor.from_pretrained(model_id)
-    model = AutoModelForZeroShotObjectDetection.from_pretrained(model_id).to(device).eval()
+    proc = AutoProcessor.from_pretrained(model_id, revision=revision)
+    model = (
+        AutoModelForZeroShotObjectDetection.from_pretrained(model_id, revision=revision)
+        .to(device)
+        .eval()
+    )
     return proc, model
 
 

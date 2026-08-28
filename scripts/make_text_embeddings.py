@@ -80,6 +80,15 @@ import torch.nn.functional as F
 # `embed_dim: int = 512` default comes from. Changing the encoder changes that default
 # and the config has to say so, which is why the encoder id travels in the output.
 DEFAULT_ENCODER = "openai/clip-vit-base-patch32"
+# The revision this project's numbers were measured on, pinned rather than floating.
+# `from_pretrained` with no `revision=` resolves whatever `main` points at today, so an
+# upstream push silently changes what a teacher produces -- and for the models here that
+# means different masks, different boxes and different metres, under artefacts that look
+# identical. Taken from the local cache on 2026-08-28, i.e. the commit every measurement
+# already in PLAN was actually made with; bumping it is then a reviewed event with a
+# re-measure attached, which is what `.github/dependabot.yml` says about torch for the
+# same reason.
+DEFAULT_ENCODER_REVISION = "3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268"
 
 # Prompt ensembling, CLIP's own recipe: encode several phrasings, average the normalised
 # vectors, renormalise. It reduces the variance of a single unlucky phrasing. These
@@ -134,13 +143,18 @@ def names_from_coco(path: Path) -> list[str]:
     return [c["name"] for c in sorted(cats, key=lambda c: c["id"])]
 
 
-def load_encoder(encoder: str, device: str):
-    """The tokeniser and text tower, loaded once and shared by the classes and anchors."""
+def load_encoder(encoder: str, device: str, revision: str = DEFAULT_ENCODER_REVISION):
+    """The tokeniser and text tower, loaded once and shared by the classes and anchors.
+
+    `revision` travels with `encoder` for the same reason the encoder id travels into the
+    output: this matrix *is* the head's target space, so a different text tower is a
+    different training objective wearing the same filename.
+    """
     from transformers import AutoTokenizer, CLIPTextModelWithProjection
 
-    tok = AutoTokenizer.from_pretrained(encoder)
-    model = CLIPTextModelWithProjection.from_pretrained(encoder).to(device).eval()
-    return tok, model
+    tok = AutoTokenizer.from_pretrained(encoder, revision=revision)
+    model = CLIPTextModelWithProjection.from_pretrained(encoder, revision=revision)
+    return tok, model.to(device).eval()
 
 
 def build_matrix(
@@ -214,6 +228,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, required=True, help="destination .pt")
     ap.add_argument("--encoder", default=DEFAULT_ENCODER)
     ap.add_argument(
+        "--encoder-revision",
+        default=DEFAULT_ENCODER_REVISION,
+        help="the encoder commit to resolve; pinned so a matrix is reproducible, and "
+        "recorded in the output beside the encoder id",
+    )
+    ap.add_argument(
         "--prompts-json",
         type=Path,
         help='{"class_name": ["phrase", ...]} -- replaces the templates for those classes',
@@ -244,7 +264,7 @@ def main(argv: list[str] | None = None) -> int:
         ap.error(f"--prompts-json names classes that are not in the head: {', '.join(unknown)}")
 
     print(f"encoding {len(names)} classes with {a.encoder}", file=sys.stderr)
-    tok, model = load_encoder(a.encoder, a.device)
+    tok, model = load_encoder(a.encoder, a.device, a.encoder_revision)
     matrix = build_matrix(names, DEFAULT_TEMPLATES, prompts, tok, model, a.device)
 
     floor = encoder_floor(tok, model, a.device)
@@ -282,6 +302,7 @@ def main(argv: list[str] | None = None) -> int:
             # matrix. A loader that ignores this field throws away the guard.
             "names": names,
             "encoder": a.encoder,
+            "encoder_revision": a.encoder_revision,
             # Kept so a matrix on disk can be regenerated or audited without guessing
             # which phrasings produced it -- the templates here are unmeasured, so the
             # next person to measure them needs to know what they are comparing against.
