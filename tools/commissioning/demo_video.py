@@ -726,7 +726,20 @@ def main() -> int:
     part_path.replace(out_path)
     # a copy, not a symlink: these get opened by players and copied to other machines,
     # and a dangling link is a worse failure than a duplicated 7 MB
-    latest.write_bytes(out_path.read_bytes())
+    #
+    # **Not under `--no-blur`, and this cost real damage on 2026-08-28.** That flag says
+    # of itself "only for a private check, never for anything shared", and then wrote its
+    # unblurred render straight into `demo_<camera>.mp4` -- the one filename every other
+    # command, README and person treats as "the render". The stamped file stays, because
+    # the private check is a legitimate use and deleting its output would just push people
+    # back to a shared name; what it may not do is silently become the shared one.
+    if args.no_blur:
+        print(
+            f"  --no-blur: {latest.name} left pointing at the last blurred render. "
+            f"This file is unpublishable; it is at {out_path.name} only."
+        )
+    else:
+        latest.write_bytes(out_path.read_bytes())
     # the track log makes the right-hand panel checkable instead of merely convincing:
     # every figure in the video has a frame, an id and a floor position in metres here
     log_path = ROOT / f"runs/commission01/{camera}.demo_tracks.json"
@@ -746,7 +759,8 @@ def main() -> int:
         + "\n"
     )
     print(f"wrote {out_path} ({n} frames @ {args.fps} fps)")
-    print(f"  newest also at {latest}")
+    if not args.no_blur:
+        print(f"  newest also at {latest}")
     print(
         f"  person detections {n_det}, dropped by FP zone {n_fp}; "
         f"track placements {n_placed}, outside walkable+{PLACE_MARGIN_M:g}m {n_outside}; "
