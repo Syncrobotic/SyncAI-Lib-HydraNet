@@ -502,6 +502,73 @@ def implausible(shapes) -> list[str]:
     return out
 
 
+# Wall fitting from the floor boundary. Constants in metres, and each is a shop fact.
+WALL_INLIER_M = 0.10  # a boundary cell this far off a line is on that line
+WALL_MIN_LEN_M = 0.8  # shorter than this is a doorway reveal or a mask nibble
+WALL_MIN_PTS = 12  # 0.72 m of boundary at CELL=0.06; below it a line is two cells and noise
+
+
+def wall_segments(grids, seed: int = 0):
+    """Long wall lines fitted to the floor's own boundary, in floor metres.
+
+    **The walls were never in the wrong place; there were too many of them.** Measured on
+    2026-08-28, 15 of 17 `wall` mask components across three cameras already sat within
+    0.37 m of the walkable region's boundary -- a few cell widths, inside the depth
+    model's own error. What made the render read as "slabs scattered over the floor" was
+    that one wall arrives as eight to fourteen disconnected components, each drawn as its
+    own pane. The fix is to stop fitting the mask's blobs and fit the boundary they all
+    lie along.
+
+    The floor is the right thing to fit to for the reason `scene3d.py` gives about floor
+    pixels: they are *on the ground plane*, where the projection is exact, while a wall's
+    own pixels come through a depth model this fleet has measured collapsing on large
+    white surfaces.
+
+    A boundary cell counts as wall-side only if the `wall` mask is near it and no fixture
+    is: the walkable region also ends where a counter stands, and a counter is not a wall.
+    Returns `[(x0, z0, x1, z1)]`.
+    """
+    walk = grids[1]
+    bnd = walk & ~ndimage.binary_erosion(walk, np.ones((3, 3)))
+    fixt = np.zeros_like(walk)
+    for cid in (3, 4, 5):
+        if cid in grids:
+            fixt |= grids[cid]
+    near_wall = (
+        ndimage.binary_dilation(grids[2], np.ones((9, 9)))
+        if 2 in grids
+        else np.zeros_like(walk)
+    )
+    keep = bnd & near_wall & ~ndimage.binary_dilation(fixt, np.ones((5, 5)))
+    r, c = np.nonzero(keep)
+    pts = np.stack([c * CELL - 12 + CELL / 2, r * CELL + CELL / 2], axis=1)
+    rng = np.random.default_rng(seed)  # seeded: the same camera must render the same room
+    out = []
+    while len(pts) >= WALL_MIN_PTS:
+        best = None
+        for _ in range(160):
+            i, j = rng.choice(len(pts), 2, replace=False)
+            d = pts[j] - pts[i]
+            n = float(np.hypot(*d))
+            if n < 1e-6:
+                continue
+            nx, nz = -d[1] / n, d[0] / n  # unit normal
+            off = np.abs((pts - pts[i]) @ np.array([nx, nz]))
+            inl = off <= WALL_INLIER_M
+            if best is None or inl.sum() > best[0]:
+                best = (int(inl.sum()), inl, d / n)
+        if best is None or best[0] < WALL_MIN_PTS:
+            break
+        _n, inl, dirv = best
+        sel = pts[inl]
+        t = sel @ dirv
+        a, b = sel[t.argmin()], sel[t.argmax()]
+        if float(np.hypot(*(b - a))) >= WALL_MIN_LEN_M:
+            out.append((float(a[0]), float(a[1]), float(b[0]), float(b[1])))
+        pts = pts[~inl]
+    return out
+
+
 def build_scene_regular(camera):
     """B-path: every fixture becomes a store-axis-aligned parametric mesh.
 
@@ -515,7 +582,18 @@ def build_scene_regular(camera):
     cy, sy = np.cos(yaw), np.sin(yaw)
     items = [(floor_mesh(grids[1]), "floor", 150, False)]
     shapes: list[tuple] = []  # (name, w, d, h) as built, for `implausible`
+    # Walls come from the floor's boundary, not from their own mask components -- see
+    # `wall_segments` for the measurement that moved this.
+    for x0, z0, x1, z1 in wall_segments(grids):
+        mx, mz = (x0 + x1) / 2, (z0 + z1) / 2
+        length = float(np.hypot(x1 - x0, z1 - z0))
+        heading = float(np.arctan2(z1 - z0, x1 - x0))
+        mesh = wall([[-length / 2, 0.0], [length / 2, 0.0]], DRAWN_H["wall"], thickness_m=0.12)
+        items.append((place(mesh, Placement(mx, mz, heading_rad=-heading)), "wall", 105, False))
+        shapes.append(("wall", length, 0.12, DRAWN_H["wall"]))
     for cid, name in CLASS_NAMES.items():
+        if name == "wall":
+            continue
         h = heights.get(cid, DRAWN_H[name])
         # Open first: a mask bridge a few cells wide welds neighbouring fixtures into one
         # component and the p3-p97 box then spans both. 3 cells is 0.18 m at CELL=0.06 and

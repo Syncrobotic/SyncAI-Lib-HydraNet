@@ -16,13 +16,17 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/commissioning"))
 from scene_mesh import (
     CLASS_NAMES,
     COLUMN_MIN_H,
     DRAWN_H,
+    WALL_INLIER_M,
     height_caption,
     implausible,
+    wall_segments,
 )
 
 WALL, COLUMN, TABLE, SHELF = 2, 3, 4, 5
@@ -107,3 +111,50 @@ def test_a_class_with_no_interval_is_not_judged():
     a silent pass is honest where an invented interval would not be."""
     assert implausible([("product_ipad", 0.30, 0.30, 0.01)]) == []
     assert implausible([("door", 1.00, 0.12, 2.05)]) == []
+
+
+# --------------------------------------------------------------------------- walls
+
+
+def _grids(walk, wall=None, fixture=None):
+    """Cell grids in `wall_segments`'s own layout: 233 x 400 at CELL = 0.06 m."""
+    shape = (233, 400)
+    g = {1: np.zeros(shape, bool), 2: np.zeros(shape, bool)}
+    g[1][walk] = True
+    if wall is not None:
+        g[2][wall] = True
+    if fixture is not None:
+        g[4] = np.zeros(shape, bool)
+        g[4][fixture] = True
+    return g
+
+
+def test_one_straight_wall_comes_back_as_one_segment_not_many():
+    """The defect this replaced: a single wall arrived as 8-14 mask components, each drawn
+    as its own pane, and the render read as slabs scattered over the floor. The components
+    were never in the wrong *place* -- 15 of 17 sat within 0.37 m of the floor boundary."""
+    walk = (slice(40, 120), slice(60, 200))
+    wall = (slice(36, 41), slice(60, 200))  # a strip along the walkable region's top edge
+    segs = wall_segments(_grids(walk, wall))
+    assert len(segs) == 1
+    x0, z0, x1, z1 = segs[0]
+    assert np.hypot(x1 - x0, z1 - z0) > 7.0  # 140 cells at 0.06 m
+    # straight to within the inlier band, not to zero: the boundary strip is a few cells
+    # thick, so a line fitted inside WALL_INLIER_M may tilt by a fraction of a degree
+    assert abs(z0 - z1) < 2 * WALL_INLIER_M
+
+
+def test_a_counter_edge_is_not_a_wall():
+    """The walkable region also ends where a fixture stands, and a fixture is not a wall.
+    Without the exclusion every display table would grow a wall along its front."""
+    walk = (slice(40, 120), slice(60, 200))
+    fixture = (slice(36, 41), slice(60, 200))
+    assert wall_segments(_grids(walk, wall=fixture, fixture=fixture)) == []
+
+
+def test_it_is_seeded_so_one_camera_renders_one_room():
+    """RANSAC with a fresh entropy source would give a different set of walls per run, and
+    a commissioning render is a thing a human approves once and compares against later."""
+    walk = (slice(40, 120), slice(60, 200))
+    wall = (slice(36, 41), slice(60, 200))
+    assert wall_segments(_grids(walk, wall)) == wall_segments(_grids(walk, wall))
