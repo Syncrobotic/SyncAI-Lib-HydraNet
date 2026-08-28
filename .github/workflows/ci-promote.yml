@@ -70,6 +70,8 @@ jobs:
       - name: Type ratchet (scripts/)
         run: ./scripts/ty_ratchet.sh scripts/
       # Coverage threshold included: a promotion that drops the floor is exactly the
-      # kind of thing that only shows up once branches are combined.
+      # kind of thing that only shows up once branches are combined. Same number as
+      # ci.yml's, deliberately -- two tiers disagreeing about the floor is how the
+      # looser one becomes the real one.
       - name: Tests on the combined state
-        run: uv run pytest --cov --cov-fail-under=80
+        run: uv run pytest --cov --cov-fail-under=83

@@ -113,6 +113,16 @@ jobs:
   # four user-facing CLIs had *zero* coverage -- a threshold a green tick can clear
   # with the entry points untested is not a gate, it is decoration.
   #
+  # **80 -> 83 on 2026-08-28, and a floor far below the true figure is the same
+  # decoration by another route.** `ff75488` brought `syncai_bev3d` into the instrument;
+  # the combined figure is **84.09%**, so the 80 it replaced allowed roughly 355
+  # statements to stop being covered before anything went red -- more than the entire
+  # 244-statement gap that commit had just made visible. This is the coverage form of
+  # the rule `scripts/ty_ratchet.sh` states for diagnostics: a baseline on the loose
+  # side of the true value is not a safe margin, it is a hole, and it fails from the
+  # direction nobody is watching. 83 leaves ~94 statements of ordinary headroom;
+  # raise it when the true figure moves and lower it only with a reason written here.
+  #
   # The suite runs in ~30 s, so it is not sharded. Revisit if it passes a few minutes;
   # the sibling Gateway repo's 4-way shard + merged-threshold pattern is the model.
   #
@@ -145,7 +155,7 @@ jobs:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
       - run: uv sync --locked --group dev --extra export
-      - run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=80
+      - run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=83
 
   # No checkpoint and no dataset: a randomly initialised model exercises the same
   # graph. Catches an operator that stopped exporting cleanly, a shape that drifted,
