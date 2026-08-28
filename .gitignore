@@ -47,6 +47,13 @@ exports/
 # been deleted is a hole with that filename's shape in it, and `tests/test_assets_allowlist.py`
 # fails on one in either direction.
 assets/*
+# Added 2026-08-28. The left panel is a customer's shop floor, so every person in it
+# has their head and shoulders blurred before this frame ever existed as a file. The
+# blur is the union of two independent instruments, because one was measurably not
+# enough: the box head at 0.12 missed people standing at the back of the aisle, and a
+# privacy mask that misses somebody has published them. The second is the difference
+# against that camera's own static plate, which owes nothing to a detector.
+!assets/demo_Taichung-cam10.gif
 !assets/bev3d_mesh_people.png
 !assets/hydranet_demo.gif
 !assets/mesh_shop_preview.png

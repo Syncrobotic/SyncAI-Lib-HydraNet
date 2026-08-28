@@ -9,6 +9,16 @@ One camera, one model, two readings: **loss prevention** (who entered where, wha
 do, did stock leave unpaid) and **retail analytics** (footfall, dwell, paths, queues) from
 the fixed CCTV already on the ceiling. No LiDAR, no new hardware.
 
+![Taichung-cam10: detections and tracks on the left, the metric 3D scene walked through on the right](assets/demo_Taichung-cam10.gif)
+
+*One camera, both readings. Left: person boxes and confirmed tracks, with the camera's
+false-positive polygons already applied. Right: the same moment in metres — the store's
+own furniture reconstructed from one static plate, with a figure standing at every
+tracked shopper's floor position. Nothing here is drawn by hand and no second sensor is
+involved. **Read the metres on this camera with its caveat**: Taichung-cam10's scale is
+known to be 1.21x too large (PLAN §7.10, a decision to leave it rather than an
+oversight), which is why its figures stand 1.98 m rather than 1.70.*
+
 The whole plan — architecture, data strategy, build order, and the measurements behind
 every decision — lives in **one document: [docs/PLAN.md](docs/PLAN.md)**. Everything the
 project previously documented is in git history (`git show b7457c2:docs/<file>`).
@@ -22,8 +32,9 @@ emits a `camera.json` — walkable floor, walls, columns, doors, display tables 
 shelves, products down to `iphone / ipad / macbook / boxed_stock`, shelf ROIs, and the
 derived false-positive polygons (glass stays a human-drawn polygon: 112 frames of
 measurement say no teacher can be trusted with it). The same artefacts render a metric
-3D scene per camera — solid furniture at depth-measured heights, exported as
-`scene.glb`/`scene.obj` for any real renderer. `syncai_hydranet` runs **every frame**: a
+3D scene per camera — solid furniture, tables and shelves at their measured heights and
+walls and columns at a stated constant because the depth model collapses on large white
+surfaces, exported as `scene.glb`/`scene.obj` for any real renderer. `syncai_hydranet` runs **every frame**: a
 shared RegNetX-800MF + BiFPN trunk with two heads — detection (`person`, `bag`,
 `device`, `boxed_stock`) and pose (17 keypoint heatmaps at P3, decoded inside the
 detection boxes) — whose boxes become tracks *in metres* through the cached geometry.
