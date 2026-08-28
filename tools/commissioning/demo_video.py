@@ -46,7 +46,7 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, str(Path(__file__).parent))
 import scene_mesh
 
-from syncai_bev3d.meshes import Placement, extrude, ground_disc, human, place
+from syncai_bev3d.meshes import Placement, box, extrude, ground_disc, human, place
 from syncai_bev3d.shading import draw_scene
 from syncai_hydranet.analytics.tracker import Tracker
 from syncai_hydranet.config import load_config
@@ -82,6 +82,7 @@ VEL_WINDOW_S = 1.0
 POS_EMA = 0.35
 FALLBACK_STATURE_M = 1.70  # only until a track has been measured STATURE_MIN_N times
 STATURE_MIN_N = 3
+PLUMB_W_M = 0.035  # the drop line under a figure: thin enough not to read as an object
 STATURE_RANGE_M = (1.2, 2.6)  # outside this the box top is not a head top
 VEL_FLOOR_MS = 0.3
 VEL_SECONDS_SHOWN = 1.0  # arrow length IS one second of travel, so it reads in metres
@@ -319,10 +320,12 @@ def main() -> int:
     checks = {args.frames // 8, args.frames // 2, args.frames - 1}
     tmp = ROOT / f"assets/_demo_panel_{camera}_{os.getpid()}.png"
     crop = None
-    header = "  ".join(
-        f"{scene_mesh.CLASS_NAMES[k].replace('display_', '')} {v:.2f}m"
-        for k, v in sorted(heights.items())
-    )
+    # `scene_mesh.height_caption`, not a second copy of it. This file used to build its
+    # own and print it under a hardcoded "measured p85:", so when the estimator became
+    # per-class on 2026-08-28 the static render's caption followed and this one did not --
+    # it went on labelling p99 numbers as p85 on every frame of a three-minute video.
+    # `tests/test_scene_mesh_caption.py` covers the function; it never covered the copy.
+    header = scene_mesh.height_caption(heights)
     seen_ids: set[int] = set()
     positions: list[dict] = []
     history: dict[int, dict[int, tuple[float, float]]] = {}
@@ -436,7 +439,18 @@ def main() -> int:
             # faint on purpose: at alpha 105 a shopper standing *behind* the display
             # counter read as standing *on* it. A ghost has to look like a ghost.
             ghosts.append((body, col, 62))
-            ghosts.append((disc, col, 80))  # the disc is the position; never hide it
+            # **A plumb line from the head to the disc, because the ghost was not enough.**
+            # The figure stands at y = 0; when a 2.4 m shelf is between it and the eye its
+            # legs are hidden and the occlusion boundary is the shelf's top edge, so the
+            # picture reads "a shopper standing on the shelf". Dropping the ghost to 62
+            # fixed the x-ray layer and left that reading intact -- on 2026-08-28 a
+            # reviewer found it in two of four sampled frames, and could not tell whether
+            # the tracker or the reconstruction was wrong. The line is drawn over the
+            # furniture with the disc, so the floor position is never inferred from where
+            # the body appears to stop.
+            plumb = place(box(PLUMB_W_M, stature, PLUMB_W_M), at)
+            ghosts.append((plumb, col, 120))
+            ghosts.append((disc, col, 150))  # the disc is the position; never hide it
             if speed >= VEL_FLOOR_MS and heading is not None:
                 arrow = place(extrude(velocity_arrow(speed * VEL_SECONDS_SHOWN), 0.02), at)
                 figures.append((arrow, key, 235, False))
@@ -473,11 +487,12 @@ def main() -> int:
             + ("" if args.metre_scale == 1.0 else f"  ·  metres x{args.metre_scale:g}"),
             fill=(216, 224, 236),
         )
-        ph.text(
-            (10, 26),
-            f"measured p85: {header}  |  walls translucent (drawn 2.4 m)",
-            fill=(170, 182, 200),
-        )
+        # Two lines: the panel is 898 px and the per-class caption does not fit on one.
+        # It used to fit because it said less -- a single "measured p85:" over every
+        # class, which was the shorter sentence and the wrong one.
+        left, _, right = header.partition("|")
+        ph.text((10, 26), left.strip(), fill=(170, 182, 200))
+        ph.text((10, 40), right.strip(), fill=(140, 152, 170))
 
         composite = Image.new("RGB", (out_w, out_h), (7, 9, 13))
         composite.paste(view_img, (0, 0))

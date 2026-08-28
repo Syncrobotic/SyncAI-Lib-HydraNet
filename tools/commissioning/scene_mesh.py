@@ -624,9 +624,25 @@ def build_scene_regular(camera):
                 # not a small cosmetic error: it is the render asserting merchandise at
                 # a position with nothing under it, which is the one thing a scene of
                 # fixtures exists to deny.
+                # **The group's extent, not its centre.** A first version tested only
+                # `at.x_m, at.z_m`, so a group whose centre sat on a cabinet was drawn at
+                # full size and overhung it -- on Taichung-cam10 a 4x4 array of boxed
+                # stock hung half a metre past the cabinet into the aisle, in every frame
+                # of the demo. That is the exact state this rule exists to forbid, waved
+                # through by the one point that was checked. The corners have to be held
+                # too, and a group only partly over a fixture is not resting on it.
                 px, pz = at.x_m, at.z_m
+                hw, hd = w / 2, d / 2
+                corners = [
+                    (
+                        px + ux * cy2 - vz * sy2,
+                        pz + ux * sy2 + vz * cy2,
+                    )
+                    for ux, vz in ((hw, hd), (hw, -hd), (-hw, hd), (-hw, -hd))
+                ]
                 if not any(
-                    x0 <= px <= x1 and z0 <= pz <= z1 and base <= top + SUPPORT_TOL_M
+                    all(x0 <= qx <= x1 and z0 <= qz <= z1 for qx, qz in corners)
+                    and base <= top + SUPPORT_TOL_M
                     for x0, x1, z0, z1, top in supports
                 ):
                     unsupported.append((name, float(base), px, pz))
