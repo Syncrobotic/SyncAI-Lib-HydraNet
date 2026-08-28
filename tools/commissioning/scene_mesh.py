@@ -373,6 +373,15 @@ def render(camera, items, heights, out_path, *, eye=None, target=None):
     cx_m = float((xs.min() + xs.max()) / 2)
     cz_m = float((zs.min() + zs.max()) / 2)
     target = target or [cx_m, 0.6, cz_m]
+    # A fixed (+x, -z) diagonal, and it has a defect this session found and did not
+    # fix: nothing asks whether something tall lies along it. Taichung-cam10's accessory
+    # wall is 6.3 m long and 2.4 m high against the +x side, so the eye stands behind it
+    # and that render is one blank panel with the shop hidden. Choosing among the four
+    # diagonals by how much tall geometry each one has to see through was tried and
+    # reverted the same hour: it fixes cam10 and makes cam11 -- the camera this render
+    # was composed on -- markedly worse, so picking a corner is a composition decision
+    # rather than a scoring one. The defect was invisible until the shelf-depth bug
+    # below stopped truncating that wall to 1.35 m.
     eye = eye or [cx_m + 0.62 * span, 0.46 * span, cz_m - 0.54 * span]
     view = View(eye, target, 620.0 * SS, W * SS / 2, H * SS / 2)
     img = Image.new("RGB", (W * SS, H * SS), BG)
@@ -556,6 +565,11 @@ def build_scene_regular(camera):
     yaw = store_yaw(grids)
     cy, sy = np.cos(yaw), np.sin(yaw)
     items = [(floor_mesh(grids[1]), "floor", 150, False)]
+    # The room's own centre, for deciding which way a fixture faces. Taken from the floor
+    # rather than from the furniture: the furniture is what is being oriented.
+    _fv = items[0][0][0]
+    room_cx = float((_fv[:, 0].min() + _fv[:, 0].max()) / 2)
+    room_cz = float((_fv[:, 2].min() + _fv[:, 2].max()) / 2)
     shapes: list[tuple] = []  # (name, w, d, h) as built, for `implausible`
     for cid, name in CLASS_NAMES.items():
         h = heights.get(cid, DRAWN_H[name])
@@ -599,11 +613,43 @@ def build_scene_regular(camera):
                 mesh = column(min(w, 0.8), min(d, 0.8), max(h, COLUMN_MIN_H))
                 items.append((place(mesh, at), name, 255, True))
             elif name == "display_shelf":
-                shapes.append((name, w, min(d, SHELF_MAX_DEPTH_M), h))
+                # **The cap is on the depth, and the depth is the SHORTER side -- which
+                # is not always `d`.** `min(d, SHELF_MAX_DEPTH_M)` assumed a merchandise
+                # wall runs along `u`, which is true of the camera the cap was measured
+                # on and false elsewhere: Taichung-cam10's three shelf components measure
+                # u1.33 x v6.29, u0.97 x v2.70 and u0.55 x v1.08 in the store frame, so
+                # the cap took a **6.29 m run down to 0.45 m** and left its 1.33 m depth
+                # alone. The render drew the store's whole accessory wall as a 1.35 x
+                # 0.45 m cabinet standing in the aisle, and `PLAUSIBLE_M` could not catch
+                # it because a truncated run is still a plausible small unit.
+                #
+                # Cam11 was unaffected -- u4.02 x v0.40 and u2.36 x v0.42, long side on
+                # `u` -- which is why the defect survived the round it was introduced in.
+                # The `wall` branch fifteen lines up already thins whichever side is
+                # shorter; this now does the same, and turns the placement a quarter turn
+                # when the run is along `v` so that `shelving`'s back panel stays behind
+                # its shelves rather than being drawn across the run.
+                if w >= d:
+                    run_m, depth_m, head = w, min(d, SHELF_MAX_DEPTH_M), -yaw
+                else:
+                    run_m, depth_m, head = d, min(w, SHELF_MAX_DEPTH_M), -(yaw + np.pi / 2)
+                # **And the back panel faces away from the room, not at it.** `shelving`
+                # puts its back at local +Z and the code above chose a heading without
+                # asking where that ends up pointing -- which was invisible while every
+                # run happened to lie one way round, and showed the moment one did not:
+                # the corrected quarter turn put the back of Taichung-cam10's 6.3 m
+                # accessory wall toward the eye, so the render drew a blank 6.3 x 2.4 m
+                # panel where the shop has an open merchandise run. Local +Z lands on
+                # (sin head, cos head); if that points at the room's centre the unit is
+                # inside out, and half a turn is the whole fix.
+                if (np.sin(head) * (room_cx - px) + np.cos(head) * (room_cz - pz)) > 0:
+                    head += np.pi
+                shapes.append((name, run_m, depth_m, h))
                 # `shelving`, not `cabinet`: these are open merchandise walls, and a
                 # carcass with solid end panels and full-depth slabs reads as a bookcase.
-                mesh = shelving(w, min(d, SHELF_MAX_DEPTH_M), h)
-                items.append((place(mesh, at), name, 255, True))
+                mesh = shelving(run_m, depth_m, h)
+                turned = Placement(px, pz, heading_rad=head)
+                items.append((place(mesh, turned), name, 255, True))
             else:  # display_table
                 # a footprint too long for four legs is a counter, not a solid prism:
                 # a slab on a recessed body, so the surface merchandise sits on exists
