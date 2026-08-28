@@ -1298,6 +1298,44 @@ something it does not support.
    fix is not a threshold: it is that `within` should be built from labelled identities
    where they exist, which for the first time they do.
 
+   **Decision 1 is settled, 2026-08-28, on the measurement this section named**
+   (`scripts/track_idf1.py`, `runs/gt_cam01/idf1.json`). Both trackers over the same
+   detections from one inference pass, against 5 labelled identities and 2,343 boxes on
+   Taichung-cam01's 900-frame clip. The single-stage arm reproduces `tracks.json`
+   byte-for-byte, which is what licenses reading the other:
+
+   | | tracks | IDF1 | IDP | IDR | switches | tracks/identity | mostly tracked |
+   |---|---|---|---|---|---|---|---|
+   | single-stage (shipped) | 10 | 0.7388 | 0.7388 | 0.7388 | 6 | 2.20 | 4/5 |
+   | **two-stage** | 8 | **0.7408** | **0.7399** | 0.7418 | **3** | **1.60** | 4/5 |
+
+   **The objection is not observed.** It was that the Kalman coasts onto a neighbour and
+   joins two shoppers, which shows up as identity *precision* falling. IDP rose, 0.7388 to
+   0.7399. Switches halve and fragmentation falls 2.20 to 1.60 tracks per identity. So
+   two-stage is safe to adopt and mildly better, which is what §7.11 and `runs/endings05/`
+   have been waiting on.
+
+   **And the number that matters more is the one that did not move.** `idfn` is 612 for
+   the shipped tracker and 605 for two-stage: **26% of the labelled boxes are lost to
+   fragmentation under a one-to-one identity mapping, and two-stage recovers seven
+   frames of it.** The loss decomposes exactly — identity 1 has 873 frames split across
+   `#1` (433), `#5` (363), `#8b` (56) and `#13` (21), so a one-to-one mapping keeps 433
+   and charges 440; identity 3 charges 172 the same way; 440 + 172 = 612. The gaps
+   responsible are **24 frames** (`#1`→`#5`) and **61** (`#5`→`#13`) against
+   `max_age = 5`. No association over a five-frame coasting window can bridge a
+   twelve-second absence, and two-stage does not change that window — it changes which
+   detections are eligible inside it.
+
+   **So the fragmentation figure this project has been quoting is not a tracker-tuning
+   problem.** Bridging 5-12 second absences is what §6 step 5 already names an appearance
+   model for, and this is the first measurement that prices it: 26 IDF1 points on this
+   clip, against the 0.2 that association tuning returned.
+
+   Caveats, all of them: **one clip, one camera, five identities**, and the labels were
+   read by a model rather than by a person (`runs/gt_cam01/provenance.json` says so in its
+   own words). The labels also cover the detector's boxes only, so this measures
+   association and not detection.
+
 19. **"Scale-measured" meant the person-height prior all along, and a second fleet arrived
    that has more of it than the first.** Opened 2026-08-27 when a new corpus —
    `gs://syncai-rtsp-recordings`, ten RTSP channels of a second store, wood floor, not
