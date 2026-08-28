@@ -259,6 +259,37 @@ def _sheet(tracks: dict, crops: dict, out: Path) -> tuple[list[Path], int]:
     return pages, drawn
 
 
+def _copresent(tracks: dict) -> dict:
+    """Pairs of tracks alive at the same time -- the merges no judgement is needed for.
+
+    Two tracks whose frame spans overlap are two people, and that is arithmetic over frame
+    indices: no model, no calibration, no threshold. It matters that it stays that way.
+    A position or speed test would exclude far more pairs, and it would exclude them using
+    exactly the geometry and the association rules that the ground truth is being built to
+    measure -- IDF1 against a label set derived from the tracker's own assumptions scores
+    agreement with those assumptions.
+
+    On the first sheet this ran against (Taichung-cam01, 10 tracks) it removes 13 of the
+    45 pairs. It is written beside the sheet rather than drawn on it because it is a fact
+    about the tracks, and the sheet is the crops.
+    """
+    span = {t: (min(int(f) for f in v), max(int(f) for f in v)) for t, v in tracks.items()}
+    ids = sorted(span, key=lambda t: span[t][0])
+    excluded, open_pairs = [], []
+    for i, a in enumerate(ids):
+        for b in ids[i + 1 :]:
+            (a0, a1), (b0, b1) = span[a], span[b]
+            if a0 <= b1 and b0 <= a1:
+                excluded.append([a, b])
+            else:
+                open_pairs.append([a, b, b0 - a1 if a1 < b0 else a0 - b1])
+    return {
+        "spans": {t: list(s) for t, s in span.items()},
+        "cannot_merge_co_present": excluded,
+        "open_pairs_gap_frames": sorted(open_pairs, key=lambda p: p[2]),
+    }
+
+
 def cmd_propose(args) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -295,6 +326,13 @@ def cmd_propose(args) -> int:
     tracks = tracks_to_json([t for t in tracker.finished() if t.confirmed])
     (out / "tracks.json").write_text(json.dumps(tracks, indent=1) + "\n")
     pages, drawn = _sheet(tracks, keep, out)
+    cop = _copresent(tracks)
+    (out / "copresent.json").write_text(json.dumps(cop, indent=1) + "\n")
+    n_pairs = len(cop["cannot_merge_co_present"]) + len(cop["open_pairs_gap_frames"])
+    print(
+        f"  {len(cop['cannot_merge_co_present'])} of {n_pairs} pairs are co-present and "
+        f"cannot merge (copresent.json)"
+    )
     lengths = sorted(len(v) for v in tracks.values())
     med = lengths[len(lengths) // 2] if lengths else 0
     (out / "provenance.json").write_text(
