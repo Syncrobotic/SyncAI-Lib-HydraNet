@@ -8,8 +8,11 @@ bag has been left, stock has gone off a shelf.
 ---------------------------------------------------------------------------
 WHY THESE ARE NOT MODEL OUTPUTS, AND THE ARGUMENT IS ALREADY IN THIS REPOSITORY
 
-`RETAIL.md` section 2 refuses to make "walkable area within 5 m" a class, and the
-three reasons transfer to every event here without modification:
+`docs/PLAN.md` §5 refuses to put an answer in the weights that belongs in a config, and
+refuses to let the rule layer reach into the model -- "four minutes is loitering" is an
+argument. The retail doc that first made the case, against "walkable area within 5 m" as
+a class, is at `git show b7457c2:docs/RETAIL.md`; its three reasons transfer to every
+event here without modification:
 
 1. **Annotators cannot label it consistently.** Where a restricted zone ends is a
    decision, not an appearance. Two annotators disagree by a metre and the model trains

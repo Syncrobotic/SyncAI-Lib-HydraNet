@@ -5,7 +5,7 @@ hydranet-infer-image, hydranet-infer-video, bev_video and annotation_batch hardc
 `ckpt.get("ema") or ckpt["model"]` -- always the average, with no way to ask for
 anything else.
 
-That is not a style difference. docs/TRAINING_GUIDE.md section 5 records a run scoring
+That is not a style difference. `git show b7457c2:docs/TRAINING_GUIDE.md` §5 recorded a run scoring
 0.16 mIoU on EMA weights against 0.95 on the raw ones from the same training, because
 the average starts at the random initialisation and takes thousands of steps to forget
 it. On a short run those are two different models -- and the tools with no way to say

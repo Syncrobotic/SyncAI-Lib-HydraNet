@@ -73,8 +73,8 @@
 #
 # Fall, fight, abandoned object, line crossing, occupancy: none of them is a model output
 # here. They are events over tracks and the ground plane, they live in
-# `analytics/events.py`, and `docs/RETAIL.md` argues why putting any of them in
-# the exported graph would be the "within 5 m is not a class" mistake repeated.
+# `analytics/events/`, and `docs/PLAN.md` §5 says why putting any of them in the exported
+# graph would be the "within 5 m is not a class" mistake repeated.
 # =============================================================================
 
 _base_: hydranet_retail_surfaces.yaml

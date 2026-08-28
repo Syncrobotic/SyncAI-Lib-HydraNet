@@ -10,7 +10,7 @@
 #
 # What this config deliberately does NOT model: "walkable within 5 m" and "the
 # merchandise zone on the floor". Both are geometry on the ground plane, both are
-# post-processing, and both are argued out in docs/RETAIL.md. Putting a distance
+# post-processing, and both are argued out in docs/PLAN.md §5. Putting a distance
 # threshold in a semantic class asks an annotator to distinguish 4.8 m of floor from
 # 5.2 m of the same floor.
 # =============================================================================
@@ -141,7 +141,7 @@ train:
   # on this hardware is batch 32 with lr 4.0e-4 -- which is this project's own scaling
   # rule, lr = batch_size x 1.25e-5, and not a guess.
   #
-  # What keeps 8 here is that every number in docs/RETAIL.md was measured at this
+  # What keeps 8 here is that every number in `git show b7457c2:docs/RETAIL.md` was measured at this
   # batch. Changing it silently redefines the baseline those tables compare against, and
   # a faster baseline that is no longer comparable to the conclusions already drawn from
   # it is a bad trade. Override per run instead, when the comparison does not matter:

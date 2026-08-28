@@ -60,7 +60,7 @@ Measured: the pairwise cosine similarities printed at the end, and the refusal t
 follows from them. Not measured: the prompt templates. They are written from the same
 reasoning as `sam3_prompts_objects.py`'s -- a shelf-level phrase beats a bare noun for
 CCTV-scale merchandise -- and that reasoning has never been checked for *text* prompts
-in this project. `docs/RETAIL.md` records the related finding for SAM 3, that
+in this project. `git show b7457c2:docs/RETAIL.md` recorded the related finding for SAM 3, that
 web English's `iphone` is a product shot rather than thirty pixels of handset on a
 shelf. An embedding of that word carries the same problem into this matrix, and no
 amount of ensembling fixes a word that means the wrong picture.

@@ -26,7 +26,8 @@ project has no hand-labelled site data at all. Sample an hour, count it by eye, 
 That is the acceptance test and there is no substitute for it.
 
 The camera pose is per-camera and it is the largest source of error in the metric
-output. docs/journal/2026-08-14 records what happens when it is guessed: a pinhole fit
+output. The 2026-08-14 journal (`git show b7457c2:docs/journal/`) recorded what
+happens when it is guessed: a pinhole fit
 absorbed the lens's barrel distortion and put 142 detected people at 1.0-1.2 m tall,
 and at the wrong pitch one image column spanned 0.07 to 3543 m of floor. Fit the lens
 first, then the pose -- `syncai_bev3d.plate_calibration`, which absorbed
@@ -85,7 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--max-age", type=int, default=5)
     ap.add_argument("--iou", type=float, default=0.3)
     # Pose. Per camera, and the defaults are Taichung-cam01's corrected fit from
-    # docs/journal/2026-08-14 -- right for that camera and an assumption for any other.
+    # measured on Taichung-cam01 -- right for that camera, an assumption for any other.
     ap.add_argument("--camera-height", type=float, default=2.38, metavar="M")
     ap.add_argument("--pitch", type=float, default=50.2, metavar="DEG")
     # 70.4, not 55. The comment above says these defaults are Taichung-cam01's corrected

@@ -8,7 +8,8 @@ separation of 11-49x against SAM 3's 0.9x. The night population never reaches th
 threshold, so unlike the SAM 3 path this one needs no daylight gate.
 
 `PERSON_THRESHOLD` is that gap, not a tuned number, and it belongs to one clip's worth of
-night evidence -- `docs/journal/2026-08-19-night-person-fleet-recheck.md` re-measured the
+night evidence -- `git show b7457c2:docs/journal/2026-08-19-night-person-fleet-recheck.md`
+re-measured the
 fleet and found 13 of 42 cameras putting a box over it on a shuttered store. What survives
 that is the static veto in `data/night_person.py`, not a different threshold here.
 

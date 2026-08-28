@@ -3,7 +3,7 @@
 
 Nothing else is retuned, so the 30 frames stay comparable with runs/site30k_qa/batch30.
 The three changes, each traced to a frame the user rejected (see
-docs/journal/2026-08-19-small-batch-breaks-three-gates.md section 5):
+`git show b7457c2:docs/journal/2026-08-19-small-batch-breaks-three-gates.md` section 5):
 
   (1) THE FLOOR IS DECIDED ONCE PER CAMERA, over every day plate that camera has, not
       once per clip. K04's 06:30 plate carries a person smeared across the left floor;

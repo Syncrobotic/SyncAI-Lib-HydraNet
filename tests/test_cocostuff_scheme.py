@@ -49,7 +49,7 @@ def test_dead_thing_ids_are_not_mapped():
     """mirror(66), window(68) and door(71) were dropped from COCO and carry no pixels.
 
     Mapping one costs nothing at runtime and quietly removes a class from the mIoU
-    denominator, which is the failure docs/METHODOLOGY.md exists to prevent.
+    denominator, which is the failure `git show b7457c2:docs/METHODOLOGY.md` existed to prevent.
     """
     for dead in (66, 68, 71):
         assert dead - 1 not in COCOSTUFF_ID_TO_INDOOR, f"labels.txt {dead} is a dead class"

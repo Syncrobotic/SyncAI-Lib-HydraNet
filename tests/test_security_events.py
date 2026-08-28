@@ -1,7 +1,7 @@
 """The security half's output: events over tracks and the floor, not model channels.
 
 Every threshold here is an argument and every position is in metres, and both are the
-same decision as `RETAIL.md`'s refusal to make "within 5 m" a class: a number that
+same decision as `docs/PLAN.md` §5: a number that
 belongs to a store belongs in a config, and a boundary drawn in pixels dies when the
 mount is knocked. These tests pin the arithmetic that makes that possible, and pin the
 refusals that stop an unbuilt producer from returning an empty list that reads as

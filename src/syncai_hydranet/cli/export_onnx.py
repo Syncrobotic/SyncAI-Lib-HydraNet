@@ -5,7 +5,7 @@
 
 The forward graph holds only convolution, resize and exp: no NMS and no dynamic control
 flow, so trtexec fuses it in one piece. NMS stays in the host post-processing code (see
-docs/DEPLOY.md).
+`serving/decode.py`, the host-side FCOS decode).
 
 Two flags move work off the host, and both change the output contract rather than the
 model -- the weights are untouched and nothing is retrained:

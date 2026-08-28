@@ -87,7 +87,7 @@ def select_weights(ckpt: dict, prefer: str = "ema") -> dict:
     hardcoded `ckpt.get("ema") or ckpt["model"]`, always taking the average with no way
     to ask for anything else.
 
-    That is not a style difference. docs/TRAINING_GUIDE.md section 5 records a run
+    That is not a style difference. `git show b7457c2:docs/TRAINING_GUIDE.md` §5 recorded a run
     scoring 0.16 mIoU on EMA weights and 0.95 on the raw ones from the same training,
     because the average starts at the random initialisation and takes thousands of
     steps to forget it. On a short run the two sets of weights are different models,

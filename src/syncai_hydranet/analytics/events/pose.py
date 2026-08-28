@@ -233,8 +233,8 @@ def pose_posture_events(
     in the event's `basis`.
 
     Every threshold here is a default and none is measured. They are stated as arguments
-    for the reason RETAIL.md gives about the 5 m rule: a number that belongs to a
-    store belongs in a config, not in weights, and not in a constant either.
+    for the reason `docs/PLAN.md` §5 gives: a number that belongs to a store belongs in a
+    config, not in weights, and not in a constant either.
     """
     require_keypoints(tracks)
     events: list[SecurityEvent] = []

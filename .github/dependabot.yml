@@ -8,7 +8,8 @@ version: 2
 #
 # PRs target `dev`, because that is where work enters -- feat/* → dev → stage → main.
 # A dependency PR opened against `main` could not be merged without breaking the
-# fast-forward promotion rule in docs/RELEASE.md.
+# fast-forward promotion rule that `.github/workflows/release-please.yml` carries now
+# (`git show b7457c2:docs/RELEASE.md` for the document that stated it).
 updates:
   - package-ecosystem: github-actions
     directory: /

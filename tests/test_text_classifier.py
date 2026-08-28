@@ -1,6 +1,6 @@
 """The open-vocabulary classifier: what makes it worth the swap, and what it cannot do.
 
-The problem is measured. `docs/RETAIL.md`'s audit swept the detection head over
+The problem is measured. `git show b7457c2:docs/RETAIL.md`'s audit swept the detection head over
 Kaohsiung-cam08, an Apple store, and got **1,683 `book` and no `laptop` at any threshold**.
 The head is finding the merchandise and naming it with the nearest shape word COCO owns.
 The boxes are right; the vocabulary is not, and no amount of COCO training fixes a word

@@ -26,7 +26,7 @@ line.
 
 The pre-labels are a starting point and nothing more. Nothing here should be trained on
 until a human has been over it -- which is exactly what the annotation contract in
-docs/METHODOLOGY.md is for.
+`git show b7457c2:docs/METHODOLOGY.md` was for.
 """
 
 from __future__ import annotations

@@ -92,7 +92,9 @@ train:
   amp_dtype: bfloat16
   grad_clip: 10.0
   ema: true                       # decay ramps up over train.ema_warmup_steps, so
-                                  # short runs are safe too; see docs/DEPLOY.md
+                                  # short runs are safe too. `utils.checkpoint.
+                                  # select_weights` carries the measurement: 0.16 mIoU
+                                  # on the average against 0.95 on the raw weights
   ema_decay: 0.9998
   log_interval: 50
   val_interval: 1

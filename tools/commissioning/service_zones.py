@@ -44,7 +44,7 @@ THE CONSTRUCTION, ENTIRELY INSIDE WHAT THE CAMERA SEES
 
 `REACH_M` is a stated reach, not a fitted number: 0.9 m is roughly where a person's feet
 are when their hands are at a counter edge. It is an argument, like every other store
-parameter in this project (`RETAIL.md` section 5: config, not weights).
+parameter in this project (`docs/PLAN.md` §5: config, not weights).
 """
 
 from __future__ import annotations

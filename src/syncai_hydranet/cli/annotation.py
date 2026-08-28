@@ -3,7 +3,7 @@
     hydranet-annotation labels --out cvat_labels.json    # the schema CVAT imports
     hydranet-annotation check datasets/site_a            # the gate before training
 
-[docs/METHODOLOGY.md](../../../docs/METHODOLOGY.md) states the contract between
+`git show b7457c2:docs/METHODOLOGY.md` stated the contract between
 annotators and training in prose, and prose drifts: a class renamed in the tool, an id
 typed by hand, a background exported as 0 where the loss expects 255, one session
 appearing in both train and val. None of that raises an error. Training accepts the

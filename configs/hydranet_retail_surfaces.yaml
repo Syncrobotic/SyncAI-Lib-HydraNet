@@ -1,5 +1,5 @@
 # =============================================================================
-# Phase 1 of docs/ARCHITECTURE.md: split the taxonomy by instrument.
+# Phase 1 of `git show b7457c2:docs/ARCHITECTURE.md`: split the taxonomy by instrument.
 #
 # `hydranet_retail_products.yaml` with `product` taken out of the segmentation head and
 # left to the detection head, which is the instrument that can resolve it. That config's

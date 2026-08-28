@@ -4,7 +4,7 @@ The site `person` teacher is Grounding DINO at 0.35. That threshold was chosen f
 measured day/night gap and the night half of it **did not survive the fleet**: re-measured
 on 2026-08-19 across all 42 live cameras at ~23:58 store-local, 13 of them put a box over
 0.35 on an empty shuttered store, the worst at 0.594. See
-`docs/journal/2026-08-19-night-person-fleet-recheck.md`.
+`git show b7457c2:docs/journal/2026-08-19-night-person-fleet-recheck.md`.
 
 This module is the veto that makes the rest usable. It does one thing:
 

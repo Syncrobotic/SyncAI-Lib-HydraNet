@@ -31,7 +31,8 @@ Detection, 2 classes: person (GDINO @0.35, the measured day/night gap) and produ
 families are merged into one `product` category, the source family kept per box).
 
 `pet` was REMOVED from the campaign scope on 2026-08-19 (the user's decision, recorded in
-docs/journal/2026-08-19-small-batch-breaks-three-gates.md section 9). The census this
+`git show b7457c2:docs/journal/2026-08-19-small-batch-breaks-three-gates.md`
+section 9). The census this
 script wrote -- 2477 boxes over 336 frames, runs/site30k_qa/pet_census.json -- tops out at
 0.5427 with p99 = 0.2018, so no threshold was ever defensible and the class would ship
 with zero positives and never fire. The `pet-census` subcommand and the id-2 category are

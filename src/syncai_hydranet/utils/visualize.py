@@ -197,7 +197,8 @@ def terrain_palette(classes, n_classes: int | None = None) -> np.ndarray:
 # every frame look equally confident: a corridor whose true span is 0.3-5 m and one whose
 # span is 0.3-1 m render identically. That matters here more than usual, because this head's
 # metres are the part known to be wrong -- a published metric-depth model over-predicted by
-# a flat 15% on a domain change (measured 2026-08-18, docs/RESEARCH_OCCUPANCY.md), and a
+# a flat 15% on a domain change (measured 2026-08-18;
+# `git show cc80fc3^:docs/RESEARCH_OCCUPANCY.md`), and a
 # self-scaling colour map hides exactly that error while looking sharper.
 #
 # Near is warm. A robot reads "red is close", and the alternative convention -- warm for

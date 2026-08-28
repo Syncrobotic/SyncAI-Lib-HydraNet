@@ -7,7 +7,7 @@
 Per the 2026-08-19 design ruling: *physical* zones (walkable floor, fixture footprints,
 entrances) are automatable proposals; *policy* attributes (restricted, max_occupancy, ...)
 are proposed-never-decided, so every proposal here carries them as explicit nulls and a
-human fills them in. Zones are polygons in metres on the floor (docs/RETAIL.md section 5:
+human fills them in. Zones are polygons in metres on the floor (`docs/PLAN.md` §5:
 config, not weights), so everything below runs through the per-camera calibration from
 runs/onboard01 rather than staying in pixels.
 

@@ -1,7 +1,7 @@
 """What to ask SAM 3 for, and what its answer is allowed to become.
 
 Self-training cannot invent a class. ``configs/hydranet_retail_cctv.yaml`` says so in
-prose and [docs/RETAIL.md](../../../docs/RETAIL.md) measures it: the site
+prose and `git show b7457c2:docs/RETAIL.md` measured it: the site
 pseudo-labels moved ``display_fixture`` by **-0.0096**, because the free-standing podiums
 came back unlabelled and the model was then taught that fixture-shaped things in a shop
 are not fixtures. The label source was the model itself, so the loop could only harden.
@@ -11,7 +11,8 @@ knowledge is external**. It has never seen this model's mistakes, so a podium it
 is new information rather than an echo. That is the whole argument for this module, and
 it is also its limit -- SAM 3 is a different model with different errors, not an oracle.
 Everything here is a *pre-label*, and the contract in
-[docs/METHODOLOGY.md](../../../docs/METHODOLOGY.md) still gates it.
+`hydranet-annotation labels|check` still gates it, and is the machine-checked half of
+the setup document that used to (`git show b7457c2:docs/METHODOLOGY.md`).
 
 Ids are imported, never typed. ``RETAIL_TERRAIN`` is the one place the numbering lives,
 and a table of hand-written ints here would be a second one -- the exact drift the

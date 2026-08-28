@@ -15,8 +15,8 @@ better and meant less.
 
 **No ground plane is fitted.** With registered metric depth, back-projecting through K is
 exact; fitting a plane and projecting onto it would add an assumption (flat floor) to
-data that does not need one. The plane matters when you have no depth -- see
-docs/RETAIL.md -- and the costmap side of the project fits one for that reason.
+data that does not need one. The plane matters when you have no depth -- `cli/scene.py`
+is the path that assumes one for exactly that case, and says what the assumption costs.
 
 **Pixels the depth sensor could not see become `unknown`, not floor.** A polished floor
 returns nothing to a projector-based sensor: 10.6% of walkable pixels in a real lobby

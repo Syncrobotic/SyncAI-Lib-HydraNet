@@ -9,7 +9,7 @@ floor a wall was itself mislabelling the classes.
 The second half is `overlay`, which clamped an out-of-range class into the last palette
 entry. Retail has thirteen terrain classes and the palette had twelve, so every
 `display_fixture` in every rendered frame was drawn as `person` -- in the class
-docs/RETAIL.md calls the reason the retail taxonomy exists at all.
+`git show b7457c2:docs/RETAIL.md` called the reason the retail taxonomy exists at all.
 
 pytest tests/test_palettes.py -v
 """

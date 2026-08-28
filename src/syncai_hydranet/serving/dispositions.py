@@ -9,7 +9,8 @@ the event row verbatim (`basis`/`value`/`threshold` -- the instrument, the measu
 the setting, never a score), the frame it can be pulled from, the checkpoint and commit
 that raised it, and the hash of the calibration the geometry ran under. Schema before
 product: this file was decided on 2026-08-19
-(`docs/journal/2026-08-19-security-retail-teachers-and-methodology.md` section 4 item 4).
+(`git show b7457c2:docs/journal/2026-08-19-security-retail-teachers-and-methodology.md`
+section 4 item 4).
 
 ---------------------------------------------------------------------------
 THE ONE-SIDEDNESS, WHICH IS A PROPERTY OF THE INSTRUMENT AND NOT A BUG

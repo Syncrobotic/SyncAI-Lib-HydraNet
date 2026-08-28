@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Offline non-causal tracking: spend future frames to save human merge decisions.
 
-docs/RETAIL_SECURITY.md names "one labelled clip" as the critical path for everything
+`git show 8b37959^:docs/RETAIL_SECURITY.md` named "one labelled clip" as the critical
+path for everything
 temporal, and scripts/track_review.py already turns labelling into a merge-review loop:
 the human cost is one decision per proposed fragment. The online tracker is a fragment
 factory -- greedy IoU, one-step constant velocity, no memory past `max_age` frames -- so

@@ -31,8 +31,8 @@ choice to the config rather than to whoever writes the dataset path:
 
 There is no `glass` id here yet. The campaign labels the glazing -- and the street behind
 it -- as `wall`, which is wrong and is recorded in
-docs/journal/2026-08-20-site30k-campaign-plan.md; the fix stamps a new id, and the id is
-added here in the same change that starts writing it, not before.
+`git show b7457c2:docs/journal/2026-08-20-site30k-campaign-plan.md`; the fix stamps a
+new id, and the id is added here in the same change that starts writing it, not before.
 """
 
 from __future__ import annotations
