@@ -59,7 +59,7 @@ class ExportWrapper(nn.Module):
     RGB in 0-255 rather than an ImageNet-normalised tensor.
 
     Why that is worth two extra operators: pre-processing parity between training and the
-    robot is listed in METHODOLOGY.md as a deployment responsibility, and the repository
+    host was a deployment responsibility nobody owned, and the repository
     was implementing it twice -- ``data/transforms.py`` for training and a hand-copied
     mean/std in ``scripts/bench_camera_orin.py`` for the board. Nothing connected the two:
     change one and no test fails, no error appears, and the deployed model is simply worse

@@ -287,7 +287,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--weights",
         choices=["ema", "model"],
         default="ema",
-        help="EMA weights need enough training steps to be meaningful; see docs/DEPLOY.md",
+        help="EMA weights need enough training steps to be meaningful; "
+        "`utils.checkpoint.select_weights` has the measurement -- 0.16 mIoU on the "
+        "average against 0.95 on the raw weights, same run",
     )
     ap.add_argument("--input", required=True, help="image or video file")
     ap.add_argument("--output", default=None, help="rendered panel; omit to write none")

@@ -15,8 +15,9 @@ at the top level, this module depends on nothing and everything may depend on it
 
 `PAD_COLOR` in particular was not shared at all: `utils.visualize.letterbox` had the same
 triple written out as a literal default with a comment pointing at the other copy. That is
-the arrangement `tests/test_orin_standalone_copies.py` exists because of, one layer in and
-with nothing watching it.
+the arrangement `tests/test_orin_standalone_copies.py` existed because of, one layer in and
+with nothing watching it -- that test is gone with the Orin, and this module is why its
+absence costs nothing: there is one definition now.
 
 `test_export_preprocessing.py` keeps the wider contract honest: the exported graph
 carries these exact values, so a host feeds raw 0-255 and the graph normalises. A second
