@@ -80,10 +80,8 @@ from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from syncai_hydranet.analytics import Tracker
+from syncai_hydranet.analytics import Tracker, person_head
 from syncai_hydranet.config import load_config
-from syncai_hydranet.data.coco_subsets import COCO_NAMES
-from syncai_hydranet.data.label_maps_retail_security import get_det_vocab
 from syncai_hydranet.data.transforms import invert_geom
 from syncai_hydranet.data.video import frames, probe
 from syncai_hydranet.models.hydranet import build_model
@@ -91,57 +89,16 @@ from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
 from syncai_hydranet.utils.device import pick_device
 from syncai_hydranet.utils.visualize import preprocess
 
-PERSON = COCO_NAMES.index("person")
+# Both live in `syncai_hydranet.analytics.person_head` since 2026-08-28, when a second
+# script needed the same refusal: `tests/test_scripts_are_not_libraries.py` is the rule
+# and its docstring is the reason. Re-exported here so this module's own tests and
+# `scripts/offline_tracks.py` reach them exactly where they always did.
+PERSON = person_head.PERSON
+head_class_names = person_head.head_class_names
+check_person_class_space = person_head.check_person_class_space
+
 CROP_W, CROP_H = 48, 96
 MAX_CROPS = 12
-
-
-def head_class_names(cfg: dict) -> tuple[str, ...] | None:
-    """What the detection head's channels are called, or `None` if the config cannot say.
-
-    Three sources, in the order a config states them: the head's own `classes` list, a
-    `det_vocab` shared with the datasets, and -- only for a head of exactly 80 channels --
-    the COCO space, which this repo's 80-class configs name by omission rather than by
-    listing. `None` means "unknown", which the caller must treat as a refusal: a head whose
-    channels have no names is exactly the head nobody can check.
-    """
-    head = cfg.get("model", {}).get("heads", {}).get("detection", {})
-    if head.get("classes"):
-        return tuple(head["classes"])
-    datasets = cfg.get("data", {}).get("datasets", [])
-    vocabs = {d["det_vocab"] for d in datasets if d.get("det_vocab")}
-    if len(vocabs) == 1:
-        return tuple(get_det_vocab(next(iter(vocabs))).classes)
-    if head.get("num_classes") == len(COCO_NAMES):
-        return tuple(COCO_NAMES)
-    return None
-
-
-def check_person_class_space(n_classes: int, names: tuple[str, ...] | None = None) -> None:
-    """Refuse a detection head in which label `PERSON` does not mean a person.
-
-    Raises rather than warns. A warning is the wrong instrument here: the failure produces
-    a complete, well-formed `tracks.json` and a review sheet full of crops, so nothing
-    downstream can tell the difference and the reviewer is looking at the crops rather
-    than at the scrollback.
-
-    `names` defaults to the COCO space so the historical single-argument call still means
-    what it did: "this head has `n_classes` channels and they are COCO's".
-    """
-    names = tuple(COCO_NAMES) if names is None else names
-    if len(names) != n_classes:
-        raise SystemExit(
-            f"The config names {len(names)} detection classes and the checkpoint's head "
-            f"has {n_classes} channels. One of them is not the model you meant; the "
-            f"tracks would be labelled by a taxonomy the weights were not trained on."
-        )
-    if len(names) <= PERSON or names[PERSON] != "person":
-        got = names[PERSON] if len(names) > PERSON else "nothing"
-        raise SystemExit(
-            f"In this detection head label {PERSON} is {got!r}, not 'person'. Nothing "
-            f"would error; the tracks would just not be people. Its classes are "
-            f"{', '.join(names)} -- use a checkpoint whose head detects people."
-        )
 
 
 def tracks_to_json(tracks) -> dict[str, dict[str, list[float]]]:

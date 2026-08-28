@@ -41,12 +41,14 @@ import torch
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-from track_review import PERSON, check_person_class_space, head_class_names
 
 from syncai_hydranet.analytics import Tracker
 from syncai_hydranet.analytics.bytetrack import OfflineForward
+from syncai_hydranet.analytics.person_head import (
+    PERSON,
+    check_person_class_space,
+    head_class_names,
+)
 from syncai_hydranet.analytics.reid_metrics import id_switches, idf1
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.transforms import invert_geom
