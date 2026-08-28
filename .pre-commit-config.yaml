@@ -108,6 +108,19 @@ repos:
   #
   # Two hooks and not one sum: src/ is what ships, scripts/ is dev-side, and the script's
   # header explains why letting one hide behind the other defeats the point.
+  #
+  # **Each `files:` lists every tree whose change can move that count, not only the tree
+  # being counted.** `scripts/` and `tools/` import the package, so a signature widened in
+  # `src/` moves their diagnostics without touching a file either pattern used to match.
+  # `adaef9d` is what that cost: it changed `analytics/tracker.py` and nothing under
+  # `scripts/`, `scripts/track_endings.py` overrides `Tracker.update`, and the count went
+  # 14 -> 15 against a baseline of 14. Six commits then landed on a tree whose Type ratchet
+  # job was already failing, unnoticed because a louder test failure was red at the same
+  # time. Bisected in detached worktrees: 45413cf 14, adaef9d 15.
+  #
+  # The cost is that a commit touching only `src/` now pays all three: 0.71 s for scripts/
+  # and 0.48 s for tools/ on top of its own. A ratchet that cannot see the change that
+  # moves it is not measuring anything.
   - repo: local
     hooks:
       - id: ty-ratchet-src
@@ -123,14 +136,14 @@ repos:
         args: ["scripts/"]
         language: system
         pass_filenames: false
-        files: ^(scripts/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml)$
+        files: ^((src|scripts)/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml)$
       - id: ty-ratchet-tools
         name: ty ratchet (tools/)
         entry: scripts/ty_ratchet.sh
         args: ["tools/"]
         language: system
         pass_filenames: false
-        files: ^(tools/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml)$
+        files: ^((src|tools)/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml)$
 
       # The script/tool import ratchet, here for a reason the ty ratchets do not have.
       #
