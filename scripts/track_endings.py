@@ -147,9 +147,22 @@ class Recording(Tracker):
         super().__init__(**kw)
         self.seen: dict[int, np.ndarray] = {}
 
-    def update(self, boxes, frame_idx, keypoints=None, scores=None):
+    def update(self, boxes, frame_idx, keypoints=None, scores=None, staff_scores=None):
+        # Every optional argument the base takes has to appear here, forwarded untouched.
+        # An override that drops one is not "ignoring a feature this script does not use":
+        # it silently narrows what `track_clip` may pass, and the caller cannot see that a
+        # `Tracker` it was handed is a `Tracker` with a smaller signature. `staff_scores`
+        # arrived on 2026-08-28 and this override went stale in the same commit -- caught
+        # by `scripts/ty_ratchet.sh`, and by nothing else, because a Python call with an
+        # unexpected keyword fails only on the run that first passes it.
         self.seen[int(frame_idx)] = np.asarray(boxes, dtype=float).reshape(-1, 4).copy()
-        return super().update(boxes, frame_idx, keypoints=keypoints, scores=scores)
+        return super().update(
+            boxes,
+            frame_idx,
+            keypoints=keypoints,
+            scores=scores,
+            staff_scores=staff_scores,
+        )
 
 
 @dataclass(frozen=True)
