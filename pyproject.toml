@@ -276,6 +276,16 @@ markers = [
     "slow: tests that train or download data (deselect with '-m \"not slow\"')",
 ]
 
+# Both packages the wheel ships, which it was not. `source` named `syncai_hydranet`
+# alone while `[tool.hatch.build.targets.wheel]` above ships `syncai_bev3d` as well, so
+# CI's `--cov-fail-under` could not see a line of it. Measured 2026-08-28 on the day it
+# was added: bev3d is 77% overall, and the two modules that hold the arithmetic every
+# event rests on are the two least covered -- `plate_calibration.py` (pixels to metres)
+# at **10%**, and `floorplan.py` (the service-zone polygons, imported by
+# `tools/commissioning/service_zones.py`, `footprints_from_masks.py` and
+# `scripts/propose_zones.py`) at **0%**. Neither is dead code; both were simply outside
+# the instrument. Adding them moves the combined figure 86% -> 84.08%, which still
+# clears the floor -- the floor is a separate decision and a separate commit.
 [tool.coverage.run]
-source = ["src/syncai_hydranet"]
+source = ["src/syncai_hydranet", "src/syncai_bev3d"]
 branch = true
