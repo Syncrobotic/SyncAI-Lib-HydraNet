@@ -24,6 +24,7 @@ import contextlib
 import json
 import subprocess
 import tempfile
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -153,7 +154,50 @@ def frames(path: str, w: int, h: int, stride_fps: float | None):
     the raise actionable ("moov atom not found" and "Invalid NAL unit size" are different
     problems), and a pipe nobody drains until the process exits is a deadlock whenever the
     error is per-frame rather than per-file.
+
+    ---------------------------------------------------------------------------
+    WHAT `stride_fps` DOES, AND WHERE IT INVENTS EVIDENCE
+
+    ffmpeg's `fps` filter emits a **constant** rate: below the source it drops frames, and
+    at or above it **duplicates** them. That is what makes `frame_index / fps` a correct
+    elapsed time downstream -- `analytics/events/behaviour.py` computes every speed and
+    every duration that way -- and it is also how a frame that no camera recorded gets
+    into a measurement. A duplicated frame is zero displacement, so it biases speed *down*
+    and can suppress a `run`.
+
+    Measured on this corpus 2026-08-28, identical consecutive frames over 200 decoded:
+
+        Kaohsiung-cam03   5.00 fps source, stride 5   ->    0 (0.0%)
+        Kaohsiung-cam03   5.00 fps source, stride 8   ->   75 (37.7%)
+        Kaohsiung-cam04   8.00 fps source, stride 5   ->    0 (0.0%)
+        Taichung-cam01    7.00 fps source, stride 5   ->    7 (3.5%)
+
+    Row two is why the warning below exists. **Row four is why "keep the stride under the
+    source rate" is not sufficient**, and it is the one worth knowing: `_fps` reports a
+    *mean*, and these streams are variable-rate -- Taichung-cam01's frame intervals run
+    0.134 s median against a 0.568 s maximum, 4.24x. A 5 fps output needs a frame every
+    0.2 s, so across a 0.568 s gap the filter has to invent two, and it does, on a camera
+    whose mean rate is comfortably above the target. Kaohsiung-cam04, same nominal margin
+    but a 2.0x worst gap, duplicates nothing.
+
+    The warning fires only on the unambiguous case, because upsampling is sometimes what
+    the caller wants: `cli/infer_video` takes `--fps` as the output rate of a render as
+    well as the sampling rate. The probe it costs is one ffprobe against minutes of
+    decode, and a probe that fails is ignored rather than changing this function's
+    failure mode -- `DecodeError` stays the way a bad clip is reported.
     """
+    if stride_fps:
+        with contextlib.suppress(Exception):
+            src_fps = probe(path)[2]
+            if stride_fps > src_fps:
+                warnings.warn(
+                    f"{path}: sampling at {stride_fps:g} fps from a {src_fps:g} fps source. "
+                    "ffmpeg's fps filter duplicates frames to make up the difference, so "
+                    "the extra frames are copies rather than evidence -- a duplicate is "
+                    "zero displacement, which biases speed down and can suppress a `run`. "
+                    "Measured on a 5 fps camera sampled at 8: 37.7% of frames duplicated.",
+                    stacklevel=2,
+                )
     vf = f"fps={stride_fps}" if stride_fps else "null"
     with tempfile.TemporaryFile() as errors:
         proc = subprocess.Popen(
