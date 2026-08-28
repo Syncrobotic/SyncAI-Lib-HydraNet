@@ -75,6 +75,35 @@ uv run ruff format .
 uv run pytest -q
 ```
 
+### Green here is not green on CI, and the three reasons are all environment
+
+A local pass is necessary and it is not sufficient. On 2026-08-28 `CI (dev)` had been red
+for a full day with **five failing tests and the export job**, while every local run of
+the same commands was green — and four of the six failures could not fail locally at all,
+because this project is developed on a box that differs from the runner in exactly three
+ways:
+
+| the runner | this box | what it broke |
+|---|---|---|
+| no accelerator | a GPU | `pin_memory=True` warns, the suite turns warnings into errors, `test_multitask_ratio` was red on every matrix row |
+| no `ffmpeg` | ffmpeg installed | a test shelled out to it without the `needs_ffmpeg` guard its neighbour already had |
+| `actions/checkout` at depth 1 | full history | `test_deleted_docs_are_cited_as_history` resolves `git show <sha>:<path>` and on a shallow clone nothing resolves |
+
+A fourth was the same shape one level out: `configs/hydranet_retail_openvocab.yaml` names
+`weights/text/retail_products.pt`, `*.pt` ignored it, and so the export-parity job had
+failed on a clean checkout **since the file was written on 2026-08-17** while passing in
+every working tree that had produced one.
+
+Two things follow, and both are cheap:
+
+* **A `git worktree` is not a clean checkout.** It shares the object database, so it can
+  never reproduce the shallow-clone class of failure. It is still the right place to run
+  the other checks, because it does not carry your untracked files.
+* **When CI is red, read CI's log, not a local re-run.** `gh run view <id> --log-failed`
+  names the failing test and its message in one command. Two of today's fixes were
+  invisible without it, and the day before, a green local run of the export loop is
+  exactly what let the job stay red.
+
 ## Figures under `assets/`
 
 `assets/` is an **allowlist**, not a denylist: `.gitignore` ignores `assets/*` and
