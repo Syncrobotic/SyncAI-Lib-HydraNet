@@ -1344,6 +1344,41 @@ something it does not support.
    position, with **no box at all** in the gaps while the blue sleeve is plainly on the
    counter (`assets/gt_th03_podium.png`).
 
+   **Step 5's other sentence is measured now, 2026-08-28, and on one of the two cameras it
+   fails** (`scripts/zone_dwell.py`, `runs/gt_*/zone_dwell.json`). The gate reads "dwell/
+   loiter durations survive — an ID switch mid-loiter resets the clock, so switches on the
+   watched clips must be rare enough not to", and IDF1 does not answer it: what the layer
+   above reports is a duration in a zone, so the product's own chain — `world_frames` →
+   `journeys` → visits in metres through the camera's commissioned geometry — is run three
+   times over the same clip, over the labelled identities and over each tracker's output.
+
+   **Taichung-cam01 passes.** 35 true visits totalling 335.2 s; both arms report 35 visits
+   totalling 326.6 s and 328.2 s, survival median 1.00, and **5 of the 6 loiters ≥ 10 s
+   are kept whole**. One single-stage visit spans two identities and it is exactly track 8,
+   the two-person track above; two-stage has none.
+
+   **Tao-Hsin-cam03 fails, and not narrowly.** The truth is **4 visits totalling 68.6 s**.
+   The shipped tracker reports **17 visits totalling 42.2 s** — four times the count and
+   38% of the time gone. Its one loiter is the member of staff at the counter, `fixture_05`,
+   **57.6 s**, and it arrives at the event layer like this:
+
+   | | reported visits covering it | longest single | as a fraction |
+   |---|---|---|---|
+   | single-stage (shipped) | **13** | 4.8 s | **8%** |
+   | two-stage | 5 | 24.4 s | 42% |
+
+   Single-stage splits it into 4.8, 4.0, 3.6, 3.0, 3.0, 2.4, 2.0, 2.0, 1.6, 1.6, 1.6, 1.6
+   and 1.2 seconds. **A person who stood there for a minute is a 4.8-second dwell**, so any
+   loiter rule with a threshold above five seconds cannot fire on this camera at all —
+   which is the gate's own sentence about the clock, with a number on it for the first
+   time. Two-stage takes 8% to 42%: a real improvement, and still not "survive".
+
+   **So step 5 does not pass on the fleet, and the failing half is not the geometry.**
+   §7.13's 7.3 cm stands; what breaks is that the identity a duration is attached to does
+   not last as long as the duration. Step 6 is gated on step 5 and should stay gated:
+   an L3 event log built on this camera would report a shopper's minute as thirteen
+   visits, and every one of them would be true.
+
    **So: adopt two-stage, and do not expect it to fix fragmentation.** Bridging 5–12 second
    absences is what §6 step 5 already names an appearance model for, and this is the first
    measurement that prices it — 26 to 49 IDF1 points of headroom, against the 0.3 to 3.6
