@@ -319,12 +319,27 @@ def check_parity(wrapper, dummy, path: str, out_names: list[str], tol: float = 1
     This catches a graph that exported wrongly. It does not catch a pre-processing
     mismatch on the robot, which is the other classic deployment failure; for that, feed a
     real frame through both paths.
+
+    **A missing onnxruntime raises rather than returning True.** This function used to
+    print a note and report a pass, so a skipped acceptance gate and a passed one left
+    the process with the same exit status -- and `--check-parity` calls itself "the
+    deployment acceptance gate" in its own help text. CI never saw it because
+    `ci.yml` installs `--extra export`; the box that would not have it is the one an
+    engine is built on, which is exactly where the gate is worth having. A caller who
+    did not ask for the check is unaffected: `main` only calls this under
+    `--check-parity`, so asking for a gate and being told the gate cannot run is the
+    thing being reported.
     """
     try:
         import onnxruntime as ort
-    except ImportError:
-        print("(onnxruntime not installed: pip install 'syncai-hydranet[export]')")
-        return True
+    except ImportError as exc:
+        raise SystemExit(
+            "--check-parity needs onnxruntime and it is not installed, so the exported "
+            "graph has NOT been compared against PyTorch. Install the extra "
+            "(`uv sync --extra export`, or `pip install 'syncai-hydranet[export]'`) and "
+            "run it again. Re-run without --check-parity only if you accept an unverified "
+            "graph; this refuses rather than reporting a pass it did not perform."
+        ) from exc
 
     with torch.no_grad():
         ref = [t.numpy() for t in wrapper(dummy)]

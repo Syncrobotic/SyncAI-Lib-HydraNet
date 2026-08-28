@@ -343,3 +343,34 @@ def test_every_narrowing_refusal_precedes_the_model_mutation(tmp_path, monkeypat
         ]
     )
     assert mutated == [True]
+
+
+# ------------------------------------------------- the gate that could not fail
+
+
+def test_parity_refuses_when_onnxruntime_is_absent_rather_than_reporting_a_pass():
+    """A skipped acceptance gate must not exit 0 the way a passed one does.
+
+    `check_parity` used to print a note and `return True` when the import failed, so
+    `main`'s `if args.check_parity and not check_parity(...)` saw a pass, the command
+    exited 0, and any wrapper reading `$?` was told the exported graph had been compared
+    against PyTorch when nothing had run. `--check-parity` describes itself as "the
+    deployment acceptance gate" in its own help.
+
+    CI could never catch it: `ci.yml`'s export-parity job installs `--extra export`. The
+    machine that would not have onnxruntime is the one an engine gets built on.
+
+    `sys.modules[name] = None` is the documented way to make a later `import name` raise
+    `ImportError`, so this exercises the real branch rather than a stubbed function.
+    """
+    with (
+        pytest.MonkeyPatch.context() as mp,
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        mp.setitem(sys.modules, "onnxruntime", None)
+        export_onnx.check_parity(object(), object(), "unused.onnx", ["terrain"])
+
+    message = str(excinfo.value)
+    assert "onnxruntime" in message
+    assert "has NOT been compared" in message, "the refusal has to say what did not happen"
+    assert "--extra export" in message, "and how to make it happen"
