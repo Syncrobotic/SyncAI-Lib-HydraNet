@@ -1336,3 +1336,50 @@ something it does not support.
    file in the bucket is broken rather than the transfer. ch7's 10:00, 12:00 and 14:00 are
    three in a row; ch5's 14:00, ch3's and ch9's 16:00 are singles. The rate over a whole
    day is not measured and matters for whether this corpus can be trained on.
+
+20. **The `person` detector has never seen a labelled shopper from these stores, and half
+   the site training images teach it that shoppers are background.** Opened 2026-08-28 to
+   confirm §7.11's premises before spending its retrain, and both of them moved.
+
+   **No config trains detection on site person labels.** Read across every yaml:
+   `pose01`, `pose02`, `security_b03` and `security_b03_cw_xl` all supervise detection
+   from `retail_objects_batch02` + `batch03` + `coco_person`. Those two site datasets
+   carry **`boxed_stock` and `device` only** — 4,758 and 5,839 annotations, zero people.
+   So the shipped retail `person` channel is trained from **COCO at `sample_ratio 0.05`**
+   and nothing else. `datasets/site30k_v1` holds **47,465 site person boxes** and is
+   wired into the same configs for **pose alone**.
+
+   **And the site images are not neutral about it.** `detection.py` has no ignore
+   mechanism — every location not assigned to a box is background for *all* classes — and
+   `datasets.py` only drops images whose annotations were *entirely* dropped, which a
+   product-labelled frame is not. Sampled with the shipped detector at 0.35: **69 of 120
+   batch02 training images contain a person (58%), and 63 of 120 in batch03 (52%)**. A
+   lower bound, since the counter is the same model that §7.19 measured missing people.
+   Every one of those frames pushes the `person` channel down on exactly the appearance
+   the fleet has to detect.
+
+   **This explains §7.11 better than the assigner does, and it explains the parts the
+   assigner could not.** Centerness is identical across quiet, crowded, good and bad
+   cameras (§7.11) because centerness is regressed on positives and **there are no site
+   person positives at all**. `cls` falls in crowds because a counter crowd at 3-5 m under
+   a 50-degree ceiling mount is as far from COCO as this fleet gets. Score rising with
+   person size, and the two worst cameras being the two most unlike COCO, follow the same
+   way. §7.11's own mechanism — FCOS giving a location to the smallest box containing it
+   — additionally required checking: when the stealing box is another *person* the class
+   target is still `person`, so what it corrupts is the regression, not `cls`. A class
+   flip needs a smaller **non-person** box, and that case cannot arise in training here,
+   because no site frame carries a person box for a bag to steal from.
+
+   **So decision 2 changes shape.** The intervention is not a crowd-aware assigner
+   (ATSS/OTA) and not new labelling: it is **putting `site30k_v1`'s person boxes into
+   detection supervision**, where they already sit on disk inside the same configs. It
+   fixes the missing-label pressure in the same move, because those frames then carry the
+   labels they were missing. The cost to state: they are Grounding DINO teacher output
+   thresholded at 0.35, score p10/p50/p90 **0.43 / 0.60 / 0.70** — teacher error, not
+   human ground truth, and `stack`-class comparability (§7a.1) still applies to any
+   vocabulary change.
+
+   **Not yet measured, and it gates the run**: whether adding 16,146 site frames at their
+   own sampling ratio disturbs the product classes that batch02/03 currently supervise,
+   and what `primary_metric` the run should select on so §7.9's checkpoint trap does not
+   fire again.
