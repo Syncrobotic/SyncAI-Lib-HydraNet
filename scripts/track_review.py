@@ -10,6 +10,9 @@
 
     # 2. a human reads runs/gt_cam04/review_*.png and writes runs/gt_cam04/merges.json
     #    [[3, 17, 41], [8, 22]]   <- each inner list is one shopper
+    #
+    #    and, where one proposed track is two shoppers, runs/gt_cam04/splits.json first
+    #    {"8": [823]}             <- track 8 becomes 8 (f<823) and 8b (f>=823)
 
     # 3. apply
     python3 scripts/track_review.py apply --out runs/gt_cam04
@@ -156,6 +159,70 @@ def tracks_to_json(tracks) -> dict[str, dict[str, list[float]]]:
     return out
 
 
+def id_key(tid: str) -> tuple[int, str]:
+    """Sort key for a track id, tolerant of a split suffix.
+
+    `split_tracks` names the pieces of track 8 `8`, `8b`, `8c`, so `int()` is no longer a
+    valid ordering and neither is the string one -- `10` must still sort after `8b`.
+    """
+    t = str(tid)
+    n = 0
+    while n < len(t) and t[n].isdigit():
+        n += 1
+    return (int(t[:n]) if n else 0, t[n:])
+
+
+def split_tracks(tracks: dict, splits: dict) -> dict:
+    """Cut a proposed track into pieces at the given frames. Returns new `tracks`.
+
+    A merge file can only say that two fragments are one shopper. It cannot say the
+    thing this clip actually needs said: **that one proposed track is two shoppers.**
+    Taichung-cam01's track 8 is the long-haired member of staff at the left counter from
+    f711 to f818 and then, from f823, the one in the blue hooded jacket walking down the
+    aisle -- the box jumps between two people who are both in the frame at f816, one
+    boxed by track 5. `PLAN 7.18` reasoned that the single-stage tracker "never
+    associates across the low band, so it cannot make this mistake", and used that to
+    make it the safe baseline the two-stage tracker was judged against. It makes it.
+
+    So the ground truth needs a cut before it needs a merge, and a review pass that can
+    only merge would have recorded the two people as one and scored both trackers against
+    that. `splits.json` is `{"8": [823]}`: frames below the first cut keep the id, the
+    next run becomes `8b`, then `8c`. Those ids are what `merges.json` then names.
+
+    A cut outside the track, or one that would leave a piece empty, is refused rather
+    than dropped -- a split that silently does nothing produces exactly what no split
+    produces.
+    """
+    out = dict(tracks)
+    for tid, cuts in splits.items():
+        tid = str(tid)
+        if tid not in tracks:
+            raise SystemExit(
+                f"splits.json cuts track {tid}, which tracks.json does not contain. "
+                f"The proposal has {len(tracks)} tracks."
+            )
+        frames_ = sorted(int(f) for f in tracks[tid])
+        bad = [c for c in cuts if not (frames_[0] < c <= frames_[-1])]
+        if bad:
+            raise SystemExit(
+                f"splits.json cuts track {tid} at {bad}, outside its span "
+                f"f{frames_[0]}-f{frames_[-1]} (a cut at its first frame would leave an "
+                f"empty piece). Cut at the first frame that belongs to the next person."
+            )
+        bounds = [frames_[0], *sorted(cuts), frames_[-1] + 1]
+        del out[tid]
+        for i in range(len(bounds) - 1):
+            lo, hi = bounds[i], bounds[i + 1]
+            piece = {f: b for f, b in tracks[tid].items() if lo <= int(f) < hi}
+            if not piece:
+                raise SystemExit(
+                    f"splits.json cuts track {tid} into an empty piece over "
+                    f"f{lo}-f{hi - 1}. Two cuts with no frames between them."
+                )
+            out[tid if i == 0 else f"{tid}{chr(ord('b') + i - 1)}"] = piece
+    return out
+
+
 def apply_merges(tracks: dict, merges: list[list]) -> dict:
     """Fold each group of track ids into one identity, keeping the lowest id.
 
@@ -173,7 +240,7 @@ def apply_merges(tracks: dict, merges: list[list]) -> dict:
     what it produces is exactly what "the tracker fragmented nothing" produces.
     """
     known = set(tracks)
-    missing = sorted({str(g) for group in merges for g in group} - known, key=int)
+    missing = sorted({str(g) for group in merges for g in group} - known, key=id_key)
     if missing:
         raise SystemExit(
             f"merges.json names {len(missing)} track id(s) that tracks.json does not "
@@ -184,7 +251,7 @@ def apply_merges(tracks: dict, merges: list[list]) -> dict:
         )
     lookup = {}
     for group in merges:
-        keep = str(sorted(int(g) for g in group)[0])
+        keep = sorted((str(g) for g in group), key=id_key)[0]
         for g in group:
             lookup[str(g)] = keep
     merged: dict[str, dict[str, list[float]]] = {}
@@ -405,9 +472,18 @@ def cmd_apply(args) -> int:
             f"rather than skipping the step, so the file records that somebody looked."
         )
     merges = json.loads(mpath.read_text())
+    spath = out / "splits.json"
+    n_proposed = len(tracks)
+    if spath.exists():
+        splits = json.loads(spath.read_text())
+        tracks = split_tracks(tracks, splits)
+        cuts = sum(len(v) for v in splits.values())
+        print(
+            f"{cuts} cut(s) in {len(splits)} track(s): {n_proposed} -> {len(tracks)} fragments"
+        )
     res = apply_merges(tracks, merges)
     (out / "ground_truth.json").write_text(json.dumps(res["tracks"], indent=1) + "\n")
-    print(f"{len(tracks)} proposed -> {len(res['tracks'])} identities")
+    print(f"{n_proposed} proposed -> {len(res['tracks'])} identities")
     if res["merge_collisions"]:
         print(f"  {res['merge_collisions']} frames claimed twice within a group (kept first)")
     print(f"  {out / 'ground_truth.json'}")
