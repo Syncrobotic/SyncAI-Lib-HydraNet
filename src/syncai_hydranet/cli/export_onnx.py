@@ -1,4 +1,4 @@
-"""Export ONNX for conversion to a TensorRT engine on Jetson Orin.
+"""Export ONNX for conversion to a TensorRT engine on the serving card.
 
     hydranet-export-onnx --config configs/hydranet_indoor.yaml \
         --checkpoint runs/hydranet_indoor/best.pt --output hydranet.onnx
@@ -61,9 +61,10 @@ class ExportWrapper(nn.Module):
     Why that is worth two extra operators: pre-processing parity between training and the
     robot is listed in METHODOLOGY.md as a deployment responsibility, and the repository
     was implementing it twice -- ``data/transforms.py`` for training and a hand-copied
-    mean/std in ``scripts/bench_camera_orin.py`` for the Jetson. Nothing connects the two.
-    Change one and no test fails, no error appears, and the model on the robot is simply
-    worse in a way that gets blamed on quantisation or on the camera.
+    mean/std in ``scripts/bench_camera_orin.py`` for the board. Nothing connected the two:
+    change one and no test fails, no error appears, and the deployed model is simply worse
+    in a way that gets blamed on quantisation or on the camera. That second copy is gone
+    with the Orin, and this is why its removal cost nothing to check.
 
     Folded into the graph it stops being a discipline problem. The constants ship with the
     weights, TensorRT fuses them into the first convolution, and the robot's only job is
@@ -672,10 +673,10 @@ def main(argv: list[str] | None = None) -> None:
 
     if embed:
         print(
-            "\nThe robot feeds raw RGB in 0-255, NCHW. It must NOT subtract a mean: the "
+            "\nThe host feeds raw RGB in 0-255, NCHW. It must NOT subtract a mean: the "
             "graph does that, and doing it twice is the failure this export prevents."
         )
-    print("\nOn Jetson Orin, build the TensorRT engine with:")
+    print("\nBuild the TensorRT engine with:")
     print(f"  trtexec --onnx={args.output} --saveEngine=hydranet.engine --fp16")
 
 

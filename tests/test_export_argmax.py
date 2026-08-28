@@ -22,7 +22,6 @@ pytest tests/test_export_argmax.py -v
 """
 
 import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -165,25 +164,18 @@ def test_parity_still_uses_relative_error_on_logits(monkeypatch):
     assert _parity([a], [b], monkeypatch)
 
 
-# --- the board reads whichever form it is given ---------------------------
-
-
-def test_live_view_reads_both_binding_forms():
-    """The Jetson viewer cannot import this package, so this is the only place the two
-    ends are checked against each other."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-    try:
-        import live_view_orin
-    finally:
-        sys.path.pop(0)
-
-    logits = np.zeros((1, 3, 4, 5), dtype=np.float32)
-    logits[0, 2] = 1.0  # class 2 everywhere
-    assert np.array_equal(
-        live_view_orin.seg_map({"terrain": logits}, "terrain"), np.full((4, 5), 2)
-    )
-
-    ids = np.full((1, 4, 5), 2, dtype=np.uint8)
-    assert np.array_equal(
-        live_view_orin.seg_map({"terrain_argmax": ids}, "terrain"), np.full((4, 5), 2)
-    )
+# --- the consumer that read them --------------------------------------------
+#
+# `test_live_view_reads_both_binding_forms` stood here until 2026-08-28. It checked that
+# `scripts/live_view_orin.py`'s `seg_map` handled both spellings -- `terrain` float logits
+# and `terrain_argmax` uint8 ids -- and it was the only place the exporter's two output
+# forms met the code that consumed them. The Orin stopped being a target and the viewer
+# went with it (`git show f64520c:scripts/live_view_orin.py`), so that test had no second
+# end left to check against; unlike the narrowing round trip, nothing of it survived the
+# consumer, because its whole content was the consumer's dispatch.
+#
+# The exporter's half is still pinned, twice:
+# `test_bindings_are_renamed_only_when_the_argmax_is_folded_in` above, and
+# `test_export_cli.py::test_argmax_seg_reaches_the_wrapper_and_the_metadata` through
+# `main`. A host written later dispatches on the binding name, and the name is what those
+# two hold.

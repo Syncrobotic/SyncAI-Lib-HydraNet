@@ -26,9 +26,9 @@ numbering on the one term both documents use.
 
 **The target is one RTX PRO 6000, server-side** — `docs/PLAN.md` §7 decision 4: 96
 concurrent streams analysed at 5 fps, with the rest of the card budgeted for a VLM on
-trigger. The Orin is not this surface's board: `scripts/live_view_orin.py` and
-`scripts/bench_camera_orin.py` stay in the tree as export-contract witnesses
-(`tests/test_orin_standalone_copies.py`), not as a deployment path.
+trigger. **The Orin is not a target at all** as of 2026-08-28 — the board scripts that
+kept a standalone copy of the preprocessing constants went with it, and the last thing in
+this repository that read an export's `.classes.json` sidecar went with them.
 
 **Nothing crosses from the rules back into L0.** Zones are polygons **in metres on the
 floor**, not pixel classes; thresholds ("four minutes is loitering", "six people is too

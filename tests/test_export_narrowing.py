@@ -20,8 +20,6 @@ pytest tests/test_export_narrowing.py -v
 """
 
 import json
-import sys
-from pathlib import Path
 
 import pytest
 import torch
@@ -219,8 +217,9 @@ def test_narrowing_reports_its_own_width():
 
 
 def test_binding_names_are_unchanged_when_nothing_is_narrowed():
-    """Existing engines and the two Jetson scripts look up `det_cls_p3`. Renaming it for
-    everyone would break every deployment that did not ask for narrowing."""
+    """Every engine already built looks up `det_cls_p3`. Renaming it for everyone would
+    break each one that did not ask for narrowing, and an engine keeps its binding names
+    and nothing else -- there is no version field in it to check."""
     names = det_output_names(5, None)
     assert names[:5] == [f"det_cls_p{i}" for i in range(3, 8)]
 
@@ -246,56 +245,59 @@ def test_sidecar_sits_beside_the_engine(output, expected):
     assert str(sidecar_path(output)) == expected
 
 
-def test_the_board_reads_back_what_the_exporter_wrote(tmp_path):
-    """The two ends of the contract, in one test: the exporter narrows and the Jetson
-    viewer names the channels. They live in different files that cannot import each other
-    -- `live_view_orin.py` runs on a board with no `syncai_hydranet` installed -- so this
-    is the only place the round trip is checked at all."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-    try:
-        import live_view_orin
-    finally:
-        sys.path.pop(0)
+def test_the_sidecar_names_exactly_the_bindings_the_engine_will_carry(tmp_path):
+    """One end of a two-ended contract, and the surviving half is still the load-bearing one.
 
+    This used to round-trip the exporter against `scripts/live_view_orin.py`, the Jetson
+    viewer that read the sidecar back. Both went on 2026-08-28 with the Orin as a target,
+    and **nothing in this tree reads a `.classes.json` today** -- which does not retire
+    the invariant, it removes the only consumer that was checking it. `cli/export_onnx.py`
+    states why the file exists at all: "a TensorRT engine keeps its binding names and
+    nothing else, so the ONNX metadata never reaches the board. The sidecar is what does
+    -- it is the only record of which COCO class each remaining channel means, and an
+    engine shipped without it is a set of unlabelled numbers."
+
+    So what is pinned here is that the record is *internally correct*: the `cls_outputs`
+    the sidecar lists are exactly the narrowed class-logit bindings the graph carries, in
+    order, and the names line up with the source indices they were narrowed from. A host
+    written later indexes by that order; getting it wrong renames every box, which is the
+    failure `head_order` exists to prevent one process boundary earlier.
+    """
     keep = head_order(ROBOT_8)
+    bindings = det_output_names(5, len(keep))
+    cls_bindings = [b for b in bindings if b.startswith("det_cls")]
+
+    assert cls_bindings == [f"det_cls8_p{i}" for i in range(3, 8)], (
+        "the class count travels in the binding name, so a host reading `det_cls_p3` "
+        "against a narrowed engine gets 80 channels' worth of names for 8 channels"
+    )
+
     path = sidecar_path(str(tmp_path / "hydranet.onnx"))
     path.write_text(
         json.dumps(
             {
                 "detection_classes": keep,
                 "source_indices": narrow_indices(keep, COCO_NAMES),
+                "cls_outputs": cls_bindings,
             }
         )
     )
+    side = json.loads(path.read_text())
 
-    engine_outputs = ["traversability", "terrain", *det_output_names(5, len(keep))]
-    found = live_view_orin.cls_bindings(engine_outputs)
-    assert found == [f"det_cls8_p{i}" for i in range(3, 8)]
-    assert live_view_orin.load_class_names(str(path), len(keep)) == keep
-
-    # An unnarrowed engine still works with no sidecar at all, which is what keeps every
-    # engine already on a board running.
-    assert live_view_orin.cls_bindings(det_output_names(5, None))[0] == "det_cls_p3"
-    assert live_view_orin.load_class_names(None, 80) == live_view_orin.COCO_NAMES
-
-    # A narrowed engine with no sidecar refuses rather than guessing.
-    with pytest.raises(SystemExit, match="narrowed at export"):
-        live_view_orin.load_class_names(None, len(keep))
-
-    # A sidecar from a different export refuses too: the count is the only thing that
-    # can be checked, and it catches the mistake that actually happens.
-    with pytest.raises(SystemExit, match="different export"):
-        live_view_orin.load_class_names(str(path), 32)
+    assert side["cls_outputs"] == cls_bindings
+    assert len(side["detection_classes"]) == len(side["source_indices"])
+    assert [COCO_NAMES[i] for i in side["source_indices"]] == side["detection_classes"], (
+        "the indices are what map a kept channel back to the checkpoint it came from; "
+        "if they disagree with the names, the sidecar renames boxes rather than labelling "
+        "them"
+    )
 
 
-def test_sidecar_round_trips_the_names_and_their_source_channels(tmp_path):
-    """A TensorRT engine keeps binding names and nothing else, so the ONNX metadata never
-    reaches the board. The sidecar is the only record of what each channel means."""
-    keep = head_order(ROBOT_8)
-    idx = narrow_indices(keep, COCO_NAMES)
-    path = sidecar_path(str(tmp_path / "hydranet.onnx"))
-    path.write_text(json.dumps({"detection_classes": keep, "source_indices": idx}))
+def test_an_unnarrowed_export_keeps_the_plain_binding_names():
+    """No narrowing, no class count in the name, and no sidecar written.
 
-    loaded = json.loads(path.read_text())
-    assert loaded["detection_classes"] == keep
-    assert [COCO_NAMES[i] for i in loaded["source_indices"]] == keep
+    Kept from the round-trip test that preceded this one, because it is the property that
+    let every engine built before `--detection-classes` existed keep working: the plain
+    `det_cls_p3` spelling is what an unnarrowed graph carries.
+    """
+    assert det_output_names(5, None)[0] == "det_cls_p3"

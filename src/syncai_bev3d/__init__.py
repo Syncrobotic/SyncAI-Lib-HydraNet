@@ -25,7 +25,9 @@ inputs and 3.8 silently truncates. The three sites it holds together:
                  is not reachable from outside.
 
 If a divergent copy of this package ever matters again, `test_orin_standalone_copies.py`
-was the pattern for keeping two copies honest.
+was the pattern for keeping two copies honest. It is at
+`git show f64520c:tests/test_orin_standalone_copies.py`, having gone with the Orin on
+2026-08-28 along with the copies it watched.
 """
 
 from .bev import (

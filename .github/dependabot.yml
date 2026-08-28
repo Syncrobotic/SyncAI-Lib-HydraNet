@@ -40,10 +40,9 @@ updates:
     open-pull-requests-limit: 5
     # `torch` and `torchvision` are excluded on purpose. They are not a dependency
     # here in the ordinary sense: the CUDA build is chosen to match the driver on the
-    # workstation and the JetPack on the Orin, docs/DEPLOY_JETSON.md pins what the
-    # board can run, and RETAIL_SCOPE.md's numbers were measured under one version.
-    # An automated bump would change the training result silently and could produce a
-    # wheel the robot cannot install. Move them by hand, with a run to show it.
+    # box that trains, and every number in `docs/PLAN.md` was measured under one
+    # version. An automated bump would change the training result silently. Move them
+    # by hand, with a run to show it.
     ignore:
       - dependency-name: torch
       - dependency-name: torchvision

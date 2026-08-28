@@ -112,7 +112,10 @@ TARGET="${1:-src/}"
 #   site_events.py        3
 #   track_review.py       2
 #   bench_e2e.py          2
-#   live_view_orin.py     1
+#
+# scripts/ 14, measured 2026-08-28: the Orin scripts left with the board they ran on, and
+# `live_view_orin.py`'s one diagnostic went with them. A fall is a notice rather than a
+# failure here, and this is the notice being spent.
 #
 # It is here now because a number being lowered has been looked at, which is the whole
 # difference. Still not a backlog: none of them paid down, and the header's rule applies
@@ -123,7 +126,7 @@ TARGET="${1:-src/}"
 # Recorded because a baseline that falls for a deletion and a baseline that falls for a
 # fix look identical in the number and mean opposite things about the tree.
 case "$TARGET" in
-  scripts/|scripts) DEFAULT_BASELINE=15 ;;
+  scripts/|scripts) DEFAULT_BASELINE=14 ;;
   *)                DEFAULT_BASELINE=11 ;;
 esac
 BASELINE="${TY_BASELINE:-$DEFAULT_BASELINE}"

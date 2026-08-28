@@ -2,7 +2,7 @@
 
 SAM 3 and Grounding DINO are not part of the network this project trains and ships. They
 run once, offline, on a box with the `annotate` extra installed, and what they leave
-behind is a dataset. Nothing under `serving/` or on the Orin imports any of this, and
+behind is a dataset. Nothing under `serving/` imports any of this, and
 neither does the wheel's install: every `transformers` import inside these modules is
 inside the function that needs it, so a base install stays importable and an inference
 box never carries a 6.5 GB checkpoint it will not run.

@@ -51,7 +51,9 @@ TERRAIN_COLORS_OFFROAD = np.array(
 
 # configs/hydranet_indoor.yaml. Taken from scripts/live_view_orin.py, which had been
 # carrying the only indoor palette in the repo -- under a comment claiming it matched
-# the training-time grids, which is how the divergence stayed invisible.
+# the training-time grids, which is how the divergence stayed invisible. That script went
+# with the Orin on 2026-08-28 (`git show f64520c:scripts/live_view_orin.py`); this is the
+# palette now, with nothing left to diverge from.
 TERRAIN_COLORS_INDOOR = np.array(
     [
         [0, 0, 0],  # void

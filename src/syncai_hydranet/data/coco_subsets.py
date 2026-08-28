@@ -19,9 +19,10 @@ from collections.abc import Iterable, Sequence
 #
 # Spelled the way COCO spells them, spaces and all, because these names are matched
 # against COCOeval's own categories -- `INDOOR_25` below is checked against this list for
-# exactly that reason. `scripts/live_view_orin.py` keeps a hyphenated copy for drawing on
-# frames; tests/test_orin_standalone_copies.py pins that the only difference is the
-# hyphen, so the board cannot start naming a class something this list does not know.
+# exactly that reason. `scripts/live_view_orin.py` kept a hyphenated copy for drawing on
+# frames and a test pinned that the only difference was the hyphen; both went with the
+# Orin on 2026-08-28 (`git show f64520c:scripts/live_view_orin.py`). This list is now the
+# only spelling, which is the outcome that guard existed to protect.
 COCO_NAMES = [
     "person", "bicycle", "car", "motorcycle",
     "airplane", "bus", "train", "truck",

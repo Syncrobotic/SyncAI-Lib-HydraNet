@@ -18,8 +18,8 @@ catch, so it is the one they must not commit themselves.
                       that surfaced was `DecodeError` refusing to pretend.
 
 Scripts are not importable as a package -- `test_scripts_are_not_libraries.py` says why --
-so they are reached the way `test_orin_standalone_copies.py` reaches the Jetson scripts:
-`scripts/` on `sys.path` for the duration of the import, and off again afterwards.
+so they are reached the way five other test modules here reach one: `scripts/` on
+`sys.path` for the duration of the import, and off again afterwards.
 """
 
 from __future__ import annotations

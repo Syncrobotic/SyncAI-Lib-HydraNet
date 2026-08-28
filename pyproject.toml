@@ -264,17 +264,20 @@ unresolved-import = "ignore"
 # `uv sync --all-extras` clears them and a suppression here would just hide which
 # extra you are missing.
 #
-# The ROS and TensorRT imports cannot resolve on a dev box at all: no wheel exists to
-# install, they only exist on the robot and on the Orin. Those are tagged per-line at
-# the import with `# pyright: ignore[reportMissingImports]` rather than muted here,
-# so a genuinely misspelled import in the same file is still caught.
+# This block once also covered ROS and TensorRT imports that could not resolve on a dev
+# box, tagged per-line with `# pyright: ignore[reportMissingImports]` rather than muted
+# here so a genuinely misspelled import in the same file was still caught. Both went with
+# the product lines that needed them -- the quadruped in `eca3814`, the Orin scripts on
+# 2026-08-28 -- and no such tag is left in the tree.
 # ---------------------------------------------------------------------------
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
 include = ["src", "scripts", "tests"]
-# `tests/test_orin_standalone_copies.py` imports the two standalone Jetson scripts by
-# module name, the same way it does at runtime after inserting scripts/ on sys.path.
+# Six tests import a script by module name the way they do at runtime, after inserting
+# scripts/ on sys.path -- `test_measurement_instruments.py`, `test_text_embeddings.py`,
+# `test_sam3_sessions.py`, `test_site_split_report.py`, `test_track_review.py` and
+# `test_export_argmax.py`. Without this, Pylance reports every one as unresolved.
 extraPaths = ["scripts"]
 # Matches the Pylance default, so the editor and a CLI run agree on what counts.
 typeCheckingMode = "basic"

@@ -4,7 +4,9 @@ METHODOLOGY.md assigns "pre-processing parity between training and the robot" to
 deployment stream, and the repository was implementing it twice: `data/transforms.py` for
 training, a hand-copied mean/std in `scripts/bench_camera_orin.py` for the Jetson. Nothing
 tied the two together. Change one and no test fails, no error appears -- the model on the
-robot is just worse, and the blame lands on quantisation.
+robot is just worse, and the blame lands on quantisation. That second copy went with the
+Orin on 2026-08-28 (`git show f64520c:scripts/bench_camera_orin.py`), and folding the
+constants into the graph is why its removal costs nothing.
 
 Folding the constants into the exported graph turns that from a discipline problem into
 an arithmetic one, which is the kind that can be tested. So:

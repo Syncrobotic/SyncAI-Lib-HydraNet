@@ -35,9 +35,9 @@ does it with an absolute `/home/paul/...` path insert, which is its own problem.
 untracked script is not in the repository yet and its author is still writing it.
 
 **A ratchet, upward only.** The existing pairs are not a backlog this test is demanding be
-cleared; some are deliberate — `live_view_orin` imports `bench_camera_orin` because both are
-copied to the board standalone, which `tests/test_orin_standalone_copies.py` exists to keep
-honest. The downward half is omitted on purpose, unlike `test_config_depth_ratchet.py`: that
+cleared; one was deliberate — `live_view_orin` imported `bench_camera_orin` because both
+were copied to the Jetson standalone, and `tests/test_orin_standalone_copies.py` existed to
+keep the copies honest. All four went on 2026-08-28 with the board as a target. The downward half is omitted on purpose, unlike `test_config_depth_ratchet.py`: that
 one measures configs, which are stable, and this set is in flux while `scripts/` is being
 worked on, so a spurious "you may lower the baseline" failure would be the more likely one.
 """
@@ -98,7 +98,7 @@ def _tracked(pathspec: str) -> list[Path]:
 # arrived.
 # 5 -> 4: `bev_demo -> bev_page` left in the 2026-08-25 cleanup -- the robot dashboard's
 # 3D page, superseded by tools/commissioning/scene_mesh.py.
-BASELINE_PAIRS = 4
+BASELINE_PAIRS = 3
 
 
 def _sibling_imports(pathspec: str) -> list[tuple[str, str]]:
@@ -157,9 +157,9 @@ def test_the_measurement_still_finds_the_pairs_it_was_written_against():
     `bev_demo -> bev_page` until the robot dashboard scripts left in the 2026-08-25
     cleanup.)
 
-    `live_view_orin -> bench_camera_orin` is deliberately not pinned here even though it
-    is the most durable pair in the list: it is exempt for a reason
-    (`tests/test_orin_standalone_copies.py`), and a pin would read as approval.
+    `live_view_orin -> bench_camera_orin` used to be the most durable pair in the list and
+    was deliberately not pinned, because it was exempt for a reason and a pin would have
+    read as approval. It is gone with the Orin, which is why `BASELINE_PAIRS` fell 4 -> 3.
     """
     pairs = _script_to_script_imports()
     assert pairs, "the scan found no imports at all — has scripts/ moved?"

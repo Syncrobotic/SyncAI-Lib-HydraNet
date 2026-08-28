@@ -13,8 +13,6 @@ name: CI (promote)
 #     halves of `lr = batch_size x 1.25e-5` live in different files by design
 #   · a taxonomy gains a class in one branch and the palette gains its colour in
 #     another, or does not (tests/test_palettes.py)
-#   · the Jetson standalone copies drift from the package they duplicate
-#     (tests/test_orin_standalone_copies.py)
 #   · the indoor-25 baseline's three pinned copies stop agreeing
 #     (tests/test_indoor25_baseline.py)
 #

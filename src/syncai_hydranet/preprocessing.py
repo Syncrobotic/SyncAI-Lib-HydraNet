@@ -18,9 +18,11 @@ triple written out as a literal default with a comment pointing at the other cop
 the arrangement `tests/test_orin_standalone_copies.py` exists because of, one layer in and
 with nothing watching it.
 
-Two tests keep the wider contract honest: `test_export_preprocessing.py` checks the
-exported graph carries these exact values, and `test_orin_standalone_copies.py` checks the
-hand-copied Jetson scripts still agree with them.
+`test_export_preprocessing.py` keeps the wider contract honest: the exported graph
+carries these exact values, so a host feeds raw 0-255 and the graph normalises. A second
+test used to check that hand-copied Jetson copies of these constants still agreed; the
+copies and the test went with the Orin on 2026-08-28, and folding the constants into the
+graph is why losing that check costs nothing -- there is no second copy left to drift.
 """
 
 from __future__ import annotations

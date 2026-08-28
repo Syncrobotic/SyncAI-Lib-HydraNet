@@ -88,8 +88,8 @@ PY
   ls -lh "$out" | awk 'NR>1 {print "  " $5, $9}'
   echo
   echo "Engines are NOT in this bundle. A TensorRT engine is tied to a GPU architecture,"
-  echo "a TensorRT version and a JetPack version, so it is a per-target build artefact."
-  echo "Build it on the board and drop it in $out/engines/<board>_<jetpack>_<trt>_<prec>.engine"
+  echo "a TensorRT version and a driver, so it is a per-target build artefact."
+  echo "Build it where it will run and drop it in $out/engines/<host>_<trt>_<prec>.engine"
 }
 
 # ---------------------------------------------------------------- verify

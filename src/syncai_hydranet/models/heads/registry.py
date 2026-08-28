@@ -118,8 +118,9 @@ class DetectionHead:
     """FCOS: three pyramid outputs, and a loss that needs the head back.
 
     The `det_cls`/`det_reg`/`det_ctr` keys are flat rather than nested under `name`
-    because the ONNX graph names its outputs from them and every consumer of an exported
-    engine -- including the hand-written Jetson scripts -- reads those names.
+    because the ONNX graph names its outputs from them, and a consumer of an exported
+    engine has nothing else to index by: TensorRT keeps the binding names and drops
+    everything else.
     """
 
     name: str
