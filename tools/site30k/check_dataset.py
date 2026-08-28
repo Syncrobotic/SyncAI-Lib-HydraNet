@@ -75,7 +75,8 @@ def main() -> int:
     if args.hash_images:
         seen: dict[str, str] = {}
         for p in sorted((args.root / "images").glob("*.jpg")):
-            h = hashlib.md5(p.read_bytes()).hexdigest()
+            # Duplicate detection, not a security claim; see `campaign_site30k.py`.
+            h = hashlib.md5(p.read_bytes(), usedforsecurity=False).hexdigest()
             if h in seen:
                 dupes.append((seen[h], p.stem))
             else:

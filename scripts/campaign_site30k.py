@@ -1279,7 +1279,11 @@ def cmd_compare(args) -> int:
     def index(root: Path) -> dict[str, tuple[str, Path]]:
         out = {}
         for jpg in sorted(root.glob("images/*/**/*.jpg")):
-            digest = hashlib.md5(jpg.read_bytes()).hexdigest()
+            # Content identity for pairing a jpg with its png, not a security claim --
+            # `usedforsecurity=False` says so to a reader and to bandit, and lets this
+            # run on a FIPS build where the bare call raises. The hash that does carry
+            # identity in this project is `data/fingerprint.py`'s, and it is sha256.
+            digest = hashlib.md5(jpg.read_bytes(), usedforsecurity=False).hexdigest()
             rel = jpg.relative_to(root / "images")
             png = root / "annotations" / rel.with_suffix(".png")
             if png.exists():
