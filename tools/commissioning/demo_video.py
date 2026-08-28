@@ -48,6 +48,11 @@ import scene_mesh
 
 from syncai_bev3d.meshes import Placement, box, extrude, ground_disc, human, place
 from syncai_bev3d.shading import draw_scene
+from syncai_hydranet.analytics.staff import (
+    StaffModel,
+    require_camera,
+    track_staff,
+)
 from syncai_hydranet.analytics.tracker import Tracker
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
@@ -64,6 +69,16 @@ TRACK_COLORS = [
     (255, 99, 71), (65, 180, 255), (255, 200, 60), (120, 220, 120),
     (220, 120, 255), (255, 150, 100), (100, 230, 210), (250, 100, 160),
 ]  # fmt: skip
+# `staff` blue and `customer` green, and a third colour that is neither. A track under
+# `staff.MIN_OBSERVATIONS` has no verdict, and drawing it as a customer would invent one --
+# every shopper would then arrive on screen as a confident green for their first second.
+STAFF_COLOR = (70, 150, 255)
+CUSTOMER_COLOR = (105, 215, 120)
+UNKNOWN_COLOR = (168, 172, 180)
+# The torso band is 0.18-0.55 of a box and `_blur_region` covers the top 45% plus padding,
+# so the face blur lands squarely on the pixels the classifier reads. Features are taken
+# from the source frame BEFORE either blur instrument runs; nothing about the order is
+# incidental, and reversing it would silently classify blurred shirts.
 PLACE_MARGIN_M = 2.0  # beyond the commissioned walkable zone a floor position is a guess
 # Velocity is measured over a WINDOW, not between adjacent frames, and only asserted
 # above a floor. Both numbers come from this camera's own tracks (1,607 steps):
@@ -125,6 +140,24 @@ def _blur_region(img: Image.Image, x0: float, y0: float, x1: float, y1: float) -
         return
     crop = img.crop((bx0, by0, bx1, by1))
     img.paste(crop.filter(ImageFilter.GaussianBlur(max(6.0, w / 5.0))), (bx0, by0))
+
+
+def _torso_crop(frame: np.ndarray, box) -> np.ndarray:
+    """The person's pixels for one box, clipped to the frame.
+
+    Clipped rather than trusted: a tracked box can predict past the frame edge on the
+    coast frames, and numpy would return an empty or short slice without complaint --
+    which `torso_stats` turns into nine zeros, a perfectly usable-looking feature vector
+    for a person who is half out of shot. One pixel of margin is kept in each direction so
+    the band is always taken over something.
+    """
+    h, w = frame.shape[:2]
+    x0, y0, x1, y1 = (float(v) for v in box)
+    ix0 = int(np.clip(x0, 0, w - 2))
+    iy0 = int(np.clip(y0, 0, h - 2))
+    ix1 = int(np.clip(x1, ix0 + 1, w))
+    iy1 = int(np.clip(y1, iy0 + 1, h))
+    return frame[iy0:iy1, ix0:ix1]
 
 
 def plate_person_boxes(frame: np.ndarray, plate: np.ndarray) -> list[tuple]:
@@ -330,8 +363,29 @@ def main() -> int:
         action="store_true",
         help="do NOT blur faces -- only for a private check, never for anything shared",
     )
+    ap.add_argument(
+        "--staff-colours",
+        metavar="MODEL_JSON",
+        default=None,
+        help="colour staff blue and customers green using this `analytics.staff` model "
+        "(e.g. runs/staff_model01/model_Kaohsiung-cam04.json). Refused unless the model "
+        "was held out on THIS camera and scores at least staff.MIN_DEPLOY_ACCURACY on "
+        "it. Without it, figures keep their identity colours.",
+    )
     args = ap.parse_args()
     camera = args.camera
+
+    # Loaded and licensed before a single frame is decoded: an unusable model has to stop
+    # the run at second zero, not after a twelve-minute render nobody can trust.
+    staff_model = None
+    if args.staff_colours:
+        staff_model = require_camera(StaffModel.load(args.staff_colours), camera)
+        print(
+            f"{camera}: staff colours from {args.staff_colours} -- "
+            f"{staff_model.accuracy:.3f} held out on this camera "
+            f"({staff_model.held_out_n} crops), fitted on {staff_model.n_crops} from "
+            f"{len(staff_model.trained_cameras)} other cameras"
+        )
 
     clip = (
         Path(args.clip)
@@ -456,7 +510,14 @@ def main() -> int:
             ]
             n_fp += len(b) - len(keep)
             boxes_src = b[keep]
-        tracks = [t for t in tracker.update(boxes_src, n) if t.hits >= 3]
+        # BEFORE the blur block below, and `frame` rather than `img` for the same reason:
+        # the face blur covers the torso band this reads (see STAFF_COLOR above).
+        staff_p = None
+        if staff_model is not None:
+            staff_p = np.array(
+                [staff_model.probability_of_crop(_torso_crop(frame, bb)) for bb in boxes_src]
+            )
+        tracks = [t for t in tracker.update(boxes_src, n, staff_scores=staff_p) if t.hits >= 3]
 
         # Two instruments, applied to the SOURCE image before anything is drawn on it, so
         # a box outline can never sit on top of an unblurred face. The detector set is
@@ -477,7 +538,14 @@ def main() -> int:
         moving = 0
         for t in tracks:
             seen_ids.add(t.track_id)
-            col = TRACK_COLORS[t.track_id % len(TRACK_COLORS)]
+            verdict = None if staff_model is None else track_staff(t)
+            col = (
+                TRACK_COLORS[t.track_id % len(TRACK_COLORS)]
+                if staff_model is None
+                else (UNKNOWN_COLOR, CUSTOMER_COLOR, STAFF_COLOR)[
+                    0 if verdict is None else 1 + int(verdict)
+                ]
+            )
             bx = np.asarray(t.box, float) / 2.0
             d.rectangle(list(bx), outline=col, width=2)
             d.text((bx[0] + 3, bx[1] + 2), f"#{t.track_id}", fill=col)
@@ -511,7 +579,15 @@ def main() -> int:
             n_placed += 1
             # the figure carries its track's colour, so the same shopper is the same
             # colour in both panels and the two views can be read against each other
-            key = f"person_{t.track_id % len(TRACK_COLORS)}"
+            # The key selects the figure's colour in the 3D panel, so it has to partition
+            # figures the same way `col` does. Keeping it on `track_id % 8` while `col`
+            # follows a verdict lets two tracks with different verdicts share one key, and
+            # the last one written wins -- a staff member silently repainted as a shopper.
+            key = (
+                f"person_{t.track_id % len(TRACK_COLORS)}"
+                if staff_model is None
+                else f"person_{ {None: 'unknown', True: 'staff', False: 'customer'}[verdict] }"
+            )
             scene_mesh.PALETTE[key] = col
             # stature from the box top, running-median per track: a single frame's
             # answer moves with the box, the median over a track does not
@@ -578,6 +654,7 @@ def main() -> int:
                     "stature_m": round(stature, 3),
                     "stature_frame_m": None if not np.isfinite(h_one) else round(h_one, 3),
                     "heading_rad": None if heading is None else round(heading, 4),
+                    "staff": verdict,
                 }
             )
 
@@ -616,6 +693,23 @@ def main() -> int:
             f"thr={args.score_thr}  |  frame {n}  tracks {len(tracks)}  moving {moving}",
             fill=(255, 255, 255),
         )
+        if staff_model is not None:
+            # The legend carries its own accuracy, because a colour that means "staff" is
+            # a claim and a viewer cannot tell a 1.00 camera from a 0.42 one by looking.
+            lx = 660
+            for label, colour in (
+                ("staff", STAFF_COLOR),
+                ("customer", CUSTOMER_COLOR),
+                ("unknown", UNKNOWN_COLOR),
+            ):
+                dd.rectangle([lx, 529, lx + 8, 537], fill=colour)
+                dd.text((lx + 12, 526), label, fill=colour)
+                lx += 20 + 6 * len(label)
+            dd.text(
+                (lx + 4, 526),
+                f"torso colour, {staff_model.accuracy:.2f} held out here",
+                fill=(150, 155, 165),
+            )
         enc.stdin.write(np.asarray(composite, np.uint8).tobytes())
         if n in checks:
             composite.save(ROOT / f"assets/demo_{camera}_{stamp}_check{n:03d}.png")
