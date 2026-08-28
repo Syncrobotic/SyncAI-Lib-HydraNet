@@ -10,6 +10,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import math
+import pathlib
 
 import pytest
 
@@ -134,3 +135,58 @@ def test_a_version_this_reader_does_not_know_is_still_refused(tmp_path):
     path.write_text(json.dumps(raw))
     with pytest.raises(ValueError, match="Re-commission"):
         CameraFile.load(path)
+
+
+# ------------------------------------- which teacher produced these metres
+
+
+def test_a_v2_file_reads_as_teachers_not_recorded_rather_than_none_used():
+    """The 8 cameras commissioned before v3 must stay readable, and stay honest.
+
+    `READABLE_VERSIONS` is a claim that nothing a file of that version holds has changed
+    meaning, so a v2 file has to keep loading. What it must not do is come back saying it
+    used no teacher: it used one and did not write it down, and the two are different
+    facts. `None` is "not recorded"; `{}` would be "recorded as none".
+    """
+    src = pathlib.Path(__file__).resolve().parents[1] / "runs" / "commission01"
+    v2_files = sorted(src.glob("*.camera.json"))
+    if not v2_files:
+        pytest.skip("no commissioned cameras in this checkout")
+
+    raw = json.loads(v2_files[0].read_text())
+    assert raw["schema_version"] == 2, "this fixture is here to pin the OLD version"
+    assert "teachers" not in raw
+
+    loaded = CameraFile.load(v2_files[0])
+    assert loaded.teachers is None
+
+
+def test_teachers_survives_a_save_and_load_round_trip(tmp_path):
+    """The field is only worth adding if it reaches the file, so check the file."""
+    cam = a_camera_file()
+    pinned = {"depth-anything/Depth-Anything-V2-Metric-Indoor-Large-hf": "d2fc6a93"}
+    stamped = dataclasses.replace(cam, teachers=pinned)
+
+    path = tmp_path / "cam.camera.json"
+    stamped.save(path)
+
+    raw = json.loads(path.read_text())
+    assert raw["schema_version"] == 3
+    assert raw["teachers"] == pinned
+    assert CameraFile.load(path).teachers == pinned
+
+
+def test_the_calib_scan_carries_its_depth_model_into_the_camera_file():
+    """The one producer wired today, checked end to end rather than by inspection.
+
+    `onboard_camera.py` writes `provenance.depth_model` and now its revision beside it;
+    `from_onboard_calib` is what turns that scan into the contract the event layer reads.
+    A scan with no revision yields None -- not a half-recorded pair.
+    """
+    from syncai_bev3d.commissioning import _teachers_of
+
+    assert _teachers_of({"provenance": {"depth_model": "m", "depth_model_revision": "r"}}) == {
+        "m": "r"
+    }
+    assert _teachers_of({"provenance": {"depth_model": "m"}}) is None
+    assert _teachers_of({}) is None

@@ -38,7 +38,7 @@ from pathlib import Path
 from ..labels import IGNORE
 from .ground import Camera, GroundPlane
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Versions this reader accepts, and why each older one is safe to read rather than
 # re-commission. A refusal is the default -- "schema_version 3" from a newer writer means
@@ -50,7 +50,12 @@ READABLE_VERSIONS = {
     # kind legal that was previously refused. Re-commissioning 8 cameras to gain a word
     # would be a cost with no measurement behind it.
     1: "v2 only widened ZONE_KINDS; no field changed meaning",
-    2: "current",
+    # v2 -> v3 added `teachers`, which is optional and defaults to None. A v2 file did
+    # not record its teachers and says so by carrying None; no field moved and no unit
+    # changed, so the 16 cameras commissioned before this stay readable rather than being
+    # re-run to gain a provenance entry they cannot retroactively know.
+    2: "v3 only added the optional `teachers` map; no field changed meaning",
+    3: "current",
 }
 
 # The zone kinds the event layer knows how to consume (`analytics/events/zones.py`).
@@ -111,6 +116,12 @@ class CameraFile:
     plate_file: str | None = None
     plate_sha256: str | None = None
     commissioned_at: str | None = None  # ISO 8601, stamped by the writer
+    # Which teacher models produced this file, as `{model_id: revision}`. The plate is
+    # hashed (`plate_sha256`) and the models that read it were not, so two camera.jsons
+    # from either side of an upstream push were indistinguishable while describing
+    # different geometry. `None` means "not recorded" -- a v2 file, or a writer that did
+    # not know -- and is deliberately not `{}`, which would claim no teacher was used.
+    teachers: dict[str, str] | None = None
 
     def save(self, path: str | Path) -> None:
         payload = {
@@ -154,6 +165,7 @@ class CameraFile:
             plate_file=raw.get("plate_file"),
             plate_sha256=raw.get("plate_sha256"),
             commissioned_at=raw.get("commissioned_at"),
+            teachers=raw.get("teachers"),
         )
         out.validate()
         return out

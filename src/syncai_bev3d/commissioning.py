@@ -33,6 +33,23 @@ from syncai_hydranet.geometry.ground import Camera, GroundPlane, ground_to_pixel
 from .plate_calibration import undistort_image
 
 
+def _teachers_of(raw: dict) -> dict[str, str] | None:
+    """`{model_id: revision}` from a calib scan's provenance block, or None if it has none.
+
+    The geometry in a `camera.json` is whatever Depth-Anything V2 said about one plate,
+    so which DA-V2 is part of what the numbers mean. `onboard_camera.py` already recorded
+    the model id; it records the revision beside it now, and this carries the pair into
+    the file the event layer actually reads.
+
+    None rather than `{}` when the scan predates this: a file that did not record its
+    teachers is not a file that used none, and the difference decides whether a mismatch
+    later is a finding or an unknown.
+    """
+    prov = raw.get("provenance") or {}
+    model, revision = prov.get("depth_model"), prov.get("depth_model_revision")
+    return {str(model): str(revision)} if model and revision else None
+
+
 def from_onboard_calib(path: str | Path) -> CameraFile:
     """One `<camera>.calib.json` from the onboard scan -> the `camera.json` contract.
 
@@ -74,6 +91,7 @@ def from_onboard_calib(path: str | Path) -> CameraFile:
         ),
         plate_file=raw.get("plate_used"),
         commissioned_at=raw.get("generated"),
+        teachers=_teachers_of(raw),
     )
     out.validate()
     return out

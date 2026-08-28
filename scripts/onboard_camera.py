@@ -193,6 +193,7 @@ def onboard_one(
         "provenance": {
             "orientation_pipeline": "syncai_bev3d.plate_calibration (imported)",
             "depth_model": pc.MODEL,
+            "depth_model_revision": pc.MODEL_REVISION,
             "person_boxes": str(person_anns),
             "person_height_prior_m": pc.ADULT_M,
             "plate_person_model": f"{PLATE_MODEL_CONFIG} + {PLATE_MODEL_CKPT} (ema)",
