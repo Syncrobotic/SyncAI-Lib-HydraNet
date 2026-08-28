@@ -1351,14 +1351,19 @@ something it does not support.
    and nothing else. `datasets/site30k_v1` holds **47,465 site person boxes** and is
    wired into the same configs for **pose alone**.
 
-   **And the site images are not neutral about it.** `detection.py` has no ignore
-   mechanism — every location not assigned to a box is background for *all* classes — and
-   `datasets.py` only drops images whose annotations were *entirely* dropped, which a
-   product-labelled frame is not. Sampled with the shipped detector at 0.35: **69 of 120
-   batch02 training images contain a person (58%), and 63 of 120 in batch03 (52%)**. A
-   lower bound, since the counter is the same model that §7.19 measured missing people.
-   Every one of those frames pushes the `person` channel down on exactly the appearance
-   the fleet has to detect.
+   ~~**And the site images are not neutral about it.**~~ **Withdrawn 2026-08-28, and the
+   mechanism it says is missing is the one already shipped.** The claim was that
+   `detection.py` has no ignore mechanism, so each of the **69 of 120 batch02 training
+   images that contain a person (58%), and 63 of 120 in batch03 (52%)**, teaches the
+   `person` channel that a shopper is background. Those two counts stand; the consequence
+   does not. `DetVocab.class_mask` is exactly that mechanism at channel granularity, it is
+   consumed by `FCOSLoss`, and `label_maps_retail_security.py` was written for this case
+   and says so in its own header. Built from `hydranet_retail_pose02.yaml` and read off
+   the objects: **`site_boxes` and `site_boxes03` both carry `class_mask [0, 0, 1, 1]`**
+   — `person` is neither rewarded nor punished on any batch02/03 frame — against
+   `coco_person`'s `[1, 1, 0, 0]`. So the site frames are neutral about `person` by
+   construction, which is the same fact as the paragraph above stated from the other side:
+   masking is why `person` is trained on COCO **alone**.
 
    **This explains §7.11 better than the assigner does, and it explains the parts the
    assigner could not.** Centerness is identical across quiet, crowded, good and bad
@@ -1381,10 +1386,33 @@ something it does not support.
    human ground truth, and `stack`-class comparability (§7a.1) still applies to any
    vocabulary change.
 
-   **Not yet measured, and it gates the run**: whether adding 16,146 site frames at their
-   own sampling ratio disturbs the product classes that batch02/03 currently supervise,
-   and what `primary_metric` the run should select on so §7.9's checkpoint trap does not
-   fire again.
+   **The first gate is answered 2026-08-28, and it needed one fact nobody had read off the
+   file**: `site30k_v1/annotations/instances_train.json` is **not person-only**. It carries
+   **person 47,465, boxed_stock 168,970 and device 117,893 — 334,328 boxes over 16,146
+   images** — against batch02+batch03's **10,597** product boxes. Added whole it would not
+   disturb the product classes, it would replace them, at better than 30:1, with teacher
+   output on the same footage.
+
+   It does not have to be added whole. `classes:` on a `coco` dataset already does this and
+   `coco_person` already uses it; the restriction is not a filter bolted on top but the
+   thing that drives `class_mask`. Built and read off the object: **`classes: [person]`
+   over `datasets/site30k_v1` gives 14,654 training images and `class_mask [1, 0, 0, 0]`**
+   — every product channel gets no gradient on those frames, and the 286,863 product boxes
+   are left out rather than mapped somewhere. So the intervention is one dataset block, and
+   the gate it was blocked on cannot fire.
+
+   Sizing, for the same reason: `coco_person` is 65,744 images at `sample_ratio 0.05` =
+   **~3,287 images an epoch**, against `site_boxes` 120 x 3.0 = 360 and `site_boxes03`
+   144 x 1.0 = 144. A `site_person` block at **0.2** draws ~2,931 an epoch, which makes
+   site footage half of the `person` supervision rather than all of it — the first run
+   should be able to attribute a change to the new labels, and a ratio that drowns COCO
+   cannot.
+
+   **Still open, and it still gates the run**: what `primary_metric` the run selects on.
+   §7.9's trap fires when the metric belongs to a different head, so it should be a
+   `person` detection metric and not `terrain_mIoU`; which one is a decision, because
+   `person` mAP on the **site** split is what the run exists to move and the val split's
+   person labels come from the same teacher.
 
 21. **`masks_pass` is not the bev-3d bottleneck, and three explanations for the missing
    furniture are ruled out.** Opened 2026-08-28 on the handoff's statement that the render
