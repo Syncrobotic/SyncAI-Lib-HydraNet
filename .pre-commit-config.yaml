@@ -21,19 +21,51 @@ repos:
         # no longer existed, which is the state a reader cannot check.)
         exclude: ^assets/.*\.gif$
 
-  # Pinned to the same ruff `uv.lock` gives CI. They drifted once -- v0.13.0 here against
-  # 0.16.2 there -- and the gap was not cosmetic: ruff learnt to format Python code blocks
-  # inside Markdown somewhere between the two, so a commit passed this hook and failed
-  # `ruff format --check .` in CI, on a file the author had no reason to think ruff read.
-  # A local gate that is more permissive than the remote one is worse than no local gate,
-  # because it teaches people the remote one is flaky. tests/test_hook_versions.py checks
-  # they still agree.
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.2
+  # ruff carries no `rev:` here, and that absence is the fix for a deadlock rather than an
+  # oversight. What it has to keep doing first: this hook and CI must run *one* ruff. They
+  # drifted once -- v0.13.0 here against 0.16.2 there -- and the gap was not cosmetic, so a
+  # commit passed the hook and failed `ruff format --check .` in CI, on a file the author
+  # had no reason to think ruff read. A local gate more permissive than the remote one is
+  # worse than no local gate, because it teaches people the remote one is flaky.
+  #
+  # Holding two pins equal is what deadlocked. `uv.lock` and this file were two pins of one
+  # tool, and Dependabot watches them through two ecosystems (`uv` and `pre-commit`) that
+  # cannot share a group. Every ruff release therefore opened two PRs, each moving one pin,
+  # each red against tests/test_hook_versions.py alone, and neither mergeable without the
+  # other. Measured 2026-08-28 by running that test against each PR's tree: both fail, the
+  # unchanged tree passes.
+  #
+  # `uv run` resolves ruff from `uv.lock` instead, which is the ruff CI runs -- ci.yml calls
+  # `uv run ruff` too. One pin, bumped by one ecosystem, and the local gate cannot be more
+  # permissive than the remote one because it is the same binary rather than a version this
+  # file promises to keep level with it.
+  #
+  # `--frozen` so a commit hook can never rewrite `uv.lock` underneath the commit it is
+  # checking; the `uv-lock` hook below is what keeps that file current. `language: system`
+  # for the reason the ty-ratchet hooks give at the bottom of this file: a pre-commit-managed
+  # environment would install a second ruff against a third dependency set.
+  #
+  # Filenames are passed, and unlike the ty-ratchet hooks below that is not a detail. These
+  # two write to the files they are given, and several sessions share this working tree, so
+  # a whole-tree `ruff format .` at commit time reformats whatever another session has
+  # in flight and untracked -- ruff's discovery finds those files (311 tracked against 314
+  # with two of them present, measured 2026-08-28), and pre-commit does not stash them.
+  # Scope and version are separate questions and the first draft of this block conflated
+  # them: the drift these hooks exist to stop was a ruff *version* gap, which passing
+  # filenames does nothing to reopen, because the version is now CI's by construction and
+  # anything a commit introduces is in that commit's own file list.
+  - repo: local
     hooks:
       - id: ruff
-        args: [--fix]
+        name: ruff check (the ruff uv.lock gives CI)
+        entry: uv run --frozen ruff check --fix
+        language: system
+        types_or: [python, pyi]
       - id: ruff-format
+        name: ruff format (the ruff uv.lock gives CI)
+        entry: uv run --frozen ruff format
+        language: system
+        types_or: [python, pyi]
 
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.8.22

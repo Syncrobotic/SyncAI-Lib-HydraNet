@@ -56,6 +56,12 @@ updates:
   # is the same trap the github-actions block above describes: a pin cannot float, so it
   # never picks up its own fixes, and nothing was watching. It drifted far enough that the
   # local ruff and CI's ruff disagreed about what "formatted" means.
+  #
+  # ruff is deliberately not among the revs this block bumps: it has no `rev:` in
+  # .pre-commit-config.yaml any more, because the hook runs the ruff `uv.lock` gives, and
+  # that file is bumped by the `uv` block above. A tool pinned in both places deadlocks --
+  # one PR per ecosystem, each moving one pin, and groups cannot span ecosystems, so
+  # neither PR can carry the other's half. tests/test_hook_versions.py keeps it that way.
   - package-ecosystem: pre-commit
     directory: /
     schedule:
