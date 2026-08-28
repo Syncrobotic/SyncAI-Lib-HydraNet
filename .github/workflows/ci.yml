@@ -105,6 +105,10 @@ jobs:
       # scripts/ has its own baseline rather than joining src/'s: one number would
       # let what ships regress behind a dev-side improvement.
       - run: ./scripts/ty_ratchet.sh scripts/
+      # tools/ armed 2026-08-28 at its own count, 73. Same reasoning one tree further
+      # out, and the same independence: a tools/ number is not allowed to move either of
+      # the other two.
+      - run: ./scripts/ty_ratchet.sh tools/
 
   # No dataset needed: the model runs on random tensors, the dataset tests build a
   # fixture in tmp_path, and test_overfit.py memorises one synthetic batch on CPU.

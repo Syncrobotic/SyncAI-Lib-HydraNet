@@ -92,3 +92,10 @@ repos:
         language: system
         pass_filenames: false
         files: ^(scripts/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml)$
+      - id: ty-ratchet-tools
+        name: ty ratchet (tools/)
+        entry: scripts/ty_ratchet.sh
+        args: ["tools/"]
+        language: system
+        pass_filenames: false
+        files: ^(tools/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml)$

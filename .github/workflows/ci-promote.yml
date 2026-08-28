@@ -67,6 +67,8 @@ jobs:
         run: ./scripts/ty_ratchet.sh src/
       - name: Type ratchet (scripts/)
         run: ./scripts/ty_ratchet.sh scripts/
+      - name: Type ratchet (tools/)
+        run: ./scripts/ty_ratchet.sh tools/
       # Coverage threshold included: a promotion that drops the floor is exactly the
       # kind of thing that only shows up once branches are combined. Same number as
       # ci.yml's, deliberately -- two tiers disagreeing about the floor is how the

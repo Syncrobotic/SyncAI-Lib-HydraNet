@@ -125,8 +125,21 @@ TARGET="${1:-src/}"
 # deleted (superseded by `tools/commissioning/demo_video.py`) and took its 2 with it.
 # Recorded because a baseline that falls for a deletion and a baseline that falls for a
 # fix look identical in the number and mean opposite things about the tree.
+#
+# tools/ armed 2026-08-28 at **73**, which is where it already was. Arming a third tree at
+# its own count rather than paying it down first is this file's whole argument applied
+# once more -- 73 red diagnostics on a first run is how a checker gets switched off, and
+# blocking the increase is the part worth having. What it is not is a claim that tools/ is
+# clean. The debt is concentrated: `site30k/review_page.py` 15, `site30k/recipe.py` 7,
+# `temporal/ntu_project.py` 6, `commissioning/service_zones.py` 5, and the remaining 40
+# are 1-4 apiece across sixteen files. A large share of those ones and threes is one
+# pattern rather than one mistake -- a tool that loads `recipe.py` through
+# `importlib.util.spec_from_file_location` gets an untyped module object, and every
+# attribute read off it is a diagnostic. Fixing that is a packaging change, not a type
+# annotation, so it does not come down by touching the files.
 case "$TARGET" in
   scripts/|scripts) DEFAULT_BASELINE=14 ;;
+  tools/|tools)     DEFAULT_BASELINE=73 ;;
   *)                DEFAULT_BASELINE=11 ;;
 esac
 BASELINE="${TY_BASELINE:-$DEFAULT_BASELINE}"
