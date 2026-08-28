@@ -30,6 +30,7 @@ from syncai_hydranet.analytics.events.pose import _torso
 from syncai_hydranet.analytics.tracker import iou
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
+from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.models.hydranet import build_model
 from syncai_hydranet.serving.decode import MIN_PERSON_FRACTION, person_pixel_fraction
@@ -172,7 +173,12 @@ def main() -> int:
     # from a real fall is whether anybody else's box was on top of this one.
     boxes_by_frame: dict[int, np.ndarray] = {}
     want = {int(x) for x in args.still_frames.split(",") if x.strip()}
-    for frame in decode_frames(str(clip), 1920, 1080, args.fps):
+    # The clip's own resolution, not 1080p: `data.video.frames` does not scale, so the
+    # width and height size the reads on a rawvideo pipe carrying the source. Seven of
+    # the fleet's 48 cameras are 704x480 sub-streams, and every 1920 below is a mapping
+    # back into *source* pixels -- which `events/pose.py` measures its thresholds in.
+    src_w, src_h, _ = probe_video(str(clip))
+    for frame in decode_frames(str(clip), src_w, src_h, args.fps):
         if n >= args.frames:
             break
         img = Image.fromarray(frame)
@@ -222,7 +228,7 @@ def main() -> int:
                 # source pixels for the tracker and the events: `Track.keypoints` is
                 # specified in image pixels, and a view-space copy would make every
                 # threshold in `events/pose.py` depend on the panel size
-                src_scale = 1920.0 / cw
+                src_scale = src_w / cw
                 boxes_src = (b - np.array([x0, y0, x0, y0])) * src_scale
                 kps_src = kps.copy()
                 kps_src[:, :, 0] = (kps_src[:, :, 0] - x0) * src_scale
@@ -246,14 +252,15 @@ def main() -> int:
             )
             if lab_all is not None and (lab_all == person).any():
                 b_all = det["boxes"].cpu().numpy()[lab_all == person]
-                src_scale = 1920.0 / region[2]
+                src_scale = src_w / region[2]
                 boxes_by_frame[n] = (
                     b_all - np.array([region[0], region[1], region[0], region[1]])
                 ) * src_scale
         if args.events and seg_fixture is not None:
             cls_map = res["terrain"][0].cpu().numpy().astype(np.uint8)
             full = np.asarray(
-                Image.fromarray(cls_map).resize((1920, 1080), Image.NEAREST), dtype=np.uint8
+                Image.fromarray(cls_map).resize((src_w, src_h), Image.NEAREST),
+                dtype=np.uint8,
             )
             terrain_frames.append({"frame_index": n, "terrain": full})
         if tracker is not None and not people:
@@ -303,7 +310,7 @@ def main() -> int:
             args.fps,
             args.camera,
             cam_file=cam_file,
-            source_size_px=(1920, 1080),
+            source_size_px=(src_w, src_h),
             fall_head_height_m=args.fall_head_height,
         )
         crowding: dict = {}

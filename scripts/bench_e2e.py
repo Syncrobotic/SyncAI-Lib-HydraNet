@@ -121,12 +121,14 @@ def bench_decode(clip: Path, streams: int, seconds: float, backend: str) -> dict
     # numbers that describe the clip and not the decoder.
     if backend == "ffmpeg-cpu":
         from syncai_hydranet.data.video import frames as decode_frames
+        from syncai_hydranet.data.video import probe as probe_video
 
         def worker(i: int) -> None:
             # rgb24 over a pipe: 1920x1080x3 per frame, which is the cost this backend
             # cannot get out of and the reason the NVDEC one exists
             while not stop.is_set():
-                for _ in decode_frames(str(clip), 1920, 1080, None):
+                src_w, src_h, _ = probe_video(str(clip))
+                for _ in decode_frames(str(clip), src_w, src_h, None):
                     counts[i] += 1
                     if stop.is_set():
                         break

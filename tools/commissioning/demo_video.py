@@ -51,6 +51,7 @@ from syncai_bev3d.shading import draw_scene
 from syncai_hydranet.analytics.tracker import Tracker
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
+from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 from syncai_hydranet.models.hydranet import build_model
@@ -334,7 +335,8 @@ def main() -> int:
     statures: dict[int, list[float]] = {}
     vel_window = max(1, round(VEL_WINDOW_S * args.fps))
     n = n_det = n_fp = n_placed = n_outside = 0
-    for frame in decode_frames(str(clip), 1920, 1080, args.fps):
+    src_w, src_h, _ = probe_video(str(clip))
+    for frame in decode_frames(str(clip), src_w, src_h, args.fps):
         if n >= args.frames:
             break
         img = Image.fromarray(frame)
@@ -347,7 +349,7 @@ def main() -> int:
             b = det["boxes"].cpu().numpy()
             lab = det["labels"].cpu().numpy()
             x0, y0, cw, _ch = region
-            b = (b - np.array([x0, y0, x0, y0])) * (1920.0 / cw)
+            b = (b - np.array([x0, y0, x0, y0])) * (src_w / cw)
             b = b[lab == person_label]
             n_det += len(b)
             keep = [
