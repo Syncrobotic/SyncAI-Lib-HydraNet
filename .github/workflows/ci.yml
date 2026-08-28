@@ -160,6 +160,13 @@ jobs:
   # No checkpoint and no dataset: a randomly initialised model exercises the same
   # graph. Catches an operator that stopped exporting cleanly, a shape that drifted,
   # and a numerical mismatch between PyTorch and the exported graph.
+  #
+  # `--allow-random-weights` is therefore load-bearing here rather than a workaround.
+  # Exporting with no checkpoint is refused by default, because on random weights
+  # `--check-parity` PASSES -- PyTorch and ONNX agree perfectly -- and no artefact
+  # records which checkpoint an export came from, so the engine cannot be told from a
+  # trained one. This job is the case the escape hatch exists for: the graph is what it
+  # is checking, and it has no run to check it against.
   export-parity:
     name: ONNX Export Parity
     runs-on: ubuntu-latest
@@ -178,7 +185,8 @@ jobs:
           for cfg in configs/*.yaml; do
             echo "::group::$cfg"
             uv run hydranet-export-onnx --config "$cfg" \
-              --output "/tmp/$(basename "$cfg" .yaml).onnx" --check-parity
+              --output "/tmp/$(basename "$cfg" .yaml).onnx" \
+              --allow-random-weights --check-parity
             echo "::endgroup::"
           done
 

@@ -386,6 +386,15 @@ def build_parser() -> argparse.ArgumentParser:
         "for shape-only exports and latency benchmarking, never for deployment",
     )
     ap.add_argument(
+        "--allow-random-weights",
+        action="store_true",
+        help="export with no --checkpoint at all, so every weight is the initialisation. "
+        "The sibling of --allow-untrained-heads and for the same two uses -- shape-only "
+        "exports and latency benchmarking -- never for deployment. Without it, omitting "
+        "--checkpoint is refused rather than silently producing an engine that cannot be "
+        "told from a trained one",
+    )
+    ap.add_argument(
         "--check-parity",
         action="store_true",
         help="run the exported graph against PyTorch on the same input and fail if they "
@@ -433,6 +442,16 @@ def main(argv: list[str] | None = None) -> None:
     if args.checkpoint:
         ckpt = load_checkpoint(args.checkpoint)
         model.load_state_dict(select_weights(ckpt, args.weights))
+    elif not args.allow_random_weights:
+        raise SystemExit(
+            "no --checkpoint: this would export the ImageNet-initialised model, whose "
+            "heads are random. `--check-parity` cannot see it -- PyTorch and ONNX agree "
+            "perfectly on random weights -- and nothing in the ONNX or the sidecar "
+            "records which checkpoint an export came from, so the resulting engine is "
+            "indistinguishable from a trained one and produces plausible boxes. Pass "
+            "--checkpoint runs/<run>/best.pt, or --allow-random-weights if this is a "
+            "shape-only export for latency benchmarking."
+        )
 
     kept_names: list[str] | None = None
     kept_idx: list[int] = []

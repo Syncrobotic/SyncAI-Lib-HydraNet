@@ -87,6 +87,18 @@ def _write_cfg(tmp_path, **overrides) -> str:
     return str(p)
 
 
+def _main(*args: str) -> None:
+    """`main` with the shape-only flag every test here needs, and the reason for it.
+
+    Nothing in this file has a checkpoint -- `torch.onnx.export` is stubbed and the point
+    is the decisions `main` makes, not the weights it makes them about. Since exporting
+    with no `--checkpoint` is refused (it would emit the initialisation, which
+    `--check-parity` cannot distinguish from a trained model), each call says so once,
+    here, rather than thirteen times below.
+    """
+    export_onnx.main([*args, "--allow-random-weights"])
+
+
 @pytest.fixture
 def exported(monkeypatch):
     """Records what `main` decided, without serialising anything.
@@ -145,9 +157,7 @@ def test_narrowing_a_model_with_no_detection_head_is_refused(tmp_path):
     )
     out = tmp_path / "m.onnx"
     with pytest.raises(SystemExit) as exc:
-        export_onnx.main(
-            ["--config", cfg, "--output", str(out), "--detection-classes", "robot_8"]
-        )
+        _main("--config", cfg, "--output", str(out), "--detection-classes", "robot_8")
     assert "nothing to narrow" in str(exc.value)
 
 
@@ -156,9 +166,7 @@ def test_an_unknown_detection_subset_is_refused_naming_the_flag(tmp_path):
     cfg = _write_cfg(tmp_path)
     out = tmp_path / "m.onnx"
     with pytest.raises(SystemExit) as exc:
-        export_onnx.main(
-            ["--config", cfg, "--output", str(out), "--detection-classes", "not-a-subset"]
-        )
+        _main("--config", cfg, "--output", str(out), "--detection-classes", "not-a-subset")
     assert str(exc.value).startswith("--detection-classes:"), (
         "the message must name the flag; a bare ValueError text leaves the operator "
         "guessing which argument was wrong"
@@ -175,7 +183,7 @@ def test_an_unsupervised_head_is_refused_before_anything_is_written(tmp_path, ex
     cfg = _write_cfg(tmp_path, **{"data.datasets": [BASE["data"]["datasets"][0]]})
     out = tmp_path / "m.onnx"
     with pytest.raises(SystemExit):
-        export_onnx.main(["--config", cfg, "--output", str(out)])
+        _main("--config", cfg, "--output", str(out))
     assert exported.export is None, "torch.onnx.export ran despite the refusal"
     assert not out.exists()
 
@@ -191,7 +199,7 @@ def test_a_refused_narrowing_leaves_no_output_file(tmp_path):
     cfg = _write_cfg(tmp_path)
     out = tmp_path / "m.onnx"
     with pytest.raises(SystemExit):
-        export_onnx.main(["--config", cfg, "--output", str(out), "--detection-classes", "nope"])
+        _main("--config", cfg, "--output", str(out), "--detection-classes", "nope")
     assert not out.exists()
     assert not export_onnx.sidecar_path(out).exists()
 
@@ -202,7 +210,7 @@ def test_a_refused_narrowing_leaves_no_output_file(tmp_path):
 def test_the_default_export_names_every_head_and_embeds_preprocessing(tmp_path, exported):
     cfg = _write_cfg(tmp_path)
     out = tmp_path / "m.onnx"
-    export_onnx.main(["--config", cfg, "--output", str(out)])
+    _main("--config", cfg, "--output", str(out))
 
     names = exported.export["output_names"]
     assert any(n.startswith("det_cls_p") for n in names), names
@@ -222,7 +230,7 @@ def test_the_default_export_names_every_head_and_embeds_preprocessing(tmp_path, 
 def test_no_embed_preprocessing_changes_both_the_dummy_and_the_metadata(tmp_path, exported):
     cfg = _write_cfg(tmp_path)
     out = tmp_path / "m.onnx"
-    export_onnx.main(["--config", cfg, "--output", str(out), "--no-embed-preprocessing"])
+    _main("--config", cfg, "--output", str(out), "--no-embed-preprocessing")
     assert exported.export["dummy"].max() < 10.0
     assert exported.props["preprocessing"] == "external"
     assert exported.props["input_range"] == "imagenet-normalised"
@@ -232,7 +240,7 @@ def test_argmax_seg_reaches_the_wrapper_and_the_metadata(tmp_path, exported):
     """The flag is wired inside `main`, so nothing was checking that setting it works."""
     cfg = _write_cfg(tmp_path)
     out = tmp_path / "m.onnx"
-    export_onnx.main(["--config", cfg, "--output", str(out), "--argmax-seg"])
+    _main("--config", cfg, "--output", str(out), "--argmax-seg")
     names = exported.export["output_names"]
     assert any(n.endswith("_argmax") for n in names), names
     assert exported.props["segmentation_output"] == "class_ids_uint8"
@@ -243,7 +251,7 @@ def test_export_input_size_overrides_the_training_size(tmp_path, exported):
     confusingly, so the override existing is not enough -- it has to take effect."""
     cfg = _write_cfg(tmp_path, export={"input_size": [192, 256]})
     out = tmp_path / "m.onnx"
-    export_onnx.main(["--config", cfg, "--output", str(out)])
+    _main("--config", cfg, "--output", str(out))
     assert tuple(exported.export["dummy"].shape[-2:]) == (192, 256)
 
 
@@ -255,7 +263,7 @@ def test_narrowing_writes_a_sidecar_naming_every_kept_class(tmp_path, exported):
     reaches the board. The sidecar is the only record of what each channel means."""
     cfg = _write_cfg(tmp_path)
     out = tmp_path / "m.onnx"
-    export_onnx.main(["--config", cfg, "--output", str(out), "--detection-classes", "robot_8"])
+    _main("--config", cfg, "--output", str(out), "--detection-classes", "robot_8")
 
     side = json.loads(export_onnx.sidecar_path(out).read_text())
     assert side["input_size"] == [128, 160]
@@ -273,7 +281,7 @@ def test_the_sidecar_indices_point_back_into_the_trained_class_list(tmp_path):
 
     cfg = _write_cfg(tmp_path)
     out = tmp_path / "m.onnx"
-    export_onnx.main(["--config", cfg, "--output", str(out), "--detection-classes", "robot_8"])
+    _main("--config", cfg, "--output", str(out), "--detection-classes", "robot_8")
     side = json.loads(export_onnx.sidecar_path(out).read_text())
     assert [COCO_NAMES[i] for i in side["source_indices"]] == side["detection_classes"]
 
@@ -281,7 +289,7 @@ def test_the_sidecar_indices_point_back_into_the_trained_class_list(tmp_path):
 def test_no_sidecar_when_nothing_was_narrowed(tmp_path, exported):
     cfg = _write_cfg(tmp_path)
     out = tmp_path / "m.onnx"
-    export_onnx.main(["--config", cfg, "--output", str(out)])
+    _main("--config", cfg, "--output", str(out))
     assert not export_onnx.sidecar_path(out).exists()
     assert "detection_classes" not in exported.props
 
@@ -317,30 +325,26 @@ def test_every_narrowing_refusal_precedes_the_model_mutation(tmp_path, monkeypat
         ({}, "not-a-subset"),  # unknown subset
     ):
         with pytest.raises(SystemExit):
-            export_onnx.main(
-                [
-                    "--config",
-                    _write_cfg(tmp_path, **cfg_kwargs),
-                    "--output",
-                    str(out),
-                    "--detection-classes",
-                    flag,
-                ]
+            _main(
+                "--config",
+                _write_cfg(tmp_path, **cfg_kwargs),
+                "--output",
+                str(out),
+                "--detection-classes",
+                flag,
             )
         assert mutated == [], "the model was narrowed before the run was refused"
         assert not out.exists()
 
     # ...and the mutation does happen on the path that is not refused, so the assertion
     # above is not passing merely because the patch never took effect.
-    export_onnx.main(
-        [
-            "--config",
-            _write_cfg(tmp_path),
-            "--output",
-            str(out),
-            "--detection-classes",
-            "robot_8",
-        ]
+    _main(
+        "--config",
+        _write_cfg(tmp_path),
+        "--output",
+        str(out),
+        "--detection-classes",
+        "robot_8",
     )
     assert mutated == [True]
 
@@ -374,3 +378,48 @@ def test_parity_refuses_when_onnxruntime_is_absent_rather_than_reporting_a_pass(
     assert "onnxruntime" in message
     assert "has NOT been compared" in message, "the refusal has to say what did not happen"
     assert "--extra export" in message, "and how to make it happen"
+
+
+# --------------------------------------------- the export that had no weights in it
+
+
+@pytest.mark.usefixtures("exported")
+def test_exporting_without_a_checkpoint_is_refused(tmp_path):
+    """The initialisation is not a model, and no artefact said which one it was.
+
+    `main` loaded weights under `if args.checkpoint:` and did nothing otherwise, so
+    omitting the flag exported the ImageNet-initialised network with random heads.
+    Three things then failed to notice, in the order an operator would meet them:
+
+    * `--check-parity` PASSES -- PyTorch and ONNX agree perfectly on random weights, so
+      the acceptance gate is not merely silent, it is affirmative;
+    * the ONNX `metadata_props` record preprocessing, input range, layout, channel order
+      and class names, and nothing about which checkpoint produced the weights;
+    * the sidecar records the class mapping and the input size, and is only written when
+      `--detection-classes` narrowed something.
+
+    So a random-weight engine and a trained one are indistinguishable from their
+    artefacts, and the engine emits boxes that look like every other box.
+    """
+    out = tmp_path / "m.onnx"
+    with pytest.raises(SystemExit) as exc:
+        export_onnx.main(["--config", _write_cfg(tmp_path), "--output", str(out)])
+
+    message = str(exc.value)
+    assert "--checkpoint" in message, "the refusal has to name the flag that fixes it"
+    assert "--allow-random-weights" in message, "and the escape hatch, for benchmarking"
+    assert not out.exists(), "refused before anything was written"
+
+
+@pytest.mark.usefixtures("exported")
+def test_the_shape_only_escape_hatch_exports(tmp_path):
+    """The refusal must not remove latency benchmarking, which legitimately has no run.
+
+    Same shape as `--allow-untrained-heads`: the unsafe thing stays reachable and has to
+    be asked for by name. `ci.yml`'s export-parity job is the standing consumer -- it
+    exports every shipped config on random weights on purpose, because the graph is what
+    it is checking.
+    """
+    out = tmp_path / "m.onnx"
+    _main("--config", _write_cfg(tmp_path), "--output", str(out))
+    assert out.exists()
