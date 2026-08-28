@@ -128,18 +128,32 @@ def _blur_region(img: Image.Image, x0: float, y0: float, x1: float, y1: float) -
     a numpy scalar raises "truth value of an array is ambiguous" rather than blurring.
     """
     x0, y0, x1, y1 = float(x0), float(y0), float(x1), float(y1)
+    rect = blur_rect(img.width, img.height, x0, y0, x1, y1)
+    if rect is None:
+        return
+    bx0, by0, bx1, by1 = rect
+    crop = img.crop((bx0, by0, bx1, by1))
+    img.paste(crop.filter(ImageFilter.GaussianBlur(max(6.0, (x1 - x0) / 5.0))), (bx0, by0))
+
+
+def blur_rect(w_img: int, h_img: int, x0, y0, x1, y1) -> tuple[int, int, int, int] | None:
+    """The rectangle `_blur_region` would blur for this box, or None if it blurs nothing.
+
+    Separated so an auditor can ask "was this face inside a blurred region" without a
+    second copy of the arithmetic. A copy would answer the question about itself.
+    """
+    x0, y0, x1, y1 = float(x0), float(y0), float(x1), float(y1)
     w, h = x1 - x0, y1 - y0
     if w < 4 or h < 4:
-        return
+        return None
     px, py = w * BLUR_PAD, h * BLUR_PAD
     bx0 = max(0, int(x0 - px))
     by0 = max(0, int(y0 - py))
-    bx1 = min(img.width, int(x1 + px))
-    by1 = min(img.height, int(y0 + h * BLUR_TOP_FRACTION + py))
+    bx1 = min(w_img, int(x1 + px))
+    by1 = min(h_img, int(y0 + h * BLUR_TOP_FRACTION + py))
     if bx1 - bx0 < 3 or by1 - by0 < 3:
-        return
-    crop = img.crop((bx0, by0, bx1, by1))
-    img.paste(crop.filter(ImageFilter.GaussianBlur(max(6.0, w / 5.0))), (bx0, by0))
+        return None
+    return bx0, by0, bx1, by1
 
 
 def _torso_crop(frame: np.ndarray, box) -> np.ndarray:
