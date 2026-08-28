@@ -114,11 +114,21 @@ def detections(prov: dict, low_thr: float) -> list[dict]:
 
 
 def to_json(tracks) -> dict[str, dict[str, list[float]]]:
+    """`{id: {frame: box}}` from either tracker's finished list.
+
+    The two carry their id under different names -- `Track.track_id` and
+    `Fragment.frag_id` -- so the id is read by asking rather than by assuming. The names
+    differ because the two were written for different jobs, and reconciling them is a
+    change to shipped tracking code that a measurement script has no business making.
+    """
     out = {}
     for t in tracks:
         if not getattr(t, "confirmed", True):
             continue
-        out[str(t.track_id)] = {
+        tid = getattr(t, "track_id", None)
+        if tid is None:
+            tid = t.frag_id
+        out[str(tid)] = {
             str(int(f)): [float(v) for v in b] for f, b in zip(t.frames, t.boxes, strict=True)
         }
     return out
