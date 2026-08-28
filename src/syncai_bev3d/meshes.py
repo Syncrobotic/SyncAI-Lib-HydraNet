@@ -441,6 +441,28 @@ def cabinet(width_m: float, depth_m: float, height_m: float, *, shelves: int = 3
 KICK_PLATE_M = 0.10  # the recess a shop fixture stands on, whatever its height
 
 
+def shelf_levels(height_m: float, *, pitch_m: float = 0.32) -> list[float]:
+    """The heights `shelving` puts its shelf surfaces at, feet at y = 0.
+
+    Exported so a caller placing merchandise can put it *on a shelf* rather than at
+    whatever height the depth model measured for the region. The two must not drift, so
+    the mesh reads its levels from here rather than the other way round: a product
+    snapped to a level this function invented would sit in mid-air the moment the mesh
+    changed its spacing.
+    """
+    if height_m <= 0 or pitch_m <= 0:
+        raise ValueError(f"shelf_levels needs positive extents, got {height_m}, {pitch_m}")
+    slab_t = min(0.025, height_m * 0.03)
+    out, y = [], min(KICK_PLATE_M, height_m * 0.5)
+    while y <= height_m - slab_t:
+        out.append(float(y))
+        y += pitch_m
+    return out
+
+
+# the recess a shop fixture stands on, whatever its height
+
+
 def shelving(
     width_m: float,
     depth_m: float,
@@ -496,13 +518,15 @@ def shelving(
         parts.append(at(box(post_w, height_m, depth_m * 0.9), sx * (width_m - post_w) / 2))
     parts.append(at(box(width_m * 0.96, kick_h, shelf_d * 0.7), dz=z_shelf))
     inner = max(width_m - 2 * post_w, width_m * 0.5)
-    y = kick_h
-    while y <= height_m - slab_t:
+    for y in shelf_levels(height_m, pitch_m=pitch_m):
         parts.append(at(box(inner, slab_t, shelf_d), dy=y, dz=z_shelf))
         parts.append(
             at(box(inner, lip_m, slab_t), dy=y + slab_t, dz=z_shelf - shelf_d / 2 + slab_t / 2)
         )
-        y += pitch_m
+    # A top panel. These cameras look down, so the most prominent face of every unit is
+    # its top: left open it reads as an empty tray with a lip on the far side, which is a
+    # warehouse pallet rack rather than a shop fixture.
+    parts.append(at(box(width_m, slab_t, depth_m), dy=height_m - slab_t))
     return _merge(*parts)
 
 
@@ -687,7 +711,9 @@ def for_object(obj: dict) -> Mesh | None:
     if kind == "table":
         return table(w, d, h)
     # One shelf per 0.45 m of carcass, which is roughly the pitch a gondola is built on.
-    return cabinet(w, d, h, shelves=max(int(h / 0.45), 1))
+    # `shelving`, the same mesh the commissioning renderer uses. Two paths drawing two
+    # different objects for one physical fixture is worse than either being wrong.
+    return shelving(w, d, h)
 
 
 def to_obj(mesh: Mesh, name: str = "mesh") -> str:

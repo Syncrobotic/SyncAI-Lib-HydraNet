@@ -26,6 +26,7 @@ from syncai_bev3d.meshes import (
     extrude,
     ground_disc,
     place,
+    shelf_levels,
     shelving,
     table,
     wall,
@@ -445,12 +446,23 @@ PLAUSIBLE_M = {
     "display_shelf": {"height": (0.90, 2.60), "span": (0.4, 9.0), "short": (0.2, 1.4)},
     "column": {"height": (1.60, 3.20), "span": (0.15, 1.30), "short": (0.15, 1.30)},
     "wall": {"height": (1.80, 3.20), "span": (0.3, 20.0), "short": (0.05, 0.6)},
+    # A door, including a double one. Tao-Hsin-cam04 builds a 3.7 m "door" and draws it
+    # as a solid slab that dominates the render: that is the shopfront glazing, not a
+    # door, and it went unreported because this table had no entry for the class. What it
+    # should be *drawn* as is a separate decision -- glass is not opaque either -- and
+    # this only stops it being drawn silently.
+    "door": {"height": (1.90, 2.60), "span": (0.6, 2.4), "short": (0.05, 0.4)},
 }
 
 # How far above a fixture's top a product may sit and still count as resting on it. A
 # cabinet's merchandise sits on shelves *inside* it, so the test is "inside the footprint
 # and not floating above the top", not "level with the top".
 SUPPORT_TOL_M = 0.25
+
+# A wall-mounted merchandise run in these shops stands about 0.4-0.45 m off the wall,
+# read off the plates. The cap was 0.8 m, inherited from the column code next to it, and
+# it made every accessory wall twice as deep as the one in the picture.
+SHELF_MAX_DEPTH_M = 0.45
 
 
 def footprint_of(mesh):
@@ -587,10 +599,10 @@ def build_scene_regular(camera):
                 mesh = column(min(w, 0.8), min(d, 0.8), max(h, COLUMN_MIN_H))
                 items.append((place(mesh, at), name, 255, True))
             elif name == "display_shelf":
-                shapes.append((name, w, min(d, 0.8), h))
+                shapes.append((name, w, min(d, SHELF_MAX_DEPTH_M), h))
                 # `shelving`, not `cabinet`: these are open merchandise walls, and a
                 # carcass with solid end panels and full-depth slabs reads as a bookcase.
-                mesh = shelving(w, min(d, 0.8), h)
+                mesh = shelving(w, min(d, SHELF_MAX_DEPTH_M), h)
                 items.append((place(mesh, at), name, 255, True))
             else:  # display_table
                 # a footprint too long for four legs is a counter, not a solid prism:
@@ -599,11 +611,18 @@ def build_scene_regular(camera):
                 mesh = table(w, d, h) if max(w, d) < 2.2 else counter(w, d, h)
                 items.append((place(mesh, at), name, 255, True))
     # Every fixture that can hold merchandise, as a world AABB plus its top.
-    supports = [
-        footprint_of(m)
-        for m, name, _a, _s in items
-        if name in ("display_table", "display_shelf")
-    ]
+    # Each support carries the heights merchandise may actually rest at: a table's top,
+    # or a shelving unit's shelf levels. Without them a product sits at whatever height
+    # the depth model measured for its region, which is a diagonal staircase drifting
+    # through the shelves it is supposed to be standing on -- and "merchandise is on a
+    # shelf" is the one sentence this scene exists to say.
+    supports = []
+    for m, nm, _a, _s in items:
+        if nm not in ("display_table", "display_shelf"):
+            continue
+        x0, x1, z0, z1, top = footprint_of(m)
+        levels = shelf_levels(top) if nm == "display_shelf" else [top]
+        supports.append((x0, x1, z0, z1, top, levels))
     unsupported: list[tuple] = []
     # extras: doors as solid tall slabs, products as slabs at their measured height
     cy2, sy2 = np.cos(yaw), np.sin(yaw)
@@ -635,6 +654,7 @@ def build_scene_regular(camera):
                 short = min(w, d)
                 if short > 0.3:
                     w, d = (w, 0.12) if w >= d else (0.12, d)
+                shapes.append((name, w, d, hgt))
                 mesh = extrude(
                     np.array(
                         [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]
@@ -672,13 +692,19 @@ def build_scene_regular(camera):
                     )
                     for ux, vz in ((hw, hd), (hw, -hd), (-hw, hd), (-hw, -hd))
                 ]
-                if not any(
-                    all(x0 <= qx <= x1 and z0 <= qz <= z1 for qx, qz in corners)
+                held = [
+                    (top, levels)
+                    for x0, x1, z0, z1, top, levels in supports
+                    if all(x0 <= qx <= x1 and z0 <= qz <= z1 for qx, qz in corners)
                     and base <= top + SUPPORT_TOL_M
-                    for x0, x1, z0, z1, top in supports
-                ):
+                ]
+                if not held:
                     unsupported.append((name, float(base), px, pz))
                     continue
+                # snap to the nearest surface of the fixture holding it. The measured
+                # height decides *which* shelf; the fixture decides where that shelf is.
+                levels = min(held, key=lambda h: abs(h[0] - base))[1]
+                base = min(levels, key=lambda y: abs(y - base))
                 for unit in product_units(name, w, d):
                     verts = unit[0].copy()
                     verts[:, 1] += base

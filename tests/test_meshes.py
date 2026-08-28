@@ -14,6 +14,7 @@ pytest tests/test_meshes.py -v
 """
 
 import math
+from itertools import pairwise
 
 import numpy as np
 import pytest
@@ -27,6 +28,7 @@ from syncai_bev3d.meshes import (
     ground_disc,
     human,
     place,
+    shelf_levels,
     shelving,
     smooth_normals,
     table,
@@ -379,17 +381,22 @@ def test_a_round_column_keeps_its_smoothing():
 def test_shelving_spaces_by_pitch_so_a_tall_run_is_not_a_stretched_short_one():
     """`cabinet` takes a shelf *count*, which is the wrong parameter for a shop: ask for
     five and a 2.4 m wall gets them 0.48 m apart while a 1.2 m unit gets 0.24. Real
-    shelving is built on one pitch whatever the height, so that is what is passed."""
-    tall, short = shelving(1.8, 0.45, 2.4), shelving(1.8, 0.45, 1.2)
+    shelving is built on one pitch whatever the height, so that is what is passed, and
+    the short unit's levels are a prefix of the tall one's."""
+    tall, short = shelf_levels(2.4), shelf_levels(1.2)
+    assert tall[: len(short)] == short
+    assert len(tall) > len(short)
+    assert all(abs((b - a) - 0.32) < 1e-9 for a, b in pairwise(tall))
 
-    def levels(mesh, h):
-        # every vertex height except the carcass's own top, which is the one value the
-        # two units cannot share and says nothing about the pitch
-        ys = np.unique(np.round(mesh[0][:, 1], 3))
-        return {float(y) for y in ys if abs(y - h) > 0.02}
 
-    assert levels(short, 1.2) <= levels(tall, 2.4)
-    assert len(levels(tall, 2.4)) > len(levels(short, 1.2))
+def test_the_mesh_puts_its_shelves_where_shelf_levels_says():
+    """The two must not drift. A caller snapping merchandise to `shelf_levels` and a mesh
+    drawing its shelves somewhere else is a product hanging in mid-air, which is exactly
+    the state the support rule exists to forbid."""
+    v, _f = shelving(1.8, 0.45, 2.1)
+    ys = np.round(v[:, 1], 3)
+    for y in shelf_levels(2.1):
+        assert np.any(np.isclose(ys, round(y, 3), atol=1e-3)), f"no shelf at {y:.2f} m"
 
 
 def test_shelving_shelves_are_shallower_than_the_unit():
