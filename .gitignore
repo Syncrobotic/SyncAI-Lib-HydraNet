@@ -24,6 +24,17 @@ exports/
 *.pth
 *.onnx
 *.engine
+# ...except the class-name embedding matrix, which is 6 KB of CLIP text vectors and is a
+# BUILD INPUT rather than a training artefact: `hydranet_retail_openvocab.yaml` names it
+# at `text_embeddings:` and `models/hydranet.py` reads it at **model construction**, so
+# without it that config cannot be built at all. It has been gitignored since it was
+# written on 2026-08-17, which made `ci.yml`'s export-parity job fail on a clean checkout
+# for every day since -- invisible until `c7fa9fe` gave that workflow a push trigger, and
+# then hidden one layer deeper: `0ca569a` fixed the depth-head export on 08-28 and the
+# verification ran in a working tree where this file exists, so 33/33 configs passed
+# locally while CI aborted on the next one along. Tracked now, so a fresh checkout builds
+# what CI builds.
+!weights/text/*.pt
 # TensorRT serialised engines. `.engine` is the Jetson convention and was the only one
 # listed; `scripts/bench_trt.py` writes `<name>.<tag>.plan`, so the four plans the
 # pro6000 sweep left in `exports/` sat untracked and *unignored* -- 100 MB that a
