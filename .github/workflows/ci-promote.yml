@@ -50,6 +50,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The unit tests read git history: `test_deleted_docs_are_cited_as_history`
+          # resolves every `git show <sha>:<path>` citation in docs/ with `cat-file -e`,
+          # and on the default depth-1 clone not one of those objects exists, so it fails
+          # for a reason that has nothing to do with the docs. 24 MiB packed, so a full
+          # fetch is cheaper than the failure it removes. Added 2026-08-28, when the real
+          # CI logs showed it red on all three matrix rows while every local run was green
+          # -- a worktree shares the object database and can never reproduce this.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
