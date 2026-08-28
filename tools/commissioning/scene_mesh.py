@@ -22,11 +22,11 @@ from syncai_bev3d.meshes import (
     Placement,
     _merge,
     box,
-    cabinet,
     column,
     extrude,
     ground_disc,
     place,
+    shelving,
     table,
     wall,
 )
@@ -588,7 +588,9 @@ def build_scene_regular(camera):
                 items.append((place(mesh, at), name, 255, True))
             elif name == "display_shelf":
                 shapes.append((name, w, min(d, 0.8), h))
-                mesh = cabinet(w, min(d, 0.8), h, shelves=max(2, int(h / 0.45)))
+                # `shelving`, not `cabinet`: these are open merchandise walls, and a
+                # carcass with solid end panels and full-depth slabs reads as a bookcase.
+                mesh = shelving(w, min(d, 0.8), h)
                 items.append((place(mesh, at), name, 255, True))
             else:  # display_table
                 # a footprint too long for four legs is a counter, not a solid prism:

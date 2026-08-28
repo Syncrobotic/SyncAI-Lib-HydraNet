@@ -27,6 +27,7 @@ from syncai_bev3d.meshes import (
     ground_disc,
     human,
     place,
+    shelving,
     smooth_normals,
     table,
     to_obj,
@@ -373,3 +374,51 @@ def test_a_round_column_keeps_its_smoothing():
     assert len(side) > 12
     # many distinct directions, none of them equal to its neighbour
     assert len(np.unique(np.round(side, 3), axis=0)) > len(side) // 2
+
+
+def test_shelving_spaces_by_pitch_so_a_tall_run_is_not_a_stretched_short_one():
+    """`cabinet` takes a shelf *count*, which is the wrong parameter for a shop: ask for
+    five and a 2.4 m wall gets them 0.48 m apart while a 1.2 m unit gets 0.24. Real
+    shelving is built on one pitch whatever the height, so that is what is passed."""
+    tall, short = shelving(1.8, 0.45, 2.4), shelving(1.8, 0.45, 1.2)
+
+    def levels(mesh, h):
+        # every vertex height except the carcass's own top, which is the one value the
+        # two units cannot share and says nothing about the pitch
+        ys = np.unique(np.round(mesh[0][:, 1], 3))
+        return {float(y) for y in ys if abs(y - h) > 0.02}
+
+    assert levels(short, 1.2) <= levels(tall, 2.4)
+    assert len(levels(tall, 2.4)) > len(levels(short, 1.2))
+
+
+def test_shelving_shelves_are_shallower_than_the_unit():
+    """The gap above each shelf is where the back panel shows, and that stripe is most of
+    what tells a merchandise run from a bookcase at a glance."""
+    v, _f = shelving(1.8, 0.50, 2.1)
+    depth = v[:, 2].max() - v[:, 2].min()
+    assert 0.45 < depth <= 0.50  # the carcass
+    # something sits at the back plane and something at the front, with a gap between
+    zs = np.unique(np.round(v[:, 2], 2))
+    assert zs.max() - zs.min() > 0.4
+
+
+def test_shelving_stands_on_a_kick_plate_rather_than_a_slab_on_the_floor():
+    """A slab at y = 0 the full depth of the unit reads as a box resting on the ground."""
+    v, _f = shelving(1.8, 0.45, 2.1)
+    floor = v[np.isclose(v[:, 1], 0.0, atol=1e-6)]
+    assert len(floor) > 0
+    kick_depth = floor[:, 2].max() - floor[:, 2].min()
+    assert kick_depth < 0.45  # recessed, not the full carcass
+
+
+@pytest.mark.parametrize(
+    ("call", "word"),
+    [
+        (lambda: shelving(0, 0.4, 2.0), "extents"),
+        (lambda: shelving(1.8, 0.4, 2.0, pitch_m=0), "pitch"),
+    ],
+)
+def test_shelving_refuses_nonsense(call, word):
+    with pytest.raises(ValueError, match=word):
+        call()

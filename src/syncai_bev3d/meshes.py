@@ -438,6 +438,74 @@ def cabinet(width_m: float, depth_m: float, height_m: float, *, shelves: int = 3
     return _merge(*parts)
 
 
+KICK_PLATE_M = 0.10  # the recess a shop fixture stands on, whatever its height
+
+
+def shelving(
+    width_m: float,
+    depth_m: float,
+    height_m: float,
+    *,
+    pitch_m: float = 0.32,
+    lip_m: float = 0.045,
+) -> Mesh:
+    """Open retail shelving -- a merchandise wall, not a bookcase.
+
+    `cabinet()` renders a carcass: solid end panels the full depth, shelf slabs the full
+    depth, evenly spaced from the floor to the top. That is a bookcase, and on a shop
+    floor it is the wrong object -- the accessory walls in these stores are open-fronted
+    units where the back panel shows above every shelf and the merchandise faces out.
+
+    Four things make the difference, and each is a feature of the real thing rather than
+    a styling choice:
+
+    * **the shelves are shallower than the unit**, so the back panel is visible in the
+      gap above each one -- that stripe is most of what tells a shelf run from a cabinet;
+    * **a front lip** on each shelf, which is what stops stock sliding off and is the
+      most recognisable edge of retail shelving from any angle;
+    * **a recessed kick plate** instead of a slab lying on the floor, so the unit reads as
+      standing rather than as a box resting on the ground;
+    * **end posts, not end panels** -- thin uprights at the corners, so the run is open
+      from the side the way a gondola is.
+
+    `pitch_m` is the shelf spacing rather than a shelf count: a 2.4 m wall and a 1.2 m
+    low unit should have shelves the same distance apart, and asking for "5 shelves"
+    stretches them apart on the tall one. 0.32 m is what these stores' accessory walls
+    are built on.
+    """
+    if width_m <= 0 or depth_m <= 0 or height_m <= 0:
+        raise ValueError(f"shelving needs positive extents, got {width_m}x{depth_m}x{height_m}")
+    if pitch_m <= 0:
+        raise ValueError(f"pitch_m must be positive, got {pitch_m}")
+    back_t = min(0.03, depth_m * 0.12)
+    post_w = min(0.05, width_m * 0.05)
+    # A constant, not a fraction of the height: a kick plate is a kick plate on a 1.2 m
+    # unit and on a 2.4 m wall, and scaling it moved the first shelf, so two units built
+    # on the same pitch came back with their shelves at different heights.
+    kick_h = min(KICK_PLATE_M, height_m * 0.5)
+    shelf_d = depth_m * 0.82  # the gap is what shows the back panel
+    slab_t = min(0.025, height_m * 0.03)
+    z_back = depth_m / 2 - back_t / 2
+    z_shelf = -depth_m / 2 + shelf_d / 2  # front-aligned, like a real run
+
+    def at(mesh, dx=0.0, dy=0.0, dz=0.0):
+        return (mesh[0] + [dx, dy, dz], mesh[1])
+
+    parts = [at(box(width_m, height_m, back_t), dz=z_back)]
+    for sx in (-1, 1):
+        parts.append(at(box(post_w, height_m, depth_m * 0.9), sx * (width_m - post_w) / 2))
+    parts.append(at(box(width_m * 0.96, kick_h, shelf_d * 0.7), dz=z_shelf))
+    inner = max(width_m - 2 * post_w, width_m * 0.5)
+    y = kick_h
+    while y <= height_m - slab_t:
+        parts.append(at(box(inner, slab_t, shelf_d), dy=y, dz=z_shelf))
+        parts.append(
+            at(box(inner, lip_m, slab_t), dy=y + slab_t, dz=z_shelf - shelf_d / 2 + slab_t / 2)
+        )
+        y += pitch_m
+    return _merge(*parts)
+
+
 def ground_disc(radius_m: float, sides: int = 32) -> Mesh:
     """A flat disc at y = 0 -- the channel the position uncertainty goes in.
 
