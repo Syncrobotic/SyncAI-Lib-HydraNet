@@ -326,33 +326,69 @@ def _sheet(tracks: dict, crops: dict, out: Path) -> tuple[list[Path], int]:
     return pages, drawn
 
 
+def _box_iou(a, b) -> float:
+    ix0, iy0 = max(a[0], b[0]), max(a[1], b[1])
+    ix1, iy1 = min(a[2], b[2]), min(a[3], b[3])
+    if ix0 >= ix1 or iy0 >= iy1:
+        return 0.0
+    inter = (ix1 - ix0) * (iy1 - iy0)
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / union if union > 0 else 0.0
+
+
 def _copresent(tracks: dict) -> dict:
-    """Pairs of tracks alive at the same time -- the merges no judgement is needed for.
+    """Which merges need no judgement, which need a look, and how far apart the rest are.
 
-    Two tracks whose frame spans overlap are two people, and that is arithmetic over frame
-    indices: no model, no calibration, no threshold. It matters that it stays that way.
-    A position or speed test would exclude far more pairs, and it would exclude them using
-    exactly the geometry and the association rules that the ground truth is being built to
-    measure -- IDF1 against a label set derived from the tracker's own assumptions scores
-    agreement with those assumptions.
+    Two tracks alive in the same frame are two people **if their boxes are somewhere
+    else**, and that is arithmetic over frame indices and box corners: no model, no
+    calibration, no threshold. It matters that it stays that way. A position or speed test
+    would exclude far more pairs, and it would exclude them using exactly the geometry and
+    the association rules that the ground truth is being built to measure -- IDF1 against a
+    label set derived from the tracker's own assumptions scores agreement with those
+    assumptions.
 
-    On the first sheet this ran against (Taichung-cam01, 10 tracks) it removes 13 of the
-    45 pairs. It is written beside the sheet rather than drawn on it because it is a fact
-    about the tracks, and the sheet is the crops.
+    **The "if their boxes are somewhere else" is not a hedge, and it was added after the
+    first version got it wrong.** That version excluded every co-present pair on the
+    premise that one person is not two boxes in a frame. On Tao-Hsin-cam03 tracks 23 and
+    24 share exactly one frame at **IoU 0.553** and are one young man in a black tee: a
+    duplicate detection at the seam, not a second shopper. Taichung-cam01 had no such pair
+    -- every co-present pair there is IoU 0.000 across every shared frame -- which is why
+    the premise survived its first clip.
+
+    So the split is by whether any shared frame has overlapping boxes at all, which needs
+    no threshold: zero overlap everywhere is two people, and anything else is a pair a
+    reviewer has to look at. **It is a `look at this` list and not a second exclusion
+    rule**, and the same clip says why it cannot be one: tracks 20 and 21 there are a young
+    man and the woman walking in beside him, two people, and their boxes cross at a worst
+    **IoU 0.557** -- higher than the 0.553 of the pair that is one person twice. How much
+    two boxes overlap does not separate a duplicate detection from two shoppers walking
+    together, so the arithmetic stops here and hands over. `co_present_but_overlapping`
+    carries the worst overlap, the frame it happens on and how many frames the pair shares,
+    because that is what a reviewer needs to go and find it.
     """
     span = {t: (min(int(f) for f in v), max(int(f) for f in v)) for t, v in tracks.items()}
     ids = sorted(span, key=lambda t: span[t][0])
-    excluded, open_pairs = [], []
+    excluded, overlapping, open_pairs = [], [], []
     for i, a in enumerate(ids):
         for b in ids[i + 1 :]:
             (a0, a1), (b0, b1) = span[a], span[b]
-            if a0 <= b1 and b0 <= a1:
-                excluded.append([a, b])
-            else:
+            if not (a0 <= b1 and b0 <= a1):
                 open_pairs.append([a, b, b0 - a1 if a1 < b0 else a0 - b1])
+                continue
+            shared = sorted(set(tracks[a]) & set(tracks[b]), key=int)
+            worst, at = 0.0, None
+            for f in shared:
+                v = _box_iou(tracks[a][f], tracks[b][f])
+                if v > worst:
+                    worst, at = v, int(f)
+            if worst > 0.0:
+                overlapping.append([a, b, round(worst, 3), at, len(shared)])
+            else:
+                excluded.append([a, b])
     return {
         "spans": {t: list(s) for t, s in span.items()},
         "cannot_merge_co_present": excluded,
+        "co_present_but_overlapping": sorted(overlapping, key=lambda p: -p[2]),
         "open_pairs_gap_frames": sorted(open_pairs, key=lambda p: p[2]),
     }
 
@@ -395,10 +431,16 @@ def cmd_propose(args) -> int:
     pages, drawn = _sheet(tracks, keep, out)
     cop = _copresent(tracks)
     (out / "copresent.json").write_text(json.dumps(cop, indent=1) + "\n")
-    n_pairs = len(cop["cannot_merge_co_present"]) + len(cop["open_pairs_gap_frames"])
+    n_pairs = (
+        len(cop["cannot_merge_co_present"])
+        + len(cop["co_present_but_overlapping"])
+        + len(cop["open_pairs_gap_frames"])
+    )
     print(
-        f"  {len(cop['cannot_merge_co_present'])} of {n_pairs} pairs are co-present and "
-        f"cannot merge (copresent.json)"
+        f"  {len(cop['cannot_merge_co_present'])} of {n_pairs} pairs are co-present with "
+        f"no overlapping box and cannot merge; "
+        f"{len(cop['co_present_but_overlapping'])} are co-present with boxes that cross, "
+        f"which arithmetic cannot settle -- look at those (copresent.json)"
     )
     lengths = sorted(len(v) for v in tracks.values())
     med = lengths[len(lengths) // 2] if lengths else 0
