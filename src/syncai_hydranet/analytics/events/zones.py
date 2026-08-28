@@ -12,7 +12,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from ...geometry.ground import Camera, GroundPlane
+from ...geometry.ground import Camera, GroundPlane, pixel_to_ground
 from ..dwell import track_ground_path
 from ..stage import BoxFrame
 from ..tracker import Track
@@ -352,11 +352,33 @@ def zone_stock_counts(
     rule `StageFrame` states: an exported engine narrowed with `--detection-classes`
     keeps only its own binding names, so a consumer that assumes a fixed list silently
     renames every box.
+
+    **A vocabulary that cannot express `classes` is refused, not counted as zero.**
+    Reading names off the frame makes the mismatch visible; it did not make it *loud*.
+    Matching by name against a vocabulary holding neither `boxed_stock` nor `device`
+    leaves `wanted` empty, every frame counts 0, and the return value is a perfectly
+    well-formed mapping that a consumer reads as "no merchandise moved" -- so the
+    stock-removal alarm stops firing and nothing anywhere says why. That is not
+    hypothetical: `tools/site30k/box_pass.py` had to map a `person`/`product` campaign
+    taxonomy back onto `retail_security` specifically to avoid it, and its comment names
+    this function and this line. PLAN section 7.1 carries the same risk for a `stack`
+    class arriving in the vocabulary.
+
+    An empty `frames` is not this failure and returns `{}`: a clip with no frames is a
+    decode question, and it is `data.video.frames` that raises on one.
     """
     out: dict[int, int] = {}
     for frame in frames:
         names = frame["class_names"]
         wanted = {i for i, n in enumerate(names) if n in classes}
+        if not wanted:
+            raise ValueError(
+                f"none of {list(classes)} is in this frame's detection vocabulary "
+                f"({list(names)}), so merchandise cannot be counted at all. Returning 0 "
+                "per frame would read as 'no stock moved' and silence the stock-removal "
+                "alarm. Pass `classes=` naming what this vocabulary actually calls "
+                "merchandise, or export an engine that carries these channels."
+            )
         boxes, scores, labels = frame["boxes"], frame["scores"], frame["labels"]
         keep = np.array(
             [
@@ -371,8 +393,6 @@ def zone_stock_counts(
         sel = boxes[keep]
         foot_u = (sel[:, 0] + sel[:, 2]) / 2
         foot_v = sel[:, 3]
-        from ..geometry.ground import pixel_to_ground
-
         x, z = pixel_to_ground(foot_u, foot_v, cam, plane)
         out[int(frame["frame_index"])] = int(zone.contains(np.stack([x, z], axis=-1)).sum())
     return out

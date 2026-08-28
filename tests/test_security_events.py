@@ -539,3 +539,63 @@ def test_without_geometry_the_check_is_skipped_rather_than_failing_closed():
                   keypoints=poses)  # fmt: skip
     (event,) = ev.pose_posture_events([track], FPS, "cam01")
     assert "box height confirming" in event.basis
+
+
+# ------------------------------- the count that reads as "nothing happened"
+
+
+def _box_frame(index: int, names: tuple[str, ...], label: int) -> dict:
+    """One `stage.BoxFrame`: a single confident box at the centre of `SQUARE`."""
+    return {
+        "frame_index": index,
+        "boxes": np.array([[900.0, 500.0, 1000.0, 700.0]], dtype=np.float32),
+        "scores": np.array([0.9], dtype=np.float32),
+        "labels": np.array([label], dtype=np.int64),
+        "class_names": names,
+    }
+
+
+def test_a_vocabulary_that_cannot_express_merchandise_is_refused_not_counted_as_zero():
+    """The stock-removal alarm's silent-death path, pinned.
+
+    `zone_stock_counts` matches merchandise **by name**. A retrain on a vocabulary that
+    holds neither `boxed_stock` nor `device` leaves the wanted set empty, and the old
+    behaviour returned a well-formed `{frame_index: 0}` for every frame -- which a
+    consumer reads as "no merchandise moved". The alarm stops firing, no exception is
+    raised, and the artefact is indistinguishable from a quiet shop.
+
+    That is not hypothetical. `tools/site30k/box_pass.py` maps its `person`/`product`
+    campaign families back onto `retail_security` for this exact reason and calls it "a
+    silent regression in the business logic" in its own header; PLAN section 7.1 carries
+    the same risk for a `stack` class entering the vocabulary. Until this test the
+    refusal had nothing holding it, so removing it would have restored the silence with
+    a green suite.
+    """
+    zone = ev.Zone("shelf", SQUARE)
+    frames = [_box_frame(i, ("person", "product"), label=1) for i in range(3)]
+
+    with pytest.raises(ValueError, match="detection vocabulary"):
+        ev.zone_stock_counts(frames, zone, CAM, PLANE)
+
+    message = ""
+    try:
+        ev.zone_stock_counts(frames, zone, CAM, PLANE)
+    except ValueError as exc:
+        message = str(exc)
+    assert "no stock moved" in message, "the refusal has to name what the silence looks like"
+    assert "classes=" in message, "and the remedy that does not need a retrain"
+
+
+def test_a_vocabulary_that_does_express_merchandise_still_counts():
+    """The refusal must not be satisfied by refusing everything.
+
+    Same frames, same zone, a vocabulary that carries `boxed_stock` -- the count comes
+    back rather than raising, so the test above is pinning a discrimination and not an
+    unconditional throw.
+    """
+    zone = ev.Zone("shelf", SQUARE)
+    frames = [_box_frame(i, ("person", "boxed_stock"), label=1) for i in range(3)]
+
+    counts = ev.zone_stock_counts(frames, zone, CAM, PLANE)
+    assert sorted(counts) == [0, 1, 2], "one entry per frame, keyed by frame_index"
+    assert all(isinstance(v, int) for v in counts.values())
