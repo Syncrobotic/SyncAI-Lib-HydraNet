@@ -78,3 +78,59 @@ def test_forward_returns_a_tuple_of_tensors():
         out = wrapper(torch.randn(1, 3, 64, 64))
     assert isinstance(out, tuple)
     assert all(torch.is_tensor(t) for t in out)
+
+
+# ---------------------------------------------------------------------------
+# Every head the model builds must reach the graph.
+#
+# `depth_heads` and `pose_heads` are their own ModuleDicts beside `seg_heads`, so a
+# flattener written from `seg_heads` + detection omits them and says nothing. Pose was
+# fixed in `a0c51de`; depth was still missing, and `configs/hydranet_hm3d_cctv.yaml`
+# builds a depth head and nothing else -- so the tuple came out empty and the exported
+# graph had zero outputs. `onnx.checker` passes such a graph; onnxruntime refuses to
+# initialise it, which is how CI's export-parity job found it, two minutes in and with an
+# error naming neither the head nor the config.
+#
+# These assert on the wrapper rather than on a real export because that is the level the
+# bug lived at, and it runs in milliseconds instead of the ~20 s an ONNX round-trip costs.
+
+DEPTH_ONLY_CFG = {
+    "model": {
+        "backbone": {"name": "resnet18", "pretrained": False},
+        "neck": {"name": "fpn", "out_channels": 32, "num_repeats": 1, "num_levels": 5},
+        "heads": {
+            "depth": {
+                "type": "depth_fpn",
+                "in_levels": [0, 1, 2],
+                "channels": 32,
+                "max_depth": 10.0,
+            }
+        },
+        "loss_balancing": "uncertainty",
+    }
+}
+
+
+def test_a_depth_only_model_exports_at_least_one_output():
+    """The regression itself: an empty tuple is a graph onnxruntime cannot load."""
+    wrapper = ExportWrapper(build_model(DEPTH_ONLY_CFG))
+    with torch.no_grad():
+        out = wrapper(torch.rand(1, 3, 64, 64) * 255.0)
+    assert len(out) == 1, "the depth head produced no graph output"
+    assert out[0].shape == (1, 1, 64, 64)
+
+
+def test_depth_binding_is_named_for_its_units():
+    """`_metres`: the head exponentiates, so this is metric depth, not logits."""
+    wrapper = ExportWrapper(build_model(DEPTH_ONLY_CFG))
+    assert wrapper.depth_output_names == ["depth_metres"]
+
+
+def test_binding_names_account_for_every_output():
+    """`check_parity` zips names against tensors with `strict=True`; a short name list
+    would turn a silently mislabelled binding into a mismatch at export time instead."""
+    wrapper = ExportWrapper(build_model(DEPTH_ONLY_CFG))
+    names = wrapper.seg_output_names + wrapper.pose_output_names + wrapper.depth_output_names
+    with torch.no_grad():
+        out = wrapper(torch.rand(1, 3, 64, 64) * 255.0)
+    assert len(names) == len(out)

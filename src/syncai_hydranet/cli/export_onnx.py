@@ -109,6 +109,18 @@ class ExportWrapper(nn.Module):
         # the slot; this is the difference between measuring that and measuring the
         # thing it replaced.
         self.pose_names = list(getattr(model, "pose_heads", {}).keys())
+        # Depth was dropped for the same reason pose was: `depth_heads` is its own
+        # ModuleDict beside `seg_heads`, so a list built from `seg_heads` plus detection
+        # plus pose silently omits it. It is exportable and always was -- a dense
+        # [B, 1, H, W] map from the same forward pass, no dynamic shapes.
+        #
+        # It failed harder than pose did. `configs/hydranet_hm3d_cctv.yaml` builds a depth
+        # head and *nothing else*, so the flattened tuple was empty and the graph exported
+        # with zero outputs. `onnx.checker` accepts that; onnxruntime does not, and the
+        # export-parity job reported it as
+        # `ort_value_name_idx_map.MaxIdx() > -1 was false`, which names neither the head
+        # nor the config.
+        self.depth_names = list(getattr(model, "depth_heads", {}).keys())
         self.embed_preprocessing = embed_preprocessing
         self.argmax_seg = argmax_seg
         if argmax_seg:
@@ -148,6 +160,18 @@ class ExportWrapper(nn.Module):
         return [f"{n}_heatmap_p3" for n in self.pose_names]
 
     @property
+    def depth_output_names(self) -> list[str]:
+        """One binding per depth head, named for its units.
+
+        `_metres` rather than a bare head name: `DepthFPNHead` exponentiates its log
+        output, so what leaves the graph is metric depth clamped to `max_depth`, not
+        logits and not disparity. A host that treats it as either gets a plausible
+        picture and wrong geometry, which is the failure mode this whole head exists to
+        avoid -- see `models/heads/depth.py` on the teacher's flat 15% scale error.
+        """
+        return [f"{n}_metres" for n in self.depth_names]
+
+    @property
     def seg_output_names(self) -> list[str]:
         """Binding names for the segmentation heads.
 
@@ -176,6 +200,12 @@ class ExportWrapper(nn.Module):
         # heatmap logits, not keypoints: `heads/pose.decode_boxes` groups them by the
         # boxes host-side NMS produced, and the graph deliberately holds no NMS
         flat += [out[n] for n in self.pose_names]
+        # Appended last rather than following `HydraNet.heads()`, which orders depth
+        # second. Binding *order* is what a TensorRT host indexes by, and the sidecar
+        # writer below finds the detection outputs at `len(seg_names)`; putting depth
+        # between them would renumber every existing export to buy nothing. Nothing
+        # shipped pairs depth with another head, so this ordering costs no clarity.
+        flat += [out[n] for n in self.depth_names]
         return tuple(flat)
 
 
@@ -538,6 +568,7 @@ def main(argv: list[str] | None = None) -> None:
     if model.det_head is not None:
         out_names += det_output_names(n_lv, len(kept_names) if kept_names else None)
     out_names += wrapper.pose_output_names
+    out_names += wrapper.depth_output_names
 
     torch.onnx.export(
         wrapper,
