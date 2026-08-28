@@ -467,7 +467,15 @@ def main():
     ap.add_argument("engine")
     ap.add_argument("--device", default="/dev/video0")
     ap.add_argument("--port", type=int, default=8080)
-    ap.add_argument("--bind", default="0.0.0.0")
+    # Loopback, and the default matters more here than in most viewers. This serves
+    # unauthenticated MJPEG of a shop floor -- identifiable customers and staff, the same
+    # footage `CONTRIBUTING.md` will not let into `assets/` without someone looking at it
+    # first -- and there is no auth anywhere in this file to add a password to. On
+    # `0.0.0.0` every host on the store's network could watch, and the operator who typed
+    # `--port 8080` had no reason to think they had published anything. Reach it through
+    # an SSH tunnel, which is what `tools/annotation/cvat.sh` already does for the same
+    # reason; pass `--bind 0.0.0.0` deliberately if the board is on an isolated bench.
+    ap.add_argument("--bind", default="127.0.0.1")
     ap.add_argument("--height", type=int, default=512)
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--quality", type=int, default=80)
