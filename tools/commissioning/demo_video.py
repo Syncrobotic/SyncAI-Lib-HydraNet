@@ -41,7 +41,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 sys.path.insert(0, str(Path(__file__).parent))
 import scene_mesh
@@ -87,6 +87,71 @@ PLUMB_W_M = 0.035  # the drop line under a figure: thin enough not to read as an
 STATURE_RANGE_M = (1.2, 2.6)  # outside this the box top is not a head top
 VEL_FLOOR_MS = 0.3
 VEL_SECONDS_SHOWN = 1.0  # arrow length IS one second of travel, so it reads in metres
+
+
+# The blur threshold is deliberately BELOW the shipped one. A detector that misses a
+# shopper costs a track; a blur that misses one publishes a face, and the two errors are
+# not comparable, so the set that gets blurred is not the set that gets drawn.
+BLUR_THR = 0.10
+# Head and shoulders, not the whole box: a blurred rectangle over a whole person reads as
+# a redaction and hides what the figure panel exists to show, and the identifiable part of
+# a shopper at this mounting height is the top of them.
+BLUR_TOP_FRACTION = 0.45
+BLUR_PAD = 0.12
+# What counts as a person-shaped change against the static plate. Deliberately loose --
+# a false positive costs a blurred shelf.
+PLATE_DIFF = 34  # 0-255 on grey; below this a pixel is lighting, not a person
+PLATE_MIN_PX = 1200
+PLATE_ASPECT = (1.0, 7.0)  # height / width of a standing person, generously
+
+
+def _blur_region(img: Image.Image, x0: float, y0: float, x1: float, y1: float) -> None:
+    """Blur the head-and-shoulders of one box, in place, at a radius set by its width.
+
+    `float()` on the corners is not decoration: the detector's boxes arrive as numpy
+    scalars, and `ImageFilter.GaussianBlur` compares its radius against a tuple, which on
+    a numpy scalar raises "truth value of an array is ambiguous" rather than blurring.
+    """
+    x0, y0, x1, y1 = float(x0), float(y0), float(x1), float(y1)
+    w, h = x1 - x0, y1 - y0
+    if w < 4 or h < 4:
+        return
+    px, py = w * BLUR_PAD, h * BLUR_PAD
+    bx0 = max(0, int(x0 - px))
+    by0 = max(0, int(y0 - py))
+    bx1 = min(img.width, int(x1 + px))
+    by1 = min(img.height, int(y0 + h * BLUR_TOP_FRACTION + py))
+    if bx1 - bx0 < 3 or by1 - by0 < 3:
+        return
+    crop = img.crop((bx0, by0, bx1, by1))
+    img.paste(crop.filter(ImageFilter.GaussianBlur(max(6.0, w / 5.0))), (bx0, by0))
+
+
+def plate_person_boxes(frame: np.ndarray, plate: np.ndarray) -> list[tuple]:
+    """Person-shaped regions that changed against the static plate.
+
+    The second instrument, and the reason there are two: this one is nothing to a
+    detector, so it cannot miss a person for the reason a detector does -- a shopper the
+    model scores 0.04 on is still a region of the frame that is not the empty shop. It
+    over-triggers on trolleys and opened doors, which costs a blurred trolley.
+    """
+    from scipy import ndimage
+
+    d = np.abs(frame.astype(np.int16).mean(2) - plate.astype(np.int16).mean(2))
+    m = ndimage.binary_opening(d > PLATE_DIFF, np.ones((5, 5)))
+    lab, _n = ndimage.label(m)
+    out = []
+    for sl in ndimage.find_objects(lab):
+        if sl is None:
+            continue
+        h = sl[0].stop - sl[0].start
+        w = sl[1].stop - sl[1].start
+        if h * w < PLATE_MIN_PX or w < 1:
+            continue
+        if not (PLATE_ASPECT[0] <= h / w <= PLATE_ASPECT[1]):
+            continue
+        out.append((sl[1].start, sl[0].start, sl[1].stop, sl[0].stop))
+    return out
 
 
 def stature_m(x_m: float, z_m: float, v_top_px: float, cf: CameraFile) -> float:
@@ -255,6 +320,16 @@ def main() -> int:
     # metres exactly as commissioned; 0.8824 is what this camera's own shoppers imply
     # (median recovered stature 1.93 m against the fleet's 1.702 m person).
     ap.add_argument("--metre-scale", type=float, default=1.0)
+    # Default ON, and the flag exists to be refused rather than to be convenient: this
+    # tool reads `datasets/studioa_clips/`, which is a customer's shop floor, and
+    # CONTRIBUTING's assets allowlist says a frame of one cannot be un-published. The
+    # README's figure was blurred by hand once and the pipeline was not committed, so
+    # nobody could reproduce it; it is code now.
+    ap.add_argument(
+        "--no-blur",
+        action="store_true",
+        help="do NOT blur faces -- only for a private check, never for anything shared",
+    )
     args = ap.parse_args()
     camera = args.camera
 
@@ -334,23 +409,45 @@ def main() -> int:
     smoothed: dict[int, tuple[float, float]] = {}
     statures: dict[int, list[float]] = {}
     vel_window = max(1, round(VEL_WINDOW_S * args.fps))
-    n = n_det = n_fp = n_placed = n_outside = 0
+    n = n_det = n_fp = n_placed = n_outside = n_blur = 0
+    # The plate is this camera's own empty shop, named by its camera.json. Missing is a
+    # refusal rather than a silent single-instrument run: the whole argument for two
+    # instruments is that neither is trusted alone.
     src_w, src_h, _ = probe_video(str(clip))
+    plate_arr = None
+    if not args.no_blur:
+        plate_path = ROOT / cf.plate_file if cf.plate_file else None
+        if plate_path is None or not plate_path.exists():
+            print(
+                f"{camera}: camera.json names no readable plate_file, so the second blur "
+                f"instrument cannot run. Pass --no-blur only if nothing here is shared.",
+                file=sys.stderr,
+            )
+            return 1
+        plate_arr = np.asarray(
+            Image.open(plate_path).convert("RGB").resize((src_w, src_h)), np.uint8
+        )
     for frame in decode_frames(str(clip), src_w, src_h, args.fps):
         if n >= args.frames:
             break
         img = Image.fromarray(frame)
         x, _canvas, region = preprocess(img, size)
         with torch.no_grad():
-            out = model.predict(x.to(device), score_thr=args.score_thr)
+            # One forward pass at the LOWER of the two thresholds: the display set is
+            # filtered out of it below, so the blur set costs nothing extra.
+            out = model.predict(x.to(device), score_thr=min(BLUR_THR, args.score_thr))
         det = out.get("detection", [{}])[0]
         boxes_src = np.zeros((0, 4), np.float32)
+        blur_boxes: list[tuple] = []
         if det and len(det.get("boxes", [])):
-            b = det["boxes"].cpu().numpy()
+            b_all = det["boxes"].cpu().numpy()
             lab = det["labels"].cpu().numpy()
+            sc = det["scores"].cpu().numpy()
             x0, y0, cw, _ch = region
-            b = (b - np.array([x0, y0, x0, y0])) * (src_w / cw)
-            b = b[lab == person_label]
+            b_all = (b_all - np.array([x0, y0, x0, y0])) * (src_w / cw)
+            person = lab == person_label
+            blur_boxes = [tuple(v) for v in b_all[person & (sc >= BLUR_THR)]]
+            b = b_all[person & (sc >= args.score_thr)]
             n_det += len(b)
             keep = [
                 i
@@ -360,6 +457,18 @@ def main() -> int:
             n_fp += len(b) - len(keep)
             boxes_src = b[keep]
         tracks = [t for t in tracker.update(boxes_src, n) if t.hits >= 3]
+
+        # Two instruments, applied to the SOURCE image before anything is drawn on it, so
+        # a box outline can never sit on top of an unblurred face. The detector set is
+        # taken at BLUR_THR and without the false-positive filter: an FP polygon exists to
+        # stop a hanging packet becoming a track, and blurring one costs nothing.
+        if not args.no_blur:
+            for bb in blur_boxes:
+                _blur_region(img, *bb)
+            if plate_arr is not None:
+                for bb in plate_person_boxes(frame, plate_arr):
+                    _blur_region(img, *bb)
+            n_blur += len(blur_boxes)
 
         # left: source view with boxes and ids
         view_img = img.resize((960, 540))
