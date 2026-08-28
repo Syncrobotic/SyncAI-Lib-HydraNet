@@ -1081,6 +1081,18 @@ something it does not support.
    "which class". They are excluded from the fold rather than averaged in, which means
    this number describes the 16 mixed cameras and says nothing about the other half.
 
+   **The attribute line stays, decided 2026-08-28.** `train_attributes.py`,
+   `eval_attributes.py` and `prep_rapv2.py` have no caller and were up for deletion on
+   that basis. They have a consumer, it is just not an import: `staff_probe.py` loads
+   `runs/crop_encoder01/last.pt` (PA-100K) and `runs/rapv2_crop01/last.pt` (RAP v2) on
+   every run, 45 MB each and both present, and skips the row rather than failing when one
+   is missing. `runs/` is gitignored, so those two checkpoints exist nowhere the repo can
+   rebuild them from. Delete the three scripts and the finding above — that both
+   fine-tunes score *below* the untrained backbone — stops being a live comparison and
+   becomes an assertion nobody can re-run. That is the question
+   [[unused-symbols-are-outdated-or-early]] says to ask of an uncalled symbol: who was it
+   for. Here it is for a measurement that is still standing.
+
 16. **Step 8's precondition holds: the features separate the classes, and they beat the
    geometric rule they would replace.** Asked before a trainer was written, because
    `analytics/pose_sequence.py` has been in the tree tested and with **zero consumers**,
