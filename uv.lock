@@ -2598,6 +2598,14 @@ bench = [
     { name = "scipy", version = "1.18.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "tensorrt" },
 ]
+commission = [
+    { name = "contourpy", version = "1.3.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "contourpy", version = "1.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "scipy", version = "1.18.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "trimesh" },
+]
 export = [
     { name = "onnx" },
     { name = "onnxruntime" },
@@ -2616,6 +2624,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "contourpy", marker = "extra == 'commission'", specifier = ">=1.3" },
     { name = "matplotlib", marker = "extra == 'bench'", specifier = ">=3.10.9" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "onnx", marker = "extra == 'export'", specifier = ">=1.15" },
@@ -2628,14 +2637,16 @@ requires-dist = [
     { name = "pynvvideocodec", marker = "extra == 'bench'", specifier = ">=2.2.1" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "scipy", marker = "extra == 'bench'", specifier = ">=1.15.3" },
+    { name = "scipy", marker = "extra == 'commission'", specifier = ">=1.15.3" },
     { name = "tensorboard", specifier = ">=2.15" },
     { name = "tensorrt", marker = "extra == 'bench'", specifier = ">=11.2.1.2" },
     { name = "torch", specifier = ">=2.1" },
     { name = "torchvision", specifier = ">=0.16" },
     { name = "tqdm", specifier = ">=4.66" },
     { name = "transformers", marker = "extra == 'annotate'", specifier = ">=5.0" },
+    { name = "trimesh", marker = "extra == 'commission'", specifier = ">=5.0.0" },
 ]
-provides-extras = ["annotate", "bench", "export"]
+provides-extras = ["annotate", "bench", "commission", "export"]
 
 [package.metadata.requires-dev]
 dev = [
