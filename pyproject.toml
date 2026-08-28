@@ -305,15 +305,29 @@ filterwarnings = [
     "error",
     # The ONNX exporter, and a decision rather than an oversight. Torch 2.9 made the
     # torch.export-based exporter the default and deprecated the TorchScript one;
-    # `cli/export_onnx.py` still asks for the legacy path because the Orin's TensorRT
-    # build is validated against what it produces. Revisit when that is re-validated,
-    # not before -- and the warning stays visible in the run log either way.
+    # `cli/export_onnx.py` still asks for the legacy path.
+    #
+    # The reason used to be that the Orin's TensorRT build was validated against what it
+    # produces, and the Orin stopped being a target on 2026-08-28. What replaced it is not
+    # weaker: **every engine this project has measured came out of this path.** The 1,494
+    # f/s that clears the delivery target, the four rows of the resolution trade, the
+    # parity PASS on each -- all of it is `exports/`, all built from TorchScript-exported
+    # ONNX. Switching exporters changes the graph's structure, so it invalidates that
+    # comparison rather than inheriting it.
+    #
+    # So this is a re-measure and not a flag flip, and the decision is the user's:
+    # export both ways from one checkpoint, diff the ONNX ops, re-run `--check-parity`,
+    # and re-run `scripts/bench_trt.py` before anything is believed. Until then the
+    # warning stays visible in the run log.
     "ignore:.*legacy TorchScript-based ONNX export.*:DeprecationWarning",
     "ignore:The feature will be removed.*:DeprecationWarning",
     # `models/heads/segmentation.py` branches on a tensor's shape during tracing, so the
-    # trace fixes the input size -- which is exactly what the exported graph is for: the
-    # Orin runs one fixed 512x640 input. A dynamic-shape export would need this branch
-    # removed and would buy nothing the deployment uses.
+    # trace fixes the input size -- which is exactly what the exported graph is for: one
+    # engine per canvas, built for the resolution it will run at. Every shipped export is
+    # a fixed size and the shipped one is 640x1120 (this comment said "the Orin runs one
+    # fixed 512x640 input", which named the wrong board and the wrong canvas). A
+    # dynamic-shape export would need this branch removed and would buy nothing the
+    # deployment uses.
     "ignore::torch.jit.TracerWarning",
 ]
 markers = [
