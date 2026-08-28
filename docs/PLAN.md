@@ -521,7 +521,7 @@ says — by looking:
 | 5 | **L1 validation** — **the geometry half has a number, 2026-08-27, and it did not need the images** (§7.13): our chain reproduces WILDTRACK's floor positions to a median **7.3 cm / p90 15.3 cm** over 19,824 person-observations on 7 cameras, and a 3-parameter rigid fit that never saw the extrinsics recovers each camera's true yaw to **<0.2°** and centre to **<14 cm**. Read §7.13 for what that is *not*. Original scope: homography accuracy against WILDTRACK/MultiviewX ground-truth floor positions; tracking quality (ID switches) on in-domain clips watched end to end. **First fleet measurement of what the layer produces, 2026-08-26** (`scripts/site_journeys.py`, `runs/journeys01/`): 8 cameras, 24 minutes, the same clips as the threshold sweep — **11,363 person detections and 202 confirmed tracks, reproducing the sweep's arm A exactly**, so the chain is consistent with what was already measured. Of those 202 tracks **86 (43%) ever enter a zone**, and the split is a length split: a track that reaches a zone has a median 26 observations and 5.5 s of span, one that never does has 9.5 and 2.4 s. Across 197 visits the **median is 3.2 s, p90 13.8 s, and only 8 visits in the whole 24 minutes last 30 s or more** (longest 105.8 s, Taichung-cam01). Visits are well observed once they exist — seen fraction p50 1.00, p10 0.79 — so this is not a detection gap: **the tracks are too short to be visits**, which is the 1,234-tracks-per-clip fragmentation stated as a retail number for the first time. That is what this step exists to fix, and it now has a baseline to move. **And the cause is not fleet-wide** (`scripts/track_endings.py`, `runs/endings03/`, same clips, no labels needed). What holds: an ending is an **exit** when the last box sits against a frame edge, and otherwise the track died mid-view -- a shopper does not vanish from a shop floor. That split is rule-independent and did not move across three runs: **80 of 191 endings are exits (42%), so 58% die mid-view.** Per camera it is not uniform, and that is the finding -- **Tao-Hsin-cam03 83% and Kaohsiung-cam04 78%, against Taichung-cam04 13%, Taichung-cam10 14% and Taichung-cam11 17%**, with the same tracker on all of them. Two cameras carry this, and one is the camera whose person-score investigation has been open since step 2. **Answered 2026-08-27, §7.11: 86% of these deaths have a box still on the person at a median 0.338 against the 0.35 threshold, so fragmentation is a threshold problem before it is a tracker problem.** **What does NOT hold is the split of those mid-view deaths into tracker-lost and detector-gone**, and an earlier revision of this plan asserted it: three matching rules gave 72/39, 72/39 and 101/10 on identical endings while `exit` stayed at 80 every time. A 1 m radius matched the *neighbouring* shopper -- its reappearances were a median 0.71 m away one frame later, 3.5 m/s -- and a 0.35 m per frame speed limit fixed that end and opened the other, reaching 3.5 m at gap 10. Distinguishing "the same person, a metre on" from "a different person, a metre away" is what an appearance model is for; `reid_metrics.cmc_map` is its metric, and nothing should be concluded from that split until something can tell two shoppers apart. `lost_detail` keeps every gap, IoU and floor distance so a later rule can be tried against the same endings. `idf1`/`id_switches` are *not* the way in here -- both need ground-truth tracks and `reid_metrics.py` records that no labelled site clip exists, which is the human cost SS4 refuses by default | position error in metres; ID-switch count per watched 10-minute clip | position error small enough that zone events land in the right zone; dwell/loiter durations survive — an ID switch mid-loiter resets the clock, so switches on the watched clips must be rare enough not to |
 | 6 | **L3 end to end, one camera** | an event log readable against its video | events match what the clip shows |
 | 8 | **behaviour head** — the one component of the head set that has never been trained. `analytics/pose_sequence.py` holds its view-invariant features (limb angles as cos/sin, limb lengths over torso), is tested, and **has zero consumers**. Training data is on disk and unused: **NTU RGB+D's official skeletons**, 11 GB, 56,881 clips including 948 `A43 falling down`, readable since 2026-08-27 by `data/ntu_skeletons.py` in real camera-frame metres — so §2.3's route survives, which a view-normalised redistribution would have made impossible. **PoseLift** (real retail, 6 cameras, pose sequences + frame-level shoplifting labels) supplies the shopping half; the caveat `pose_sequence.py` already measured stands — its cameras look near-straight-down, height/torso 0.9 against our 2.6 — which is why the features are angles and ratios rather than coordinates. The projection to our measured camera pose (2.38 m, 50.2°, vfov 70.4°) is the domain adaptation and is **not yet written** | a temporal classifier under 100K parameters, CPU, plus the NTU→camera-pose projection tool | **it must beat the geometry it replaces, which now has a number**: §7.14's tuned rule reads 96% fall recall at a 29% `A06 pick up` false rate on NTU. The model is held out **by subject**, not by clip — NTU repeats each action per performer, and a random split puts the same body on both sides. And the standing rule applies unchanged: `fall`, `crouch` and `sit` verified firing correctly on watched site footage, by eye |
-| 9 | **`staff/customer`** — listed in §4.3 as necessarily in-domain since the plan was written, blocking two steps, and until 2026-08-27 not a step of its own. First measurement in §7.15: **0.893 balanced accuracy** held out by camera, from nine torso-colour statistics that beat every embedding in the tree. What remains is not a better model — the two failures were read off the frames: a camera whose staff wear jackets over the polo, and a near-top-down camera whose crops are hair and shoulders. So: the **three uniform reference photos per store** already on the waiting list, the **1,181 crops in `pool/`** already extracted, and top-down views in the labelled set | a per-store uniform reference fitted from the photos, and `staff` on `Track` beside `TrackSupport` | **stated by its consumer rather than by the classifier.** `reach_to_shelf` measures 11.7 alerts a minute on a clip where every person is staff (§6 step 3); the gate is that the same clip's alert rate falls to something a person would read. The classifier's own figure is reported held out **by camera**, never pooled — 16 of 32 labelled cameras carry a single class, where "which camera" is "which class" |
+| 9 | **`staff/customer`** — listed in §4.3 as necessarily in-domain since the plan was written, blocking two steps, and until 2026-08-27 not a step of its own. First measurement in §7.15: **0.893 balanced accuracy** held out by camera, from nine torso-colour statistics that beat every embedding in the tree. What remains is not a better model — the two failures were read off the frames: a camera whose staff wear jackets over the polo, and a near-top-down camera whose crops are hair and shoulders. So: the **three uniform reference photos per store** already on the waiting list, the **1,181 crops in `pool/`** already extracted, and top-down views in the labelled set | a per-store uniform reference fitted from the photos, and `staff` on `Track` beside `TrackSupport` | **stated by its consumer rather than by the classifier.** `reach_to_shelf` measures 11.7 alerts a minute on a clip where every person is staff (§6 step 3); the gate is that the same clip's alert rate falls to something a person would read. The classifier's own figure is reported held out **by camera**, never pooled — 16 of 32 labelled cameras carry a single class, where "which camera" is "which class" **Half done 2026-08-28, §7.23: the classifier is now an artefact and `Track` carries it.** `analytics/staff.py` persists a fitted model with its standardisation and the camera its accuracy was held out on; `Track.staff_scores` is the wire; `analytics.staff.track_staff` is the one-verdict-per-person reduction; `demo_video --staff-colours` is the first consumer, staff blue and customers green. **Torso colour alone, not §7.15's 0.893 combination** — that arm has no `per_camera` block, so it cannot answer "may this store be coloured" for any store, and 0.880 with sixteen per-camera numbers is the more useful model. Licensed on Kaohsiung-cam04, Taichung-cam01 and Taichung-cam11 (1.00 each, n=15/18/15) and **refused on Tao-Hsin-cam04 at 0.417** by a floor of 0.90. What is still not done is the half this row's deliverable names second: the **per-store uniform reference fitted from three photographs**, which is the thing that would move Tao-Hsin, and the gate stays what the consumer says — `reach_to_shelf`'s alert rate on the all-staff clip, not the classifier's own figure. |
 | 7 | **shadow mode, one store** | alerts/camera/day + operator accept/reject log + **the first shrinkage reconciliation** | single-digit rate; rejects show an actionable pattern |
 
 Throughput ceiling: already passed 2026-08-24 (1,552 fps TRT, batch 16) — but engine-only
@@ -1659,3 +1659,68 @@ something it does not support.
    so which corner to stand in is a composition decision rather than a scoring one. The
    demo video's panel is unaffected, because `demo_video.content_crop` reframes on the
    content after rendering.
+
+23. **The staff/customer classifier became something that can be applied, and the number
+   that licensed it is per camera rather than the headline.** Done 2026-08-28, for the
+   demo colouring the user asked for: staff blue, customers green.
+
+   §7.15 measured 0.893 and stopped. `scripts/staff_probe.py` fit a probe, printed a
+   figure and wrote `probe.json`; **nothing was persisted**, so step 9's deliverable —
+   `staff` on `Track` — had nothing to load. `analytics/staff.py` is the missing half:
+   the same arithmetic, plus the standardisation it was fitted with and a record of which
+   camera its accuracy was held out on.
+
+   **The headline is not the adoptable model, and `probe.json` says so rather than a
+   preference.** The 0.893 arm is colour + the ImageNet embedding, and the probe's second
+   loop keeps only a pooled `balanced_accuracy` — **no `per_camera` block at all**. So for
+   any camera we might deploy on, that model's held-out accuracy cannot be looked up.
+   Colour alone scores 0.880 and has all sixteen, and they are what the decision is made
+   from:
+
+   | | | | |
+   |---|---|---|---|
+   | Kaohsiung-cam04 **1.00** (n=15) | Taichung-cam01 **1.00** (n=18) | Taichung-cam11 **1.00** (n=15) | Kaohsiung-cam05 0.91 (n=11) |
+   | Taichung-cam03 0.73 (n=15) | **Tao-Hsin-cam04 0.42** (n=12) | **Tao-Hsin-cam01 0.40** (n=15) | |
+
+   **0.893 is an average over sixteen cameras and two of them are below a coin toss.**
+   That is the same shape as every other entry in this section: the statistic was true and
+   answered a different question than the one the deployment decision asks.
+
+   **The gate has two conditions, because one would not have caught it.** A model must
+   name the camera **and** clear a 0.90 floor on it. `model_Tao-Hsin-cam04.json` exists,
+   names its own camera and scores 0.417; a gate that only matched the camera would have
+   waved it through and coloured half that store's staff as shoppers, confidently, on
+   every frame. The floor is derived, not felt: a three-minute clip carries 4–10 distinct
+   people, so 0.90 keeps the expected miscoloured count below one.
+
+   **What the render had to get right and would not have announced.** Features are taken
+   from the source frame **before** either blur instrument: `_blur_region` covers the top
+   45% of a box plus padding and the torso band is 0.18–0.55 of it, so the face blur lands
+   exactly on the pixels the classifier reads. The 3D panel's palette key follows the
+   verdict rather than `track_id % 8`, or two tracks with different verdicts share a key
+   and the last write repaints one of them. A track under `MIN_OBSERVATIONS` is drawn grey,
+   because otherwise every shopper arrives as a confident green for their first second.
+
+   **Verification, not assertion.** The whole probe re-run after the refactor reproduces
+   every §7.15 headline to three decimals (0.850 / 0.723 / 0.777 / 0.880 / 0.893) and all
+   sixteen per-camera accuracies to four. Fitting on the training half only — the probe
+   standardises transductively — was measured rather than argued, and changes none of the
+   sixteen. The four refusals in `tests/test_staff_model.py` and the two tracker guards
+   were each verified by deleting the defence and watching the test go red.
+
+   **Which cameras this licenses.** Kaohsiung-cam04 and the two Taichung cameras.
+   **Tao-Hsin gets a figure without staff colours**, and the reason is stated rather than
+   averaged over: 0.42 on the only Tao-Hsin camera that reconstructs shelving at all.
+   That store's uniform is the §7.15 failure mode already read off the frames, and what it
+   needs is the three physical reference photographs on the waiting list, not a better fit.
+
+   **Found while doing it, and fixed separately: `--no-blur` was writing its unblurred
+   render into `assets/demo_<camera>.mp4`** — the one filename every command, the README
+   and any person treats as this camera's render, from a flag whose own help says "never
+   for anything shared". `tests/test_assets_allowlist.py` cannot reach it: that test
+   governs what may be committed, and this is a file that gets copied by hand.
+
+   **Open, and not fixed here: `tools/commissioning/heads_video.py` does not blur at
+   all**, and writes `assets/heads_<camera>.mp4` under the same shared-name convention.
+   One such file is on disk today. Whether that tool should carry the blur pipeline is a
+   decision, not a typo.
