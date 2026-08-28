@@ -1277,6 +1277,27 @@ something it does not support.
    is the measurement decision 1 should be settled on**; this one narrows what has to be
    labelled and has already removed the reason to think two-stage is unsafe.
 
+   **One premise above is false, found 2026-08-28 while labelling that clip, and it is the
+   one the `within` reference is built on.** This section twice says the single-stage
+   tracker "never associates across the low band, so it has no way to make this mistake" —
+   `scripts/track_identity.py`'s docstring says it a third time — and uses it to call one
+   track's first half against its second half *same person by construction*. On
+   Taichung-cam01's 900-frame clip, **proposed track 8 is two people**: frames 711–820 are
+   the long-haired member of staff crouching at the left counter, and from **f821** the box
+   is on the one in the blue hooded jacket standing beside her, who is separately boxed as
+   track 5 five frames earlier. The box height goes **211, 227, 242, 424** across f818–821
+   and `assets/gt_cam01_track8_cut.png` shows the first person still crouching inside the
+   crop after the jump. Two people came together, and the high band alone was enough.
+
+   What that costs: `within` on this camera pools at least one pair that is two people, so
+   the same-person reference is **wider than it should be**, which biases the instrument
+   toward calling a two-stage join ordinary. The direction is the safe one for the
+   conclusion above — it makes flags *less* likely, and the conclusion was that none of the
+   67 well-observed joins flagged — but "by construction" is now "on this evidence", and a
+   camera where the shipped tracker merges more would loosen the reference further. The
+   fix is not a threshold: it is that `within` should be built from labelled identities
+   where they exist, which for the first time they do.
+
 19. **"Scale-measured" meant the person-height prior all along, and a second fleet arrived
    that has more of it than the first.** Opened 2026-08-27 when a new corpus —
    `gs://syncai-rtsp-recordings`, ten RTSP channels of a second store, wood floor, not
