@@ -15,7 +15,11 @@ the fixed CCTV already on the ceiling. No LiDAR, no new hardware.
 false-positive polygons already applied. Right: the same moment in metres — the store's
 own furniture reconstructed from one static plate, with a figure standing at every
 tracked shopper's floor position. Nothing here is drawn by hand and no second sensor is
-involved. **Read the metres on this camera with its caveat**: Taichung-cam10's scale is
+involved. **Every face is blurred by `demo_video.py` itself**, by two instruments — the
+detector at a threshold below the one it ships at, and person-shaped change against this
+camera's own static plate — because a blur that misses a shopper publishes a face while a
+detector that misses one only loses a track. **Read the metres on this camera with its
+caveat**: Taichung-cam10's scale is
 known to be 1.21x too large (PLAN §7.10, a decision to leave it rather than an
 oversight), which is why its figures stand 1.98 m rather than 1.70.*
 
