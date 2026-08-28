@@ -43,6 +43,12 @@ exports/
 # and the moment in between is the point: a frame of a customer's shop floor cannot be
 # un-published once it is in the history.
 #
+# Four figures left on 2026-08-28: `hydranet_demo.gif`, `mesh_shop_preview.png`,
+# `bev3d_mesh_people.png` and `retail_bootstrap_fixture_split.jpg`. Nothing in the tree
+# referenced any of them -- they were allowlisted and then orphaned, which is the state
+# this list is least able to notice, since it only checks that the names match the
+# tracked files and not that anything points at them.
+#
 # The list has to match what is tracked, exactly. A `!` line for a figure that has since
 # been deleted is a hole with that filename's shape in it, and `tests/test_assets_allowlist.py`
 # fails on one in either direction.
@@ -54,10 +60,6 @@ assets/*
 # privacy mask that misses somebody has published them. The second is the difference
 # against that camera's own static plate, which owes nothing to a detector.
 !assets/demo_Taichung-cam10.gif
-!assets/bev3d_mesh_people.png
-!assets/hydranet_demo.gif
-!assets/mesh_shop_preview.png
-!assets/retail_bootstrap_fixture_split.jpg
 !assets/retail_cctv_scene.gif
 !assets/social_preview.png
 

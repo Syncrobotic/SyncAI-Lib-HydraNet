@@ -268,7 +268,9 @@ nothing enforced it. `world_frame`/`world_frames` now take `source_size_px`: sta
 scales the points, omitting it is checked, and a point more than 1.5× outside the
 calibrated canvas is refused with the mismatch named. Corrected, the same clip reads
 x −1.9…1.0 m, z 1.6…5.1 m — inside the commissioned floor — and one shopper stands 20.2 s
-in one 1.5 m cell and 23.4 s in the next (`assets/journey_cam01_frame150.png`).
+in one 1.5 m cell and 23.4 s in the next (rendered by `scripts/site_journeys.py`; the
+frame itself is not in `assets/`, whose allowlist keeps customer shop floors out of the
+history unless a figure earns a line in `.gitignore`).
 
 **Confidence travels with the position.** `WorldObject` carries `score`, and
 `Journey.score_p50` reports it, for the reason §4/step 4's sweep established: a track
