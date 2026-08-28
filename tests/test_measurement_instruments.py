@@ -25,6 +25,7 @@ so they are reached the way five other test modules here reach one: `scripts/` o
 from __future__ import annotations
 
 import math
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -180,6 +181,16 @@ def test_no_box_at_all_splits_on_whether_the_dense_head_still_sees_a_person():
 # --------------------------------------------------------------- reading a clip's size
 
 
+# `test_video_decode_errors.py` already carries this guard and this test did not, so it
+# passed on every machine that has ffmpeg and failed on the one that decides -- the
+# GitHub runner ships without it, and the failure there is `FileNotFoundError: 'ffmpeg'`
+# rather than anything about resolutions. Found 2026-08-28, red on three matrix rows.
+needs_ffmpeg = pytest.mark.skipif(
+    not (shutil.which("ffmpeg") and shutil.which("ffprobe")), reason="needs ffmpeg"
+)
+
+
+@needs_ffmpeg
 @pytest.mark.parametrize("size", [(1920, 1080), (704, 480)])
 def test_a_clip_is_read_at_its_own_resolution(tmp_path, size):
     """704x480 is not hypothetical: seven of the fleet's forty-eight cameras deliver it.
