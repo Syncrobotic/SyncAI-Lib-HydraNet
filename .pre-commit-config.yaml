@@ -131,3 +131,32 @@ repos:
         language: system
         pass_filenames: false
         files: ^(tools/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml)$
+
+      # The script/tool import ratchet, here for a reason the ty ratchets do not have.
+      #
+      # `tests/test_scripts_are_not_libraries.py` enumerates with `git ls-files`, and that is
+      # deliberate -- its `_tracked` docstring records that scanning the filesystem was the
+      # first version and made the local suite red for untracked work CI cannot see. The
+      # consequence is that a bare `pytest` run answers about the index, so a new tool that
+      # imports another passes while it is untracked and fails the moment it is staged.
+      #
+      # `b8abfb5` is what that costs: `tools/commissioning/demo_gif.py` importing `demo_video`
+      # took the pair count to 7 against a baseline of 6, the author ran the suite green
+      # before staging it, and `dev` was pushed red (CI run 33169830273). Fixed in `6a63d87`
+      # by moving the shared half into `src/`, which is what the ratchet was asking for.
+      #
+      # A pre-commit hook runs after staging by construction, so the index it reads is the
+      # commit's. Measured 2026-08-28 on a probe tool importing `demo_video`: untracked,
+      # `ls-files` sees 0 and the ratchet passes; after `git add`, it sees 1 and the ratchet
+      # fails -- with no commit in between. This puts the gate at that second point.
+      #
+      # It costs a pytest process -- 2.28 / 2.31 / 2.49 s over three runs on this box, and
+      # nearly all of that is interpreter and collection rather than the four tests, which
+      # take 0.17 s between them. `files:` keeps it off every commit that touches neither
+      # tree, which is most of them.
+      - id: tool-import-ratchet
+        name: script/tool import ratchet
+        entry: uv run --frozen pytest tests/test_scripts_are_not_libraries.py -q -p no:cacheprovider
+        language: system
+        pass_filenames: false
+        files: ^(scripts|tools)/.*\.py$
