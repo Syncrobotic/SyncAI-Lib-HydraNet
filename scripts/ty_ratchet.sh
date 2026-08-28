@@ -111,15 +111,19 @@ TARGET="${1:-src/}"
 #   campaign_site30k.py   7
 #   site_events.py        3
 #   track_review.py       2
-#   render_demo.py        2
 #   bench_e2e.py          2
 #   live_view_orin.py     1
 #
 # It is here now because a number being lowered has been looked at, which is the whole
-# difference. Still not a backlog: six files, none of them paid down, and the header's
-# rule applies -- they come down as those files are touched.
+# difference. Still not a backlog: none of them paid down, and the header's rule applies
+# -- they come down as those files are touched.
+#
+# scripts/ 15 on 2026-08-28, and this one is not a payment either: `render_demo.py` was
+# deleted (superseded by `tools/commissioning/demo_video.py`) and took its 2 with it.
+# Recorded because a baseline that falls for a deletion and a baseline that falls for a
+# fix look identical in the number and mean opposite things about the tree.
 case "$TARGET" in
-  scripts/|scripts) DEFAULT_BASELINE=17 ;;
+  scripts/|scripts) DEFAULT_BASELINE=15 ;;
   *)                DEFAULT_BASELINE=11 ;;
 esac
 BASELINE="${TY_BASELINE:-$DEFAULT_BASELINE}"

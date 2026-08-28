@@ -1,7 +1,0 @@
-# Seed replicate. Seeds 42, 7 and 13 match every run in this family so each comparison is
-# paired; the between-seed spread is 0.0173 and the paired sd 0.0034.
-_base_: hydranet_retail_security_b03_cw.yaml
-
-experiment: hydranet_retail_security_b03_cw_seed7
-output_dir: runs/hydranet_retail_security_b03_cw_seed7
-seed: 7
