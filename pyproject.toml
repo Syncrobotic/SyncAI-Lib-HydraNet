@@ -137,7 +137,28 @@ dev = [
     # on the diagnostic count and a floating pre-1.0 checker would move that number on
     # its own schedule. Dependabot bumps it; the count moving is then a reviewed event.
     "ty>=0.0.72",
+    # `trimesh` and `scipy` are here because the *test suite imports them*, which is a
+    # different claim from the `commission` extra's and is why both are listed twice.
+    # `tests/test_scene_mesh_caption.py` imports `tools/commissioning/scene_mesh.py` and
+    # `tests/test_measurement_instruments.py` imports `scripts/track_endings.py`; both of
+    # those start with `from scipy import ndimage`, at module scope, so a missing scipy is
+    # a collection ERROR and pytest exits non-zero having run nothing at all.
+    #
+    # scipy was the half that never got added. `trimesh` reached this group when
+    # `scene_mesh.py` needed it; when the same file gained its scipy import (`7a83e0e`)
+    # and `track_endings.py` gained its own (`a697820`), nothing followed, because the
+    # only environment anyone ran the suite in already had scipy from `--extra bench` or,
+    # after `f322935`, `--extra commission`. CI syncs `--group dev --extra export` and has
+    # neither, so its `test` job died at collection on all three matrix rows while every
+    # local run stayed green -- the exact shape `.github/workflows/ci.yml` records for
+    # `e2dfb3d`, a red tree reported green because the passing command was not the gate's.
+    #
+    # A test-only dependency belongs in the dev group even when an extra also names it.
+    # Reaching it through `--extra commission` would make the suite's requirements a
+    # property of an optional feature set, so dropping that extra would silently stop
+    # running two tests rather than fail.
     "trimesh>=5.0.0",
+    "scipy>=1.15.3",
 ]
 
 [tool.hatch.version]
