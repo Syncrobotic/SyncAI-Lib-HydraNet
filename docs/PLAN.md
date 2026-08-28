@@ -1298,7 +1298,11 @@ something it does not support.
    fix is not a threshold: it is that `within` should be built from labelled identities
    where they exist, which for the first time they do.
 
-   **Decision 1 is settled, 2026-08-28, on the measurement this section named**
+   **~~Decision 1 is settled~~ — WITHDRAWN THE SAME DAY, see the second clip below. What
+   follows was measured on one camera and does not hold on the next one.** Read the two
+   together or neither.
+
+   **Decision 1's first measurement, 2026-08-28, on the instrument this section named**
    (`scripts/track_idf1.py`, `runs/gt_cam01/idf1.json`). Both trackers over the same
    detections from one inference pass, against 5 labelled identities and 2,343 boxes on
    Taichung-cam01's 900-frame clip. The single-stage arm reproduces `tracks.json`
@@ -1335,6 +1339,41 @@ something it does not support.
    read by a model rather than by a person (`runs/gt_cam01/provenance.json` says so in its
    own words). The labels also cover the detector's boxes only, so this measures
    association and not detection.
+
+   **The second clip reverses it, and the caveat above is why this section is not a
+   decision.** `runs/gt_th03/` labels 900 frames of Tao-Hsin-cam03 -- the camera with 83%
+   mid-view track deaths -- as **4 identities from 18 proposed tracks**, and the dominant
+   one is a member of staff leaning on a counter for 58 s **in thirteen fragments**, every
+   one at the same image position, with no box at all in the gaps while the blue sleeve is
+   plainly on the counter (`assets/gt_th03_podium.png`). Same instrument, same self-check,
+   which passed:
+
+   | Tao-Hsin-cam03 | tracks | IDF1 | IDP | IDR | switches | tracks/identity | mostly tracked |
+   |---|---|---|---|---|---|---|---|
+   | single-stage (shipped) | 18 | **0.5095** | **0.5084** | 0.5105 | 14 | 4.50 | 2/4 |
+   | two-stage | 15 | 0.3059 | **0.2348** | 0.4388 | 7 | 2.50 | 1/4 |
+
+   **Identity precision collapses, 0.508 to 0.235, and IDF1 falls twenty points.** That is
+   the objection this section was written to test, observed: the low band gives the Kalman
+   something to coast onto, and on a camera where one person is invisible for stretches it
+   coasts onto somebody else. Note that the *tracker-shaped* numbers still improve —
+   switches 14 to 7, fragmentation 4.50 to 2.50 — which is exactly why they cannot be read
+   as quality. **Fewer, longer tracks that are the wrong people.**
+
+   A third reading points the same way and is not quotable: `runs/gt_cam11` labels an
+   older proposal built from `configs/hydranet_indoor.yaml`, a different detector, so its
+   ground truth does not describe the shipped model's boxes and `track_idf1.py`'s
+   self-check refuses it. Its arms ran 0.976 -> 0.910 with IDP 0.975 -> 0.836 before the
+   file was deleted. Same direction, no standing.
+
+   **So decision 1 is open, and it is now a per-camera question rather than a yes/no.**
+   Two-stage helped slightly where fragmentation was mild (Taichung-cam01, 42% mid-view
+   deaths) and hurt badly where it is severe (Tao-Hsin-cam03, 83%) — which is the opposite
+   of the way it was expected to earn its place, and it is the same shape as §7.11's
+   finding that the 0.15 detection threshold has to be a per-camera decision. What both
+   clips agree on is the thing neither tracker addresses: **26% of cam01's labelled boxes
+   and 49% of cam03's are lost to fragmentation under a one-to-one mapping**, and the gaps
+   responsible are seconds long against a five-frame `max_age`.
 
 19. **"Scale-measured" meant the person-height prior all along, and a second fleet arrived
    that has more of it than the first.** Opened 2026-08-27 when a new corpus —
