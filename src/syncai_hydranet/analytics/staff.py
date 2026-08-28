@@ -299,6 +299,17 @@ def require_camera(
     )
 
 
+def track_staff(track) -> bool | None:
+    """One verdict for one `analytics.tracker.Track`, from the scores it carries.
+
+    The reduction lives here rather than as a property on `Track` so that `tracker.py`
+    stays free of this module's crop geometry, minimum-observation rule and classifier --
+    a track records the evidence, and the thing that knows what the evidence means says
+    what it means.
+    """
+    return staff_verdict(track.staff_scores)
+
+
 def staff_verdict(probabilities) -> bool | None:
     """One decision for one person: `True` staff, `False` customer, `None` not enough.
 

@@ -35,7 +35,9 @@ from syncai_hydranet.analytics.staff import (
     fit_staff_model,
     require_camera,
     staff_verdict,
+    track_staff,
 )
+from syncai_hydranet.analytics.tracker import Tracker
 
 
 def _batch(n: int = 60):
@@ -203,3 +205,61 @@ def test_the_crop_size_constant_is_the_attribute_crop_geometry():
     """Pinned because §7.15's numbers were measured through it; if it changes, every
     saved model is refused by `load` rather than quietly re-interpreted."""
     assert CROP_SIZE == (256, 128)
+
+
+# ------------------------------------------------- the wire from the tracker to a verdict
+#
+# `Track.staff_scores` is the third index-aligned list on `Track`, and it inherits the two
+# failures the first two documented: a list that skips frames still zips against `frames`
+# without error, and a tracker given staff scores on some frames and not others produces a
+# track whose appearance belongs to different frames than it claims.
+
+
+def _box(x, y, w=20.0, h=60.0):
+    return [x, y, x + w, y + h]
+
+
+def test_a_track_carries_one_staff_score_per_observed_frame():
+    t = Tracker()
+    for i, p in enumerate([0.91, 0.88, 0.93]):
+        t.update(np.array([_box(10.0 + i, 10.0)]), i, staff_scores=np.array([p]))
+    track = t.tracks[0]
+    assert track.staff_scores == pytest.approx([0.91, 0.88, 0.93])
+    assert len(track.staff_scores) == len(track.frames) == len(track.boxes)
+
+
+def test_staff_scores_stay_optional_so_every_existing_caller_still_works():
+    t = Tracker()
+    for i in range(3):
+        t.update(np.array([_box(10.0 + i, 10.0)]), i)
+    assert t.tracks[0].staff_scores == []
+    assert track_staff(t.tracks[0]) is None
+
+
+def test_a_tracker_that_has_seen_staff_scores_refuses_a_frame_without_them():
+    t = Tracker()
+    t.update(np.array([_box(10.0, 10.0)]), 0, staff_scores=np.array([0.9]))
+    with pytest.raises(ValueError, match="staff scores"):
+        t.update(np.array([_box(11.0, 10.0)]), 1)
+
+
+def test_a_tracker_that_has_not_seen_staff_scores_refuses_a_frame_with_them():
+    t = Tracker()
+    t.update(np.array([_box(10.0, 10.0)]), 0)
+    with pytest.raises(ValueError, match="staff scores"):
+        t.update(np.array([_box(11.0, 10.0)]), 1, staff_scores=np.array([0.9]))
+
+
+def test_a_staff_score_per_box_is_required_not_per_track():
+    t = Tracker()
+    with pytest.raises(ValueError, match="no safe interpretation"):
+        t.update(
+            np.array([_box(10.0, 10.0), _box(60.0, 10.0)]), 0, staff_scores=np.array([0.9])
+        )
+
+
+def test_track_staff_reduces_a_whole_track_to_one_person():
+    t = Tracker()
+    for i in range(MIN_OBSERVATIONS):
+        t.update(np.array([_box(10.0 + i, 10.0)]), i, staff_scores=np.array([0.8]))
+    assert track_staff(t.tracks[0]) is True

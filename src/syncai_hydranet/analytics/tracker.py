@@ -108,6 +108,20 @@ class Track:
     # every track produced before 2026-08-26. A consumer that needs it says so; see
     # `events.support_for`.
     scores: list[float] = field(default_factory=list)
+    # P(staff) for the crop of each observed box, index-aligned with `frames` and `boxes`
+    # for the third time and the same reason.
+    #
+    # **Evidence, not a verdict.** `staff/customer` is a property of a person and not of a
+    # frame -- `analytics/track_attributes.py` measured the same staff member labelled `F`
+    # in one frame and `M` in the next -- so what a consumer wants is one answer per
+    # track, and `analytics.staff.track_staff` is where that reduction lives. It is not a
+    # property here on purpose: this module stays free of the classifier, its crop
+    # geometry and its minimum-observation rule, all three of which are `staff.py`'s to
+    # state and to change.
+    #
+    # Empty when the caller supplied no staff scores, which is every track produced
+    # before 2026-08-28 and every track from a camera the classifier is not licensed for.
+    staff_scores: list[float] = field(default_factory=list)
 
     @property
     def centre(self) -> np.ndarray:
@@ -167,6 +181,7 @@ class Tracker:
         # all frames or none, because a gap in either cannot be recovered afterwards.
         self._keypoints_seen: bool | None = None
         self._scores_seen: bool | None = None
+        self._staff_seen: bool | None = None
 
     def update(
         self,
@@ -174,6 +189,7 @@ class Tracker:
         frame_idx: int,
         keypoints: np.ndarray | None = None,
         scores: np.ndarray | None = None,
+        staff_scores: np.ndarray | None = None,
     ) -> list[Track]:
         """Advance one frame. ``boxes`` is (N,4) xyxy for one class. Returns live tracks.
 
@@ -189,7 +205,13 @@ class Tracker:
         `bytetrack`'s two-band mechanism and this tracker deliberately has no equivalent
         -- and the reason to carry it is stated on `Track.scores`.
 
-        **All frames or none, per tracker**, for keypoints and for scores independently.
+        ``staff_scores`` is (N,) values of P(staff) from `analytics.staff`, one per box in
+        the same order. Recorded rather than used, like ``scores``: nothing here
+        associates on appearance, and the reduction to one verdict per person is
+        `staff.track_staff`.
+
+        **All frames or none, per tracker**, for keypoints, scores and staff scores
+        independently.
         Passing either on some calls and not others silently misaligns its list against
         `frames`, which is exactly the drift `Track.keypoints` documents as its reason for
         being a field. A tracker that has seen keypoints refuses a later call without
@@ -211,8 +233,16 @@ class Tracker:
                     f"{len(scores)} scores for {len(boxes)} boxes: they are matched by "
                     "position, so a mismatch has no safe interpretation"
                 )
+        if staff_scores is not None:
+            staff_scores = np.asarray(staff_scores, dtype=float).reshape(-1)
+            if len(staff_scores) != len(boxes):
+                raise ValueError(
+                    f"{len(staff_scores)} staff scores for {len(boxes)} boxes: they are "
+                    "matched by position, so a mismatch has no safe interpretation"
+                )
         self._keypoints_seen = _latch(self._keypoints_seen, keypoints is not None, "keypoints")
         self._scores_seen = _latch(self._scores_seen, scores is not None, "scores")
+        self._staff_seen = _latch(self._staff_seen, staff_scores is not None, "staff scores")
 
         # Predict: constant velocity on the box centre, size held.
         for t in self.tracks:
@@ -234,6 +264,8 @@ class Tracker:
                 t.keypoints.append(keypoints[di].copy())
             if scores is not None:
                 t.scores.append(float(scores[di]))
+            if staff_scores is not None:
+                t.staff_scores.append(float(staff_scores[di]))
             if t.hits >= self.min_hits:
                 t.confirmed = True
 
@@ -245,6 +277,7 @@ class Tracker:
                 boxes=[boxes[di].copy()],
                 keypoints=[] if keypoints is None else [keypoints[di].copy()],
                 scores=[] if scores is None else [float(scores[di])],
+                staff_scores=[] if staff_scores is None else [float(staff_scores[di])],
             )
             t.confirmed = self.min_hits <= 1
             self.tracks.append(t)
