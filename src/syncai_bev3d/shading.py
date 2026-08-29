@@ -253,3 +253,76 @@ def contact_shadows(
         if (depth > 0).all():
             d.polygon([(float(u), float(v)) for u, v in uv], fill=(0, 0, 0, alpha))
     return layer.filter(ImageFilter.GaussianBlur(blur_px)) if blur_px > 0 else layer
+
+
+# How much of the scene behind it an object may hide before it starts to fade, and how
+# far the fade goes. Both are fractions of the *projected area of everything further from
+# the eye than that object* -- the quantity a viewer actually experiences as "I cannot see
+# past this".
+FADE_START = 0.10
+FADE_FULL = 0.35
+FADE_FLOOR = 0.28  # the faded object keeps this share of its alpha; it must still be there
+
+
+def occlusion_alpha(view: View, items, *, keep: tuple = ()) -> list[int]:
+    """Alphas for ``(mesh, rgb, alpha)`` items, reduced where one hides the rest.
+
+    **The eye is a fixed diagonal and nothing asked what stands along it.** PLAN 7.22
+    recorded the consequence and left it open: Taichung-cam10's accessory wall is 6.3 m
+    long and 2.4 m high on the +x side, so the commissioning still for that camera is
+    taken from behind it and the shop is one blank panel. Choosing a different corner was
+    tried and reverted the same hour -- it fixes cam10 and makes cam11 worse, so which
+    corner to stand in is a composition decision rather than a scoring one.
+
+    Fading the occluder is the better answer to the same problem, and it is what any
+    architectural viewer does with a near wall: the composition is unchanged, the object
+    is still visibly there, and the room behind it becomes readable. Nothing moves, so no
+    render is re-composed and no earlier judgement about framing is invalidated.
+
+    The measure is deliberately not "is this object close": a small object close to the
+    eye hides nothing. It is **the share of the projected area of everything behind it
+    that this object covers**, which is the thing a viewer is complaining about. Bounding
+    boxes rather than silhouettes, because the difference costs a rasterisation per item
+    and cannot change which object is the offender -- only by how much.
+
+    `keep` names items exempted by their colour key: the floor is one, since it lies under
+    everything and would otherwise fade every time.
+    """
+    boxes, near, far, out = [], [], [], []
+    for (verts, _faces), _rgb, alpha in items:
+        uv, depth = view.project_points(verts)
+        ok = depth > 0
+        if not ok.any():
+            boxes.append(None)
+            near.append(np.inf)
+            far.append(np.inf)
+        else:
+            p = uv[ok]
+            boxes.append((p[:, 0].min(), p[:, 1].min(), p[:, 0].max(), p[:, 1].max()))
+            near.append(float(depth[ok].min()))
+            far.append(float(depth[ok].max()))
+        out.append(int(alpha))
+
+    for i, bi in enumerate(boxes):
+        if bi is None or (len(keep) and items[i][1] in keep):
+            continue
+        area_i = (bi[2] - bi[0]) * (bi[3] - bi[1])
+        if area_i <= 0:
+            continue
+        behind_area = covered = 0.0
+        for j, bj in enumerate(boxes):
+            if j == i or bj is None or near[j] <= far[i]:
+                continue  # not wholly behind this object
+            behind_area += (bj[2] - bj[0]) * (bj[3] - bj[1])
+            ox = min(bi[2], bj[2]) - max(bi[0], bj[0])
+            oy = min(bi[3], bj[3]) - max(bi[1], bj[1])
+            if ox > 0 and oy > 0:
+                covered += ox * oy
+        if behind_area <= 0:
+            continue
+        frac = covered / behind_area
+        if frac <= FADE_START:
+            continue
+        t = min((frac - FADE_START) / (FADE_FULL - FADE_START), 1.0)
+        out[i] = round(out[i] * (1.0 - t * (1.0 - FADE_FLOOR)))
+    return out

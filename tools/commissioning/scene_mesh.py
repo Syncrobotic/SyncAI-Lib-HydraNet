@@ -38,7 +38,7 @@ from syncai_bev3d.meshes import (
     table,
     wall,
 )
-from syncai_bev3d.shading import View, contact_shadows, draw_scene
+from syncai_bev3d.shading import View, contact_shadows, draw_scene, occlusion_alpha
 from syncai_hydranet.geometry.camera_json import CameraFile
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
@@ -406,7 +406,14 @@ def render(camera, items, heights, out_path, *, eye=None, target=None):
             uv, depth = view.project_points(np.array([a, b], float))
             if (depth > 0).all():
                 draw.line([tuple(uv[0]), tuple(uv[1])], fill=(58, 68, 84, 150), width=SS)
-    draw_scene(draw, view, [(m, PALETTE[k], a) for m, k, a, _ in items], bg=BG)
+    # Fade whatever stands between the eye and the room. PLAN 7.22 left this open, and
+    # the alternative -- picking a different corner -- was tried and reverted because it
+    # fixes one camera and breaks another. `occlusion_alpha` leaves the composition alone.
+    painted = [(m, PALETTE[k], a) for m, k, a, _ in items]
+    faded = occlusion_alpha(view, painted, keep=(PALETTE["floor"],))
+    draw_scene(
+        draw, view, [(m, c, a) for (m, c, _), a in zip(painted, faded, strict=True)], bg=BG
+    )
     img = img.resize((W, H), Image.Resampling.LANCZOS)
     text = ImageDraw.Draw(img)
     text.text(

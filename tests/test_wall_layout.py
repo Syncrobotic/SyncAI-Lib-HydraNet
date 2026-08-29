@@ -37,6 +37,7 @@ from syncai_bev3d.floorplan import (
     snap_to_walls,
     wall_runs,
 )
+from syncai_bev3d.shading import FADE_FLOOR, View, occlusion_alpha
 
 
 def _cells(u0, u1, v0, v1, step=0.06):
@@ -225,3 +226,77 @@ def test_a_fixture_far_from_every_wall_is_untouched():
     wall = ("u", 0.0, 0.0, 6.0, 0.15)
     box = (1.0, 3.0, 2.0, 2.6)
     assert snap_to_walls(box, [wall]) == box
+
+
+# ------------------------------------------------- what stands between the eye and the room
+
+
+def _slab(x0, x1, y1, z0, z1):
+    """A box as (verts, faces) — only the vertices matter to `occlusion_alpha`."""
+    verts = np.array(
+        [[x, y, z] for x in (x0, x1) for y in (0.0, y1) for z in (z0, z1)],
+        float,
+    )
+    return (verts, np.zeros((0, 3), int))
+
+
+def _view(eye=(0.0, 2.0, -8.0), target=(0.0, 0.6, 0.0)):
+    return View(list(eye), list(target), 620.0, 640.0, 360.0)
+
+
+def test_a_near_wall_across_the_view_is_faded():
+    """PLAN 7.22's open item: the eye is a fixed diagonal and nothing asked what stands
+    along it. Taichung-cam10's 6.3 m accessory wall is on that line and the render was one
+    blank panel with the shop behind it."""
+    blocker = (_slab(-4.0, 4.0, 2.4, -2.0, -1.8), (200, 200, 200), 255)
+    room = [(_slab(-1.0 + i, 0.0 + i, 1.0, 3.0, 4.0), (180, 180, 180), 255) for i in range(4)]
+    out = occlusion_alpha(_view(), [blocker, *room])
+    assert out[0] < 255, "the wall across the view kept its full alpha"
+    assert all(a == 255 for a in out[1:]), "the room behind it was faded instead"
+
+
+def test_a_small_object_close_to_the_eye_is_not_faded():
+    """The measure is what an object hides, not how close it is. A stool by the lens hides
+    nothing, and fading it would say the opposite of what the viewer sees."""
+    stool = (_slab(-0.2, 0.2, 0.5, -2.0, -1.8), (200, 200, 200), 255)
+    room = [(_slab(-1.0 + i, 0.0 + i, 1.0, 3.0, 4.0), (180, 180, 180), 255) for i in range(4)]
+    out = occlusion_alpha(_view(), [stool, *room])
+    assert out[0] == 255
+
+
+def test_two_things_at_the_same_depth_do_not_hide_each_other():
+    """ "Behind" means wholly behind. Two fixtures at one depth overlap on screen and hide
+    nothing of each other; treating that as occlusion fades whichever is larger, which on
+    a real camera is most of the room."""
+    tall = (_slab(-3.0, 3.0, 3.0, -2.0, -1.8), (200, 200, 200), 255)
+    short = (_slab(-1.0, 1.0, 1.0, -2.0, -1.8), (200, 200, 200), 255)
+    assert occlusion_alpha(_view(), [tall, short]) == [255, 255]
+
+
+def test_nothing_fades_when_nothing_is_behind_anything():
+    items = [(_slab(-3.0, -2.0, 1.0, 0.0, 1.0), (200, 200, 200), 255),
+             (_slab(2.0, 3.0, 1.0, 0.0, 1.0), (200, 200, 200), 255)]  # fmt: skip
+    assert occlusion_alpha(_view(), items) == [255, 255]
+
+
+def test_a_faded_object_is_still_visible():
+    """It is being seen through, not deleted: a wall that vanishes is a different lie from
+    a wall that hides the room."""
+    blocker = (_slab(-6.0, 6.0, 3.0, -2.0, -1.8), (200, 200, 200), 255)
+    room = [(_slab(-1.0 + i, 0.0 + i, 1.0, 3.0, 4.0), (180, 180, 180), 255) for i in range(6)]
+    out = occlusion_alpha(_view(), [blocker, *room])
+    assert 0 < out[0] <= round(255 * FADE_FLOOR) + 1
+
+
+def test_an_item_named_in_keep_is_never_faded():
+    """Exercised on something that would otherwise fade, which the floor would not.
+
+    A first version named the floor -- a slab spanning the whole scene -- and passed with
+    the `keep` check deleted, because a floor's far edge lies beyond everything, so nothing
+    is ever *wholly behind* it and it cannot fade in the first place. The test was green
+    about a mechanism it never reached.
+    """
+    blocker = (_slab(-4.0, 4.0, 2.4, -2.0, -1.8), (200, 200, 200), 255)
+    room = [(_slab(-1.0 + i, 0.0 + i, 1.0, 3.0, 4.0), (180, 180, 180), 255) for i in range(4)]
+    assert occlusion_alpha(_view(), [blocker, *room])[0] < 255  # it does fade
+    assert occlusion_alpha(_view(), [blocker, *room], keep=((200, 200, 200),))[0] == 255
