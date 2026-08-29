@@ -1917,8 +1917,46 @@ something it does not support.
    tree already computes, not a new model — the same shape as `floor_both_sides` in §7.25,
    and it needs no new labels at all.
 
-   Not started. Recorded here because a wrong class silently changes what every downstream
-   rule means, and nothing currently reports it.
+   **Measured 2026-08-29, and the answer is better than the one proposed above.** Two
+   findings, one negative and one decisive.
+
+   *The prompt cannot do it, and now there is a number.* `prompt_group == "till"` covers
+   **48 of the 71 service zones (68%)** across the eight cameras, because `retail counter`
+   sits in that group and it matches every merchandise counter in these shops --
+   9 of 12 zones on Taichung-cam04, 10 of 13 on Taichung-cam10. Only four cameras carry an
+   instance whose prompt is literally `checkout counter`, at scores from 0.484 to 0.915.
+   §7.19's caveat that "which fixture is the till is a store fact, not a 0.745 from a
+   shape-shaped prompt" is confirmed rather than merely suspected.
+
+   *The two sides of one instance are the discriminator.* `service_zones` already splits
+   an instance into a zone per side -- same `instance_px`, `side` 0/1/2 -- and that is what
+   makes the relation checkable without a new model. On Kaohsiung-cam04, over 3,304 track
+   placements from a 900-frame clip, the counter SAM 3 calls `checkout counter` at 0.915
+   splits perfectly:
+
+   | zone | side | staff | customer |
+   |---|---|---|---|
+   | `fixture_02` | 0 | 0 | 724 |
+   | `fixture_04` | 1 | 1,137 | 0 |
+
+   One counter, one side entirely customers and the other entirely staff. So the rule is
+   not "staff for most of the clip" as written above -- it is **the contrast between an
+   instance's own sides**, which is a relation between two things and needs no threshold
+   anybody has to defend.
+
+   **And the absolute form would have misfired, which is why the contrast matters.** On
+   Taichung-cam01 the staff share is 0.98-1.00 on *every* fixture zone in the store,
+   because that clip's people are all staff -- the same clip §6 step 3 uses. An absolute
+   threshold would have called all seven zones tills. That is `0298d7a` in a third place:
+   **a population that is all one class licenses nothing**, and the till rule needs the
+   same refusal `analytics.staff.require_camera` already carries for the classifier.
+
+   Still to do: two cameras (Taichung-cam10, Tao-Hsin-cam04) have no staff verdicts in
+   their track logs yet, so the fleet evidence is one decisive camera and one that proves
+   the refusal is needed. Then the `till` kind has to reach `camera.json` -- today
+   `prompt_group` is written to `runs/service_zones01/<camera>.service_zones.json` and
+   **flattened to `kind: "display"`** on the way in, so even the weak signal is discarded
+   at the boundary, which is the same shape as §7.27.
 
 27. **`implausible()` names seven fixtures across the fleet and nothing reads it.**
    Measured 2026-08-29 over all eight commissioned cameras, on the build the renders
