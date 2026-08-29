@@ -7,9 +7,11 @@ version: 2
 # so the pins stay readable.
 #
 # PRs target `dev`, because that is where work enters -- feat/* → dev → stage → main.
-# A dependency PR opened against `main` could not be merged without breaking the
-# fast-forward promotion rule that `.github/workflows/release-please.yml` carries now
-# (`git show b7457c2:docs/RELEASE.md` for the document that stated it).
+# A dependency PR opened against `main` would put a commit there that never went through
+# `ci.yml` on dev or `ci-promote.yml` on the way to stage, which is the whole point of
+# having the flow. This used to be justified by a fast-forward promotion rule instead;
+# that rule was already broken by four PR merges and no longer states anything true --
+# see the header of `.github/workflows/release-please.yml` for what was measured.
 updates:
   - package-ecosystem: github-actions
     directory: /

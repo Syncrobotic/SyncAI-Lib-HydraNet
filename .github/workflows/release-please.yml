@@ -1,27 +1,34 @@
-name: Release Please
+name: Release (main)
 
-# Versioning for the promotion flow feat/* → dev → stage → main. `ci.yml` gates
-# feat→dev and `ci-promote.yml` gates dev→stage; this adds the version bump at the
-# bottom of that flow and the tag at the top of it.
+# Releasing, for the promotion flow feat/* → dev → stage → main. `ci.yml` gates
+# feat→dev and `ci-promote.yml` gates dev→stage; this turns an arrival on `main` into a
+# tag and a GitHub Release, and does nothing anywhere else.
 #
-# **Two jobs, deliberately split, because the version bump has to ride the flow.** The
-# obvious setup -- release-please pointed at `main`, as the sibling Gateway repo runs it
-# -- is wrong here. A release PR merges *into* its target branch, so pointing it at
-# `main` would create the version bump on `main`, where neither `ci-promote.yml` nor any
-# promotion has tested it, and `stage` would never carry the version it was supposed to
-# have been accepted at. The bump belongs at the bottom of the flow and has to travel up
-# it like anything else.
+# **`dev` carries no version and nothing here runs on it.** Until 2026-08-29 a
+# release-please job ran on every push to dev and kept an open PR proposing the next
+# version number. `dev` is where work lands; a version number is a property of what has
+# been released, so proposing one there was wrong, and it cost a three-minute workflow on
+# every single push to maintain a PR nobody was going to merge. Removed on the user's
+# instruction: a release is triggered by an arrival on `main`, and by nothing else.
 #
-# So the two halves of a release are separated and each is put where it is legal:
+# What that automation had produced by the time it was removed, all of it measured: zero
+# GitHub Releases, zero tags, no CHANGELOG.md in the tree at all, and `__version__` still
+# at the 0.1.0 it started at. Its one artefact was PR #9, open since 2026-08-28, whose own
+# CI had been queued four times and executed zero times because a bot's PR needs a
+# maintainer to approve its workflows and nobody had.
 #
-#   release-pr  runs on `dev`, opens an ordinary PR carrying the version bump and
-#               the CHANGELOG. Merging it is the same act as merging any feat/*
-#               branch, and the bump then rides dev → stage → main untouched.
-#               `skip-github-release: true` -- it must not tag from here.
+# So the version is now set the way every other change to this repository is set: by a
+# commit that edits `src/syncai_hydranet/__init__.py`, which rides feat/* → dev → stage →
+# main under the same gates as anything else. When it arrives here carrying a version that
+# has no tag, that is a release -- tag it, attach the wheel and sdist, and take the notes
+# from CHANGELOG.md if a section for that version exists.
 #
-#   release     runs on `main`. When a version arrives that has no tag yet, that is
-#               a release: tag it, cut the GitHub Release from the CHANGELOG section
-#               release-please already wrote, and attach the wheel and sdist.
+# **`release-please-config.json` and `.release-please-manifest.json` are now read by
+# nothing.** They are kept rather than deleted because `tests/test_version_agreement.py`
+# checks that `CITATION.cff` is listed among their `extra-files`, and that check is the
+# only thing keeping the citation's version in step with the package's. Removing the
+# config means deciding what keeps those two in step instead, which is a separate change
+# from this one.
 #
 # The tag therefore lands on `main`, which is what RELEASE.md defined as released
 # (that document was deleted in `26dc519`; `git show b7457c2:docs/RELEASE.md` for it).
@@ -65,7 +72,7 @@ name: Release Please
 # main says nothing about which checkpoint a robot is running. See RELEASE.md §2.
 on:
   push:
-    branches: [dev, main]
+    branches: [main]
   # Rebuild and re-attach distributions for an existing release -- a transient runner
   # failure, or a tag whose assets never uploaded. Built from that tag's source, so
   # the result is the released version rather than main's HEAD.
@@ -86,24 +93,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ---------------------------------------------------------------- dev side
-  release-pr:
-    name: Version PR (dev)
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write # push the release PR's branch
-      pull-requests: write
-    steps:
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          target-branch: dev
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
-
-  # --------------------------------------------------------------- main side
   release:
     name: Tag & publish (main)
     if: |
