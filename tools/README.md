@@ -4,6 +4,13 @@ Everything here sits *upstream* of training: it makes the data and checks the in
 depends on. It is not a deployment surface — that is [`../deploy/`](../deploy/), the
 downstream end. Filing these under `deploy/` would confuse an input with an output.
 
+**"Training" there means `hydranet-train`**, the wheel's entry point that fits the shipped
+network. One tool here does fit a model — `temporal/train_posture.py`, the step-8 posture
+model, under 100K parameters — and it is not an exception to the sentence above so much as
+a reminder of what that sentence is about: it consumes a `.npz` the other three temporal
+tools produce, it ships nothing, and it is here rather than in `src/` for the same reason
+everything else is.
+
 ## [`commissioning/`](commissioning/) — the per-camera pipeline (PLAN §2.1)
 
 Everything that turns one camera's plates into its `camera.json` and its 3D scene:
@@ -23,6 +30,28 @@ distillation source for the bottom-up P3 head (PLAN §2.2).
 
 The 2026-08-20 campaign's orchestration, kept exactly as it ran; `recipe.py`'s
 per-camera pre-pass is also the engine `commissioning/masks_pass.py` drives.
+
+## [`temporal/`](temporal/) — NTU RGB+D, and the posture model it feeds (PLAN §6 step 8)
+
+Four tools, in the order they run. The first three exist because **the fall/bend
+separation cannot be settled on our own footage**: PLAN §7 records a shopper leaning over
+a counter producing a `fall` with a torso at 69° and a box 21% shorter, and a bend passing
+every image-space test a fall passes. NTU RGB+D has ground-truth 3D for both actions, so
+the question is answerable there and only there.
+
+- **`ntu_survey.py`** — what is in the archive before anything is built from it: which
+  action classes, how many sequences, what the class balance is.
+- **`ntu_project.py`** — NTU's 3D skeletons rendered through *our* camera geometry. **The
+  projection is the domain adaptation**: a model trained on NTU's own frontal view has
+  never seen a person from a ceiling corner, and re-projecting the 3D through each
+  commissioned camera's pose is what makes the sequences ours without collecting them.
+- **`ntu_fall_discriminator.py`** — the measurement that motivated the height feature.
+  Against NTU's own ground truth in metres, `A43 falling down` peaks at a 74.5° median
+  torso angle and `A06 pick up` at 76.3° — **the angle does not separate them** — while
+  head height above the floor does.
+- **`train_posture.py`** — the step-8 model itself, fitted on `ntu_project.py`'s `.npz`.
+  Under 100K parameters, because it runs per track per frame behind a network that has
+  already spent the budget.
 
 ## [`annotation/`](annotation/) — the CVAT stack
 
