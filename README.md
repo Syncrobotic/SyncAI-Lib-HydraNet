@@ -9,30 +9,40 @@ One camera, one model, two readings: **loss prevention** (who entered where, wha
 do, did stock leave unpaid) and **retail analytics** (footfall, dwell, paths, queues) from
 the fixed CCTV already on the ceiling. No LiDAR, no new hardware.
 
-![Taichung-cam10: detections and tracks on the left, the metric 3D scene walked through on the right](assets/demo_Taichung-cam10.gif)
-
-*Left: person boxes and confirmed tracks, with this camera's false-positive polygons
-applied — **staff blue, customers green**, one verdict per person, grey until a track has
-been seen long enough to have an opinion. Right: the same moment in metres, the store's own
-furniture reconstructed from one static plate, a figure at every tracked shopper's floor
-position. Nothing is drawn by hand and no second sensor is involved.*
-
-*Two things to read the panels with. **Every face is blurred by `demo_video.py` itself**,
-by two instruments, and `demo_gif.py` then re-runs the detector on the source frames at a
-far lower threshold and refuses to write the figure unless every person it finds falls
-inside a blurred region — it has refused one (PLAN §7.24). And **the right panel has
-fixtures, not a room**: a fixed camera sees part of one store, so the walls are the runs
-that were observed rather than a closed boundary, and wall heights are a stated constant
-because the depth model collapses on white surfaces.*
-
-**A second store**, same code, same audit:
-
 ![Kaohsiung-cam04: detections and tracks on the left, the metric 3D scene on the right](assets/demo_Kaohsiung-cam04.gif)
 
-*The staff colours are licensed per camera and refused where they are not earned: this one
-scores 1.00 held out on 15 labelled crops, and the same model is refused on Tao-Hsin-cam04
-at 0.417 — that store's figure is rendered without them and says so, rather than colouring
-half its staff as shoppers (PLAN §7.23).*
+*Left: person boxes and confirmed tracks, with this camera's false-positive polygons
+applied — **staff blue, customers green**, one verdict per person from nine torso-colour
+statistics, and grey until a track has been seen long enough to have an opinion. Right: the
+same moment in metres, the store's own furniture reconstructed from one static plate, a
+figure at every tracked shopper's floor position. Nothing is drawn by hand and no second
+sensor is involved.*
+
+*Three things to read the panels with. **Every face is blurred by `demo_video.py` itself**,
+by two instruments, and `demo_gif.py` then re-runs the detector on the source frames at a
+far lower threshold and refuses to write the figure unless every person it finds falls
+inside a blurred region — it has refused one (PLAN §7.24). **The right panel has fixtures,
+not a room**: a fixed camera sees part of one store, so the walls are the runs that were
+observed rather than a closed boundary, and wall and column heights are a stated constant,
+printed on the panel, because the depth model collapses on white surfaces. And **the window
+is the busiest two minutes of a three-minute clip**, chosen automatically by
+`demo_gif.py --start auto` — a figure of an empty shop shows nothing, but it is a selection
+and this is it being said.*
+
+**The same code on a second camera**, where the answer is different:
+
+![Taichung-cam01: detections and tracks on the left, the metric 3D scene on the right](assets/demo_Taichung-cam01.gif)
+
+*Taichung-cam01 is a repair counter, and the classifier calls **98.5% of its
+person-observations staff** — 2,144 against 34. That is the figure worth having beside the
+first one: a model that painted everyone the same colour would look identical on the shop
+floor above and would be caught here.*
+
+*The colours are licensed per camera and refused where they are not earned. Both cameras
+here score 1.00 held out on their own labelled crops (15 and 18). The same model is refused
+on Tao-Hsin-cam04, which scores 0.417, and on Taichung-cam10, whose 15 labelled crops are
+15 staff and 0 customers — an accuracy that cannot be wrong about customers cannot license
+colouring them (PLAN §7.23).*
 
 The whole plan — architecture, data strategy, build order, and the measurements behind
 every decision — lives in **one document: [docs/PLAN.md](docs/PLAN.md)**. Everything the
