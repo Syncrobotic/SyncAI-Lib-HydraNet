@@ -41,49 +41,35 @@ exports/
 # `git add -A` would have committed. Both extensions, because both are produced.
 *.plan
 
-# Everything under assets/, then the figures back in by name.
+# assets/ = results. assets/dev/ = everything on the way to one.
 #
-# This used to be a denylist -- mp4, mov, pdf -- and its own comment said what it was
-# for: "`git add -A` in a hurry should not be able to publish a client's floor plan".
-# A denylist cannot do that job. The material this repo actually handles is retail CCTV
-# from customer stores, and one frame of it is a .png. `assets/retail_static_plate_cam01.png`
-# sat untracked in the tree while the denylist covered three formats none of which it was.
+# **The split is the simple half and the allowlist is the load-bearing half.** Renders,
+# contact sheets, overlays and per-camera review images are working material: they go in
+# `assets/dev/`, which is ignored wholesale and never allowlisted. What stays in
+# `assets/` itself is what a reader is meant to open, and each of those is named below.
 #
-# So the default is now "no", and the figures that belong to the README and the docs are
-# listed below. Adding one more is a deliberate act -- `git add -f`, then a line here --
-# and the moment in between is the point: a frame of a customer's shop floor cannot be
-# un-published once it is in the history.
+# The default is "no", and it is a denylist's failure that made it so: the old rule
+# ignored mp4/mov/pdf while `assets/retail_static_plate_cam01.png` -- one frame of a
+# customer's shop floor -- sat untracked and addable. The material this repo handles is
+# retail CCTV, and it arrives in whatever format the renderer chose. Adding a figure is
+# therefore a deliberate act: `git add -f`, then a line here, and the moment in between
+# is the point, because a frame of a customer's shop floor cannot be un-published once
+# it is in the history.
 #
-# Four figures left on 2026-08-28: `hydranet_demo.gif`, `mesh_shop_preview.png`,
-# `bev3d_mesh_people.png` and `retail_bootstrap_fixture_split.jpg`. Nothing in the tree
-# referenced any of them -- they were allowlisted and then orphaned, which is the state
-# this list is least able to notice, since it only checks that the names match the
-# tracked files and not that anything points at them.
-#
-# The list has to match what is tracked, exactly. A `!` line for a figure that has since
-# been deleted is a hole with that filename's shape in it, and `tests/test_assets_allowlist.py`
-# fails on one in either direction.
+# Every published store figure carries a tracked `.audit.json` beside it recording that
+# the detector was re-run on the source frames and found no unblurred face. `tests/
+# test_assets_allowlist.py` holds this list and the tracked set to each other exactly, in
+# both directions; `tests/test_figures_are_audited.py` holds the figures to their verdicts.
 assets/*
-# Added 2026-08-28. The left panel is a customer's shop floor, so every person in it
-# has their head and shoulders blurred before this frame ever existed as a file. The
-# blur is the union of two independent instruments, because one was measurably not
-# enough: the box head at 0.12 missed people standing at the back of the aisle, and a
-# privacy mask that misses somebody has published them. The second is the difference
-# against that camera's own static plate, which owes nothing to a detector.
-!assets/demo_Taichung-cam10.gif
-!assets/demo_Taichung-cam10.audit.json
-!assets/retail_cctv_scene.gif
-!assets/social_preview.png
-# Added 2026-08-28, the two other stores. Each figure carries a tracked `.audit.json`
-# beside it, written by `tools/commissioning/demo_gif.py` **whether the audit passed or
-# failed**: camera, source clip, commit, thresholds, person boxes checked and person
-# boxes whose head fell outside every blurred region. That last number is the one that
-# licenses the figure, and on Tao-Hsin-cam04 it was 132 of 954 before `6a63d87` -- two
-# shoppers at a shelf with a face plainly readable, at a blur threshold that had been
-# below the shipped one and still too high. A figure whose verdict is missing, or whose
-# failing count is not zero, has not been cleared to be here.
-!assets/demo_Kaohsiung-cam04.gif
+assets/dev/
+!assets/cctv_v1.gif
+!assets/cctv_v2.audit.json
+!assets/cctv_v2.gif
 !assets/demo_Kaohsiung-cam04.audit.json
+!assets/demo_Kaohsiung-cam04.gif
+!assets/demo_Taichung-cam10.audit.json
+!assets/demo_Taichung-cam10.gif
+!assets/social_preview.png
 
 # Editors / OS
 .vscode/

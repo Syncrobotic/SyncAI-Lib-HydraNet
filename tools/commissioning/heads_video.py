@@ -57,6 +57,7 @@ from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 from syncai_hydranet.models.hydranet import build_model
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
+from syncai_hydranet.utils.face_blur import BLUR_THR, blur_region, plate_person_boxes
 from syncai_hydranet.utils.visualize import preprocess, terrain_palette
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
@@ -191,6 +192,17 @@ def main() -> int:
     ap.add_argument("--fps", type=float, default=5.0)
     ap.add_argument("--score-thr", type=float, default=0.35)
     ap.add_argument("--metre-scale", type=float, default=1.0)
+    # Default ON, and the flag exists to be refused rather than to be convenient. This
+    # tool renders a customer's shop floor across three of its four panels and had **no
+    # blur at all** until 2026-08-29, while writing to `assets/heads_<camera>.mp4` -- a
+    # shared filename, in the directory whose whole convention is that nothing enters it
+    # unaudited. `demo_video.py` has carried the two instruments for days; there was never
+    # a reason for this one not to, only nobody had asked.
+    ap.add_argument(
+        "--no-blur",
+        action="store_true",
+        help="do NOT blur faces -- only for a private check, never for anything shared",
+    )
     args = ap.parse_args()
     camera = args.camera
 
@@ -238,8 +250,8 @@ def main() -> int:
 
     out_w, out_h = PANEL[0] * 2, PANEL[1] * 3
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    final = ROOT / f"assets/heads_{camera}_{stamp}.mp4"
-    latest = ROOT / f"assets/heads_{camera}.mp4"
+    final = ROOT / f"assets/dev/heads_{camera}_{stamp}.mp4"
+    latest = ROOT / f"assets/dev/heads_{camera}.mp4"
     part = final.with_suffix(".mp4.part")
     enc = subprocess.Popen(
         ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
@@ -249,7 +261,7 @@ def main() -> int:
     )  # fmt: skip
 
     tracker = Tracker()
-    tmp = ROOT / f"assets/_heads_{camera}_{os.getpid()}.png"
+    tmp = ROOT / f"assets/dev/_heads_{camera}_{os.getpid()}.png"
     crop = None
     history: dict[int, dict[int, tuple[float, float]]] = {}
     last_heading: dict[int, float] = {}
@@ -258,6 +270,22 @@ def main() -> int:
     vel_window = max(1, round(VEL_WINDOW_S * args.fps))
     n = 0
     src_w, src_h, _ = probe_video(str(clip))
+    # The plate is this camera's own empty shop, named by its camera.json. Missing is a
+    # refusal rather than a silent single-instrument run: the whole argument for two
+    # instruments is that neither is trusted alone.
+    plate_arr = None
+    if not args.no_blur:
+        plate_path = ROOT / cf.plate_file if cf.plate_file else None
+        if plate_path is None or not plate_path.exists():
+            print(
+                f"{camera}: camera.json names no readable plate_file, so the second blur "
+                f"instrument cannot run. Pass --no-blur only if nothing here is shared.",
+                file=sys.stderr,
+            )
+            return 1
+        plate_arr = np.asarray(
+            Image.open(plate_path).convert("RGB").resize((src_w, src_h)), np.uint8
+        )
     for frame in decode_frames(str(clip), src_w, src_h, args.fps):
         if n >= args.frames:
             break
@@ -269,6 +297,26 @@ def main() -> int:
         pose_rows = res.get("pose", [None])[0]
         x0, y0, cw, _ch = region
         to_panel = PANEL[0] / cw
+
+        # **Before any panel is drawn from `img`.** Three of the four panels are the
+        # source frame with something painted on it, so blurring after would leave two of
+        # them showing the faces the third had covered. A second forward pass rather than
+        # one at the lower threshold: the pose rows are index-aligned with the detections,
+        # so widening the display set to reach the blur set would put skeletons on
+        # 0.07-confidence boxes and change what the figure claims.
+        if not args.no_blur:
+            with torch.no_grad():
+                blur_res = model.predict(x.to(device), score_thr=BLUR_THR)
+            b_det = blur_res.get("detection", [{}])[0]
+            if b_det and len(b_det.get("boxes", [])):
+                bb_all = b_det["boxes"].cpu().numpy()
+                b_lab = b_det["labels"].cpu().numpy()
+                bb_all = (bb_all - np.array([x0, y0, x0, y0])) * (src_w / cw)
+                for box in bb_all[b_lab == person]:
+                    blur_region(img, *box)
+            if plate_arr is not None:
+                for box in plate_person_boxes(frame, plate_arr):
+                    blur_region(img, *box)
 
         # --- 1. detection, every class the head has ---------------------------------
         p_det = img.resize(PANEL)
@@ -435,9 +483,18 @@ def main() -> int:
         print(f"ffmpeg exited {rc}", file=sys.stderr)
         return 1
     part.replace(final)
-    latest.write_bytes(final.read_bytes())
+    # Not under `--no-blur`: that flag says "never for anything shared" and this is the
+    # filename everything else reads as this camera's render. Same fix as `demo_video`.
+    if args.no_blur:
+        print(
+            f"  --no-blur: {latest.name} left as it was. This render is unpublishable; "
+            f"it is at {final.name} only."
+        )
+    else:
+        latest.write_bytes(final.read_bytes())
     print(f"wrote {final} ({n} frames @ {args.fps} fps)")
-    print(f"  newest also at {latest}")
+    if not args.no_blur:
+        print(f"  newest also at {latest}")
     return 0
 
 

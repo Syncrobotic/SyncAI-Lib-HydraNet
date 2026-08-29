@@ -74,12 +74,15 @@ TRACK_COLORS = [
     (255, 99, 71), (65, 180, 255), (255, 200, 60), (120, 220, 120),
     (220, 120, 255), (255, 150, 100), (100, 230, 210), (250, 100, 160),
 ]  # fmt: skip
-# `staff` blue and `customer` green, and a third colour that is neither. A track under
-# `staff.MIN_OBSERVATIONS` has no verdict, and drawing it as a customer would invent one --
-# every shopper would then arrive on screen as a confident green for their first second.
+# **Two colours, not three: staff blue, everything else green.** The user's rule, and it
+# is a product decision rather than a measurement one, so it is stated here rather than
+# argued with. What it costs is worth writing down: a track shorter than
+# `staff.MIN_OBSERVATIONS` has no verdict, and this draws it as a customer, so a member of
+# staff who crosses the frame in under about a second is green. The alternative -- a third
+# grey state -- put a colour on screen that a viewer had to be told how to read, and every
+# shopper arrived grey for their first second, which read as a defect.
 STAFF_COLOR = (70, 150, 255)
 CUSTOMER_COLOR = (105, 215, 120)
-UNKNOWN_COLOR = (168, 172, 180)
 # The torso band is 0.18-0.55 of a box and `_blur_region` covers the top 45% plus padding,
 # so the face blur lands squarely on the pixels the classifier reads. Features are taken
 # from the source frame BEFORE either blur instrument runs; nothing about the order is
@@ -312,6 +315,15 @@ def main() -> int:
         "was held out on THIS camera and scores at least staff.MIN_DEPLOY_ACCURACY on "
         "it. Without it, figures keep their identity colours.",
     )
+    ap.add_argument(
+        "--staff-min-accuracy",
+        type=float,
+        default=None,
+        help="lower the held-out accuracy `analytics.staff` requires for this camera. "
+        "The default floor is derived (see MIN_DEPLOY_ACCURACY); passing this is the "
+        "explicit exception the refusal message asks for, and the number used is printed "
+        "and recorded, so a figure never carries a threshold nobody can see.",
+    )
     args = ap.parse_args()
     camera = args.camera
 
@@ -319,7 +331,14 @@ def main() -> int:
     # the run at second zero, not after a twelve-minute render nobody can trust.
     staff_model = None
     if args.staff_colours:
-        staff_model = require_camera(StaffModel.load(args.staff_colours), camera)
+        from syncai_hydranet.analytics.staff import MIN_DEPLOY_ACCURACY
+
+        args.staff_min_accuracy = (
+            MIN_DEPLOY_ACCURACY if args.staff_min_accuracy is None else args.staff_min_accuracy
+        )
+        staff_model = require_camera(
+            StaffModel.load(args.staff_colours), camera, min_accuracy=args.staff_min_accuracy
+        )
         print(
             f"{camera}: staff colours from {args.staff_colours} -- "
             f"{staff_model.accuracy:.3f} held out on this camera "
@@ -373,8 +392,14 @@ def main() -> int:
     # approved was overwritten by a worse one and there was nothing to go back to, and
     # "which file is the newest" stopped being answerable from the filesystem.
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    out_path = ROOT / f"assets/demo_{camera}_{stamp}.mp4"
-    latest = ROOT / f"assets/demo_{camera}.mp4"
+    # `assets/dev/` because a render is working material, not a result. The result is the
+    # figure `demo_gif.py` cuts from it, and that is the only thing `assets/` itself holds
+    # -- one directory a reader opens, one the pipeline writes through, and the ignore rule
+    # is then two lines rather than a growing list of patterns.
+    dev = ROOT / "assets/dev"
+    dev.mkdir(parents=True, exist_ok=True)
+    out_path = dev / f"demo_{camera}_{stamp}.mp4"
+    latest = dev / f"demo_{camera}.mp4"
     part_path = out_path.with_suffix(".mp4.part")
     enc = subprocess.Popen(
         ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
@@ -388,7 +413,7 @@ def main() -> int:
     # frame 0 can never show a track -- the tracker confirms at 3 hits -- so the
     # frame-check samples land where there is something to check
     checks = {args.frames // 8, args.frames // 2, args.frames - 1}
-    tmp = ROOT / f"assets/_demo_panel_{camera}_{os.getpid()}.png"
+    tmp = dev / f"_demo_panel_{camera}_{os.getpid()}.png"
     crop = None
     # `scene_mesh.height_caption`, not a second copy of it. This file used to build its
     # own and print it under a hardcoded "measured p85:", so when the estimator became
@@ -482,9 +507,7 @@ def main() -> int:
             col = (
                 TRACK_COLORS[t.track_id % len(TRACK_COLORS)]
                 if staff_model is None
-                else (UNKNOWN_COLOR, CUSTOMER_COLOR, STAFF_COLOR)[
-                    0 if verdict is None else 1 + int(verdict)
-                ]
+                else (STAFF_COLOR if verdict is True else CUSTOMER_COLOR)
             )
             bx = np.asarray(t.box, float) / 2.0
             d.rectangle(list(bx), outline=col, width=2)
@@ -526,7 +549,7 @@ def main() -> int:
             key = (
                 f"person_{t.track_id % len(TRACK_COLORS)}"
                 if staff_model is None
-                else f"person_{ {None: 'unknown', True: 'staff', False: 'customer'}[verdict] }"
+                else ("person_staff" if verdict is True else "person_customer")
             )
             scene_mesh.PALETTE[key] = col
             # stature from the box top, running-median per track: a single frame's
@@ -637,11 +660,7 @@ def main() -> int:
             # The legend carries its own accuracy, because a colour that means "staff" is
             # a claim and a viewer cannot tell a 1.00 camera from a 0.42 one by looking.
             lx = 660
-            for label, colour in (
-                ("staff", STAFF_COLOR),
-                ("customer", CUSTOMER_COLOR),
-                ("unknown", UNKNOWN_COLOR),
-            ):
+            for label, colour in (("staff", STAFF_COLOR), ("customer", CUSTOMER_COLOR)):
                 dd.rectangle([lx, 529, lx + 8, 537], fill=colour)
                 dd.text((lx + 12, 526), label, fill=colour)
                 lx += 20 + 6 * len(label)
@@ -652,7 +671,7 @@ def main() -> int:
             )
         enc.stdin.write(np.asarray(composite, np.uint8).tobytes())
         if n in checks:
-            composite.save(ROOT / f"assets/demo_{camera}_{stamp}_check{n:03d}.png")
+            composite.save(dev / f"demo_{camera}_{stamp}_check{n:03d}.png")
         if n % 100 == 0:
             print(f"  {n}/{args.frames}", flush=True)
         n += 1

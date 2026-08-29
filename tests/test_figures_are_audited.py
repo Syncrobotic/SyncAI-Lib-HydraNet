@@ -113,3 +113,44 @@ def test_a_figure_was_blurred_at_least_as_hard_as_today(figure: str):
         f"{figure} was rendered with a blur threshold of {v['blur_score_thr']} and the "
         f"current standard is {BLUR_THR}. Higher means less was blurred. Re-render it."
     )
+
+
+# The scene code a figure was rendered by. Anything under these paths changes what the
+# right-hand panel shows, so a figure whose verdict predates a change to them is showing
+# a reconstruction the repository no longer produces.
+SCENE_PATHS = (
+    "tools/commissioning/demo_video.py",
+    "tools/commissioning/scene_mesh.py",
+    "src/syncai_bev3d/floorplan.py",
+    "src/syncai_bev3d/meshes.py",
+    "src/syncai_bev3d/shading.py",
+    "src/syncai_hydranet/utils/face_blur.py",
+)
+
+
+@pytest.mark.parametrize("figure", _figures())
+def test_a_figure_is_not_older_than_the_code_that_drew_it(figure: str):
+    """A verdict records the commit it was rendered at, and nothing was reading it.
+
+    The defect this catches, from 2026-08-29: both README figures were cut at `ef60573`,
+    and `f63c0d2` -- which stopped drawing a false wall as a misplaced merchandise run --
+    landed after. The figures went on showing boxes hovering above the counters, which the
+    repository had already fixed, and every other test here stayed green because the faces
+    were blurred and the verdict was present. **A figure is a claim about what this code
+    produces**; the moment the code moves, the claim is about a version that is gone.
+
+    Only the paths that change what is drawn count. A README edit or a new test does not
+    stale a figure, and treating every commit as staling one would make this unignorable
+    noise that somebody would then ignore.
+    """
+    v = _verdict(figure)
+    at = v.get("commit")
+    if not at or _git("cat-file", "-e", at).returncode != 0:
+        pytest.skip(f"{figure}'s verdict names no commit reachable here")
+    changed = _git("log", "--oneline", f"{at}..HEAD", "--", *SCENE_PATHS).stdout.strip()
+    assert not changed, (
+        f"{figure} was rendered at {at[:7]} and the scene code has moved since:\n"
+        f"{changed}\nRe-render it with `tools/commissioning/demo_video.py` and re-cut it "
+        "with `demo_gif.py`, or the figure is a claim about a version that no longer "
+        "exists."
+    )

@@ -127,7 +127,8 @@ def main() -> int:
         "--video",
         default=None,
         help="the render to cut from. Default: the newest stamped "
-        "assets/demo_<camera>_<stamp>.mp4, which is never a --no-blur render.",
+        "assets/dev/demo_<camera>_<stamp>.mp4. `assets/dev/` is where renders live; "
+        "`assets/` itself holds only the figures cut from them.",
     )
     ap.add_argument(
         "--start",
@@ -163,7 +164,7 @@ def main() -> int:
     if a.video:
         video = Path(a.video)
     else:
-        stamped = sorted(ROOT.glob(f"assets/demo_{a.camera}_2*.mp4"))
+        stamped = sorted(ROOT.glob(f"assets/dev/demo_{a.camera}_2*.mp4"))
         if not stamped:
             print(
                 f"no stamped render for {a.camera}. Run demo_video.py first; "
