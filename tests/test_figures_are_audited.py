@@ -25,6 +25,7 @@ excused.
 
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 from pathlib import Path
@@ -155,3 +156,129 @@ def test_a_figure_is_not_older_than_the_code_that_drew_it(figure: str):
         "with `demo_gif.py`, or the figure is a claim about a version that no longer "
         "exists."
     )
+
+
+# ------------------------------------------------------------------ the recipe, not just the result
+
+# The parser is read out of the source with `ast` rather than imported. `demo_video`
+# builds a model and pulls in torch at import, and a guard that heavy is one somebody
+# deletes; `argparse`'s `_actions` is also a private attribute and a poor thing to hang a
+# gate on. The string literals passed to `add_argument` are the public surface.
+DEMO_VIDEO = "tools/commissioning/demo_video.py"
+
+
+def _argument_dests(path: str) -> set[str]:
+    tree = ast.parse((REPO / path).read_text(encoding="utf-8"))
+    dests = set()
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        if node.func.attr != "add_argument" or not node.args:
+            continue
+        # Positional arguments only, and only the first. Sweeping every string literal
+        # in the call would collect `metavar="MODEL_JSON"`, `action="store_true"` and the
+        # help text and derive flags from them.
+        explicit = [
+            k.value.value
+            for k in node.keywords
+            if k.arg == "dest" and isinstance(k.value, ast.Constant)
+        ]
+        if explicit:
+            dests.add(explicit[0])
+            continue
+        first = node.args[0]
+        if isinstance(first, ast.Constant) and isinstance(first.value, str):
+            dests.add(first.value.lstrip("-").replace("-", "_"))
+    return dests
+
+
+def test_the_parser_is_readable_from_the_source():
+    """The scan that everything below depends on, pinned so it cannot go quiet.
+
+    An `ast` walk that stops matching -- the parser moved into a function, the calls
+    became `parser.add_argument`, the flags moved to a table -- would return an empty set
+    and every assertion below would pass about nothing.
+    """
+    dests = _argument_dests(DEMO_VIDEO)
+    assert {"camera", "clip", "checkpoint", "staff_colours", "metre_scale"} <= dests, dests
+
+
+@pytest.mark.parametrize("figure", _figures())
+def test_a_figure_records_every_argument_its_render_was_given(figure: str):
+    """A figure whose recipe is unrecorded is a figure nobody can re-cut correctly.
+
+    The defect this was written against, 2026-08-29: a second session re-rendered
+    `demo_Taichung-cam10` without `--staff-colours` and produced a figure with per-track
+    identity colours and no staff legend -- undoing `65a6b78`, which is the commit that
+    made that figure two-colour on purpose. The audit passed, the blur passed, the
+    verdict was written, and **nothing in it named the flag**, because the record was a
+    hand-maintained list of eight fields against a parser of ten.
+
+    `--metre-scale` was missing on the same principle and is worse: `positions` are
+    written in metres and two runs at 1.0 and 0.8824 produce different numbers under
+    identical-looking provenance. So the assertion is over the parser rather than over a
+    list of flags somebody has to remember to extend.
+    """
+    v = _verdict(figure)
+    args = v.get("render_args")
+    assert args, (
+        f"{figure}'s verdict has no `render_args`. Re-cut it with `demo_gif.py`, which "
+        "copies the render's own arguments out of the track log."
+    )
+    missing = sorted(_argument_dests(DEMO_VIDEO) - set(args))
+    assert not missing, (
+        f"{figure} was rendered before these arguments were recorded, or they were "
+        f"dropped from the record: {missing}. A flag that is not in the verdict is a "
+        "flag the next person to re-cut this figure cannot know to pass."
+    )
+
+
+@pytest.mark.parametrize("figure", _figures())
+def test_a_published_figure_was_cut_with_the_staff_colours(figure: str):
+    """The narrower half, and it encodes a decision rather than a rule of nature.
+
+    The user removed the third "unknown" colour on 2026-08-28 and both published figures
+    are staff-blue / customer-green. Without this, dropping `--staff-colours` from a
+    re-cut is a silent revert -- which is exactly what happened.
+
+    **The day a figure is legitimately published without it, change this line rather than
+    delete it.** That day exists: `analytics.staff.require_camera` refuses Tao-Hsin-cam04
+    at 0.417, so a figure from that camera cannot carry staff colours and its verdict
+    would have to say so deliberately.
+    """
+    args = _verdict(figure).get("render_args") or {}
+    assert args.get("staff_colours"), (
+        f"{figure} was cut from a render with no staff model. Both published figures are "
+        "staff-blue / customer-green by decision; re-cut with `--staff-colours "
+        "runs/staff_model01/model_<camera>.json` (Taichung-cam10 also needs "
+        "`--staff-min-accuracy 0.85`, its measured 0.874 against the 0.90 floor)."
+    )
+
+
+@pytest.mark.parametrize("figure", _figures())
+def test_a_staff_coloured_figure_records_the_accuracy_it_prints(figure: str):
+    """The path is not identity, and the number on the picture has to exist somewhere.
+
+    `render_args.staff_colours` is `runs/staff_model01/model_<camera>.json`, and `runs/`
+    is gitignored and regenerable -- the same path can be refitted with a different
+    accuracy and no verdict would move. Meanwhile the figure's own legend prints
+    `0.87 held out here`, so until this landed **the artefact displayed a number that
+    nothing recorded**.
+
+    `min_accuracy_required` is in there too, because Taichung-cam10 ships under an
+    explicit exception (0.874 measured against a 0.90 floor, `--staff-min-accuracy
+    0.85`), and an exception nobody can see in the record is an exception nobody can
+    review.
+    """
+    v = _verdict(figure)
+    if not (v.get("render_args") or {}).get("staff_colours"):
+        pytest.skip(f"{figure} was not cut with staff colours")
+    model = v.get("staff_model")
+    assert model, f"{figure} names a staff model in its arguments and records nothing about it"
+    for field in ("sha256", "accuracy", "held_out", "held_out_n", "min_accuracy_required"):
+        assert model.get(field) is not None, f"{figure}'s staff_model has no {field}"
+    assert model["held_out"] == v["camera"], (
+        f"{figure}'s staff model was held out on {model['held_out']}, not on "
+        f"{v['camera']} -- `require_camera` should have refused this render"
+    )
+    assert model["accuracy"] >= model["min_accuracy_required"]

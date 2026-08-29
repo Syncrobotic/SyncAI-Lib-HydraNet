@@ -121,7 +121,7 @@ jobs:
           fetch-depth: 0 # tags, so an already-released version is recognised
           persist-credentials: false
 
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
 
@@ -159,13 +159,24 @@ jobs:
       # The notes release-please already wrote, rather than `--generate-notes`:
       # CHANGELOG.md is grouped by the Conventional Commit types this project
       # enforces, and a raw commit list would discard that grouping.
+      #
+      # **The file is optional, and today it does not exist.** Removing release-please
+      # removed the only thing that wrote CHANGELOG.md, and the header of this workflow
+      # records that absence as measured -- so the fallback below is not a defensive
+      # nicety, it is the path every release takes until somebody writes one by hand.
+      # Reading the file unconditionally raised `FileNotFoundError` and failed the job
+      # *before* the fallback could run, which was worse than a missing section in
+      # exactly the way that matters: the tag and release steps below never executed, so
+      # the version stayed untagged, so the next push to `main` took the same branch and
+      # failed identically. A release that cannot be cut cannot un-break itself.
       - name: Extract the CHANGELOG section
         if: steps.v.outputs.release == 'new'
         run: |
           python3 - "$TAG" <<'PY' > release-notes.md
           import re, sys, pathlib
           tag = sys.argv[1].lstrip("v")
-          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          path = pathlib.Path("CHANGELOG.md")
+          text = path.read_text(encoding="utf-8") if path.is_file() else ""
           # release-please writes "## [0.2.0](compare-url) (date)"; take that heading
           # to the next one at the same level.
           m = re.search(rf"^##\s+\[?{re.escape(tag)}\]?.*?$(.*?)(?=^##\s|\Z)",

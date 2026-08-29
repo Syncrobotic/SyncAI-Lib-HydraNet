@@ -19,6 +19,8 @@ from syncai_bev3d.scene_mesh import (
     DRAWN_H,
     height_caption,
     implausible,
+    implausible_caption,
+    not_furniture,
 )
 
 WALL, COLUMN, TABLE, SHELF = 2, 3, 4, 5
@@ -103,3 +105,50 @@ def test_a_class_with_no_interval_is_not_judged():
     a silent pass is honest where an invented interval would not be."""
     assert implausible([("product_ipad", 0.30, 0.30, 0.01)]) == []
     assert implausible([("door", 1.00, 0.12, 2.05)]) == []
+
+
+# ------------------------------------------------------- the caption for what is not furniture
+
+WELDED = ("display_table", 2.60, 2.45, 0.79)
+# 0.15 and not the 0.20 Taichung-cam01 reports: that camera's sliver prints as
+# "short 0.20 m outside 0.20-1.40", which reads as a bug in the interval and is a
+# rounding artefact of the line -- the value is below 0.20 and `%.2f` puts it back on the
+# boundary. Worth knowing before reading a printed line as an off-by-one.
+SLIVER = ("display_shelf", 0.55, 0.15, 2.08)
+GLAZING = ("door", 3.70, 0.12, 2.05)
+GOOD = ("display_table", 1.20, 0.80, 0.79)
+
+
+def test_a_scene_with_nothing_to_say_says_nothing():
+    """The property every caller depends on: an empty caption is drawn by nobody, so a
+    clean scene renders to the pixels it rendered to before this line existed."""
+    assert implausible_caption([GOOD, ("wall", 4.00, 0.15, 2.40)]) == ""
+    assert not_furniture([GOOD]) == []
+
+
+def test_the_caption_names_the_fixture_and_its_measurements():
+    said = implausible_caption([GOOD, WELDED])
+    assert "display_table 2.60x2.45 m" in said
+    # The dimensions, not the interval: a reader who sees 2.60x2.45 knows it is two
+    # counters welded by a mask without being told what a table is allowed to measure.
+    assert "0.30" not in said and "1.60" not in said
+
+
+def test_the_caption_is_capped_because_it_goes_on_an_image():
+    said = implausible_caption([WELDED, SLIVER, GLAZING, ("column", 2.00, 2.00, 2.40)])
+    assert said.count("x") == 3  # one "WxD" per named fixture
+    assert "+1 more" in said
+    assert "column" not in said  # the fourth is counted, not named
+
+
+def test_the_caption_and_the_printed_lines_describe_the_same_scene():
+    """Two copies of one rule is the failure this repository keeps paying for. The
+    caption is filtered through `implausible` itself, and this is what says so."""
+    shapes = [GOOD, WELDED, SLIVER, GLAZING]
+    bad = not_furniture(shapes)
+    assert [b[0] for b in bad] == ["display_table", "display_shelf", "door"]
+    # Every fixture the caption drops is one `implausible` is silent about, and every
+    # one it keeps is one `implausible` speaks about. Stated as the equivalence rather
+    # than as two lists that happen to match today.
+    for shape in shapes:
+        assert bool(implausible([shape])) == (shape in bad)

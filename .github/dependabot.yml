@@ -49,6 +49,23 @@ updates:
     ignore:
       - dependency-name: torch
       - dependency-name: torchvision
+      # `onnxruntime` is capped at `<1.23` in pyproject's `export` extra, and the two
+      # lines of comment above that cap say why: 1.23 dropped cp310 wheels, and 3.10 is
+      # both `requires-python`'s floor and half the CI matrix. Dependabot cannot read a
+      # comment, so it proposed raising the cap to `<1.25` (PR #17) -- editing the very
+      # constraint the comment exists to hold -- and the PR failed `Unit tests (Python
+      # 3.10)` exactly as written. It will be re-proposed every week until the floor
+      # moves.
+      #
+      # The cost is not the noise. `open-pull-requests-limit` is 5 and there are five
+      # open Dependabot PRs, so a bump that can never pass permanently occupies a fifth
+      # of the budget, and a full budget is one Dependabot does not add to -- including
+      # for a security update. An unmergeable PR is not free; it is a held slot.
+      #
+      # Remove this entry when `requires-python` moves to 3.11, at which point the cap
+      # in pyproject goes with it.
+      - dependency-name: onnxruntime
+        versions: [">=1.23"]
     groups:
       dev-tooling:
         patterns: [ruff, pytest, pytest-cov, pre-commit, ty]
