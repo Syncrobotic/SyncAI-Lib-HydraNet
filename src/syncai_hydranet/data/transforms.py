@@ -12,11 +12,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-
-PAD_COLOR = (114, 114, 114)  # matches utils.visualize.letterbox
-PAD_LABEL = 255  # padded pixels are always ignore, never contribute to the loss
+from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD, PAD_COLOR, PAD_LABEL
 
 
 class Sample(dict):
@@ -29,6 +25,33 @@ class Sample(dict):
 # without re-deriving the transform from image sizes -- a derivation that is simply
 # wrong once letterbox padding is involved.
 GEOM_IDENTITY = (1.0, 1.0, 0.0, 0.0)
+
+# COCO-17 left/right pairs, for the horizontal flip. A mirrored image with unswapped
+# keypoint identities teaches the head that "left wrist" means "whichever side", which
+# is worse than no flip at all.
+POSE_LR_SWAP = [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15]
+
+
+def _pose_scale(sample: Sample, sx: float, sy: float) -> None:
+    if "pose" in sample and len(sample["pose"]):
+        kp = sample["pose"].copy()
+        kp[:, :, 0] *= sx
+        kp[:, :, 1] *= sy
+        sample["pose"] = kp
+
+
+def _pose_shift_clip(sample: Sample, dx: float, dy: float, w: int, h: int) -> None:
+    """Shift keypoints; one that leaves the canvas keeps its position but loses its
+    confidence -- the person stays, the joint stops supervising."""
+    if "pose" in sample and len(sample["pose"]):
+        kp = sample["pose"].copy()
+        kp[:, :, 0] += dx
+        kp[:, :, 1] += dy
+        outside = (
+            (kp[:, :, 0] < 0) | (kp[:, :, 0] >= w) | (kp[:, :, 1] < 0) | (kp[:, :, 1] >= h)
+        )
+        kp[:, :, 2] = np.where(outside, 0.0, kp[:, :, 2])
+        sample["pose"] = kp
 
 
 def _geom_scale(sample: Sample, fx: float, fy: float) -> None:
@@ -63,10 +86,10 @@ def _resize(sample: Sample, size: tuple[int, int]) -> Sample:
     img = sample["image"]
     ow, oh = img.size
     _geom_scale(sample, w / ow, h / oh)
-    sample["image"] = img.resize((w, h), Image.BILINEAR)
+    sample["image"] = img.resize((w, h), Image.Resampling.BILINEAR)
     if "masks" in sample:
         sample["masks"] = {
-            k: np.array(Image.fromarray(m).resize((w, h), Image.NEAREST))
+            k: np.array(Image.fromarray(m).resize((w, h), Image.Resampling.NEAREST))
             for k, m in sample["masks"].items()
         }
     if "boxes" in sample and len(sample["boxes"]):
@@ -75,6 +98,7 @@ def _resize(sample: Sample, size: tuple[int, int]) -> Sample:
         b[:, [0, 2]] *= sx
         b[:, [1, 3]] *= sy
         sample["boxes"] = b
+    _pose_scale(sample, w / ow, h / oh)
     return sample
 
 
@@ -109,7 +133,15 @@ def _paste(sample: Sample, size: tuple[int, int], x0: int, y0: int) -> Sample:
         b[:, [0, 2]] = b[:, [0, 2]].clip(0, w)
         b[:, [1, 3]] = b[:, [1, 3]].clip(0, h)
         keep = (b[:, 2] - b[:, 0] > 2) & (b[:, 3] - b[:, 1] > 2)
+        # A source that carries both boxes and poses carries them as parallel arrays,
+        # one row per person. A crop that drops a box must drop its skeleton with it, or
+        # the arrays stop describing the same people and every consumer that zips them --
+        # the pose validation metric decodes person i's heatmap window from box i --
+        # silently scores one person against another's geometry.
+        if "pose" in sample and len(sample["pose"]) == len(b):
+            sample["pose"] = sample["pose"][keep]
         sample["boxes"], sample["labels"] = b[keep], sample["labels"][keep]
+    _pose_shift_clip(sample, x0, y0, w, h)
     return sample
 
 
@@ -142,13 +174,17 @@ class RandomHorizontalFlip:
             return s
         w = s["image"].size[0]
         s["geom"] = None  # a mirror is not an (sx, sy, px, py) mapping; train-only anyway
-        s["image"] = s["image"].transpose(Image.FLIP_LEFT_RIGHT)
+        s["image"] = s["image"].transpose(Image.Transpose.FLIP_LEFT_RIGHT)
         if "masks" in s:
             s["masks"] = {k: np.ascontiguousarray(m[:, ::-1]) for k, m in s["masks"].items()}
         if "boxes" in s and len(s["boxes"]):
             b = s["boxes"].copy()
             b[:, [0, 2]] = w - b[:, [2, 0]]
             s["boxes"] = b
+        if "pose" in s and len(s["pose"]):
+            kp = s["pose"][:, POSE_LR_SWAP, :].copy()
+            kp[:, :, 0] = w - kp[:, :, 0]
+            s["pose"] = kp
         return s
 
 
@@ -187,6 +223,7 @@ class RandomScaleCrop:
             b[:, [1, 3]] = b[:, [1, 3]].clip(0, h)
             keep = (b[:, 2] - b[:, 0] > 2) & (b[:, 3] - b[:, 1] > 2)
             s["boxes"], s["labels"] = b[keep], s["labels"][keep]
+        _pose_shift_clip(s, -x0, -y0, w, h)
         return s
 
 
@@ -252,6 +289,22 @@ class ToTensor:
         img = (img - IMAGENET_MEAN) / IMAGENET_STD
         s["image"] = torch.from_numpy(img.transpose(2, 0, 1)).contiguous()
         if "masks" in s:
+            # **`masks` means class ids, and this cast is the contract rather than a
+            # convenience.** Anything routed through here is truncated to integers, so a
+            # continuous target put in this dict does not fail -- it quantises.
+            #
+            # The depth head found this the day it was written (2026-08-18) and stayed
+            # out: 2.73 m would arrive as 2 and 0.34 m as 0, and since 0.0 is NYUv2's
+            # no-return sentinel the near field would be deleted and then masked out as
+            # invalid. The loss falls, the run looks healthy, and the head learns a
+            # staircase. `data/nyu_depth.py` does its own preprocessing for that reason.
+            #
+            # Widening this to preserve float dtype would be a two-line change and the
+            # wrong one: it would invite continuous targets into a pipeline whose other
+            # stages are also written for class ids -- nearest-neighbour resampling is
+            # right for a label map and lossy for metres, and the photometric jitter above
+            # must never touch a target that is not an image. A float target wants its own
+            # path, which is what it has.
             s["masks"] = {
                 k: torch.from_numpy(m.astype(np.int64)) for k, m in s["masks"].items()
             }
@@ -274,6 +327,31 @@ AUGMENT_DEFAULTS = {
 }
 
 
+def _augment_pair(a: dict, key: str) -> tuple[float, float]:
+    """Read a two-number setting, and say which key is wrong when it is not one.
+
+    ``a`` is ``AUGMENT_DEFAULTS`` merged with ``data.augment`` from a YAML file, so its
+    values are whatever the config said. Reading them inline left the merged dict typed
+    as "float or a pair of floats" at every use site -- five type errors, and worse, a
+    config writing ``scale_range: 0.5`` failed inside ``tuple()`` with a message naming
+    neither the setting nor the file. Config values are checked where they are read.
+    """
+    v = a[key]
+    if isinstance(v, (int, float)) or len(tuple(v)) != 2:
+        raise ValueError(f"data.augment.{key} must be two numbers, e.g. [0.75, 1.5]; got {v!r}")
+    lo, hi = (float(x) for x in v)
+    if lo > hi:
+        raise ValueError(f"data.augment.{key}: {lo} > {hi}, so the range is empty")
+    return lo, hi
+
+
+def _augment_num(a: dict, key: str) -> float:
+    v = a[key]
+    if not isinstance(v, (int, float)):
+        raise ValueError(f"data.augment.{key} must be a number; got {v!r}")
+    return float(v)
+
+
 def build_transforms(
     input_size, train: bool, letterbox: bool = False, augment: dict | None = None
 ) -> Compose:
@@ -293,15 +371,15 @@ def build_transforms(
     a = {**AUGMENT_DEFAULTS, **(augment or {})}
     if train:
         geom_cls = LetterboxScaleCrop if letterbox else RandomScaleCrop
-        geom = geom_cls(input_size, scale_range=tuple(a["scale_range"]))
+        geom = geom_cls(input_size, scale_range=_augment_pair(a, "scale_range"))
         return Compose(
             [
                 geom,
-                RandomHorizontalFlip(p=float(a["flip_p"])),
+                RandomHorizontalFlip(p=_augment_num(a, "flip_p")),
                 ColorJitter(
-                    brightness=float(a["brightness"]),
-                    contrast=float(a["contrast"]),
-                    saturation=float(a["saturation"]),
+                    brightness=_augment_num(a, "brightness"),
+                    contrast=_augment_num(a, "contrast"),
+                    saturation=_augment_num(a, "saturation"),
                 ),
                 ToTensor(),
             ]

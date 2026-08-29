@@ -137,3 +137,15 @@ def test_version_has_a_single_source():
     import syncai_hydranet
 
     assert version("syncai-hydranet") == syncai_hydranet.__version__
+
+
+def test_a_step_with_no_supervised_head_says_so():
+    """The config schema rejects this, but the runtime is the last line and the one that
+    would otherwise fail as `'NoneType' object has no attribute 'detach'` -- an error
+    that names neither the dataset, the head, nor the config key responsible."""
+    cfg = load_config(CFG, ["model.backbone.pretrained=false"])
+    model = build_model(cfg).eval()
+    out = model(torch.randn(1, 3, 64, 80))
+    targets = {"traversability": torch.zeros(1, 64, 80, dtype=torch.long)}
+    with pytest.raises(ValueError, match="supervis"):
+        model.compute_losses(out, targets, [])

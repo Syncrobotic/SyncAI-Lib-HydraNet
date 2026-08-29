@@ -1,0 +1,92 @@
+# =============================================================================
+# The same run again on batch02, with the dataset as the only experimental variable.
+#
+# `hydranet_retail_objects_site_balanced.yaml` answered its question and the answer was
+# negative: rebalancing the sampling **delayed** the `product` collapse rather than
+# preventing it. Its own selection metric peaked at epoch 2 (0.4821) and was never beaten
+# in the following 37 epochs, settling four to seven times lower, while `fixture` and
+# `person` held steady throughout. So the failure is specific to the rare classes rather
+# than the run falling over, and reweighting one side of a contradiction did not resolve
+# it. That header's "it is not dilution, it is sign" argument is therefore partly wrong:
+# sign was real and sign was not the whole of it.
+#
+# `column` behaved differently from `product` in that run, which is the premise this one
+# tests. It rose 0.001 -> 0.321 by epoch 5 and *held* at 0.23-0.27; `product` spiked and
+# fell. Different shapes mean different causes: `column` was starved and responded to
+# weight, `product` was not.
+#
+# ---------------------------------------------------------------------------
+# The prediction this run exists to settle, recorded before the answer was available
+#
+#   batch02 moves `column` substantially more than `product`.
+#
+# Why it should: `product`'s competitor is `fixture`, and batch01 already asserted fixture,
+# so both sides of that boundary had site evidence. `column`'s competitor is `wall`, and
+# batch01 asserted nothing about wall -- ADE20K says `wall` on 59.71% of its labelled
+# pixels across 743 of 750 images while its own `column` supervision is 0.75% on 56 images
+# of atrium marble, and a painted shop pillar looks like a wall. batch02 supplies the
+# missing side. If both classes move together instead, the mechanism is generic and this
+# reasoning is wrong.
+#
+# ---------------------------------------------------------------------------
+# What changed from the balanced run, and why the list is short on purpose
+#
+# **The dataset.** batch02 asserts `floor` and `wall` (ignore fell 56% -> 11.3%), lowers
+# `product`'s SAM 3 threshold 0.40 -> 0.25 after a three-camera sweep, re-runs the one
+# 352x240 camera at the 3x upscale its resolution needs, and adds the dark laptops a human
+# spotted by eye that `laptop on a table` returned zero instances for.
+#
+# That is four changes inside one dataset, so this run is **not** a single-variable test of
+# any one of them -- it is a single-variable test of *batch02 as a whole* against batch01.
+# The prediction above is falsifiable in exactly that form and no finer. Anyone wanting to
+# attribute a move to the floor/wall assertion specifically needs a further run.
+#
+# **split_val: test -> val, and this one is not an experimental variable, it is a leak.**
+# The balanced run had `split_val: test` because batch01 had no val split, so `best.pt` was
+# selected on the test cameras -- which makes its 0.4821 a test number that also chose the
+# checkpoint, and burns that split for that run. batch02 holds out three train cameras as
+# val for exactly this. R2 of `git show b7457c2:docs/RETAIL_DATA.md` is what said the test cameras
+# may not participate in selection; keeping the leak "for comparability" would preserve
+# comparability with a number that should not have existed.
+#
+# **early_stop_patience: 10.** The balanced run peaked at epoch 2 and ran to 39. With
+# patience it would have ended at 12 and freed the card an hour earlier.
+# =============================================================================
+
+_base_: hydranet_retail_objects_site_balanced.yaml
+
+experiment: hydranet_retail_objects_site_batch02
+output_dir: runs/hydranet_retail_objects_site_batch02
+
+data:
+  datasets:
+    - name: ade20k
+      type: seg_folder
+      root: datasets/ADE20K
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: ade20k_retail_objects
+      supervises: [terrain]
+      sample_ratio: 0.15
+
+    - name: site_sam3
+      type: seg_folder
+      root: datasets/retail_objects_batch02
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: retail_objects_native
+      supervises: [terrain]
+      sample_ratio: 3.0
+
+    - name: coco
+      type: coco
+      root: datasets/coco
+      split_train: train2017
+      split_val: val2017
+      supervises: [detection]
+      sample_ratio: 0.1
+
+train:
+  early_stop_patience: 10

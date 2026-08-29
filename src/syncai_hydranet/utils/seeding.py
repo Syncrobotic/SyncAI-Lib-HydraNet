@@ -86,14 +86,22 @@ def apply_channels_last(
 ) -> None:
     """Move 4-D weights to NHWC, which is the layout tensor cores read natively.
 
-    This changes no arithmetic -- only the strides the same numbers are stored with --
-    but it removes the implicit transposes cuDNN would otherwise insert around every
+    It removes the implicit transposes cuDNN would otherwise insert around every
     convolution. Measured on an RTX PRO 6000 at batch 48, 512x640, bf16 autocast:
-    153.2 -> 121.1 ms, about -21% (`scripts/bench_channels_last.py`). Under fp32 it is
+    153.2 -> 121.1 ms, about -21% (measured by `scripts/bench_channels_last.py`, deleted
+    in `500cdd2`; the numbers are here rather than behind it for that reason). Under
+    fp32 it is
     worth nothing -- 219.6 -> 220.9 ms -- because those convolutions run on CUDA cores,
     which do not care about layout. The saving is entirely in work not done, which is
     why high GPU utilisation beforehand did not rule it out: transposing counts as
     utilisation.
+
+    It is the strides that change, **not only the strides**: NHWC selects different
+    convolution kernels, which accumulate in a different order. Under the TF32 every run
+    here enables, the two layouts' outputs differ by ~1e-2 of scale (1e-5 with TF32 off);
+    `tests/test_channels_last.py` pins both. So this defaults to off -- a run with the
+    flag flipped partway through is not bit-comparable to itself, and a control that
+    exists to isolate one variable must not collect a second one from a restart.
     """
     if not enabled:
         return

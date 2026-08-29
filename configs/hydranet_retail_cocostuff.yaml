@@ -1,0 +1,78 @@
+# =============================================================================
+# SyncAI-Lib-HydraNet: retail + COCO-Stuff, to answer one question.
+#
+# Does adding COCO-Stuff's segmentation labels buy anything for the classes ADE20K
+# starves -- stairs, door, glass, floor_soft?
+#
+# **This inherits the CCTV run's recipe on purpose, despite having nothing to do with
+# CCTV.** The control it must be read against already exists:
+#
+#     runs/hydranet_retail_cctv_noself   12 epochs from runs/hydranet_retail_base/best.pt
+#                                        (E22), 512x896, ADE20K 1.0 + COCO 0.1
+#
+# That run was produced on 2026-08-14 to separate the low-LR restart from the site
+# pseudo-labels, and it happens to be exactly this recipe minus COCO-Stuff. Matching it
+# turns this into a one-variable comparison for the price of 12 epochs instead of the 60
+# a fresh baseline would cost. Change any of epochs, lr, input_size or the ADE20K/COCO
+# ratios here and that control stops applying -- rerun it too, or the difference cannot
+# be attributed.
+#
+# What this experiment can and cannot settle, from the measurement on 2026-08-14 that
+# self-training scored ~zero on ADE20K while removing a real failure on site footage:
+# **ADE20K movement alone does not decide this.** Read it on three splits --
+#   1. ADE20K test (329)         the source domain, comparable with everything to date
+#   2. COCO-Stuff test (539)     a second labelled domain, indoor-filtered, never selected on
+#   3. the site clips, by eye    the only thing that resembles the deployment
+# =============================================================================
+_base_: hydranet_retail_cctv.yaml
+
+experiment: hydranet_retail_cocostuff
+output_dir: runs/hydranet_retail_cocostuff
+
+data:
+  datasets:
+    - name: ade20k
+      type: seg_folder
+      root: datasets/ADE20K
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: ade20k_retail
+      supervises: [traversability, terrain]
+      sample_ratio: 1.0
+
+    # 13,557 indoor-filtered images built by hydranet-prepare-cocostuff. Per-pixel labels
+    # for frames already in datasets/coco, so this cost one 659 MB download and no new
+    # imagery. What it actually supplies, measured rather than assumed:
+    #
+    #   door        5,098      glass  5,547 window-other + 2,451 mirror-stuff
+    #   floor_soft  3,687 carpet + 1,943 rug + 264 mat
+    #   stairs        452      <- against ADE20K's 314. The headline "9x more stairs"
+    #                             was wrong: most of COCO's stairs are outdoor steps and
+    #                             the indoor filter removes them. door and glass are the
+    #                             real gain here, not stairs.
+    #
+    # It supplies no free-standing display podiums, no wet_slippery, no floor_metal and
+    # no threshold_ramp, and it is human-height web photography of homes and public
+    # interiors -- the same limitation as ADE20K, not a fix for it.
+    #
+    # sample_ratio 0.5 puts it at rough parity with ADE20K's 6,612 per epoch rather than
+    # letting 2x the images dominate. **This is a starting point, not a measured
+    # optimum** -- unlike COCO's 0.1, which was swept on the test split. If this run is
+    # worth keeping, sweep it before believing the number.
+    - name: cocostuff
+      type: seg_folder
+      root: datasets/cocostuff_seg
+      split_train: train
+      split_test: test
+      label_map: cocostuff_retail
+      supervises: [traversability, terrain]
+      sample_ratio: 0.5
+
+    - name: coco
+      type: coco
+      root: datasets/coco
+      split_train: train2017
+      split_val: val2017
+      supervises: [detection]
+      sample_ratio: 0.1

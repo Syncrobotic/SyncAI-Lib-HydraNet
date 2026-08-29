@@ -3,7 +3,7 @@
     hydranet-annotation labels --out cvat_labels.json    # the schema CVAT imports
     hydranet-annotation check datasets/site_a            # the gate before training
 
-[docs/ANNOTATION_SETUP.md](../../../docs/ANNOTATION_SETUP.md) states the contract between
+`git show b7457c2:docs/METHODOLOGY.md` stated the contract between
 annotators and training in prose, and prose drifts: a class renamed in the tool, an id
 typed by hand, a background exported as 0 where the loss expects 255, one session
 appearing in both train and val. None of that raises an error. Training accepts the
@@ -43,15 +43,27 @@ from ..data.label_maps_retail import (
     RETAIL_TERRAIN,
     RETAIL_TERRAIN_TO_TRAV,
 )
+from ..data.label_maps_retail_objects import (
+    RETAIL_OBJECTS,
+    RETAIL_OBJECTS_NATIVE_ID,
+    RETAIL_OBJECTS_TO_TRAV,
+)
+from ..labels import IGNORE
 from ..utils.visualize import terrain_palette
 
-IGNORE = 255
 TRAV_NAMES = {0: "blocked", 1: "caution", 2: "go", IGNORE: "ignore"}
 
-# Annotation priority, from ANNOTATION_SETUP.md: rank by danger x how blind LiDAR is.
+# Annotation priority, from METHODOLOGY.md: rank by danger x how blind LiDAR is.
 # Confirmed annotate-only -- the full-vocabulary ADE20K does not supply these three.
 # `display_fixture` is retail-only and joins the list for the same reason: no public
 # dataset has shop fixtures, and ADE20K's tables are domestic.
+#
+# `column` and `product` join for the object taxonomy, and they are the two the coverage
+# table must flag loudest. `product` has no public source at all. `column` has one in
+# ADE20K (id 43) but **not** in any mask this project has already drawn: every site mask
+# so far was annotated under the retail 13, where a column is `wall`. Migrated data
+# therefore reports 0.00% for it while looking entirely healthy, which is exactly the
+# shape of the `wet_slippery` failure this list exists to make visible.
 PRIORITY = (
     "glass",
     "wet_slippery",
@@ -59,6 +71,8 @@ PRIORITY = (
     "threshold_ramp",
     "stairs",
     "display_fixture",
+    "column",
+    "product",
 )
 
 
@@ -82,6 +96,13 @@ class Scheme:
 SCHEMES = {
     "indoor": Scheme("indoor", INDOOR_TERRAIN, INDOOR_TERRAIN_TO_TRAV, INDOOR_NATIVE_ID),
     "retail": Scheme("retail", RETAIL_TERRAIN, RETAIL_TERRAIN_TO_TRAV, RETAIL_NATIVE_ID),
+    # The object taxonomy: seven classes, for "what is this" rather than "can the robot
+    # step here". An annotator drawing a shop under `retail` produces no `column` and no
+    # `product` at all -- the same failure the class docstring above describes for
+    # indoor-vs-retail, one taxonomy further on.
+    "retail_objects": Scheme(
+        "retail_objects", RETAIL_OBJECTS, RETAIL_OBJECTS_TO_TRAV, RETAIL_OBJECTS_NATIVE_ID
+    ),
 }
 DEFAULT_SCHEME = "indoor"
 
@@ -187,10 +208,14 @@ def _read_mask(path: Path) -> np.ndarray | None:
     is fine (the palette indices *are* the ids), mode RGB is not -- training would read
     the red channel and call it a class.
     """
-    ann = Image.open(path)
-    if ann.mode not in ("L", "P", "I", "I;16"):
-        return None
-    return np.asarray(ann)
+    # `with`, and `asarray` *inside* it: PIL opens lazily, so the array has to be
+    # materialised before the handle closes. The refusal path is the one that leaked --
+    # a dataset of RGB masks is exactly the case that hits it on every file, and this
+    # function is called once per mask across a whole split.
+    with Image.open(path) as ann:
+        if ann.mode not in ("L", "P", "I", "I;16"):
+            return None
+        return np.asarray(ann)
 
 
 def check_split(root: Path, split: str, rep: Report, allow_void: bool, scheme: Scheme) -> dict:
@@ -212,23 +237,30 @@ def check_split(root: Path, split: str, rep: Report, allow_void: bool, scheme: S
         rep.error(f"{split}: no image/annotation pairs -- training would refuse this split")
         return stats
 
-    # Anything unpaired is dropped silently by the loader, which is how an annotation
-    # run "finishes" with a third of its work not being trained on.
+    _report_unpaired(split, img_dir, ann_dir, pairs, rep)
+    void_pixels = _scan_pairs(pairs, img_dir, scheme, rep, stats)
+    _report_unlabelled(split, stats, void_pixels, scheme, allow_void, rep)
+    return stats
+
+
+def _report_unpaired(split: str, img_dir: Path, ann_dir: Path, pairs, rep: Report) -> None:
+    """Anything unpaired is dropped silently by the loader.
+
+    Which is how an annotation run "finishes" with a third of its work not being trained
+    on, and why this is an error rather than a note.
+    """
     paired_imgs = {p.resolve() for p, _ in pairs}
     paired_anns = {a.resolve() for _, a in pairs}
-    lonely_imgs = [
-        p
-        for p in img_dir.rglob("*")
-        if p.suffix.lower() in {".png", ".jpg", ".jpeg", ".bmp"}
-        and p.resolve() not in paired_imgs
-    ]
-    lonely_anns = [
-        p
-        for p in ann_dir.rglob("*")
-        if p.suffix.lower() in {".png", ".jpg", ".jpeg", ".bmp"}
-        and p.resolve() not in paired_anns
-    ]
-    for label, lonely in (("image", lonely_imgs), ("annotation", lonely_anns)):
+    for label, directory, paired in (
+        ("image", img_dir, paired_imgs),
+        ("annotation", ann_dir, paired_anns),
+    ):
+        lonely = [
+            p
+            for p in directory.rglob("*")
+            if p.suffix.lower() in {".png", ".jpg", ".jpeg", ".bmp"}
+            and p.resolve() not in paired
+        ]
         if lonely:
             shown = ", ".join(p.name for p in sorted(lonely)[:3])
             rep.error(
@@ -236,49 +268,72 @@ def check_split(root: Path, split: str, rep: Report, allow_void: bool, scheme: S
                 f"dropped by the loader (e.g. {shown})"
             )
 
+
+def _check_one_mask(img_path: Path, ann_path: Path, allowed: set, scheme: Scheme, rep: Report):
+    """Read and validate one mask. Returns the array, or None if it cannot be counted.
+
+    Each refusal is separate because each has a different fix, and a mask that fails any
+    of them must not reach the counters -- a wrong shape counted anyway is worse than an
+    uncounted one, because it makes the class shares below quietly wrong.
+    """
+    mask = _read_mask(ann_path)
+    if mask is None:
+        # `with`, because this is the error path of a checker that walks whole datasets:
+        # a leaked handle per bad mask is a file-descriptor exhaustion on exactly the run
+        # that has the most of them. PIL opens lazily, so `.mode` inside the block is
+        # enough to read the header without decoding the image.
+        with Image.open(ann_path) as im:
+            mode = im.mode
+        rep.error(
+            f"{ann_path.name}: {mode} mode, not single channel. "
+            "Export the mask as a single-channel PNG whose pixel value is the class id."
+        )
+        return None
+    if mask.ndim != 2:
+        rep.error(f"{ann_path.name}: {mask.ndim}-d annotation, expected 2-d")
+        return None
+    with Image.open(img_path) as im:
+        if im.size != (mask.shape[1], mask.shape[0]):
+            rep.error(
+                f"{ann_path.name}: mask {mask.shape[1]}x{mask.shape[0]} but image "
+                f"{im.size[0]}x{im.size[1]} -- the two are resized independently, so "
+                "the labels would be geometrically wrong, not merely misaligned"
+            )
+            return None
+    unknown = sorted(int(v) for v in np.unique(mask) if int(v) not in allowed)
+    if unknown:
+        rep.error(
+            f"{ann_path.name}: ids {unknown} are not in the {scheme.name} scheme; the "
+            "loader maps them to ignore, so those pixels train on nothing"
+        )
+    return mask
+
+
+def _scan_pairs(pairs, img_dir: Path, scheme: Scheme, rep: Report, stats: dict) -> int:
+    """Fold every valid pair into `stats`. Returns the void (id 0) pixel count."""
     allowed = set(scheme.native) | {IGNORE}
-    void_is_trained = scheme.native.get(0) == 0
     void_pixels = 0
-
     for img_path, ann_path in pairs:
-        mask = _read_mask(ann_path)
+        mask = _check_one_mask(img_path, ann_path, allowed, scheme, rep)
         if mask is None:
-            rep.error(
-                f"{ann_path.name}: {Image.open(ann_path).mode} mode, not single channel. "
-                "Export the mask as a single-channel PNG whose pixel value is the class id."
-            )
             continue
-        if mask.ndim != 2:
-            rep.error(f"{ann_path.name}: {mask.ndim}-d annotation, expected 2-d")
-            continue
-
-        with Image.open(img_path) as im:
-            if im.size != (mask.shape[1], mask.shape[0]):
-                rep.error(
-                    f"{ann_path.name}: mask {mask.shape[1]}x{mask.shape[0]} but image "
-                    f"{im.size[0]}x{im.size[1]} -- the two are resized independently, so "
-                    "the labels would be geometrically wrong, not merely misaligned"
-                )
-                continue
-
-        present = np.unique(mask)
-        unknown = sorted(int(v) for v in present if int(v) not in allowed)
-        if unknown:
-            rep.error(
-                f"{ann_path.name}: ids {unknown} are not in the {scheme.name} scheme; the "
-                "loader maps them to ignore, so those pixels train on nothing"
-            )
         counts = np.bincount(mask.ravel(), minlength=256)
-        for tid in present:
+        for tid in np.unique(mask):
             tid = int(tid)
             if tid in allowed:
                 stats["pixels"][tid] += int(counts[tid])
                 stats["images"][tid] += 1
         void_pixels += int(counts[0])
         stats["sessions"][_session_of(img_path, img_dir)] += 1
+    return void_pixels
 
+
+def _report_unlabelled(
+    split: str, stats: dict, void_pixels: int, scheme: Scheme, allow_void: bool, rep: Report
+) -> None:
+    """The two ways a split can be mostly unlabelled without looking like it."""
     total_px = sum(stats["pixels"].values())
-    if void_pixels and void_is_trained and not allow_void:
+    if void_pixels and scheme.native.get(0) == 0 and not allow_void:
         share = 100 * void_pixels / max(total_px, 1)
         rep.error(
             f"{split}: {share:.1f}% of pixels are id 0 (void), and the indoor_native map "
@@ -289,8 +344,8 @@ def check_split(root: Path, split: str, rep: Report, allow_void: bool, scheme: S
 
     # A forgotten background and a deliberately blank one are the same pixels, so this
     # cannot be an error. It can be said out loud, which is enough: nobody sets out to
-    # ship a batch that is four-fifths ignore, and the per-class shares below are shares
-    # of what *was* labelled, so they stay reassuring while it happens.
+    # ship a batch that is four-fifths ignore, and the per-class shares reported later
+    # are shares of what *was* labelled, so they stay reassuring while it happens.
     ignored_px = sum(stats["pixels"][tid] for tid in _ignored_ids(scheme))
     if total_px and ignored_px / total_px > 0.6:
         rep.warn(
@@ -299,7 +354,6 @@ def check_split(root: Path, split: str, rep: Report, allow_void: bool, scheme: S
             "fine and the loss simply skips them. If it is not, most of this batch will "
             "train on nothing"
         )
-    return stats
 
 
 def check_sessions(per_split: dict[str, dict], rep: Report) -> None:
@@ -434,9 +488,11 @@ def _add_scheme(parser) -> None:
         "--scheme",
         choices=sorted(SCHEMES),
         default=DEFAULT_SCHEME,
-        help="which taxonomy to use. retail is the indoor 12 plus display_fixture; "
-        "annotating a shop under the indoor scheme yields data with no fixtures in it "
-        "at all, and nothing downstream would report that",
+        help="which taxonomy to use. retail is the indoor 12 plus display_fixture, for "
+        "'can the robot step here'; retail_objects is the 7-class object taxonomy, for "
+        "'what is this'. Annotating a shop under the wrong one yields data missing a "
+        "whole class -- fixtures under indoor, columns and products under retail -- and "
+        "nothing downstream would report that",
     )
 
 

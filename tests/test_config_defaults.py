@@ -33,6 +33,11 @@ DECLARED_DEVIATIONS = {
         "fine-tunes from hydranet_retail_base/best.pt at 3.1e-6 per sample, a quarter "
         "of the from-scratch rate; runs/hydranet_retail_cctv used exactly this"
     ),
+    "hydranet_retail_cocostuff.yaml": (
+        "inherits the CCTV fine-tune's rate on purpose: its control is "
+        "runs/hydranet_retail_cctv_noself, which is this recipe minus COCO-Stuff, and "
+        "moving lr onto the from-scratch line would make that comparison meaningless"
+    ),
 }
 
 

@@ -13,8 +13,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..labels import IGNORE
+from . import label_maps_cocostuff as _cs
 from . import label_maps_indoor as _ind
 from . import label_maps_retail as _ret
+from . import label_maps_retail_objects as _obj
+from . import label_maps_site30k as _s30
 
 # Unified 12-class terrain, aligned with ``data.terrain_classes`` in the configs.
 TERRAIN = {
@@ -122,7 +126,7 @@ def terrain_to_traversability(terrain_mask, trav_map=None):
     """Map an ``HxW`` terrain id array to traversability ids (0/1/2, 255 = ignore)."""
     import numpy as np
 
-    out = np.full_like(terrain_mask, 255)
+    out = np.full_like(terrain_mask, IGNORE)
     for t_id, trav in (trav_map or TERRAIN_TO_TRAV).items():
         out[terrain_mask == t_id] = trav
     return out
@@ -190,6 +194,126 @@ SCHEMES: dict[str, LabelScheme] = {
         _ret.RETAIL_TERRAIN_TO_TRAV,
         _ret.RETAIL_TERRAIN,
     ),
+    # ----------------------------------------------------------------- retail objects
+    #
+    # A second retail taxonomy answering "what object is this", where the one above
+    # answers "can the robot step here". Separate on purpose: this one merges the two
+    # fixture classes and splits `column` out of `wall`, and neither is expressible
+    # under the ids-0-11-are-indoor invariant that tests/test_retail_scheme.py pins.
+    # See label_maps_retail_objects.py for what the site audit found.
+    "ade20k_retail_objects": _scheme(
+        "ade20k_retail_objects",
+        "id",
+        _obj.ADE20K_ID_TO_RETAIL_OBJECTS,
+        _obj.RETAIL_OBJECTS_TO_TRAV,
+        _obj.RETAIL_OBJECTS,
+    ),
+    "retail_objects_native": _scheme(
+        "retail_objects_native",
+        "id",
+        _obj.RETAIL_OBJECTS_NATIVE_ID,
+        _obj.RETAIL_OBJECTS_TO_TRAV,
+        _obj.RETAIL_OBJECTS,
+    ),
+    # The same taxonomy with `product` taken out of segmentation and left to the
+    # detection head, which is the instrument that can actually resolve it: merchandise
+    # is 2-3 feature cells across at stride 8, and a dense head has too few cells to put
+    # an edge in. `person` stays, because unlike `product` its pixels would fall back to
+    # `floor` and open walkable space where a shopper is standing. See
+    # label_maps_retail_objects.py for the asymmetry, which is the whole argument.
+    #
+    # `retail_surfaces_from_objects` reads the site masks already on disk -- which carry
+    # `RETAIL_OBJECTS` ids -- so dropping the class costs no re-annotation. It is a
+    # renumbering as well as a merge: `person` is 6 there and 5 here.
+    "ade20k_retail_surfaces": _scheme(
+        "ade20k_retail_surfaces",
+        "id",
+        _obj.ADE20K_ID_TO_RETAIL_SURFACES,
+        _obj.RETAIL_SURFACES_TO_TRAV,
+        _obj.RETAIL_SURFACES,
+    ),
+    "retail_surfaces_native": _scheme(
+        "retail_surfaces_native",
+        "id",
+        _obj.RETAIL_SURFACES_NATIVE_ID,
+        _obj.RETAIL_SURFACES_TO_TRAV,
+        _obj.RETAIL_SURFACES,
+    ),
+    "retail_surfaces_from_objects": _scheme(
+        "retail_surfaces_from_objects",
+        "id",
+        _obj.RETAIL_OBJECTS_ID_TO_SURFACES,
+        _obj.RETAIL_SURFACES_TO_TRAV,
+        _obj.RETAIL_SURFACES,
+    ),
+    # The site30k campaign taxonomy: eleven ids as written, or the same masks folded
+    # back onto RETAIL_SURFACES so they can be mixed with batch02/batch03 under the
+    # configs that already exist. label_maps_site30k.py argues for both readings.
+    "site30k_native": _scheme(
+        "site30k_native",
+        "id",
+        _s30.SITE30K_NATIVE_ID,
+        _s30.SITE30K_TO_TRAV,
+        _s30.SITE30K,
+    ),
+    "site30k_to_surfaces": _scheme(
+        "site30k_to_surfaces",
+        "id",
+        _s30.SITE30K_ID_TO_SURFACES,
+        _obj.RETAIL_SURFACES_TO_TRAV,
+        _obj.RETAIL_SURFACES,
+    ),
+    # The other direction: read a RETAIL_SURFACES dataset (ADE20K, batch02, batch03) so it
+    # can supervise an 11-class site30k head. `fixture` becomes IGNORE, because the split
+    # into display_table/shelf is a judgement those masks never made.
+    "surfaces_to_site30k": _scheme(
+        "surfaces_to_site30k",
+        "id",
+        _s30.SURFACES_ID_TO_SITE30K,
+        _s30.SITE30K_TO_TRAV,
+        _s30.SITE30K,
+    ),
+    "ade20k_site30k": _scheme(
+        "ade20k_site30k",
+        "id",
+        _s30.ADE20K_ID_TO_SITE30K,
+        _s30.SITE30K_TO_TRAV,
+        _s30.SITE30K,
+    ),
+    "retail_objects_to_site30k": _scheme(
+        "retail_objects_to_site30k",
+        "id",
+        _s30.RETAIL_OBJECTS_ID_TO_SITE30K,
+        _s30.SITE30K_TO_TRAV,
+        _s30.SITE30K,
+    ),
+    # Reads the retail-13 site masks already collected (SAM 3 consensus, pilot) under
+    # the object taxonomy, so that work carries over. `column` does not survive the
+    # trip -- get_scheme() says so out loud rather than leaving it to an IoU of 0.000.
+    "retail_objects_migrated": _scheme(
+        "retail_objects_migrated",
+        "id",
+        _obj.RETAIL_ID_TO_OBJECTS,
+        _obj.RETAIL_OBJECTS_TO_TRAV,
+        _obj.RETAIL_OBJECTS,
+    ),
+    # COCO-Stuff rides on the images already in datasets/coco. Its PNG values sit one
+    # below the ids in the dataset's own labels.txt, and `person` is value 0 -- both are
+    # handled inside the module and pinned by tests/test_cocostuff_scheme.py.
+    "cocostuff_indoor": _scheme(
+        "cocostuff_indoor",
+        "id",
+        _cs.COCOSTUFF_ID_TO_INDOOR,
+        _ind.INDOOR_TERRAIN_TO_TRAV,
+        _ind.INDOOR_TERRAIN,
+    ),
+    "cocostuff_retail": _scheme(
+        "cocostuff_retail",
+        "id",
+        _cs.COCOSTUFF_ID_TO_RETAIL,
+        _ret.RETAIL_TERRAIN_TO_TRAV,
+        _ret.RETAIL_TERRAIN,
+    ),
 }
 
 
@@ -210,6 +334,21 @@ def get_scheme(name: str) -> LabelScheme:
             f"class names rather than confirmed against the official table ({detail}). "
             "A wrong entry relabels a whole class without any error. Confirm them before "
             "reporting numbers from RELLIS-3D.",
+            stacklevel=2,
+        )
+    if name == "retail_objects_migrated":
+        import warnings
+
+        # Same shape of warning as rellis, and for the same reason: what is lost here is
+        # lost silently. These masks were drawn under a taxonomy where a column *is*
+        # wall, so migrating them cannot separate the two -- the run trains a `column`
+        # channel on nothing and reports a plausible-looking 0.000 sixty epochs later.
+        warnings.warn(
+            "label_map 'retail_objects_migrated' reads retail-13 masks under the object "
+            "taxonomy. `column` (id 3) cannot survive the migration: those masks put "
+            "columns inside `wall`, so this scheme supplies zero column pixels. Pair it "
+            "with freshly drawn columns -- one polygon per fixed camera -- or the class "
+            "is an empty channel.",
             stacklevel=2,
         )
     return SCHEMES[name]

@@ -1,0 +1,274 @@
+# person01 -- pose02 plus site person boxes in detection supervision (PLAN 7.20).
+#
+# The delta from `hydranet_retail_pose02.yaml` is exactly one dataset block, and that is
+# the point: `person` on this fleet has never been supervised by a labelled shopper from
+# these stores. Every config in the tree -- pose01, pose02, security_b03, the xl run --
+# supervises detection from `retail_objects_batch02` + `batch03` + `coco_person`, and the
+# two site sets carry `boxed_stock` and `device` only. So the shipped retail `person`
+# channel is trained on COCO at `sample_ratio 0.05`: web photography at eye level, against
+# a fleet that is overhead, down-pitched and h.264.
+#
+# `datasets/site30k_v1` has held 47,465 site person boxes since it was built and is wired
+# into these same configs for POSE alone.
+#
+# **`classes: [person]` is load-bearing, not tidiness.** That annotation file is not
+# person-only: 47,465 person, 168,970 boxed_stock and 117,893 device, 334,328 boxes over
+# 16,146 images, against batch02+batch03's 10,597 product boxes. Added whole it would not
+# disturb the product classes, it would replace them at better than 30:1 with teacher
+# output on the same footage. The restriction is also what drives `DetVocab.class_mask`:
+# built, this block supplies label 0 only and carries `class_mask [1, 0, 0, 0]`, so every
+# product channel takes NO GRADIENT on these frames and the 286,863 product boxes are left
+# out rather than mapped somewhere. Dropping `classes` does not degrade this run, it is a
+# different run.
+#
+# **`sample_ratio: 0.2` is chosen so the result can be attributed.** 14,654 training images
+# at 0.2 is ~2,931 an epoch, against `coco_person`'s 65,744 x 0.05 = ~3,287. Site footage
+# becomes half of the `person` supervision rather than all of it; a ratio that drowns COCO
+# would leave no way to tell a gain from a domain swap. Read off
+# `MultiTaskLoader.detection_class_steps()` rather than off the ratios, both configs built:
+#
+#                  pose02            person01
+#   person        102/115  89%      193/206  94%     <- 91 of the 193 are the new site steps
+#   bag           102/115  89%      102/206  50%
+#   boxed_stock    13/115  11%       13/206   6%
+#   device         13/115  11%       13/206   6%
+#
+# The product classes fall as a SHARE and not as an amount: 13 steps before, 13 after. The
+# epoch simply grew. `class_mask` is why that is the whole story -- the added steps are not
+# negatives for `boxed_stock` and `device`, they are nothing at all.
+#
+# **Two costs, stated so they are not discovered.** The epoch is ~1.8x longer (115 -> 206
+# detection steps), and detection validation goes from 2,961 images every fifth epoch to
+# 11,609 every epoch. At `epochs: 120`, inherited from pose02 because pose02's curve needed
+# them, that is a long run to answer one question. Warm-starting from
+# `runs/hydranet_retail_pose02/last.pt` would answer it in a fraction of it -- the head sets
+# are identical, which is what the trainer's `--load` is strict about -- at the cost that
+# the result is then a fine-tune and not comparable with pose02's own numbers. Left as a
+# from-scratch run on purpose; the choice belongs to whoever spends the card.
+#
+# **`primary_metric` is `detection_mAP/site_person`** -- the head this run exists to move,
+# on the footage it exists to move it on. PLAN 7.9's trap is selecting on another head's
+# number: pose01 chose `best.pt` on terrain mIoU and shipped the run's WORST pose model.
+# `detection_val_interval` is therefore 1, which `config_schema._check_detection_val_interval`
+# requires and would refuse this file without. The cost is real and is stated rather than
+# discovered: detection validation goes from 2,961 images every fifth epoch to 11,609 every
+# epoch, because site_person's val split is 8,648 on its own.
+#
+# **What the number is agreement with.** Those val person boxes are Grounding DINO output
+# thresholded at 0.35 (score p10/p50/p90 0.43/0.60/0.70), so selecting on this metric
+# selects for agreement with that teacher, not with a person. No held-out human-labelled
+# person set exists on this fleet -- `scripts/track_review.py` is building the first one and
+# it is for association, not detection. Anyone quoting a number off this run owes that
+# sentence. `detection_mAP/coco_person` stays in metrics.jsonl beside it precisely so a
+# collapse there is visible rather than traded away silently.
+seed: 42
+model:
+  backbone:
+    name: regnet_x_800mf
+    pretrained: true
+    frozen_stages: 0
+  neck:
+    name: bifpn
+    out_channels: 96
+    num_repeats: 2
+    num_levels: 5
+  heads:
+    terrain:
+      type: semantic_fpn
+      num_classes: 6
+      in_levels:
+      - 0
+      - 1
+      - 2
+      channels: 64
+      dropout: 0.1
+      loss:
+        ce_weight: 1.0
+        dice_weight: 1.5
+        ignore_index: 255
+        class_weights:
+        - 0.0
+        - 0.54
+        - 0.66
+        - 1.6
+        - 0.46
+        - 1.73
+    detection:
+      type: fcos
+      num_classes: 4
+      in_levels:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      channels: 96
+      num_convs: 4
+      strides:
+      - 8
+      - 16
+      - 32
+      - 64
+      - 128
+      loss:
+        cls_weight: 1.0
+        reg_weight: 1.0
+        centerness_weight: 1.0
+      classes:
+      - person
+      - bag
+      - boxed_stock
+      - device
+    pose:
+      type: pose_p3
+      num_classes: 17
+      channels: 96
+      num_convs: 3
+      sigma_cells: 1.5
+      teacher_min_conf: 0.3
+  loss_balancing: uncertainty
+  fixed_weights:
+    traversability: 1.0
+    terrain: 1.0
+    detection: 1.0
+    pose: 1.0
+data:
+  input_size:
+  - 640
+  - 1120
+  workers: 8
+  augment:
+    scale_range:
+    - 0.75
+    - 1.5
+    flip_p: 0.5
+    brightness: 0.3
+    contrast: 0.3
+    saturation: 0.3
+  letterbox: true
+  terrain_classes:
+  - void
+  - floor
+  - wall
+  - column
+  - fixture
+  - person
+  datasets:
+  - name: ade20k
+    type: seg_folder
+    root: datasets/ADE20K
+    split_train: train
+    split_val: val
+    split_test: test
+    label_map: ade20k_retail_surfaces
+    sample_ratio: 0.15
+    supervises:
+    - terrain
+  - name: site_seg
+    type: seg_folder
+    root: datasets/retail_objects_batch02
+    split_train: train
+    split_val: val
+    split_test: test
+    label_map: retail_surfaces_from_objects
+    sample_ratio: 2.0
+    supervises:
+    - terrain
+  - name: site_seg03
+    type: seg_folder
+    root: datasets/retail_objects_batch03
+    split_train: train
+    split_val: val
+    split_test: test
+    label_map: retail_surfaces_from_objects
+    sample_ratio: 2.0
+    supervises:
+    - terrain
+  - name: site_boxes
+    type: coco
+    root: datasets/retail_objects_batch02
+    split_train: train
+    split_val: val
+    split_test: test
+    det_vocab: retail_security
+    sample_ratio: 3.0
+    supervises:
+    - detection
+  - name: site_boxes03
+    type: coco
+    root: datasets/retail_objects_batch03
+    split_train: train
+    split_val: val
+    split_test: test
+    det_vocab: retail_security
+    sample_ratio: 1.0
+    supervises:
+    - detection
+  - name: site_pose
+    type: pose_keypoints
+    root: datasets/site30k_v1
+    split_train: train
+    split_val: val
+    split_test: test
+    sample_ratio: 0.3
+    supervises:
+    - pose
+  - name: site_person
+    type: coco
+    root: datasets/site30k_v1
+    split_train: train
+    split_val: val
+    split_test: test
+    classes:
+    - person
+    det_vocab: retail_security
+    sample_ratio: 0.2
+    supervises:
+    - detection
+  - name: coco_person
+    type: coco
+    root: datasets/coco
+    split_train: train2017
+    split_val: val2017
+    classes:
+    - person
+    - backpack
+    - handbag
+    - suitcase
+    det_vocab: retail_security
+    sample_ratio: 0.05
+    supervises:
+    - detection
+train:
+  epochs: 120
+  batch_size: 32
+  optimizer: adamw
+  lr: 0.0004
+  backbone_lr_mult: 0.1
+  weight_decay: 0.05
+  warmup_iters: 1000
+  scheduler: cosine
+  amp: true
+  amp_dtype: bfloat16
+  grad_clip: 10.0
+  ema: true
+  ema_decay: 0.9998
+  log_interval: 50
+  val_interval: 1
+  primary_metric: detection_mAP/site_person
+  # 4,000 persons out of the val split's 22,241: decode is a per-box Python loop, the
+  # whole split costs ~30 s an epoch and a deterministic prefix costs ~7 s for the same
+  # curve. The number that GATES is still eval_student.py over the whole test split.
+  pose_val_max_persons: 4000
+  channels_last: true
+  early_stop_patience: 0
+  detection_val_interval: 1
+export:
+  opset: 17
+  # No `input_size` override on purpose: the export inherits `data.input_size`.
+  # It carried 512x640 from an ancestor config until 2026-08-24 -- the exact canvas
+  # this file's header argues is unusable (8.0-12.5% of boxes under FCOS's stride-8
+  # cell, "not hard to learn, unlearnable"). Training at 640x1120 and exporting at
+  # 512x640 puts every deployed object at 0.57x the scale the weights learned.
+experiment: hydranet_retail_security_b03_cw_xl
+output_dir: runs/hydranet_retail_person01

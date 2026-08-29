@@ -1,7 +1,9 @@
 """Backbone: torchvision RegNet / ResNet exposing multi-scale features C2..C5.
 
-Chosen for Jetson Orin and TensorRT: only Conv/BN/ReLU, no squeeze-excite and no
-Swish, so whole stages fuse into single kernels. RegNetX also gives a better
+Chosen for TensorRT: only Conv/BN/ReLU, no squeeze-excite and no Swish, so whole
+stages fuse into single kernels. The constraint came from a Jetson Orin and outlived it
+-- kernel fusion is what the serving card wants too, and the graph was already shaped for
+it. RegNetX also gives a better
 accuracy/latency ratio than ResNet at equal FLOPs.
 """
 

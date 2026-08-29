@@ -64,6 +64,9 @@ To identify one, match on the subject rather than the hash: the rewritten
 counterpart is the same sentence, lower-cased, behind a type prefix. The baseline
 run `runs/hydranet_indoor` (traversability mIoU 0.6765) records `ba30fa88`, which
 is `aa07bbe docs: translate the three docs to English, and fix a 404 download URL`.
+That 0.6765 is here as a *label for the run*, not as the figure the head clears: it is
+the best epoch of the best of three seeds (0.6765 / 0.6339 / 0.6300 best, 0.6635 / 0.6094
+/ 0.6065 last), and a peer repository quoted it as a bar and was about 0.05 optimistic.
 
 ## Code
 
@@ -74,3 +77,68 @@ uv run ruff check --fix .
 uv run ruff format .
 uv run pytest -q
 ```
+
+### Green here is not green on CI, and the three reasons are all environment
+
+A local pass is necessary and it is not sufficient. On 2026-08-28 `CI (dev)` had been red
+for a full day with **five failing tests and the export job**, while every local run of
+the same commands was green — and four of the six failures could not fail locally at all,
+because this project is developed on a box that differs from the runner in exactly three
+ways:
+
+| the runner | this box | what it broke |
+|---|---|---|
+| no accelerator | a GPU | `pin_memory=True` warns, the suite turns warnings into errors, `test_multitask_ratio` was red on every matrix row |
+| no `ffmpeg` | ffmpeg installed | a test shelled out to it without the `needs_ffmpeg` guard its neighbour already had |
+| `actions/checkout` at depth 1 | full history | `test_deleted_docs_are_cited_as_history` resolves `git show <sha>:<path>` and on a shallow clone nothing resolves |
+
+A fourth was the same shape one level out: `configs/hydranet_retail_openvocab.yaml` names
+`weights/text/retail_products.pt`, `*.pt` ignored it, and so the export-parity job had
+failed on a clean checkout **since the file was written on 2026-08-17** while passing in
+every working tree that had produced one.
+
+Two things follow, and both are cheap:
+
+* **A `git worktree` is not a clean checkout.** It shares the object database, so it can
+  never reproduce the shallow-clone class of failure. It is still the right place to run
+  the other checks, because it does not carry your untracked files.
+* **When CI is red, read CI's log, not a local re-run.** `gh run view <id> --log-failed`
+  names the failing test and its message in one command. Two of today's fixes were
+  invisible without it, and the day before, a green local run of the export loop is
+  exactly what let the job stay red.
+
+## Figures under `assets/`
+
+`assets/` is an **allowlist**, not a denylist: `.gitignore` ignores `assets/*` and names
+the figures back in one by one. `assets/dev/` is ignored wholesale and never allowlisted:
+renders, check frames and panel temporaries go there, so `assets/` itself holds only what
+a reader is meant to open. Adding a new figure takes two steps, and the second one is the
+point:
+
+```bash
+git add -f assets/my_new_figure.png     # 1. override the ignore
+#          then add `!assets/my_new_figure.png` to .gitignore   # 2. keep it addable
+```
+
+**A figure cut from store footage takes a third step, and it is not optional.**
+`tests/test_figures_are_audited.py` requires every tracked `assets/demo_*.gif` to have a
+tracked `assets/demo_*.audit.json` beside it, recording the camera, the source clip and
+commit, the thresholds the render actually ran at, how many person boxes were checked and
+how many failed — and it fails unless the failing count is zero and the checked count is
+above zero, because a window of an empty shop is not a passed audit. `demo_gif.py` writes
+that verdict itself; allowlist it the same way as the figure. There is no exception
+mechanism and that is deliberate: the remedy for a flagged box is to blur it, and an
+exception would only ever be reached by someone who wants the figure to ship.
+
+The friction is deliberate. Most images in this project are rendered from customer
+CCTV — `datasets/studioa_clips/<City>-cam<NN>/` — and a single frame of a shop floor
+carries identifiable shoppers and staff. A denylist of formats cannot protect that,
+because the format a frame lands in is whichever one the renderer chose. It was
+`assets/*.mp4`, `*.mov` and `*.pdf` for a while, and a 1920x380 PNG cut from
+Taichung-cam01 walked straight past all three.
+
+So before step 1, look at the image and ask whether anyone in it is identifiable.
+A figure that only shows masks, meshes or plots is fine. A frame with people in it
+needs their consent or needs to not be here — the history is not editable after the
+fact, and `tests/test_assets_allowlist.py` is only guarding the mechanism, not the
+judgement.

@@ -114,5 +114,7 @@ def test_amp_and_fp32_losses_agree(dtype):
     head = build_det_head(HEAD_CFG, 16)
     feats, boxes, labels = _batch()
     cls_out, reg_out, ctr_out = head(feats)
-    fp32 = float(FCOSLoss(NUM_CLASSES)(head, cls_out, reg_out, ctr_out, boxes, labels)[0])
+    fp32 = float(
+        FCOSLoss(NUM_CLASSES)(head, cls_out, reg_out, ctr_out, boxes, labels)[0].detach()
+    )
     assert amp == pytest.approx(fp32, rel=0.05), f"amp {amp} vs fp32 {fp32}"

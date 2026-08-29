@@ -1,0 +1,18 @@
+{
+ "Tao-Hsin-cam03": [
+  {"poly": [[196,0],[460,0],[458,214],[198,222]],
+   "to": "glass", "from": ["wall"],
+   "note": "glazed doors onto the mall corridor; the corridor behind them is inside the pane"},
+  {"poly": [[0,140],[168,205],[175,540],[0,540]],
+   "to": "display_table", "from": ["wall"],
+   "note": "left counter bank -- white cabinets against a white wall, read as wall by the teachers"},
+  {"poly": [[487,215],[960,175],[960,540],[520,540]],
+   "to": "display_table", "from": ["wall"],
+   "note": "right counter bank, same failure; the floor between the counters is protected by from=wall"}
+ ],
+ "Tao-Hsin-cam04": [
+  {"poly": [[272,0],[580,0],[575,150],[278,157]],
+   "to": "glass", "from": ["wall"],
+   "note": "street-facing shopfront glazing; scooters, pavement and people outside are inside the pane"}
+ ]
+}

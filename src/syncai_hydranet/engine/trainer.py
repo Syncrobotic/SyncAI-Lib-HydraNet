@@ -1,23 +1,33 @@
-"""Training engine: AMP, warmup + cosine schedule, EMA, checkpoints, TensorBoard."""
+"""A run's lifecycle: build it, step it, validate it, checkpoint it.
+
+The three separable ideas that used to sit in this file are next door -- `ema.py` for the
+weight average, `optim.py` for the parameter-group policy and the schedule. They left
+because they are not about the loop: two test modules were already importing them past
+`Trainer` to use on their own, which is the tell.
+
+What stays is genuinely one thing. `Trainer` holds model, optimiser, scheduler, scaler,
+EMA and the best-so-far metric, and every method here reads several of them at once;
+splitting that further would move the coupling into signatures rather than remove it.
+"""
 
 from __future__ import annotations
 
-import copy
-import math
+import json
 import time
 from pathlib import Path
+from typing import cast
 
-import numpy as np
 import torch
 import torch.nn as nn
 
 from ..config import diff_config
 from ..config_schema import check_config
-from ..data.datasets import build_dataset
+from ..data.datasets import build_dataset, split_leaks
 from ..data.fingerprint import fingerprint_dataset
 from ..data.multitask import MultiTaskLoader
+from ..models.heads.segmentation import SemanticFPNHead
 from ..models.hydranet import build_model
-from ..utils.checkpoint import CKPT_FORMAT, load_checkpoint
+from ..utils.checkpoint import CKPT_FORMAT, load_checkpoint, save_checkpoint
 from ..utils.device import (
     pick_device,
     supports_amp,
@@ -25,7 +35,12 @@ from ..utils.device import (
     supports_pinned_memory,
 )
 from ..utils.logger import get_logger
-from ..utils.runmeta import append_metrics, resolve_out_dir, write_run_meta
+from ..utils.runmeta import (
+    append_metrics,
+    resolve_out_dir,
+    selection_report,
+    write_run_meta,
+)
 from ..utils.seeding import (
     apply_channels_last,
     configure_backends,
@@ -35,127 +50,11 @@ from ..utils.seeding import (
     seed_everything,
 )
 from ..utils.visualize import TRAV_COLORS, prediction_grid, terrain_palette
+from .ema import ModelEMA
 from .evaluator import build_val_loaders, evaluate, select_metric
+from .optim import WarmupCosine, build_optimizer
 
 DEFAULT_PRIMARY_METRIC = "traversability_mIoU"
-
-
-class ModelEMA:
-    """Exponential moving average of the weights, with a warmed-up decay.
-
-    The average starts from the model's *initial* random weights. At a fixed decay of
-    0.9998 that initialisation is still 45% of the EMA after 160 steps, and validation
-    -- which runs on the EMA -- reported 0.16 mIoU for a model whose raw weights scored
-    0.95. The failure is silent and looks exactly like a model that did not learn.
-
-    The decay is therefore ramped: ``decay * (1 - exp(-updates / warmup_steps))``, so
-    the first updates copy the model almost outright and the smoothing strengthens as
-    the average acquires real history. This is the standard fix (YOLOv5, timm) and it
-    makes EMA safe on short runs instead of merely warned about.
-    """
-
-    def __init__(self, model: nn.Module, decay: float = 0.9998, warmup_steps: int = 2000):
-        self.ema = copy.deepcopy(model).eval()
-        for p in self.ema.parameters():
-            p.requires_grad_(False)
-        self.decay = decay
-        self.warmup_steps = max(int(warmup_steps), 0)
-        self.updates = 0
-
-    def decay_at(self, updates: int) -> float:
-        if self.warmup_steps <= 0:
-            return self.decay
-        return self.decay * (1 - math.exp(-updates / self.warmup_steps))
-
-    def residual_init_fraction(self, steps: int) -> float:
-        """How much of the random initialisation survives after ``steps`` updates."""
-        if steps <= 0:
-            return 1.0
-        if self.warmup_steps <= 0:
-            return float(self.decay**steps)
-        n = np.arange(1, steps + 1)
-        decays = self.decay * (1 - np.exp(-n / self.warmup_steps))
-        return float(np.exp(np.log(decays).sum()))
-
-    @torch.no_grad()
-    def update(self, model: nn.Module):
-        self.updates += 1
-        d = self.decay_at(self.updates)
-        msd = model.state_dict()
-        for k, v in self.ema.state_dict().items():
-            if v.dtype.is_floating_point:
-                v.mul_(d).add_(msd[k].detach(), alpha=1 - d)
-            else:
-                v.copy_(msd[k])
-
-
-def build_optimizer(model: nn.Module, tcfg) -> torch.optim.Optimizer:
-    """Lower LR for the backbone (transfer-learning convention); no weight decay on
-    biases and norm parameters."""
-    lr = float(tcfg["lr"])
-    bb_mult = float(tcfg.get("backbone_lr_mult", 1.0))
-    wd = float(tcfg.get("weight_decay", 0.05))
-    decay, no_decay, bb_decay, bb_no_decay = [], [], [], []
-    for name, p in model.named_parameters():
-        if not p.requires_grad:
-            continue
-        is_bb = name.startswith("backbone.")
-        no_wd = p.ndim <= 1  # bias or norm
-        target = (
-            bb_no_decay
-            if is_bb and no_wd
-            else bb_decay
-            if is_bb
-            else no_decay
-            if no_wd
-            else decay
-        )
-        target.append(p)
-    groups = [
-        {"params": decay, "lr": lr, "weight_decay": wd},
-        {"params": no_decay, "lr": lr, "weight_decay": 0.0},
-        {"params": bb_decay, "lr": lr * bb_mult, "weight_decay": wd},
-        {"params": bb_no_decay, "lr": lr * bb_mult, "weight_decay": 0.0},
-    ]
-    if tcfg.get("optimizer", "adamw") == "adamw":
-        return torch.optim.AdamW(groups)
-    return torch.optim.SGD(groups, momentum=0.9, nesterov=True)
-
-
-class WarmupCosine:
-    def __init__(self, optimizer, warmup_iters: int, total_iters: int):
-        self.opt = optimizer
-        self.warmup = max(warmup_iters, 1)
-        self.total = total_iters
-        self.base_lrs = [g["lr"] for g in optimizer.param_groups]
-        self.it = 0
-
-    def _factor(self, it: int) -> float:
-        if it <= self.warmup:
-            return it / self.warmup
-        t = (it - self.warmup) / max(self.total - self.warmup, 1)
-        return 0.5 * (1 + math.cos(math.pi * min(t, 1.0)))
-
-    def _apply(self):
-        f = self._factor(self.it)
-        for g, base in zip(self.opt.param_groups, self.base_lrs, strict=True):
-            g["lr"] = base * f
-
-    def step(self):
-        self.it += 1
-        self._apply()
-
-    def state_dict(self) -> dict:
-        return {"it": self.it}
-
-    def load_state_dict(self, state: dict) -> None:
-        """Restore the schedule position and immediately re-apply it.
-
-        Without the re-apply the first resumed step would run at the base LR, which for
-        a run resumed near the end of cosine decay is orders of magnitude too high.
-        """
-        self.it = int(state["it"])
-        self._apply()
 
 
 def _targets_to_device(targets: dict, device) -> dict:
@@ -170,10 +69,143 @@ def _targets_to_device(targets: dict, device) -> dict:
     return out
 
 
+def _build_datasets(dcfg, input_size):
+    """Every dataset in the config, split into what trains and what selects.
+
+    Returns `(train_sets, val_sets, names, ratios, val_names)`. Kept as a function
+    returning values rather than a method assigning attributes, so the order the
+    constructor does things in stays visible where it matters -- the loaders below need
+    these, and the step count needs the loaders.
+    """
+    lb = bool(dcfg.get("letterbox", False))
+    aug = dcfg.get("augment")
+    train_sets, val_sets, names, ratios, val_names = [], [], [], [], []
+    for ds in dcfg["datasets"]:
+        train_sets.append(build_dataset(ds, input_size, "train", letterbox=lb, augment=aug))
+        # A dataset may contribute training signal without joining checkpoint selection:
+        # omit `split_val` and it is trained on but never validated on.
+        #
+        # This is not a convenience. The evaluator accumulates one confusion matrix per
+        # head across every val set, so anything listed here lands in the number that
+        # picks best.pt -- and on 2026-08-14 eight pseudo-labelled frames were enough to
+        # read `display_fixture` 0.4224 against a 0.3612 baseline, which meant nothing
+        # because the model was being scored against its own predecessor. A second
+        # labelled domain is worth far more as a split nothing selects on than as
+        # another voice in the selection.
+        if ds.get("split_val"):
+            # Validation never augments, so it takes no augment argument.
+            val_sets.append(build_dataset(ds, input_size, "val", letterbox=lb))
+            val_names.append(ds["name"])
+        names.append(ds["name"])
+        ratios.append(float(ds.get("sample_ratio", 1.0)))
+    if not val_sets:
+        raise ValueError(
+            "no dataset declares split_val, so nothing can select a checkpoint; "
+            "at least one is required"
+        )
+    return train_sets, val_sets, names, ratios, val_names
+
+
+def _resolve_amp(tcfg, device):
+    """Returns `(enabled, dtype, scaler)`, refusing a dtype this device cannot do."""
+    amp = bool(tcfg.get("amp", True)) and supports_amp(device)
+    # bfloat16, not float16, because that is what every run this project has produced
+    # was actually trained in -- all of them passing it on the command line while the
+    # default here said otherwise.
+    amp_dtype = resolve_amp_dtype(str(tcfg.get("amp_dtype", "bfloat16")))
+    if amp and amp_dtype is torch.bfloat16 and not supports_bfloat16(device):
+        raise ValueError(
+            "train.amp_dtype=bfloat16 needs an Ampere-or-newer CUDA device; this "
+            f"one ({torch.cuda.get_device_name(device)}) does not support it. "
+            "Set train.amp_dtype=float16 explicitly -- no run in this project has "
+            "used fp16, so treat its first results as unvalidated."
+        )
+    return amp, amp_dtype, torch.amp.GradScaler(enabled=needs_grad_scaler(amp, amp_dtype))
+
+
+def _make_ema(model, tcfg, total_iters: int, logger):
+    """The EMA copy validation will run on, or None, plus the warning it may deserve."""
+    if not tcfg.get("ema", True):
+        return None
+    decay = float(tcfg.get("ema_decay", 0.9998))
+    warmup = int(tcfg.get("ema_warmup_steps", 2000))
+    ema = ModelEMA(model, decay, warmup)
+    # The ramp makes this rare rather than routine, but a run shorter than the ramp
+    # itself can still validate on weights that are mostly noise, and that failure looks
+    # exactly like a model that did not learn.
+    residual = ema.residual_init_fraction(total_iters)
+    if residual > 0.05:
+        logger.warning(
+            f"EMA warning: {total_iters} optimizer steps at decay={decay} "
+            f"(warmup {warmup}) leave {residual:.0%} of the random "
+            f"initialisation in the EMA weights used for validation. Scores "
+            f"will be understated. Lower train.ema_warmup_steps or set "
+            f"train.ema=false for runs this short."
+        )
+    return ema
+
+
+def _open_tensorboard(out_dir: Path):
+    """A SummaryWriter under `out_dir/tb`, or None if tensorboard is not importable.
+
+    Best-effort on purpose: curves are worth having and never worth failing a run over,
+    and `Trainer._log_images` and `_log_task_weights` both check for None.
+    """
+    try:
+        from torch.utils.tensorboard import SummaryWriter
+
+        return SummaryWriter(str(out_dir / "tb"))
+    except Exception:
+        return None
+
+
+def _log_code_version(git: dict, out_dir: Path, logger) -> None:
+    """Say which commit produced this run, or why that cannot be said.
+
+    Datasets live outside git and checkpoints outlive branches, so "which code produced
+    this" has to be answered at write time or not at all.
+    """
+    if not git.get("available"):
+        logger.warning("not a git checkout: this run's code version is unrecorded")
+    elif git["dirty"]:
+        logger.warning(
+            f"working tree is dirty at {git['commit'][:8]}; the exact code is only "
+            f"recoverable via {out_dir / 'uncommitted.patch'}"
+        )
+    else:
+        logger.info(f"code version: {git['commit'][:8]} ({git['branch']})")
+
+
 class Trainer:
     def __init__(self, cfg, resuming: bool = False):
+        """Seven phases, in an order that three of them constrain.
+
+        This was one 212-line block. The phases were already there -- every one of them
+        had a blank line and a paragraph of comment above it -- but the *constraints
+        between* them were not written down anywhere, because in one straight-line body
+        they read as "the line above". They are now each stated on the method they
+        constrain, which is the thing that was actually at risk: a reordering that still
+        runs, still trains, and quietly changes what is in the checkpoint.
+        """
         self.cfg = cfg
         self.device = pick_device(cfg.get("device"))
+        self._open_run_dir(cfg, resuming)
+        seed = self._seed_and_configure_backends(cfg)
+        self._build_model(cfg)
+        tcfg, dcfg = cfg["train"], cfg["data"]
+        names, train_sets, val_size = self._build_data(cfg, seed)
+        total_iters = self._build_schedule(tcfg)
+        self._configure_run_policy(tcfg)
+        self._write_run_meta(cfg, names, train_sets, dcfg, val_size, total_iters)
+
+    # ---------------------------------------------------------------- construction
+
+    def _open_run_dir(self, cfg, resuming: bool) -> None:
+        """The output directory and the logger, before anything that might warn.
+
+        First because every phase after it reports through `self.logger`, and a warning
+        raised before the log file exists is a warning nobody reads.
+        """
         self.out_dir = resolve_out_dir(Path(cfg["output_dir"]), resuming=resuming)
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.logger = get_logger("hydranet", self.out_dir / "train.log")
@@ -182,9 +214,30 @@ class Trainer:
                 f"{cfg['output_dir']} already holds a run; writing to {self.out_dir} "
                 f"instead. Use --resume to continue the existing one."
             )
+            # And record where it actually went. `write_run_meta` snapshots this cfg into
+            # meta.json and config.yaml, so without this a run in a timestamped sibling
+            # states the directory it was *asked* for -- which is a different run's.
+            # `runs/hydranet_indoor_det-20260813-190051/meta.json` says
+            # `output_dir: runs/hydranet_indoor_det` today. Nothing reads the key after
+            # this line; `self.out_dir` is what the run uses.
+            #
+            # **This covers the sibling and nothing else.** A directory renamed or copied
+            # after the run still carries the old path, and that is the worse case rather
+            # than the leftover one: `runs/hydranet_retail_objects_site_balanced_pooledmetric`
+            # names `runs/hydranet_retail_objects_site_balanced`, which exists and is a
+            # different experiment, so following it yields another run's real numbers
+            # instead of an error. Nothing here can see a rename that happens later.
+            cfg["output_dir"] = str(self.out_dir)
         for w in check_config(cfg):
             self.logger.warning(f"config: {w}")
 
+    def _seed_and_configure_backends(self, cfg) -> int:
+        """Determinism and the backend flags. Returns the seed, which the loader needs.
+
+        **Before the model is built.** `seed_everything` seeds the RNG that initialises
+        the weights, so seeding after `build_model` would leave the initial weights
+        unseeded while every log line still reported a seed.
+        """
         seed = int(cfg.get("seed", 42))
         seed_everything(seed)
         configure_backends(
@@ -194,7 +247,10 @@ class Trainer:
             tf32=bool(cfg["train"].get("tf32", True)),
             logger=self.logger,
         )
+        return seed
 
+    def _build_model(self, cfg) -> None:
+        """The model, on the device, in its final memory format."""
         self.model = build_model(cfg).to(self.device)
         # Before the EMA copy is taken below: it deep-copies the model, so converting
         # afterwards would leave the weights validation actually runs on in NCHW.
@@ -204,19 +260,18 @@ class Trainer:
             logger=self.logger,
         )
         self.memory_format = model_memory_format(self.model)
-        tcfg = cfg["train"]
-        dcfg = cfg["data"]
-        input_size = dcfg["input_size"]
 
-        lb = bool(dcfg.get("letterbox", False))
-        aug = dcfg.get("augment")
-        train_sets, val_sets, names, ratios = [], [], [], []
-        for ds in dcfg["datasets"]:
-            train_sets.append(build_dataset(ds, input_size, "train", letterbox=lb, augment=aug))
-            # Validation never augments, so it takes no augment argument.
-            val_sets.append(build_dataset(ds, input_size, "val", letterbox=lb))
-            names.append(ds["name"])
-            ratios.append(float(ds.get("sample_ratio", 1.0)))
+    def _build_data(self, cfg, seed: int):
+        """Loaders and the split check. Returns `(names, train_sets, val_size)` for meta.
+
+        After `_build_model` only because it logs through the same logger; nothing here
+        touches the weights. The leak check raises rather than warns, and does it before
+        the first step, because the alternative is a finished run whose numbers cannot
+        be used.
+        """
+        tcfg, dcfg = cfg["train"], cfg["data"]
+        input_size = dcfg["input_size"]
+        train_sets, val_sets, names, ratios, val_names = _build_datasets(dcfg, input_size)
         self.train_loader = MultiTaskLoader(
             train_sets,
             names,
@@ -226,11 +281,58 @@ class Trainer:
             seed=seed,
             pin_memory=supports_pinned_memory(self.device),
         )
-        self.val_sets = list(zip(names, val_sets, strict=True))
+        # Counted from the schedule, not read off sample_ratio. A shared detection
+        # vocabulary makes it possible for one class to be trained on a small minority of
+        # steps while the config looks balanced, and this is the only place both halves
+        # of that number exist.
+        for cls, (steps, total) in sorted(self.train_loader.detection_class_steps().items()):
+            self.logger.info(
+                f"detection class {cls}: supervised on {steps}/{total} detection steps "
+                f"({steps / total:.0%}); the rest are masked, not negative"
+            )
+        self.val_sets = list(zip(val_names, val_sets, strict=True))
+        val_size = {n: len(v) for n, v in self.val_sets}
+        skipped = [n for n in names if n not in val_size]
+        if skipped:
+            self.logger.info(
+                f"trained on but not validated on: {', '.join(skipped)} "
+                "(no split_val, so they take no part in choosing best.pt)"
+            )
+        # Raised before the first step, because the alternative is a finished run whose
+        # numbers cannot be used. A supplementary dataset selected on a property of the
+        # footage -- "SAM 3 finds a column here" -- selects against whatever split those
+        # cameras already belong to, and the two configs are internally consistent either
+        # way. This has happened once, at a cost of three seeds.
+        leaks = split_leaks(cfg["data"]["datasets"])
+        if leaks:
+            detail = "\n".join(
+                f"  {a} trains on {len(cams)} camera(s) that {b} scores in {split}: "
+                f"{', '.join(cams)}"
+                for a, b, split, cams in leaks
+            )
+            raise ValueError(
+                f"train/eval camera overlap between datasets:\n{detail}\n"
+                "A split by camera means nothing if another dataset trains on those "
+                "cameras. Drop them from the training set, or move them out of the "
+                "evaluated split -- and prefer the first, because a split that shrinks "
+                "to fit the data it was meant to hold out is not a split."
+            )
         # Built once: validation runs every epoch, and a DataLoader's worker pool is
         # expensive to create and pointless to throw away.
         self.val_loaders = build_val_loaders(self.val_sets, cfg, self.device)
+        return names, train_sets, val_size
 
+    def _build_schedule(self, tcfg):
+        """Optimizer, LR schedule, AMP, EMA and compile. Returns the total iteration count.
+
+        **After `_build_model`, and the ordering is load-bearing twice.** `_make_ema`
+        deep-copies the model, so a model converted to channels_last afterwards would
+        leave the weights validation actually runs on in NCHW. And `torch.compile` is
+        held as a separate handle rather than replacing `self.model`, for the reason
+        spelled out at that line: an OptimizedModule's `state_dict()` prefixes every key
+        with `_orig_mod.`, and assigning it would write checkpoints that neither
+        `hydranet-eval` nor `hydranet-export-onnx` can read.
+        """
         self.epochs = int(tcfg["epochs"])
         # Accumulation decouples the batch the optimiser sees from the batch that has to
         # fit in memory, so a laptop and an A100 can train the same effective batch
@@ -250,19 +352,7 @@ class Trainer:
             self.optimizer, int(tcfg.get("warmup_iters", 500)), total_iters
         )
 
-        self.amp = bool(tcfg.get("amp", True)) and supports_amp(self.device)
-        # bfloat16, not float16, because that is what every run this project has
-        # produced was actually trained in -- all of them passing it on the command
-        # line while the default here said otherwise.
-        self.amp_dtype = resolve_amp_dtype(str(tcfg.get("amp_dtype", "bfloat16")))
-        if self.amp and self.amp_dtype is torch.bfloat16 and not supports_bfloat16(self.device):
-            raise ValueError(
-                "train.amp_dtype=bfloat16 needs an Ampere-or-newer CUDA device; this "
-                f"one ({torch.cuda.get_device_name(self.device)}) does not support it. "
-                "Set train.amp_dtype=float16 explicitly -- no run in this project has "
-                "used fp16, so treat its first results as unvalidated."
-            )
-        self.scaler = torch.amp.GradScaler(enabled=needs_grad_scaler(self.amp, self.amp_dtype))
+        self.amp, self.amp_dtype, self.scaler = _resolve_amp(tcfg, self.device)
         self.grad_clip = float(tcfg.get("grad_clip", 0.0))
         if self.accum_steps > 1:
             self.logger.info(
@@ -274,42 +364,78 @@ class Trainer:
         if self.amp:
             self.logger.info(f"mixed precision: {self.amp_dtype}")
 
-        ema_decay = float(tcfg.get("ema_decay", 0.9998))
-        ema_warmup = int(tcfg.get("ema_warmup_steps", 2000))
-        self.ema = (
-            ModelEMA(self.model, ema_decay, ema_warmup) if tcfg.get("ema", True) else None
-        )
-        if self.ema:
-            # The ramp makes this rare rather than routine, but a run shorter than the
-            # ramp itself can still validate on weights that are mostly noise, and that
-            # failure looks exactly like a model that did not learn.
-            residual = self.ema.residual_init_fraction(total_iters)
-            if residual > 0.05:
-                self.logger.warning(
-                    f"EMA warning: {total_iters} optimizer steps at decay={ema_decay} "
-                    f"(warmup {ema_warmup}) leave {residual:.0%} of the random "
-                    f"initialisation in the EMA weights used for validation. Scores "
-                    f"will be understated. Lower train.ema_warmup_steps or set "
-                    f"train.ema=false for runs this short."
-                )
+        self.ema = _make_ema(self.model, tcfg, total_iters, self.logger)
 
+        # torch.compile, held as a *separate handle* rather than replacing self.model.
+        #
+        # `torch.compile(m)` returns an OptimizedModule wrapping m. It shares m's
+        # parameters, so the optimizer and EMA see the same tensors either way -- but
+        # its `state_dict()` prefixes every key with `_orig_mod.`. Assigning it to
+        # self.model would therefore write checkpoints that neither `hydranet-eval`,
+        # `hydranet-export-onnx` nor an older checkpoint loader can read, and the
+        # breakage would surface at export time rather than here.
+        #
+        # So: self.model stays eager and owns state_dict, EMA and compute_losses;
+        # self.forward_module is what the training step calls. Validation runs on the
+        # EMA copy, which is eager by construction.
+        self.forward_module = self.model
+        if bool(tcfg.get("compile", False)):
+            mode = str(tcfg.get("compile_mode", "default"))
+            self.forward_module = torch.compile(self.model, mode=mode)
+            self.logger.info(
+                f"torch.compile enabled (mode={mode}); the first steps of epoch 1 "
+                "include graph capture and will look stalled"
+            )
+        return total_iters
+
+    def _configure_run_policy(self, tcfg) -> None:
+        """What the loop does per epoch: logging cadence, validation cadence, stopping.
+
+        None of it is state the model or the data depends on, so it is last before the
+        run meta -- and it is the phase whose defaults a config most often overrides.
+        """
         self.log_interval = int(tcfg.get("log_interval", 50))
         self.val_interval = int(tcfg.get("val_interval", 1))
+        # Detection validation is 4,952 COCO images and 20% of every epoch, measured on
+        # runs/hydranet_retail_objects: median epoch 85 s of which 17 s is the mAP pass,
+        # 17 minutes of an 84 minute run. Terrain validation is 285 images and stays
+        # every epoch, because it is what selects best.pt.
+        #
+        # An interval, and deliberately not removal. mAP is not dead weight even when it
+        # selects nothing: RETAIL.md's COCO-dilution sweep is only readable because
+        # detection was measured alongside segmentation, and ARCHITECTURE.md's AMP
+        # crash in the FCOS loss survived 166 tests and a full 60-epoch run because
+        # nothing exercised that path. An unvalidated head is not a head with a stale
+        # number; it is a head whose collapse is invisible. The interval keeps the
+        # tripwire and checks it less often.
+        self.det_val_interval = max(1, int(tcfg.get("detection_val_interval", 1)))
+        # 0 disables. Counted in validations rather than epochs, which are the same thing
+        # unless val_interval > 1.
+        #
+        # A smaller `epochs` would be the obvious alternative and it is the wrong one:
+        # across 13 runs in runs/ the peak lands anywhere from epoch 6 (fixed_coco10) to
+        # epoch 53 of 60 (indoor_seed7). A fixed cut either wastes the first case or
+        # truncates the second. Patience only ever removes epochs that improved nothing.
+        self.early_stop_patience = max(0, int(tcfg.get("early_stop_patience", 0)))
+        self.epochs_since_best = 0
         # One named metric decides best.pt. For a robot the honest choice is a
         # traversability number, not an average across heads: mistaking a wall for
         # floor is not compensated by a good mAP on chairs.
         self.primary_metric = str(tcfg.get("primary_metric", DEFAULT_PRIMARY_METRIC))
         self.logger.info(f"model selection: primary_metric={self.primary_metric}")
-        try:
-            from torch.utils.tensorboard import SummaryWriter
-
-            self.tb = SummaryWriter(str(self.out_dir / "tb"))
-        except Exception:
-            self.tb = None
+        self.tb = _open_tensorboard(self.out_dir)
         self.global_step = 0
         self.best_metric = -1.0
         self.start_epoch = 0  # last completed epoch; --resume advances it
 
+    def _write_run_meta(self, cfg, names, train_sets, dcfg, val_size, total_iters) -> None:
+        """The record of what this run is, written before it starts.
+
+        **Last, and it has to be.** It snapshots the resolved `cfg`, the step counts and
+        the dataset fingerprints -- all of which the phases above produce. Written up
+        front rather than at the end so that a run killed at epoch 3 is still traceable
+        to the data behind it.
+        """
         n_params = sum(p.numel() for p in self.model.parameters())
         meta = write_run_meta(
             self.out_dir,
@@ -322,26 +448,17 @@ class Trainer:
                 {
                     "name": n,
                     "train_size": len(t),
-                    "val_size": len(v),
+                    # None, not 0: "not validated on" and "validated on nothing" are
+                    # different facts and the run meta should not blur them.
+                    "val_size": val_size.get(n),
                     # Datasets live outside git; without this, "which data produced
                     # this checkpoint" has no answer six months later.
                     **fingerprint_dataset(ds),
                 }
-                for n, t, v, ds in zip(
-                    names, train_sets, val_sets, dcfg["datasets"], strict=True
-                )
+                for n, t, ds in zip(names, train_sets, dcfg["datasets"], strict=True)
             ],
         )
-        git = meta["git"]
-        if not git.get("available"):
-            self.logger.warning("not a git checkout: this run's code version is unrecorded")
-        elif git["dirty"]:
-            self.logger.warning(
-                f"working tree is dirty at {git['commit'][:8]}; the exact code is only "
-                f"recoverable via {self.out_dir / 'uncommitted.patch'}"
-            )
-        else:
-            self.logger.info(f"code version: {git['commit'][:8]} ({git['branch']})")
+        _log_code_version(meta["git"], self.out_dir, self.logger)
 
     # ------------------------------------------------------------------
     def train(self):
@@ -357,9 +474,39 @@ class Trainer:
         )
         for epoch in range(self.start_epoch + 1, self.epochs + 1):
             self.train_one_epoch(epoch)
-            if epoch % self.val_interval == 0:
-                self.record_epoch(epoch, self.validate(epoch))
+            if epoch % self.val_interval != 0:
+                continue
+            if self.should_stop(self.record_epoch(epoch, self.validate(epoch))):
+                self.logger.info(
+                    f"early stop: {self.epochs_since_best} validations without a new best "
+                    f"{self.primary_metric} (patience {self.early_stop_patience}); "
+                    f"best {self.best_metric:.4f}, stopping at epoch {epoch} of {self.epochs}"
+                )
+                break
+        self._report_selection()
         self.logger.info("training complete")
+
+    def _report_selection(self) -> None:
+        """Say what `best.pt` gave up on the heads it was not selected for.
+
+        At the end rather than per-epoch: the question is about the finished trajectory,
+        and a warning that fires every validation is a warning nobody reads. Written to
+        `selection.json` beside the checkpoints so it survives the terminal.
+        """
+        path = self.out_dir / "metrics.jsonl"
+        if not path.exists():
+            return
+        lines = path.read_text(encoding="utf-8").splitlines()
+        rows = [json.loads(line) for line in lines if line]
+        summary, warnings = selection_report(rows, self.primary_metric)
+        if not summary:
+            return
+        (self.out_dir / "selection.json").write_text(
+            json.dumps({"primary_metric": self.primary_metric, "heads": summary}, indent=1),
+            encoding="utf-8",
+        )
+        for w in warnings:
+            self.logger.warning(f"checkpoint selection: {w}")
 
     def record_epoch(self, epoch: int, metrics: dict) -> bool:
         """Update the best score, then write the checkpoints. Returns True on a new best.
@@ -396,7 +543,7 @@ class Trainer:
             images = images.contiguous(memory_format=self.memory_format)
             targets = _targets_to_device(batch["targets"], self.device)
             with torch.amp.autocast(self.device.type, enabled=self.amp, dtype=self.amp_dtype):
-                outputs = self.model(images)
+                outputs = self.forward_module(images)
                 loss, logs = self.model.compute_losses(outputs, targets, batch["supervises"])
             # Gradients sum across the group, so each micro-batch contributes its share
             # rather than a full step's worth.
@@ -435,18 +582,60 @@ class Trainer:
                     self._log_task_weights()
 
     # ------------------------------------------------------------------
+    def should_stop(self, is_best: bool) -> bool:
+        """Advance the patience counter and say whether the run is finished.
+
+        Separate from the loop because an off-by-one here does not fail loudly -- it
+        either ends a run several epochs early or never fires at all, and both look like
+        a run that simply took that long.
+        """
+        if is_best:
+            self.epochs_since_best = 0
+            return False
+        self.epochs_since_best += 1
+        return bool(self.early_stop_patience) and (
+            self.epochs_since_best >= self.early_stop_patience
+        )
+
+    def val_subset(self, epoch: int) -> tuple[list, list]:
+        """The validation sets to score this epoch, and their loaders, aligned.
+
+        Filtering here rather than inside ``evaluate`` keeps the change to one caller:
+        ``evaluate`` already accepts the pair, so a subset needs no new API and
+        ``hydranet-eval`` is untouched. A dataset is dropped only when detection is the
+        *only* head it supervises, so a source feeding both still scores both.
+
+        The last epoch always runs everything. A run whose final row carries an mAP from
+        five epochs earlier invites exactly the misreading this repository keeps writing
+        docs about -- a number in a table with nothing saying when it was measured.
+        """
+        last = epoch >= self.epochs
+        if self.det_val_interval == 1 or last or epoch % self.det_val_interval == 0:
+            return self.val_sets, self.val_loaders
+        keep = [
+            i
+            for i, (_, ds) in enumerate(self.val_sets)
+            if set(getattr(ds, "supervises", ())) - {"detection"}
+        ]
+        # Every val set is detection-only: skipping them all would validate nothing and
+        # leave `select_metric` with an empty dict. Score them rather than fail.
+        if not keep:
+            return self.val_sets, self.val_loaders
+        return [self.val_sets[i] for i in keep], [self.val_loaders[i] for i in keep]
+
     @torch.no_grad()
     def validate(self, epoch: int) -> dict:
         model = self.ema.ema if self.ema else self.model
         samples: dict | None = {} if self.tb else None
+        val_sets, loaders = self.val_subset(epoch)
         metrics = evaluate(
             model,
-            self.val_sets,
+            val_sets,
             self.cfg,
             self.device,
             self.logger,
             samples=samples,
-            loaders=self.val_loaders,
+            loaders=loaders,
         )
         append_metrics(
             self.out_dir,
@@ -472,6 +661,11 @@ class Trainer:
         Curves only say the loss is falling. This says whether the model is calling a
         whole floor a wall, and how much of the frame is ignore padding.
         """
+        # The one caller already guards on `self.tb`, and `samples` is only ever built
+        # when it is set -- but that is the caller's invariant, not this method's. State
+        # it here so the method is safe to call on its own and the writer is a writer.
+        if self.tb is None:
+            return
         classes = self.cfg["data"].get("terrain_classes")
         for head, (imgs, preds, gts) in (samples or {}).items():
             if head == "traversability":
@@ -479,7 +673,16 @@ class Trainer:
             else:
                 # n_classes is the fallback for a config that names no classes; a config
                 # that does name them gets the palette built for that taxonomy.
-                palette = terrain_palette(classes, self.model.seg_heads[head].num_classes)
+                # `cast` rather than a bare attribute read: `ModuleDict.__getitem__` is
+                # typed to return `Module`, so `.num_classes` widens to `Tensor | Module`
+                # and the palette silently takes something that is not a count.
+                #
+                # To `SemanticFPNHead`, not to `SegmentationHead`: the latter is the frozen
+                # dataclass adapter that *holds* a module, and `seg_heads` stores the module
+                # itself -- its own docstring says so. Casting to the adapter type would have
+                # silenced the checker with a claim that is not true of this object.
+                seg = cast("SemanticFPNHead", self.model.seg_heads[head])
+                palette = terrain_palette(classes, seg.num_classes)
             grid = prediction_grid(imgs, preds, gts, palette)
             self.tb.add_image(f"val_pred/{head}", grid, self.global_step, dataformats="HWC")
 
@@ -514,11 +717,18 @@ class Trainer:
             "epoch": epoch,
             "global_step": self.global_step,
             "best_metric": self.best_metric,
+            # Runs on this box get preempted. A resumed run that restarts its patience
+            # counter either stops early or never stops, and neither announces itself --
+            # the same class of silent-wrong as resuming without `best_metric`.
+            "epochs_since_best": self.epochs_since_best,
             "cfg": dict(self.cfg),
         }
 
     def save(self, name: str, epoch: int):
-        torch.save(self.state_dict(epoch), self.out_dir / name)
+        # Through a temporary file and a rename. `last.pt` is overwritten every epoch,
+        # and a preemption landing inside that write used to leave a truncated file
+        # where the only resume point had been. See utils.checkpoint.save_checkpoint.
+        save_checkpoint(self.state_dict(epoch), self.out_dir / name)
 
     def load(self, path: str, resume: bool = False):
         ckpt = load_checkpoint(path)
@@ -570,6 +780,7 @@ class Trainer:
         self.start_epoch = int(ckpt.get("epoch", 0))
         self.global_step = int(ckpt.get("global_step", 0))
         self.best_metric = float(ckpt.get("best_metric", -1.0))
+        self.epochs_since_best = int(ckpt.get("epochs_since_best", 0))
 
         if ckpt.get("scheduler") is not None:
             self.scheduler.load_state_dict(ckpt["scheduler"])

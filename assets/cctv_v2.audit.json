@@ -1,0 +1,17 @@
+{
+ "camera": "Taichung-cam10",
+ "gif": "cctv_v2.gif",
+ "render": "heads_Taichung-cam10_20260829-172149.mp4",
+ "source_clip": "archive_20260816-112916_20260816-113416.mp4",
+ "commit": "86465b65f213611f0e684db4953cc2e859beb83e",
+ "start_frame": 88,
+ "frames": 100,
+ "stride": 2,
+ "audit_score_thr": 0.03,
+ "blur_score_thr": 0.07,
+ "head_coverage_required": 0.98,
+ "person_boxes_checked": 328,
+ "person_boxes_failing": 0,
+ "failing_examples": [],
+ "produced_by": "tools/commissioning/heads_video.py, cut and audited by hand with demo_gif.py primitives"
+}

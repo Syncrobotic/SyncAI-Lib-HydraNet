@@ -1,0 +1,88 @@
+# =============================================================================
+# `hydranet_retail_security_b03.yaml` with two changes, one of which does not touch
+# training at all.
+#
+# ---------------------------------------------------------------------------
+# 1. THE CLASS WEIGHTS, AND THE CONFUSION MATRIX THEY COME FROM
+#
+# 36 site val images through b03's own checkpoint, rows are the label:
+#
+#              floor     wall   column  fixture   person     IoU   share
+#   floor      90.7%     6.7%     0.0%     2.3%     0.3%    0.847  27.7%
+#   wall        1.1%    97.9%     0.0%     0.9%     0.1%    0.566  20.0%
+#   column      2.7%    86.2%     9.5%     1.7%     0.0%    0.094   4.0%
+#   fixture     3.5%    20.9%     0.0%    75.3%     0.3%    0.734  42.5%
+#   person      3.1%     7.1%     0.0%     3.3%    86.4%    0.830   5.8%
+#
+# **`wall` recalls 97.9% of itself and scores IoU 0.566, because it is eating its
+# neighbours**: 86.2% of `column` and 20.9% of `fixture` come back as wall. `column` is
+# not missing supervision -- batch03 gives it 3.24% of pixels across 105 of 224 masks --
+# it is losing the argmax to a class four times its size.
+#
+# `SegLoss.class_weights` was built for this exact signature and its docstring says so:
+# "One class absorbing and the rest under-firing is the signature of frequency bias, and
+# it survived dice_weight 1.5" -- measured then on `fixture` absorbing, now on `wall`.
+#
+# The weights are `1/sqrt(share)`, normalised to mean 1 over the five real classes, from
+# the shares measured in batch03's own training masks. It is a standard heuristic rather
+# than a fitted quantity, and it is derived from this dataset rather than chosen: `column`
+# ends at 2.4x `wall`. Whether 1/sqrt is the right exponent is the next thing to measure,
+# not something this file claims to know.
+#
+# `void` is 0.0 and never a target -- it is `ignore_index` -- but the list has to be
+# num_classes long or SegLoss refuses it, which is the correct refusal.
+#
+# ---------------------------------------------------------------------------
+# 2. SELECTION, WHICH CHANGES WHICH CHECKPOINT SURVIVES AND NOTHING ELSE
+#
+# The parent selects on `detection_mAP/site_boxes`, and on b03 that saved E31 (det 0.1160,
+# terrain/site 0.6238) while the run's best segmentation was E16 at **0.6664**. A 0.043
+# mIoU improvement existed in `metrics.jsonl` and in no checkpoint on disk. These runs
+# exist to answer a segmentation question, so they select on one.
+#
+# **It selects on `site_seg03` and is reported on `site_seg`.** The 48 new-camera images
+# choose the checkpoint; the 36 batch02 images -- which the control runs also have and
+# which selection never touches -- measure it. `val_cannot_measure_what_it_selects` is the
+# whole reason, and here the two sets are separate rather than merely large.
+#
+# Per-epoch metrics are unaffected by this key, so every comparison already made against
+# the security runs still holds.
+# =============================================================================
+
+_base_: hydranet_retail_security_b03.yaml
+
+experiment: hydranet_retail_security_b03_cw
+output_dir: runs/hydranet_retail_security_b03_cw
+
+model:
+  heads:
+    terrain:
+      loss:
+        ce_weight: 1.0
+        dice_weight: 1.5
+        ignore_index: 255
+        # void, floor, wall, column, fixture, person
+        class_weights: [0.0, 0.54, 0.66, 1.6, 0.46, 1.73]
+
+train:
+  primary_metric: terrain_mIoU/site_seg03
+
+  # **Early stopping off.** Inherited it fires at different epochs on different metrics:
+  # the control runs stopped at E48 and E50 on a detection metric's patience, and the
+  # first class-weighted run stopped at **E19** on this segmentation one, because
+  # `site_seg03` is 48 images and ten non-improving validations on a small val set is a
+  # low bar. Two runs trained to different lengths are not a comparison, and the length
+  # was being set by whichever metric happened to select. Everything in this family now
+  # trains the full 60 epochs.
+  early_stop_patience: 0
+
+  # Detection validation every fifth epoch. Legal now and not before: the parent selects
+  # on `detection_mAP/site_boxes`, and `_check_detection_val_interval` refuses that
+  # pairing because `val_subset` drops detection-only val sets on the skipped epochs and
+  # the selection metric vanishes. Selecting on segmentation removes the conflict.
+  #
+  # Measured reason: an epoch is ~20 s of training and ~15 s of validation, and the
+  # validation is three COCOeval passes over 36 + 48 + 2,737 images, on CPU, with the GPU
+  # at 0%. Sampled utilisation ran 85 82 100 81 77 0 0 0 0 84 85 0 -- a 60/40 duty cycle
+  # whose idle half is this.
+  detection_val_interval: 5

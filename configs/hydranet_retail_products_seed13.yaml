@@ -1,0 +1,20 @@
+# Seed replicate of hydranet_retail_products.yaml. **This is instrumentation, not a model.**
+#
+# Nothing in this project has ever measured detection-mAP run-to-run variance. The only
+# variance figure that exists is segmentation -- `hydranet_indoor` 0.5827 against
+# `hydranet_indoor_seed7` 0.5846 -- and mAP over a 36-image validation set is noisier than
+# mIoU by construction, so that number does not transfer.
+#
+# The immediate cause is the open-vocabulary control: text_embedding scored 0.0572 against
+# linear's 0.0655, and **nobody can say whether 0.0083 is a result or noise.** The wider
+# reason is that the same is true of every detection comparison this project has made or
+# will make. One variance band makes all of them readable, which is why this is worth a
+# GPU hour on its own.
+#
+# Identical to the parent in every respect except `seed` and `output_dir`. If it ever
+# differs in anything else, it stops measuring variance and starts measuring that.
+_base_: hydranet_retail_products.yaml
+
+experiment: hydranet_retail_products_seed13
+output_dir: runs/hydranet_retail_products_seed13
+seed: 13

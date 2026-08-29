@@ -4,11 +4,13 @@ pytest tests/test_runmeta.py -v
 """
 
 import json
+from pathlib import Path
 
 import yaml
 
 from syncai_hydranet.config import Config
 from syncai_hydranet.utils.runmeta import (
+    RUN_LOCK,
     append_metrics,
     environment,
     git_state,
@@ -59,6 +61,107 @@ def test_empty_leftover_directory_is_reused(tmp_path):
     out.mkdir()
     (out / "train.log").write_text("")
     assert resolve_out_dir(out) == out
+
+
+def test_a_live_run_holds_its_directory_before_it_has_written_anything(tmp_path):
+    """The window this lock exists for.
+
+    Occupancy used to be `any(*.pt) or meta.json`, and meta.json is written at the *end*
+    of Trainer.__init__ -- after the model, the datasets and every split fingerprint. A
+    second run starting inside that window was handed the same directory, and the two
+    then shared train.log, tb/, metrics.jsonl, last.pt and best.pt.
+    """
+    out = tmp_path / "run"
+    first = resolve_out_dir(out)
+    assert first == out
+    assert (out / RUN_LOCK).is_file(), "the claim was not recorded"
+
+    second = resolve_out_dir(out)  # no *.pt, no meta.json -- the old test said "reuse"
+    assert second != first
+    assert second.name.startswith("run-")
+
+
+def test_two_runs_starting_in_the_same_second_get_different_directories(tmp_path):
+    """The sibling name is a timestamp to the second, and two starts can share one."""
+    out = tmp_path / "run"
+    got = {resolve_out_dir(out), resolve_out_dir(out), resolve_out_dir(out)}
+    assert len(got) == 3, f"two runs were handed the same directory: {got}"
+
+
+def test_a_lock_left_by_a_dead_run_is_taken_over(tmp_path):
+    """A killed run must not poison its own directory forever.
+
+    Nothing releases the lock on the way out, because a preempted run never reaches a
+    release -- so liveness is the test, and pid 0 never names a live process here.
+    """
+    out = tmp_path / "run"
+    out.mkdir()
+    (out / RUN_LOCK).write_text(json.dumps({"pid": 2**22, "started_at": "then"}))
+    assert resolve_out_dir(out) == out
+
+
+def test_an_unreadable_lock_is_treated_as_abandoned(tmp_path):
+    """A truncated lock is what a crash mid-write leaves. It is not a live claim."""
+    out = tmp_path / "run"
+    out.mkdir()
+    (out / RUN_LOCK).write_text("{not json")
+    assert resolve_out_dir(out) == out
+
+
+def test_a_finished_run_is_still_protected_without_a_lock(tmp_path):
+    """Artefacts outlive processes. best.pt on disk means occupied, lock or no lock."""
+    out = tmp_path / "run"
+    out.mkdir()
+    (out / "best.pt").write_bytes(b"")
+    assert not (out / RUN_LOCK).exists()
+    assert resolve_out_dir(out) != out
+
+
+def test_resuming_takes_the_lock_back(tmp_path):
+    """--resume owns the directory, and a concurrent fresh run must be sent elsewhere."""
+    out = tmp_path / "run"
+    out.mkdir()
+    (out / "last.pt").write_bytes(b"")
+    assert resolve_out_dir(out, resuming=True) == out
+    assert (out / RUN_LOCK).is_file()
+
+
+def test_a_run_records_the_directory_it_actually_wrote_to(tmp_path):
+    """meta.json is provenance, and provenance that names another run is worse than none.
+
+    `resolve_out_dir` sends a second run to a timestamped sibling, and `write_run_meta`
+    snapshots the config it was handed -- so the sibling used to record the directory it
+    was *asked* for. `runs/hydranet_indoor_det-20260813-190051/meta.json` still says
+    `output_dir: runs/hydranet_indoor_det`, which is a different run's directory.
+
+    Found while checking a peer's finding that `experiment` does not identify a run either:
+    nine of forty-one run directories disagree with their own `experiment` field, six of
+    them calling themselves `hydranet_indoor`, including all four arms of the COCO ratio
+    sweep. That half is a labelling choice and is documented rather than changed. This half
+    was a record that did not match the fact.
+    """
+    from syncai_hydranet.engine.trainer import Trainer
+
+    out = tmp_path / "run"
+    out.mkdir()
+    (out / "best.pt").write_bytes(b"")  # occupied, so the next run gets a sibling
+
+    cfg = {"output_dir": str(out)}
+    resolved = resolve_out_dir(Path(cfg["output_dir"]))
+    assert resolved != out, "precondition: an occupied directory yields a sibling"
+
+    # The one line under test, in the shape Trainer applies it.
+    if str(resolved) != str(cfg["output_dir"]):
+        cfg["output_dir"] = str(resolved)
+    assert Path(cfg["output_dir"]) == resolved
+
+    meta = write_run_meta(resolved, cfg)
+    assert Path(meta["config"]["output_dir"]).name == resolved.name
+    on_disk = json.loads((resolved / "meta.json").read_text())
+    assert Path(on_disk["config"]["output_dir"]) == resolved, (
+        "meta.json names a directory this run did not write to"
+    )
+    assert Trainer  # the caller this mirrors; imported so a rename fails here too
 
 
 # ------------------------------------------------------------------- metadata

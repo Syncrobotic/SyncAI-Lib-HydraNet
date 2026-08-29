@@ -71,6 +71,15 @@ data:
       # comparable number comes afterwards, from the clean source-domain split:
       #   hydranet-eval --config configs/hydranet_retail.yaml \
       #       --checkpoint runs/hydranet_retail_cctv/best.pt --split test
+      #
+      # That was run on 2026-08-14, together with the control that removes this dataset
+      # and changes nothing else (runs/hydranet_retail_cctv_noself). Result in
+      # `git show b7457c2:docs/RETAIL.md`. Short version: **on ADE20K these frames do nothing** -- the
+      # whole gain belongs to the low-LR restart, and without the control this run would
+      # have been written up as "adaptation improved the source domain too", which is
+      # false. What they do buy is only visible on the site's own footage: a static false
+      # `caution` on a structural column drops from 49.7% of frames to 6.4%. They also
+      # erode `display_fixture` on their own (-0.0096), exactly as the note above says.
 
     - name: coco
       type: coco

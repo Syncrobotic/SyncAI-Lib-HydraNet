@@ -4,7 +4,9 @@ METHODOLOGY.md assigns "pre-processing parity between training and the robot" to
 deployment stream, and the repository was implementing it twice: `data/transforms.py` for
 training, a hand-copied mean/std in `scripts/bench_camera_orin.py` for the Jetson. Nothing
 tied the two together. Change one and no test fails, no error appears -- the model on the
-robot is just worse, and the blame lands on quantisation.
+robot is just worse, and the blame lands on quantisation. That second copy went with the
+Orin on 2026-08-28 (`git show f64520c:scripts/bench_camera_orin.py`), and folding the
+constants into the graph is why its removal costs nothing.
 
 Folding the constants into the exported graph turns that from a discipline problem into
 an arithmetic one, which is the kind that can be tested. So:
@@ -21,8 +23,9 @@ from PIL import Image
 
 from syncai_hydranet.cli.export_onnx import INPUT_NORMALISED, INPUT_RAW, ExportWrapper
 from syncai_hydranet.config import load_config
-from syncai_hydranet.data.transforms import IMAGENET_MEAN, IMAGENET_STD, build_transforms
+from syncai_hydranet.data.transforms import build_transforms
 from syncai_hydranet.models.hydranet import build_model
+from syncai_hydranet.preprocessing import IMAGENET_MEAN, IMAGENET_STD
 
 SIZE = (64, 80)
 
