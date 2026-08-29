@@ -334,6 +334,17 @@ def main() -> int:
                     "gif": out.name,
                     "render": video.name,
                     "source_clip": meta["clip"],
+                    # **The recipe, carried out of the track log into the tracked file.**
+                    # `runs/` is gitignored, so a record that stays there is a record CI
+                    # cannot read and a re-cutter on a fresh checkout does not have. The
+                    # figure a second session re-cut without `--staff-colours` on
+                    # 2026-08-29 passed every check here because the flags were nowhere
+                    # in this file. `.get` rather than `[]`: a render from before the
+                    # track log carried them writes `null`, and
+                    # `tests/test_figures_are_audited.py` refuses that rather than
+                    # reading a missing key as agreement.
+                    "render_args": meta.get("args"),
+                    "staff_model": meta.get("staff_model"),
                     "commit": subprocess.run(
                         ["git", "rev-parse", "HEAD"],
                         cwd=ROOT,

@@ -399,7 +399,7 @@ def height_caption(heights: dict[int, float]) -> str:
     return line + (f"; depth saw {seen}, which is the white-surface collapse" if seen else "")
 
 
-def render(camera, items, heights, out_path, *, eye=None, target=None):
+def render(camera, items, heights, out_path, *, eye=None, target=None, shapes=()):
     # The *furniture* sets the frame, not the floor. The walkable carpet is drawn out to
     # the edge of the projectable area, so including it made the span the room's reach
     # rather than the room's contents and every scene came out small and far away.
@@ -459,6 +459,12 @@ def render(camera, items, heights, out_path, *, eye=None, target=None):
         fill=(216, 224, 236),
     )
     text.text((18, 36), height_caption(heights), fill=(170, 182, 200))
+    # The third line only exists when there is something to say. `shapes` defaults to
+    # empty so a caller that does not pass it is unchanged, and a clean scene that does
+    # pass it renders identically to one that does not.
+    said = implausible_caption(shapes)
+    if said:
+        text.text((18, 56), said, fill=(236, 168, 96))
     img.save(out_path)
     return view
 
@@ -573,6 +579,43 @@ def implausible(shapes) -> list[str]:
                     f"(built {max(w, d):.2f}x{min(w, d):.2f} m, height {h:.2f} m)"
                 )
     return out
+
+
+def not_furniture(shapes) -> list[tuple]:
+    """The subset of `shapes` `implausible` objects to, as data rather than as sentences.
+
+    Filtered through `implausible` itself rather than by re-reading `PLAUSIBLE_M`: a
+    second copy of the rule is the failure this repository keeps paying for, and the
+    caption below has to name exactly what the printed line names or the picture and the
+    scrollback disagree about the same scene.
+    """
+    return [s for s in shapes if implausible([s])]
+
+
+def implausible_caption(shapes) -> str:
+    """One line for the picture, naming what the render draws and does not believe.
+
+    **Empty when there is nothing to say, and every caller draws nothing then**, so a
+    scene with no defect renders to the same pixels it did before this existed -- which
+    is what let the two published figures be re-cut byte-identical.
+
+    It exists because `implausible` had no consumer for the whole of its life. It was
+    called in one CLI's `main()` and printed to a terminal; the four tools that produce
+    every published figure -- `demo_video`, `heads_video`, `scene_overlay`,
+    `social_card` -- discarded the shapes and drew the fixture anyway. Measured across
+    the fleet 2026-08-29 (PLAN 7.27): 7 fixtures on 4 of the 8 commissioned cameras, all
+    of them shipped in pictures that said nothing about them.
+
+    The dimensions are the informative part and the interval is not: a reader who sees
+    `display_table 2.60x2.45 m` knows it is two counters welded by a mask without being
+    told what a table may measure. Three at most, because this goes on an image.
+    """
+    bad = not_furniture(shapes)
+    if not bad:
+        return ""
+    shown = ", ".join(f"{n} {max(w, d):.2f}x{min(w, d):.2f} m" for n, w, d, _h in bad[:3])
+    more = f", +{len(bad) - 3} more" if len(bad) > 3 else ""
+    return f"drawn and not believed -- outside its class interval: {shown}{more}"
 
 
 # **Walls: three attempts, none of them shippable, and the record is the value.**

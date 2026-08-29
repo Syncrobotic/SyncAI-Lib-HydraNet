@@ -1,9 +1,29 @@
 {
  "camera": "Taichung-cam10",
  "gif": "demo_Taichung-cam10.gif",
- "render": "demo_Taichung-cam10_20260829-192353.mp4",
+ "render": "demo_Taichung-cam10_20260829-204134.mp4",
  "source_clip": "archive_20260816-112916_20260816-113416.mp4",
- "commit": "5ddd9a0c4651bd43d5391306e3157c837db0e8fb",
+ "render_args": {
+  "camera": "Taichung-cam10",
+  "clip": "datasets/studioa_clips/Taichung-cam10/archive_20260816-112916_20260816-113416.mp4",
+  "frames": 900,
+  "fps": 5.0,
+  "checkpoint": "last.pt",
+  "score_thr": 0.35,
+  "metre_scale": 1.0,
+  "no_blur": false,
+  "staff_colours": "runs/staff_model01/model_Taichung-cam10.json",
+  "staff_min_accuracy": 0.85
+ },
+ "staff_model": {
+  "path": "runs/staff_model01/model_Taichung-cam10.json",
+  "sha256": "551aec5e51f94ec9a8dfe377516352bafdc81a42a94e3630ad6de373e42b5246",
+  "accuracy": 0.8740157480314961,
+  "held_out": "Taichung-cam10",
+  "held_out_n": 127,
+  "min_accuracy_required": 0.85
+ },
+ "commit": "c034a1907dc920cf093429832b94b455cb0b0edc",
  "start_frame": 88,
  "frames": 120,
  "stride": 1,

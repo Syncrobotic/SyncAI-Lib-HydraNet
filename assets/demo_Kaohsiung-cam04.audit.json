@@ -1,9 +1,29 @@
 {
  "camera": "Kaohsiung-cam04",
  "gif": "demo_Kaohsiung-cam04.gif",
- "render": "demo_Kaohsiung-cam04_20260829-191408.mp4",
+ "render": "demo_Kaohsiung-cam04_20260829-203156.mp4",
  "source_clip": "archive_20260816-112757_20260816-113301.mp4",
- "commit": "5ddd9a0c4651bd43d5391306e3157c837db0e8fb",
+ "render_args": {
+  "camera": "Kaohsiung-cam04",
+  "clip": "datasets/studioa_clips/Kaohsiung-cam04/archive_20260816-112757_20260816-113301.mp4",
+  "frames": 900,
+  "fps": 5.0,
+  "checkpoint": "last.pt",
+  "score_thr": 0.35,
+  "metre_scale": 1.0,
+  "no_blur": false,
+  "staff_colours": "runs/staff_model01/model_Kaohsiung-cam04.json",
+  "staff_min_accuracy": 0.9
+ },
+ "staff_model": {
+  "path": "runs/staff_model01/model_Kaohsiung-cam04.json",
+  "sha256": "f273c32a812bee9815b5d3a6b1f6006005ce3480008130c93203959ecf20c530",
+  "accuracy": 1.0,
+  "held_out": "Kaohsiung-cam04",
+  "held_out_n": 15,
+  "min_accuracy_required": 0.9
+ },
+ "commit": "c034a1907dc920cf093429832b94b455cb0b0edc",
  "start_frame": 242,
  "frames": 120,
  "stride": 1,
