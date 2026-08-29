@@ -1826,9 +1826,18 @@ something it does not support.
    Taichung-cam01's 4.7 m, Kaohsiung-cam04's 3.0 m. Those are the counter runs §7.21
    measured as classified `wall` by both teachers on a white-fixture store — and extracting
    them as long continuous runs had made them **more** convincing, not less. They are
-   re-classified as merchandise rather than discarded: the mask holds a real object, only
-   its class was wrong. **Tao-Hsin-cam03, which §7.21 records as reconstructing zero
-   shelving, gains five runs it never had**, without a single parameter being tuned.
+   **dropped**, and the attempt to do better than that is worth recording because it broke
+   the requirement this whole entry is about. Re-classifying them as merchandise -- the
+   mask holds a real object, only its class is wrong -- put the fixture in the wrong
+   **place**: the line is fitted to the `wall` point set, which on a white-fixture store is
+   the counter *and the wall behind it*, so it sits at the wall, a metre behind the counter
+   that failed the relation. Projected back through the camera, a box on that line hovers
+   above the counter standing in front of it. Measured by rendering `scene_overlay` at
+   `619975b` and at the change: **Tao-Hsin-cam03 went from four well-placed meshes to
+   six**, the two extra ones floating over the counter runs, and Kaohsiung-cam04 from three
+   to five with a sliver standing on open floor. Reverted in `f63c0d2`. **A fixture the
+   mask cannot place is better absent than present and wrong** -- and an earlier revision
+   of this entry claimed those five boxes as a gain.
 
    **Fit, regularise, mesh — in that order, which this file did not have.** Nothing ever
    compared one fitted component with another, so two boxes drawn through each other was a
