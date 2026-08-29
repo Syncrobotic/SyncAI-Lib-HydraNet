@@ -690,6 +690,13 @@ def main() -> int:
                 "clip": clip.name,
                 "checkpoint": args.checkpoint,
                 "score_thr": args.score_thr,
+                # The threshold the faces were blurred at, recorded because an auditor
+                # has to reconstruct the blur set THIS render applied. Reading the
+                # current constant instead answers "would today's threshold have covered
+                # them", which is a different and more flattering question -- and the
+                # constant moved on 2026-08-28 (0.10 -> 0.07), so the two now differ.
+                "blur_score_thr": BLUR_THR,
+                "blur_faces": not args.no_blur,
                 "fps": args.fps,
                 "frames": n,
                 "positions": positions,
