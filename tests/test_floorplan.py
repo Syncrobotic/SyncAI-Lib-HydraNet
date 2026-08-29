@@ -22,9 +22,11 @@ import pytest
 from syncai_bev3d.floorplan import (
     BevGrid,
     polygon_area,
+    resolve_overlaps,
     shoelace,
     simplify_chain,
     simplify_ring,
+    snap_to_walls,
 )
 
 
@@ -229,3 +231,87 @@ def test_a_rastered_point_survives_the_round_trip_to_its_own_cell():
     centre = grid.to_metres(np.array([[cols[0], rows[0]]], dtype=float))[0]
     assert abs(centre[0] - 1.3) <= grid.cell / 2
     assert abs(centre[1] - 5.7) <= grid.cell / 2
+
+
+# ---------------------------------------------------------------------------
+# two fixtures cannot occupy the same floor
+
+
+def test_boxes_that_do_not_touch_are_left_alone():
+    out = resolve_overlaps([(0, 1, 0, 1), (2, 3, 2, 3)])
+    assert out == [(0.0, 1.0, 0.0, 1.0), (2.0, 3.0, 2.0, 3.0)]
+
+
+def test_a_box_mostly_inside_another_is_absorbed_rather_than_shrunk():
+    """The asymmetry the docstring argues for, as a case.
+
+    A box more than `FIXTURE_CONTAINED_FRAC` inside another is the same fixture fitted
+    twice from different evidence -- the class mask and the re-classified wall run can
+    both cover it -- so shrinking it to contact would leave a sliver of a fixture that
+    was never there. PLAN 7.21 measured the welded-object half of this at 263 of 503
+    merges on Taichung-cam01.
+    """
+    out = resolve_overlaps([(0, 4, 0, 4), (1, 2, 1, 2)])
+    assert out[0] == (0.0, 4.0, 0.0, 4.0)
+    assert out[1] is None, "a contained box is absorbed, and the list keeps its length"
+
+
+def test_the_smaller_box_gives_way_along_the_axis_it_overlaps_least():
+    """Two real fixtures grown into each other: the thinner overlap is the yielding axis.
+
+    That axis is the direction the smaller box's own extent was least certain in, which
+    is why the rule picks it rather than splitting the difference.
+    """
+    lateral = resolve_overlaps([(0, 2, 0, 4), (1.8, 4, 0, 4)])
+    assert lateral[0] == (0.0, 1.8, 0.0, 4.0), "the smaller box's u face moved to contact"
+    assert lateral[1] == (1.8, 4.0, 0.0, 4.0), "the larger box is untouched"
+
+    forward = resolve_overlaps([(0, 4, 0, 2), (0, 4, 1.8, 4)])
+    assert forward[0] == (0.0, 4.0, 0.0, 1.8)
+    assert forward[1] == (0.0, 4.0, 1.8, 4.0)
+
+
+def test_resolving_leaves_no_pair_still_interpenetrating():
+    """The property the function exists for, asserted over its own output."""
+    boxes = [(0, 2, 0, 4), (1.8, 4, 0, 4), (3.5, 6, 0, 4), (10, 11, 10, 11)]
+    out = [b for b in resolve_overlaps(boxes) if b is not None]
+    for i, a in enumerate(out):
+        for b in out[i + 1 :]:
+            ou = min(a[1], b[1]) - max(a[0], b[0])
+            ov = min(a[3], b[3]) - max(a[2], b[2])
+            assert ou <= 1e-9 or ov <= 1e-9, f"{a} and {b} still overlap"
+
+
+# ---------------------------------------------------------------------------
+# fixtures stand against walls
+
+
+def test_a_fixture_within_the_snap_distance_is_moved_flush():
+    """A 12 cm gap between shelving and the wall behind it is a fitting error.
+
+    It is also the kind a reader spots instantly, because daylight through the gap is
+    what the eye follows -- which is why this runs at all rather than being left to a
+    reviewer.
+    """
+    box = (1.0, 3.0, 0.12, 1.0)
+    wall = ("u", 0.0, 0.0, 5.0, 0.1)
+    assert snap_to_walls(box, [wall]) == (1.0, 3.0, 0.0, 1.0)
+
+
+def test_snapping_moves_only_the_near_face_so_depth_is_measured_not_invented():
+    box = (1.0, 3.0, 0.12, 1.0)
+    out = snap_to_walls(box, [("u", 0.0, 0.0, 5.0, 0.1)])
+    assert out[3] == box[3], "the far face is the fixture's measured depth and must not move"
+    assert out[0] == box[0] and out[1] == box[1], "the along-wall extent is untouched"
+
+
+def test_a_gap_wider_than_the_snap_distance_is_a_gap():
+    """35 cm is a real space between a fixture and a wall, not a fitting error."""
+    box = (1.0, 3.0, 0.35, 1.0)
+    assert snap_to_walls(box, [("u", 0.0, 0.0, 5.0, 0.1)]) == box
+
+
+def test_a_wall_that_does_not_run_past_the_fixture_is_not_snapped_to():
+    """Perpendicular distance alone would pull a fixture onto a wall at the other end."""
+    box = (1.0, 3.0, 0.12, 1.0)
+    assert snap_to_walls(box, [("u", 0.0, 8.0, 9.0, 0.1)]) == box

@@ -29,10 +29,12 @@ exact -- which is worth knowing precisely because §7.19 says the fleet's metres
 
 from __future__ import annotations
 
+import json
 import math
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from syncai_bev3d.plate_calibration import (
     ADULT_M,
@@ -40,6 +42,9 @@ from syncai_bev3d.plate_calibration import (
     column_health,
     fit_pose_from_people,
     floor_scale,
+    load_person_boxes,
+    person_checks,
+    pick_daytime_slot,
     undistort_image,
 )
 from syncai_hydranet.geometry.ground import Camera, GroundPlane, undistort_points
@@ -381,3 +386,134 @@ def test_column_health_says_so_rather_than_inventing_a_range_when_nothing_is_flo
     out = column_health(cam, GroundPlane(2.8, math.radians(-45.0)), H_PX, W_PX)
     assert out["floor_rows"] < 2
     assert "range_near_m" not in out
+
+
+# ---------------------------------------------------------------------------
+# what reaches the fit: plate selection and the person-box gates
+
+
+def test_the_brightest_daytime_plate_wins_and_the_slot_keys_are_utc(tmp_path):
+    """Slot keys are UTC and the store is +8, so the window is not the one in the name.
+
+    A plate written at `2326` UTC is 07:26 in the shop and is not daytime; one at `0530`
+    is 13:30 and is. Getting this backwards picks a night plate for a camera that has a
+    perfectly good day one, and every mask and metre downstream is fitted to a dark frame.
+    """
+    for slot, value in (
+        ("20260816-233000", 250),
+        ("20260816-033000", 100),
+        ("20260816-053000", 200),
+    ):
+        Image.fromarray(np.full((20, 30, 3), value, np.uint8)).save(
+            tmp_path / f"plate_{slot}.png"
+        )
+    assert pick_daytime_slot(tmp_path) == "20260816-053000", (
+        "the 2330 plate is the brightest but is 07:30 store-local"
+    )
+
+
+def test_a_camera_with_no_daytime_plate_is_refused(tmp_path):
+    Image.fromarray(np.zeros((20, 30, 3), np.uint8)).save(
+        tmp_path / "plate_20260816-233000.png"
+    )
+    with pytest.raises(SystemExit):
+        pick_daytime_slot(tmp_path)
+
+
+def _anns(tmp_path, annotations):
+    path = tmp_path / "instances.json"
+    path.write_text(
+        json.dumps(
+            {
+                "categories": [{"id": 1, "name": "person"}, {"id": 2, "name": "bag"}],
+                "images": [
+                    {"id": 10, "file_name": "CamA__f0.jpg", "width": 960, "height": 540},
+                    {"id": 11, "file_name": "CamB__f0.jpg", "width": 960, "height": 540},
+                ],
+                "annotations": annotations,
+            }
+        )
+    )
+    return path
+
+
+def test_person_boxes_are_scaled_from_the_annotation_frame_to_the_plate(tmp_path):
+    """`camera-json-is-calibrated-at-half-resolution` in one function.
+
+    The annotations are 960x540 and the plate is 1920x1080, and the boxes must be scaled
+    by two on the way in. Skipping it does not raise -- it returns metres, which is the
+    failure `world_frame`'s `source_size_px` was added to stop elsewhere.
+    """
+    path = _anns(
+        tmp_path,
+        [{"image_id": 10, "category_id": 1, "bbox": [100, 100, 60, 180], "score": 0.9}],
+    )
+    boxes = load_person_boxes(path, "CamA", 1920, 1080, 0.0)
+    assert boxes.tolist() == [[200.0, 200.0, 320.0, 560.0]]
+
+
+@pytest.mark.parametrize(
+    ("ann", "why"),
+    [
+        (
+            {"image_id": 10, "category_id": 2, "bbox": [300, 100, 60, 180], "score": 0.9},
+            "not a person",
+        ),
+        (
+            {"image_id": 10, "category_id": 1, "bbox": [400, 100, 60, 180], "score": 0.2},
+            "below the score gate",
+        ),
+        (
+            {"image_id": 10, "category_id": 1, "bbox": [0, 100, 60, 180], "score": 0.9},
+            "against the frame edge, so a crop",
+        ),
+        (
+            {"image_id": 10, "category_id": 1, "bbox": [500, 100, 200, 180], "score": 0.9},
+            "too wide to be standing",
+        ),
+        (
+            {"image_id": 11, "category_id": 1, "bbox": [100, 100, 60, 180], "score": 0.9},
+            "a different camera",
+        ),
+    ],
+)
+def test_every_gate_on_the_way_into_the_height_prior(tmp_path, ann, why):
+    """Each of these boxes would move the median person height if it got through.
+
+    The prior is a *median* over the survivors, so a gate that stops working does not
+    fail, it shifts a camera's metres -- and `scale_source` would still read
+    `person_height_median_vs_1.7m_prior_nNN` with a larger `NN`.
+    """
+    assert len(load_person_boxes(_anns(tmp_path, [ann]), "CamA", 1920, 1080, 0.0)) == 0, why
+
+
+def test_person_checks_reports_the_prior_and_an_independent_bound():
+    """The cross-check `person_checks` exists to be: the plane's answer beside a depth-free one.
+
+    Handed a plane that is right, both agree and `scale_person` sits at 1.0 -- the ratio
+    of the 1.70 m prior to what the boxes imply. The people-only fit is computed without
+    the plane at all, which is what makes it a bound rather than a restatement.
+    """
+    cam_h, pitch_deg, vfov = 2.8, 25.0, 60.0
+    boxes = _synth_people(vfov, cam_h, pitch_deg)
+    cam = Camera.from_vfov(H_PX, W_PX, vfov)
+    plane = GroundPlane(height=cam_h, pitch=math.radians(pitch_deg))
+    out = person_checks(boxes, cam, plane, (H_PX, W_PX), vfov)
+    assert out["boxes_used"] == len(boxes)
+    assert out["implied_person_height_med_m"] == pytest.approx(ADULT_M, abs=0.01)
+    assert out["scale_person"] == pytest.approx(1.0, abs=0.01)
+    assert out["people_fit"]["height_m"] == pytest.approx(cam_h, abs=0.01)
+
+
+def test_person_checks_records_the_failure_instead_of_dropping_the_key():
+    """Too few boxes to fit: `people_fit` carries `failed`, and the caller can see why.
+
+    A missing key and a recorded refusal read differently to anything downstream, and
+    this is the branch the `SystemExit` type exists to reach.
+    """
+    boxes = _synth_people(60.0, 2.8, 25.0)[:3]
+    cam = Camera.from_vfov(H_PX, W_PX, 60.0)
+    plane = GroundPlane(height=2.8, pitch=math.radians(25.0))
+    out = person_checks(boxes, cam, plane, (H_PX, W_PX), 60.0)
+    assert "failed" in out["people_fit"]
+    assert "implied_person_height_med_m" not in out, "fewer than five boxes measures nothing"
