@@ -1,226 +1,167 @@
-# SyncAI-Lib-HydraNet
+# SyncAI-Lib-HydraNet — security & retail analytics for fixed store CCTV
 
-Multi-head perception network for quadruped robots: **one forward pass, one frame, three
-outputs — traversable surface, terrain class, object detection.**
-The architecture follows the Tesla HydraNet idea: a shared backbone and neck carry almost
-all of the compute, while the task heads stay tiny and mutually independent.
+[![CI](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/actions/workflows/ci.yml)
+[![Python 3.10 – 3.13](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](pyproject.toml)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.1%2B-ee4c2c)](https://pytorch.org/)
+[![Licence Apache-2.0](https://img.shields.io/badge/licence-Apache--2.0-green)](LICENSE)
 
-![traversability and the same answer projected onto the floor](assets/bev_ground_projection.gif)
+One camera, one model, two readings: **loss prevention** (who entered where, what did they
+do, did stock leave unpaid) and **retail analytics** (footfall, dwell, paths, queues) from
+the fixed CCTV already on the ceiling. No LiDAR, no new hardware.
 
-Left, traversability with detections: green is walkable, red is blocked. Right, the same
-answer projected onto the floor in metres, each detected object placed where its box meets
-the ground — the one range a single camera can recover. Handheld footage of a building
-lobby, run through the 60-epoch multi-task checkpoint. The camera height and pitch there
-are assumed, not measured; on the robot the ground plane is fitted to the depth return
-each frame, which also tracks the pitch and roll of a walking quadruped.
+![Kaohsiung-cam04: detections and tracks on the left, the metric 3D scene on the right](assets/demo_Kaohsiung-cam04.gif)
 
-**Read it for what it is.** The floor, the walls and the partitions are solid, and the two
-heads agree with each other — the trunk is doing its job. What this clip cannot show is the
-part that is not finished: `caution` scores 0.33 on the held-out test split and `stairs`
-0.32, because three of the four terrain classes that map to `caution` have **zero** training
-examples, and because the training data is ADE20K — human-height web photography, not
-footage from a robot's camera. Point the same model at a ceiling and a quarter of it comes
-back "go". The gap is data, not architecture; [docs/METHODOLOGY.md](docs/METHODOLOGY.md)
-says what to collect and in what order.
+*Left: person boxes and confirmed tracks, with this camera's false-positive polygons
+applied — **staff blue, everything else green**, one verdict per person from nine
+torso-colour statistics. Two colours, not three: a track too short to have a verdict is
+drawn as a customer, so a member of staff crossing in under about a second is green — the
+cost of not putting a third colour on screen that a viewer has to be told how to read.
+Right: the
+same moment in metres, the store's own furniture reconstructed from one static plate, a
+figure at every tracked shopper's floor position. Nothing is drawn by hand and no second
+sensor is involved.*
+
+*Three things to read the panels with. **Every face is blurred by `demo_video.py` itself**,
+by two instruments, and `demo_gif.py` then re-runs the detector on the source frames at a
+far lower threshold and refuses to write the figure unless every person it finds falls
+inside a blurred region — it has refused one (PLAN §7.24). **The right panel has fixtures,
+not a room**: a fixed camera sees part of one store, so the walls are the runs that were
+observed rather than a closed boundary, and wall and column heights are a stated constant,
+printed on the panel, because the depth model collapses on white surfaces. And **the window
+is the busiest two minutes of a three-minute clip**, chosen automatically by
+`demo_gif.py --start auto` — a figure of an empty shop shows nothing, but it is a selection
+and this is it being said.*
+
+*The colours are licensed per camera and refused where they are not earned. This camera
+scores 1.00 held out on its own 15 labelled crops; the same model is refused on
+Tao-Hsin-cam04, which scores 0.417. And it is not a model that paints everyone one colour:
+pointed at Taichung-cam01, a repair counter, it calls **98.5% of person-observations
+staff**, 2,144 against 34.*
+
+**A second store**, the same code with the colours switched off:
+
+![Taichung-cam10: detections and tracks on the left, the metric 3D scene on the right](assets/demo_Taichung-cam10.gif)
+
+*Taichung-cam10 is rendered **without** staff colours, and the reason is the point. Its 15
+labelled crops are 15 staff and 0 customers, so a model held out on it scores a clean 1.000
+that measures only whether it calls staff staff — an accuracy that cannot be wrong about
+customers cannot license colouring them, and the gate refuses it (PLAN §7.23). The figures
+here carry identity colours instead. **Read its metres with the caveat**: this camera's
+scale is known to be 1.21x too large (PLAN §7.10, a decision to leave rather than an
+oversight), which is why its figures stand 1.98 m rather than 1.70.*
+
+The whole plan — architecture, data strategy, build order, and the measurements behind
+every decision — lives in **one document: [docs/PLAN.md](docs/PLAN.md)**. Everything the
+project previously documented is in git history (`git show b7457c2:docs/<file>`).
+
+## The design in one paragraph
+
+Two packages with one contract between them. `syncai_bev3d` runs **once per camera**: it
+builds a static plate, fits the ground geometry, runs the teachers one time, and emits a
+`camera.json` — walkable floor, walls, columns, doors, display tables and shelves,
+products down to `iphone / ipad / macbook / boxed_stock`, shelf ROIs, and the derived
+false-positive polygons. The same artefacts render a metric 3D scene per camera, exported
+as `scene.glb` / `scene.obj`. `syncai_hydranet` runs **every frame**: a shared
+RegNetX-800MF + BiFPN trunk carrying **the two heads this product trains** — detection
+(`person`, `bag`, `device`, `boxed_stock`) and pose (17 keypoint heatmaps at P3, decoded
+inside the detection boxes) — whose boxes become tracks *in metres* through the cached
+geometry. The model defines two more families, segmentation and monocular depth, and each
+config trains the subset it names; the retail-security configs name neither, which is why
+this paragraph says two where `models/hydranet.py` holds four. Everything above that
+is rules, a tiny temporal model, and a VLM on trigger.
+
+**Anything constant on a fixed camera is cached, never learned; only what changes
+frame-to-frame spends the GPU.** The boundary is enforced rather than remembered:
+`tests/test_package_boundaries.py` fails if a serving-path module ever imports
+`syncai_bev3d`.
+
+## Two model suites, one product
+
+The project runs **two very different kinds of model**, and confusing them is the
+classic failure this architecture exists to prevent:
+
+| | the **teachers** (`syncai_bev3d`) | the **student** (`syncai_hydranet`) |
+|---|---|---|
+| models | SAM 3, Grounding DINO, Depth-Anything V2, ViTPose — hundreds of millions to billions of parameters | one HydraNet, **~8 M parameters** |
+| when | **once per camera** (commissioning) and **once per dataset** (labelling) | **every frame, 96 streams × 5 fps** |
+| where the answers go | cached: `camera.json`, masks, keypoint files | inferred: boxes + keypoints per frame |
+| allowed to be slow | yes — 40 s per plate is fine | no — the whole budget is 480 frames/s (PLAN §7.4) |
 
 ```mermaid
-flowchart TB
-    IMG(["image · 3 × 512 × 640"])
-
-    subgraph TRUNK ["SHARED TRUNK — 7,022,342 params · 84.4%"]
-        direction TB
-        BB["<b>RegNetX-800MF backbone</b> · 6.59M · 79.2%<br/>stem → stage1 → stage2 → stage3 → stage4"]
-        CFEAT["C2 · 64ch · 1/4 &nbsp;&nbsp; C3 · 128ch · 1/8<br/>C4 · 288ch · 1/16 &nbsp;&nbsp; C5 · 672ch · 1/32"]
-        LAT["1×1 lateral → 96 ch · C2 dropped<br/>P6, P7 added by stride-2 conv from P5"]
-        NECK["<b>BiFPN × 2</b> · 435K · 5.2%<br/>weighted top-down, then weighted bottom-up"]
-        PYR["P3 1/8 &nbsp; P4 1/16 &nbsp; P5 1/32 &nbsp; P6 1/64 &nbsp; P7 1/128<br/>all 96 ch"]
-        BB --> CFEAT --> LAT --> NECK --> PYR
+flowchart LR
+    subgraph OFFLINE ["once per camera / dataset — syncai_bev3d"]
+        PLATE["static plate"] --> TEACH["SAM3 · GDINO · DA-V2<br/>+ depth & floor-boundary completion"]
+        TEACH --> CJ[("camera.json<br/>masks · walkable · zones<br/>shelf ROIs · FP polygons")]
+        TEACH --> SCENE["3D scene<br/>GLB / OBJ"]
+        VIT["ViTPose over Gold boxes"] --> KP[("keypoint labels")]
     end
-
-    subgraph HEADS ["TASK HEADS — 1,294,089 params · 15.6% · mutually independent"]
-        direction LR
-        TRAV["<b>Traversability</b><br/>Semantic-FPN<br/>277K · 3.3%"]
-        TERR["<b>Terrain</b><br/>Semantic-FPN<br/>278K · 3.3%"]
-        DET["<b>Detection</b><br/>FCOS, anchor-free<br/>739K · 8.9%"]
+    subgraph ONLINE ["every frame — syncai_hydranet"]
+        NET["HydraNet ~8M"] --> TRK["tracks in metres"] --> EV["rules → events → alerts"]
     end
-
-    OUTT["<b>3 × 512 × 640</b><br/>blocked / caution / go"]
-    OUTE["<b>12 × 512 × 640</b><br/>surface class"]
-    OUTD["<b>per level P3–P7</b><br/>cls 80 · reg 4 (l,t,r,b) · ctr 1<br/>NMS runs outside the graph"]
-
-    IMG --> BB
-    PYR -->|"P3–P5"| TRAV
-    PYR -->|"P3–P5"| TERR
-    PYR -->|"P3–P7"| DET
-    TRAV --> OUTT
-    TERR --> OUTE
-    DET --> OUTD
-
-    classDef trunk fill:#2d6a9f,stroke:#1b4a72,color:#fff
-    classDef head fill:#b4531f,stroke:#7d3915,color:#fff
-    classDef out fill:#3d7a4a,stroke:#255030,color:#fff
-    classDef io fill:#555,stroke:#333,color:#fff
-    class BB,CFEAT,LAT,NECK,PYR trunk
-    class TRAV,TERR,DET head
-    class OUTT,OUTE,OUTD out
-    class IMG io
+    CJ --> TRK
+    KP -. distillation .-> NET
 ```
 
-Shapes above are for the default `input_size: [512, 640]`; the segmentation heads always
-resize their logits back to the input resolution, so the two mask outputs match the image
-whatever it is set to.
-
-The parameter split bears the design out: **84.4% shared trunk, 15.6% for all three heads
-combined** (8,316,434 total). A fourth head costs roughly 3–9% more parameters and reuses
-the 84% already paid for.
-
-- **Backbone**: torchvision RegNetX, swappable to ResNet18/34/50 with one config key
-- **Neck**: BiFPN (fast-normalized fusion), with plain FPN as the alternative
-- **Head 1, traversability**: Semantic-FPN style segmentation, 3 classes
-- **Head 2, terrain**: the same segmentation head, 12 classes
-- **Head 3, detection**: FCOS, anchor-free (focal + GIoU + centerness)
-- **Multi-task balancing**: Kendall learned uncertainty weighting (or fixed weights)
-- **Partial supervision across datasets**: each step draws a batch from a single dataset and
-  backpropagates only the losses of the heads that dataset supervises
-- **One annotation, two heads**: terrain labels generate traversability labels via a policy table
-- **TensorRT friendly**: the forward graph is only Conv/BN/ReLU/Resize/MaxPool/Exp/Mul; NMS
-  lives in post-processing
-
-## Installation
-
-The project uses [uv](https://docs.astral.sh/uv/) for environments and dependencies.
+## Install & run
 
 ```bash
-uv sync --group dev --extra export   # create .venv and install everything
-uv run pytest                        # smoke tests, no dataset required
+uv sync                                        # or: pip install -e .
+hydranet-train --config configs/<config>.yaml  # train
+hydranet-eval --config configs/<config>.yaml   # evaluate
+hydranet-infer-video ...                       # overlay inference on a clip
+hydranet-export-onnx ...                       # ONNX for the TensorRT path
 ```
 
-Training, evaluation and inference all pick CUDA → MPS → CPU automatically.
+Entry points: `hydranet-train`, `hydranet-eval`, `hydranet-infer-image`,
+`hydranet-infer-video`, `hydranet-scene`, `hydranet-export-onnx`, `hydranet-annotation`,
+`hydranet-report`, and the two dataset preparers `hydranet-prepare-ade20k` and
+`hydranet-prepare-cocostuff` — ten, which is what `[project.scripts]` in `pyproject.toml`
+declares.
 
-```bash
-uv run hydranet-prepare-ade20k --src datasets/ADEChallengeData2016 --dst datasets/ADE20K \
-    --test-fraction 0.5
-uv run hydranet-train --config configs/hydranet_indoor.yaml
-uv run hydranet-eval  --config configs/hydranet_indoor.yaml \
-    --checkpoint runs/hydranet_indoor/best.pt --split test
-```
+## Layout
 
-## Where to look
-
-| If you are | Read |
+| path | what |
 |---|---|
-| running it | [docs/USAGE.md](docs/USAGE.md) — datasets, training flags, what a run leaves behind |
-| new to multi-head training | [docs/TRAINING_GUIDE.md](docs/TRAINING_GUIDE.md) — why it is shaped this way, and which measurements lie |
-| picking it up as a team | [docs/METHODOLOGY.md](docs/METHODOLOGY.md) — dividing the work, what data to collect, the four levels of evaluation |
-| annotating | [docs/ANNOTATION_SETUP.md](docs/ANNOTATION_SETUP.md) — the CVAT stack and the labelling contract |
-| changing the architecture | [docs/ARCHITECTURE_REVIEW.md](docs/ARCHITECTURE_REVIEW.md) — measured answers, including two that say *no* |
-| deploying | [docs/DEPLOY_JETSON.md](docs/DEPLOY_JETSON.md), then [docs/ORIN_BRINGUP.md](docs/ORIN_BRINGUP.md) for a board from scratch |
-| shipping a version | [docs/RELEASE.md](docs/RELEASE.md) — `dev → stage → main`, and separately how a *model* gets a version |
-| scoping a retail robot | [docs/RETAIL_SCOPE.md](docs/RETAIL_SCOPE.md) — what to build and what to keep out of the network |
-| turning a mask into metres | [docs/GROUND_PROJECTION.md](docs/GROUND_PROJECTION.md) — the projection above, and why the camera pose is fitted per frame |
-| on a Mac | [docs/TRAIN_MACOS.md](docs/TRAIN_MACOS.md) |
+| `src/syncai_bev3d/` | commissioning: calibration fitting, plate pipeline, SAM 3 / Grounding DINO teachers, BEV & scene rendering — runs once per camera |
+| `src/syncai_hydranet/` | the per-frame side: models, training engine, data, runtime geometry + the `camera.json` contract, serving, analytics |
+| `configs/` | training configs — `config.yaml` inside a run directory is the only authoritative record of what a run trained on |
+| `docs/PLAN.md` | the plan; the single source of truth |
+| `tools/commissioning/` | the per-camera pipeline: metre-grid verification, structure masks, depth completion, product subclasses, false-positive polygons, and the 3D scene renders (`scene_mesh.py` → GLB/OBJ). `masks_diagnose.py` and `cluster_rules.py` are its instruments: the first keeps the per-cluster verdict the pipeline otherwise prints as a total, the second replays those cached proposals through a different rule with no GPU |
+| `tools/pose/` | the ViTPose teacher run that labels the Gold boxes for the pose head |
+| `tools/site30k/`, `scripts/` | campaign tooling, static plates, teachers' CLI front ends, and the measurement instruments a claim in this file rests on — `track_review.py` (turn track ground truth into minutes of judgement), `track_idf1.py` (both trackers over one inference pass), `zone_dwell.py` (does a visit survive the tracker) |
+| `datasets/`, `runs/`, `exports/`, `weights/` | data and artefacts (largely gitignored) |
 
-`docs/journal/` holds dated notes from particular days: session handoffs, a hardware move.
-They are records, not documentation — accurate about the day they describe and not
-maintained afterwards. The newest,
-[2026-08-14](docs/journal/2026-08-14-deploy-retail-handoff.md), says what is in flight.
+## Credits
 
-## Commands
+**Teachers.** The commissioning pass runs four published models once per camera and caches
+their answers; none of them is in the serving path. Each is pinned to an exact commit in
+`src/syncai_bev3d/teachers/` and `tools/pose/`.
 
-Installation provides these console scripts:
-
-| Command | Purpose |
+| model | used for |
 |---|---|
-| `hydranet-train` | Training |
-| `hydranet-eval` | Run validation on a checkpoint |
-| `hydranet-infer-image` | Overlay inference on a single image or a folder |
-| `hydranet-infer-video` | Video inference (uses the system ffmpeg, no opencv needed) |
-| `hydranet-export-onnx` | Export ONNX for TensorRT |
-| `hydranet-prepare-ade20k` | Filter ADE20K to its indoor subset and lay it out as `seg_folder` |
-| `hydranet-report` | Summarise one run, or rank runs and diff their configs |
-| `hydranet-annotation` | Emit the CVAT label schema; gate an annotated dataset before training on it |
+| [SAM 3](https://huggingface.co/facebook/sam3) (Meta) | promptable segmentation of the static plate — fixtures, floor, products |
+| [Grounding DINO](https://huggingface.co/IDEA-Research/grounding-dino-base) (IDEA Research) | open-vocabulary boxes, and the `person` proposals the student is distilled from |
+| [Depth-Anything V2 Metric Indoor](https://huggingface.co/depth-anything/Depth-Anything-V2-Metric-Indoor-Large-hf) | fixture heights where the depth holds |
+| [ViTPose](https://huggingface.co/usyd-community/vitpose-base-simple) (USyd) | the 17-keypoint labels the pose head is trained against |
 
-Run them all with `uv run <command>`, or `source .venv/bin/activate` first.
+**Datasets.** Public sets used for pre-training, mixing and evaluation:
+[ADE20K](https://groups.csail.mit.edu/vision/datasets/ADE20K/) ·
+[COCO](https://cocodataset.org/) and
+[COCO-Stuff](https://github.com/nightrome/cocostuff) ·
+[HM3D](https://aihabitat.org/datasets/hm3d/) ·
+[NYU Depth v2](https://cs.nyu.edu/~silberman/datasets/nyu_depth_v2.html) ·
+[RAP v2](https://www.rapdataset.com/) ·
+[PA-100K](https://github.com/xh-liu/HydraPlus-Net) ·
+[PETA](http://mmlab.ie.cuhk.edu.hk/projects/PETA.html) ·
+[Market-1501](https://zheng-lab.cecs.anu.edu.au/Project/project_reid.html) ·
+[PoseLift](https://github.com/TeCSAR-UNCC/PoseLift). Each keeps its own licence and terms;
+this repository redistributes none of them.
 
-## Deployment configs
-
-| Config | Environment | Terrain classes | Segmentation datasets |
-|---|---|---|---|
-| `hydranet_regnet800mf.yaml` | Off-road | 12 outdoor (grass / gravel / tree-bush …) | RUGD, RELLIS-3D |
-| `hydranet_indoor.yaml` | Indoor (lobbies / corridors / factory floors) | 12 indoor (floor / glass / stairs …) | ADE20K + your own annotations |
-| `hydranet_retail.yaml` | Retail (shops / supermarkets) | the indoor 12 + `display_fixture` | ADE20K + store footage |
-
-Model structure, losses and training mechanics are identical across all three — the
-differences are `data.terrain_classes`, `label_map` and the data sources. All three use
-COCO for the detection head, unchanged.
-
-Each inherits `configs/_base/hydranet.yaml`, so a config file contains only what makes
-that deployment different. What is *not* in a file comes from the base, and the run's
-`meta.json` records the merged result.
-Label schemes are defined in `SCHEMES` in
-[`label_maps.py`](src/syncai_hydranet/data/label_maps.py); the indoor mapping is in
-[`label_maps_indoor.py`](src/syncai_hydranet/data/label_maps_indoor.py).
-
-If your camera's aspect ratio differs from `input_size`, turn on `data.letterbox: true`
-(a portrait phone video squeezed straight into the input is compressed more than 2× horizontally).
-
-## Adding a task head (example: monocular depth)
-
-1. Add the head module under `src/syncai_hydranet/models/heads/` (it takes the FPN feature list)
-2. Register the type branch in `hydranet.py::HydraNet.__init__` and add its loss in `compute_losses`
-3. Add a `model.heads` section to the config, and list the new head under the relevant
-   dataset's `supervises`
-
-Heads are mutually independent, so this does not affect training or deployment of the
-existing ones.
-
-## Development
-
-```bash
-uv run ruff check --fix .    # lint + import sorting
-uv run ruff format .         # formatting
-uv run pytest --cov          # tests + coverage
-uv run pre-commit install    # enable pre-commit checks
-```
-
-CI runs lint plus a Python 3.10 / 3.12 test matrix on GitHub Actions, and fails below 68%
-coverage. The tests need no datasets: model tests run on random tensors, dataset tests build
-a fixture in `tmp_path`, and `test_overfit.py` verifies the training loop really converges by
-memorising one synthetic batch to over 95% pixel accuracy (chance is 33% across three classes).
-
-## Project layout
-
-```text
-src/syncai_hydranet/
-├── config.py                 # YAML config + dot-path overrides
-├── config_schema.py          # config validation: unknown keys, types, cross-field consistency
-├── cli/                      # console script entry points (train/eval/infer/export/report)
-├── models/
-│   ├── backbone.py           # RegNet / ResNet multi-scale features
-│   ├── neck.py               # BiFPN / FPN
-│   ├── heads/segmentation.py # Semantic-FPN segmentation head (shared by both seg heads)
-│   ├── heads/detection.py    # FCOS head + target assignment + decode/NMS
-│   ├── losses.py             # CE+Dice / Focal+GIoU / uncertainty weighting
-│   └── hydranet.py           # assembly + compute_losses + predict
-├── data/
-│   ├── label_maps.py         # off-road mappings + the SCHEMES registry
-│   ├── label_maps_indoor.py  # indoor 12 classes + ADE20K mapping
-│   ├── datasets.py           # SegFolderDataset / CocoDetDataset / split resolution
-│   ├── transforms.py         # joint image+mask+box augmentation, letterbox, geometry inversion
-│   ├── fingerprint.py        # dataset fingerprints, written into meta.json
-│   └── multitask.py          # round-robin loader across datasets
-├── engine/
-│   ├── trainer.py            # AMP / EMA / cosine / gradient accumulation / checkpoints / TB
-│   └── evaluator.py          # mIoU + COCO mAP + primary metric selection
-└── utils/
-    ├── device.py             # CUDA → MPS → CPU
-    ├── checkpoint.py         # safe loading (weights_only) + format version
-    ├── runmeta.py            # git / environment / config snapshot / metrics.jsonl
-    ├── seeding.py            # global seed, worker seeds, backend flags
-    └── visualize.py          # palettes, overlays, letterbox, comparison images
-```
+**Store footage.** Every frame of a shop in this repository comes from the deployment
+partner's own cameras, is used with their permission, and has every face blurred by
+`demo_video.py` before the file exists — see the figure caption above. Raw clips and plates
+are gitignored and are not redistributed.
 
 ## Licence
 
-Apache-2.0 (ADE20K / RUGD / RELLIS-3D / COCO each carry their own data licences — check them
-before commercial use).
+Apache-2.0. See [LICENSE](LICENSE) and [CITATION.cff](CITATION.cff).

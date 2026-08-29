@@ -9,7 +9,7 @@ floor a wall was itself mislabelling the classes.
 The second half is `overlay`, which clamped an out-of-range class into the last palette
 entry. Retail has thirteen terrain classes and the palette had twelve, so every
 `display_fixture` in every rendered frame was drawn as `person` -- in the class
-docs/RETAIL_SCOPE.md calls the reason the retail taxonomy exists at all.
+`git show b7457c2:docs/RETAIL.md` called the reason the retail taxonomy exists at all.
 
 pytest tests/test_palettes.py -v
 """
@@ -25,6 +25,8 @@ from syncai_hydranet.utils.visualize import (
     TERRAIN_COLORS_INDOOR,
     TERRAIN_COLORS_OFFROAD,
     TERRAIN_COLORS_RETAIL,
+    TERRAIN_COLORS_RETAIL_OBJECTS,
+    TERRAIN_COLORS_RETAIL_SURFACES,
     overlay,
     terrain_palette,
 )
@@ -46,6 +48,8 @@ def classes_of(name):
         ("hydranet_regnet800mf.yaml", TERRAIN_COLORS_OFFROAD),
         ("hydranet_indoor.yaml", TERRAIN_COLORS_INDOOR),
         ("hydranet_retail.yaml", TERRAIN_COLORS_RETAIL),
+        ("hydranet_retail_objects.yaml", TERRAIN_COLORS_RETAIL_OBJECTS),
+        ("hydranet_retail_surfaces.yaml", TERRAIN_COLORS_RETAIL_SURFACES),
     ],
 )
 def test_each_config_gets_its_own_palette(config, expected):
@@ -152,3 +156,48 @@ def test_cvat_labels_match_the_render_colours():
         for entry in label_spec(scheme):
             r, g, b = (int(c) for c in palette[entry["terrain_id"]])
             assert entry["color"] == f"#{r:02x}{g:02x}{b:02x}", f"{scheme_name}/{entry['name']}"
+
+
+# ------------------------------------------- surfaces, which has no word of its own
+
+
+def test_surfaces_is_not_mistaken_for_objects():
+    """`retail_surfaces` is `retail_objects` minus `product`, so every name it carries
+    appears there too and it has no distinctive marker. It is matched on `fixture` placed
+    after `product`, and this is the test that keeps those two lines in that order: the
+    object palette applied to surfaces classes is off by one from `person` onwards, and a
+    wrong colour is indistinguishable from a wrong prediction.
+    """
+    surfaces = terrain_palette(classes_of("hydranet_retail_surfaces.yaml"))
+    objects = terrain_palette(classes_of("hydranet_retail_objects.yaml"))
+    assert np.array_equal(surfaces, TERRAIN_COLORS_RETAIL_SURFACES)
+    assert np.array_equal(objects, TERRAIN_COLORS_RETAIL_OBJECTS)
+    assert len(surfaces) == 6 and len(objects) == 7
+
+
+def test_a_class_keeps_its_colour_across_the_split_that_removed_product():
+    """The two taxonomies are read side by side in the comparison the split was made to
+    settle. A class that changed colour between them would look like a class that changed
+    behaviour, so the shared ids are copied rather than re-picked -- and `person`, which
+    moves from id 6 to id 5, keeps its colour across the move.
+    """
+    surfaces = TERRAIN_COLORS_RETAIL_SURFACES
+    objects = TERRAIN_COLORS_RETAIL_OBJECTS
+    assert np.array_equal(surfaces[:5], objects[:5])
+    assert np.array_equal(surfaces[5], objects[6])
+
+
+def test_a_seed_replicate_gets_the_same_palette_as_its_parent():
+    """The seed configs exist to measure variance between runs. A palette that differed
+    between replicates would put a rendering difference inside that measurement.
+
+    Resolved through `load_config` rather than raw YAML, because a seed replicate inherits
+    its classes through `_base_` and declares none of its own -- which is exactly the file
+    shape that reaches the trainer, so it is the one worth checking.
+    """
+    from syncai_hydranet.config import load_config
+
+    parent = terrain_palette(classes_of("hydranet_retail_surfaces.yaml"))
+    for seed in ("hydranet_retail_surfaces_seed7.yaml", "hydranet_retail_surfaces_seed13.yaml"):
+        cfg = load_config(str(CONFIGS / seed), [])
+        assert np.array_equal(terrain_palette(cfg["data"]["terrain_classes"]), parent), seed

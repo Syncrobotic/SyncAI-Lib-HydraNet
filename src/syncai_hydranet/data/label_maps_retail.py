@@ -29,7 +29,8 @@ Two things a store needs that are deliberately **not** classes here:
   trains as noise. Derive it in bird's-eye view from the fixture footprint instead,
   where "within 1.5 m of a fixture" is a number rather than an opinion.
 
-See [docs/RETAIL_SCOPE.md](../../../docs/RETAIL_SCOPE.md).
+The taxonomy's argument is at `git show b7457c2:docs/RETAIL.md`, deleted with the
+docs set on 2026-08-25.
 """
 
 from __future__ import annotations

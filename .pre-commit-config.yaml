@@ -8,18 +8,68 @@ repos:
         # Compose's !override tag is not plain YAML, and it is the only way to replace
         # a list from upstream's file rather than append to it. `docker compose config`
         # validates that file properly.
-        exclude: ^deploy/annotation/docker-compose\.override\.yml$
+        exclude: ^tools/annotation/docker-compose\.override\.yml$
       - id: check-toml
       - id: check-merge-conflict
       - id: check-added-large-files
         args: [--maxkb=1024]   # datasets and checkpoints stay out of git entirely
+        # README figures are animations and do not fit in 1 MB at a size worth looking
+        # at; assets/cctv_v1.gif is 2.6 MB. Narrow on purpose -- the guard is here for
+        # datasets and checkpoints, and this does not loosen it for those.
+        #
+        # This comment has now named a file that did not exist twice. It said
+        # retail_cctv_3heads.gif until 2026-08-27, after f9d4fcf deleted it; it then said
+        # retail_cctv_scene.gif until 2026-08-29, after 65a6b78 renamed that to
+        # cctv_v1.gif. A justification that names a file is only as durable as the name,
+        # and neither rename touched this line -- which is the state a reader cannot
+        # check, arriving twice by the same route.
+        exclude: ^assets/.*\.gif$
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.13.0
+  # ruff carries no `rev:` here, and that absence is the fix for a deadlock rather than an
+  # oversight. What it has to keep doing first: this hook and CI must run *one* ruff. They
+  # drifted once -- v0.13.0 here against 0.16.2 there -- and the gap was not cosmetic, so a
+  # commit passed the hook and failed `ruff format --check .` in CI, on a file the author
+  # had no reason to think ruff read. A local gate more permissive than the remote one is
+  # worse than no local gate, because it teaches people the remote one is flaky.
+  #
+  # Holding two pins equal is what deadlocked. `uv.lock` and this file were two pins of one
+  # tool, and Dependabot watches them through two ecosystems (`uv` and `pre-commit`) that
+  # cannot share a group. Every ruff release therefore opened two PRs, each moving one pin,
+  # each red against tests/test_hook_versions.py alone, and neither mergeable without the
+  # other. Measured 2026-08-28 by running that test against each PR's tree: both fail, the
+  # unchanged tree passes.
+  #
+  # `uv run` resolves ruff from `uv.lock` instead, which is the ruff CI runs -- ci.yml calls
+  # `uv run ruff` too. One pin, bumped by one ecosystem, and the local gate cannot be more
+  # permissive than the remote one because it is the same binary rather than a version this
+  # file promises to keep level with it.
+  #
+  # `--frozen` so a commit hook can never rewrite `uv.lock` underneath the commit it is
+  # checking; the `uv-lock` hook below is what keeps that file current. `language: system`
+  # for the reason the ty-ratchet hooks give at the bottom of this file: a pre-commit-managed
+  # environment would install a second ruff against a third dependency set.
+  #
+  # Filenames are passed, and unlike the ty-ratchet hooks below that is not a detail. These
+  # two write to the files they are given, and several sessions share this working tree, so
+  # a whole-tree `ruff format .` at commit time reformats whatever another session has
+  # in flight and untracked -- ruff's discovery finds those files (311 tracked against 314
+  # with two of them present, measured 2026-08-28), and pre-commit does not stash them.
+  # Scope and version are separate questions and the first draft of this block conflated
+  # them: the drift these hooks exist to stop was a ruff *version* gap, which passing
+  # filenames does nothing to reopen, because the version is now CI's by construction and
+  # anything a commit introduces is in that commit's own file list.
+  - repo: local
     hooks:
       - id: ruff
-        args: [--fix]
+        name: ruff check (the ruff uv.lock gives CI)
+        entry: uv run --frozen ruff check --fix
+        language: system
+        types_or: [python, pyi]
       - id: ruff-format
+        name: ruff format (the ruff uv.lock gives CI)
+        entry: uv run --frozen ruff format
+        language: system
+        types_or: [python, pyi]
 
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.8.22
@@ -36,3 +86,108 @@ repos:
       - id: conventional-pre-commit
         stages: [commit-msg]
         args: [feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert]
+
+  # The type ratchet, which until now ran nowhere a commit could see.
+  #
+  # `d9e3cca` is the cost of that, written down the day it was found: `src/` had been over
+  # its baseline since `ef9b53c` and **every commit for a full day landed on a red tree**,
+  # including the session that eventually noticed. Its own commit message names the cause
+  # -- "nobody saw it because the ratchet is not in `.pre-commit-config.yaml`" -- and the
+  # reason the CI job did not catch it either is structural: `ci.yml` triggers on
+  # `pull_request`, and this project's work goes straight onto `dev`. A gate that only a PR
+  # can run is not a gate on a branch nobody opens a PR against.
+  #
+  # `repo: local` + `language: system` rather than a pre-commit-managed environment, and
+  # this is not a style choice. `scripts/ty_ratchet.sh` pins its own interpreter and calls
+  # `uv run --isolated` because the baselines are meaningless otherwise -- the count reports
+  # what the installed *stubs* say, and the same tree measured 8 on one interpreter and 12
+  # on another. A managed environment would install a second `ty` against a third dependency
+  # set and hand back a number that matches neither the script's table nor CI's.
+  #
+  # `pass_filenames: false` because the baseline is a whole-tree count: a diagnostic in a
+  # file this commit did not stage is still one of the eleven, and checking only the staged
+  # subset would report zero on most commits and never ratchet anything. `files:` keeps it
+  # off commits that touch neither tree instead -- a docs or config commit pays nothing, and
+  # a run costs ~0.8 s when it does fire.
+  #
+  # Two hooks and not one sum: src/ is what ships, scripts/ is dev-side, and the script's
+  # header explains why letting one hide behind the other defeats the point.
+  #
+  # **Each `files:` lists every tree whose change can move that count, not only the tree
+  # being counted.** `scripts/` and `tools/` import the package, so a signature widened in
+  # `src/` moves their diagnostics without touching a file either pattern used to match.
+  # `adaef9d` is what that cost: it changed `analytics/tracker.py` and nothing under
+  # `scripts/`, `scripts/track_endings.py` overrides `Tracker.update`, and the count went
+  # 14 -> 15 against a baseline of 14. Six commits then landed on a tree whose Type ratchet
+  # job was already failing, unnoticed because a louder test failure was red at the same
+  # time. Bisected in detached worktrees: 45413cf 14, adaef9d 15.
+  #
+  # The cost is that a commit touching only `src/` now pays all three: 0.71 s for scripts/
+  # and 0.48 s for tools/ on top of its own. A ratchet that cannot see the change that
+  # moves it is not measuring anything.
+  - repo: local
+    hooks:
+      - id: ty-ratchet-src
+        name: ty ratchet (src/)
+        entry: scripts/ty_ratchet.sh
+        args: ["src/"]
+        language: system
+        pass_filenames: false
+        files: ^(src/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml)$
+      - id: ty-ratchet-scripts
+        name: ty ratchet (scripts/)
+        entry: scripts/ty_ratchet.sh
+        args: ["scripts/"]
+        language: system
+        pass_filenames: false
+        files: ^((src|scripts)/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml)$
+      - id: ty-ratchet-tools
+        name: ty ratchet (tools/)
+        entry: scripts/ty_ratchet.sh
+        args: ["tools/"]
+        language: system
+        pass_filenames: false
+        files: ^((src|tools)/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml)$
+
+      # The script/tool import ratchet, here for a reason the ty ratchets do not have.
+      #
+      # `tests/test_scripts_are_not_libraries.py` enumerates with `git ls-files`, and that is
+      # deliberate -- its `_tracked` docstring records that scanning the filesystem was the
+      # first version and made the local suite red for untracked work CI cannot see. The
+      # consequence is that a bare `pytest` run answers about the index, so a new tool that
+      # imports another passes while it is untracked and fails the moment it is staged.
+      #
+      # `b8abfb5` is what that costs: `tools/commissioning/demo_gif.py` importing `demo_video`
+      # took the pair count to 7 against a baseline of 6, the author ran the suite green
+      # before staging it, and `dev` was pushed red (CI run 33169830273). Fixed in `6a63d87`
+      # by moving the shared half into `src/`, which is what the ratchet was asking for.
+      #
+      # A pre-commit hook runs after staging by construction, so the index it reads is the
+      # commit's. Measured 2026-08-28 on a probe tool importing `demo_video`: untracked,
+      # `ls-files` sees 0 and the ratchet passes; after `git add`, it sees 1 and the ratchet
+      # fails -- with no commit in between. This puts the gate at that second point.
+      #
+      # It costs a pytest process -- 2.28 / 2.31 / 2.49 s over three runs on this box, and
+      # nearly all of that is interpreter and collection rather than the four tests, which
+      # take 0.17 s between them. `files:` keeps it off every commit that touches neither
+      # tree, which is most of them.
+      #
+      # **`--no-verify` defeats this, and on a shared checkout that is not an exotic state.**
+      # pre-commit refuses to run at all while this file is unstaged -- "Your pre-commit
+      # configuration is unstaged", the commit is blocked, and the only way through is
+      # `--no-verify`, which skips every hook here. Verified 2026-08-28 in a detached
+      # worktree: an unstaged edit to this file blocks an unrelated commit outright, and
+      # `--no-verify` lands it. So whenever one session is editing this file, every other
+      # session in the tree is committing with no hooks at all -- which is exactly what
+      # happened on the evening `b8abfb5` went out, and `pre-commit run --files <paths>`
+      # run by hand does not substitute: it only runs hooks whose `files:` pattern matches
+      # what is listed, so a whole-tree hook nobody names is skipped the same way.
+      #
+      # CI is the backstop and it works -- run 33169830273 caught `b8abfb5` on push. This
+      # hook buys the ~5 minutes between the commit and that result, not correctness.
+      - id: tool-import-ratchet
+        name: script/tool import ratchet
+        entry: uv run --frozen pytest tests/test_scripts_are_not_libraries.py -q -p no:cacheprovider
+        language: system
+        pass_filenames: false
+        files: ^(scripts|tools)/.*\.py$

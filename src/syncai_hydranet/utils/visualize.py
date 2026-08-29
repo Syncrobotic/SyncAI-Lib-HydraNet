@@ -14,6 +14,9 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image
 
+from ..labels import IGNORE
+from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD, PAD_COLOR
+
 # Traversability: blocked / caution / go. The one taxonomy that does not change between
 # deployments, so it needs no selection.
 TRAV_COLORS = np.array([[220, 40, 40], [250, 200, 40], [40, 200, 80]], dtype=np.uint8)
@@ -48,7 +51,9 @@ TERRAIN_COLORS_OFFROAD = np.array(
 
 # configs/hydranet_indoor.yaml. Taken from scripts/live_view_orin.py, which had been
 # carrying the only indoor palette in the repo -- under a comment claiming it matched
-# the training-time grids, which is how the divergence stayed invisible.
+# the training-time grids, which is how the divergence stayed invisible. That script went
+# with the Orin on 2026-08-28 (`git show f64520c:scripts/live_view_orin.py`); this is the
+# palette now, with nothing left to diverge from.
 TERRAIN_COLORS_INDOOR = np.array(
     [
         [0, 0, 0],  # void
@@ -74,12 +79,67 @@ TERRAIN_COLORS_RETAIL = np.concatenate(
     [TERRAIN_COLORS_INDOOR, np.array([[120, 80, 200]], dtype=np.uint8)]  # display_fixture
 )
 
+# configs/hydranet_retail_objects.yaml: the object taxonomy, seven classes.
+#
+# Deliberately keyed to the retail palette rather than freshly picked, so that the two
+# retail taxonomies can be read side by side in a review: floor keeps the brown it has
+# in every indoor and retail grid, wall keeps its grey, person keeps its pink, and
+# `fixture` takes display_fixture's violet because that is the class it absorbs.
+#
+# Only the two new classes need a colour of their own. `column` gets a deeper, bluer
+# grey than `wall` -- near it, because that is where it came from, and separable from
+# it, because telling those two apart is the entire reason this taxonomy exists.
+# `product` gets amber, the one hue nothing else in any palette here uses.
+TERRAIN_COLORS_RETAIL_OBJECTS = np.array(
+    [
+        [0, 0, 0],  # void
+        [139, 90, 43],  # floor      -- as floor_hard everywhere else
+        [130, 130, 130],  # wall     -- as wall everywhere else
+        [70, 90, 150],  # column     -- new: wall's neighbour, not wall's twin
+        [120, 80, 200],  # fixture   -- as display_fixture, the class it absorbs
+        [255, 170, 30],  # product   -- new
+        [255, 100, 180],  # person   -- as person everywhere else
+    ],
+    dtype=np.uint8,
+)
+
+# `retail_surfaces` is `retail_objects` with `product` taken out of the dense head and
+# left to detection, so the ids below 5 are unchanged and `person` moves 6 -> 5. The
+# colours are **deliberately copied rather than re-picked**: the two taxonomies will be
+# read side by side in exactly the comparison the split was made to settle, and a class
+# that changed colour between them would look like a class that changed behaviour.
+TERRAIN_COLORS_RETAIL_SURFACES = np.array(
+    [
+        [0, 0, 0],  # void
+        [139, 90, 43],  # floor     -- as retail_objects
+        [130, 130, 130],  # wall    -- as retail_objects
+        [70, 90, 150],  # column    -- as retail_objects
+        [120, 80, 200],  # fixture  -- as retail_objects
+        [255, 100, 180],  # person  -- as retail_objects, moved down one id
+    ],
+    dtype=np.uint8,
+)
+
 # Most specific first, and the order is load-bearing: retail is indoor plus one class,
 # so it contains every indoor marker and would match `floor_hard` if that came first.
 # Selection is by name rather than by length because indoor and off-road are both
 # twelve long -- length is precisely the test that would keep agreeing while the
 # colours meant different things.
+#
+# The object taxonomy is matched on `product`, which no other taxonomy contains. Its
+# own class names are otherwise a subset of words the others use (`wall`, `person`),
+# so a less distinctive marker would be a live collision rather than a theoretical one.
+#
+# `retail_surfaces` has **no word of its own** -- it is `retail_objects` minus `product`,
+# so every name it carries appears there too. It is therefore matched on `fixture` and
+# placed *after* the `product` entry, and that order is the whole distinction: a
+# taxonomy holding `product` is the object one, and one holding `fixture` without it is
+# the surfaces one. Moving these two lines past each other paints every surfaces run in
+# the object palette, which is off by one from `person` onwards -- a wrong colour, which
+# `overlay` exists to say is indistinguishable from a wrong prediction.
 _TERRAIN_PALETTES = (
+    ("product", TERRAIN_COLORS_RETAIL_OBJECTS),
+    ("fixture", TERRAIN_COLORS_RETAIL_SURFACES),
     ("display_fixture", TERRAIN_COLORS_RETAIL),
     ("floor_hard", TERRAIN_COLORS_INDOOR),
     ("dirt", TERRAIN_COLORS_OFFROAD),
@@ -132,6 +192,47 @@ def terrain_palette(classes, n_classes: int | None = None) -> np.ndarray:
     )
 
 
+# Depth is metres, not a class id, so it gets a ramp rather than a palette -- and the ramp
+# is pinned to a fixed range rather than normalised per frame. Per-frame normalisation makes
+# every frame look equally confident: a corridor whose true span is 0.3-5 m and one whose
+# span is 0.3-1 m render identically. That matters here more than usual, because this head's
+# metres are the part known to be wrong -- a published metric-depth model over-predicted by
+# a flat 15% on a domain change (measured 2026-08-18;
+# `git show cc80fc3^:docs/RESEARCH_OCCUPANCY.md`), and a
+# self-scaling colour map hides exactly that error while looking sharper.
+#
+# Near is warm. A robot reads "red is close", and the alternative convention -- warm for
+# far, as a raw depth value would give -- puts the loudest colour on the part of the frame
+# that matters least.
+_DEPTH_RAMP = np.array(
+    [
+        [230, 60, 40],  # near
+        [245, 175, 55],
+        [225, 225, 70],
+        [110, 205, 110],
+        [45, 150, 190],
+        [15, 30, 85],  # far
+    ],
+    dtype=np.float32,
+)
+
+
+def depth_colors(depth_m: np.ndarray, vmax: float, vmin: float = 0.0) -> np.ndarray:
+    """Metric depth ``[H, W]`` -> RGB ``uint8``, on a FIXED ``vmin..vmax`` scale.
+
+    Anything beyond the ends is clamped rather than rescaled, so a frame that saturates
+    looks saturated instead of looking like a different scene.
+    """
+    d = np.clip(
+        (np.asarray(depth_m, dtype=np.float32) - vmin) / max(vmax - vmin, 1e-6), 0.0, 1.0
+    )
+    pos = d * (len(_DEPTH_RAMP) - 1)
+    lo = np.floor(pos).astype(np.int32)
+    hi = np.minimum(lo + 1, len(_DEPTH_RAMP) - 1)
+    t = (pos - lo)[..., None]
+    return (_DEPTH_RAMP[lo] * (1 - t) + _DEPTH_RAMP[hi] * t).astype(np.uint8)
+
+
 def overlay(
     base: Image.Image, mask: np.ndarray, palette: np.ndarray, alpha: float = 0.45
 ) -> Image.Image:
@@ -154,7 +255,7 @@ def overlay(
     return Image.fromarray(out)
 
 
-def letterbox(img: Image.Image, size, fill=(114, 114, 114)):
+def letterbox(img: Image.Image, size, fill=PAD_COLOR):
     """Scale to fit inside ``(H, W)`` preserving aspect ratio, then centre-pad.
 
     Returns ``(image, (x0, y0, w, h))``; the region locates the real content inside the
@@ -166,7 +267,7 @@ def letterbox(img: Image.Image, size, fill=(114, 114, 114)):
     nw, nh = max(round(ow * s), 1), max(round(oh * s), 1)
     canvas = Image.new("RGB", (w, h), fill)
     x0, y0 = (w - nw) // 2, (h - nh) // 2
-    canvas.paste(img.resize((nw, nh), Image.BILINEAR), (x0, y0))
+    canvas.paste(img.resize((nw, nh), Image.Resampling.BILINEAR), (x0, y0))
     return canvas, (x0, y0, nw, nh)
 
 
@@ -183,14 +284,12 @@ def preprocess(img: Image.Image, size, use_letterbox: bool = True):
     """
     import torch
 
-    from ..data.transforms import IMAGENET_MEAN, IMAGENET_STD
-
     h, w = size
     img = img.convert("RGB")
     if use_letterbox:
         img, region = letterbox(img, size)
     else:
-        img, region = img.resize((w, h), Image.BILINEAR), (0, 0, w, h)
+        img, region = img.resize((w, h), Image.Resampling.BILINEAR), (0, 0, w, h)
     arr = np.asarray(img, dtype=np.float32) / 255.0
     arr = (arr - IMAGENET_MEAN) / IMAGENET_STD
     return torch.from_numpy(arr.transpose(2, 0, 1))[None], img, region
@@ -209,8 +308,6 @@ def crop_box(arr: np.ndarray, region) -> np.ndarray:
 
 def denormalize(t) -> np.ndarray:
     """Convert a normalized ``[3, H, W]`` tensor back to an ``[H, W, 3]`` uint8 array."""
-    from ..data.transforms import IMAGENET_MEAN, IMAGENET_STD
-
     arr = t.detach().cpu().numpy().transpose(1, 2, 0)
     arr = arr * IMAGENET_STD + IMAGENET_MEAN
     return (np.clip(arr, 0, 1) * 255).astype(np.uint8)
@@ -231,8 +328,8 @@ def prediction_grid(images, preds, gts, palette, max_n: int = 4, gap: int = 4) -
         g = np.asarray(gts[i].detach().cpu().numpy(), dtype=np.int64)
         pred_img = np.asarray(overlay(base, p, palette))
         # Paint label ignore (255) black so unsupervised regions are obvious.
-        gt_img = np.asarray(overlay(base, np.where(g == 255, 0, g), palette))
-        gt_img = np.where((g == 255)[..., None], 0, gt_img).astype(np.uint8)
+        gt_img = np.asarray(overlay(base, np.where(g == IGNORE, 0, g), palette))
+        gt_img = np.where((g == IGNORE)[..., None], 0, gt_img).astype(np.uint8)
         sep = np.full((gt_img.shape[0], gap, 3), 255, np.uint8)
         rows.append(np.concatenate([np.asarray(base), sep, pred_img, sep, gt_img], axis=1))
     if not rows:

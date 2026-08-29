@@ -9,15 +9,10 @@ filled in.
 pytest tests/test_bev_scene.py -v
 """
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-
-from bev_scene import (
+from syncai_bev3d.depth_scene import (
     BLOCKED,
     CELL_BLOCKED,
     CELL_EMPTY,
@@ -129,7 +124,7 @@ def test_an_object_reports_the_distance_it_was_built_at():
     depth, box = _scene_with_slab(z=2.0)
     obj = object_from_box(box, backproject(depth, K))
     assert obj is not None
-    assert obj["z"] == pytest.approx(2.0, abs=0.01)
+    assert obj["z_m"] == pytest.approx(2.0, abs=0.01)
     assert obj["range_m"] == pytest.approx(2.0, abs=0.05)
 
 
@@ -139,8 +134,9 @@ def test_extent_comes_back_in_metres_slightly_under():
     the size, and an object drawn slightly small is a smaller lie than one drawn large."""
     depth, box = _scene_with_slab(z=2.0, half_w=0.3, half_h=0.45)
     obj = object_from_box(box, backproject(depth, K))
-    assert obj["w"] == pytest.approx(0.6 * 0.9, abs=0.06)
-    assert obj["h"] == pytest.approx(0.9 * 0.9, abs=0.06)
+    assert obj is not None
+    assert obj["width_m"] == pytest.approx(0.6 * 0.9, abs=0.06)
+    assert obj["height_m"] == pytest.approx(0.9 * 0.9, abs=0.06)
 
 
 def test_a_box_with_too_few_returns_is_dropped_not_guessed():
@@ -183,7 +179,7 @@ def test_an_elongated_footprint_does_report_a_heading():
     )
     assert obj is not None
     assert obj["yaw_confidence"] > 0.8
-    assert abs(np.sin(obj["yaw"])) < 0.2, "the axis lies along x"
+    assert abs(np.sin(obj["yaw_rad"])) < 0.2, "the axis lies along x"
 
 
 # --------------------------------------------------------------------------- payload
@@ -197,9 +193,10 @@ def test_build_scene_is_serialisable_and_metric():
     trav = np.full((H, W), GO, np.uint8)
     scene = build_scene(trav, depth, K, [{"box": box, "cls": "chair", "score": 0.8}])
     json.dumps(scene)  # must round-trip: it is served as JSON every frame
-    assert scene["objects"][0]["cls"] == "chair"
-    assert scene["objects"][0]["z"] == pytest.approx(2.0, abs=0.05)
-    assert scene["grid"]["cell"] > 0
+    assert scene["objects"][0]["name"] == "chair"
+    assert scene["objects"][0]["z_m"] == pytest.approx(2.0, abs=0.05)
+    assert scene["grid"]["cell_m"] > 0
+    assert scene["source"] == "depth", "a payload must say which evidence built it"
 
 
 def test_background_inside_the_box_does_not_set_the_extent():
@@ -215,8 +212,8 @@ def test_background_inside_the_box_does_not_set_the_extent():
 
     got = object_from_box(box, backproject(depth, K))
     assert got is not None
-    assert got["z"] == pytest.approx(2.0, abs=0.05), "the wall must not drag the distance"
-    assert got["w"] < 0.8, f"the wall must not set the width, got {got['w']:.2f} m"
+    assert got["z_m"] == pytest.approx(2.0, abs=0.05), "the wall must not drag the distance"
+    assert got["width_m"] < 0.8, f"the wall must not set the width, got {got['width_m']:.2f} m"
 
 
 def test_a_deep_object_is_not_trimmed_to_its_front_face():
@@ -226,4 +223,57 @@ def test_a_deep_object_is_not_trimmed_to_its_front_face():
     depth = np.repeat(zs[:, None], W, axis=1).astype(np.float32)
     obj = object_from_box((0, 0, W, H), backproject(depth, K))
     assert obj is not None
-    assert obj["d"] > 0.6, f"a 1 m deep surface should not collapse, got {obj['d']:.2f} m"
+    assert obj["depth_m"] > 0.6, (
+        f"a 1 m deep surface should not collapse, got {obj['depth_m']:.2f} m"
+    )
+
+
+def test_the_two_scene_builders_share_one_vocabulary_and_declare_their_evidence():
+    """Two payloads, two kinds of evidence, one set of names.
+
+    `syncai_bev3d.bev.scene` places objects on a ground plane -- assumed from flags, or fitted
+    to depth. This module back-projects registered metric depth and fits no plane. Both
+    are called a scene, both carry `grid` and `objects`, and that is exactly enough
+    overlap for a renderer handed the wrong one to draw something plausible out of it.
+
+    So: every key name they share means the same quantity in the same unit, and each says
+    which evidence built it. The keys they do *not* share are the ones only one of them
+    can answer -- a yaw needs a point cloud, a `class_share` needs a rasterised map -- and
+    those stay absent rather than being filled with a default that reads as measured.
+    """
+    import math
+
+    from syncai_bev3d import scene as plane_scene
+    from syncai_hydranet.geometry import Camera, GroundPlane
+
+    trav = np.full((H, W), GO, np.uint8)
+    depth = flat_depth(2.5)
+    box = (W // 2 - 8, H // 2 - 6, W // 2 + 8, H // 2 + 6)
+    from_depth = build_scene(trav, depth, K, [{"box": box, "cls": "chair", "score": 0.8}])
+    from_plane, _ = plane_scene(
+        trav,
+        Camera.from_vfov(H, W, 55.0),
+        GroundPlane(1.2, math.radians(15)),
+        boxes=[list(box)],
+        labels=[56],
+        scores=[0.8],
+        names={56: "chair"},
+    )
+
+    assert from_depth["source"] == "depth"
+    assert from_plane["source"] == "plane"
+
+    shared_top = set(from_depth) & set(from_plane)
+    assert shared_top == {"source", "grid", "objects"}
+
+    # Both grids are a metric window onto the floor; both say where it starts and how big
+    # a cell is. Everything else about them differs, because one is a flat list of cell
+    # states and the other a rasterised map of class ids.
+    assert set(from_depth["grid"]) & set(from_plane["grid"]) == {"x_min", "cell_m"}
+
+    assert from_depth["objects"] and from_plane["objects"]
+    shared_obj = set(from_depth["objects"][0]) & set(from_plane["objects"][0])
+    assert shared_obj == {"x_m", "z_m", "width_m", "height_m", "range_m", "score", "name"}
+    for key in shared_obj - {"name"}:
+        assert isinstance(from_depth["objects"][0][key], (int, float))
+        assert isinstance(from_plane["objects"][0][key], (int, float, type(None)))

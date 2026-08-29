@@ -52,7 +52,11 @@ model:
   fixed_weights: { traversability: 1.0, terrain: 1.0, detection: 1.0 }
 
 data:
-  input_size: [512, 640]          # H, W. Start at 384x512 on Jetson.
+  # H, W. The retail line ships larger -- 512x896, then 640x1120 -- and PLAN 6 step 3
+  # prices the trade: 448x784 doubles engine throughput for 0.018 PCK. A config that
+  # wants a different canvas says so here; the export follows `data.input_size` and
+  # must not be given one of its own in this file (see the `export:` block).
+  input_size: [512, 640]
   workers: 8                      # one loader per dataset; lower this on a laptop
   # Augmentation strength is part of what produced a checkpoint, so it is stated rather
   # than hidden in transforms.py. These are the values every run before it became
@@ -77,15 +81,20 @@ train:
   warmup_iters: 1000
   scheduler: cosine
   amp: true                       # automatically disabled off CUDA
-  # Stated rather than left to the code default, which said float16. All nine runs in
-  # runs/ were trained in bfloat16 and every one of them supplied it on the command
-  # line, so the value a plain `hydranet-train --config` used was one nothing had ever
-  # been trained with -- on a detection loss with its own history of AMP dtype bugs.
+  # Stated rather than left to the code default, which said float16. Every run directory
+  # in runs/ that carries a config names bfloat16 -- nine of them when this was written on
+  # 2026-08-14, forty-three today, still unanimous -- and before this line each one had to
+  # supply it on the command line, so the value a plain `hydranet-train --config` used was
+  # one nothing had ever been trained with, on a detection loss with its own history of
+  # AMP dtype bugs. The claim is phrased against runs/ rather than a count on purpose:
+  # the count was only ever true for a week.
   # Needs Ampere or newer; on older cards the trainer says so instead of downgrading.
   amp_dtype: bfloat16
   grad_clip: 10.0
   ema: true                       # decay ramps up over train.ema_warmup_steps, so
-                                  # short runs are safe too; see docs/TRAIN_MACOS.md
+                                  # short runs are safe too. `utils.checkpoint.
+                                  # select_weights` carries the measurement: 0.16 mIoU
+                                  # on the average against 0.95 on the raw weights
   ema_decay: 0.9998
   log_interval: 50
   val_interval: 1
@@ -97,4 +106,16 @@ train:
 
 export:
   opset: 17
-  input_size: [512, 640]
+  # No `input_size` here on purpose. `cli/export_onnx.py` falls back to
+  # `data.input_size` when the key is absent, and its comment says why that is the
+  # right default: "a TensorRT engine built for the wrong input size is a much later
+  # and much more confusing failure than a missing config key". `export` is a dict and
+  # dicts merge key by key, so a value here reaches every inheriting config whether it
+  # wants one or not, and `or` then takes the inherited size over the trained one.
+  # Measured 2026-08-27 with this line present: six configs resolved to an export size
+  # they never trained at -- retail_cctv, retail_cocostuff and the three
+  # b03_cw_hires variants at 512x896, and hm3d_cctv at 480x640, all exporting 512x640.
+  # The rest were right by coincidence rather than by design: they happen to train at
+  # 512x640, so any one of them changing its training resolution would have joined the
+  # six silently. A config that genuinely wants a different export canvas states it
+  # itself, which is still supported and still tested.

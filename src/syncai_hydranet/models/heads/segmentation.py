@@ -9,6 +9,8 @@ parameters than the entire neck.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -21,7 +23,7 @@ class SemanticFPNHead(nn.Module):
         self,
         in_channels: int,
         num_classes: int,
-        in_levels: list[int] = (0, 1, 2),
+        in_levels: Sequence[int] = (0, 1, 2),
         channels: int = 64,
         dropout: float = 0.1,
     ):

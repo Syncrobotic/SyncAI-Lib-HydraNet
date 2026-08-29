@@ -1,0 +1,15 @@
+# Seed replicate of hydranet_retail_security.yaml. Instrumentation, not a model.
+#
+# **Seeds 42, 7 and 13 match the hydranet_retail_surfaces and _products replicates.** The
+# question is what adding COCO `person`/`bag` to the same head costs the merchandise
+# classes, and a seed-matched pair answers it far more tightly than two means: the paired
+# sd on this family is 0.0034 against a between-seed spread of 0.0173, five times tighter,
+# because matching the seed cancels the run-to-run term instead of averaging over it.
+#
+# Nothing below 0.017 is readable from unpaired single runs, which is why this file exists
+# rather than one run and an opinion.
+_base_: hydranet_retail_security.yaml
+
+experiment: hydranet_retail_security_seed7
+output_dir: runs/hydranet_retail_security_seed7
+seed: 7

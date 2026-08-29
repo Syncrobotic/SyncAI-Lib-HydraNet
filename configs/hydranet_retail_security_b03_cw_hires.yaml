@@ -1,0 +1,21 @@
+# =============================================================================
+# `hydranet_retail_security_b03_cw.yaml` at 512x896, and nothing else.
+#
+# The canvas is 1.25:1 and the footage is 16:9, so 512x640 spends 29.7% of its input on
+# grey bars and leaves the subject 360 rows. 512x896 uses 98.4% of the canvas and gives
+# 504 rows for 1.4x the compute.
+#
+# It is expected to help the 20.9% of `fixture` that comes back as `wall`, which is partly
+# a boundary between two large regions. It is **not** expected to help `column`: 86.2% of
+# a column is called wall, and a whole pillar misclassified is not an edge problem. The
+# class weights are the intervention aimed at that one, and separating the two is why
+# these are two configs.
+# =============================================================================
+
+_base_: hydranet_retail_security_b03_cw.yaml
+
+experiment: hydranet_retail_security_b03_cw_hires
+output_dir: runs/hydranet_retail_security_b03_cw_hires
+
+data:
+  input_size: [512, 896]

@@ -1,0 +1,16 @@
+# Seed replicate of hydranet_retail_surfaces.yaml. Instrumentation, not a model.
+#
+# **Seeds 42, 7 and 13 deliberately match the hydranet_retail_products replicates.** The
+# question this answers is whether taking `product` out of the segmentation head costs
+# detection mAP, and a seed-matched pair is a stronger comparison than two means: the same
+# seed gives the same data order and the same init, so what differs between
+# `..._products_seed7` and this run is the taxonomy and nothing else.
+#
+# The band those three produced on the parent config was 0.0648-0.0821, spread 0.0173 on a
+# 14% relative sd. Anything smaller than that is not readable from single runs, which is
+# why this file exists rather than one run and an opinion.
+_base_: hydranet_retail_surfaces.yaml
+
+experiment: hydranet_retail_surfaces_seed7
+output_dir: runs/hydranet_retail_surfaces_seed7
+seed: 7

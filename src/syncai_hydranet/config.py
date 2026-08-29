@@ -138,6 +138,33 @@ def _load_with_bases(path: Path, seen: list[Path] | None = None) -> dict:
     return merge_config(merged, raw)
 
 
+def _drop_disabled_heads(cfg: dict) -> list[str]:
+    """``model.heads.<name>: null`` in a child config removes that head. Returns them.
+
+    Inheritance can add and it can change, and until this it could not subtract. A
+    config that wanted the base's backbone, neck, schedule and two of its three heads
+    had no way to say so -- ``merge_config`` merges dicts key by key, so the base's head
+    survived every attempt to override it away, and the only route was to stop
+    inheriting and copy 90 lines.
+
+    Deleting here rather than skipping at build time is deliberate: it happens once,
+    before validation, so a removed head is removed for *everything* downstream --
+    the schema, ``unsupervised_heads``, the trainer's loss balancer, the exporter and
+    ``meta.json``. Skipping it in HydraNet alone would leave a config whose recorded
+    lineage claims a head the checkpoint does not have.
+
+    Only ``None`` removes. An empty dict is a different thing -- a head declared with no
+    settings -- and stays an error about a missing ``type``, which is what it is.
+    """
+    heads = (cfg.get("model") or {}).get("heads")
+    if not isinstance(heads, dict):
+        return []
+    disabled = [name for name, hcfg in heads.items() if hcfg is None]
+    for name in disabled:
+        del heads[name]
+    return disabled
+
+
 def load_config(
     path: str | Path, overrides: list[str] | None = None, validate: bool = True
 ) -> Config:
@@ -164,6 +191,7 @@ def load_config(
         if not sep:
             raise ValueError(f"override must be key=value, got: {ov}")
         cfg.set_path(key.strip(), val.strip())
+    _drop_disabled_heads(cfg)
     if validate:
         from .config_schema import check_config
 

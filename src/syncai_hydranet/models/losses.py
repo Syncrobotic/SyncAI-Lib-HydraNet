@@ -7,6 +7,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from ..labels import IGNORE
+
 # ---------------------------- segmentation ----------------------------
 
 
@@ -17,6 +19,17 @@ class SegLoss(nn.Module):
     wall, cover most pixels while the classes that matter most for safety (stairs,
     water, glass) may be under 1%. Plain CE is dominated by the large classes; Dice
     optimises region overlap directly and is insensitive to class size.
+
+    **Dice alone did not settle it, which is why `class_weights` exists.** Measured on
+    the batch02 retail-objects run, as agreement with SAM 3 over six held-out cameras:
+    `fixture` reached 92.6% recall at 56.1% precision while every other class sat at
+    91-96% precision and 21-69% recall. One class absorbing and the rest under-firing is
+    the signature of frequency bias, and it survived `dice_weight` 1.5 against
+    `ce_weight` 1.0 -- Dice is `dice.mean()`, so it is already class-balanced, and the
+    unweighted CE beside it is what still pulls toward the common classes.
+
+    Off by default. Passing weights changes what a checkpoint means, so it is opt-in per
+    config rather than a default that silently reinterprets every previous run.
     """
 
     def __init__(
@@ -24,16 +37,40 @@ class SegLoss(nn.Module):
         num_classes: int,
         ce_weight: float = 1.0,
         dice_weight: float = 1.0,
-        ignore_index: int = 255,
+        ignore_index: int = IGNORE,
+        class_weights: list[float] | None = None,
     ):
         super().__init__()
         self.num_classes = num_classes
         self.ce_weight = ce_weight
         self.dice_weight = dice_weight
         self.ignore_index = ignore_index
+        # A buffer so it follows `.to(device)` -- CE raises on a device mismatch and it
+        # would only fire once training reached the GPU. **`persistent=False`** so it
+        # stays out of `state_dict()`: these are a config value, not learned state, and
+        # a persistent buffer makes every checkpoint that predates this unloadable into a
+        # weighted model -- `Missing key(s): seg_losses.terrain.class_weights`, which is
+        # exactly the case of turning weights on and fine-tuning from an existing run.
+        # The `config.yaml` written beside every checkpoint already records that a run
+        # trained under weights, so nothing is lost by keeping them out.
+        if class_weights is None:
+            self.class_weights = None
+        else:
+            if len(class_weights) != num_classes:
+                raise ValueError(
+                    f"class_weights has {len(class_weights)} entries for {num_classes} "
+                    f"classes; a silent broadcast here would reweight the wrong classes"
+                )
+            self.register_buffer(
+                "class_weights",
+                torch.tensor(class_weights, dtype=torch.float),
+                persistent=False,
+            )
 
     def forward(self, logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        loss = self.ce_weight * F.cross_entropy(logits, target, ignore_index=self.ignore_index)
+        loss = self.ce_weight * F.cross_entropy(
+            logits, target, weight=self.class_weights, ignore_index=self.ignore_index
+        )
         if self.dice_weight > 0:
             loss = loss + self.dice_weight * self._dice(logits, target)
         return loss
@@ -55,13 +92,24 @@ class SegLoss(nn.Module):
 # ---------------------------- detection ----------------------------
 
 
-def sigmoid_focal_loss(logits, targets_onehot, alpha=0.25, gamma=2.0):
+def sigmoid_focal_loss(logits, targets_onehot, alpha=0.25, gamma=2.0, channel_mask=None):
+    """``channel_mask`` broadcasts over the class axis and zeroes whole channels.
+
+    Not a class weight. A weight of zero and a mask of zero are the same arithmetic and
+    a different claim: a weight says this class matters less, a mask says *this dataset
+    cannot answer for this class*, so its images are neither evidence for it nor against
+    it. `label_maps_retail_security` has the measurement that makes the distinction worth
+    the parameter -- an unlabelled shopper in a site frame, taken as a negative, is what
+    held `product` at IoU 0.000 for 22 epochs in the segmentation case.
+    """
     p = logits.sigmoid()
     ce = F.binary_cross_entropy_with_logits(logits, targets_onehot, reduction="none")
     p_t = p * targets_onehot + (1 - p) * (1 - targets_onehot)
     loss = ce * ((1 - p_t) ** gamma)
     if alpha >= 0:
         loss = loss * (alpha * targets_onehot + (1 - alpha) * (1 - targets_onehot))
+    if channel_mask is not None:
+        loss = loss * channel_mask
     return loss.sum()
 
 
@@ -89,7 +137,14 @@ class FCOSLoss(nn.Module):
         self.num_classes = num_classes
         self.w = (cls_weight, reg_weight, centerness_weight)
 
-    def forward(self, head, cls_out, reg_out, ctr_out, boxes_list, labels_list):
+    def forward(
+        self, head, cls_out, reg_out, ctr_out, boxes_list, labels_list, class_mask=None
+    ):
+        """``class_mask`` is [B, C] or [C]: which channels this batch's dataset can label.
+
+        None means "all of them", which is the single-source case and every run before
+        the retail+security vocabulary existed.
+        """
         device = cls_out[0].device
         shapes = [c.shape[-2:] for c in cls_out]
         _, cls_t, reg_t, ctr_t = head.get_targets(shapes, boxes_list, labels_list, device)
@@ -113,7 +168,13 @@ class FCOSLoss(nn.Module):
         # only fires when the detection head is actually supervised on CUDA, which
         # is why it survived every seg-only run.
         onehot[pos] = F.one_hot(cls_t[pos], self.num_classes).to(onehot.dtype)
-        cls_loss = sigmoid_focal_loss(flat_cls, onehot) / num_pos
+        if class_mask is not None:
+            # [B, C] -> [B, 1, C] against flat_cls's [B, points, C]; a [C] mask
+            # broadcasts as it is. Cast rather than assume: under autocast flat_cls is
+            # bf16/fp16 and the mask arrives from the collate as float32.
+            mask = class_mask.to(flat_cls.dtype)
+            class_mask = mask[:, None, :] if mask.dim() == 2 else mask
+        cls_loss = sigmoid_focal_loss(flat_cls, onehot, channel_mask=class_mask) / num_pos
         if pos.any():
             reg_loss = giou_loss(flat_reg[pos], reg_t[pos]) / num_pos
             ctr_loss = (
@@ -150,12 +211,15 @@ class UncertaintyWeighting(nn.Module):
         self.log_vars = nn.ParameterDict({t: nn.Parameter(torch.zeros(())) for t in task_names})
 
     def forward(self, losses: dict[str, torch.Tensor]) -> torch.Tensor:
-        total = None
+        # Collect then stack, rather than seeding an accumulator with None: that loop
+        # returned None untouched for an empty `losses`, i.e. it promised a Tensor and
+        # handed back None for the caller's `.backward()` to trip over one frame later.
+        # An empty step is a caller bug either way; this way it says so where it happens.
+        terms = []
         for name, loss in losses.items():
             s = self.log_vars[name]
-            term = torch.exp(-s) * loss + 0.5 * s
-            total = term if total is None else total + term
-        return total
+            terms.append(torch.exp(-s) * loss + 0.5 * s)
+        return torch.stack(terms).sum()
 
 
 class FixedWeighting(nn.Module):
@@ -164,8 +228,6 @@ class FixedWeighting(nn.Module):
         self.weights = dict(weights)
 
     def forward(self, losses: dict[str, torch.Tensor]) -> torch.Tensor:
-        total = None
-        for name, loss in losses.items():
-            term = self.weights.get(name, 1.0) * loss
-            total = term if total is None else total + term
-        return total
+        # Same shape as UncertaintyWeighting.forward above, for the same reason.
+        terms = [self.weights.get(name, 1.0) * loss for name, loss in losses.items()]
+        return torch.stack(terms).sum()

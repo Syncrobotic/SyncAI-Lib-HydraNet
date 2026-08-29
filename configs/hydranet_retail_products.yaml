@@ -1,0 +1,120 @@
+# =============================================================================
+# Count the merchandise, do not estimate its area.
+#
+# Every object config so far asks the segmentation head "what fraction of this shelf is
+# product". That is the wrong instrument for the question the shop actually has, and the
+# reason is measurable rather than aesthetic.
+#
+# The 9,385 merchandise boxes `scripts/sam3_prelabel.py --boxes` already wrote, measured
+# at the model's own input scale (letterboxed to 640x512):
+#
+#     boxed_stock   n=6610   median  17.7 x 28.7 px   =  2.2 x 3.6 cells at stride 8
+#     device        n=2775   median  20.0 x 18.7 px   =  2.5 x 2.3 cells at stride 8
+#
+# `semantic_fpn` takes `in_levels: [0, 1, 2]`, and level 0 is stride 8, so a laptop is
+# **two or three feature cells across**. The head cannot draw its outline no matter how
+# long it trains -- there are not enough cells to put an edge in. That is what the amber
+# blobs on a counter are, and why `product` IoU sits near 0.1 while `fixture`, which is
+# large and clean-edged, reaches 0.72 on the same frames.
+#
+# A box needs no cells. It needs a centre and an extent, which is exactly what FCOS
+# regresses, and the labels have existed on disk since the first pre-label batch with
+# nothing reading them.
+#
+# ---------------------------------------------------------------------------
+# Why this does not also train COCO
+#
+# `CocoDetDataset` remaps category ids to contiguous 0-based labels per dataset. Two
+# detection datasets in one config therefore both produce a label `0` -- `person` in
+# COCO's numbering and `boxed_stock` in this one -- and one head cannot hold both
+# meanings. Merchandise detection is its own run until something arbitrates that, and
+# pretending otherwise would train a head to answer two questions with one channel.
+#
+# The terrain head stays, and stays supervised the same way. It is the reason to run one
+# network rather than two: the trunk that learns a shop's fixtures is the trunk that
+# should propose boxes on them, and `product` as a region is still the right answer to
+# "how much shelf is stocked" even when it is the wrong answer to "how many items".
+# =============================================================================
+
+_base_: hydranet_retail_objects.yaml
+
+experiment: hydranet_retail_products
+output_dir: runs/hydranet_retail_products
+
+model:
+  heads:
+    # Free space is a lookup on terrain here as everywhere in this family; see
+    # hydranet_retail_objects.yaml for the measurement that removed it.
+    traversability: null
+    terrain:
+      num_classes: 7
+      loss:
+        dice_weight: 1.5
+    detection:
+      # boxed_stock, device. Not 80: an untrained channel is not free, it is a channel
+      # spending gradient learning to say no, and this run has two things to find.
+      num_classes: 2
+      # Stated rather than left to the comment above. `cli/scene.detection_class_names`
+      # reads this first, and without it a panel drawn from this checkpoint falls back to
+      # the bare channel index -- or, before that resolver reached
+      # `hydranet-infer-image`, to COCO's names, which drew a wall of hanging accessory
+      # packets as ten `person` boxes at 0.30-0.37.
+      classes: [boxed_stock, device]
+
+data:
+  terrain_classes: [void, floor, wall, column, fixture, product, person]
+  datasets:
+    - name: ade20k
+      type: seg_folder
+      root: datasets/ADE20K
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: ade20k_retail_objects
+      supervises: [terrain]
+      # The same 0.15 the balanced run settled on. At 1.0 the source domain is 90% of
+      # every step and teaches that a shop contains no `product` -- the argument is in
+      # hydranet_retail_objects_site_balanced.yaml and it applies unchanged here.
+      sample_ratio: 0.15
+
+    - name: site_seg
+      type: seg_folder
+      root: datasets/retail_objects_batch02
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: retail_objects_native
+      supervises: [terrain]
+      sample_ratio: 3.0
+
+    - name: site_boxes
+      type: coco
+      # `CocoDetDataset` reads `root/<split>/` for images and
+      # `root/annotations/instances_<split>.json`, while the pre-label writer lays images
+      # out under `root/images/<split>/`. The symlink is made by the split step rather
+      # than the layout being changed, because the annotation gate and every existing
+      # mask path depend on the current one.
+      root: datasets/retail_objects_batch02
+      split_train: train
+      split_val: val
+      split_test: test
+      supervises: [detection]
+      sample_ratio: 1.0
+
+train:
+  epochs: 60
+  # Unqualified, and that is not a typo. `_det_metrics` suffixes the key with the dataset
+  # name only when a config has more than one detection source; with `site_boxes` alone
+  # the key stays `detection_mAP`. So this name is correct exactly as long as this run has
+  # one detection dataset -- add COCO back and it becomes `detection_mAP/site_boxes` and
+  # this line has to change with it. `select_metric` raises with the available keys rather
+  # than selecting silently on the wrong number, so the failure would be loud, but it
+  # would cost an epoch to find.
+  primary_metric: detection_mAP
+  # Both from dcc4b2f, and this run is the case they were written for: it is a first look
+  # at whether the boxes are learnable at all, so it should stop as soon as it stops
+  # improving rather than spending an hour proving it.
+  early_stop_patience: 10
+  # Detection *is* the point here, so it is scored every epoch. The interval exists for
+  # runs where mAP selects nothing; this one selects on it.
+  detection_val_interval: 1

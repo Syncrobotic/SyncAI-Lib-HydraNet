@@ -19,14 +19,57 @@ htmlcov/
 # be traced to the data behind it. See data/fingerprint.py.
 datasets/
 runs/
+exports/
 *.pt
 *.pth
 *.onnx
 *.engine
+# ...except the class-name embedding matrix, which is 6 KB of CLIP text vectors and is a
+# BUILD INPUT rather than a training artefact: `hydranet_retail_openvocab.yaml` names it
+# at `text_embeddings:` and `models/hydranet.py` reads it at **model construction**, so
+# without it that config cannot be built at all. It has been gitignored since it was
+# written on 2026-08-17, which made `ci.yml`'s export-parity job fail on a clean checkout
+# for every day since -- invisible until `c7fa9fe` gave that workflow a push trigger, and
+# then hidden one layer deeper: `0ca569a` fixed the depth-head export on 08-28 and the
+# verification ran in a working tree where this file exists, so 33/33 configs passed
+# locally while CI aborted on the next one along. Tracked now, so a fresh checkout builds
+# what CI builds.
+!weights/text/*.pt
+# TensorRT serialised engines. `.engine` is the Jetson convention and was the only one
+# listed; `scripts/bench_trt.py` writes `<name>.<tag>.plan`, so the four plans the
+# pro6000 sweep left in `exports/` sat untracked and *unignored* -- 100 MB that a
+# `git add -A` would have committed. Both extensions, because both are produced.
+*.plan
 
-# Large media
-assets/*.mp4
-assets/*.mov
+# assets/ = results. assets/dev/ = everything on the way to one.
+#
+# **The split is the simple half and the allowlist is the load-bearing half.** Renders,
+# contact sheets, overlays and per-camera review images are working material: they go in
+# `assets/dev/`, which is ignored wholesale and never allowlisted. What stays in
+# `assets/` itself is what a reader is meant to open, and each of those is named below.
+#
+# The default is "no", and it is a denylist's failure that made it so: the old rule
+# ignored mp4/mov/pdf while `assets/retail_static_plate_cam01.png` -- one frame of a
+# customer's shop floor -- sat untracked and addable. The material this repo handles is
+# retail CCTV, and it arrives in whatever format the renderer chose. Adding a figure is
+# therefore a deliberate act: `git add -f`, then a line here, and the moment in between
+# is the point, because a frame of a customer's shop floor cannot be un-published once
+# it is in the history.
+#
+# Every published store figure carries a tracked `.audit.json` beside it recording that
+# the detector was re-run on the source frames and found no unblurred face. `tests/
+# test_assets_allowlist.py` holds this list and the tracked set to each other exactly, in
+# both directions; `tests/test_figures_are_audited.py` holds the figures to their verdicts.
+assets/*
+assets/dev/
+!assets/cctv_v1.gif
+!assets/cctv_v2.audit.json
+!assets/cctv_v2.gif
+!assets/demo_Kaohsiung-cam04.audit.json
+!assets/demo_Kaohsiung-cam04.gif
+!assets/demo_Taichung-cam10.audit.json
+!assets/demo_Taichung-cam10.gif
+!assets/social_preview.png
 
 # Editors / OS
 .vscode/
@@ -40,3 +83,8 @@ assets/*.mov
 *credentials*.json
 gcp-key*.json
 .gcp/
+
+# Model release bundles. Staged locally, published to GCS -- a bundle carries a 128 MB
+# checkpoint and its per-target builds, and git is not where those belong. MANIFEST.json
+# is what makes a bundle verifiable wherever it lives; see docs/RELEASE.md.
+releases/

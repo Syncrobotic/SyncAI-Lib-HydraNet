@@ -10,7 +10,7 @@
 #
 # What this config deliberately does NOT model: "walkable within 5 m" and "the
 # merchandise zone on the floor". Both are geometry on the ground plane, both are
-# post-processing, and both are argued out in docs/RETAIL_SCOPE.md. Putting a distance
+# post-processing, and both are argued out in docs/PLAN.md §5. Putting a distance
 # threshold in a semantic class asks an annotator to distinguish 4.8 m of floor from
 # 5.2 m of the same floor.
 # =============================================================================
@@ -105,13 +105,61 @@ data:
       # 0.279 understates it, while the segmentation cost was already fully paid.
       sample_ratio: 0.1
 
-  workers: 4
+  # Measured by `scripts/bench_batch_size.py` (deleted in `500cdd2`, which is why the
+  # table is here rather than behind it) on an RTX PRO 6000 (24 cores), loader alone,
+  # batch 32:
+  #
+  #     workers    4      8     12     16
+  #     img/s  172.4  361.3  322.6  312.2
+  #
+  # Raised to 8 for headroom at larger batches, NOT because 4 was starving this run.
+  # That was tried and measured: resuming the batch-8 baseline with 8 workers changed
+  # throughput not at all (132-136 img/s before, 132-136 after). The reason is simply
+  # that supply at 4 workers (172) already exceeded what a batch-8 step consumes (132) --
+  # the loader was never the constraint at this batch size, and reading it as one meant
+  # comparing supply against the batch-*32* compute ceiling by mistake.
+  #
+  # It becomes the constraint at batch 32, where compute wants 434 and even 8 workers
+  # supply only 361. That is what this setting is for.
+  #
+  # Past 8 it regresses: the loader is per-dataset, so `workers: 12` with two datasets
+  # is 24 worker processes plus the trainer on 24 cores.
+  workers: 8
 
 train:
   # Same inherited-lr bug as hydranet_indoor.yaml: the base's 2.0e-4 is set for its
   # batch of 16, so a batch of 8 has to bring its own lr down with it.
+  #
+  # **Left at 8 deliberately, and it is not the fast setting.** Measured on an RTX PRO
+  # 6000, model only, 512x640 bf16, quiet card:
+  #
+  #     batch     8     16     32     48
+  #     NHWC  233.5  399.3  433.9  433.0   img/s
+  #     peak    1.9    3.8    7.4   11.0   GiB
+  #
+  # Compute plateaus at 32; 48 buys nothing and costs 3.6 GiB. So the throughput setting
+  # on this hardware is batch 32 with lr 4.0e-4 -- which is this project's own scaling
+  # rule, lr = batch_size x 1.25e-5, and not a guess.
+  #
+  # What keeps 8 here is that every number in `git show b7457c2:docs/RETAIL.md` was measured at this
+  # batch. Changing it silently redefines the baseline those tables compare against, and
+  # a faster baseline that is no longer comparable to the conclusions already drawn from
+  # it is a bad trade. Override per run instead, when the comparison does not matter:
+  #
+  #     hydranet-train --config configs/hydranet_retail.yaml \
+  #         --set train.batch_size=32 train.lr=4.0e-4 train.channels_last=true
+  #
+  # (`workers` and `channels_last` are safe to change here because neither alters what
+  # the optimiser sees -- only how fast it gets there.)
   batch_size: 8
   lr: 1.0e-4
+
+  # +26% from batch 16 up on this card (399.3 vs 318.1 at 16, 433.9 vs 345.5 at 32),
+  # and only +3.5% at batch 8 -- NHWC needs a batch to pay off. Note this contradicts
+  # the -33% that scripts/bench_channels_last.py recorded on older hardware (the script
+  # went in `500cdd2`; the figure is the whole of what it said): the flag is
+  # architecture-dependent, so re-measure it per box rather than inheriting the verdict.
+  channels_last: true
 
   # A shop robot's expensive mistakes are: walking into a glass storefront, walking
   # into a display, and slipping on a mopped floor. Two of those are `blocked`, so the

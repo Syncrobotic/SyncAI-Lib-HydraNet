@@ -1,0 +1,193 @@
+name: Release (main)
+
+# Releasing, for the promotion flow feat/* → dev → stage → main. `ci.yml` gates
+# feat→dev and `ci-promote.yml` gates dev→stage; this turns an arrival on `main` into a
+# tag and a GitHub Release, and does nothing anywhere else.
+#
+# **`dev` carries no version and nothing here runs on it.** Until 2026-08-29 a
+# release-please job ran on every push to dev and kept an open PR proposing the next
+# version number. `dev` is where work lands; a version number is a property of what has
+# been released, so proposing one there was wrong, and it cost a three-minute workflow on
+# every single push to maintain a PR nobody was going to merge. Removed on the user's
+# instruction: a release is triggered by an arrival on `main`, and by nothing else.
+#
+# What that automation had produced by the time it was removed, all of it measured: zero
+# GitHub Releases, zero tags, no CHANGELOG.md in the tree at all, and `__version__` still
+# at the 0.1.0 it started at. Its one artefact was PR #9, open since 2026-08-28, whose own
+# CI had been queued four times and executed zero times because a bot's PR needs a
+# maintainer to approve its workflows and nobody had.
+#
+# So the version is now set the way every other change to this repository is set: by a
+# commit that edits `src/syncai_hydranet/__init__.py`, which rides feat/* → dev → stage →
+# main under the same gates as anything else. When it arrives here carrying a version that
+# has no tag, that is a release -- tag it, attach the wheel and sdist, and take the notes
+# from CHANGELOG.md if a section for that version exists.
+#
+# **`release-please-config.json` and `.release-please-manifest.json` are now read by
+# nothing.** They are kept rather than deleted because `tests/test_version_agreement.py`
+# checks that `CITATION.cff` is listed among their `extra-files`, and that check is the
+# only thing keeping the citation's version in step with the package's. Removing the
+# config means deciding what keeps those two in step instead, which is a separate change
+# from this one.
+#
+# The tag therefore lands on `main`, which is what RELEASE.md defined as released
+# (that document was deleted in `26dc519`; `git show b7457c2:docs/RELEASE.md` for it).
+#
+# **What promotion actually does, measured 2026-08-29, because this comment used to say
+# something else.** It claimed no branch ever gains a commit the branch below it does not
+# have, and that promotion being fast-forward makes the tagged commit the same git object
+# that was reviewed. Both were false, and had been through all four promotions to date:
+# every one was merged through a GitHub PR, and a PR merge writes a merge commit onto the
+# target. `stage` carries `8170796` and `b62ca2c` that `dev` does not; `main` carries
+# `096e912` and `27ef617` that `stage` does not.
+#
+# The two hops fail at different moments, which is worth stating precisely because the
+# obvious check reports the wrong one as healthy:
+#
+#     $ git checkout stage && git merge --ff-only origin/dev
+#     fatal: Not possible to fast-forward, aborting.
+#
+#     $ git checkout main && git merge --ff-only origin/stage
+#     Already up to date.
+#
+# `main` reads clean only because it was built by merging `stage` into it, so `stage` is
+# an ancestor and there is nothing to fast-forward *to*. `main` is not an ancestor of
+# `stage`, so that hop aborts the same way the moment `stage` advances -- at the next
+# promotion, not at the next check.
+#
+# What survives, and it is the part that matters: `main` and `stage` resolve to the **same
+# tree** (`cbc632f4`). Those four merge commits carry no content of their own, so what is
+# tagged and released is what was reviewed on dev and accepted on stage -- an identical
+# tree reached by a different commit, rather than the identical commit.
+#
+# **Nothing asserts any of this.** The invariant lived only in this comment, which is how
+# it was broken four times without anyone noticing, and how the comment went on describing
+# a repository that had stopped existing. Restoring the strict form would mean promoting by
+# `git merge --ff-only` from a clone and pushing, never through a PR -- and re-aligning
+# `stage` and `main` first, which rewrites two shared branches. That has not been done and
+# is not implied by anything here.
+#
+# Model releases are NOT this. Weights are versioned by `scripts/release_bundle.sh`
+# into an immutable checksummed bundle, because `runs/` is not in git and a commit on
+# main says nothing about which checkpoint a robot is running. See RELEASE.md §2.
+on:
+  push:
+    branches: [main]
+  # Rebuild and re-attach distributions for an existing release -- a transient runner
+  # failure, or a tag whose assets never uploaded. Built from that tag's source, so
+  # the result is the released version rather than main's HEAD.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to (re)build artifacts for, e.g. v0.2.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Serialize per branch, and never cancel mid-flight: a cancelled release run can
+# leave a tag without its artifacts.
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag & publish (main)
+    if: |
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # create the tag, the release, and upload assets
+    env:
+      GH_TOKEN: ${{ github.token }}
+      INPUT_TAG: ${{ github.event.inputs.tag }}
+    steps:
+      # The manual value flows into a checkout ref and a `gh release` target, so it
+      # is validated before either, and read from the environment rather than
+      # inlined into a shell.
+      - name: Validate tag (manual runs)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          printf '%s' "$INPUT_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' \
+            || { echo "::error::Invalid tag '$INPUT_TAG' — expected vX.Y.Z (e.g. v0.2.0)"; exit 1; }
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.inputs.tag || github.sha }}
+          fetch-depth: 0 # tags, so an already-released version is recognised
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      # Build first and take the version from the artifact rather than by parsing
+      # `__init__.py`. Whatever the wheel says is what a `pip install` will report,
+      # so deriving the tag from it removes the class of bug where the tag and the
+      # installed package disagree -- which is exactly what would happen if the
+      # `x-release-please-version` annotation were ever dropped from that file.
+      - run: uv build
+
+      - name: Resolve version and decide whether this is a release
+        id: v
+        run: |
+          WHEEL=$(ls dist/*.whl)
+          VERSION=$(basename "$WHEEL" | cut -d- -f2)
+          TAG="v${VERSION}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if [ -n "$INPUT_TAG" ]; then
+            # Manual rebuild: the tag exists by definition, and must match the source.
+            [ "$INPUT_TAG" = "$TAG" ] || {
+              echo "::error::tag $INPUT_TAG holds version $VERSION — refusing to attach mismatched artifacts"
+              exit 1
+            }
+            echo "release=rebuild" >> "$GITHUB_OUTPUT"
+          elif git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            # Ordinary promotion of code whose version was released earlier. Not an
+            # error and not a release -- most pushes to main are this.
+            echo "release=none" >> "$GITHUB_OUTPUT"
+            echo "$TAG already exists; nothing to release."
+          else
+            echo "release=new" >> "$GITHUB_OUTPUT"
+            echo "$TAG is new; cutting a release."
+          fi
+
+      # The notes release-please already wrote, rather than `--generate-notes`:
+      # CHANGELOG.md is grouped by the Conventional Commit types this project
+      # enforces, and a raw commit list would discard that grouping.
+      - name: Extract the CHANGELOG section
+        if: steps.v.outputs.release == 'new'
+        run: |
+          python3 - "$TAG" <<'PY' > release-notes.md
+          import re, sys, pathlib
+          tag = sys.argv[1].lstrip("v")
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          # release-please writes "## [0.2.0](compare-url) (date)"; take that heading
+          # to the next one at the same level.
+          m = re.search(rf"^##\s+\[?{re.escape(tag)}\]?.*?$(.*?)(?=^##\s|\Z)",
+                        text, re.M | re.S)
+          print((m.group(1).strip() if m else f"Release {sys.argv[1]}."))
+          PY
+        env:
+          TAG: ${{ steps.v.outputs.tag }}
+
+      - name: Tag and release
+        if: steps.v.outputs.release == 'new'
+        run: |
+          gh release create "$TAG" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --notes-file release-notes.md
+        env:
+          TAG: ${{ steps.v.outputs.tag }}
+
+      - name: Re-attach artifacts
+        if: steps.v.outputs.release == 'rebuild'
+        run: gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+        env:
+          TAG: ${{ steps.v.outputs.tag }}

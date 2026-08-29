@@ -98,8 +98,88 @@ def _is_test(stem: str, fraction: float) -> bool:
     """
     if fraction <= 0:
         return False
-    digest = hashlib.sha1(stem.encode("utf-8")).hexdigest()
+    # `usedforsecurity=False` says what this hash is for: a stable bucketing of a
+    # filename, never a signature. It leaves the digest byte-identical -- which it has
+    # to, because a changed digest would silently move images between test and val and
+    # contaminate exactly the number this function exists to protect.
+    digest = hashlib.sha1(stem.encode("utf-8"), usedforsecurity=False).hexdigest()
     return int(digest[:8], 16) / 0xFFFFFFFF < fraction
+
+
+def _empty_target_dirs(dst: Path, out_split: str, targets: list[str], splitting: bool) -> dict:
+    """Create and empty every directory this split is about to write.
+
+    A test split left by an earlier run has to be cleared even when this run is not
+    writing one. Otherwise re-running without --test-fraction (whose default is 0, so
+    simply omitting it is enough) rebuilds val over every kept image while the old test
+    directory survives untouched -- putting the entire held-out split back inside
+    validation, silently. Measured on a 20-image fixture: 9 of 9 test images reappeared
+    in val. That is the contamination `_is_test` exists to prevent, arriving through the
+    directory instead.
+    """
+    to_clear = list(targets)
+    if out_split == "val" and not splitting:
+        to_clear.append("test")
+
+    dirs = {}
+    for t in to_clear:
+        img_dir, ann_dir = dst / "images" / t, dst / "annotations" / t
+        emptied = 0
+        for d in (img_dir, ann_dir):
+            d.mkdir(parents=True, exist_ok=True)
+            for old in d.iterdir():
+                old.unlink()
+                emptied += 1
+        if t not in targets and emptied:
+            print(
+                f"  removed a stale test split ({emptied // 2} images) left by an "
+                f"earlier --test-fraction run; pass --test-fraction to rebuild it"
+            )
+        dirs[t] = (img_dir, ann_dir)
+    return dirs
+
+
+def _link_kept(
+    scored, src: Path, ade_split: str, out_split: str, dirs, splitting, args, scenes
+):
+    """Symlink every frame that passes the thresholds. Returns `(kept, kept_scenes)`.
+
+    Symlinks rather than copies: ADE20K is 4 GB and this is a view of it, so a second
+    copy would be a second thing to keep in sync with nothing saying which is current.
+
+    `splitting` is passed rather than inferred from `dirs`. A "test" entry is present
+    there in two different situations -- this run is writing one, or it is clearing a
+    stale one -- and reading the dict would send held-out frames back into val in the
+    second case, which is the exact contamination `_empty_target_dirs` exists to stop.
+    """
+    kept, kept_scenes = Counter(), Counter()
+    for path_str, floor, sky, veg in scored:
+        if floor < args.min_floor or sky > args.max_sky or veg > args.max_vegetation:
+            continue
+        ann = Path(path_str)
+        img = src / "images" / ade_split / f"{ann.stem}.jpg"
+        if not img.is_file():
+            continue
+        t = "test" if (splitting and _is_test(ann.stem, args.test_fraction)) else out_split
+        img_dir, ann_dir = dirs[t]
+        (img_dir / img.name).symlink_to(img)
+        (ann_dir / ann.name).symlink_to(ann)
+        kept[t] += 1
+        kept_scenes[scenes.get(ann.stem, "unknown")] += 1
+    return kept, kept_scenes
+
+
+def _report_split(
+    ade_split, targets, kept, n_scored: int, splitting: bool, kept_scenes
+) -> None:
+    """What this split kept, and out of how many, per target directory."""
+    for t in targets:
+        pct = 100 * kept[t] / n_scored
+        print(f"{ade_split} -> {t}: kept {kept[t]}/{n_scored} ({pct:.1f}%)")
+    if splitting:
+        print(f"  ({sum(kept.values())} kept in total, split by filename hash)")
+    top = ", ".join(f"{k}={v}" for k, v in kept_scenes.most_common(8))
+    print(f"  top scenes: {top}")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -124,56 +204,11 @@ def main(argv: list[str] | None = None) -> None:
         splitting = out_split == "val" and args.test_fraction > 0
         targets = [out_split, "test"] if splitting else [out_split]
 
-        # A test split left by an earlier run has to be cleared even when this run is
-        # not writing one. Otherwise re-running without --test-fraction (whose default
-        # is 0, so simply omitting it is enough) rebuilds val over every kept image
-        # while the old test directory survives untouched -- putting the entire
-        # held-out split back inside validation, silently. Measured on a 20-image
-        # fixture: 9 of 9 test images reappeared in val. That is the contamination
-        # `_is_test` exists to prevent, arriving through the directory instead.
-        to_clear = list(targets)
-        if out_split == "val" and not splitting:
-            to_clear.append("test")
-
-        dirs = {}
-        for t in to_clear:
-            img_dir, ann_dir = dst / "images" / t, dst / "annotations" / t
-            emptied = 0
-            for d in (img_dir, ann_dir):
-                d.mkdir(parents=True, exist_ok=True)
-                for old in d.iterdir():
-                    old.unlink()
-                    emptied += 1
-            if t not in targets and emptied:
-                print(
-                    f"  removed a stale test split ({emptied // 2} images) left by an "
-                    f"earlier --test-fraction run; pass --test-fraction to rebuild it"
-                )
-            dirs[t] = (img_dir, ann_dir)
-
-        kept, kept_scenes = Counter(), Counter()
-        for path_str, floor, sky, veg in scored:
-            if floor < args.min_floor or sky > args.max_sky or veg > args.max_vegetation:
-                continue
-            ann = Path(path_str)
-            img = src / "images" / ade_split / f"{ann.stem}.jpg"
-            if not img.is_file():
-                continue
-            t = "test" if (splitting and _is_test(ann.stem, args.test_fraction)) else out_split
-            img_dir, ann_dir = dirs[t]
-            (img_dir / img.name).symlink_to(img)
-            (ann_dir / ann.name).symlink_to(ann)
-            kept[t] += 1
-            kept_scenes[scenes.get(ann.stem, "unknown")] += 1
-
-        total = sum(kept.values())
-        for t in targets:
-            pct = 100 * kept[t] / len(scored)
-            print(f"{ade_split} -> {t}: kept {kept[t]}/{len(scored)} ({pct:.1f}%)")
-        if splitting:
-            print(f"  ({total} kept in total, split by filename hash)")
-        top = ", ".join(f"{k}={v}" for k, v in kept_scenes.most_common(8))
-        print(f"  top scenes: {top}")
+        dirs = _empty_target_dirs(dst, out_split, targets, splitting)
+        kept, kept_scenes = _link_kept(
+            scored, src, ade_split, out_split, dirs, splitting, args, scenes
+        )
+        _report_split(ade_split, targets, kept, len(scored), splitting, kept_scenes)
 
     print(f"\nwrote {dst}")
     print("point the config at it with:  root: " + str(dst))

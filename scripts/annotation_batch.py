@@ -26,7 +26,7 @@ line.
 
 The pre-labels are a starting point and nothing more. Nothing here should be trained on
 until a human has been over it -- which is exactly what the annotation contract in
-docs/ANNOTATION_SETUP.md is for.
+`git show b7457c2:docs/METHODOLOGY.md` was for.
 """
 
 from __future__ import annotations
@@ -46,40 +46,14 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
-from syncai_hydranet.cli.infer_video import frames, probe  # noqa: E402  # isort: skip
+from syncai_hydranet.data.video import frames, probe  # noqa: E402  # isort: skip
 from syncai_hydranet.config import load_config  # noqa: E402
-from syncai_hydranet.data.transforms import IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
+from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
+from syncai_hydranet.labels import IGNORE  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
+from syncai_hydranet.preprocessing import IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
-
-IGNORE = 255
-DESCRIPTOR = (12, 16)  # a coarse grey thumbnail is enough to tell scenes apart
-
-
-def describe(frame: np.ndarray) -> np.ndarray:
-    """A tiny grey thumbnail, normalised. Cheap, and robust to compression noise."""
-    img = Image.fromarray(frame).convert("L").resize(DESCRIPTOR[::-1], Image.BILINEAR)
-    v = np.asarray(img, dtype=np.float32).reshape(-1)
-    return v / (np.linalg.norm(v) + 1e-6)
-
-
-def farthest_first(descs: list[np.ndarray], k: int) -> list[int]:
-    """Pick k frames that disagree with each other as much as possible.
-
-    Starts from the frame furthest from the average -- the least typical one -- rather
-    than from frame zero, so a clip that opens on an empty room does not anchor the whole
-    selection on it.
-    """
-    if len(descs) <= k:
-        return list(range(len(descs)))
-    x = np.stack(descs)
-    chosen = [int(np.argmax(np.linalg.norm(x - x.mean(0), axis=1)))]
-    dist = np.linalg.norm(x - x[chosen[0]], axis=1)
-    while len(chosen) < k:
-        nxt = int(np.argmax(dist))
-        chosen.append(nxt)
-        dist = np.minimum(dist, np.linalg.norm(x - x[nxt], axis=1))
-    return sorted(chosen)
+from syncai_hydranet.utils.device import pick_device  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -91,7 +65,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--weights",
         choices=["ema", "model"],
         default="ema",
-        help="EMA weights need enough training steps to be meaningful; see docs/TRAIN_MACOS.md",
+        help="EMA weights need enough training steps to be meaningful; "
+        "`utils.checkpoint.select_weights` has the measurement -- 0.16 mIoU on the "
+        "average against 0.95 on the raw weights, same run",
     )
     ap.add_argument("--out", required=True, help="dataset root to write")
     ap.add_argument("--split", default="train")
@@ -110,8 +86,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     cfg = load_config(args.config, args.set)
+    device = pick_device(cfg.get("device"))
     model = build_model(cfg).to(device).eval()
     ckpt = load_checkpoint(args.checkpoint)
     model.load_state_dict(select_weights(ckpt, args.weights))
@@ -140,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
         for n, idx in enumerate(picks):
             frame = kept[idx]
             img = Image.fromarray(frame)
-            small = img.resize((size[1], size[0]), Image.BILINEAR)
+            small = img.resize((size[1], size[0]), Image.Resampling.BILINEAR)
             arr = (np.asarray(small, np.float32) / 255.0 - IMAGENET_MEAN) / IMAGENET_STD
             x = torch.from_numpy(arr.transpose(2, 0, 1))[None].to(device)
             with torch.no_grad():
@@ -151,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
             # Unsure means unsure. A confident wrong pre-label is the one an annotator
             # accepts without looking; a hole is the one they fill.
             mask[conf[0].cpu().numpy() < args.confidence] = IGNORE
-            mask_img = Image.fromarray(mask).resize(img.size, Image.NEAREST)
+            mask_img = Image.fromarray(mask).resize(img.size, Image.Resampling.NEAREST)
 
             stem = f"{n:04d}"
             img.save(img_dir / f"{stem}.jpg", quality=92)

@@ -1,0 +1,14 @@
+{
+  "note": "The eight site clips every fleet measurement of 2026-08-26 ran on: the threshold sweep (runs/thr_sweep01), the pose-event pass (runs/pose_events02), the journey run (runs/journeys01) and the track-ending analysis (runs/endings01). Pinned as data rather than globbed, because a run that silently picks a different clip produces numbers that cannot be compared with the ones already recorded. One camera per line, the clip it was measured on.",
+  "corpus_root": "datasets/studioa_clips",
+  "clips": {
+    "Kaohsiung-cam04": "archive_20260816-112757_20260816-113301.mp4",
+    "Taichung-cam01": "archive_20260816-113024_20260816-113528.mp4",
+    "Taichung-cam04": "archive_20260816-113005_20260816-113509.mp4",
+    "Taichung-cam07": "archive_20260816-113047_20260816-113551.mp4",
+    "Taichung-cam10": "archive_20260816-112916_20260816-113416.mp4",
+    "Taichung-cam11": "archive_20260816-113146_20260816-113647.mp4",
+    "Tao-Hsin-cam03": "archive_20260816-063115_20260816-063619.mp4",
+    "Tao-Hsin-cam04": "archive_20260816-112911_20260816-113415.mp4"
+  }
+}

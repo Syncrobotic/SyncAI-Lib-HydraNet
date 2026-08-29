@@ -60,6 +60,9 @@ def test_counts_match_the_numpy_implementation_exactly(n_classes):
     for p, t in zip(preds, targets, strict=True):
         cm.update(p, t)
 
+    # `mat` is None until the first update allocates it on that batch's device, so this
+    # also pins that the loop above actually ran rather than silently doing nothing.
+    assert cm.mat is not None
     got = cm.mat.reshape(n_classes, n_classes).cpu().numpy()
     assert np.array_equal(got, reference_matrix(preds, targets, n_classes))
 
@@ -86,12 +89,14 @@ def test_ignore_pixels_are_excluded_not_counted_as_a_class():
     tgt = torch.full((4, 4), IGNORE, dtype=torch.long)
     tgt[0, 0] = 0
     cm.update(pred, tgt)
+    assert cm.mat is not None
     assert int(cm.mat.sum()) == 1
 
 
 def test_an_all_ignore_batch_leaves_the_matrix_empty():
     cm = ConfusionMatrix(3)
     cm.update(torch.zeros(4, 4, dtype=torch.long), torch.full((4, 4), IGNORE, dtype=torch.long))
+    assert cm.mat is not None
     assert int(cm.mat.sum()) == 0
     miou, per_class = cm.miou()
     assert np.isnan(miou) and np.isnan(per_class).all()

@@ -1,45 +1,299 @@
-name: CI
+name: CI (dev)
 
+# Tier 1 of the linear promotion flow feat/* → dev → stage → main: the full gate
+# where new code first enters. Runs format · lint · unit tests (coverage matrix) ·
+# ONNX export parity · release-bundle refusals.
+#
+# The export and bundler checks used to sit on stage/main (the since-removed
+# release-gate.yml) with the stated reason that "a broken export is discovered on
+# the robot otherwise". That reason argues for the opposite placement: the earliest
+# tier is where the fix is cheapest, and an export regression that only reds at
+# dev→stage has already travelled a whole tier past the branch that caused it. They
+# take ~2 min on random weights and no dataset, so there is no cost argument for
+# deferring them either.
+#
+# Both triggers, and the `push` one is here because the `pull_request` one alone let
+# `dev` sit red for a day. Twice.
+#
+# The argument this comment used to make -- "promotion is strictly PR-based and the PR
+# already tests the merge result, so a post-merge push re-run would just duplicate this
+# gate" -- is sound and does not describe how this repository is worked. Sessions commit
+# straight onto `dev`; there is frequently no PR into `dev` at all, so there was nothing
+# for a push run to duplicate and the gate simply never ran. `e2dfb3d` landed a test
+# importing another test module, which fails under `uv run pytest` and passes under
+# `python -m pytest`, and the suite was red by the documented command for a full day while
+# being reported green. `.pre-commit-config.yaml`'s ty-ratchet block records the identical
+# shape from the other direction -- `src/` over its baseline since `ef9b53c`, every commit
+# for a day on a red tree -- and names this same cause verbatim. A gate only a PR can run
+# is not a gate on a branch nobody opens a PR against.
+#
+# An ADDITION, not a replacement. The `pull_request` trigger stays: a PR into `dev` still
+# has to gate before it merges, and swapping the trigger would move the hole rather than
+# close it. `feat/*` still gets CI the moment a PR is opened, which is the property the
+# old `on.push.branches: [main, stage, dev]` lacked.
+#
+# The whole workflow runs on a push, not a fast subset. A push run blocks nothing -- there
+# is no merge for anyone to be tempted to bypass -- so the "fast job people do not route
+# around" argument does not apply, and a `dev` push whose green means something narrower
+# than a PR's green would be two meanings for one badge. The heavy leg is export parity at
+# ~2 min, jobs run in parallel, and `cancel-in-progress` keeps a burst of commits to one
+# run: the tip is what gets tested, which is what the badge claims.
 on:
-  push:
-    # dev is where the work happens; gating only main means a broken commit is
-    # discovered at merge time, long after it was cheap to fix.
-    branches: [main, stage, dev]
   pull_request:
+    branches: [dev]
+  push:
+    branches: [dev]
+
+# Least-privilege default: jobs only check out code.
+permissions:
+  contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-dev-${{ github.ref }}
   cancel-in-progress: true
 
+# Every job installs with `uv sync --locked`. A bare `uv sync` silently re-resolves
+# when uv.lock has drifted from pyproject.toml, so CI tests a dependency set nobody
+# committed and the drift never reds. That is not hypothetical here: the `annotate`
+# extra sat in pyproject for a while without ever reaching the lock, and CI stayed
+# green throughout. `--locked` fails the job instead, which is the point of a lock.
 jobs:
-  lint:
+  format:
+    name: Format
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
-      - run: uv sync --group dev
-      - run: uv run ruff check --output-format=github .
+      - run: uv sync --locked --group dev
       - run: uv run ruff format --check .
 
-  test:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+      - run: uv sync --locked --group dev
+      - run: uv run ruff check --output-format=github .
+
+  # A RATCHET, not a pass/fail gate: the count may fall, never rise. The baseline and
+  # the reasoning both live in the script, because ci-promote.yml runs the same check
+  # on the combined state and a second copy here would be the one nobody updates.
+  types:
+    name: Type ratchet
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+      - run: uv sync --locked --group dev
+      - run: ./scripts/ty_ratchet.sh src/
+      # scripts/ has its own baseline rather than joining src/'s: one number would
+      # let what ships regress behind a dev-side improvement.
+      - run: ./scripts/ty_ratchet.sh scripts/
+      # tools/ armed 2026-08-28 at its own count, 73. Same reasoning one tree further
+      # out, and the same independence: a tools/ number is not allowed to move either of
+      # the other two.
+      - run: ./scripts/ty_ratchet.sh tools/
+
+  # No dataset needed: the model runs on random tensors, the dataset tests build a
+  # fixture in tmp_path, and test_overfit.py memorises one synthetic batch on CPU.
+  #
+  # The coverage floor tracks what the suite actually reaches. It sat at 68 while the
+  # four user-facing CLIs had *zero* coverage -- a threshold a green tick can clear
+  # with the entry points untested is not a gate, it is decoration.
+  #
+  # **80 -> 83 on 2026-08-28, and a floor far below the true figure is the same
+  # decoration by another route.** `ff75488` brought `syncai_bev3d` into the instrument;
+  # the combined figure is **84.09%**, so the 80 it replaced allowed roughly 355
+  # statements to stop being covered before anything went red -- more than the entire
+  # 244-statement gap that commit had just made visible. This is the coverage form of
+  # the rule `scripts/ty_ratchet.sh` states for diagnostics: a baseline on the loose
+  # side of the true value is not a safe margin, it is a hole, and it fails from the
+  # direction nobody is watching. 83 leaves ~94 statements of ordinary headroom;
+  # raise it when the true figure moves and lower it only with a reason written here.
+  #
+  # The suite runs in ~30 s, so it is not sharded. Revisit if it passes a few minutes;
+  # the sibling Gateway repo's 4-way shard + merged-threshold pattern is the model.
+  #
+  # The matrix is the floor, the newest claimed version, and nothing in between. 3.10 is
+  # `requires-python`'s floor and what the working `.venv` on this box actually runs
+  # (3.10.12), so it is the version a local run is measured on. 3.13 is the newest the
+  # classifiers claim, and a matrix that stops below its own claim leaves the claim
+  # untested. 3.12 sits between them because the lock resolves a different numpy per
+  # Python version and the middle row is where that has broken before.
+  #
+  # This comment used to say 3.13 was "what the maintainer's venv actually runs". It is
+  # not, and had not been for some time -- the venv is 3.10.12. The row is right for the
+  # reason above; only its justification was wrong, which is the harder kind to notice.
+  # 3.11 is claimed but not tested: a pre-existing gap, add a row if it ever costs
+  # anything.
+  test:
+    name: Unit tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.12"]
+        python-version: ['3.10', '3.12', '3.13']
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The unit tests read git history: `test_deleted_docs_are_cited_as_history`
+          # resolves every `git show <sha>:<path>` citation in docs/ with `cat-file -e`,
+          # and on the default depth-1 clone not one of those objects exists, so it fails
+          # for a reason that has nothing to do with the docs. 24 MiB packed, so a full
+          # fetch is cheaper than the failure it removes. Added 2026-08-28, when the real
+          # CI logs showed it red on all three matrix rows while every local run was green
+          # -- a worktree shares the object database and can never reproduce this.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
-      - run: uv sync --group dev --extra export
-      # No dataset needed: the model runs on random tensors, the dataset tests build a
-      # fixture in tmp_path, and test_overfit.py memorises one synthetic batch on CPU.
-      #
-      # The floor tracks what the suite actually reaches. It sat at 68 while the four
-      # user-facing CLIs had *zero* coverage -- a threshold that a green tick could clear
-      # with the entry points untested is not a gate, it is decoration.
-      - run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=80
+      - run: uv sync --locked --group dev --extra export
+      - run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=83
+
+  # No checkpoint and no dataset: a randomly initialised model exercises the same
+  # graph. Catches an operator that stopped exporting cleanly, a shape that drifted,
+  # and a numerical mismatch between PyTorch and the exported graph.
+  #
+  # `--allow-random-weights` is therefore load-bearing here rather than a workaround.
+  # Exporting with no checkpoint is refused by default, because on random weights
+  # `--check-parity` PASSES -- PyTorch and ONNX agree perfectly -- and no artefact
+  # records which checkpoint an export came from, so the engine cannot be told from a
+  # trained one. This job is the case the escape hatch exists for: the graph is what it
+  # is checking, and it has no run to check it against.
+  export-parity:
+    name: ONNX Export Parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+      - run: uv sync --locked --group dev --extra export
+
+      - name: Export every shipped config and check parity
+        run: |
+          for cfg in configs/*.yaml; do
+            echo "::group::$cfg"
+            uv run hydranet-export-onnx --config "$cfg" \
+              --output "/tmp/$(basename "$cfg" .yaml).onnx" \
+              --allow-random-weights --check-parity
+            echo "::endgroup::"
+          done
+
+      # The guard exists so an unsupervised head cannot reach an engine. If it stops
+      # refusing, that protection is gone and nothing else would notice.
+      - name: The export guard still refuses an unsupervised head
+        run: |
+          if uv run hydranet-export-onnx --config configs/hydranet_indoor.yaml \
+               --output /tmp/should-not-exist.onnx \
+               --set 'data.datasets=[{name: ade20k, type: seg_folder, root: datasets/ADE20K, split_train: train, split_val: val, label_map: ade20k_indoor, supervises: [traversability, terrain], sample_ratio: 1.0}]'
+          then
+            echo "::error::export guard did not refuse an unsupervised detection head"
+            exit 1
+          fi
+          echo "guard refused as expected"
+
+  # The bundler is the only thing standing between an unreproducible run and a
+  # published model, so its refusals are worth testing rather than trusting.
+  release-bundle:
+    name: Release Bundle Refusals
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+      - run: uv sync --locked --group dev --extra export
+
+      - name: The bundler refuses a run it cannot reproduce
+        run: |
+          mkdir -p /tmp/fakerun
+          cp configs/hydranet_indoor.yaml /tmp/fakerun/config.yaml
+          touch /tmp/fakerun/best.pt /tmp/fakerun/metrics.jsonl
+          printf '{"git": {"commit": "%s", "dirty": true}}' "$GITHUB_SHA" > /tmp/fakerun/meta.json
+          if PYTHON="uv run python" ./scripts/release_bundle.sh create /tmp/fakerun vci; then
+            echo "::error::bundler accepted a run trained from a dirty tree"
+            exit 1
+          fi
+          echo "bundler refused the dirty run as expected"
+
+  # Two scanners, and both were quoted as passing figures in this project's notes before
+  # either was installed. `pip-audit` is the one to read carefully: run bare it audits
+  # whatever environment it is in, which under `uvx` is its own ephemeral one, so it
+  # reported "No known vulnerabilities found" over 28 packages belonging to nobody. It is
+  # given `uv export`'s requirements here instead -- the locked set a contributor installs.
+  #
+  # bandit is split by severity the way the type ratchet is split by tree, and for the same
+  # reason. `src/` is what ships and is held to medium-and-above, which is 0 today. The
+  # dev-side trees are held to high-only, because the three mediums there are a `pickle`
+  # load in `scripts/prep_rapv2.py` and two `xml.etree` parses in
+  # `scripts/wildtrack_ground_eval.py`, all reading dataset files that are already on the
+  # box. Naming them here rather than hiding them behind `# nosec` keeps the exception
+  # readable by someone who did not write it: if that list stops matching, the split is
+  # tolerating something nobody argued for.
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+      - run: uv sync --locked --group dev
+      - name: bandit -- what ships, medium and above
+        run: uv run bandit -q -r src -ll
+      - name: bandit -- dev-side trees, high only
+        run: uv run bandit -q -r scripts tools -lll
+      # No `-r`: pip-audit resolves a requirements file by building a virtualenv, which
+      # needs `ensurepip` and fails outright on the box this project develops on. Auditing
+      # the synced environment needs no resolver, and `uv sync --locked` above is what
+      # makes it deterministic -- it is uv.lock's set, installed. Measured 2026-08-29: 90
+      # packages including torch, no known vulnerabilities, exit 0; and exit 1 with five
+      # advisories when handed a package with known ones, so the gate is not decoration.
+      # It skips `syncai-hydranet` itself, printing that it did, because this project is
+      # not on PyPI to have advisories.
+      - name: Audit the locked dependency set
+        run: uv run pip-audit --progress-spinner off
+
+  # Single required status for branch protection: depends on every job above, so
+  # adding a new job can't silently slip past a rule that only listed the old set.
+  # Fails closed if any dependency failed, was cancelled, or was skipped.
+  ci-success:
+    name: CI success
+    runs-on: ubuntu-latest
+    needs: [format, lint, types, test, export-parity, release-bundle, security]
+    if: always()
+    steps:
+      - name: Assert every job succeeded
+        run: |
+          for result in $(echo '${{ toJSON(needs) }}' | grep -o '"result": "[a-z]*"' | cut -d'"' -f4); do
+            [ "$result" = "success" ] || { echo "A required job did not succeed ($result)"; exit 1; }
+          done

@@ -1,0 +1,17 @@
+{
+  "schema": "hydranet-thresholds/v1",
+  "checkpoint": "runs/hydranet_retail_security_b03_cw_xl-20260825-162131/last.pt",
+  "note": "Working points for the retail_security detection vocabulary. The fleet default is the hysteresis measured in runs/stable01 (one-frame boxes 40% -> 11.7%). Per-camera entries below are exceptions and each states what measured it; a camera absent from `cameras` runs the default, which is the intended state for a healthy camera.",
+  "default": {
+    "person": {"birth": 0.35, "keep": 0.20},
+    "bag": {"birth": 0.35, "keep": 0.20},
+    "boxed_stock": {"birth": 0.35, "keep": 0.20},
+    "device": {"birth": 0.35, "keep": 0.20}
+  },
+  "cameras": {
+    "Kaohsiung-cam04": {
+      "basis": "runs/thr_sweep01, 2026-08-26. At a 0.15 birth threshold this camera goes 3,353 -> 13,595 person detections, four times the factor the seven healthy cameras show (+51%), which is its open person-score investigation (docs/PLAN.md step 2) surfacing rather than recall. Held at the shipped 0.35 until that investigation closes, so a fleet-wide lowering cannot take this camera with it.",
+      "person": {"birth": 0.35, "keep": 0.20}
+    }
+  }
+}

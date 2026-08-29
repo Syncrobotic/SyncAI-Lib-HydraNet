@@ -1,0 +1,78 @@
+version: 2
+
+# This repository pins every GitHub Action to a commit SHA rather than a tag, which
+# is the right call and also the reason this file has to exist: a SHA cannot float,
+# so a pinned action never picks up its own security fixes. Nothing was watching
+# them. Dependabot rewrites the SHA and the trailing `# vX.Y.Z` comment together,
+# so the pins stay readable.
+#
+# PRs target `dev`, because that is where work enters -- feat/* → dev → stage → main.
+# A dependency PR opened against `main` would put a commit there that never went through
+# `ci.yml` on dev or `ci-promote.yml` on the way to stage, which is the whole point of
+# having the flow. This used to be justified by a fast-forward promotion rule instead;
+# that rule was already broken by four PR merges and no longer states anything true --
+# see the header of `.github/workflows/release-please.yml` for what was measured.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    target-branch: dev
+    commit-message:
+      # Conventional Commits are enforced at commit-msg by pre-commit, and
+      # release-please groups the CHANGELOG by these types. A Dependabot PR whose
+      # title is not typed would land untyped in the history.
+      prefix: build
+    labels: [dependencies]
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the routine version drift; a lone action bumping is rarely worth
+      # its own review, and five open PRs a week is how this gets muted.
+      actions:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    target-branch: dev
+    commit-message:
+      prefix: build
+    labels: [dependencies]
+    open-pull-requests-limit: 5
+    # `torch` and `torchvision` are excluded on purpose. They are not a dependency
+    # here in the ordinary sense: the CUDA build is chosen to match the driver on the
+    # box that trains, and every number in `docs/PLAN.md` was measured under one
+    # version. An automated bump would change the training result silently. Move them
+    # by hand, with a run to show it.
+    ignore:
+      - dependency-name: torch
+      - dependency-name: torchvision
+    groups:
+      dev-tooling:
+        patterns: [ruff, pytest, pytest-cov, pre-commit, ty]
+        update-types: [minor, patch]
+
+  # Without this the hook revs in .pre-commit-config.yaml are pinned and unmanaged, which
+  # is the same trap the github-actions block above describes: a pin cannot float, so it
+  # never picks up its own fixes, and nothing was watching. It drifted far enough that the
+  # local ruff and CI's ruff disagreed about what "formatted" means.
+  #
+  # ruff is deliberately not among the revs this block bumps: it has no `rev:` in
+  # .pre-commit-config.yaml any more, because the hook runs the ruff `uv.lock` gives, and
+  # that file is bumped by the `uv` block above. A tool pinned in both places deadlocks --
+  # one PR per ecosystem, each moving one pin, and groups cannot span ecosystems, so
+  # neither PR can carry the other's half. tests/test_hook_versions.py keeps it that way.
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+    target-branch: dev
+    commit-message:
+      prefix: build
+    labels: [dependencies]
+    open-pull-requests-limit: 5
+    groups:
+      hooks:
+        patterns: ["*"]

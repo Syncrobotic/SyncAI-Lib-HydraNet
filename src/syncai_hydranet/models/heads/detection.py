@@ -16,10 +16,13 @@ per site, which matters for a robot that gets redeployed to new environments.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 
 import torch
 import torch.nn as nn
 import torchvision
+
+from .text_classifier import TextEmbeddingClassifier
 
 INF = 1e8
 
@@ -66,16 +69,45 @@ def _tower(ch: int, n: int) -> nn.Sequential:
 SCORE_THR_EVAL = 0.05
 SCORE_THR_VIEW = 0.30
 
+# Fixed ceiling CCTV in a shop needs a third, and it is lower than either. Measured on
+# two site cameras, 40 frames each (runs/review_20260816/):
+#
+#     threshold   Taichung-cam01        Kaohsiung-cam08
+#       0.15       11.8 boxes/frame      10.0 boxes/frame
+#       0.25        3.4                   0.0
+#       0.30        ~2                    0.0
+#       0.35        1.6                   0.0
+#
+# Read the right-hand column. At the shipped viewing default this camera returns **no
+# detections at all** -- not few, none -- across an Apple store with a podium of
+# MacBooks, wall shelving of boxed stock and customers in frame. The whole distribution
+# sits below the cut, so nothing downstream can recover it and the frame looks like a
+# scene with nothing in it rather than like a threshold set too high.
+#
+# 0.20 is a compromise and is stated as one. It restores boxes on the dead cameras
+# without the ~10/frame that 0.15 produces, and it is a stopgap for a calibration
+# problem rather than a fix: scores are not comparable between these cameras, so one
+# global number cannot be right for both. The fix is per-class thresholds fitted to
+# hand-labelled site boxes, and this project has none yet -- METHODOLOGY.md ranks
+# that work and RETAIL.md s6 explains why the test split has to come first.
+#
+# Deliberately NOT the default for SCORE_THR_VIEW: 0.30 was chosen for the robot's
+# forward-facing camera, where a false box is a stop the robot did not need, and
+# nothing here re-measured that case.
+SCORE_THR_RETAIL = 0.20
+
 
 class FCOSHead(nn.Module):
     def __init__(
         self,
         in_channels: int,
         num_classes: int,
-        in_levels: list[int] = (0, 1, 2, 3, 4),
+        in_levels: Sequence[int] = (0, 1, 2, 3, 4),
         channels: int = 96,
         num_convs: int = 4,
-        strides: list[int] = (8, 16, 32, 64, 128),
+        strides: Sequence[int] = (8, 16, 32, 64, 128),
+        cls_head: str = "linear",
+        embed_dim: int = 512,
     ):
         super().__init__()
         self.in_levels = list(in_levels)
@@ -86,12 +118,24 @@ class FCOSHead(nn.Module):
         )
         self.cls_tower = _tower(channels, num_convs)
         self.reg_tower = _tower(channels, num_convs)
-        self.cls_pred = nn.Conv2d(channels, num_classes, 3, 1, 1)
+        # `linear` is the shipped head: one learned vector per class, class list frozen
+        # into the weights. `text_embedding` scores against a matrix of class-name
+        # embeddings instead, which makes the vocabulary a config rather than a retrain --
+        # see heads/text_classifier.py for why the cam08 audit makes that worth having.
+        if cls_head not in ("linear", "text_embedding"):
+            raise ValueError(f"cls_head must be linear or text_embedding, got {cls_head!r}")
+        self.cls_head = cls_head
+        if cls_head == "text_embedding":
+            self.cls_pred = TextEmbeddingClassifier(channels, embed_dim, num_classes)
+        else:
+            self.cls_pred = nn.Conv2d(channels, num_classes, 3, 1, 1)
+            # Focal loss prior: start with a positive probability around 0.01.
+            bias = self.cls_pred.bias
+            assert bias is not None  # nn.Conv2d carries a bias unless bias=False is asked for
+            nn.init.constant_(bias, -math.log((1 - 0.01) / 0.01))
         self.reg_pred = nn.Conv2d(channels, 4, 3, 1, 1)
         self.ctr_pred = nn.Conv2d(channels, 1, 3, 1, 1)
         self.scales = nn.ModuleList(Scale(1.0) for _ in self.in_levels)
-        # Focal loss prior: start with a positive probability around 0.01.
-        nn.init.constant_(self.cls_pred.bias, -math.log((1 - 0.01) / 0.01))
         # Per-level regression ranges, as in the FCOS paper.
         self.regress_ranges = [(-1, 64), (64, 128), (128, 256), (256, 512), (512, INF)]
 
@@ -228,4 +272,6 @@ def build_det_head(cfg, in_channels: int) -> FCOSHead:
         channels=cfg.get("channels", 96),
         num_convs=cfg.get("num_convs", 4),
         strides=cfg.get("strides", [8, 16, 32, 64, 128]),
+        cls_head=cfg.get("cls_head", "linear"),
+        embed_dim=cfg.get("embed_dim", 512),
     )

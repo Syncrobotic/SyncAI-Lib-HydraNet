@@ -1,0 +1,33 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "023f601bc721ca444f6251a488b1d5305994f80b",
+  "packages": {
+    ".": {
+      "release-type": "python",
+      "package-name": "syncai-hydranet",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": false,
+      "include-component-in-tag": false,
+      "changelog-path": "CHANGELOG.md",
+      "_comment_skip": "release-please runs against dev, so it must NOT cut the tag: a tag is a claim that code is released, and RELEASE.md defines main as what a robot is running. It maintains the version bump and CHANGELOG as an ordinary PR into dev; the tag is created by the same workflow when that commit reaches main by fast-forward.",
+      "skip-github-release": true,
+      "_comment_extra_files": "CITATION.cff carries the same version and nothing was updating it, so it would have drifted at the first release. tests/test_version_agreement.py checks the result rather than trusting this list, because an updater that silently matches nothing is this repository's most familiar failure.",
+      "extra-files": [
+        "src/syncai_hydranet/__init__.py",
+        "CITATION.cff"
+      ],
+      "changelog-sections": [
+        { "type": "feat", "section": "Features" },
+        { "type": "fix", "section": "Fixes" },
+        { "type": "perf", "section": "Performance" },
+        { "type": "refactor", "section": "Refactoring" },
+        { "type": "docs", "section": "Documentation" },
+        { "type": "build", "section": "Build & packaging" },
+        { "type": "ci", "section": "CI" },
+        { "type": "test", "section": "Tests", "hidden": true },
+        { "type": "style", "section": "Style", "hidden": true },
+        { "type": "chore", "section": "Chores", "hidden": true }
+      ]
+    }
+  }
+}
