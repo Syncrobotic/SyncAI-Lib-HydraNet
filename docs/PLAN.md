@@ -1653,13 +1653,22 @@ something it does not support.
    check that matters. The back panel now also faces away from the room's centre; nothing
    had asked where `shelving`'s back pointed, and on cam10 it pointed into the aisle.
 
-   **Found underneath it and NOT fixed: the eye is a fixed (+x, -z) diagonal and nothing
-   asks whether something tall lies along it.** With the 6.3 m wall restored, the
-   commissioning still for cam10 is taken from behind it. Scoring the four diagonals by
-   occlusion was tried and reverted the same hour — it fixes cam10 and makes cam11 worse,
-   so which corner to stand in is a composition decision rather than a scoring one. The
-   demo video's panel is unaffected, because `demo_video.content_crop` reframes on the
-   content after rendering.
+   **Found underneath it: the eye is a fixed (+x, -z) diagonal and nothing asks whether
+   something tall lies along it.** With the 6.3 m wall restored, the commissioning still
+   for cam10 was taken from behind it. Scoring the four diagonals by occlusion was tried
+   and reverted the same hour — it fixes cam10 and makes cam11 worse, so which corner to
+   stand in is a composition decision rather than a scoring one. The demo video's panel
+   was never affected, because `demo_video.content_crop` reframes on the content after
+   rendering.
+
+   **Answered 2026-08-29 (`ad78d08`), by fading the occluder rather than moving the eye.**
+   The composition is untouched, so no earlier framing judgement is invalidated; the
+   offending object stays visibly present and the room behind it becomes readable, which is
+   what an architectural viewer does with a near wall. The measure is deliberately not "is
+   this object close" — a stool by the lens hides nothing — but the share of the projected
+   area of everything *wholly behind* an object that the object covers. The eye is still
+   fixed; that was the mechanism, and it was the still being unreadable that was the
+   complaint.
 
 23. **The staff/customer classifier became something that can be applied, and the number
    that licensed it is per camera rather than the headline.** Done 2026-08-28, for the
@@ -1721,10 +1730,15 @@ something it does not support.
    for anything shared". `tests/test_assets_allowlist.py` cannot reach it: that test
    governs what may be committed, and this is a file that gets copied by hand.
 
-   **Open, and not fixed here: `tools/commissioning/heads_video.py` does not blur at
-   all**, and writes `assets/heads_<camera>.mp4` under the same shared-name convention.
-   One such file is on disk today. Whether that tool should carry the blur pipeline is a
-   decision, not a typo.
+   **Was open here: `tools/commissioning/heads_video.py` did not blur at all**, and wrote
+   `assets/heads_<camera>.mp4` under the same shared-name convention. **Closed 2026-08-29
+   (`65a6b78`).** Both instruments now run **before any panel is drawn**, because three of
+   its four panels are the source frame with something painted on them and blurring after
+   would leave two of them showing what the third had covered. It takes a second forward
+   pass rather than reusing one at the lower threshold: the pose rows are index-aligned
+   with the detections, so widening the display set to reach the blur set would put
+   skeletons on 0.07 boxes and change what the figure claims. `--no-blur` no longer claims
+   the shared filename, and renders now go to `assets/dev/`, which is ignored wholesale.
 
 24. **The face blur was missing people, and the instrument that found it had to be built
    wrong twice first.** Found 2026-08-28 while cutting the two store figures the user

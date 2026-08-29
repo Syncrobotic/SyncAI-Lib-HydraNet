@@ -13,13 +13,38 @@ everything else is.
 
 ## [`commissioning/`](commissioning/) — the per-camera pipeline (PLAN §2.1)
 
-Everything that turns one camera's plates into its `camera.json` and its 3D scene:
-`masks_pass.py` (structure vote), `extras_pass.py` (door / product subclasses / the SAM3
-floor source), `depth_complete.py` (geometry fills what the teachers miss),
-`fp_polygons.py` (derived false-positive zones, human accept/reject),
-`scene3d.py` / `scene_mesh.py` (the flat diagnostic panel and the solid-mesh scene with
-GLB/OBJ export). Each is idempotent from the caches; re-runs cost no GPU except the two
-teacher passes.
+Everything that turns one camera's plates into its `camera.json`, its zones, and its 3D
+scene. Each is idempotent from the caches; re-runs cost no GPU except the two teacher
+passes. Eighteen tools, in the four groups they actually fall into — this section listed
+six of them until 2026-08-29, and the whole figure pipeline, which is where the face-blur
+work lives, was among the twelve it did not mention.
+
+**Build the artefacts.** `masks_pass.py` (structure vote), `extras_pass.py` (door /
+product subclasses / the SAM 3 floor source), `depth_complete.py` (geometry fills what the
+teachers miss), `fp_polygons.py` (derived false-positive zones, human accept/reject),
+`footprints_from_masks.py` (fixture footprints — its own docstring records two attempts and
+neither correct yet).
+
+**Zones a store owns.** `service_zones.py` proposes the floor a shopper can stand in from
+SAM 3 instances with no human drawing anything; `zones_confirm.py` is the accept/reject
+pass that turns those proposals into named zones; `zone_draw.py` is the manual route —
+click the floor, get metres; `zones_apply.py` writes human assertions and metre-zone
+proposals back into the commissioning artefacts.
+
+**Look at what was built.** `scene3d.py` and `scene_mesh.py` (the flat diagnostic panel
+and the solid-mesh scene, with GLB/OBJ export), `scene_overlay.py` (project the
+commissioned scene back through its own camera onto its own plate — the check that the
+metres agree with the pixels), `masks_diagnose.py` (why `masks_pass` gave a camera the
+structure it did, per cluster, with the picture), `cluster_rules.py` (replay a merge rule
+against the cached SAM 3 proposals on every camera, no GPU).
+
+**Figures, and the audit that licenses them.** `demo_video.py` renders the three-minute
+demo and **blurs every face by two instruments before any panel is drawn**;
+`heads_video.py` shows every head of the network in one frame from one forward pass and
+blurs the same way; `demo_gif.py` cuts the README figure from a render **and writes the
+audit verdict that says it may be published**; `social_card.py` does the same for the
+GitHub social preview. Renders go to `assets/dev/`, which is ignored wholesale — `assets/`
+itself holds only results. See CONTRIBUTING.md for the third step a store figure needs.
 
 ## [`pose/`](pose/) — the pose head's teacher
 

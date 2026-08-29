@@ -64,6 +64,9 @@ To identify one, match on the subject rather than the hash: the rewritten
 counterpart is the same sentence, lower-cased, behind a type prefix. The baseline
 run `runs/hydranet_indoor` (traversability mIoU 0.6765) records `ba30fa88`, which
 is `aa07bbe docs: translate the three docs to English, and fix a 404 download URL`.
+That 0.6765 is here as a *label for the run*, not as the figure the head clears: it is
+the best epoch of the best of three seeds (0.6765 / 0.6339 / 0.6300 best, 0.6635 / 0.6094
+/ 0.6065 last), and a peer repository quoted it as a bar and was about 0.05 optimistic.
 
 ## Code
 
@@ -106,14 +109,26 @@ Two things follow, and both are cheap:
 
 ## Figures under `assets/`
 
-`assets/` is an **allowlist**, not a denylist: `.gitignore` ignores `assets/*` and
-names the figures back in one by one. Adding a new one therefore takes two steps,
-and the second one is the point:
+`assets/` is an **allowlist**, not a denylist: `.gitignore` ignores `assets/*` and names
+the figures back in one by one. `assets/dev/` is ignored wholesale and never allowlisted:
+renders, check frames and panel temporaries go there, so `assets/` itself holds only what
+a reader is meant to open. Adding a new figure takes two steps, and the second one is the
+point:
 
 ```bash
 git add -f assets/my_new_figure.png     # 1. override the ignore
 #          then add `!assets/my_new_figure.png` to .gitignore   # 2. keep it addable
 ```
+
+**A figure cut from store footage takes a third step, and it is not optional.**
+`tests/test_figures_are_audited.py` requires every tracked `assets/demo_*.gif` to have a
+tracked `assets/demo_*.audit.json` beside it, recording the camera, the source clip and
+commit, the thresholds the render actually ran at, how many person boxes were checked and
+how many failed — and it fails unless the failing count is zero and the checked count is
+above zero, because a window of an empty shop is not a passed audit. `demo_gif.py` writes
+that verdict itself; allowlist it the same way as the figure. There is no exception
+mechanism and that is deliberate: the remedy for a flagged box is to blur it, and an
+exception would only ever be reached by someone who wants the figure to ship.
 
 The friction is deliberate. Most images in this project are rendered from customer
 CCTV — `datasets/studioa_clips/<City>-cam<NN>/` — and a single frame of a shop floor

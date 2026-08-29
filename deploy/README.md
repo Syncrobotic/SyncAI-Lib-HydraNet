@@ -25,8 +25,11 @@ both products and sits *upstream* of training, so it lives in [`../tools/annotat
 not under `deploy/`. Putting it here would confuse "how we make labels" with "where the
 model runs."
 
-When to split this into separate repos: only on a real forcing function — the two surfaces
-gaining separate teams, separate release cadences, or a security/IP boundary (product B
-ships to a cloud you run; product A ships to customer hardware). While one team shares the
-core, the monorepo's single CI proving a model change against *both* surfaces is worth more
-than the isolation.
+**When to split this into separate repos** is currently a question with no subject: there
+is one surface, and one surface cannot be split from anything. The criterion is kept
+because it is what the directory is shaped around, and it becomes live again the moment a
+second surface arrives — split only on a real forcing function, meaning surfaces that gain
+separate teams, separate release cadences, or a security/IP boundary (one ships to a cloud
+you run, another to customer hardware). Until then the argument for the monorepo is the one
+above it: the core is consumed, never consuming, and that boundary was measured rather than
+asserted when removing an entire product line took no core changes at all.

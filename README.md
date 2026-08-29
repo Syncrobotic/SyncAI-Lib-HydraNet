@@ -12,8 +12,11 @@ the fixed CCTV already on the ceiling. No LiDAR, no new hardware.
 ![Kaohsiung-cam04: detections and tracks on the left, the metric 3D scene on the right](assets/demo_Kaohsiung-cam04.gif)
 
 *Left: person boxes and confirmed tracks, with this camera's false-positive polygons
-applied — **staff blue, customers green**, one verdict per person from nine torso-colour
-statistics, and grey until a track has been seen long enough to have an opinion. Right: the
+applied — **staff blue, everything else green**, one verdict per person from nine
+torso-colour statistics. Two colours, not three: a track too short to have a verdict is
+drawn as a customer, so a member of staff crossing in under about a second is green — the
+cost of not putting a third colour on screen that a viewer has to be told how to read.
+Right: the
 same moment in metres, the store's own furniture reconstructed from one static plate, a
 figure at every tracked shopper's floor position. Nothing is drawn by hand and no second
 sensor is involved.*
@@ -59,9 +62,12 @@ builds a static plate, fits the ground geometry, runs the teachers one time, and
 products down to `iphone / ipad / macbook / boxed_stock`, shelf ROIs, and the derived
 false-positive polygons. The same artefacts render a metric 3D scene per camera, exported
 as `scene.glb` / `scene.obj`. `syncai_hydranet` runs **every frame**: a shared
-RegNetX-800MF + BiFPN trunk with two heads — detection (`person`, `bag`, `device`,
-`boxed_stock`) and pose (17 keypoint heatmaps at P3, decoded inside the detection boxes) —
-whose boxes become tracks *in metres* through the cached geometry. Everything above that
+RegNetX-800MF + BiFPN trunk carrying **the two heads this product trains** — detection
+(`person`, `bag`, `device`, `boxed_stock`) and pose (17 keypoint heatmaps at P3, decoded
+inside the detection boxes) — whose boxes become tracks *in metres* through the cached
+geometry. The model defines two more families, segmentation and monocular depth, and each
+config trains the subset it names; the retail-security configs name neither, which is why
+this paragraph says two where `models/hydranet.py` holds four. Everything above that
 is rules, a tiny temporal model, and a VLM on trigger.
 
 **Anything constant on a fixed camera is cached, never learned; only what changes
@@ -108,7 +114,9 @@ hydranet-export-onnx ...                       # ONNX for the TensorRT path
 
 Entry points: `hydranet-train`, `hydranet-eval`, `hydranet-infer-image`,
 `hydranet-infer-video`, `hydranet-scene`, `hydranet-export-onnx`, `hydranet-annotation`,
-`hydranet-report` (see `pyproject.toml`).
+`hydranet-report`, and the two dataset preparers `hydranet-prepare-ade20k` and
+`hydranet-prepare-cocostuff` — ten, which is what `[project.scripts]` in `pyproject.toml`
+declares.
 
 ## Layout
 

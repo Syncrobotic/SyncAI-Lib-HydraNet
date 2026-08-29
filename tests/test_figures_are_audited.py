@@ -18,7 +18,7 @@ about the act of writing rather than about the frames.
 
 **Scope is by producer, not by exemption.** `demo_gif.py` names its own output
 `assets/demo_<camera>.gif`, so that pattern is exactly the set of figures cut from store
-footage. `retail_cctv_scene.gif` is a segmentation figure with no person in it and no
+footage. `cctv_v1.gif` is a segmentation figure with no person in it and no
 render behind it; it is out of scope because nothing produced it here, not because it was
 excused.
 """
