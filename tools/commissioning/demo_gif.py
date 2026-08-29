@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -65,11 +66,7 @@ from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.models.hydranet import build_model
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
-from syncai_hydranet.utils.face_blur import (
-    BLUR_THR,
-    blur_rect,
-    plate_person_boxes,
-)
+from syncai_hydranet.utils.face_blur import blur_rect, plate_person_boxes
 from syncai_hydranet.utils.visualize import preprocess
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
@@ -231,6 +228,7 @@ def main() -> int:
         return 1
 
     out = Path(a.out) if a.out else ROOT / f"assets/demo_{a.camera}.gif"
+    verdict = out.with_suffix(".audit.json")
     sheets_dir = ROOT / f"runs/commission01/{a.camera}.gif_check"
     sheets_dir.mkdir(parents=True, exist_ok=True)
 
@@ -259,6 +257,27 @@ def main() -> int:
         if not clip.exists():
             print(f"the render's source clip is gone: {clip}", file=sys.stderr)
             return 1
+        # The threshold THIS render blurred at, not today's constant. Absent means the
+        # render predates the field, and there is then no way to know what it covered --
+        # so the audit refuses rather than assuming the current value, which is larger and
+        # would make every old figure look cleaner than it was.
+        if "blur_score_thr" not in meta:
+            print(
+                f"{log.name} records no `blur_score_thr`, so this render predates "
+                "2026-08-28 and what it blurred at is unknown. Re-render before cutting "
+                "a figure from it; auditing it against today's threshold would report a "
+                "blur set larger than the one actually applied.",
+                file=sys.stderr,
+            )
+            return 1
+        if not meta.get("blur_faces", True):
+            print(
+                f"{log.name} says this render was made with --no-blur. A figure cut from "
+                "it must not be published.",
+                file=sys.stderr,
+            )
+            return 1
+        render_blur_thr = float(meta["blur_score_thr"])
         cfg = load_config(str(RUN / "config.yaml"), validate=False)
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model = build_model(cfg).to(device).eval()
@@ -282,9 +301,9 @@ def main() -> int:
                 break
             if (i - start) % a.stride:
                 continue
-            # exactly what `demo_video` blurs: its detector set at BLUR_THR, plus the
+            # exactly what `demo_video` blurred: its OWN detector threshold, plus the
             # static-plate instrument. Neither is re-derived here; both are imported.
-            b_blur, _ = person_boxes(frame, model, device, size, person_label, BLUR_THR)
+            b_blur, _ = person_boxes(frame, model, device, size, person_label, render_blur_thr)
             rects = [r for bb in b_blur if (r := blur_rect(src_w, src_h, *bb)) is not None]
             if plate_arr is not None:
                 rects += [
@@ -302,6 +321,45 @@ def main() -> int:
             f"  audit on {clip.name} at score {AUDIT_THR}: {n_people} person boxes over "
             f"{a.count} frames, {len(naked)} whose head is not inside a blurred region"
         )
+        # **Written whether it passed or failed, and that is the whole point.** A verdict
+        # file that only appears on success makes `failing == 0` true by construction, so
+        # a guard reading it would be green about the act of writing rather than about the
+        # frames. Written either way, a figure committed by hand after a refused audit
+        # carries the refusal next to it.
+        verdict.write_text(
+            json.dumps(
+                {
+                    "camera": a.camera,
+                    "gif": out.name,
+                    "render": video.name,
+                    "source_clip": meta["clip"],
+                    "commit": subprocess.run(
+                        ["git", "rev-parse", "HEAD"],
+                        cwd=ROOT,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    ).stdout.strip()
+                    or None,
+                    "start_frame": start,
+                    "frames": a.count,
+                    "stride": a.stride,
+                    "audit_score_thr": AUDIT_THR,
+                    "blur_score_thr": render_blur_thr,
+                    "head_coverage_required": HEAD_COVERAGE,
+                    "person_boxes_checked": n_people,
+                    "person_boxes_failing": len(naked),
+                    "failing_examples": [
+                        {"source_frame": i, "box": bb, "score": round(s0, 3)}
+                        for i, bb, s0, _ in naked[:10]
+                    ],
+                    "contact_sheets": str(sheets_dir.relative_to(ROOT)),
+                },
+                indent=1,
+            )
+            + "\n"
+        )
+        print(f"  verdict -> {verdict.relative_to(ROOT)}")
         if naked:
             for i, bb, s0, un in naked[:10]:
                 print(

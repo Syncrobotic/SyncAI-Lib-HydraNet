@@ -73,6 +73,17 @@ assets/*
 !assets/demo_Taichung-cam10.gif
 !assets/retail_cctv_scene.gif
 !assets/social_preview.png
+# Added 2026-08-28, the two other stores. Each figure carries a tracked `.audit.json`
+# beside it, written by `tools/commissioning/demo_gif.py` **whether the audit passed or
+# failed**: camera, source clip, commit, thresholds, person boxes checked and person
+# boxes whose head fell outside every blurred region. That last number is the one that
+# licenses the figure, and on Tao-Hsin-cam04 it was 132 of 954 before `6a63d87` -- two
+# shoppers at a shelf with a face plainly readable, at a blur threshold that had been
+# below the shipped one and still too high. A figure whose verdict is missing, or whose
+# failing count is not zero, has not been cleared to be here.
+!assets/demo_Kaohsiung-cam04.gif
+!assets/demo_Kaohsiung-cam04.audit.json
+!assets/demo_Taichung-cam10.audit.json
 
 # Editors / OS
 .vscode/

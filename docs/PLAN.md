@@ -1724,3 +1724,142 @@ something it does not support.
    all**, and writes `assets/heads_<camera>.mp4` under the same shared-name convention.
    One such file is on disk today. Whether that tool should carry the blur pipeline is a
    decision, not a typo.
+
+24. **The face blur was missing people, and the instrument that found it had to be built
+   wrong twice first.** Found 2026-08-28 while cutting the two store figures the user
+   asked for. This is the privacy path, so it is written out in full.
+
+   **The defect.** `demo_video` blurs at `BLUR_THR`, deliberately below the shipped
+   detection threshold, on the argument that a detector missing a shopper costs a track
+   while a blur missing one publishes a face. The value was 0.10, chosen as "below 0.35"
+   and never measured against whether it was low enough. It was not. Over the busiest 120
+   frames of Tao-Hsin-cam04, the detector re-run at 0.03 finds **954 person boxes, 132 of
+   which have a head outside every blurred rectangle**, scoring around 0.08. One of them,
+   cropped from the source frame and read by eye, is **two shoppers at a shelf with the
+   man's profile plainly recognisable**. The static-plate instrument — the second one,
+   which exists precisely because it cannot fail the way a detector fails — missed the
+   same people.
+
+   **The fix is nearly free, and that is measured rather than assumed.** Over the same
+   windows: 0.10 → **0.07** takes the readable count to **0** on Tao-Hsin-cam04 while the
+   blurred fraction of the frame moves 7.0% → 7.2%, and on Kaohsiung-cam04 it changes
+   nothing at all (0 readable either way, 32.4% both). 0.03 costs no more again and is
+   **deliberately not taken**: the audit runs at 0.03, and a render that blurs at exactly
+   the threshold its auditor inspects at is checking itself with its own answer.
+
+   **The instrument, and the two versions of it that were wrong.** The first ran the
+   detector on the *rendered panel* and refused any head that still had fine texture. It
+   is worth recording because it looked entirely reasonable: over 120 frames it returned
+   921 boxes with head-gradient ratios p50 0.99 and p90 3.17, no separation in any score
+   band, and **zero boxes above 0.35 on a window where the render itself had people in
+   every frame**. The rendered panel is half resolution, carries drawn boxes and grey
+   slabs and has been through h264, so the detector is not reading an image it was trained
+   on — and gradient energy cannot tell a face from merchandise in any case. Both halves
+   answered a different question. The second version ran on the source frames but
+   reconstructed the blur set from the *current* `BLUR_THR` rather than the one the render
+   used, which would have reported every old figure cleaner than it was; `demo_tracks.json`
+   now records `blur_score_thr` and `blur_faces`, and the audit refuses a render that
+   predates the field or was made with `--no-blur`.
+
+   **What this says about the two-instrument design.** Both instruments missed the same
+   people on the same frames. Contact sheets and a person's eyes missed them too — the
+   sheets were rendered and read, and a face 47 px wide in a 480 px thumbnail does not
+   announce itself. Only the audit found it. So the honest statement is not "two
+   instruments make this safe" but "every mechanism here has now failed at least once, and
+   the only one that has not is the one that checks the others".
+
+   **Consequences.** `tests/test_figures_are_audited.py` requires every tracked
+   `assets/demo_*.gif` to carry a tracked `.audit.json` written whether the audit passed or
+   failed, with zero failing boxes, a non-zero checked count, and a blur threshold at least
+   as strict as the current constant. That last clause fired immediately on
+   **`assets/demo_Taichung-cam10.gif`, the README's front-page figure, which was cut at
+   0.10** — its own audit found zero at the time and there is no reason to doubt that
+   camera, but "zero at a threshold since found insufficient on another camera of the same
+   fleet" is inherited rather than measured, so it was re-rendered.
+
+   **Also fixed here, and it is the same shape one layer out**: `--no-blur` was copying its
+   unblurred render into `assets/demo_<camera>.mp4`, the filename every command and person
+   treats as this camera's render, from a flag whose own help says "never for anything
+   shared". `tests/test_assets_allowlist.py` cannot reach that — it governs what may be
+   committed, and this is a file that gets copied by hand.
+
+25. **"Relative relationships must be correct" turned out to be a different requirement
+   from "the numbers must be right", and it is the one the scene was failing.** Stated by
+   the user on 2026-08-28 after reading the renders: *precision is negotiable; a cabinet is
+   not at 45 degrees and a wall is not several disconnected panes.* Every defect below is
+   invisible to a per-object check, which is why `PLAUSIBLE_M` passed all of them — a 7.9 m
+   wall 15 cm thick is plausible in every dimension it has.
+
+   **The 45 degrees was `main()`, not the geometry.** Two scene builders exist.
+   `build_scene_regular` fits each fixture as a box in the store's own frame, so everything
+   is parallel or perpendicular to everything else *by construction*; the older
+   `build_scene` tiles `rect_decompose` rectangles aligned to the **world** axes, and a shop
+   30 degrees off those comes out as staircases of small blocks. Every real consumer —
+   `demo_video`, `heads_video`, `scene_overlay` — had moved to the regular path already.
+   `main()` had not, and `main()` is what writes `assets/commission_mesh_*.png` and what the
+   social preview card was cut from, so **the two most widely seen images in the project
+   were the only ones still built the old way**. `--regular` is now `--ragged`.
+
+   **The panes were not walls.** In the store frame, Taichung-cam11's five `wall`
+   components measure 1.12x1.07, 1.44x0.85, 1.22x0.27, 1.23x0.86 and 1.11x0.63 m, and
+   Taichung-cam04's eight are 0.6–1.5 m long. A shop wall is four to eight metres. **What
+   the mask holds is not walls but the patches of white surface still visible between the
+   fixtures standing in front of them**, and drawing each patch as its own 2.4 m slab is
+   the row of floating panes. Merging the boxes afterwards was the obvious fix, was tried
+   first, and barely moved anything: 5 → 5, 8 → 7, 6 → 6. **Boxes fitted to fragments are
+   not collinear enough to merge**, and no amount of care in the merging reaches that.
+
+   `wall_runs` does the step the scan-to-BIM sequence actually specifies, in its order: fit
+   the wall **axes** to the whole point set, split each into runs at gaps wider than a door
+   leaf, then intersect perpendicular runs at corners. Runs go to 2–3x their previous
+   length. **Non-maximum suppression across the run is not optional** — one wall votes in
+   several adjacent bins, and without it the fleet went *up* to 26 and 28 runs per camera,
+   longer than before and more numerous, which is worse. Closing the runs into a room
+   polygon — the last step of that sequence — is deliberately **not** done: a fixed camera
+   sees part of one store, and closure would draw walls along the edge of the field of view.
+
+   **And roughly half of what it fitted was still not a wall.** `floor_both_sides` is the
+   relation, and no shape or size can substitute for it: a room boundary has floor on one
+   side and the outside world on the other; a shopper can stand on both sides of a counter.
+   Measured across four cameras, about half the runs fail it — **Tao-Hsin-cam04's two
+   longest at 7.9 m (724 floor cells one side, 550 the other) and 7.2 m (626 / 430)**,
+   Taichung-cam01's 4.7 m, Kaohsiung-cam04's 3.0 m. Those are the counter runs §7.21
+   measured as classified `wall` by both teachers on a white-fixture store — and extracting
+   them as long continuous runs had made them **more** convincing, not less. They are
+   re-classified as merchandise rather than discarded: the mask holds a real object, only
+   its class was wrong. **Tao-Hsin-cam03, which §7.21 records as reconstructing zero
+   shelving, gains five runs it never had**, without a single parameter being tuned.
+
+   **Fit, regularise, mesh — in that order, which this file did not have.** Nothing ever
+   compared one fitted component with another, so two boxes drawn through each other was a
+   normal output; a reviewer calls that a jumble and no per-object check can see it.
+   `resolve_overlaps` absorbs a box more than 60% inside another (the class mask and a
+   re-classified run can both cover one counter — Tao-Hsin-cam03 goes 5 shelves → 2 on that
+   alone) and otherwise shrinks the smaller along the axis it overlaps least, which is the
+   direction its extent was least certain in. `snap_to_walls` moves a fixture within 20 cm
+   of a wall flush to it, near face only, so it keeps its measured depth.
+
+   **What an independent reader saw, and what it recommended.** A second model was given
+   the four plate-versus-reconstruction pairs cold. Its verdict: nothing is skewed — the
+   single-global-yaw design genuinely delivers that half — but **zero of four cameras have
+   a room**, two of four have a fixture layout a customer would recognise, and the column is
+   missing on every camera that has one. Its ranked recommendations, kept here because the
+   reasoning transfers even where the answer does not: (1) commission the wall line by hand,
+   one click-path per camera, since §7.21 proved by measurement that no automatic route
+   supplies it — **declined by the user, who requires this stay automatic**; (2) the BEV
+   plausibility pass, done here; (3) a vanishing-point room frame as a cross-check on
+   `store_yaw`, which today votes with the least reliable objects in the scene; (4) an
+   image-space sibling of `floor_both_sides` — a true wall has wall pixels *above* its top
+   edge, a counter does not — which needs no depth and so is immune to the white-surface
+   collapse; (5) extend the fixture catalogue (chair, round podium, door constrained to lie
+   on a wall line). It named as **not worth doing**: floorplan vectorisation networks
+   (Floor-SP / HEAT / RoomFormer — wrong input distribution for a single partial monocular
+   view), CAD retrieval (Scan2CAD / ROCA — retail gondolas are not in their vocabularies),
+   better monocular depth for wall heights, and replacing the 1.70 m person prior (a uniform
+   scale error cannot break a relative relationship).
+
+   **Open after this, in the order they are worth doing**: the room boundary with no human
+   click — the honest automatic route is the occupancy-grid distinction between an
+   *obstacle* boundary and a *frontier*, so that the field-of-view edge stays open rather
+   than becoming a wall; the vertical wall test above; columns, which are lost on every
+   camera; and the door, which is currently drawn standing in the middle of the floor.
