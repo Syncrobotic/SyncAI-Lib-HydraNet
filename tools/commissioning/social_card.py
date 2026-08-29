@@ -21,14 +21,12 @@ here by construction rather than by re-cropping: the scene comes from
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import scene_mesh
+from syncai_bev3d import scene_mesh
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
 CARD = (1280, 640)
@@ -84,7 +82,7 @@ def main() -> int:
     # than through the wall the default diagonal stands behind. Whatever still blocks it
     # fades, because `scene_mesh.render` now scores occlusion.
     eye = [cx - 0.62 * span, 0.46 * span, cz - 0.54 * span]
-    tmp = ROOT / "assets/dev/_social_scene.png"
+    tmp = ROOT / "assets/dev/_social_scene_mesh.png"
     tmp.parent.mkdir(parents=True, exist_ok=True)
     # **Render at the panel's own aspect rather than cropping to it afterwards.** The
     # renderer frames the furniture to fill whatever canvas it is given, so asking it for
@@ -100,14 +98,16 @@ def main() -> int:
     # `render` writes its own two-line commissioning caption at the top. That belongs on a
     # diagnostic, not on a card, so the canvas is asked for those rows and they are cut --
     # rather than painting over them, which would leave a bar the caption used to be in.
-    scene = Image.open(tmp).convert("RGB").crop((0, CAPTION_H, PANEL_W, CARD[1] + CAPTION_H))
+    panel_img = (
+        Image.open(tmp).convert("RGB").crop((0, CAPTION_H, PANEL_W, CARD[1] + CAPTION_H))
+    )
     card = Image.new("RGB", CARD, BG)
     # Full bleed on the right half. Fitting the scene *inside* a box left a band of card
     # background above and below it, and a preview card is read at thumbnail size where
     # empty space is the first thing that registers. The scene is cropped to the panel's
     # aspect around its own centre of mass rather than letterboxed into it.
     panel = (CARD[0] - PANEL_W, 0, CARD[0], CARD[1])
-    card.paste(scene.resize((PANEL_W, CARD[1]), Image.Resampling.LANCZOS), (panel[0], 0))
+    card.paste(panel_img.resize((PANEL_W, CARD[1]), Image.Resampling.LANCZOS), (panel[0], 0))
     # a soft edge so the panel does not read as a pasted rectangle
     fade = Image.new("L", (56, CARD[1]))
     fd = ImageDraw.Draw(fade)

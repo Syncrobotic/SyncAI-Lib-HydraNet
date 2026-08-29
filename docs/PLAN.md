@@ -1589,8 +1589,9 @@ something it does not support.
    2 -> 9 on Kaohsiung-cam04.
 
    **And it changes nothing downstream, which is the finding.** `scene_mesh` opens the
-   class mask PNGs and takes connected components (`scene_mesh.py:409`); the object
-   identity clustering produces is discarded before the scene is built. Measured on the
+   class mask PNGs and takes connected components (`syncai_bev3d/scene_mesh.py`, in
+   `cell_grids`); the object identity clustering produces is discarded before the scene
+   is built. Measured on the
    painted map, all four arms -- current/sized x paint-by-score/paint-by-area -- give
    Tao-Hsin-cam03 **72.6, 72.8, 72.6, 72.8 % wall with `table` at 7.3% and 4 fixture
    components in every one**. Taichung-cam04 and -cam11 do not move either. Only

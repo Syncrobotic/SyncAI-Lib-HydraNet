@@ -185,7 +185,17 @@ def test_the_measurement_still_finds_the_pairs_it_was_written_against():
 # with a leading underscore is one nobody can change without breaking a caller they were
 # never told about. The `scene_mesh` three are a renderer being reused, the same shape one
 # step earlier.
-BASELINE_TOOL_PAIRS = 6
+#
+# 6 -> 3 on 2026-08-29, and the `scene_mesh` three are the ones that went. A fourth
+# importer -- `social_card.py`, the GitHub preview card -- turned this test red, which is
+# what it is for, and the answer was the one the failure message names: the scene build
+# and its renderer moved to `src/syncai_bev3d/scene_mesh.py`, so `demo_video`, `heads_video`,
+# `scene_overlay` and `social_card` now import a package module and `scene_mesh.py` is
+# left as the CLI that writes the PNG, the OBJ and the GLB. The move is the point rather
+# than a way past the gate: under `tools/` that file was 13% covered and its scene build
+# had never been executed by a test, and it is now inside the coverage floor with
+# `tests/test_scene_build.py` behind it.
+BASELINE_TOOL_PAIRS = 3
 
 
 def _tool_to_tool_imports() -> list[tuple[str, str]]:
@@ -208,12 +218,19 @@ def test_no_new_tool_becomes_a_library_for_another():
 def test_the_tools_measurement_still_finds_the_pairs_it_was_written_against():
     """Same guard as above: a scan that goes quiet passes forever.
 
-    Both forms are pinned here rather than one, because `tools/` is where the from-form
-    matters most -- `from zones_confirm import _font, _plate, _to_px` is the pair that
-    reaches for another module's *private* names, and it is the one an AST walk that
-    stopped reading `ImportFrom` would silently lose.
+    The from-form is what `tools/` has left, and it is the one worth holding here:
+    `from zones_confirm import _font, _plate, _to_px` reaches for another module's
+    *private* names, and it is the one an AST walk that stopped reading `ImportFrom`
+    would silently lose. Two of them are pinned, with different callers.
+
+    **The bare-import witness in `tools/` is gone, and deliberately not replaced.** It
+    was `scene_overlay -> scene_mesh`, and it left when the scene build moved into
+    `syncai_bev3d`; pinning a pair only to keep a form represented would be pinning the
+    debt this test exists to remove. The `scripts/` sibling above holds `import x` on a
+    real pair, and both directories run through the same `_sibling_imports`, so the form
+    is still witnessed.
     """
     pairs = _tool_to_tool_imports()
     assert pairs, "the scan found no imports at all -- has tools/ moved?"
     assert ("footprints_from_masks.py", "zones_confirm") in pairs
-    assert ("scene_overlay.py", "scene_mesh") in pairs
+    assert ("heads_video.py", "demo_video") in pairs

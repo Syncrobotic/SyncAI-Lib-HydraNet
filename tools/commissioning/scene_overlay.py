@@ -12,15 +12,12 @@ Usage:
 """
 
 import argparse
-import sys
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw
 
-sys.path.insert(0, str(Path(__file__).parent))
-import scene_mesh
-
+from syncai_bev3d import scene_mesh
 from syncai_hydranet.geometry.camera_json import CameraFile
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")

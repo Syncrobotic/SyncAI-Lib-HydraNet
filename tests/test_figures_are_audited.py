@@ -121,6 +121,7 @@ def test_a_figure_was_blurred_at_least_as_hard_as_today(figure: str):
 SCENE_PATHS = (
     "tools/commissioning/demo_video.py",
     "tools/commissioning/scene_mesh.py",
+    "src/syncai_bev3d/scene_mesh.py",
     "src/syncai_bev3d/floorplan.py",
     "src/syncai_bev3d/meshes.py",
     "src/syncai_bev3d/shading.py",

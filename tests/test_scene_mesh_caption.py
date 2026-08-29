@@ -1,6 +1,6 @@
 """The commissioning render's height caption, which used to assert what the render denied.
 
-`scene_mesh.py` draws `wall` and `column` at constants, and says why above `CLASS_NAMES`:
+`syncai_bev3d.scene_mesh` draws `wall` and `column` at constants, and says why above `CLASS_NAMES`:
 DA-V2 collapses on white surfaces, so a 2.4 m wall measures 1.07-1.65 m and a
 floor-to-ceiling column measures 1.16 m. The geometry has always been honest about that.
 **The caption was not** -- it printed those collapsed numbers as "measured p85" next to a
@@ -13,11 +13,7 @@ invisible in the picture: a wrong caption over a right render looks like a right
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/commissioning"))
-from scene_mesh import (
+from syncai_bev3d.scene_mesh import (
     CLASS_NAMES,
     COLUMN_MIN_H,
     DRAWN_H,

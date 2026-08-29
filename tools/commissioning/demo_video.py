@@ -43,9 +43,7 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
-sys.path.insert(0, str(Path(__file__).parent))
-import scene_mesh
-
+from syncai_bev3d import scene_mesh
 from syncai_bev3d.meshes import Placement, box, extrude, ground_disc, human, place
 from syncai_bev3d.shading import draw_scene
 from syncai_hydranet.analytics.staff import (

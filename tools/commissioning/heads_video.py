@@ -33,7 +33,6 @@ import torch
 from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, str(Path(__file__).parent))
-import scene_mesh
 from demo_video import (
     TRACK_COLORS,
     VEL_FLOOR_MS,
@@ -47,6 +46,7 @@ from demo_video import (
     walkable_bounds,
 )
 
+from syncai_bev3d import scene_mesh
 from syncai_bev3d.meshes import Placement, extrude, ground_disc, human, place
 from syncai_bev3d.shading import draw_scene
 from syncai_hydranet.analytics import Tracker
@@ -62,8 +62,8 @@ from syncai_hydranet.utils.visualize import preprocess, terrain_palette
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
 PANEL = (960, 540)
-# Commissioning's taxonomy, drawn in `scene_mesh`'s own colours so the mask panel and the
-# 3D panel name the same thing the same way. Order is paint order: surfaces, then the
+# Commissioning's taxonomy, drawn in `syncai_bev3d.scene_mesh`'s own colours so the mask panel
+# and the 3D panel name the same thing the same way. Order is paint order: surfaces, then the
 # things that sit on them.
 MASK_ORDER = (
     "floor",
