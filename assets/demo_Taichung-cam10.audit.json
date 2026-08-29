@@ -1,9 +1,9 @@
 {
  "camera": "Taichung-cam10",
  "gif": "demo_Taichung-cam10.gif",
- "render": "demo_Taichung-cam10_20260829-182328.mp4",
+ "render": "demo_Taichung-cam10_20260829-192353.mp4",
  "source_clip": "archive_20260816-112916_20260816-113416.mp4",
- "commit": "65a6b78be7765b5cb6875854693404141d218b5f",
+ "commit": "5ddd9a0c4651bd43d5391306e3157c837db0e8fb",
  "start_frame": 88,
  "frames": 120,
  "stride": 1,
