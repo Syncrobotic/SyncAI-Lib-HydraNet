@@ -208,3 +208,221 @@ def _douglas_peucker(
         if dist[i] > tol:
             keep[a + 1 + i] = True
             stack += [(a, a + 1 + i), (a + 1 + i, b)]
+
+
+# Wall extraction, in the store frame. The numbers are metres and each is a claim.
+WALL_BIN = 0.20  # across-axis bin: a wall's cells scatter this much through mask noise
+WALL_GAP_TOL = 0.60  # a gap this small is occlusion; a door is 0.8-1.0 m and must survive
+WALL_MIN_RUN_M = 1.20  # shorter than this is a patch of white surface, not a wall
+WALL_MIN_CELLS = 40  # per candidate line, before it is allowed to be a wall at all
+WALL_CORNER_TOL = 0.80  # extend two perpendicular runs this far to make them meet
+# How far either side of an accepted run its evidence is consumed. A wall seen obliquely
+# is a band of cells, not a line, so this is the band's half-width rather than a tolerance.
+WALL_SUPPRESS = 0.55
+
+
+def wall_runs(cells_u, cells_v):
+    """Wall runs fitted to the whole `wall` point set, not to its connected components.
+
+    **The components are not walls, and that is why the render showed eight to fourteen
+    disconnected panes.** Measured on 2026-08-28 in the store frame: Taichung-cam11's five
+    `wall` components are 1.12 x 1.07, 1.44 x 0.85, 1.22 x 0.27, 1.23 x 0.86 and
+    1.11 x 0.63 m, and Taichung-cam04's eight are 0.6-1.5 m long and 0.3-0.8 m thick. A
+    real shop wall is four to eight metres. What the mask holds is not walls but the
+    patches of white surface still visible between the fixtures standing in front of them,
+    and drawing each patch as its own 2.4 m slab is what put a row of floating panes in the
+    scene. Merging the boxes afterwards barely helped -- 5 -> 5, 8 -> 7, 6 -> 6 -- because
+    boxes fitted to fragments are not collinear enough to merge.
+
+    So this does the step the scan-to-BIM sequence actually specifies, and does it in the
+    order that sequence gives: **extract the wall axes from the point set first**, then
+    split each axis into runs at real gaps, then intersect perpendicular runs at corners.
+    Fitting a line through five patches that share a wall recovers the wall; fitting a box
+    to each patch never can, however carefully the boxes are merged afterwards.
+
+    Closing the runs into a room polygon -- the last step of that sequence -- is
+    deliberately not done. A fixed camera sees part of one store, so closure would draw
+    walls along the edge of the field of view, where the shop continues.
+
+    Takes the `wall` cells' `(u, v)` coordinates. Returns `(axis, perp, lo, hi)` tuples.
+    """
+    used = np.zeros(len(cells_u), bool)
+    cands = []
+    for axis, along, across in (("u", cells_u, cells_v), ("v", cells_v, cells_u)):
+        if not len(across):
+            continue
+        lo_edge = float(across.min())
+        idx = ((across - lo_edge) / WALL_BIN).astype(int)
+        for b in np.unique(idx):
+            # two adjacent bins together, so a wall sitting on a bin boundary is not split
+            sel = (idx >= b) & (idx <= b + 1)
+            if sel.sum() < WALL_MIN_CELLS:
+                continue
+            order = np.argsort(along[sel])
+            pos = along[sel][order]
+            members = np.nonzero(sel)[0][order]
+            breaks = np.nonzero(np.diff(pos) > WALL_GAP_TOL)[0] + 1
+            for piece, mem in zip(
+                np.split(pos, breaks), np.split(members, breaks), strict=True
+            ):
+                if len(piece) < WALL_MIN_CELLS or piece[-1] - piece[0] < WALL_MIN_RUN_M:
+                    continue
+                lo_p, hi_p = np.percentile(across[mem], [3, 97])
+                cands.append(
+                    (piece[-1] - piece[0], axis, float(np.median(across[mem])),
+                     float(piece[0]), float(piece[-1]), float(hi_p - lo_p), mem)
+                )  # fmt: skip
+
+    # Longest first, then suppress the neighbourhood -- not just the cells that voted.
+    #
+    # **Marking only the member cells is not enough, and the first version did exactly
+    # that.** Every wall votes in several adjacent bins, so one wall produced a stack of
+    # parallel lines a few centimetres apart, each with its own untouched cells: the fleet
+    # went to 26 and 28 runs per camera, longer than before and more numerous, which is
+    # worse. Suppressing a band either side of an accepted run is the non-maximum
+    # suppression any Hough-style extraction needs and this one was missing.
+    out: list[list] = []
+    for _len_m, axis, perp, lo, hi, thick, mem in sorted(cands, key=lambda t: -t[0]):
+        if used[mem].mean() > 0.5:
+            continue
+        along, across = (cells_u, cells_v) if axis == "u" else (cells_v, cells_u)
+        used |= (
+            (along >= lo - WALL_GAP_TOL)
+            & (along <= hi + WALL_GAP_TOL)
+            & (np.abs(across - perp) <= WALL_SUPPRESS)
+        )
+        out.append([axis, perp, lo, hi, thick])
+
+    for a in out:
+        for b in out:
+            if a[0] == b[0]:
+                continue
+            if not (b[2] - WALL_CORNER_TOL <= a[1] <= b[3] + WALL_CORNER_TOL):
+                continue
+            if 0 < a[2] - b[1] <= WALL_CORNER_TOL:
+                a[2] = b[1]
+            elif 0 < b[1] - a[3] <= WALL_CORNER_TOL:
+                a[3] = b[1]
+    return [tuple(v) for v in out]
+
+
+# A run with this much floor on its thinner side is not a boundary of the room.
+FLOOR_BOTH_SIDES = 0.25
+FLOOR_BAND_M = 1.20  # how far either side of a run its floor evidence is counted
+
+
+def floor_both_sides(run, floor_u, floor_v) -> float:
+    """How much floor lies on the *thinner* side of a run, as a fraction of the thicker.
+
+    **The one relation that separates a wall from a counter, and neither a shape nor a
+    size can do it.** A 7.9 m run 15 cm thick is a perfectly plausible wall by every
+    per-object check this file has; the thing that makes it not a wall is that a shopper
+    can stand on both sides of it. A room boundary has floor on one side and the outside
+    world on the other.
+
+    Measured 2026-08-28 across four cameras, roughly half of the fitted `wall` runs fail
+    it -- including Tao-Hsin-cam04's two longest at 7.9 m (724 floor cells against 550) and
+    7.2 m (626 against 430). Those are the counter runs that PLAN 7.21 recorded as being
+    classified `wall` by both teachers on a white-fixture store. Extracting them as long
+    continuous runs made them *more* convincing, not less: before this test the scene put a
+    pair of eight-metre walls through the middle of a phone shop.
+    """
+    axis, perp, lo, hi = run[0], run[1], run[2], run[3]
+    along, across = (floor_u, floor_v) if axis == "u" else (floor_v, floor_u)
+    near = (along >= lo) & (along <= hi) & (np.abs(across - perp) <= FLOOR_BAND_M)
+    left = int((near & (across < perp)).sum())
+    right = int((near & (across > perp)).sum())
+    return min(left, right) / max(max(left, right), 1)
+
+
+# Fixture regularisation. Every scan-to-BIM and structured-modelling pipeline has a pass
+# like this between fitting and meshing, and this one did not: each component was fitted
+# and drawn without ever being compared with its neighbours, so every relationship error
+# in the scene came from that gap. The numbers are metres and fractions.
+FIXTURE_CONTAINED_FRAC = 0.60  # overlap above this share of the smaller box: one object
+FIXTURE_SNAP_M = 0.20  # a fixture this close to a wall is against it, and is moved flush
+
+
+def _overlap(a, b) -> tuple[float, float]:
+    """Overlap of two axis-aligned boxes along each axis, in metres. Negative is a gap."""
+    return (
+        min(a[1], b[1]) - max(a[0], b[0]),
+        min(a[3], b[3]) - max(a[2], b[2]),
+    )
+
+
+def resolve_overlaps(boxes):
+    """Fixtures that interpenetrate, resolved by containment or by shrinking to contact.
+
+    `boxes` are `(u0, u1, v0, v1)` in the store frame. Returns a list the same length,
+    with `None` where a box was absorbed into another.
+
+    **Two fixtures cannot occupy the same floor, and until this existed they routinely
+    did.** Nothing in the pipeline compared one fitted component with another, so a
+    counter standing in front of a wall -- which PLAN 7.21 measured arriving as a single
+    welded object 263 times out of 503 merges on Taichung-cam01 -- could also arrive as
+    two boxes drawn through each other. A reviewer reading the render calls that
+    "a jumble of boxes", and no per-object check can see it: each box on its own is a
+    perfectly plausible fixture.
+
+    The rule is deliberately asymmetric. A box more than `FIXTURE_CONTAINED_FRAC` inside
+    another is not a second fixture, it is the same one fitted twice from different
+    evidence -- the class mask and the re-classified wall run can both cover it -- so it
+    is absorbed rather than shrunk. Anything else is two real fixtures whose boxes have
+    grown into each other, and the smaller gives way along whichever axis it overlaps
+    least, which is the direction its own extent was least certain in.
+    """
+    out = [list(map(float, b)) for b in boxes]
+    order = sorted(
+        range(len(out)),
+        key=lambda i: -((out[i][1] - out[i][0]) * (out[i][3] - out[i][2])),
+    )
+    dropped = set()
+    for rank, i in enumerate(order):
+        if i in dropped:
+            continue
+        for j in order[rank + 1 :]:
+            if j in dropped:
+                continue
+            ou, ov = _overlap(out[i], out[j])
+            if ou <= 0 or ov <= 0:
+                continue
+            area_j = (out[j][1] - out[j][0]) * (out[j][3] - out[j][2])
+            if area_j <= 0 or (ou * ov) / area_j > FIXTURE_CONTAINED_FRAC:
+                dropped.add(j)
+                continue
+            # give way along the thinner overlap: the axis this box was least sure of
+            if ou <= ov:
+                if out[j][0] < out[i][0]:
+                    out[j][1] = out[i][0]
+                else:
+                    out[j][0] = out[i][1]
+            elif out[j][2] < out[i][2]:
+                out[j][3] = out[i][2]
+            else:
+                out[j][2] = out[i][3]
+    return [None if i in dropped else tuple(out[i]) for i in range(len(out))]
+
+
+def snap_to_walls(box, walls):
+    """A fixture within `FIXTURE_SNAP_M` of a wall line is moved flush against it.
+
+    Shop fixtures stand against walls; a 12 cm gap between a shelving run and the wall
+    behind it is a fitting error, and it is the kind a reader sees immediately because
+    the daylight through the gap is what the eye follows. Only the near face moves, so
+    the fixture keeps its measured depth.
+    """
+    u0, u1, v0, v1 = box
+    for axis, perp, lo, hi, _thick in walls:
+        along = (u0, u1) if axis == "u" else (v0, v1)
+        if along[1] < lo - FIXTURE_SNAP_M or along[0] > hi + FIXTURE_SNAP_M:
+            continue  # the wall does not run past this fixture at all
+        near, far = (v0, v1) if axis == "u" else (u0, u1)
+        if 0 < near - perp <= FIXTURE_SNAP_M:
+            near = perp
+        elif 0 < perp - far <= FIXTURE_SNAP_M:
+            far = perp
+        else:
+            continue
+        u0, u1, v0, v1 = (u0, u1, near, far) if axis == "u" else (near, far, v0, v1)
+    return (u0, u1, v0, v1)

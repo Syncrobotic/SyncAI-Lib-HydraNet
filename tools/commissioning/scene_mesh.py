@@ -8,7 +8,7 @@ shadows, and the metre grid. Also writes a `scene.obj` per camera so a real rend
 (Blender, Open3D, macOS preview) can take over -- `draw_scene` is a painter's
 algorithm and says so in its own docstring.
 
-Usage: uv run python tools/commissioning/scene_mesh.py <camera> [...] [--gif]
+Usage: uv run python tools/commissioning/scene_mesh.py <camera> [...] [--gif] [--ragged]
 """
 
 import sys
@@ -18,6 +18,13 @@ import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage
 
+from syncai_bev3d.floorplan import (
+    FLOOR_BOTH_SIDES,
+    floor_both_sides,
+    resolve_overlaps,
+    snap_to_walls,
+    wall_runs,
+)
 from syncai_bev3d.meshes import (
     Placement,
     _merge,
@@ -52,6 +59,7 @@ PALETTE = {
     "product_iphone": (255, 70, 70),
 }
 CLASS_NAMES = {2: "wall", 3: "column", 4: "display_table", 5: "display_shelf"}
+WALL_CID = 2  # named because the wall runs read the class mask directly, not by name
 CELL = 0.06
 DRAWN_H = {"wall": 2.4, "column": 2.4, "display_table": 0.75, "display_shelf": 2.0}
 # A column runs floor to ceiling. The depth model reads 1.07-1.65 m for one (see the
@@ -571,7 +579,14 @@ def build_scene_regular(camera):
     room_cx = float((_fv[:, 0].min() + _fv[:, 0].max()) / 2)
     room_cz = float((_fv[:, 2].min() + _fv[:, 2].max()) / 2)
     shapes: list[tuple] = []  # (name, w, d, h) as built, for `implausible`
+    # ---- 1. FIT. Every fixture as an axis-aligned box in the store frame. Nothing is
+    # meshed here: a box's neighbours decide as much about it as its own evidence does,
+    # and until 2026-08-28 this loop drew each one the moment it was fitted, which is why
+    # nothing in the scene had ever compared two fixtures with each other.
+    fixtures: list[list] = []  # [name, u0, u1, v0, v1, h]
     for cid, name in CLASS_NAMES.items():
+        if name == "wall":
+            continue  # walls are fitted to the whole point set below, not per blob
         h = heights.get(cid, DRAWN_H[name])
         # Open first: a mask bridge a few cells wide welds neighbouring fixtures into one
         # component and the p3-p97 box then spans both. 3 cells is 0.18 m at CELL=0.06 and
@@ -589,73 +604,105 @@ def build_scene_regular(camera):
                 continue
             x = c * CELL - 12 + CELL / 2
             z = r * CELL + CELL / 2
-            # into the store frame, robust extents, snap to 5 cm
             u = x * cy + z * sy
             v = -x * sy + z * cy
             u0, u1 = np.percentile(u, [3, 97])
             v0, v1 = np.percentile(v, [3, 97])
+            um, vm = (u0 + u1) / 2, (v0 + v1) / 2
             w = max(round((u1 - u0) / 0.05) * 0.05, 0.3)
             d = max(round((v1 - v0) / 0.05) * 0.05, 0.3)
-            um, vm = (u0 + u1) / 2, (v0 + v1) / 2
-            px, pz = um * cy - vm * sy, um * sy + vm * cy
-            at = Placement(px, pz, heading_rad=-yaw)
-            if name == "wall":
-                short = min(w, d)
-                if short > 0.4:  # a fat "wall" blob is a wall corner: thin it
-                    w, d = (w, 0.15) if w >= d else (0.15, d)
-                shapes.append((name, w, d, DRAWN_H["wall"]))
-                half = (w if w >= d else d) / 2
-                pts = [[-half, 0.0], [half, 0.0]] if w >= d else [[0.0, -half], [0.0, half]]
-                mesh = wall(pts, 2.4, thickness_m=max(min(w, d), 0.12))
-                items.append((place(mesh, at), name, 105, False))
-            elif name == "column":
-                shapes.append((name, min(w, 0.8), min(d, 0.8), max(h, COLUMN_MIN_H)))
-                mesh = column(min(w, 0.8), min(d, 0.8), max(h, COLUMN_MIN_H))
-                items.append((place(mesh, at), name, 255, True))
-            elif name == "display_shelf":
-                # **The cap is on the depth, and the depth is the SHORTER side -- which
-                # is not always `d`.** `min(d, SHELF_MAX_DEPTH_M)` assumed a merchandise
-                # wall runs along `u`, which is true of the camera the cap was measured
-                # on and false elsewhere: Taichung-cam10's three shelf components measure
-                # u1.33 x v6.29, u0.97 x v2.70 and u0.55 x v1.08 in the store frame, so
-                # the cap took a **6.29 m run down to 0.45 m** and left its 1.33 m depth
-                # alone. The render drew the store's whole accessory wall as a 1.35 x
-                # 0.45 m cabinet standing in the aisle, and `PLAUSIBLE_M` could not catch
-                # it because a truncated run is still a plausible small unit.
-                #
-                # Cam11 was unaffected -- u4.02 x v0.40 and u2.36 x v0.42, long side on
-                # `u` -- which is why the defect survived the round it was introduced in.
-                # The `wall` branch fifteen lines up already thins whichever side is
-                # shorter; this now does the same, and turns the placement a quarter turn
-                # when the run is along `v` so that `shelving`'s back panel stays behind
-                # its shelves rather than being drawn across the run.
-                if w >= d:
-                    run_m, depth_m, head = w, min(d, SHELF_MAX_DEPTH_M), -yaw
-                else:
-                    run_m, depth_m, head = d, min(w, SHELF_MAX_DEPTH_M), -(yaw + np.pi / 2)
-                # **And the back panel faces away from the room, not at it.** `shelving`
-                # puts its back at local +Z and the code above chose a heading without
-                # asking where that ends up pointing -- which was invisible while every
-                # run happened to lie one way round, and showed the moment one did not:
-                # the corrected quarter turn put the back of Taichung-cam10's 6.3 m
-                # accessory wall toward the eye, so the render drew a blank 6.3 x 2.4 m
-                # panel where the shop has an open merchandise run. Local +Z lands on
-                # (sin head, cos head); if that points at the room's centre the unit is
-                # inside out, and half a turn is the whole fix.
-                if (np.sin(head) * (room_cx - px) + np.cos(head) * (room_cz - pz)) > 0:
-                    head += np.pi
-                shapes.append((name, run_m, depth_m, h))
-                # `shelving`, not `cabinet`: these are open merchandise walls, and a
-                # carcass with solid end panels and full-depth slabs reads as a bookcase.
-                mesh = shelving(run_m, depth_m, h)
-                turned = Placement(px, pz, heading_rad=head)
-                items.append((place(mesh, turned), name, 255, True))
-            else:  # display_table
-                # a footprint too long for four legs is a counter, not a solid prism:
-                # a slab on a recessed body, so the surface merchandise sits on exists
-                shapes.append((name, w, d, h))
-                mesh = table(w, d, h) if max(w, d) < 2.2 else counter(w, d, h)
-                items.append((place(mesh, at), name, 255, True))
+            if name == "column":
+                w, d, h = min(w, 0.8), min(d, 0.8), max(h, COLUMN_MIN_H)
+            fixtures.append([name, um - w / 2, um + w / 2, vm - d / 2, vm + d / 2, h])
+
+    # ---- 2. THE WALLS, fitted to the whole `wall` point set rather than to its
+    # components, and then only the runs a shopper cannot stand on both sides of.
+    _wr, _wc = np.nonzero(grids[WALL_CID])
+    _wx = _wc * CELL - 12 + CELL / 2
+    _wz = _wr * CELL + CELL / 2
+    _fr, _fc = np.nonzero(grids[1])
+    _fx = _fc * CELL - 12 + CELL / 2
+    _fz = _fr * CELL + CELL / 2
+    floor_u, floor_v = _fx * cy + _fz * sy, -_fx * sy + _fz * cy
+    walls = []
+    for run in wall_runs(_wx * cy + _wz * sy, -_wx * sy + _wz * cy):
+        axis, perp, lo, hi, thick = run
+        if floor_both_sides((axis, perp, lo, hi), floor_u, floor_v) > FLOOR_BOTH_SIDES:
+            # **Re-classified, not discarded.** The mask holds a real object here; what
+            # was wrong is its class, and dropping it would leave the shop emptier than
+            # the camera saw. A free-standing run in a phone shop is a gondola or a
+            # counter -- and 2.4 m of solid wall through the middle of the floor is the
+            # one thing it certainly is not.
+            dep = float(min(max(thick, 0.40), SHELF_MAX_DEPTH_M))
+            fix_h = heights.get(5, heights.get(4, DRAWN_H["display_shelf"]))
+            spec = (
+                ["display_shelf", lo, hi, perp - dep / 2, perp + dep / 2, fix_h]
+                if axis == "u"
+                else ["display_shelf", perp - dep / 2, perp + dep / 2, lo, hi, fix_h]
+            )
+            fixtures.append(spec)
+            continue
+        walls.append(run)
+    for axis, perp, lo, hi, _thick in walls:
+        a = (lo, perp) if axis == "u" else (perp, lo)
+        b = (hi, perp) if axis == "u" else (perp, hi)
+        pts = [
+            [a[0] * cy - a[1] * sy, a[0] * sy + a[1] * cy],
+            [b[0] * cy - b[1] * sy, b[0] * sy + b[1] * cy],
+        ]
+        shapes.append(("wall", hi - lo, 0.15, DRAWN_H["wall"]))
+        items.append((wall(pts, DRAWN_H["wall"], thickness_m=0.15), "wall", 105, False))
+
+    # ---- 3. REGULARISE. The step every scan-to-BIM and structured-modelling pipeline
+    # has between fitting and meshing, and the one this file did not: two fixtures cannot
+    # occupy the same floor, and a fixture a hand's width from a wall is against it.
+    resolved = resolve_overlaps([(f[1], f[2], f[3], f[4]) for f in fixtures])
+    kept = []
+    for spec, resolved_box in zip(fixtures, resolved, strict=True):
+        if resolved_box is None:
+            continue
+        spec[1], spec[2], spec[3], spec[4] = snap_to_walls(resolved_box, walls)
+        kept.append(spec)
+
+    # ---- 4. MESH.
+    for name, u0, u1, v0, v1, h in kept:
+        w, d = u1 - u0, v1 - v0
+        if min(w, d) < 0.15:
+            continue  # shrunk to nothing by a neighbour: it was that neighbour
+        um, vm = (u0 + u1) / 2, (v0 + v1) / 2
+        px, pz = um * cy - vm * sy, um * sy + vm * cy
+        at = Placement(px, pz, heading_rad=-yaw)
+        if name == "column":
+            shapes.append((name, w, d, h))
+            items.append((place(column(w, d, h), at), name, 255, True))
+        elif name == "display_shelf":
+            # **The cap is on the depth, and the depth is the SHORTER side -- which is
+            # not always `d`.** `min(d, SHELF_MAX_DEPTH_M)` assumed a merchandise wall
+            # runs along `u`, which is true of the camera the cap was measured on and
+            # false elsewhere: Taichung-cam10's three shelf components measure
+            # u1.33 x v6.29, u0.97 x v2.70 and u0.55 x v1.08 in the store frame, so the
+            # cap took a **6.29 m run down to 0.45 m** and left its 1.33 m depth alone.
+            # `PLAUSIBLE_M` could not catch it because a truncated run is still a
+            # plausible small unit.
+            if w >= d:
+                run_m, depth_m, head = w, min(d, SHELF_MAX_DEPTH_M), -yaw
+            else:
+                run_m, depth_m, head = d, min(w, SHELF_MAX_DEPTH_M), -(yaw + np.pi / 2)
+            # **And the back panel faces away from the room, not at it.** `shelving` puts
+            # its back at local +Z; local +Z lands on (sin head, cos head), and if that
+            # points at the room's centre the unit is inside out. Half a turn is the fix.
+            if (np.sin(head) * (room_cx - px) + np.cos(head) * (room_cz - pz)) > 0:
+                head += np.pi
+            shapes.append((name, run_m, depth_m, h))
+            mesh = shelving(run_m, depth_m, h)
+            items.append((place(mesh, Placement(px, pz, heading_rad=head)), name, 255, True))
+        else:  # display_table
+            # a footprint too long for four legs is a counter, not a solid prism: a slab
+            # on a recessed body, so the surface merchandise sits on exists
+            shapes.append((name, w, d, h))
+            mesh = table(w, d, h) if max(w, d) < 2.2 else counter(w, d, h)
+            items.append((place(mesh, at), name, 255, True))
+
     # Every fixture that can hold merchandise, as a world AABB plus its top.
     # Each support carries the heights merchandise may actually rest at: a table's top,
     # or a shelving unit's shelf levels. Without them a product sits at whatever height
@@ -804,9 +851,22 @@ def export_obj(camera, items):
 def main():
     argv = [a for a in sys.argv[1:] if not a.startswith("--")]
     gif = "--gif" in sys.argv[1:]
-    regular = "--regular" in sys.argv[1:]
+    # **The regular path is the default, and the flag now opts OUT of it.** Every real
+    # consumer -- `demo_video`, `heads_video`, `scene_overlay` -- has called
+    # `build_scene_regular` for some time; `main()` was the last caller of the ragged one,
+    # and `main()` is what writes `assets/commission_mesh_*.png` and what the social
+    # preview card was cut from. So the two most widely seen images in the project were
+    # the only ones still built by the older path.
+    #
+    # It matters because the paths differ in the axis they align to. `rect_decompose`
+    # tiles the cell grid with rectangles axis-aligned to the **world** x/z, while
+    # `build_scene_regular` fits each fixture in the **store** frame from `store_yaw`. A
+    # shop standing 30 deg off the world axes therefore came out of the ragged path as
+    # staircases of small world-aligned blocks -- read by a reviewer as "cabinets at 45
+    # degrees", which is what it looks like and is not what the reconstruction believed.
+    ragged = "--ragged" in sys.argv[1:]
     for camera in argv:
-        built = (build_scene_regular if regular else build_scene)(camera)
+        built = (build_scene if ragged else build_scene_regular)(camera)
         _cf, items, heights = built[:3]
         for line in implausible(built[3] if len(built) > 3 else []):
             print(f"  {camera}: implausible {line}")
