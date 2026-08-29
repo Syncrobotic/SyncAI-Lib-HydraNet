@@ -242,13 +242,54 @@ jobs:
           fi
           echo "bundler refused the dirty run as expected"
 
+  # Two scanners, and both were quoted as passing figures in this project's notes before
+  # either was installed. `pip-audit` is the one to read carefully: run bare it audits
+  # whatever environment it is in, which under `uvx` is its own ephemeral one, so it
+  # reported "No known vulnerabilities found" over 28 packages belonging to nobody. It is
+  # given `uv export`'s requirements here instead -- the locked set a contributor installs.
+  #
+  # bandit is split by severity the way the type ratchet is split by tree, and for the same
+  # reason. `src/` is what ships and is held to medium-and-above, which is 0 today. The
+  # dev-side trees are held to high-only, because the three mediums there are a `pickle`
+  # load in `scripts/prep_rapv2.py` and two `xml.etree` parses in
+  # `scripts/wildtrack_ground_eval.py`, all reading dataset files that are already on the
+  # box. Naming them here rather than hiding them behind `# nosec` keeps the exception
+  # readable by someone who did not write it: if that list stops matching, the split is
+  # tolerating something nobody argued for.
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+      - run: uv sync --locked --group dev
+      - name: bandit -- what ships, medium and above
+        run: uv run bandit -q -r src -ll
+      - name: bandit -- dev-side trees, high only
+        run: uv run bandit -q -r scripts tools -lll
+      # No `-r`: pip-audit resolves a requirements file by building a virtualenv, which
+      # needs `ensurepip` and fails outright on the box this project develops on. Auditing
+      # the synced environment needs no resolver, and `uv sync --locked` above is what
+      # makes it deterministic -- it is uv.lock's set, installed. Measured 2026-08-29: 90
+      # packages including torch, no known vulnerabilities, exit 0; and exit 1 with five
+      # advisories when handed a package with known ones, so the gate is not decoration.
+      # It skips `syncai-hydranet` itself, printing that it did, because this project is
+      # not on PyPI to have advisories.
+      - name: Audit the locked dependency set
+        run: uv run pip-audit --progress-spinner off
+
   # Single required status for branch protection: depends on every job above, so
   # adding a new job can't silently slip past a rule that only listed the old set.
   # Fails closed if any dependency failed, was cancelled, or was skipped.
   ci-success:
     name: CI success
     runs-on: ubuntu-latest
-    needs: [format, lint, types, test, export-parity, release-bundle]
+    needs: [format, lint, types, test, export-parity, release-bundle, security]
     if: always()
     steps:
       - name: Assert every job succeeded

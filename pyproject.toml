@@ -159,6 +159,20 @@ dev = [
     # running two tests rather than fail.
     "trimesh>=5.0.0",
     "scipy>=1.15.3",
+    # Security gates. Both were quoted in this project's notes as passing figures long
+    # before either was installed anywhere -- "bandit HIGH 0, pip-audit no CVE" came from
+    # ad-hoc `uvx` runs, so nothing standing produced them and nobody could have noticed
+    # them going wrong. Pinned through uv.lock for the reason `ty` above is: a floating
+    # scanner changes what the gate means on its own schedule, and Dependabot bumping it
+    # makes that a reviewed event.
+    #
+    # `pip-audit` has a trap worth naming here, because it looks like it passed either
+    # way. Run bare under `uvx` it audits *its own ephemeral environment* -- it reported
+    # "No known vulnerabilities found" over 28 packages that are not this project's. The
+    # CI job feeds it `uv export`'s requirements instead, which is the locked set a
+    # contributor actually installs (70 packages on 2026-08-29, no known vulnerabilities).
+    "bandit>=1.8",
+    "pip-audit>=2.7",
 ]
 
 [tool.hatch.version]
