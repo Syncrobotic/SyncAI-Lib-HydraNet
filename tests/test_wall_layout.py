@@ -27,6 +27,7 @@ Three things are pinned here, each written against a defect that had already hap
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from syncai_bev3d.floorplan import (
     FLOOR_BOTH_SIDES,
@@ -38,6 +39,12 @@ from syncai_bev3d.floorplan import (
     wall_runs,
 )
 from syncai_bev3d.shading import FADE_FLOOR, View, occlusion_alpha
+from syncai_hydranet.geometry.ground import (
+    Camera,
+    GroundPlane,
+    height_above_floor_m,
+    pixel_row_at_height,
+)
 
 
 def _cells(u0, u1, v0, v1, step=0.06):
@@ -300,3 +307,26 @@ def test_an_item_named_in_keep_is_never_faded():
     room = [(_slab(-1.0 + i, 0.0 + i, 1.0, 3.0, 4.0), (180, 180, 180), 255) for i in range(4)]
     assert occlusion_alpha(_view(), [blocker, *room])[0] < 255  # it does fade
     assert occlusion_alpha(_view(), [blocker, *room], keep=((200, 200, 200),))[0] == 255
+
+
+# ---------------------------------------------- a mask cannot reach above its own class
+
+
+def test_the_height_solve_and_its_inverse_round_trip():
+    """`pixel_row_at_height` is only useful if it is exactly the inverse of the forward
+    solve -- a cut made at the wrong row keeps or discards the wrong pixels."""
+    cam = Camera(fx=900.0, fy=900.0, cx=960.0, cy=540.0)
+    plane = GroundPlane(height=2.8, pitch=0.35)
+    for x_m, z_m, h_m in [(0.0, 4.0, 1.3), (-2.0, 6.0, 2.4), (1.5, 3.0, 0.75)]:
+        v = pixel_row_at_height(x_m, z_m, h_m, cam, plane)
+        assert np.isfinite(v)
+        assert height_above_floor_m(x_m, z_m, v, cam, plane) == pytest.approx(h_m, abs=1e-6)
+
+
+def test_a_taller_point_projects_higher_in_the_image():
+    """Sign check, because getting it backwards would trim the fixture and keep the wall."""
+    cam = Camera(fx=900.0, fy=900.0, cx=960.0, cy=540.0)
+    plane = GroundPlane(height=2.8, pitch=0.35)
+    low = pixel_row_at_height(0.0, 5.0, 0.5, cam, plane)
+    high = pixel_row_at_height(0.0, 5.0, 2.4, cam, plane)
+    assert high < low, "a higher point must land on a smaller row number"

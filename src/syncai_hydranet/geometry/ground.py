@@ -263,3 +263,31 @@ def height_above_floor_m(
     if abs(den) < 1e-9:
         return float("nan")
     return float((a[1] - k * a[2]) / den)
+
+
+def pixel_row_at_height(
+    x_m: float, z_m: float, h_m: float, camera: Camera, plane: GroundPlane
+) -> float:
+    """The image row a point ``h_m`` above the floor at ``(x_m, z_m)`` projects to.
+
+    The inverse of `height_above_floor_m`, and it exists for a use the forward direction
+    cannot serve: **cutting a mask at a class's plausible height.**
+
+    A `display_table` component that reaches 2.44 m is not a 2.44 m table. It is a counter
+    whose mask has been welded to the wall behind it -- PLAN §7.21 measured that welding
+    directly, 263 of 503 merges on Taichung-cam01 being containment merges, because a
+    counter standing in front of a wall is 100% inside the wall's mask from any single
+    viewpoint. Dropping the component loses a real counter; keeping it draws a 2.4 m slab
+    where the shop has a waist-high fixture. Cutting the mask at the row that 1.3 m
+    projects to keeps the counter and discards the wall, and needs no depth at all, which
+    matters because the depth model collapses on exactly the white surfaces this happens on.
+
+    Same linear relation as the forward solve, rearranged. NaN on a degenerate ray.
+    """
+    rot = plane.rotation
+    a = rot @ np.array([x_m, plane.height, z_m])
+    b = rot @ np.array([0.0, 1.0, 0.0])
+    den = a[2] - h_m * b[2]
+    if abs(den) < 1e-9:
+        return float("nan")
+    return float(camera.cy + camera.fy * (a[1] - h_m * b[1]) / den)

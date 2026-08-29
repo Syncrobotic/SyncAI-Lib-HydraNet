@@ -60,6 +60,16 @@ PALETTE = {
 }
 CLASS_NAMES = {2: "wall", 3: "column", 4: "display_table", 5: "display_shelf"}
 WALL_CID = 2  # named because the wall runs read the class mask directly, not by name
+# **Measured and rejected 2026-08-29: cutting a fixture mask at its class's plausible
+# ceiling.** The diagnosis was right and the remedy was not. Single-view metrology on the
+# component tops does identify the welding PLAN 7.21 measured -- the largest
+# `display_table` component reads 2.44 m on Taichung-cam01, 1.90 m on cam11, 2.09 m on
+# Kaohsiung-cam04, and it is the *largest* component every time, which is what welding
+# produces. But clearing the mask above the row 1.30 m projects to deleted real furniture
+# with it: display tables went 5 -> 1 on Taichung-cam01 and to **zero** on Kaohsiung-cam04
+# and Tao-Hsin-cam03. `geometry.pixel_row_at_height` stays, because the solve is right and
+# tested; what is missing is a base position per component that a welded mask does not
+# corrupt, and the component's lowest rows are not it.
 CELL = 0.06
 DRAWN_H = {"wall": 2.4, "column": 2.4, "display_table": 0.75, "display_shelf": 2.0}
 # A column runs floor to ceiling. The depth model reads 1.07-1.65 m for one (see the
