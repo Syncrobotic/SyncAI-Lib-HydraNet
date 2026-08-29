@@ -263,3 +263,34 @@ def test_track_staff_reduces_a_whole_track_to_one_person():
     for i in range(MIN_OBSERVATIONS):
         t.update(np.array([_box(10.0 + i, 10.0)]), i, staff_scores=np.array([0.8]))
     assert track_staff(t.tracks[0]) is True
+
+
+def test_a_camera_whose_labels_are_all_one_class_licenses_nothing():
+    """The one the first two conditions would have let through, and it is a real camera.
+
+    Taichung-cam10's 15 labelled crops are 15 staff and zero customers. A model held out
+    on it scores a clean 1.000 -- measuring only whether it calls staff staff, and unable
+    to be wrong about customers because none were labelled. PLAN §7.15 states the same
+    hazard for the fleet: 16 of 32 labelled cameras carry a single class, where "which
+    camera" is "which class".
+    """
+    stats, y, cams = _batch()
+    m = fit_staff_model(stats, y, cams, held_out="cam01")
+    for staff_count in (0, m.held_out_n):
+        blind = replace(m, accuracy=1.0, held_out_staff=staff_count)
+        with pytest.raises(ValueError, match="cannot be wrong"):
+            require_camera(blind, "cam01")
+
+
+def test_a_mixed_held_out_camera_still_licenses():
+    """The guard must not refuse the cameras it was written to admit."""
+    stats, y, cams = _batch()
+    m = fit_staff_model(stats, y, cams, held_out="cam01")
+    assert 0 < (m.held_out_staff or 0) < (m.held_out_n or 0)
+    assert require_camera(m, "cam01") is m
+
+
+def test_the_class_balance_survives_a_save_and_load(tmp_path):
+    stats, y, cams = _batch()
+    m = fit_staff_model(stats, y, cams, held_out="cam01")
+    assert StaffModel.load(m.save(tmp_path / "m.json")).held_out_staff == m.held_out_staff

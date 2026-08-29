@@ -140,6 +140,10 @@ class StaffModel:
     held_out: str | None
     accuracy: float | None  # on `held_out`, or None
     held_out_n: int | None
+    # How many of `held_out`'s crops carried each label. A camera whose held-out set is
+    # all one class has an accuracy that cannot be wrong about the other, and that is a
+    # different quantity from the one the floor is written against.
+    held_out_staff: int | None = None
     crop_size: tuple[int, int] = CROP_SIZE
 
     def probability(self, stats: np.ndarray) -> np.ndarray:
@@ -172,6 +176,7 @@ class StaffModel:
                     "held_out": self.held_out,
                     "accuracy": self.accuracy,
                     "held_out_n": self.held_out_n,
+                    "held_out_staff": self.held_out_staff,
                 },
                 indent=1,
             )
@@ -203,6 +208,7 @@ class StaffModel:
             held_out=d["held_out"],
             accuracy=d["accuracy"],
             held_out_n=d["held_out_n"],
+            held_out_staff=d.get("held_out_staff"),
             crop_size=CROP_SIZE,
         )
 
@@ -239,10 +245,11 @@ def fit_staff_model(
     mean, std = x[~test].mean(0), x[~test].std(0)
     z = (x - mean) / (std + 1e-6)
     w = fit_logreg(z[~test], y[~test])
-    acc, n_held = None, None
+    acc, n_held, n_staff = None, None, None
     if held_out is not None:
         hit = (predict(w, z[test]) >= 0.5).astype(int) == y[test].astype(int)
         acc, n_held = float(hit.mean()), int(test.sum())
+        n_staff = int(y[test].sum())
     return StaffModel(
         weights=w,
         mean=mean,
@@ -252,6 +259,7 @@ def fit_staff_model(
         held_out=held_out,
         accuracy=acc,
         held_out_n=n_held,
+        held_out_staff=n_staff,
     )
 
 
@@ -265,7 +273,15 @@ def require_camera(
     number for this camera" has to stop the caller rather than be discoverable later by
     someone looking at the render and wondering.
 
-    **Two conditions, not one.** Matching the camera is not sufficient and the reason is
+    **Three conditions, not one.** The third was added on 2026-08-29 after the first two
+    would have licensed Taichung-cam10: its 15 labelled crops are **15 staff and zero
+    customers**, so a model held out on it scores a clean **1.000** that measures only
+    whether it calls staff staff. It cannot be wrong about customers there, because none
+    were labelled -- and a number that cannot be wrong cannot license anything. That is
+    the same shape as PLAN §7.15's own warning that 16 of 32 labelled cameras carry a
+    single class, where "which camera" is "which class".
+
+    **The other two.** Matching the camera is not sufficient and the reason is
     concrete: `runs/staff_model01/model_Tao-Hsin-cam04.json` exists, names its own camera,
     and scores **0.417 on 12 crops**. A gate that only asked "is this the right camera"
     would wave it through and colour half that store's staff as shoppers, which is the
@@ -273,6 +289,17 @@ def require_camera(
     was asked the easier question.
     """
     if model.held_out == camera:
+        n, ns = model.held_out_n, model.held_out_staff
+        if n is not None and ns is not None and (ns == 0 or ns == n):
+            raise ValueError(
+                f"this staff model's {model.accuracy:.3f} on {camera} was measured on "
+                f"{n} crops that are all "
+                f"{'staff' if ns else 'customer'}, so it says only that the model gets "
+                f"{'staff' if ns else 'customers'} right there and nothing at all about "
+                "the other class. It cannot be wrong, which is why it cannot license "
+                "anything. Label some crops of the missing class on this camera, or "
+                "render it without staff colours."
+            )
         if model.accuracy is not None and model.accuracy < min_accuracy:
             raise ValueError(
                 f"this staff model scores {model.accuracy:.3f} on {camera} "
