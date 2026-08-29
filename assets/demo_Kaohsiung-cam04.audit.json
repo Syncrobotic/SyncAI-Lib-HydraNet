@@ -3,7 +3,7 @@
  "gif": "demo_Kaohsiung-cam04.gif",
  "render": "demo_Kaohsiung-cam04_20260829-181403.mp4",
  "source_clip": "archive_20260816-112757_20260816-113301.mp4",
- "commit": "86465b65f213611f0e684db4953cc2e859beb83e",
+ "commit": "65a6b78be7765b5cb6875854693404141d218b5f",
  "start_frame": 242,
  "frames": 120,
  "stride": 1,
