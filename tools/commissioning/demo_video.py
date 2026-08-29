@@ -25,9 +25,12 @@ Usage:
   uv run python tools/commissioning/demo_video.py <camera> [--clip PATH]
       [--frames 900] [--fps 5] [--checkpoint last.pt] [--score-thr 0.35]
 
-Writes assets/demo_<camera>.mp4 (gitignored -- customer footage) and three sample
-frames for the frame-check. The mp4 is written to `.part` and renamed on success, so a
-killed render leaves no file rather than a truncated one that ffprobe cannot open.
+Writes assets/dev/demo_<camera>_<stamp>.mp4 and a stable assets/dev/demo_<camera>.mp4
+beside it (both ignored wholesale -- customer footage), plus three sample frames for the
+frame-check. `assets/` itself holds only results; a render is working material, and the
+result is the figure `demo_gif.py` cuts from it. The mp4 is written to `.part` and
+renamed on success, so a killed render leaves no file rather than a truncated one that
+ffprobe cannot open.
 """
 
 import argparse
