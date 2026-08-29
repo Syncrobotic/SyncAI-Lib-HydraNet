@@ -4,15 +4,13 @@ name: Release Please
 # feat→dev and `ci-promote.yml` gates dev→stage; this adds the version bump at the
 # bottom of that flow and the tag at the top of it.
 #
-# **Two jobs, deliberately split, because the flow is strict.** The obvious setup --
-# release-please pointed at `main`, as the sibling Gateway repo runs it -- cannot be
-# used here. A release PR merges *into* its target branch, so pointing it at `main`
-# would put a commit there that `stage` does not have, and RELEASE.md requires main
-# to advance only by `git merge --ff-only origin/stage`. The very next promotion
-# would fail outright:
-#
-#     $ git checkout main && git merge --ff-only origin/stage
-#     fatal: Not possible to fast-forward, aborting.
+# **Two jobs, deliberately split, because the version bump has to ride the flow.** The
+# obvious setup -- release-please pointed at `main`, as the sibling Gateway repo runs it
+# -- is wrong here. A release PR merges *into* its target branch, so pointing it at
+# `main` would create the version bump on `main`, where neither `ci-promote.yml` nor any
+# promotion has tested it, and `stage` would never carry the version it was supposed to
+# have been accepted at. The bump belongs at the bottom of the flow and has to travel up
+# it like anything else.
 #
 # So the two halves of a release are separated and each is put where it is legal:
 #
@@ -25,12 +23,42 @@ name: Release Please
 #               a release: tag it, cut the GitHub Release from the CHANGELOG section
 #               release-please already wrote, and attach the wheel and sdist.
 #
-# The tag therefore lands on `main`, which is what RELEASE.md defines as released,
-# and no branch ever gains a commit that did not come from the branch below it.
+# The tag therefore lands on `main`, which is what RELEASE.md defined as released
+# (that document was deleted in `26dc519`; `git show b7457c2:docs/RELEASE.md` for it).
 #
-# Because promotion is fast-forward, the commit the tag names is byte-identical to
-# the one that was reviewed on dev and accepted on stage -- the same git object, not
-# a copy of it.
+# **What promotion actually does, measured 2026-08-29, because this comment used to say
+# something else.** It claimed no branch ever gains a commit the branch below it does not
+# have, and that promotion being fast-forward makes the tagged commit the same git object
+# that was reviewed. Both were false, and had been through all four promotions to date:
+# every one was merged through a GitHub PR, and a PR merge writes a merge commit onto the
+# target. `stage` carries `8170796` and `b62ca2c` that `dev` does not; `main` carries
+# `096e912` and `27ef617` that `stage` does not.
+#
+# The two hops fail at different moments, which is worth stating precisely because the
+# obvious check reports the wrong one as healthy:
+#
+#     $ git checkout stage && git merge --ff-only origin/dev
+#     fatal: Not possible to fast-forward, aborting.
+#
+#     $ git checkout main && git merge --ff-only origin/stage
+#     Already up to date.
+#
+# `main` reads clean only because it was built by merging `stage` into it, so `stage` is
+# an ancestor and there is nothing to fast-forward *to*. `main` is not an ancestor of
+# `stage`, so that hop aborts the same way the moment `stage` advances -- at the next
+# promotion, not at the next check.
+#
+# What survives, and it is the part that matters: `main` and `stage` resolve to the **same
+# tree** (`cbc632f4`). Those four merge commits carry no content of their own, so what is
+# tagged and released is what was reviewed on dev and accepted on stage -- an identical
+# tree reached by a different commit, rather than the identical commit.
+#
+# **Nothing asserts any of this.** The invariant lived only in this comment, which is how
+# it was broken four times without anyone noticing, and how the comment went on describing
+# a repository that had stopped existing. Restoring the strict form would mean promoting by
+# `git merge --ff-only` from a clone and pushing, never through a PR -- and re-aligning
+# `stage` and `main` first, which rewrites two shared branches. That has not been done and
+# is not implied by anything here.
 #
 # Model releases are NOT this. Weights are versioned by `scripts/release_bundle.sh`
 # into an immutable checksummed bundle, because `runs/` is not in git and a commit on
