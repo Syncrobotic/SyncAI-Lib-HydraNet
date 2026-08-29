@@ -34,6 +34,7 @@ ffprobe cannot open.
 """
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -334,6 +335,11 @@ def main() -> int:
     if args.staff_colours:
         from syncai_hydranet.analytics.staff import MIN_DEPLOY_ACCURACY
 
+        # **Written back onto the namespace on purpose, not merely for convenience.**
+        # The track log records `vars(args)`, so this line is what makes it record the
+        # *effective* floor -- 0.90 when the flag was not passed -- instead of `null`. A
+        # cleanup that computes the floor into a local variable would silently turn the
+        # record back into "no threshold stated".
         args.staff_min_accuracy = (
             MIN_DEPLOY_ACCURACY if args.staff_min_accuracy is None else args.staff_min_accuracy
         )
@@ -712,6 +718,32 @@ def main() -> int:
     log_path.write_text(
         json.dumps(
             {
+                # **Every argument, wholesale, and not a hand-picked list.** This record
+                # held eight fields against a parser of ten, and on 2026-08-29 that cost
+                # a figure: a second session re-cut `demo_Taichung-cam10` without
+                # `--staff-colours` -- undoing `65a6b78`, which made it two-colour on
+                # purpose -- and nothing in the verdict named the flag, so the audit, the
+                # blur check and the staleness guard all passed on a figure that had
+                # silently changed. `--metre-scale` was missing on the same principle and
+                # is worse: `positions` below are in metres and two runs at 1.0 and
+                # 0.8824 produce different numbers under identical-looking provenance.
+                # An allowlist is broken again the day flag eleven lands;
+                # `tests/test_figures_are_audited.py` reads the parser and checks this.
+                "args": vars(args),
+                # And what the arguments RESOLVED to, because a path is not identity:
+                # `runs/` is gitignored and regenerable, so the same model file can be
+                # refitted at the same path with a different accuracy and no record
+                # would move. The figure's own legend prints this number.
+                "staff_model": None
+                if staff_model is None
+                else {
+                    "path": args.staff_colours,
+                    "sha256": hashlib.sha256(Path(args.staff_colours).read_bytes()).hexdigest(),
+                    "accuracy": staff_model.accuracy,
+                    "held_out": staff_model.held_out,
+                    "held_out_n": staff_model.held_out_n,
+                    "min_accuracy_required": args.staff_min_accuracy,
+                },
                 "camera": camera,
                 "clip": clip.name,
                 "checkpoint": args.checkpoint,
