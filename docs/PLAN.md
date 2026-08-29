@@ -1872,3 +1872,34 @@ something it does not support.
    *obstacle* boundary and a *frontier*, so that the field-of-view edge stays open rather
    than becoming a wall; the vertical wall test above; columns, which are lost on every
    camera; and the door, which is currently drawn standing in the middle of the floor.
+
+26. **The checkout counter is not a trained class, and it is being classified as
+   merchandise shelving.** Reported by the user 2026-08-29 from the renders, and it is a
+   labelling gap rather than a geometry one, so none of §7.25's work touches it.
+
+   The fixture vocabulary is `wall / column / display_table / display_shelf`. A till point
+   is neither a table nor a shelf: it is a counter with a person permanently behind it,
+   and every retail output that matters treats it differently from a merchandise run — a
+   queue forms at it, dwell there is a transaction rather than interest, and
+   `reach_to_shelf` firing at a till is an operator picking up a scanner, not a shopper
+   handling stock. Classified as `display_shelf` it inherits the merchandise
+   interpretation of all three.
+
+   **Why this is likely the same root as §7.21 rather than a separate defect.** Both
+   teachers read a white counter as a wall on a white-fixture store, which §7.21 measured
+   and proved unfixable by clustering, prompt or paint order. A till point in these shops
+   is a white counter, so the same surface that defeats the `wall`/`table` distinction
+   defeats the `table`/`till` one. What separates a till from a merchandise counter is not
+   its surface: it is **what is on it and who stands behind it** — a monitor, a card
+   terminal, a printer, and a person on the staff side for most of the trading day.
+
+   That last part is the useful observation, because this project already measures it.
+   `staff/customer` is fitted per camera (§7.23) and `service_zones` already gives every
+   fixture the floor beside it (§7.19's 71 zones). **A fixture whose adjacent floor is
+   occupied by `staff` for most of the clip is a till; one whose adjacent floor is
+   occupied by customers is a merchandise run.** That is a relation between two things the
+   tree already computes, not a new model — the same shape as `floor_both_sides` in §7.25,
+   and it needs no new labels at all.
+
+   Not started. Recorded here because a wrong class silently changes what every downstream
+   rule means, and nothing currently reports it.

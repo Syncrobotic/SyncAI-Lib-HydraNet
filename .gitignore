@@ -70,8 +70,8 @@ assets/*
 # enough: the box head at 0.12 missed people standing at the back of the aisle, and a
 # privacy mask that misses somebody has published them. The second is the difference
 # against that camera's own static plate, which owes nothing to a detector.
-!assets/demo_Taichung-cam01.gif
-!assets/demo_Taichung-cam01.audit.json
+!assets/demo_Taichung-cam10.gif
+!assets/demo_Taichung-cam10.audit.json
 !assets/retail_cctv_scene.gif
 !assets/social_preview.png
 # Added 2026-08-28, the two other stores. Each figure carries a tracked `.audit.json`

@@ -29,20 +29,23 @@ is the busiest two minutes of a three-minute clip**, chosen automatically by
 `demo_gif.py --start auto` — a figure of an empty shop shows nothing, but it is a selection
 and this is it being said.*
 
-**The same code on a second camera**, where the answer is different:
+*The colours are licensed per camera and refused where they are not earned. This camera
+scores 1.00 held out on its own 15 labelled crops; the same model is refused on
+Tao-Hsin-cam04, which scores 0.417. And it is not a model that paints everyone one colour:
+pointed at Taichung-cam01, a repair counter, it calls **98.5% of person-observations
+staff**, 2,144 against 34.*
 
-![Taichung-cam01: detections and tracks on the left, the metric 3D scene on the right](assets/demo_Taichung-cam01.gif)
+**A second store**, the same code with the colours switched off:
 
-*Taichung-cam01 is a repair counter, and the classifier calls **98.5% of its
-person-observations staff** — 2,144 against 34. That is the figure worth having beside the
-first one: a model that painted everyone the same colour would look identical on the shop
-floor above and would be caught here.*
+![Taichung-cam10: detections and tracks on the left, the metric 3D scene on the right](assets/demo_Taichung-cam10.gif)
 
-*The colours are licensed per camera and refused where they are not earned. Both cameras
-here score 1.00 held out on their own labelled crops (15 and 18). The same model is refused
-on Tao-Hsin-cam04, which scores 0.417, and on Taichung-cam10, whose 15 labelled crops are
-15 staff and 0 customers — an accuracy that cannot be wrong about customers cannot license
-colouring them (PLAN §7.23).*
+*Taichung-cam10 is rendered **without** staff colours, and the reason is the point. Its 15
+labelled crops are 15 staff and 0 customers, so a model held out on it scores a clean 1.000
+that measures only whether it calls staff staff — an accuracy that cannot be wrong about
+customers cannot license colouring them, and the gate refuses it (PLAN §7.23). The figures
+here carry identity colours instead. **Read its metres with the caveat**: this camera's
+scale is known to be 1.21x too large (PLAN §7.10, a decision to leave rather than an
+oversight), which is why its figures stand 1.98 m rather than 1.70.*
 
 The whole plan — architecture, data strategy, build order, and the measurements behind
 every decision — lives in **one document: [docs/PLAN.md](docs/PLAN.md)**. Everything the
