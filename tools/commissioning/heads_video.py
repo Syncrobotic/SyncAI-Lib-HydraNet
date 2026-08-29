@@ -232,7 +232,8 @@ def main() -> int:
     p_legend = legend_panel(terrain_names, palette, mask_names)
 
     scene_mesh.SS = 1
-    _cf2, items, heights, _shapes = scene_mesh.build_scene_regular(camera)
+    _cf2, items, heights, shapes = scene_mesh.build_scene_regular(camera)
+    not_believed = scene_mesh.implausible_caption(shapes)
     if args.metre_scale != 1.0:
         items = [((m[0] * args.metre_scale, m[1]), *rest) for m, *rest in items]
         heights = {k: v * args.metre_scale for k, v in heights.items()}
@@ -452,7 +453,8 @@ def main() -> int:
         label(
             p_m,
             "L1 - tracks on the commissioned floor, in metres",
-            f"{len(tracks)} tracks  wedge = facing  arrow = 1 s of travel",
+            f"{len(tracks)} tracks  wedge = facing  arrow = 1 s of travel"
+            + (f"   |   {not_believed}" if not_believed else ""),
         )
 
         canvas = Image.new("RGB", (out_w, out_h), (7, 9, 13))

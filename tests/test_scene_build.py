@@ -190,3 +190,44 @@ def test_a_welded_table_is_reported_rather_than_drawn_silently(tmp_path):
     _items, shapes = _built(root)
     said = scene_mesh.implausible(shapes)
     assert any("display_table" in line and "span" in line for line in said), said
+
+
+# --------------------------------------------------- the picture says what the code knows
+
+
+def test_a_clean_scene_renders_identically_whether_or_not_it_is_asked(tmp_path):
+    """The property the published figures depend on.
+
+    `render` gained a third caption line for fixtures it does not believe in. If it drew
+    anything at all on a clean scene, every figure in `assets/` would have to be re-cut
+    for a line saying nothing -- so an empty verdict must be byte-for-byte invisible.
+    """
+    root = a_store(tmp_path)
+    _cf, items, heights, shapes = scene_mesh.build_scene_regular(CAMERA, root)
+    assert scene_mesh.implausible(shapes) == []
+    quiet, asked = tmp_path / "quiet.png", tmp_path / "asked.png"
+    scene_mesh.render(CAMERA, items, heights, quiet)
+    scene_mesh.render(CAMERA, items, heights, asked, shapes=shapes)
+    assert quiet.read_bytes() == asked.read_bytes()
+
+
+def test_a_welded_fixture_reaches_the_picture(tmp_path):
+    """And the other half: delete the defence and this goes green about nothing.
+
+    `implausible` was called in one CLI's `main()` and printed to a terminal for the
+    whole of its life while four tools drew the fixture and said nothing (PLAN 7.27).
+    This is the test that the sentence is now *on the image*.
+    """
+    welded = ("display_table", slice(180, 240), slice(120, 400), 0.78)
+    root = a_store(tmp_path, fixtures=(welded,))
+    _cf, items, heights, shapes = scene_mesh.build_scene_regular(CAMERA, root)
+    assert scene_mesh.implausible(shapes)
+    quiet, asked = tmp_path / "quiet.png", tmp_path / "asked.png"
+    scene_mesh.render(CAMERA, items, heights, quiet)
+    scene_mesh.render(CAMERA, items, heights, asked, shapes=shapes)
+    a = np.asarray(Image.open(quiet).convert("RGB"), int)
+    b = np.asarray(Image.open(asked).convert("RGB"), int)
+    rows = np.nonzero((np.abs(a - b).sum(2) > 0).any(axis=1))[0]
+    assert len(rows), "the render is identical: the caption never reached the image"
+    # Only the caption band moves -- the geometry is untouched by being described.
+    assert rows.min() >= 50 and rows.max() <= 75, f"pixels changed outside the caption: {rows}"

@@ -85,7 +85,7 @@ def main():
         for line in implausible(built[3] if len(built) > 3 else []):
             print(f"  {camera}: implausible {line}")
         out = ROOT / f"assets/commission_mesh_{camera}.png"
-        render(camera, items, heights, out)
+        render(camera, items, heights, out, shapes=built[3] if len(built) > 3 else ())
         obj = export_obj(camera, items)
         glb = export_glb(camera, items)
         print(f"{camera}: {out.name}, {obj.name}, {glb.name}")

@@ -364,7 +364,7 @@ def main() -> int:
 
     # the static scene, built once; the view frozen so the room does not swim
     scene_mesh.SS = 1
-    _cf2, items, heights, _shapes = scene_mesh.build_scene_regular(camera)
+    _cf2, items, heights, shapes = scene_mesh.build_scene_regular(camera)
     # merchandise stays in: the product regions are now tiled with unit-sized items
     # sitting on the counter tops, which is what a store looks like. They read as
     # clutter only when they are region-sized slabs, which is what they used to be.
@@ -422,6 +422,10 @@ def main() -> int:
     # it went on labelling p99 numbers as p85 on every frame of a three-minute video.
     # `tests/test_scene_mesh_caption.py` covers the function; it never covered the copy.
     header = scene_mesh.height_caption(heights)
+    # A third header line, and only when there is one. This panel crops the render's own
+    # caption away, so passing `shapes` to `render` would not reach the figure -- and the
+    # figure is the artefact somebody looks at.
+    not_believed = scene_mesh.implausible_caption(shapes)
     seen_ids: set[int] = set()
     positions: list[dict] = []
     history: dict[int, dict[int, tuple[float, float]]] = {}
@@ -645,6 +649,8 @@ def main() -> int:
         left, _, right = header.partition("|")
         ph.text((10, 26), left.strip(), fill=(170, 182, 200))
         ph.text((10, 40), right.strip(), fill=(140, 152, 170))
+        if not_believed:
+            ph.text((10, 54), not_believed, fill=(236, 168, 96))
 
         composite = Image.new("RGB", (out_w, out_h), (7, 9, 13))
         composite.paste(view_img, (0, 0))

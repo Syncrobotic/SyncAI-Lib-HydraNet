@@ -58,7 +58,7 @@ def main() -> int:
     plate = plate.resize((w_px, h_px))
 
     scene_mesh.SS = 1
-    _cf, items, _heights, _shapes = scene_mesh.build_scene_regular(args.camera)
+    _cf, items, _heights, shapes = scene_mesh.build_scene_regular(args.camera)
     if args.metre_scale != 1.0:
         items = [((m[0] * args.metre_scale, m[1]), *rest) for m, *rest in items]
 
@@ -78,9 +78,19 @@ def main() -> int:
             pts = [(float(uv[i, 0]) * up, float(uv[i, 1]) * up) for i in face]
             d.polygon(pts, outline=(*rgb, 230))
         drawn += 1
+    # This is the falsifiable view -- the wireframe over the plate it was built from --
+    # so it is the one place a fixture the code does not believe in most needs saying.
+    said = scene_mesh.implausible_caption(shapes)
+    if said:
+        # On its own the line is orange text over a lit shop floor and unreadable, which
+        # is the same defect as printing it to a terminal nobody reads. The band is drawn
+        # only when there is something to say, so a clean overlay is unchanged.
+        d.rectangle([0, 0, img.width, 42], fill=(0, 0, 0, 175))
     d.text(
         (8, 8), f"{args.camera}  scene projected back through camera.json", fill=(255, 255, 255)
     )
+    if said:
+        d.text((8, 24), said, fill=(246, 178, 106))
     out = Path(args.out or ROOT / f"assets/scene_overlay_{args.camera}.png")
     img.save(out)
     print(f"wrote {out}  ({drawn} meshes)")
