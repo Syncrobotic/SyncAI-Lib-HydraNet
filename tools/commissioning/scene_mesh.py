@@ -643,21 +643,23 @@ def build_scene_regular(camera):
     floor_u, floor_v = _fx * cy + _fz * sy, -_fx * sy + _fz * cy
     walls = []
     for run in wall_runs(_wx * cy + _wz * sy, -_wx * sy + _wz * cy):
-        axis, perp, lo, hi, thick = run
+        axis, perp, lo, hi, _thick = run
         if floor_both_sides((axis, perp, lo, hi), floor_u, floor_v) > FLOOR_BOTH_SIDES:
-            # **Re-classified, not discarded.** The mask holds a real object here; what
-            # was wrong is its class, and dropping it would leave the shop emptier than
-            # the camera saw. A free-standing run in a phone shop is a gondola or a
-            # counter -- and 2.4 m of solid wall through the middle of the floor is the
-            # one thing it certainly is not.
-            dep = float(min(max(thick, 0.40), SHELF_MAX_DEPTH_M))
-            fix_h = heights.get(5, heights.get(4, DRAWN_H["display_shelf"]))
-            spec = (
-                ["display_shelf", lo, hi, perp - dep / 2, perp + dep / 2, fix_h]
-                if axis == "u"
-                else ["display_shelf", perp - dep / 2, perp + dep / 2, lo, hi, fix_h]
-            )
-            fixtures.append(spec)
+            # **Dropped, not re-classified -- and the difference was measured.** A shopper
+            # can stand on both sides of this, so it is not a room boundary: that much the
+            # relation establishes, and removing it is the whole gain.
+            #
+            # Converting it into a merchandise run instead was tried on 2026-08-29 and put
+            # the fixture in the wrong place, which is the one error the user's standard
+            # does not allow. The line is fitted to the **`wall` point set**, and on a
+            # white-fixture store that set is the counter *and the wall behind it*, welded
+            # (PLAN 7.21). So the fitted line sits between them -- at the wall, a metre
+            # behind the counter that made it fail the relation. Projected back through
+            # the camera, a box on the wall's line appears floating above the counter in
+            # front of it, and `scene_overlay` shows exactly that: Tao-Hsin-cam03 went from
+            # four well-placed meshes to six, the two extra ones hovering over the counters.
+            #
+            # A fixture the mask cannot place is better absent than present and wrong.
             continue
         walls.append(run)
     for axis, perp, lo, hi, _thick in walls:
