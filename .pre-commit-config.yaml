@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -72,7 +72,7 @@ repos:
         types_or: [python, pyi]
 
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.8.22
+    rev: 0.12.6
     hooks:
       - id: uv-lock          # keep uv.lock in sync with pyproject.toml
 
@@ -81,7 +81,7 @@ repos:
   #   pre-commit install --hook-type commit-msg
   # See CONTRIBUTING.md for the allowed types and why the history was rewritten.
   - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v4.0.0
+    rev: v4.4.0
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
