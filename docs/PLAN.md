@@ -1285,9 +1285,10 @@ something it does not support.
    Taichung-cam01's 900-frame clip, **proposed track 8 is two people**: frames 711–820 are
    the long-haired member of staff crouching at the left counter, and from **f821** the box
    is on the one in the blue hooded jacket standing beside her, who is separately boxed as
-   track 5 five frames earlier. The box height goes **211, 227, 242, 424** across f818–821
-   and `assets/gt_cam01_track8_cut.png` shows the first person still crouching inside the
-   crop after the jump. Two people came together, and the high band alone was enough.
+   track 5 five frames earlier. The box height goes **211, 227, 242, 424** across f818–821,
+   and the crop read by eye at f821 has the first person still crouching inside it after
+   the jump — a local figure from `scripts/track_review.py`, never published, because
+   `assets/` requires a passing face audit and this is an unaudited shop-floor frame. Two people came together, and the high band alone was enough.
 
    What that costs: `within` on this camera pools at least one pair that is two people, so
    the same-person reference is **wider than it should be**, which biases the instrument
@@ -1342,7 +1343,7 @@ something it does not support.
    Tao-Hsin-cam03 makes the point without arithmetic: its dominant identity is a member of
    staff leaning on a counter for 58 s **in thirteen fragments**, all at the same image
    position, with **no box at all** in the gaps while the blue sleeve is plainly on the
-   counter (`assets/gt_th03_podium.png`).
+   counter, read by eye off the same `track_review.py` crops.
 
    **Step 5's other sentence is measured now, 2026-08-28, and on one of the two cameras it
    fails** (`scripts/zone_dwell.py`, `runs/gt_*/zone_dwell.json`). The gate reads "dwell/
