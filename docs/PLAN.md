@@ -1919,3 +1919,41 @@ something it does not support.
 
    Not started. Recorded here because a wrong class silently changes what every downstream
    rule means, and nothing currently reports it.
+
+27. **`implausible()` names seven fixtures across the fleet and nothing reads it.**
+   Measured 2026-08-29 over all eight commissioned cameras, on the build the renders
+   actually use (`build_scene_regular`), because the previous entries in this section
+   name the function repeatedly and none of them says how much it is finding.
+
+   **85 fixtures built, 7 outside their class interval, on 4 of the 8 cameras**, and the
+   identities matter more than the total because they are three different defects:
+
+   | camera | fixture | what it is |
+   |---|---|---|
+   | Taichung-cam01 | `display_table` 2.60x2.45 m | the welding §7.21 measured -- two counters bridged |
+   | Taichung-cam01 | `display_table` 2.05x2.00 m | the same |
+   | Taichung-cam01 | `display_shelf` 0.55x0.20 m | a sliver: what a neighbour's `resolve_overlaps` left of it |
+   | Taichung-cam04 | `display_table` 3.10x1.90 m | welding |
+   | Tao-Hsin-cam03 | `display_table` 1.85x1.80 m | welding |
+   | Tao-Hsin-cam03 | `door` 2.60 m span | shopfront glazing, not a door |
+   | Tao-Hsin-cam04 | `door` 3.70 m span | the same, and named in §7.25 already |
+
+   **Every one of them is drawn, and the sentence naming it goes to a terminal nobody is
+   reading.** `implausible` is called in `tools/commissioning/scene_mesh.py`'s `main()`
+   and nowhere else -- not by `demo_video`, `heads_video`, `scene_overlay` or
+   `social_card`, which are what produce every published figure. So the four cameras
+   above ship pictures with a fixture the code has already decided is not furniture, and
+   the picture says nothing. That is the shape this repository keeps writing down: a
+   check that talks and is not heard, the sibling of the green light wired to nothing.
+
+   **What it must not become.** Deleting the offender is the obvious consumer and it is
+   the one §7.25 measured and reverted: cutting a welded mask at the class ceiling took
+   display tables 5 -> 1 on Taichung-cam01 and to zero on two cameras, because a welded
+   component is a real fixture *plus* its neighbour, not a phantom. And "absent beats
+   present-and-wrong" was written about a fixture the mask **cannot place**; a welded
+   table is in the right place and the wrong size, which is a different trade.
+
+   Open. The candidate consumers, in the order they are worth trying: the render says it
+   in the picture rather than on stdout, so a reader of the figure sees what the code
+   already knows; and the commissioning record carries it per camera, so the count is a
+   number that can be watched rather than a line in a scrollback.
