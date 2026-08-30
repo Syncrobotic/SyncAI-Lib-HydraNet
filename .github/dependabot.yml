@@ -11,7 +11,7 @@ version: 2
 # `ci.yml` on dev or `ci-promote.yml` on the way to stage, which is the whole point of
 # having the flow. This used to be justified by a fast-forward promotion rule instead;
 # that rule was already broken by four PR merges and no longer states anything true --
-# see the header of `.github/workflows/release-please.yml` for what was measured.
+# see the header of `.github/workflows/release.yml` for what was measured.
 updates:
   - package-ecosystem: github-actions
     directory: /
