@@ -167,7 +167,7 @@ jobs:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
       - run: uv sync --locked --group dev --extra export
-      - run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=83
+      - run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=85
 
   # No checkpoint and no dataset: a randomly initialised model exercises the same
   # graph. Catches an operator that stopped exporting cleanly, a shape that drifted,

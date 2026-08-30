@@ -110,8 +110,14 @@ jobs:
       # kind of thing that only shows up once branches are combined. Same number as
       # ci.yml's, deliberately -- two tiers disagreeing about the floor is how the
       # looser one becomes the real one.
+      #
+      # 83 -> 85 on 2026-08-30, and 85 is what CI measures, not what a laptop does.
+      # Locally this tree reads 86% because `test_run_depth.py` runs there: the model is
+      # cached and there is a GPU, so `run_depth` is covered. CI syncs `--extra export`
+      # only, that file skips, and every matrix row reports **85.23%**. Setting the floor
+      # from the local number would have failed all three rows on the first push.
       - name: Tests on the combined state
-        run: uv run pytest --cov --cov-fail-under=83
+        run: uv run pytest --cov --cov-fail-under=85
       # Security moves here too, and for the same combined-state reason as the tests --
       # not as a blanket copy of ci.yml. `pip-audit` reads the *merged* `uv.lock`, and a
       # lock neither branch produced is exactly what two Dependabot PRs make: each was
