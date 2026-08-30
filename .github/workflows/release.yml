@@ -1,5 +1,17 @@
 name: Release (main)
 
+# Renamed from `release-please.yml` on 2026-08-30, and the reason is that the old name
+# cost someone a search. release-please was removed from this repository on 2026-08-29;
+# nothing here runs it, and `name:` has been `Release (main)` throughout. So the file was
+# named after a tool that no longer exists while the job it defines is called something
+# else -- and when `v0.1.0` was finally cut, the first question asked was why
+# "release-please" had not triggered. It had. It is this, under its own name.
+#
+# What keeps the old name legitimately: `release-please-config.json`, the
+# `x-release-please-version` annotation in `__init__.py` and `CITATION.cff`, and
+# `tests/test_version_agreement.py`, which is the only thing holding the citation's
+# version to the package's. Those are the tool's own artefacts and are not renamed here.
+#
 # Releasing, for the promotion flow feat/* → dev → stage → main. `ci.yml` gates
 # feat→dev and `ci-promote.yml` gates dev→stage; this turns an arrival on `main` into a
 # tag and a GitHub Release, and does nothing anywhere else.
@@ -89,7 +101,7 @@ permissions:
 # Serialize per branch, and never cancel mid-flight: a cancelled release run can
 # leave a tag without its artifacts.
 concurrency:
-  group: release-please-${{ github.ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:

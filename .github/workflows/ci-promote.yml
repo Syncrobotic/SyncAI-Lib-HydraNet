@@ -1,7 +1,16 @@
 name: CI (promote)
 
 # Tier 2 of the promotion flow feat/* → dev → stage → main. The full gate runs at
-# feat→dev (ci.yml); this is a COMBINED-STATE check on the dev→stage promotion PR.
+# feat→dev (ci.yml); this is a COMBINED-STATE check on BOTH promotion PRs -- dev→stage
+# and stage→main.
+#
+# **`main` was added on 2026-08-30, and until then the last hop had no CI at all.**
+# `ci.yml` triggers on `dev`, this triggered on `stage`, and `release.yml` triggers on a
+# *push* to `main` -- which is a release, not a gate, and runs after the merge rather than
+# before it. So a pull request into `main` ran nothing, on the one hop closest to what
+# ships. The reason the omission survived is that it looks like coverage from either end:
+# read from `dev` the chain is gated twice, and read from `release.yml` `main` clearly has
+# a workflow. Neither view shows the hole.
 #
 # It exists because GitHub does not re-run a green PR when its base advances: branch
 # B can merge into dev having been tested against a dev that never contained branch
@@ -27,11 +36,13 @@ name: CI (promote)
 # function of one config and the model code, not of how branches combined.
 #
 # NOTE: this workflow only RUNS the checks. To actually BLOCK a bad promotion, mark
-# "CI (promote) / Combined-state smoke" as a required status check in the `stage`
-# branch protection rule.
+# "CI (promote) / Combined-state smoke" as a required status check in the `stage` AND
+# `main` branch protection rules. Ordering matters when you do: a required check that no
+# workflow reports leaves every PR "Expected -- waiting for status", permanently
+# unmergeable. So this trigger has to reach a branch *before* that branch requires it.
 on:
   pull_request:
-    branches: [stage]
+    branches: [stage, main]
 
 # Least-privilege default: jobs only check out code.
 permissions:
@@ -83,3 +94,19 @@ jobs:
       # looser one becomes the real one.
       - name: Tests on the combined state
         run: uv run pytest --cov --cov-fail-under=83
+      # Security moves here too, and for the same combined-state reason as the tests --
+      # not as a blanket copy of ci.yml. `pip-audit` reads the *merged* `uv.lock`, and a
+      # lock neither branch produced is exactly what two Dependabot PRs make: each was
+      # audited against its own base and the combination against neither. bandit rides
+      # along because it is seconds and because code that is individually clean on two
+      # branches is still only ever scanned separately.
+      #
+      # ONNX export parity deliberately does NOT move here; see the note above. An export
+      # is a function of one config and the model code, not of how branches combined, and
+      # it is the one check whose ~2 min is real.
+      - name: bandit -- what ships, medium and above
+        run: uv run bandit -q -r src -ll
+      - name: bandit -- dev-side trees, high only
+        run: uv run bandit -q -r scripts tools -lll
+      - name: Audit the merged dependency set
+        run: uv run pip-audit --progress-spinner off
