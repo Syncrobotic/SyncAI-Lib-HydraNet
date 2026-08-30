@@ -19,6 +19,15 @@ and its whole scene build had never been executed by a test. The CLI stays behin
 The commissioning inputs are read from `root`, defaulting to the checkout this package
 sits in. They are `runs/` artefacts, which is deliberately outside the wheel: an
 installed copy has no commissioning data, and a test passes a `tmp_path` instead.
+
+---------------------------------------------------------------------------
+AND IT IS NOT A NEWER `bev3d`
+
+`bev3d.py` draws a perspective panel from a *live forward pass* -- arrays, no commissioning
+artefacts -- so it works on any footage from any camera. This one takes a camera name and
+reads what commissioning measured for it, which exists for **8 of 48**. The README's
+figures moved to this panel, which makes the other look superseded; it is not, and
+`bev3d.py`'s own docstring carries the same note from the other side.
 """
 
 import os
