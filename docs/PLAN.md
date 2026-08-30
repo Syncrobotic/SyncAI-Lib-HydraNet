@@ -409,6 +409,46 @@ store's shrinkage counts and incident reports**, weekly. The signal is weak and 
 by weeks — it is also the only one available, so it is reported with that caveat rather
 than not at all.
 
+### 4.6 Retention — what is kept, for how long, and why the tiers differ
+
+Decided 2026-08-30. Until then this document said nothing about retention and neither did
+anything else in the tree: `grep -rniE "retention|PDPA|GDPR|consent"` over `src`, `tools`,
+`scripts`, `docs` and CONTRIBUTING returned one line, and it was about git history being
+uneditable. A product that records customers in a shop in Taiwan, where the 個人資料保護法
+applies, had no stated answer to "how long do you keep this".
+
+**The tiers are short on imagery and long on numbers**, because those carry different risk
+and different value. A frame of a shop floor is the thing a person could be recognised in
+and is the thing a model no longer needs once it has been trained on. A row saying
+`reach_to_shelf` fired at `basis=wrist_over_fixture value=0.66 threshold=0.35` identifies
+nobody and is the only record of why an alert was raised months later.
+
+| what | where | kept | why that number |
+|---|---|---|---|
+| raw store clips | `datasets/studioa_clips/` | **30 days** | long enough for one incident investigation and one re-cut of a figure; past that a clip is a liability holding no answer the measurements have not already extracted |
+| imagery derived from them | `runs/**/*.{jpg,png,gif,mp4}` | **90 days** | one model iteration. A crop sheet is evidence for a verdict, and a verdict is re-read when the next training set is assembled |
+| measurements | `runs/**/*.{json,jsonl,npz,log,yaml}` | **kept** | numbers, not pictures. Deleting these deletes the apparatus behind every claim in this document |
+| static plates | `datasets/studioa_static/` | **kept** | the temporal median removes every moving person by construction; a plate is the empty shop |
+| disposition log | the JSONL store | **kept** | `frame_ref` is a *pointer* — clip path plus frame offsets — not an image. When the clip expires the pointer stops resolving, which is the deletion, and the operator's verdict survives as a number |
+| published figures | `assets/` | **permanent, and unerasable** | they are in git history. CONTRIBUTING already states this; §4.6 restates it as the reason the audit gate in front of `assets/` is the strictest one here |
+
+**Two properties of the design carry most of the weight, and neither was added for this.**
+The disposition log stores a pointer rather than a frame, so expiring a clip severs the
+link without touching the log. And everything except `assets/` is gitignored, so deletion
+is deletion — the only holding that cannot be revoked is the five tracked figures, which
+is why the thing guarding that directory is an allowlist plus a per-figure audit verdict
+rather than a convention.
+
+**What this does not decide, and it is not a code question.** Whether the deployment
+partner or this project is the 蒐集者 under the PDPA changes who owes notice to whom, and
+that changes the numbers above rather than the mechanism. Stated here so the omission is
+visible: the tiers are engineering defaults chosen to be defensible, not a legal position.
+
+`scripts/retention_sweep.py` enforces the table and `tests/test_retention_policy.py` holds
+the two to each other, because a policy nothing executes is the failure mode this
+repository has the most notes about.
+
+
 ## 5. What it must never do
 
 1. Never put an answer in the weights that belongs in a config.
