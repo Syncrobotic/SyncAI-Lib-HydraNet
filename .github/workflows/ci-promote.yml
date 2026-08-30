@@ -43,6 +43,24 @@ name: CI (promote)
 on:
   pull_request:
     branches: [stage, main]
+  # And on the push that a promotion actually produces. Two reasons, and the second is
+  # the one that is not obvious:
+  #
+  #   1. A `pull_request` check is the only thing gating `stage`, and it only exists if
+  #      somebody opens a PR. A direct push had no check at all.
+  #   2. **A `pull_request` run tests a merge that does not exist yet.** GitHub builds a
+  #      simulated merge of head into base and runs against that; the commit this repo
+  #      actually keeps is a different object, created afterwards. They agree almost
+  #      always, which is exactly why the case where they do not would be missed.
+  #
+  # `main` is deliberately absent here: `release.yml` already runs on that push, and a
+  # release-please PR merging into `main` would otherwise pay for this whole suite a
+  # second time to re-check a version bump.
+  #
+  # Cost is one extra run per promotion, not per commit -- pushes to `stage` only happen
+  # when a promotion lands.
+  push:
+    branches: [stage]
 
 # Least-privilege default: jobs only check out code.
 permissions:
