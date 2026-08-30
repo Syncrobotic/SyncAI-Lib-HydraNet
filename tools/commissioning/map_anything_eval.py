@@ -61,6 +61,15 @@ ANCHOR_VFOV_DEG = 70.4
 # reading a model card -- unlike SAM 3, which is gated, or NTU/PoseLift, which are
 # research-only and are kept out of every training config for that reason.
 MODEL_ID = "facebook/map-anything-apache"
+# The snapshot every number in this file's docstring was measured against, taken from
+# `huggingface_hub.scan_cache_dir()` rather than from whatever upstream `main` points at
+# today. Without it the readings would silently re-base on a model none of them was made
+# against -- and 38.26 deg is only worth reporting if it can be reproduced.
+#
+# `tests/test_teacher_revisions_are_pinned.py` caught this after the file was committed
+# and not before, because that guard enumerates *tracked* files: the full suite ran clean
+# while the file was still untracked. The lesson is the ordering, not the pin.
+MODEL_REVISION = "00f9c245bbcb60522d1ed7f9e9d88462c6e3f38a"
 
 
 @dataclass(frozen=True)
@@ -166,7 +175,7 @@ def _load_model():
     from mapanything.models import MapAnything
 
     dev = "cuda" if torch.cuda.is_available() else "cpu"
-    return MapAnything.from_pretrained(MODEL_ID).to(dev).eval(), dev
+    return MapAnything.from_pretrained(MODEL_ID, revision=MODEL_REVISION).to(dev).eval(), dev
 
 
 def undistorted_plates(dest: Path) -> dict[str, Path]:
