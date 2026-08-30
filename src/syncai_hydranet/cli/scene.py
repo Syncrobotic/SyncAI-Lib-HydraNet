@@ -82,6 +82,7 @@ from ..geometry.ground import Camera, GroundPlane
 from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint, select_weights
 from ..utils.device import pick_device
+from ..utils.face_blur import BLUR_THR, blur_rect, blur_region
 from ..utils.temporal import FixedCameraStabiliser
 from ..utils.visualize import (
     TRAV_COLORS,
@@ -125,6 +126,51 @@ class SceneRecord(SceneReport):
     frame: int
 
 
+def blur_people(base: Image.Image, model, device, x, region, det_names) -> int:
+    """Blur every face this model can find in `base`, before anything is drawn on it.
+
+    **`cli/scene.py` published a customer's shop floor with no blur stage at all until
+    2026-08-30.** Its two sibling renderers, `tools/commissioning/demo_video.py` and
+    `heads_video.py`, both blur by construction; this one draws the same frames from the
+    same cameras and did not. `assets/cctv_v1.gif` is what that produced -- a figure of
+    Tao-Hsin-cam03 whose own commit message says it was chosen partly because it "has a
+    person walking through it", published unblurred and with no audit verdict.
+
+    So the defect was never that one file: it was that a renderer able to write into
+    `assets/` had no blur, and deleting the figure would have left the tool able to make
+    another one.
+
+    A **second forward pass** at `BLUR_THR`, rather than lowering the one `compose`
+    already makes. Sharing it -- which is what `demo_video.py` does, and correctly, for a
+    900-frame render -- would put sub-threshold boxes into the detections the panel draws
+    and the payload reports, changing every scene figure this CLI has ever produced. A
+    still can afford the extra pass; correctness under a threshold change cannot be
+    assumed here.
+
+    Returns the number of regions blurred, so a caller can say so rather than trust it.
+    """
+    if not det_names or "person" not in tuple(det_names):
+        return 0
+    person = tuple(det_names).index("person")
+    with torch.no_grad():
+        out = model.predict(x.to(device), score_thr=BLUR_THR)
+    det = (out.get("detection") or [{}])[0]
+    if not det or not len(det.get("boxes", [])):
+        return 0
+    boxes = det["boxes"].cpu().numpy()
+    labels = det["labels"].cpu().numpy()
+    scores = det["scores"].cpu().numpy()
+    x0, y0, _cw, _ch = region
+    n = 0
+    for bb in boxes[(labels == person) & (scores >= BLUR_THR)]:
+        # Canvas coordinates; `base` is the crop at (x0, y0), so shift rather than scale.
+        r = blur_rect(base.width, base.height, bb[0] - x0, bb[1] - y0, bb[2] - x0, bb[3] - y0)
+        if r is not None:
+            blur_region(base, *r)
+            n += 1
+    return n
+
+
 def compose(
     frame: Image.Image,
     model,
@@ -152,6 +198,10 @@ def compose(
         out = model.predict(x.to(device), score_thr=args.score_thr)
     x0, y0, cw, ch = region
     base = canvas.crop((x0, y0, x0 + cw, y0 + ch))
+    # Before every draw below, for `demo_video.py`'s stated reason: a box outline must
+    # never end up sitting on top of an unblurred face.
+    if not getattr(args, "no_blur", False):
+        blur_people(base, model, device, x, region, det_names)
     if "traversability" in out:
         trav = crop_box(out["traversability"][0].cpu().numpy(), region)
     else:
@@ -296,6 +346,15 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--json", default=None, help="scene payload; JSON lines for a clip")
     ap.add_argument("--fps", type=float, default=6.0, help="sampling and output fps")
     ap.add_argument("--max-frames", type=int, default=0, help="0 means all")
+    # Default ON, and the flag exists to be refused rather than to be convenient: this
+    # CLI reads store footage, and CONTRIBUTING's assets allowlist says a frame of a
+    # customer's shop floor cannot be un-published. `assets/cctv_v1.gif` is what its
+    # absence produced.
+    ap.add_argument(
+        "--no-blur",
+        action="store_true",
+        help="do NOT blur faces -- only for a private check, never for anything shared",
+    )
     ap.add_argument("--score-thr", type=float, default=SCORE_THR_SCENE)
     # The assumptions. Printed on every frame, because a plausible-looking map built on a
     # wrong height is the failure mode this whole panel has.
