@@ -41,6 +41,7 @@ from syncai_bev3d.plate_calibration import (
     choose_floor,
     column_health,
     fit_pose_from_people,
+    floor_candidates,
     floor_scale,
     load_person_boxes,
     person_checks,
@@ -517,3 +518,86 @@ def test_person_checks_records_the_failure_instead_of_dropping_the_key():
     out = person_checks(boxes, cam, plane, (H_PX, W_PX), 60.0)
     assert "failed" in out["people_fit"]
     assert "implied_person_height_med_m" not in out, "fewer than five boxes measures nothing"
+
+
+# ---------------------------------------------------------------------------
+# floor selection through the real RANSAC, on depth this file synthesises
+
+
+def _depth_of(cam: Camera, plane: GroundPlane, h: int, w: int, height_m=None, mask=None):
+    """A depth frame for a plane `height_m` below the camera, in metres.
+
+    The ray for each pixel is intersected with the plane analytically, so the frame is
+    exactly what a perfect depth sensor would return -- which is the point: it lets
+    `floor_candidates` be checked against an answer known independently of it. Beyond
+    15 m the value is dropped rather than kept: a ray near the horizon meets the plane at
+    hundreds of metres, arithmetically correct and not a reading any depth model produces.
+    """
+    v, u = np.mgrid[0:h, 0:w].astype(float)
+    rays = np.stack([(u - cam.cx) / cam.fx, (v - cam.cy) / cam.fy, np.ones_like(u)], axis=-1)
+    level = rays @ plane.rotation
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t = (plane.height if height_m is None else height_m) / level[..., 1]
+    depth = np.where(np.isfinite(t) & (t > 0) & (t < 15.0), t, np.nan)
+    return depth if mask is None else np.where(mask, depth, np.nan)
+
+
+def test_the_floor_fit_recovers_the_plane_the_depth_was_built_from():
+    """The other closed loop, and the one that runs the RANSAC rather than mocking it.
+
+    `floor_candidates` is the step every commissioned camera's geometry comes out of, and
+    nothing executed it. Given a depth frame computed from a known plane it returns that
+    plane to **0.00 mm and 0.0000 degrees**, so the fit itself adds no error -- which is
+    worth pinning separately from the depth model's, because in the field the two are only
+    ever seen added together.
+    """
+    cam = Camera.from_vfov(240, 320, 60.0)
+    truth = GroundPlane(height=2.8, pitch=math.radians(30.0))
+    depth = _depth_of(cam, truth, 240, 320)
+
+    plane, _residual, rows = choose_floor(floor_candidates(depth, cam, inlier_m=0.03))
+    assert plane is not None and rows
+    assert plane.height == pytest.approx(2.8, abs=0.005)
+    assert math.degrees(plane.pitch) == pytest.approx(30.0, abs=0.05)
+    assert math.degrees(plane.roll) == pytest.approx(0.0, abs=0.05)
+
+
+def test_a_counter_across_the_seed_band_does_not_become_the_floor():
+    """ "Lowest plausible", proven through the fit instead of on hand-built candidates.
+
+    `fit_ground_plane` seeds from the lower part of the frame, so a counter in the near
+    field is sampled *more* than the floor is -- the failure this rule exists for, and one
+    a per-candidate check cannot see, because the counter's plane is a perfectly good
+    plane. Here a surface 0.95 m above the floor fills the bottom 30% of the frame, and
+    RANSAC genuinely proposes both: **h=1.85 with 23,040 inliers and h=2.80 with 39,360**.
+
+    Selecting on inlier count would still pick the floor here, so the assertion is on the
+    stronger property: both were offered, and the one further below the camera won.
+    """
+    cam = Camera.from_vfov(240, 320, 60.0)
+    truth = GroundPlane(height=2.8, pitch=math.radians(30.0))
+    counter = np.zeros((240, 320), dtype=bool)
+    counter[int(240 * 0.70) :, :] = True
+
+    floor = _depth_of(cam, truth, 240, 320)
+    top = _depth_of(cam, truth, 240, 320, height_m=2.8 - 0.95, mask=counter)
+    depth = np.where(np.isfinite(top), top, floor)
+
+    plane, _residual, rows = choose_floor(floor_candidates(depth, cam, inlier_m=0.03))
+    offered = {round(r["height_m"], 2) for r in rows}
+    assert 1.85 in offered, "the counter must actually be proposed, or this proves nothing"
+    assert 2.8 in offered
+    assert plane.height == pytest.approx(2.8, abs=0.05), "the counter became the floor"
+
+
+def test_a_depth_frame_with_nothing_in_it_yields_no_candidates():
+    """`fit_ground_plane` needs 50 finite points in a band; below that it declines.
+
+    An all-NaN frame is what a camera pointed at glass returns, and the refusal has to
+    reach `choose_floor` as an empty list rather than as a plane fitted to noise.
+    """
+    cam = Camera.from_vfov(240, 320, 60.0)
+    empty = np.full((240, 320), np.nan)
+    assert floor_candidates(empty, cam, inlier_m=0.03) == []
+    plane, residual, rows = choose_floor([])
+    assert plane is None and residual is None and rows == []
