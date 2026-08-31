@@ -160,9 +160,9 @@ BASELINE="${TY_BASELINE:-$DEFAULT_BASELINE}"
 # when a peer attributed an 8-diagnostic overage to a file move that could not have caused
 # it -- moving files inside `scripts/` cannot change a recursive check of `scripts/`.
 #
-# 3.12 rather than the 3.10 floor because it is what a fresh `uv sync` resolves today and
+# 3.12 rather than the 3.11 floor because it is what a fresh `uv sync` resolves today and
 # what the test matrix's upper row uses, so the gate measures the environment contributors
-# actually get. Override for a one-off with TY_PYTHON=3.10.
+# actually get. Override for a one-off with TY_PYTHON=3.11.
 #
 # **A second reason a hand-run count does not compare, independent of the interpreter.**
 # This script counts `error[` lines; `ty`'s own trailing "Found N diagnostics" counts

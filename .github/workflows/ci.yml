@@ -130,18 +130,25 @@ jobs:
   # The suite runs in ~30 s, so it is not sharded. Revisit if it passes a few minutes;
   # the sibling Gateway repo's 4-way shard + merged-threshold pattern is the model.
   #
-  # The matrix is the floor, the newest claimed version, and nothing in between. 3.10 is
-  # `requires-python`'s floor and what the working `.venv` on this box actually runs
-  # (3.10.12), so it is the version a local run is measured on. 3.13 is the newest the
-  # classifiers claim, and a matrix that stops below its own claim leaves the claim
-  # untested. 3.12 sits between them because the lock resolves a different numpy per
-  # Python version and the middle row is where that has broken before.
+  # The matrix is the floor, the newest claimed version, and nothing in between. 3.11 is
+  # `requires-python`'s floor since 2026-08-31 and 3.13 is the newest the classifiers
+  # claim; a matrix that stops below its own claim leaves the claim untested. 3.12 sits
+  # between them because the lock resolves a different numpy per Python version and the
+  # middle row is where that has broken before.
   #
-  # This comment used to say 3.13 was "what the maintainer's venv actually runs". It is
-  # not, and had not been for some time -- the venv is 3.10.12. The row is right for the
-  # reason above; only its justification was wrong, which is the harder kind to notice.
-  # 3.11 is claimed but not tested: a pre-existing gap, add a row if it ever costs
-  # anything.
+  # **The floor moved because a dependency moved first.** onnxruntime 1.23 dropped cp310
+  # wheels and 1.24 needs cp311+, so `export`'s cap and a Dependabot ignore both existed
+  # to hold a bump that could never pass while 3.10 was claimed -- an unmergeable PR
+  # permanently occupying one of five slots. Raising the floor was the decision that
+  # released all three.
+  #
+  # Two earlier revisions of this comment were wrong about their own rows, which is the
+  # instructive part. It said 3.13 was "what the maintainer's venv actually runs" when
+  # the venv was 3.10.12; the correction then said 3.10 was that venv, which stopped
+  # being true the moment the floor moved and the venv was rebuilt at 3.11.15. **A row
+  # justified by what one box happens to run needs re-checking every time that box
+  # changes.** These rows are justified by `requires-python` and the classifiers, which
+  # are in this repository and move only when someone edits them.
   test:
     name: Unit tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -149,7 +156,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.10', '3.12', '3.13']
+        python-version: ['3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
