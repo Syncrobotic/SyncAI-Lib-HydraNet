@@ -17,7 +17,6 @@ Usage:
 
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -27,6 +26,7 @@ from PIL import Image
 
 from syncai_bev3d.teachers.boxes import nms
 from syncai_hydranet.analytics.events import pose as ev
+from syncai_hydranet.utils.runmeta import git_state
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
 ANN_DIR = ROOT / "datasets/site30k_v1/annotations"
@@ -139,13 +139,18 @@ def main() -> int:
         if n % 200 == 0:
             print(f"  {n}/{len(todo)}", flush=True)
 
-    git = subprocess.run(
-        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=ROOT
-    ).stdout.strip()
     payload = {
         "provenance": {
             "tool": "tools/pose/vitpose_teacher.py",
-            "git_commit": git,
+            # `git_state` rather than a `git rev-parse` of its own. The call this
+            # replaces had no `check`, no timeout and no way to say it had failed: git
+            # not resolving wrote `"git_commit": ""` into the record, which is a value
+            # and not an absence, so a reader saw a provenance field that had been
+            # filled in with nothing. `git_state` returns `{"available": False}` when it
+            # cannot answer, and when it can it also reports whether the tree was dirty
+            # -- which for a label set is the part that decides whether the labels can be
+            # re-made at all.
+            "git": git_state(ROOT),
             "pose_model": POSE_MODEL,
             "boxes": f"instances_all_{args.split}.json, NMS 0.5, score >= {GOLD_MIN} (Gold)",
             "keypoint_order": list(ev.KEYPOINT_NAMES),
