@@ -18,9 +18,11 @@ about the act of writing rather than about the frames.
 
 **Scope is by producer, not by exemption.** `demo_gif.py` names its own output
 `assets/demo_<camera>.gif`, so that pattern is exactly the set of figures cut from store
-footage. `cctv_v1.gif` is a segmentation figure with no person in it and no
-render behind it; it is out of scope because nothing produced it here, not because it was
-excused.
+footage. Anything else tracked in `assets/` is out of scope because nothing here produced
+it and there is no render behind it to re-derive a blurred region from -- not because it
+was excused. `test_renderers_blur.py` is what covers that case, by asking of every
+renderer that can write into `assets/` whether it could produce an unblurred figure at
+all; `cctv_v1.gif` is the figure that made both necessary.
 """
 
 from __future__ import annotations

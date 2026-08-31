@@ -257,6 +257,20 @@ def load_person_boxes(anns: Path, camera: str, plate_w: int, plate_h: int, k1: f
 
     Same gates as the video-based collector in fit_camera_from_people.py had: edge boxes are
     crops, extreme aspect ratios are not standing people.
+
+    **The edge gate runs before the undistortion, and that ordering is the whole point.**
+    It asks whether the frame cut this person in half, so the frame it has to ask about is
+    the one the detector saw. Undistorting first and then comparing against ``plate_w`` /
+    ``plate_h`` compares a coordinate in the undistorted plane against the *distorted*
+    frame's bounds, and a barrel model pushes points outward, so it drops whole people for
+    being far from the axis rather than for being cropped. Measured on the fleet's
+    ``k1 = -0.225`` over 23 cameras on 2026-08-31: **269 boxes before, 332 after, and no
+    camera crossed the ten-box floor** -- so this changes sample sizes, not which cameras
+    are `measured`. The anchor Taichung-cam01 went 37 -> 47 with its people-only height
+    unmoved at 2.19 m, which is what says the recovered boxes agree with the kept ones.
+    Taichung-cam05 went 15 -> 24 and its height 1.36 -> 2.04 m: it had been sitting on the
+    ten-sample floor with the off-axis boxes -- the ones that constrain pitch -- gated out,
+    reporting an impossible ceiling height through every check.
     """
     d = json.loads(anns.read_text())
     person = next(c["id"] for c in d["categories"] if c["name"] == "person")
@@ -269,15 +283,15 @@ def load_person_boxes(anns: Path, camera: str, plate_w: int, plate_h: int, k1: f
         sx, sy = plate_w / im["width"], plate_h / im["height"]
         x, y, bw, bh = a["bbox"]
         box = np.array([x * sx, y * sy, (x + bw) * sx, (y + bh) * sy])
+        m = 3.0  # 6 px at 1080 rows, halved with the frame
+        if box[0] < m or box[1] < m or box[2] > plate_w - m or box[3] > plate_h - m:
+            continue
         if abs(k1) > 1e-12:
             centre, radius = (plate_w / 2.0, plate_h / 2.0), math.hypot(plate_h, plate_w) / 2.0
             corners = undistort_points(
                 box.reshape(2, 2), k1, centre, radius
             )  # (x0,y0),(x1,y1): foot and head columns move together enough for a check
             box = corners.reshape(4)
-        m = 3.0  # 6 px at 1080 rows, halved with the frame
-        if box[0] < m or box[1] < m or box[2] > plate_w - m or box[3] > plate_h - m:
-            continue
         bw2, bh2 = box[2] - box[0], box[3] - box[1]
         if bh2 <= 0 or not (1.4 <= bh2 / max(bw2, 1e-6) <= 6.0):
             continue

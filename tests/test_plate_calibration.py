@@ -488,6 +488,27 @@ def test_every_gate_on_the_way_into_the_height_prior(tmp_path, ann, why):
     assert len(load_person_boxes(_anns(tmp_path, [ann]), "CamA", 1920, 1080, 0.0)) == 0, why
 
 
+def test_the_edge_gate_asks_about_the_frame_the_detector_saw(tmp_path):
+    """A whole person far off-axis is not a crop, and a barrel model must not make it one.
+
+    This box sits at plate x 1720-1800 inside a 1920-wide plate -- nowhere near the edge --
+    and at the fleet's k1 = -0.225 it undistorts to x1 = 1926, past the same bound. Gating
+    after the undistortion compares an undistorted coordinate against the *distorted*
+    frame's width and drops it, and the drop is silent: it looks like a camera short of
+    people, which is the one reading `scale_source: unmeasured` is documented to have.
+
+    The aspect ratio is 3.12 raw and 2.75 undistorted, so both are well inside the 1.4-6.0
+    gate and this test can only fail for the ordering it is about.
+    """
+    ann = {"image_id": 10, "category_id": 1, "bbox": [860, 140, 40, 125], "score": 0.9}
+    path = _anns(tmp_path, [ann])
+    assert len(load_person_boxes(path, "CamA", 1920, 1080, -0.225)) == 1, (
+        "a whole person at plate x 1720-1800 was dropped by the edge gate, which means the "
+        "gate ran on undistorted coordinates against the raw frame's bounds again"
+    )
+    assert len(load_person_boxes(path, "CamA", 1920, 1080, 0.0)) == 1, "undistorted, it is kept"
+
+
 def test_person_checks_reports_the_prior_and_an_independent_bound():
     """The cross-check `person_checks` exists to be: the plane's answer beside a depth-free one.
 
