@@ -124,8 +124,7 @@ class StageFrame(BoxFrame):
     across the module that declares it: `zone_stock_counts` reads five of its six required
     keys and never `image`; `reach_to_shelf_events` reads two, of which only
     `frame_index` is required here; and the only producer of a real payload
-    (`scripts/pose_pilot.py`, since deleted in `500cdd2`) built `{frame_index, terrain}`,
-    which satisfies none of it.
+    built `{frame_index, terrain}`, which satisfies none of it.
     A contract that no consumer needs in full and no producer can supply is not a
     contract -- it is a comment that type-checks, and annotating a signature with it would
     have made a working caller an error.
@@ -135,15 +134,6 @@ class StageFrame(BoxFrame):
     because it has every key either requires. A producer that has everything states it
     with this; a producer that has a dense map and no boxes states `TerrainFrame` and is
     not lying about the rest.
-
-    **This was two classes until 2026-08-31**, split only because `NotRequired` is 3.11+
-    and this project's floor was 3.10. `requires-python` is `>=3.11` now, so the split has
-    nothing left to do and the payload is one class again. The observation the split's
-    docstring carried is kept, because the gap it names did not close with the floor:
-    `NotRequired` on 3.10 fails at **import**, and `ty_ratchet.sh` does not catch that,
-    because a type checker checks types rather than importing the module. What catches it
-    is the test matrix's floor row -- which is why that row is `requires-python`'s floor
-    and not whichever interpreter a contributor's venv resolved.
     """
 
     # Required here and optional in `TerrainFrame`, deliberately. A full first-stage

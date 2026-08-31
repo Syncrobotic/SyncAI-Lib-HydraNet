@@ -246,14 +246,10 @@ def _sheet(tracks: dict, crops: dict, out: Path) -> tuple[list[Path], int]:
     geometry was checked and reported; the page contents were not. A caller that only
     counts pages cannot tell a sheet from a set of labels.
     """
-    # Clear the previous run's pages before writing this one's. A re-run that yields fewer
-    # tracks writes fewer pages, and the surplus survives: this directory held
-    # `review_03..06.png` from an earlier pass alongside `review_01..02.png` from a later
-    # one, six pages of which four were stale. Empty ones merely waste a reviewer's time;
-    # the dangerous case is stale pages that *have* crops, because their track ids are
-    # from a `tracks.json` that no longer exists and every grouping made from them is
-    # silently against the wrong file. `merges.json` records ids and nothing else, so
-    # there is no later step at which that could be caught.
+    # Clear the previous run's pages first: a re-run that yields fewer tracks leaves the
+    # surplus behind, and a stale page that *has* crops carries track ids from a
+    # `tracks.json` that no longer exists. `merges.json` records ids and nothing else, so
+    # a grouping made against the wrong file is not caught at any later step.
     for old in out.glob("review_*.png"):
         old.unlink()
 
