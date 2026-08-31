@@ -52,9 +52,15 @@ costing nothing at runtime -- so it can be adopted incrementally and by parts ra
 in one commit that touches every caller.
 """
 
-from __future__ import annotations
-
-from typing import TypedDict
+# **No `from __future__ import annotations` in this module, and that is load-bearing.**
+# It makes every annotation a string, and `TypedDict` does not resolve strings at class
+# creation -- so `NotRequired[...]` becomes invisible and the key it marks comes out
+# **required**. Measured here on 2026-08-31: with the future import, `StageFrame` reported
+# seven required keys and none optional; without it, six and `terrain`. Nothing else in
+# this file needs it -- `np.ndarray | None` is a runtime-valid expression on the 3.11
+# floor -- and `test_stage_contract.py` holds the resulting key sets, which is the check
+# that would have caught the mistake had it existed one revision earlier.
+from typing import NotRequired, TypedDict
 
 import numpy as np
 
@@ -105,24 +111,7 @@ class TerrainFrame(FrameRef, total=False):
     image: np.ndarray  # HxWx3 uint8 RGB
 
 
-class _StageFrameRequired(BoxFrame):
-    """Split from `StageFrame` only to mark one key optional on Python 3.10.
-
-    `NotRequired` is 3.11+, and this project's venv is 3.10 -- it was tried first and
-    fails at *import*, which `ty_ratchet.sh` does not catch because a type checker checks
-    types rather than importing the module. Worth the two extra lines rather than a
-    `typing_extensions` import in `src/`, which would put a dependency question in the way
-    of a two-key distinction.
-    """
-
-    # Required here and optional in `TerrainFrame`, deliberately. A full first-stage
-    # payload can always supply the image and the crop encoder is the whole reason this
-    # stage exists, so a payload a crop cannot be cut from would have to be redefined the
-    # moment it is built. `utils/temporal.py` needs it too, for its change-gate.
-    image: np.ndarray
-
-
-class StageFrame(_StageFrameRequired, total=False):
+class StageFrame(BoxFrame):
     """One frame's worth of first-stage output, as the second stage needs it.
 
     Deliberately **not** `HydraNet.predict`'s dict. That one is keyed by head name and
@@ -146,6 +135,21 @@ class StageFrame(_StageFrameRequired, total=False):
     because it has every key either requires. A producer that has everything states it
     with this; a producer that has a dense map and no boxes states `TerrainFrame` and is
     not lying about the rest.
+
+    **This was two classes until 2026-08-31**, split only because `NotRequired` is 3.11+
+    and this project's floor was 3.10. `requires-python` is `>=3.11` now, so the split has
+    nothing left to do and the payload is one class again. The observation the split's
+    docstring carried is kept, because the gap it names did not close with the floor:
+    `NotRequired` on 3.10 fails at **import**, and `ty_ratchet.sh` does not catch that,
+    because a type checker checks types rather than importing the module. What catches it
+    is the test matrix's floor row -- which is why that row is `requires-python`'s floor
+    and not whichever interpreter a contributor's venv resolved.
     """
 
-    terrain: np.ndarray | None
+    # Required here and optional in `TerrainFrame`, deliberately. A full first-stage
+    # payload can always supply the image and the crop encoder is the whole reason this
+    # stage exists, so a payload a crop cannot be cut from would have to be redefined the
+    # moment it is built. `utils/temporal.py` needs it too, for its change-gate.
+    image: np.ndarray
+
+    terrain: NotRequired[np.ndarray | None]
