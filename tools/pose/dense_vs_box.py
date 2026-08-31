@@ -25,6 +25,7 @@ import torch
 from PIL import Image, ImageDraw
 from scipy import ndimage
 
+from syncai_hydranet.analytics.tracker import iou_pair
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.models.hydranet import build_model
@@ -62,16 +63,6 @@ def containment(blob, box) -> float:
     inter = max(0, x1 - x0) * max(0, y1 - y0)
     area = (blob[2] - blob[0]) * (blob[3] - blob[1])
     return inter / area if area > 0 else 0.0
-
-
-def iou(a, b) -> float:
-    x0 = max(a[0], b[0])
-    y0 = max(a[1], b[1])
-    x1 = min(a[2], b[2])
-    y1 = min(a[3], b[3])
-    inter = max(0, x1 - x0) * max(0, y1 - y0)
-    ua = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
-    return inter / ua if ua > 0 else 0.0
 
 
 def sheet(
@@ -155,7 +146,7 @@ def main() -> int:
             for bb in blobs:
                 # blob is in the cropped map; boxes are in letterboxed input space
                 bl = (bb[0] + x0, bb[1] + y0, bb[2] + x0, bb[3] + y0)
-                best = max((iou(bl, bx) for bx in boxes), default=0.0)
+                best = max((iou_pair(bl, bx) for bx in boxes), default=0.0)
                 cont = max((containment(bl, bx) for bx in boxes), default=0.0)
                 src = [int((v - (x0 if i % 2 == 0 else y0)) * scale) for i, v in enumerate(bl)]
                 pad = int(0.12 * max(src[2] - src[0], src[3] - src[1]) + 8)

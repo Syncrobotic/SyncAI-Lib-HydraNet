@@ -49,7 +49,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from syncai_hydranet.analytics import events as ev  # noqa: E402
 from syncai_hydranet.analytics.journey import journeys  # noqa: E402
-from syncai_hydranet.analytics.tracker import Track  # noqa: E402
+from syncai_hydranet.analytics.tracker import Track, iou_pair  # noqa: E402
 from syncai_hydranet.analytics.world import world_frames  # noqa: E402
 from syncai_hydranet.data.video import probe  # noqa: E402
 from syncai_hydranet.geometry.camera_json import CameraFile  # noqa: E402
@@ -80,16 +80,6 @@ def as_tracks(path: Path) -> list[Track]:
             )
         )
     return out
-
-
-def iou(a: np.ndarray, b: np.ndarray) -> float:
-    x0, y0 = max(a[0], b[0]), max(a[1], b[1])
-    x1, y1 = min(a[2], b[2]), min(a[3], b[3])
-    if x0 >= x1 or y0 >= y1:
-        return 0.0
-    inter = (x1 - x0) * (y1 - y0)
-    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
-    return inter / union if union > 0 else 0.0
 
 
 def visits_of(tracks: list[Track], cam_file, zones, fps, src, min_seconds):
@@ -147,7 +137,7 @@ def purity(
             n += 1
             best, who = 0.5, None
             for gid, gb in gt_by_frame.get(f, []):
-                v = iou(b, gb)
+                v = iou_pair(b, gb)
                 if v > best:
                     best, who = v, gid
             if who is not None:
