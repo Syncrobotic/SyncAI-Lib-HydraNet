@@ -157,8 +157,21 @@ def test_the_commissioned_baseline_is_readable_and_plausible():
     This does not check they are *right*. Every one is fitted from the 1.70 m person prior
     (PLAN 7.19), so the comparison this tool runs is two estimates meeting -- which the
     tool prints in words on every run rather than leaving to be inferred from a table.
+
+    **It reads `runs/commission01/`, which is gitignored, so on a fresh checkout there is
+    nothing to read.** It asserted `len == 8` against that and turned `dev` red on
+    2026-08-30 for three Python rows -- passing on the box that made the artefacts and
+    failing everywhere else, which is the same `runs/`-dependence this repository has
+    written about, in the form where it fails instead of skipping.
+
+    The skip is scoped to *nothing at all*, not to "fewer than eight". An empty directory
+    means this test could not run; a directory holding three camera.json means the shipped
+    set has lost five, and those must not look alike. `tests/test_camera_json.py` skips on
+    the same condition and in the same words.
     """
     base = mae.commissioned()
+    if not base:
+        pytest.skip("no commissioned cameras in this checkout")
     assert len(base) == 8, "the eight shipped camera.json"
     assert mae.ANCHOR_CAMERA in base, "the only camera with a measured vfov must be there"
     for cam, m in base.items():
