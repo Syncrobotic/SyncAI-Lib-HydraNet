@@ -639,6 +639,36 @@ def main(argv: list[str] | None = None) -> None:
 
         m = onnx.load(args.output)
         onnx.checker.check_model(m)
+
+        # Simplification runs before the properties are written, so the graph that
+        # carries them is the graph that ships and `simplified` records what happened
+        # rather than what was attempted. `onnxsim` preserves `metadata_props` -- checked
+        # on 2026-08-31 against a model carrying the provenance keys, in and out -- so
+        # nothing is lost by writing them once, afterwards, instead of twice.
+        #
+        # **Every outcome says which one it was, and that is the fix.** Until 2026-08-31
+        # only success spoke. `onnxsim` missing raised into a bare `except ImportError:
+        # pass`, and a simplification its own validation refused fell through `if ok:`
+        # saying nothing -- and the unsimplified graph had already been saved, so both
+        # produced a file that looks exactly like the simplified one. The operator had to
+        # notice an absent line, and the absence had two different causes. It is the shape
+        # `98b1682` fixed one branch over, where `check_parity` returned True when
+        # onnxruntime was missing: a step that cannot run must not report like one that
+        # ran. It matters here because `onnxsim` lives in the `export` extra, so CI has it
+        # and a plain `uv sync --group dev` does not -- the same command took the silent
+        # branch on one machine and the loud one on the other.
+        try:
+            from onnxsim import simplify
+
+            candidate, ok = simplify(m)
+            if ok:
+                m, simplified = candidate, "yes"
+            else:
+                simplified = "no: onnxsim ran and refused its own result"
+        except ImportError:
+            simplified = "no: onnxsim is not installed (it is in the `export` extra)"
+        print(f"onnxsim simplification: {simplified}")
+
         # The input name carries the contract into the TensorRT engine, which does not
         # keep these properties; they are here for anyone reading the ONNX itself.
         props = {
@@ -646,6 +676,7 @@ def main(argv: list[str] | None = None) -> None:
             "input_range": "0-255" if embed else "imagenet-normalised",
             "input_layout": "NCHW",
             "channel_order": "RGB",
+            "simplified": simplified,
             **provenance,
         }
         if kept_names is not None:
@@ -656,15 +687,6 @@ def main(argv: list[str] | None = None) -> None:
             entry.key, entry.value = key, value
         onnx.save(m, args.output)
         print("ONNX check passed")
-        try:
-            from onnxsim import simplify
-
-            m, ok = simplify(m)
-            if ok:
-                onnx.save(m, args.output)
-                print("onnxsim simplification done")
-        except ImportError:
-            pass
     except ImportError:
         print("(onnx not installed, skipping check)")
 
