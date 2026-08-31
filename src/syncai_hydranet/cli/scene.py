@@ -624,6 +624,42 @@ def render_video(in_path: Path, renderer: Renderer, args) -> int:
             f"ffmpeg exited {code} while encoding {args.output}; "
             f"the file is incomplete or was never written."
         )
+    # **The record beside the render, so the figure can be audited and re-made.**
+    # `tools/commissioning/demo_gif.py` cuts a publishable gif and writes the verdict
+    # that licenses it, and it needs to know which clip the render came from, at what
+    # frame rate, and at what threshold the faces were blurred. `demo_video.py` states
+    # that in `runs/commission01/<camera>.demo_tracks.json`; this command had nowhere to
+    # say it, which is why `assets/cctv_v1.gif` was published with **no verdict at all**
+    # and why nothing in the repository records how it was made.
+    #
+    # Written beside the *render* rather than under `runs/<camera>.`, deliberately: the
+    # per-camera path is overwritten by the next render of the same camera, so a verdict
+    # naming a render whose record has since been replaced cannot be checked. A sidecar
+    # cannot be clobbered by a different render.
+    if args.output:
+        sidecar = Path(args.output).with_suffix(".render.json")
+        sidecar.write_text(
+            json.dumps(
+                {
+                    "produced_by": "syncai_hydranet.cli.scene",
+                    "args": vars(args),
+                    # The camera is the clip's directory. Every corpus path this reads is
+                    # `datasets/<corpus>/<camera>/<archive>.mp4`, and the audit needs the
+                    # camera to find the source clip again.
+                    "camera": Path(args.input).parent.name,
+                    "clip": Path(args.input).name,
+                    "fps": args.fps,
+                    # The threshold the faces were blurred at, not today's constant: an
+                    # auditor has to reconstruct the blur set THIS render applied.
+                    "blur_score_thr": BLUR_THR,
+                    "blur_faces": not args.no_blur,
+                    "frames": n,
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        print(f"  record -> {sidecar}")
     print(f"wrote {args.output or args.json} ({n} frames)")
     return 0
 
