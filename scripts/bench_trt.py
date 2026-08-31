@@ -9,10 +9,18 @@ idle GPU: a throughput number taken while anything shares the card is not a
 measurement.
 
 Method: build a serialized engine per (onnx, precision), then time enqueues with CUDA
-events around `execute_async_v3` on a dedicated stream, H2D/D2H included in a separate
-"end-to-end" figure and excluded in the "compute" figure -- the gap between the two is
-the PCIe story, which is the reason the in-graph argmax exists. Engines are cached next
-to the ONNX so re-runs skip the build.
+events around `execute_async_v3` on a dedicated stream, H2D **and D2H** included in a
+separate "end-to-end" figure and excluded in the "compute" figure -- the gap between the
+two is the PCIe story, which is the reason the in-graph argmax exists. Engines are cached
+next to the ONNX so re-runs skip the build.
+
+**D2H was missing until 2026-08-31 and the docstring claimed it was there.** Only the
+inputs were copied, so the "end-to-end" figure was engine + upload, and the outputs --
+which is where this model's PCIe cost actually is -- were never moved. That made the
+figure blind to the one thing it was cited for: `--argmax-seg` shrinks the output payload
+**9.2x** at batch 16 (296.03 MB of fp32 `terrain` logits at 16x6x640x1120 down to
+32.25 MB with a uint8 `terrain_argmax`), and the harness charged it the slower engine
+while measuring none of the saving. Read a pre-2026-08-31 `results.json` as upload-only.
 """
 
 from __future__ import annotations
@@ -95,6 +103,31 @@ def bench(plan: Path, batch: int, seconds: float) -> dict:
         if engine.get_tensor_mode(name) == trt.TensorIOMode.INPUT:
             host_in[name] = np.random.randint(0, 255, size=shape).astype(dtype)
 
+    host_out = {
+        engine.get_tensor_name(i): np.empty(
+            tuple(engine.get_tensor_shape(engine.get_tensor_name(i))),
+            dtype=trt.nptype(engine.get_tensor_dtype(engine.get_tensor_name(i))),
+        )
+        for i in range(engine.num_io_tensors)
+        if engine.get_tensor_mode(engine.get_tensor_name(i)) == trt.TensorIOMode.OUTPUT
+    }
+
+    def d2h():
+        """The half that was missing. This model's outputs dwarf its input -- at batch 16
+        the fp32 `terrain` logits alone are 275 MB against a 137 MB image -- so an
+        "end-to-end" figure without them is an upload benchmark."""
+        for name, arr in host_out.items():
+            ptr, nbytes = dev[name]
+            check(
+                cudart.cudaMemcpyAsync(
+                    arr.ctypes.data,
+                    ptr,
+                    nbytes,
+                    cudart.cudaMemcpyKind.cudaMemcpyDeviceToHost,
+                    stream,
+                )
+            )
+
     def h2d():
         for name, arr in host_in.items():
             ptr, nbytes = dev[name]
@@ -124,6 +157,8 @@ def bench(plan: Path, batch: int, seconds: float) -> dict:
             if with_copies:
                 h2d()
             ctx.execute_async_v3(stream)
+            if with_copies:
+                d2h()
             n += 1
         check(cudart.cudaEventRecord(stop, stream))
         check(cudart.cudaEventSynchronize(stop))
@@ -136,7 +171,7 @@ def bench(plan: Path, batch: int, seconds: float) -> dict:
         check(cudart.cudaFree(ptr))
     return {
         "frames_per_s_compute": round(fps_compute, 1),
-        "frames_per_s_h2d": round(fps_e2e, 1),
+        "frames_per_s_e2e": round(fps_e2e, 1),
     }
 
 
@@ -189,13 +224,13 @@ def main(argv=None) -> int:
                 "batch": batch,
                 **r,
                 "meets_target_compute": r["frames_per_s_compute"] >= TARGET_FPS,
-                "meets_target_h2d": r["frames_per_s_h2d"] >= TARGET_FPS,
+                "meets_target_e2e": r["frames_per_s_e2e"] >= TARGET_FPS,
             }
             results.append(row)
             print(
                 f"{path.name:16s} {'fp16' if fp16 else 'fp32'} b={batch:<3d} "
                 f"compute {r['frames_per_s_compute']:8.1f} f/s"
-                f"   +H2D {r['frames_per_s_h2d']:8.1f} f/s"
+                f"   +copies {r['frames_per_s_e2e']:8.1f} f/s"
             )
     (args.out / "results.json").write_text(
         json.dumps(
