@@ -600,6 +600,25 @@ order. A component with no step is not scheduled, it is assumed.
    vocabulary change silently empties `analytics/events/zones.py:346`'s default class list
    — the stock-removal alarm stops firing without an exception. Decide at step 4.
 
+29. **The serving target is bound by PCIe, and by the input rather than the output.**
+   Measured 2026-08-31 on the RTX PRO 6000 at 640x1120, fp16, from
+   `exports/pro6000_xl20260825/` (batch 16): compute clears the 1,440 f/s target, and
+   **end to end nothing comes within a third of it** — plain 1149.8 compute / 354.1 with
+   copies, `--argmax-seg` 1097.6 / 412.5.
+
+   The flag wins by 16.5%, but far less than its payload saving suggests: it takes the
+   outputs from 296.03 MB to 32.25 MB (9.2x) while the **fp32 input stays at 137 MB**, so
+   total transfer only falls 433 → 169 MB. **The remaining cost is the upload.** Two ways
+   out, neither started: a uint8 input contract (4x off the input), or keeping frames off
+   PCIe entirely via the NVDEC path §7 decision 8 already chose.
+
+   Two caveats bind these numbers. `bench_trt.py`'s end-to-end figure **never copied the
+   outputs back** until `69ede66` — it was engine + upload, so any earlier `results.json`
+   is upload-only and the flag it was cited to evaluate was the one thing it could not
+   see. And the numbers are not repeatable on a shared card: the same engine measured
+   1468 and 1149.8 compute on two runs. Both are indicative until something re-runs them
+   on an idle GPU.
+
 28. **The best terrain checkpoint in the tree is not the one anything uses.** Measured
    2026-08-31, final epoch of each run (which is what `last.pt` is), the same recipe:
 
