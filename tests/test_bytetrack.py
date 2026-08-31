@@ -19,6 +19,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from syncai_hydranet.analytics import tracker
 from syncai_hydranet.analytics.bytetrack import (
     Fragment,
     Kalman,
@@ -260,3 +261,44 @@ def test_update_accepts_the_shapes_a_decoder_hands_it(n):
     boxes = np.stack([_box(50.0 + 120.0 * i, 200.0) for i in range(n)])
     fwd.update(boxes, np.full(n, 0.9), 0)
     assert len(fwd.tracks) == n
+
+
+# --------------------------------------------------------------- the two IoUs agree
+#
+# `tracker.iou` is (N,4) x (M,4) -> (N,M); `tracker.iou_pair` is one box against one, and
+# is written out rather than wrapping the first because a pair through the vectorised form
+# costs 14x (17.8 us against 1.2 us) and its callers are loops. Two implementations of one
+# formula is the shape this repository keeps finding, so they are held equal here rather
+# than by inspection: it is the second implementation that makes the first one's callers
+# safe to move, and nothing else would notice them drifting.
+
+
+def test_the_scalar_iou_agrees_with_the_vectorised_one():
+    rng = np.random.default_rng(20260831)
+    boxes = rng.uniform(0, 400, size=(60, 2))
+    sizes = rng.uniform(1, 200, size=(60, 2))
+    xyxy = np.hstack([boxes, boxes + sizes])
+    grid = tracker.iou(xyxy, xyxy)
+    for i in range(len(xyxy)):
+        for j in range(len(xyxy)):
+            assert tracker.iou_pair(xyxy[i], xyxy[j]) == pytest.approx(grid[i, j], abs=1e-12), (
+                f"boxes {i} and {j} disagree: {tracker.iou_pair(xyxy[i], xyxy[j])} "
+                f"against the vectorised {grid[i, j]}"
+            )
+
+
+@pytest.mark.parametrize(
+    "a, b",
+    [
+        ([0, 0, 10, 10], [10, 0, 20, 10]),  # edge-touching: no area, not overlap
+        ([0, 0, 10, 10], [20, 20, 30, 30]),  # disjoint
+        ([0, 0, 10, 10], [0, 0, 10, 10]),  # identical
+        ([0, 0, 10, 10], [2, 2, 4, 4]),  # contained
+        ([0, 0, 0, 0], [0, 0, 10, 10]),  # degenerate: zero area, zero union contribution
+        ([5, 5, 5, 10], [0, 0, 10, 10]),  # degenerate: zero width
+    ],
+)
+def test_the_two_ious_agree_on_the_degenerate_boxes_too(a, b):
+    """Random boxes never produce these, and they are where two formulas usually part."""
+    pair = np.array([a], dtype=float), np.array([b], dtype=float)
+    assert tracker.iou_pair(a, b) == pytest.approx(tracker.iou(*pair)[0, 0], abs=1e-12)

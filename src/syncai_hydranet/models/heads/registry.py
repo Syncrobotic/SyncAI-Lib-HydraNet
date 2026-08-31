@@ -34,6 +34,7 @@ import torch
 
 from ..losses import FCOSLoss
 from .detection import FCOSHead
+from .pose import decode_boxes
 
 
 class Head(Protocol):
@@ -198,8 +199,6 @@ class PoseHead:
         return self.name in targets
 
     def decode_into(self, result: dict, out: dict, **_kw) -> None:
-        from .pose import decode_boxes
-
         maps = out[self.name]
         dets = result.get(self.det_name) if self.det_name else None
         decoded = []

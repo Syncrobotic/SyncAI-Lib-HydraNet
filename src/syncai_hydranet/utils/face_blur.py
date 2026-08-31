@@ -1,14 +1,10 @@
 """Blurring the faces out of a frame before it leaves the building.
 
-This lived in `tools/commissioning/demo_video.py` until 2026-08-28, when `demo_gif.py`
-needed to *audit* it -- "was this face inside a region the render blurred" -- and the only
-honest way to answer that is to call the same arithmetic rather than a copy, since a copy
-answers the question about itself. `tests/test_scripts_are_not_libraries.py` refused the
-tool-to-tool import that made, and it was right to: `tools/` is outside the wheel, outside
-the type ratchet and outside the coverage floor, and it resolves at all only because
-Python puts the entry script's directory on `sys.path`. Of everything under `tools/`, the
-code that decides whether a customer's face is published is the last thing that should
-live outside all three.
+It lives in `src/` because two callers need the **same arithmetic**: the render blurs
+with it, and `demo_gif.py` audits the result by asking "was this face inside a region the
+render blurred". A copy would answer that question about itself. Of everything this project
+has, the code that decides whether a customer's face is published is the last that should
+sit outside the wheel, the type ratchet and the coverage floor.
 
 ---------------------------------------------------------------------------
 TWO INSTRUMENTS, AND WHY NEITHER IS THE LAST WORD

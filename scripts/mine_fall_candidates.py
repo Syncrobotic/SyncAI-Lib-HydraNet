@@ -39,9 +39,8 @@ for candidate in (HERE.parent / "src", HERE / "src"):
     if candidate.is_dir():
         sys.path.insert(0, str(candidate))
 
-# The clip loop lives in the package now, not in a sibling script. It used to be imported
-# from `retail_flow.py` -- a script other scripts import is a module in the wrong place --
-# and the copy here had drifted: no lens correction, while `site_events.py` had one.
+# The clip loop is in the package, not in a sibling script: a script other scripts import
+# is a module in the wrong place, and the copies here and in `site_events.py` had drifted.
 from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
 from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
 from syncai_hydranet.analytics.events import fall_candidates  # noqa: E402
@@ -70,12 +69,10 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--min-hits", type=int, default=3)
     ap.add_argument("--max-age", type=int, default=5)
     ap.add_argument("--iou", type=float, default=0.3)
-    # The lens, and it was missing until 2026-08-19. This script tracked on distorted
-    # boxes while `site_events.py` ran the same loop on undistorted ones; the tracker
-    # associates on IoU, so the two could link observations differently on the same clip.
-    # `0.0` reproduces the old behaviour exactly, for comparing candidate sets across the
-    # change. The default is Taichung-cam01's tile-grid fit and is an assumption on the
-    # other 47 cameras -- but the value it replaces was an unstated assumption of zero.
+    # The tracker associates on IoU, so tracking distorted boxes links observations
+    # differently from tracking undistorted ones. The default is Taichung-cam01's
+    # tile-grid fit and is an assumption on the other 47 cameras; `0.0` is the
+    # no-correction arm, for comparing candidate sets across the change.
     ap.add_argument("--k1", type=float, default=-0.225)
     # Deliberately more permissive than the library default of 1.5 s. This is a mining
     # pass: a candidate costs a human ten seconds to dismiss and a missed one costs the
@@ -128,12 +125,10 @@ def border_contact(track, frame_start: int, frame_end: int, w: int, h: int, pad:
 def person_tracks(clip: str, model, size, device, args) -> tuple[list, int, int]:
     """Person tracks for one clip, plus the two denominators.
 
-    **`k1` is passed now and was not before.** This function used to hold its own copy of
-    the loop with no lens correction, while `site_events.py` held the same loop with one.
-    The tracker associates on IoU, so that divergence could change which observations get
-    linked -- and it is this script that produced the 48 candidate spans. The shared loop
-    is `analytics/clip_tracks.track_clip`; it has no default for `k1`, which is what stops
-    the two from drifting apart again.
+    The loop is `analytics/clip_tracks.track_clip` and it has **no default for `k1`**,
+    which is what stops this script and `site_events.py` from silently tracking on
+    differently-corrected boxes -- the tracker associates on IoU, so that divergence
+    changes which observations get linked.
     """
     tracker = Tracker(iou_threshold=args.iou, max_age=args.max_age, min_hits=args.min_hits)
     out = track_clip(

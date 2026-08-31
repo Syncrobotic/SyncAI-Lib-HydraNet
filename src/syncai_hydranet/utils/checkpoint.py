@@ -82,16 +82,12 @@ def load_checkpoint(path: str | Path, map_location: str = "cpu") -> dict:
 def select_weights(ckpt: dict, prefer: str = "ema") -> dict:
     """Choose between a checkpoint's EMA and raw weights.
 
-    Two rules used to coexist. hydranet-eval and the ONNX export honoured a --weights
-    flag; hydranet-infer-image, hydranet-infer-video, hydranet-scene and annotation_batch
-    hardcoded `ckpt.get("ema") or ckpt["model"]`, always taking the average with no way
-    to ask for anything else.
-
-    That is not a style difference. `git show b7457c2:docs/TRAINING_GUIDE.md` §5 recorded a run
-    scoring 0.16 mIoU on EMA weights and 0.95 on the raw ones from the same training,
-    because the average starts at the random initialisation and takes thousands of
-    steps to forget it. On a short run the two sets of weights are different models,
-    and the tools that render pictures were the ones with no way to say which.
+    **Every caller goes through this, and the reason is that the two sets are not two
+    styles of the same model.** `git show b7457c2:docs/TRAINING_GUIDE.md` §5 recorded a run
+    scoring 0.16 mIoU on EMA weights and 0.95 on the raw ones from the same training: the
+    average starts at the random initialisation and takes thousands of steps to forget it,
+    so on a short run they are different models. A tool that hardcodes
+    `ckpt.get("ema") or ckpt["model"]` has no way to say which one it rendered.
     """
     if prefer not in ("ema", "model"):
         raise ValueError(f"prefer must be 'ema' or 'model', not {prefer!r}")

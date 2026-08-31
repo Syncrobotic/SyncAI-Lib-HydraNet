@@ -1,87 +1,28 @@
 name: Release (main)
 
-# Renamed from `release-please.yml` on 2026-08-30, and the reason is that the old name
-# cost someone a search. release-please was removed from this repository on 2026-08-29;
-# nothing here runs it, and `name:` has been `Release (main)` throughout. So the file was
-# named after a tool that no longer exists while the job it defines is called something
-# else -- and when `v0.1.0` was finally cut, the first question asked was why
-# "release-please" had not triggered. It had. It is this, under its own name.
-#
-# What keeps the old name legitimately: `release-please-config.json`, the
-# `x-release-please-version` annotation in `__init__.py` and `CITATION.cff`, and
-# `tests/test_version_agreement.py`, which is the only thing holding the citation's
-# version to the package's. Those are the tool's own artefacts and are not renamed here.
-#
-# Releasing, for the promotion flow feat/* → dev → stage → main. `ci.yml` gates
-# feat→dev and `ci-promote.yml` gates dev→stage; this turns an arrival on `main` into a
+# Releasing, for the promotion flow feat/* -> dev -> stage -> main. `ci.yml` gates
+# feat->dev and `ci-promote.yml` gates dev->stage; this turns an arrival on `main` into a
 # tag and a GitHub Release, and does nothing anywhere else.
 #
-# **`dev` carries no version and nothing here runs on it.** Until 2026-08-29 a
-# release-please job ran on every push to dev and kept an open PR proposing the next
-# version number. `dev` is where work lands; a version number is a property of what has
-# been released, so proposing one there was wrong, and it cost a three-minute workflow on
-# every single push to maintain a PR nobody was going to merge. Removed on the user's
-# instruction: a release is triggered by an arrival on `main`, and by nothing else.
+# release-please opens a `chore(main): release X.Y.Z` PR against `main` carrying the bump
+# and the CHANGELOG entry, and merging it is the act of deciding to release. That arrival
+# carries a version with no tag, which is what the `release` job below exists for.
 #
-# What that automation had produced by the time it was removed, all of it measured: zero
-# GitHub Releases, zero tags, no CHANGELOG.md in the tree at all, and `__version__` still
-# at the 0.1.0 it started at. Its one artefact was PR #9, open since 2026-08-28, whose own
-# CI had been queued four times and executed zero times because a bot's PR needs a
-# maintainer to approve its workflows and nobody had.
+# `release-please-config.json` and `.release-please-manifest.json` are passed to the
+# action below, and are also what `tests/test_version_agreement.py` reads to check that
+# `CITATION.cff` is listed among their `extra-files` -- the only thing holding the
+# citation's version to the package's.
 #
-# So the version is now set the way every other change to this repository is set: by a
-# commit that edits `src/syncai_hydranet/__init__.py`, which rides feat/* → dev → stage →
-# main under the same gates as anything else. When it arrives here carrying a version that
-# has no tag, that is a release -- tag it, attach the wheel and sdist, and take the notes
-# from CHANGELOG.md if a section for that version exists.
+# **`main` and `stage` resolve to the same tree and not the same commit, and nothing
+# asserts it.** Promotions go through GitHub PRs, and a PR merge writes a merge commit
+# onto the target, so `main` carries commits `stage` does not. Those merges carry no
+# content of their own, so what is tagged is the tree that was reviewed, reached by a
+# different commit. Restoring the strict form means promoting by `git merge --ff-only`
+# from a clone and re-aligning two shared branches; that has not been done.
 #
-# **`release-please-config.json` and `.release-please-manifest.json` are now read by
-# nothing.** They are kept rather than deleted because `tests/test_version_agreement.py`
-# checks that `CITATION.cff` is listed among their `extra-files`, and that check is the
-# only thing keeping the citation's version in step with the package's. Removing the
-# config means deciding what keeps those two in step instead, which is a separate change
-# from this one.
-#
-# The tag therefore lands on `main`, which is what RELEASE.md defined as released
-# (that document was deleted in `26dc519`; `git show b7457c2:docs/RELEASE.md` for it).
-#
-# **What promotion actually does, measured 2026-08-29, because this comment used to say
-# something else.** It claimed no branch ever gains a commit the branch below it does not
-# have, and that promotion being fast-forward makes the tagged commit the same git object
-# that was reviewed. Both were false, and had been through all four promotions to date:
-# every one was merged through a GitHub PR, and a PR merge writes a merge commit onto the
-# target. `stage` carries `8170796` and `b62ca2c` that `dev` does not; `main` carries
-# `096e912` and `27ef617` that `stage` does not.
-#
-# The two hops fail at different moments, which is worth stating precisely because the
-# obvious check reports the wrong one as healthy:
-#
-#     $ git checkout stage && git merge --ff-only origin/dev
-#     fatal: Not possible to fast-forward, aborting.
-#
-#     $ git checkout main && git merge --ff-only origin/stage
-#     Already up to date.
-#
-# `main` reads clean only because it was built by merging `stage` into it, so `stage` is
-# an ancestor and there is nothing to fast-forward *to*. `main` is not an ancestor of
-# `stage`, so that hop aborts the same way the moment `stage` advances -- at the next
-# promotion, not at the next check.
-#
-# What survives, and it is the part that matters: `main` and `stage` resolve to the **same
-# tree** (`cbc632f4`). Those four merge commits carry no content of their own, so what is
-# tagged and released is what was reviewed on dev and accepted on stage -- an identical
-# tree reached by a different commit, rather than the identical commit.
-#
-# **Nothing asserts any of this.** The invariant lived only in this comment, which is how
-# it was broken four times without anyone noticing, and how the comment went on describing
-# a repository that had stopped existing. Restoring the strict form would mean promoting by
-# `git merge --ff-only` from a clone and pushing, never through a PR -- and re-aligning
-# `stage` and `main` first, which rewrites two shared branches. That has not been done and
-# is not implied by anything here.
-#
-# Model releases are NOT this. Weights are versioned by `scripts/release_bundle.sh`
-# into an immutable checksummed bundle, because `runs/` is not in git and a commit on
-# main says nothing about which checkpoint a robot is running. See RELEASE.md §2.
+# Model releases are NOT this. Weights are versioned by `scripts/release_bundle.sh` into
+# an immutable checksummed bundle, because `runs/` is not in git and a commit on `main`
+# says nothing about which checkpoint a robot is running.
 on:
   push:
     branches: [main]
@@ -105,6 +46,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # release-please proposes the version; the job below turns an arrival carrying an
+  # untagged one into a tag and a release. Two jobs because they answer two questions:
+  # "what should the next version be" is a function of the commits, and "is this a
+  # release" is a function of whether that version already has a tag.
+  #
+  # **`target-branch: main`, and the release PR lands on `main` directly.** That is the
+  # one thing here that does not ride feat/* → dev → stage → main, and it is deliberate:
+  # a version bump and a CHANGELOG entry are metadata *about* a release, not work, and
+  # they cannot be written before the thing they describe has arrived. `main`'s
+  # `__version__` therefore runs ahead of `dev`'s between releases. Nothing conflicts on
+  # the next promotion -- git keeps `main`'s line, since `stage` never touched it -- and
+  # `test_version_agreement.py` holds `__init__.py` and `CITATION.cff` to each other on
+  # whichever branch it runs, both of which release-please updates together.
+  #
+  # **The base must be a branch with no required status check.** A PR opened with
+  # `secrets.GITHUB_TOKEN` does not trigger workflows -- GitHub's recursion guard -- so on
+  # a protected base the release PR would be permanently blocked on a check that can never
+  # run. `dev` requires `CI success`; `main` requires none, so the release PR merges on
+  # inspection, which is what a version bump should be reviewed by anyway.
+  release-pr:
+    name: Version PR (main)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # push the release PR's branch
+      pull-requests: write
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target-branch: main
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
   release:
     name: Tag & publish (main)
     if: |
@@ -172,15 +148,11 @@ jobs:
       # CHANGELOG.md is grouped by the Conventional Commit types this project
       # enforces, and a raw commit list would discard that grouping.
       #
-      # **The file is optional, and today it does not exist.** Removing release-please
-      # removed the only thing that wrote CHANGELOG.md, and the header of this workflow
-      # records that absence as measured -- so the fallback below is not a defensive
-      # nicety, it is the path every release takes until somebody writes one by hand.
-      # Reading the file unconditionally raised `FileNotFoundError` and failed the job
-      # *before* the fallback could run, which was worse than a missing section in
-      # exactly the way that matters: the tag and release steps below never executed, so
-      # the version stayed untagged, so the next push to `main` took the same branch and
-      # failed identically. A release that cannot be cut cannot un-break itself.
+      # **The file is optional and is not in the tree yet**; release-please writes it on
+      # the first release PR. Reading it unconditionally raised `FileNotFoundError` before
+      # the fallback could run, and the tag and release steps are `if release == 'new'`
+      # and sit after this one -- so the version stayed untagged and the next push failed
+      # identically. A release that cannot be cut cannot un-break itself.
       - name: Extract the CHANGELOG section
         if: steps.v.outputs.release == 'new'
         run: |

@@ -52,9 +52,15 @@ costing nothing at runtime -- so it can be adopted incrementally and by parts ra
 in one commit that touches every caller.
 """
 
-from __future__ import annotations
-
-from typing import TypedDict
+# **No `from __future__ import annotations` in this module, and that is load-bearing.**
+# It makes every annotation a string, and `TypedDict` does not resolve strings at class
+# creation -- so `NotRequired[...]` becomes invisible and the key it marks comes out
+# **required**. Measured here on 2026-08-31: with the future import, `StageFrame` reported
+# seven required keys and none optional; without it, six and `terrain`. Nothing else in
+# this file needs it -- `np.ndarray | None` is a runtime-valid expression on the 3.11
+# floor -- and `test_stage_contract.py` holds the resulting key sets, which is the check
+# that would have caught the mistake had it existed one revision earlier.
+from typing import NotRequired, TypedDict
 
 import numpy as np
 
@@ -105,24 +111,7 @@ class TerrainFrame(FrameRef, total=False):
     image: np.ndarray  # HxWx3 uint8 RGB
 
 
-class _StageFrameRequired(BoxFrame):
-    """Split from `StageFrame` only to mark one key optional on Python 3.10.
-
-    `NotRequired` is 3.11+, and this project's venv is 3.10 -- it was tried first and
-    fails at *import*, which `ty_ratchet.sh` does not catch because a type checker checks
-    types rather than importing the module. Worth the two extra lines rather than a
-    `typing_extensions` import in `src/`, which would put a dependency question in the way
-    of a two-key distinction.
-    """
-
-    # Required here and optional in `TerrainFrame`, deliberately. A full first-stage
-    # payload can always supply the image and the crop encoder is the whole reason this
-    # stage exists, so a payload a crop cannot be cut from would have to be redefined the
-    # moment it is built. `utils/temporal.py` needs it too, for its change-gate.
-    image: np.ndarray
-
-
-class StageFrame(_StageFrameRequired, total=False):
+class StageFrame(BoxFrame):
     """One frame's worth of first-stage output, as the second stage needs it.
 
     Deliberately **not** `HydraNet.predict`'s dict. That one is keyed by head name and
@@ -135,8 +124,7 @@ class StageFrame(_StageFrameRequired, total=False):
     across the module that declares it: `zone_stock_counts` reads five of its six required
     keys and never `image`; `reach_to_shelf_events` reads two, of which only
     `frame_index` is required here; and the only producer of a real payload
-    (`scripts/pose_pilot.py`, since deleted in `500cdd2`) built `{frame_index, terrain}`,
-    which satisfies none of it.
+    built `{frame_index, terrain}`, which satisfies none of it.
     A contract that no consumer needs in full and no producer can supply is not a
     contract -- it is a comment that type-checks, and annotating a signature with it would
     have made a working caller an error.
@@ -148,4 +136,10 @@ class StageFrame(_StageFrameRequired, total=False):
     not lying about the rest.
     """
 
-    terrain: np.ndarray | None
+    # Required here and optional in `TerrainFrame`, deliberately. A full first-stage
+    # payload can always supply the image and the crop encoder is the whole reason this
+    # stage exists, so a payload a crop cannot be cut from would have to be redefined the
+    # moment it is built. `utils/temporal.py` needs it too, for its change-gate.
+    image: np.ndarray
+
+    terrain: NotRequired[np.ndarray | None]

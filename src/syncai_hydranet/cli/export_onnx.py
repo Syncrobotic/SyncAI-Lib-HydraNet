@@ -352,15 +352,11 @@ def check_parity(wrapper, dummy, path: str, out_names: list[str], tol: float = 1
     mismatch on the robot, which is the other classic deployment failure; for that, feed a
     real frame through both paths.
 
-    **A missing onnxruntime raises rather than returning True.** This function used to
-    print a note and report a pass, so a skipped acceptance gate and a passed one left
-    the process with the same exit status -- and `--check-parity` calls itself "the
-    deployment acceptance gate" in its own help text. CI never saw it because
-    `ci.yml` installs `--extra export`; the box that would not have it is the one an
-    engine is built on, which is exactly where the gate is worth having. A caller who
-    did not ask for the check is unaffected: `main` only calls this under
-    `--check-parity`, so asking for a gate and being told the gate cannot run is the
-    thing being reported.
+    **A missing onnxruntime raises rather than returning True**, so a skipped acceptance
+    gate and a passed one do not leave the process with the same exit status. CI installs
+    `--extra export` and always has it; the box that would not is the one an engine is
+    built on, which is exactly where the gate is worth having. A caller who did not ask
+    for the check is unaffected -- `main` only calls this under `--check-parity`.
     """
     try:
         import onnxruntime as ort
@@ -639,6 +635,32 @@ def main(argv: list[str] | None = None) -> None:
 
         m = onnx.load(args.output)
         onnx.checker.check_model(m)
+
+        # Simplification runs before the properties are written, so the graph that
+        # carries them is the graph that ships and `simplified` records what happened
+        # rather than what was attempted. `onnxsim` preserves `metadata_props` -- checked
+        # on 2026-08-31 against a model carrying the provenance keys, in and out -- so
+        # nothing is lost by writing them once, afterwards, instead of twice.
+        #
+        # **Every outcome says which one it was.** `onnxsim` can be absent, or present and
+        # refuse the simplification, and the unsimplified graph is already saved either
+        # way -- so all three produce a file that looks alike, and only a named outcome
+        # tells them apart. It matters because `onnxsim` lives in the `export` extra: CI
+        # has it and a plain `uv sync --group dev` does not, so the same command takes
+        # different branches on two machines. A step that cannot run must not report like
+        # one that ran.
+        try:
+            from onnxsim import simplify
+
+            candidate, ok = simplify(m)
+            if ok:
+                m, simplified = candidate, "yes"
+            else:
+                simplified = "no: onnxsim ran and refused its own result"
+        except ImportError:
+            simplified = "no: onnxsim is not installed (it is in the `export` extra)"
+        print(f"onnxsim simplification: {simplified}")
+
         # The input name carries the contract into the TensorRT engine, which does not
         # keep these properties; they are here for anyone reading the ONNX itself.
         props = {
@@ -646,6 +668,7 @@ def main(argv: list[str] | None = None) -> None:
             "input_range": "0-255" if embed else "imagenet-normalised",
             "input_layout": "NCHW",
             "channel_order": "RGB",
+            "simplified": simplified,
             **provenance,
         }
         if kept_names is not None:
@@ -656,15 +679,6 @@ def main(argv: list[str] | None = None) -> None:
             entry.key, entry.value = key, value
         onnx.save(m, args.output)
         print("ONNX check passed")
-        try:
-            from onnxsim import simplify
-
-            m, ok = simplify(m)
-            if ok:
-                onnx.save(m, args.output)
-                print("onnxsim simplification done")
-        except ImportError:
-            pass
     except ImportError:
         print("(onnx not installed, skipping check)")
 

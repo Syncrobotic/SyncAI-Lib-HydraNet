@@ -8,6 +8,8 @@ from typing import Any
 
 import yaml
 
+from .config_schema import check_config
+
 
 class Config(dict):
     """A dict that also supports attribute access, e.g. ``cfg.model.backbone.name``."""
@@ -193,7 +195,5 @@ def load_config(
         cfg.set_path(key.strip(), val.strip())
     _drop_disabled_heads(cfg)
     if validate:
-        from .config_schema import check_config
-
         check_config(cfg)
     return cfg

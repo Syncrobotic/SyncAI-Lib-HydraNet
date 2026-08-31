@@ -422,11 +422,10 @@ def main() -> int:
     checks = {args.frames // 8, args.frames // 2, args.frames - 1}
     tmp = dev / f"_demo_panel_{camera}_{os.getpid()}.png"
     crop = None
-    # `scene_mesh.height_caption`, not a second copy of it. This file used to build its
-    # own and print it under a hardcoded "measured p85:", so when the estimator became
-    # per-class on 2026-08-28 the static render's caption followed and this one did not --
-    # it went on labelling p99 numbers as p85 on every frame of a three-minute video.
-    # `tests/test_scene_mesh_caption.py` covers the function; it never covered the copy.
+    # `scene_mesh.height_caption`, not a second copy of it. A copy here once went on
+    # labelling p99 numbers as "measured p85" for a whole video after the estimator became
+    # per-class, because `tests/test_scene_mesh_caption.py` covers the function and could
+    # not cover the copy.
     header = scene_mesh.height_caption(heights)
     # A third header line, and only when there is one. This panel crops the render's own
     # caption away, so passing `shapes` to `render` would not reach the figure -- and the

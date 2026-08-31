@@ -20,6 +20,8 @@ from torch.utils.data import Dataset
 
 from . import label_maps
 from .label_maps_retail_security import get_det_vocab
+from .nyu_depth import NyuDepthDataset, RenderedDepthDataset
+from .pose_keypoints import PoseKeypointsDataset
 from .transforms import GEOM_IDENTITY, Sample, build_transforms
 
 IMG_EXTS = {".png", ".jpg", ".jpeg", ".bmp"}
@@ -425,8 +427,6 @@ def build_dataset(
             det_vocab=dcfg.get("det_vocab"),
         )
     if dcfg["type"] == "rendered_depth":
-        from .nyu_depth import RenderedDepthDataset
-
         return RenderedDepthDataset(
             dcfg["root"],
             folder,
@@ -437,10 +437,6 @@ def build_dataset(
             max_depth=dcfg.get("max_depth", 10.0),
         )
     if dcfg["type"] == "nyu_depth":
-        # Imported here rather than at module scope so `import ...data.datasets` stays
-        # free of the h5py dependency for every run that is not NYUv2.
-        from .nyu_depth import NyuDepthDataset
-
         return NyuDepthDataset(
             dcfg["root"],
             folder,
@@ -451,8 +447,6 @@ def build_dataset(
             max_depth=dcfg.get("max_depth", 10.0),
         )
     if dcfg["type"] == "pose_keypoints":
-        from .pose_keypoints import PoseKeypointsDataset
-
         return PoseKeypointsDataset(
             dcfg["root"],
             folder,
