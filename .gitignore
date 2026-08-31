@@ -62,7 +62,6 @@ exports/
 # both directions; `tests/test_figures_are_audited.py` holds the figures to their verdicts.
 assets/*
 assets/dev/
-!assets/cctv_v1.gif
 !assets/cctv_v2.audit.json
 !assets/cctv_v2.gif
 !assets/demo_Kaohsiung-cam04.audit.json

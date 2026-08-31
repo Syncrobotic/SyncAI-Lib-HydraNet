@@ -600,6 +600,32 @@ order. A component with no step is not scheduled, it is assumed.
    vocabulary change silently empties `analytics/events/zones.py:346`'s default class list
    — the stock-removal alarm stops firing without an exception. Decide at step 4.
 
+28. **The best terrain checkpoint in the tree is not the one anything uses.** Measured
+   2026-08-31, final epoch of each run (which is what `last.pt` is), the same recipe:
+
+   | metric | `runs/…b03_cw_xl` (the default) | `runs/…b03_cw_xl-20260825-162131` |
+   |---|---|---|
+   | `terrain_mIoU/site_seg03` | 0.5652 | **0.6254** |
+   | `terrain_mIoU/site_seg` | 0.5658 | **0.6178** |
+   | `detection_mAP50/site_boxes03` | 0.3020 | **0.3356** |
+   | `terrain_mIoU/ade20k` | **0.7255** | 0.7043 |
+   | `detection_mAP/coco_person` | **0.2103** | 0.2022 |
+
+   Better on every **site** metric, slightly worse on the two web-dataset ones. Nothing
+   points at it: `stable_infer.py`, `onboard_camera.py`, `demo_video.py`, `demo_gif.py`,
+   `flicker_baseline.py` and `serve_pilot.py` all name the default run, and **both README
+   figures were drawn with it**. What the gap costs is visible rather than abstract — on
+   `dingpu-1f/test1` the default's `best.pt` labels a whole stone wall `floor` and the
+   dated run's `last.pt` does not (`assets/dev/dingpu/test1_floor_mask_two_checkpoints.png`,
+   floor share 0.561 vs 0.337, IoU 0.590).
+
+   Two things to settle before promoting, because promotion re-cuts every published
+   figure and re-runs the fleet: whether the dated run was deliberately not promoted, and
+   whether the two web-metric regressions matter for anything shipped. **Deferred by the
+   user on 2026-08-31 until there is more information.** Note also that the dated run's
+   `selection.json` names `terrain_mIoU/site_seg03` as its primary metric but records
+   0.7030, which is that run's best plain `terrain_mIoU`; its `site_seg03` best is 0.6681.
+
 5. **Retail dashboard surface unscoped** — the numbers fall out of L1 free; what a store
    manager opens, at what cadence, is a product question. Blocks nothing before step 6.
    One modelling gap hides inside it: **store-level footfall needs cross-camera dedup**

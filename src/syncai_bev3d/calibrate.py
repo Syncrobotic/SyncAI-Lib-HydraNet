@@ -281,7 +281,36 @@ def fit_k1(
     is still improving where the search stopped, which is what every earlier camera fit in
     this project did, and it should be read as "no answer" rather than as the endpoint. The
     cam01 fit is trustworthy because `k1 = -0.225` sits in the interior.
+
+    **The range may not reach `|k1| = 1`, and widening it to chase a boundary hit is the
+    one thing never to do here.** The division model is `r_u = r_d / (1 + k1 r_d^2)` with
+    `r` normalised so the image corner is `r_d = 1`, so its singularity `1/sqrt(-k1)` moves
+    *inside the frame* once `|k1| >= 1`. Past that a few points map to enormous radii,
+    `_renormalise` rescales the set to a fixed RMS radius to compensate, and everything else
+    collapses into a dense blob at the centre -- which is precisely what `concentration`
+    rewards. The objective stops scoring straightness and starts scoring collapse, and the
+    false peak it grows sits at about **-1.14**.
+
+    Measured 2026-08-31: on a `(-1.2, 0.3)` sweep a **full-frame, centred, exactly
+    zero-distortion grid** returns `k1 = -1.140` and `is_interior_maximum` reports True,
+    because that peak lands about four steps inside the bound rather than on it. So the
+    refusal has to be here, on the range, rather than in the interior check.
+
+    Inside `|k1| < 1` the interior check is enough: at the widest legal range a
+    zero-distortion grid runs to the bound and is correctly refused. But that also means a
+    genuine lens beyond about -0.6 cannot be measured by this objective at all -- the six
+    `dingpu-1f` cameras all run to -0.6 on real floor points while their footprints return
+    ~0 on the control, so those lenses are past what this can reach. **Before believing any
+    sweep, run the same footprint with a synthetic straight grid and require ~0**; that flat
+    control is what stops an artefact reading as a verdict.
     """
+    if not all(abs(float(k)) < 1.0 for k in k_range):
+        raise ValueError(
+            f"k_range={k_range} reaches |k1| >= 1, where the division model's singularity "
+            "is inside the frame and this objective rewards collapse rather than "
+            "straightness (a zero-distortion grid fits -1.14 there). A boundary hit at a "
+            "legal range means no answer, not a wider search."
+        )
     h, w = shape
     centre = (w / 2.0, h / 2.0)
     radius = math.hypot(h, w) / 2.0

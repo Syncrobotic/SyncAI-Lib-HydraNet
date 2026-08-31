@@ -1,21 +1,23 @@
 """A renderer that can put a shop floor in `assets/` blurs faces, checked rather than assumed.
 
-`assets/cctv_v1.gif` is a figure of Tao-Hsin-cam03, tracked and published, with **no audit
-verdict and no blur anywhere in it**. Its own commit message says the camera was chosen
-partly because it "has a person walking through it".
+`assets/cctv_v1.gif` was a figure of Tao-Hsin-cam03, tracked and published, with **no audit
+verdict and no blur anywhere in it**. Its commit message says the camera was chosen partly
+because it "has a person walking through it", and it had one: a shopper crossing the aisle
+away from the lens for the second half of the cut, unblurred. It was deleted on 2026-08-31.
 
 **The defect was never that file.** It was drawn by `cli/scene.py`, which had no blur stage
 at all, while its two sibling renderers -- `demo_video.py` and `heads_video.py` -- blur by
-construction. Deleting the figure would have fixed one file and left the tool able to make
-another one tomorrow. So the fix is the stage, and this is what stops it being removed
-again.
+construction. Deleting the figure *instead of* fixing that would have left the tool able to
+make another one tomorrow, so the stage came first and the figure went afterwards. This
+test is what keeps the stage.
 
 It also closes the gap two green tests left open between them. `test_assets_allowlist.py`
 holds the allowlist and the tracked set to each other, and `test_figures_are_audited.py`
-holds `assets/demo_*.gif` to their verdicts. `cctv_v1.gif` satisfies the first and is
-outside the second's enumeration, so both pass while it sits unaudited in the seam. This
-test asks a different question -- not "is this file audited" but "could this tool have
-produced it" -- and the answer has to be no.
+holds `assets/demo_*.gif` to their verdicts. A figure under any other name satisfies the
+first and falls outside the second's enumeration, so both stay green while it sits
+unaudited in the seam -- which is where `cctv_v1.gif` sat. This test asks a different
+question -- not "is this file audited" but "could this tool have produced it" -- and the
+answer has to be no.
 
 **`scene_overlay.py` is deliberately not in the list, and saying so is the point.** It
 renders the same cameras and does not blur, but everything it writes lands under
@@ -73,7 +75,7 @@ def test_a_publishing_renderer_imports_the_blur(rel):
     assert path.is_file(), f"{rel} has moved; this guard now checks nothing"
     assert any(BLUR_MODULE in m for m in _imports(path)), (
         f"{rel} renders store footage and does not import `{BLUR_MODULE}`. "
-        "That is what produced assets/cctv_v1.gif: a published figure of a customer's "
+        "That is how assets/cctv_v1.gif came to be published: a figure of a customer's "
         "shop floor, unblurred, with no audit verdict, from a renderer that had no blur "
         "stage. If this renderer genuinely cannot see a person, say so here and remove it "
         "from the list -- do not add a local blur."

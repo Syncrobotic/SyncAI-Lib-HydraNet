@@ -113,6 +113,50 @@ def test_the_objective_does_not_reward_shrinking_everything():
     assert abs(recovered) < 0.05, "an undistorted grid must not fit a large k1"
 
 
+def test_the_range_may_not_reach_the_models_singularity():
+    """**Bug three, and the one the interior check could not see.**
+
+    `is_interior_maximum` exists to refuse a boundary hit, and the natural response to one
+    is to widen the search. That is the trap: past `|k1| = 1` the division model's
+    singularity is inside the frame, `_renormalise` answers the resulting huge radii by
+    squashing everything else into a blob, and `concentration` scores the blob. The false
+    peak lands a few steps inside the bound, so the interior check calls it a measurement.
+    """
+    with pytest.raises(ValueError, match="singularity"):
+        fit_k1(_grid(), (H, W), k_range=(-1.2, 0.3), steps=101)
+    with pytest.raises(ValueError, match="singularity"):
+        fit_k1(_grid(), (H, W), k_range=(-2.0, 0.3), steps=155)
+    fit_k1(_grid(), (H, W), k_range=(-0.99, 0.3), steps=130)  # legal, must not raise
+
+
+@pytest.mark.parametrize(
+    ("x0", "x1", "y0", "y1", "why"),
+    [
+        (120, W - 120, 80, H - 80, "full frame"),
+        (0, W, H * 0.4, H, "lower 60%, as a ceiling camera's floor mask is"),
+        (W * 0.45, W, H * 0.45, H, "one quadrant, the most restricted footprint"),
+    ],
+)
+def test_a_straight_grid_fits_no_lens_whatever_its_footprint(x0, x1, y0, y1, why):
+    """The flat control, at the widest legal range.
+
+    Every real fit in this project is made on a floor mask, which never contains the image
+    centre of a ceiling camera, so "does this footprint fit ~0 with no lens present" is a
+    question every caller has to be able to ask. Where the answer is not ~0 the sweep is
+    reporting its own geometry: on `(-0.95, 0.3)` the quadrant already runs to -0.950 while
+    the full frame still returns -0.020, which is how much earlier a restricted footprint
+    gives way.
+    """
+    pts = []
+    for xx in np.linspace(x0, x1, 32):
+        pts += [(xx, y) for y in np.linspace(y0, y1, 400)]
+    for yy in np.linspace(y0, y1, 18):
+        pts += [(x, yy) for x in np.linspace(x0, x1, 600)]
+    recovered, sweep = fit_k1(np.array(pts, float), (H, W))
+    assert abs(recovered) < 0.05, f"{why}: a straight grid fit k1={recovered:+.3f}"
+    assert is_interior_maximum(sweep), why
+
+
 def test_concentration_is_measured_per_orientation():
     """**Bug two.** A floor grid has two line directions, so only 2 of 180 theta rows carry
     any straightness signal; the other 178 are smeared whatever the lens does. Scoring the
