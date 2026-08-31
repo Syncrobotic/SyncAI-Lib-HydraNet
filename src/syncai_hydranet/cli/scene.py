@@ -132,13 +132,14 @@ def blur_people(base: Image.Image, model, device, x, region, det_names) -> int:
     **`cli/scene.py` published a customer's shop floor with no blur stage at all until
     2026-08-30.** Its two sibling renderers, `tools/commissioning/demo_video.py` and
     `heads_video.py`, both blur by construction; this one draws the same frames from the
-    same cameras and did not. `assets/cctv_v1.gif` is what that produced -- a figure of
-    Tao-Hsin-cam03 whose own commit message says it was chosen partly because it "has a
-    person walking through it", published unblurred and with no audit verdict.
+    same cameras and did not. `assets/cctv_v1.gif` was what that produced -- a figure of
+    Tao-Hsin-cam03 whose commit message says it was chosen partly because it "has a person
+    walking through it", published unblurred and with no audit verdict, and deleted on
+    2026-08-31 once this stage existed.
 
     So the defect was never that one file: it was that a renderer able to write into
-    `assets/` had no blur, and deleting the figure would have left the tool able to make
-    another one.
+    `assets/` had no blur, and deleting the figure *instead of* adding it would have left
+    the tool able to make another one.
 
     A **second forward pass** at `BLUR_THR`, rather than lowering the one `compose`
     already makes. Sharing it -- which is what `demo_video.py` does, and correctly, for a
@@ -348,7 +349,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--max-frames", type=int, default=0, help="0 means all")
     # Default ON, and the flag exists to be refused rather than to be convenient: this
     # CLI reads store footage, and CONTRIBUTING's assets allowlist says a frame of a
-    # customer's shop floor cannot be un-published. `assets/cctv_v1.gif` is what its
+    # customer's shop floor cannot be un-published. `assets/cctv_v1.gif` was what its
     # absence produced.
     ap.add_argument(
         "--no-blur",
