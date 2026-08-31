@@ -33,9 +33,10 @@ and when it was finally checked against the code, "the contract was wrong, not m
 unadopted". So `world_frame` below is not a convenience -- it is the evidence that the
 keys are the keys something can actually fill, and the tests read the type off it.
 
-What this still is not: **adopted**. One producer, no consumer yet. `dwell` and
+What this still is not: **adopted everywhere**. `analytics/journey.py` consumes it, and
+`scripts/site_journeys.py` and `scripts/zone_dwell.py` through it; `dwell` and
 `events/zones.py` take `Track` and will keep taking `Track` until someone measures that
-moving them changes no number. That is a separate change and it is not this one.
+moving them changes no number.
 
 ---------------------------------------------------------------------------
 THREE DECISIONS WORTH THE LINES

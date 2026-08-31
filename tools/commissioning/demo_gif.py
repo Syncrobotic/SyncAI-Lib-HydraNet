@@ -3,11 +3,9 @@
 
     uv run python tools/commissioning/demo_gif.py Kaohsiung-cam04
 
-`assets/demo_Taichung-cam10.gif` was made by hand. That is the same shape as the defect
-`bddec6c` fixed a few hours earlier -- the previous README figure had been *blurred* by
-hand and no one could reproduce it -- and it survived only because the blur was the half
-somebody noticed. A figure of a customer's shop floor that cannot be re-made is a figure
-nobody can re-check when the pipeline behind it moves, which it did twice on 2026-08-28.
+**A figure of a customer's shop floor that cannot be re-made is a figure nobody can
+re-check when the pipeline behind it moves.** Both README figures were once cut by hand,
+and the blur on one of them was applied by hand too.
 
 ---------------------------------------------------------------------------
 THE CHECK, AND ONE THAT WAS TRIED AND DOES NOT WORK

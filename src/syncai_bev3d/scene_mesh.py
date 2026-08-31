@@ -6,14 +6,10 @@ their measured heights, translucent walls (only their footprint is measured -- a
 slab would assert a height the camera never saw), the walkable floor as a tinted carpet,
 contact shadows, and the metre grid.
 
-**This lived in `tools/commissioning/scene_mesh.py` until 2026-08-29, and moved because
-four tools import it.** `demo_video`, `heads_video`, `scene_overlay` and `social_card`
-all reach for `build_scene_regular`, `render` and `PALETTE`; the fourth of them turned
-`tests/test_scripts_are_not_libraries.py` red, which is that test working. The cost it
-names is the one that applies here word for word: under `tools/` this file sat outside
-the wheel, outside the type ratchet and outside the coverage floor, so the module every
-renderer in the project depends on was the one nothing checked -- 13% of its statements,
-and its whole scene build had never been executed by a test. The CLI stays behind in
+`demo_video`, `heads_video`, `scene_overlay` and `social_card` all import
+`build_scene_regular`, `render` and `PALETTE` from here, which is why this is a package
+module and not a script: under `tools/` it would sit outside the wheel, the type ratchet
+and the coverage floor. The CLI that writes the PNG, the OBJ and the GLB stays in
 `tools/commissioning/scene_mesh.py`, which is what a script is for.
 
 The commissioning inputs are read from `root`, defaulting to the checkout this package
@@ -382,9 +378,8 @@ def height_caption(heights: dict[int, float]) -> str:
     `DRAWN_H["wall"]` and `COLUMN_MIN_H`, for the reason stated above `CLASS_NAMES`:
     DA-V2 collapses on white surfaces, so every wall component on Taichung-cam10
     measures 1.07-1.65 m against a real 2.4 and Taichung-cam01's column reads 1.16 m for
-    something that runs floor to ceiling. This line used to print those numbers as
-    "measured p85" beside a picture drawn at the constants -- a caption asserting a
-    height the render did not use and the code already knew was wrong.
+    something that runs floor to ceiling. Printing those numbers as "measured p85" beside
+    a picture drawn at the constants would assert a height the render did not use.
 
     They still appear, because deleting a measurement is not the same as labelling it:
     the collapse is a real property of the depth model on this fleet and a reader who
@@ -416,26 +411,20 @@ def render(camera, items, heights, out_path, *, eye=None, target=None, shapes=()
     xs = np.concatenate([m[0][:, 0] for m in solid])
     zs = np.concatenate([m[0][:, 2] for m in solid])
     cx_m, cz_m = float(np.median(xs)), float(np.median(zs))
-    # **Frame the scene, do not frame a fixed distance.** The eye used to sit at a
-    # constant offset whatever the room measured, so a 6 m shop filled the canvas and a
-    # 12 m one sat in the middle of it at a third of the width -- and an unreadable render
-    # is not a neutral cost. On 2026-08-27 a reviewer reading these images called a
-    # foreshortened 1 cm iPad slab a "45-degree tilted panel, physically impossible" and
-    # correct product placement "floating"; both readings were of the framing, not of the
-    # reconstruction. Distance scales with the scene's own diagonal.
+    # **Frame the scene, do not frame a fixed distance.** At a constant eye offset a 6 m
+    # shop fills the canvas and a 12 m one sits in the middle at a third of the width, and
+    # an unreadable render is not a neutral cost -- a reviewer reading one called correct
+    # product placement "floating". Distance scales with the scene's own diagonal.
     span = max(float(xs.max() - xs.min()), float(zs.max() - zs.min()), 2.0)
     cx_m = float((xs.min() + xs.max()) / 2)
     cz_m = float((zs.min() + zs.max()) / 2)
     target = target or [cx_m, 0.6, cz_m]
-    # A fixed (+x, -z) diagonal, and it has a defect this session found and did not
-    # fix: nothing asks whether something tall lies along it. Taichung-cam10's accessory
-    # wall is 6.3 m long and 2.4 m high against the +x side, so the eye stands behind it
-    # and that render is one blank panel with the shop hidden. Choosing among the four
-    # diagonals by how much tall geometry each one has to see through was tried and
-    # reverted the same hour: it fixes cam10 and makes cam11 -- the camera this render
-    # was composed on -- markedly worse, so picking a corner is a composition decision
-    # rather than a scoring one. The defect was invisible until the shelf-depth bug
-    # below stopped truncating that wall to 1.35 m.
+    # A fixed (+x, -z) diagonal, with a **known open defect**: nothing asks whether
+    # something tall lies along it. Taichung-cam10's accessory wall is 6.3 m long and 2.4 m
+    # high against the +x side, so the eye stands behind it and that render is one blank
+    # panel with the shop hidden. Scoring the four diagonals by how much tall geometry each
+    # must see through fixes cam10 and makes cam11 markedly worse -- picking a corner is a
+    # composition decision rather than a scoring one.
     eye = eye or [cx_m + 0.62 * span, 0.46 * span, cz_m - 0.54 * span]
     view = View(eye, target, 620.0 * SS, W * SS / 2, H * SS / 2)
     img = Image.new("RGB", (W * SS, H * SS), BG)
@@ -676,9 +665,8 @@ def build_scene_regular(camera, root: Path | None = None):
     room_cz = float((_fv[:, 2].min() + _fv[:, 2].max()) / 2)
     shapes: list[tuple] = []  # (name, w, d, h) as built, for `implausible`
     # ---- 1. FIT. Every fixture as an axis-aligned box in the store frame. Nothing is
-    # meshed here: a box's neighbours decide as much about it as its own evidence does,
-    # and until 2026-08-28 this loop drew each one the moment it was fitted, which is why
-    # nothing in the scene had ever compared two fixtures with each other.
+    # meshed here: a box's neighbours decide as much about it as its own evidence does, so
+    # drawing one the moment it is fitted is what stops the scene ever comparing two.
     fixtures: list[list] = []  # [name, u0, u1, v0, v1, h]
     for cid, name in CLASS_NAMES.items():
         if name == "wall":
