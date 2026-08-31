@@ -14,17 +14,13 @@ coverage. A coverage floor was the obvious guard and is the wrong one: most of t
 legitimately have no tests, and a gate that demands them gets deleted. This measures the
 thing that has actually gone wrong twice instead.
 
-**`tools/` is measured too, since 2026-08-26, and for the same reason word for word.**
-The argument above is about *where the code sits*, not about the directory's name: at
-7,671 lines across 29 files it is outside the wheel (`[tool.hatch.build.targets.wheel]`
-names `src/` only), outside the type ratchet (`ci.yml` runs `ty_ratchet.sh` on `src/` and
-`scripts/`, and nothing on `tools/`) and outside the coverage floor, exactly as `scripts/`
-is. It was left unmeasured because it did not exist when this test was written, and in the
-meantime it grew the failure verbatim: `service_zones.py` and `footprints_from_masks.py`
-both reach into `zones_confirm.py` for `_font`, `_plate` and `_to_px` -- *private* names,
-by a bare module import that only resolves because Python puts the entry script's own
-directory on `sys.path`. Six pairs on the day the gate was extended, against `scripts/`'s
-four.
+**`tools/` is measured too, and for the same reason word for word.** The argument is
+about *where the code sits*, not about the directory's name: `tools/` is outside the wheel
+(`[tool.hatch.build.targets.wheel]` names `src/` only) and outside the coverage floor,
+exactly as `scripts/` is. `service_zones.py` and `footprints_from_masks.py` reach into
+`zones_confirm.py` for `_font`, `_plate` and `_to_px` -- *private* names, by a bare module
+import that only resolves because Python puts the entry script's own directory on
+`sys.path`.
 
 Grouped **per directory**, because `tools/` has subdirectories and a bare `import boxes`
 in `tools/site30k/` can only ever find its own neighbour. `tools/site30k/recipe.py`
@@ -77,27 +73,8 @@ def _tracked(pathspec: str) -> list[Path]:
     return [REPO / line for line in out.stdout.split() if line.endswith(".py")]
 
 
-# Measured 2026-08-19. Lower it when a pair is moved into the package; never raise it.
-# 10 -> 9 same day: the plate-calibration pipeline moved to
-# `geometry/plate_calibration.py` (now `syncai_bev3d/plate_calibration.py`; the paths in
-# this log are the ones that were current on the day each line was written), which
-# removed `calibrate_from_plate ->
-# fit_camera_from_people` (and kept `onboard_camera` from becoming the 11th pair).
-# 9 -> 8: the day/night pixel test moved to `syncai_bev3d/teachers/photometry.py`, which removed
-# `sam3_product_coverage -> sam3_person_boxes`. It was two copies of one formula, one
-# gating and one reporting, and the reporting copy's docstring named the other instead of
-# importing it.
-# 6 -> 5: `propose_zones -> calibrate_from_plate` was pure indirection -- the script it
-# imported `undistort_image` from had itself imported it from
-# `geometry/plate_calibration.py`, and carried a comment saying other scripts re-imported
-# it. One hop removed, no code moved.
-# 8 -> 6: the SAM 3 teacher moved to `syncai_bev3d/teachers/sam3.py`, which removed both
-# `-> sam3_prelabel` pairs. `column_camera_sweep._prelabel` went with them: it loaded the
-# same script *by path* to stay out of this count, and said in its own docstring that a
-# third caller wanting `segment` was the signal to move it into the package. That caller
-# arrived.
-# 5 -> 4: `bev_demo -> bev_page` left in the 2026-08-25 cleanup -- the robot dashboard's
-# 3D page, superseded by tools/commissioning/scene_mesh.py.
+# Lower it when a pair is moved into the package; never raise it. The history of this
+# number is in `git log -p`.
 BASELINE_PAIRS = 3
 
 
@@ -157,9 +134,6 @@ def test_the_measurement_still_finds_the_pairs_it_was_written_against():
     `bev_demo -> bev_page` until the robot dashboard scripts left in the 2026-08-25
     cleanup.)
 
-    `live_view_orin -> bench_camera_orin` used to be the most durable pair in the list and
-    was deliberately not pinned, because it was exempt for a reason and a pin would have
-    read as approval. It is gone with the Orin, which is why `BASELINE_PAIRS` fell 4 -> 3.
     """
     pairs = _script_to_script_imports()
     assert pairs, "the scan found no imports at all — has scripts/ moved?"
@@ -169,32 +143,17 @@ def test_the_measurement_still_finds_the_pairs_it_was_written_against():
 
 # ---------------------------------------------------------------- the same rule, `tools/`
 
-# Measured 2026-08-26, the day `tools/` was brought into this gate. Lower it when a pair is
-# moved into `src/`; never raise it. The six:
+# Lower it when a pair is moved into `src/`; never raise it. The three that remain:
 #
 #   footprints_from_masks -> zones_confirm    `_font`, `_plate`, `_to_px`, `PALETTE`
 #   service_zones         -> zones_confirm    `_font`
-#   demo_video            -> scene_mesh
-#   heads_video           -> scene_mesh
 #   heads_video           -> demo_video
-#   scene_overlay         -> scene_mesh
 #
 # The first two are the ones with a name on them. `zones_confirm.py` is a confirm-sheet
 # renderer and three underscore-prefixed names in it are now the drawing convention every
 # commissioning sheet shares -- which makes them an interface, and an interface spelled
 # with a leading underscore is one nobody can change without breaking a caller they were
-# never told about. The `scene_mesh` three are a renderer being reused, the same shape one
-# step earlier.
-#
-# 6 -> 3 on 2026-08-29, and the `scene_mesh` three are the ones that went. A fourth
-# importer -- `social_card.py`, the GitHub preview card -- turned this test red, which is
-# what it is for, and the answer was the one the failure message names: the scene build
-# and its renderer moved to `src/syncai_bev3d/scene_mesh.py`, so `demo_video`, `heads_video`,
-# `scene_overlay` and `social_card` now import a package module and `scene_mesh.py` is
-# left as the CLI that writes the PNG, the OBJ and the GLB. The move is the point rather
-# than a way past the gate: under `tools/` that file was 13% covered and its scene build
-# had never been executed by a test, and it is now inside the coverage floor with
-# `tests/test_scene_build.py` behind it.
+# never told about.
 BASELINE_TOOL_PAIRS = 3
 
 

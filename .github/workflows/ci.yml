@@ -4,28 +4,18 @@ name: CI (dev)
 # where new code first enters. Runs format · lint · unit tests (coverage matrix) ·
 # ONNX export parity · release-bundle refusals.
 #
-# The export and bundler checks used to sit on stage/main (the since-removed
-# release-gate.yml) with the stated reason that "a broken export is discovered on
-# the robot otherwise". That reason argues for the opposite placement: the earliest
-# tier is where the fix is cheapest, and an export regression that only reds at
-# dev→stage has already travelled a whole tier past the branch that caused it. They
-# take ~2 min on random weights and no dataset, so there is no cost argument for
-# deferring them either.
+# The export and bundler checks run here, at the earliest tier, because that is where a
+# fix is cheapest -- an export regression that only reds at dev→stage has already
+# travelled a whole tier past the branch that caused it. They take ~2 min on random
+# weights and no dataset, so there is no cost argument for deferring them.
 #
 # Both triggers, and the `push` one is here because the `pull_request` one alone let
 # `dev` sit red for a day. Twice.
 #
-# The argument this comment used to make -- "promotion is strictly PR-based and the PR
-# already tests the merge result, so a post-merge push re-run would just duplicate this
-# gate" -- is sound and does not describe how this repository is worked. Sessions commit
-# straight onto `dev`; there is frequently no PR into `dev` at all, so there was nothing
-# for a push run to duplicate and the gate simply never ran. `e2dfb3d` landed a test
-# importing another test module, which fails under `uv run pytest` and passes under
-# `python -m pytest`, and the suite was red by the documented command for a full day while
-# being reported green. `.pre-commit-config.yaml`'s ty-ratchet block records the identical
-# shape from the other direction -- `src/` over its baseline since `ef9b53c`, every commit
-# for a day on a red tree -- and names this same cause verbatim. A gate only a PR can run
-# is not a gate on a branch nobody opens a PR against.
+# **`push` as well as `pull_request`, because sessions commit straight onto `dev`.**
+# There is frequently no PR into `dev` at all, so a PR-only trigger has nothing to run on
+# and the gate simply never fires. That has cost a day of a red suite reported green.
+# A gate only a PR can run is not a gate on a branch nobody opens a PR against.
 #
 # An ADDITION, not a replacement. The `pull_request` trigger stays: a PR into `dev` still
 # has to gate before it merges, and swapping the trigger would move the hole rather than
@@ -142,13 +132,10 @@ jobs:
   # permanently occupying one of five slots. Raising the floor was the decision that
   # released all three.
   #
-  # Two earlier revisions of this comment were wrong about their own rows, which is the
-  # instructive part. It said 3.13 was "what the maintainer's venv actually runs" when
-  # the venv was 3.10.12; the correction then said 3.10 was that venv, which stopped
-  # being true the moment the floor moved and the venv was rebuilt at 3.11.15. **A row
-  # justified by what one box happens to run needs re-checking every time that box
-  # changes.** These rows are justified by `requires-python` and the classifiers, which
-  # are in this repository and move only when someone edits them.
+  # **These rows are justified by `requires-python` and the classifiers, not by what any
+  # box happens to run.** Two earlier revisions of this comment named a contributor's venv
+  # and were wrong about it both times; a repository fact moves only when someone edits
+  # it.
   test:
     name: Unit tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
