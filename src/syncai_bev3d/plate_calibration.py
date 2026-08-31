@@ -119,7 +119,7 @@ def undistort_image(img: np.ndarray, k1: float) -> np.ndarray:
     fx, fy = (xs - x0)[..., None], (ys - y0)[..., None]
     im = img.astype(np.float64)
     if im.ndim == 2:
-        im, fx, fy = im[..., None], fx, fy
+        im = im[..., None]
     out = (
         im[y0, x0] * (1 - fx) * (1 - fy)
         + im[y0, x1] * fx * (1 - fy)

@@ -13,16 +13,10 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
         args: [--maxkb=1024]   # datasets and checkpoints stay out of git entirely
-        # README figures are animations and do not fit in 1 MB at a size worth looking
-        # at; assets/cctv_v1.gif is 2.6 MB. Narrow on purpose -- the guard is here for
-        # datasets and checkpoints, and this does not loosen it for those.
-        #
-        # This comment has now named a file that did not exist twice. It said
-        # retail_cctv_3heads.gif until 2026-08-27, after f9d4fcf deleted it; it then said
-        # retail_cctv_scene.gif until 2026-08-29, after 65a6b78 renamed that to
-        # cctv_v1.gif. A justification that names a file is only as durable as the name,
-        # and neither rename touched this line -- which is the state a reader cannot
-        # check, arriving twice by the same route.
+        # README figures are animations and do not fit in 1 MB at a size worth looking at.
+        # Narrow on purpose -- the guard is here for datasets and checkpoints, and this
+        # does not loosen it for those. Deliberately names no file: this line has twice
+        # justified itself with one that had since been renamed or deleted.
         exclude: ^assets/.*\.gif$
 
   # ruff carries no `rev:` here, and that absence is the fix for a deadlock rather than an
@@ -89,13 +83,10 @@ repos:
 
   # The type ratchet, which until now ran nowhere a commit could see.
   #
-  # `d9e3cca` is the cost of that, written down the day it was found: `src/` had been over
-  # its baseline since `ef9b53c` and **every commit for a full day landed on a red tree**,
-  # including the session that eventually noticed. Its own commit message names the cause
-  # -- "nobody saw it because the ratchet is not in `.pre-commit-config.yaml`" -- and the
-  # reason the CI job did not catch it either is structural: `ci.yml` triggers on
-  # `pull_request`, and this project's work goes straight onto `dev`. A gate that only a PR
-  # can run is not a gate on a branch nobody opens a PR against.
+  # The reason it has to be here and not only in CI is structural: `ci.yml` triggers on
+  # `pull_request`, and this project's work goes straight onto `dev`. **A gate that only a
+  # PR can run is not a gate on a branch nobody opens a PR against** -- `src/` once sat
+  # over its baseline for a full day, every commit landing on a red tree.
   #
   # `repo: local` + `language: system` rather than a pre-commit-managed environment, and
   # this is not a style choice. `scripts/ty_ratchet.sh` pins its own interpreter and calls
@@ -116,11 +107,9 @@ repos:
   # **Each `files:` lists every tree whose change can move that count, not only the tree
   # being counted.** `scripts/` and `tools/` import the package, so a signature widened in
   # `src/` moves their diagnostics without touching a file either pattern used to match.
-  # `adaef9d` is what that cost: it changed `analytics/tracker.py` and nothing under
-  # `scripts/`, `scripts/track_endings.py` overrides `Tracker.update`, and the count went
-  # 14 -> 15 against a baseline of 14. Six commits then landed on a tree whose Type ratchet
-  # job was already failing, unnoticed because a louder test failure was red at the same
-  # time. Bisected in detached worktrees: 45413cf 14, adaef9d 15.
+  # What that cost once: a change to `analytics/tracker.py` and nothing under `scripts/`
+  # moved `scripts/` 14 -> 15, because `scripts/track_endings.py` overrides
+  # `Tracker.update`. Six commits then landed on a tree whose ratchet was already red.
   #
   # The cost is that a commit touching only `src/` now pays all three: 0.71 s for scripts/
   # and 0.48 s for tools/ on top of its own. A ratchet that cannot see the change that

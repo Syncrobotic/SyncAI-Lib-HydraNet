@@ -51,6 +51,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from ...utils.checkpoint import load_checkpoint
+
 # CLIP's learned temperature converges near 100; starting there rather than at 1 matters
 # because the focal loss's prior assumes logits in a particular range, and a cosine
 # similarity lives in [-1, 1] until something scales it.
@@ -70,8 +72,6 @@ def load_matrix_file(path, num_classes: int, expect_names: list[str] | None = No
     not every config declares names, and checking is refused rather than skipped when it
     can be done: passing names that disagree is an error, omitting them is a choice.
     """
-    from ...utils.checkpoint import load_checkpoint
-
     blob = load_checkpoint(path)
     if not isinstance(blob, dict) or "matrix" not in blob:
         raise ValueError(

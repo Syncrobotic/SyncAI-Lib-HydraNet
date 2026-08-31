@@ -15,6 +15,7 @@ depend on torch being importable in the test environment.
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -72,4 +73,35 @@ def test_bev3d_does_not_import_the_serving_stack():
     assert not offenders, (
         "syncai_bev3d imports syncai_hydranet beyond the named core edges:\n  "
         + "\n  ".join(offenders)
+    )
+
+
+# ------------------------------------------------------- what the wheel promises
+#
+# PEP 561: a package without a `py.typed` marker is treated as untyped no matter how
+# annotated it is, and the failure is silent in the direction that matters -- the
+# consumer's checker simply says nothing about it. `syncai_bev3d` shipped that way until
+# 2026-08-31: 87% of its functions annotated, in the wheel beside `syncai_hydranet`, and
+# invisible to anyone type-checking against it.
+#
+# Checked against `[tool.hatch.build.targets.wheel].packages` rather than a hardcoded
+# pair, because the way this recurs is a third package being added and the marker not
+# following it.
+
+
+def _shipped_packages() -> list[Path]:
+    text = (REPO / "pyproject.toml").read_text(encoding="utf-8")
+    block = re.search(r"\[tool\.hatch\.build\.targets\.wheel\](.*?)(?=\n\[|\Z)", text, re.S)
+    assert block, "pyproject.toml no longer declares the wheel's packages"
+    return [REPO / p for p in re.findall(r'"([^"]+)"', block.group(1))]
+
+
+def test_every_shipped_package_declares_that_it_is_typed():
+    shipped = _shipped_packages()
+    assert len(shipped) >= 2, f"expected both packages in the wheel, found {shipped}"
+    missing = [p.name for p in shipped if not (p / "py.typed").exists()]
+    assert not missing, (
+        f"shipped without a py.typed marker: {missing}. PEP 561 makes a package with "
+        "annotations but no marker indistinguishable from one with none, so a consumer's "
+        "type checker silently ignores it. Add an empty `py.typed` beside `__init__.py`."
     )

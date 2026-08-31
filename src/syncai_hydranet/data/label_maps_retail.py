@@ -35,7 +35,7 @@ docs set on 2026-08-25.
 
 from __future__ import annotations
 
-from .label_maps_indoor import INDOOR_TERRAIN, INDOOR_TERRAIN_TO_TRAV
+from .label_maps_indoor import ADE20K_ID_TO_INDOOR, INDOOR_TERRAIN, INDOOR_TERRAIN_TO_TRAV
 
 # The indoor 12, plus one. Do not renumber: 0-11 must stay identical to INDOOR_TERRAIN.
 RETAIL_TERRAIN = {
@@ -81,8 +81,6 @@ _ADE_FIXTURES = {
 
 
 def _build_ade20k_map() -> dict[int, int]:
-    from .label_maps_indoor import ADE20K_ID_TO_INDOOR
-
     out = dict(ADE20K_ID_TO_INDOOR)
     for ade_id in _ADE_FIXTURES:
         out[ade_id] = RETAIL_TERRAIN["display_fixture"]

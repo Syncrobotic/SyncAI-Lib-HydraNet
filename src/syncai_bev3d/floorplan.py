@@ -179,7 +179,7 @@ def simplify_ring(poly: np.ndarray, tol: float, max_vertices: int) -> np.ndarray
         keep_r[[0, len(rolled) - 1]] = True
         _douglas_peucker(rolled, 0, len(rolled) - 1, tol, keep_r)
         idx = set(np.flatnonzero(keep).tolist())
-        idx |= {(hi + i) % n for i in np.flatnonzero(keep_r)}
+        idx |= {(hi + i) % n for i in np.flatnonzero(keep_r).tolist()}
         out = poly[sorted(idx)]
         if len(out) <= max_vertices:
             return out

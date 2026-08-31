@@ -4,6 +4,34 @@ The flat top-down panel in ``bev.py`` is the honest primitive -- metres, class i
 colour -- and it stays that way. This renders it for a person: the floor in perspective,
 the boundary raised into a wall, and detections as boxes on the ground rather than dots.
 
+---------------------------------------------------------------------------
+THIS IS NOT AN OLDER `scene_mesh`, AND THE CONFUSION IS THE REPOSITORY'S FAULT
+
+`scene_mesh.py` arrived on 2026-08-25 and draws a solid-geometry room: extruded
+footprints, real fixtures, contact shadows, a `scene.obj` per camera. It is what
+`demo_video.py` and `heads_video.py` put in the right-hand panel, so it is what the
+README's figures look like -- and this module's panel, which is what the README figures
+looked like *before* that date, therefore reads as the previous generation of the same
+thing. It is not, and nothing in the tree said so until 2026-08-30.
+
+**The two take different inputs and answer different questions.**
+
+    bev3d.render(trav_bev, terrain_bev, grid, objects, ...)   arrays, from a live forward pass
+    scene_mesh.build_scene_regular(camera, root)              a camera name -> `runs/` artefacts
+
+`scene_mesh` reads what commissioning measured, so it cannot draw a camera that has not
+been commissioned -- **8 of the fleet's 48**. This module needs no `camera.json`, no
+plate, and no masks: it draws what the network sees in the frame in front of it, which is
+the only 3D panel available for the other 40 and for any footage from a camera nobody has
+commissioned yet.
+
+So: `scene_mesh` for "what is this camera's measured geometry", this for "what does the
+network see here". Retiring either would remove an answer, not a duplicate. The commit
+that introduced `scene_mesh` (`7a83e0e`) does not mention this module at all, which is
+how a reader arrives at the wrong conclusion honestly.
+
+---------------------------------------------------------------------------
+
 **None of this adds information.** Every surface here is drawn from something the flat map
 already asserted, and the two disagreements worth naming up front are:
 

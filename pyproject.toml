@@ -8,7 +8,7 @@ name = "syncai-hydranet"
 dynamic = ["version"]
 description = "Multi-head perception network for fixed store CCTV: person and product detection, pose, and terrain segmentation in a single forward pass."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "SYNCROBOTIC" }]
@@ -43,7 +43,6 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -64,9 +63,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# onnxruntime is capped: 1.23 dropped cp310 wheels, and requires-python still allows
-# 3.10, which is also half the CI matrix. Raise the cap when the floor moves to 3.11.
-export = ["onnx>=1.15", "onnxsim>=0.4", "onnxruntime>=1.17,<1.23"]
+# The `<1.23` cap is gone with the 3.10 floor it existed for. 1.23 dropped cp310 wheels
+# and 1.24 needs cp311+, so the cap and `.github/dependabot.yml`'s matching ignore were
+# both holding one constraint: that a bump onnxruntime had already made could not be
+# taken while `requires-python` said 3.10. Both said "raise it when the floor moves to
+# 3.11" and the floor has moved.
+export = ["onnx>=1.15", "onnxsim>=0.4", "onnxruntime>=1.17"]
 # SAM 3 pre-labelling (scripts/sam3_prelabel.py). An annotation-time tool, never a
 # runtime dependency: nothing under src/ imports transformers, and an inference box must
 # not carry a 6.5 GB checkpoint it never runs. `facebook/sam3` is a gated repo, so this

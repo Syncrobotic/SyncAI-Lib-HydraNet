@@ -49,23 +49,19 @@ updates:
     ignore:
       - dependency-name: torch
       - dependency-name: torchvision
-      # `onnxruntime` is capped at `<1.23` in pyproject's `export` extra, and the two
-      # lines of comment above that cap say why: 1.23 dropped cp310 wheels, and 3.10 is
-      # both `requires-python`'s floor and half the CI matrix. Dependabot cannot read a
-      # comment, so it proposed raising the cap to `<1.25` (PR #17) -- editing the very
-      # constraint the comment exists to hold -- and the PR failed `Unit tests (Python
-      # 3.10)` exactly as written. It will be re-proposed every week until the floor
-      # moves.
+      # `onnxruntime` was ignored at `>=1.23` here and capped at `<1.23` in pyproject,
+      # for one reason: 1.23 dropped cp310 wheels while `requires-python` still said
+      # 3.10. Dependabot cannot read a comment, so it re-proposed the bump every week --
+      # PR #17, then #26 -- and each one failed `Unit tests (Python 3.10)` exactly as the
+      # comment predicted. **That is not noise, it is a held slot**:
+      # `open-pull-requests-limit` is 5, so an unmergeable PR permanently occupies a
+      # fifth of the budget, and a full budget is one Dependabot does not add to,
+      # including for a security update.
       #
-      # The cost is not the noise. `open-pull-requests-limit` is 5 and there are five
-      # open Dependabot PRs, so a bump that can never pass permanently occupies a fifth
-      # of the budget, and a full budget is one Dependabot does not add to -- including
-      # for a security update. An unmergeable PR is not free; it is a held slot.
-      #
-      # Remove this entry when `requires-python` moves to 3.11, at which point the cap
-      # in pyproject goes with it.
-      - dependency-name: onnxruntime
-        versions: [">=1.23"]
+      # Both are gone with the 3.10 floor, 2026-08-31. Kept as a comment because the
+      # shape recurs: when a bump cannot pass, the question is whether the constraint it
+      # violates is still one this project wants to hold. Here it was not -- 3.11 was
+      # claimed and untested, and nothing needed 3.10.
     groups:
       dev-tooling:
         patterns: [ruff, pytest, pytest-cov, pre-commit, ty]

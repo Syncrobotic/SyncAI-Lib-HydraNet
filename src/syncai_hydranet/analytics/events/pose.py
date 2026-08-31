@@ -12,6 +12,7 @@ from typing import Any
 
 import numpy as np
 
+from ...geometry.ground import height_above_floor_m, pixel_to_ground, undistort_points
 from ..stage import TerrainFrame
 from ..tracker import Track
 from ._geometry import _runs
@@ -152,8 +153,6 @@ def _head_heights_m(
     solve is degenerate; the caller treats an all-NaN span as "not measured" and keeps the
     event rather than dropping it on a refusal.
     """
-    from ...geometry.ground import height_above_floor_m, pixel_to_ground, undistort_points
-
     out = []
     w, h = cam_file.image_size_px
     sx, sy = (w / source_size_px[0], h / source_size_px[1]) if source_size_px else (1.0, 1.0)

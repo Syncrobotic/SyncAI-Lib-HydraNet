@@ -3,11 +3,9 @@
 
     uv run python tools/commissioning/demo_gif.py Kaohsiung-cam04
 
-`assets/demo_Taichung-cam10.gif` was made by hand. That is the same shape as the defect
-`bddec6c` fixed a few hours earlier -- the previous README figure had been *blurred* by
-hand and no one could reproduce it -- and it survived only because the blur was the half
-somebody noticed. A figure of a customer's shop floor that cannot be re-made is a figure
-nobody can re-check when the pipeline behind it moves, which it did twice on 2026-08-28.
+**A figure of a customer's shop floor that cannot be re-made is a figure nobody can
+re-check when the pipeline behind it moves.** Both README figures were once cut by hand,
+and the blur on one of them was applied by hand too.
 
 ---------------------------------------------------------------------------
 THE CHECK, AND ONE THAT WAS TRIED AND DOES NOT WORK
@@ -173,7 +171,15 @@ def main() -> int:
             )
             return 1
         video = stamped[-1]
-    log = ROOT / f"runs/commission01/{a.camera}.demo_tracks.json"
+    # **A sidecar beside the render wins over the per-camera log.** `cli/scene.py` writes
+    # `<render>.render.json`, because the per-camera path below is overwritten by the next
+    # render of that camera -- so a verdict naming an older render cannot be checked
+    # against the record that produced it. `demo_video.py` still writes the per-camera
+    # file and is unchanged; this only adds a place to look first.
+    sidecar = video.with_suffix(".render.json")
+    log = (
+        sidecar if sidecar.exists() else ROOT / f"runs/commission01/{a.camera}.demo_tracks.json"
+    )
     if not log.exists():
         print(
             f"{log} is missing. demo_video.py writes it beside every render, and both the "
@@ -228,7 +234,13 @@ def main() -> int:
         )
         return 1
 
-    out = Path(a.out) if a.out else ROOT / f"assets/demo_{a.camera}.gif"
+    # `ROOT /` rather than `Path(...)`: an absolute `--out` is returned unchanged and a
+    # relative one is anchored to the repository, which is what every other path here
+    # already assumes. Given `--out assets/x.gif` from the repo root, the old form
+    # produced a relative path, `verdict.relative_to(ROOT)` raised **after** the verdict
+    # was written and before the gif was -- leaving a verdict on disk describing a render
+    # that had not replaced the figure beside it.
+    out = ROOT / Path(a.out) if a.out else ROOT / f"assets/demo_{a.camera}.gif"
     verdict = out.with_suffix(".audit.json")
     sheets_dir = ROOT / f"runs/commission01/{a.camera}.gif_check"
     sheets_dir.mkdir(parents=True, exist_ok=True)

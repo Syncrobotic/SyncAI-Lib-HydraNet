@@ -114,6 +114,29 @@ def test_image_is_required_of_a_full_payload_and_optional_of_a_terrain_one():
     assert "image" in TerrainFrame.__optional_keys__
 
 
+def test_terrain_is_optional_on_a_full_payload():
+    """The half of the asymmetry nothing was checking, and it went wrong the moment it
+    could.
+
+    `StageFrame` was two classes until 2026-08-31 -- `_StageFrameRequired` existed only
+    because `NotRequired` is 3.11+ and the floor was 3.10. Collapsing it on the new floor
+    silently made `terrain` **required**: `stage.py` had `from __future__ import
+    annotations`, which turns every annotation into a string, and `TypedDict` does not
+    resolve strings at class creation, so `NotRequired[...]` is invisible to it. Seven
+    required keys, none optional, and every test in this file still passed -- because the
+    test above pins `image` as required and nothing pinned `terrain` as optional.
+
+    A detection-only config has no terrain head. If `terrain` were required, the payload
+    every retail config can actually produce would not satisfy its own contract.
+    """
+    assert "terrain" in StageFrame.__optional_keys__, (
+        "`terrain` is required on StageFrame. If `stage.py` regained `from __future__ "
+        "import annotations`, that is why: NotRequired cannot survive stringised "
+        "annotations."
+    )
+    assert "terrain" not in StageFrame.__required_keys__
+
+
 def test_a_terrain_payload_that_the_old_contract_rejected_still_works():
     """`scripts/pose_pilot.py`'s shape, end to end. Under the single six-key StageFrame
     this was a type error, while being the only real payload anyone had built. The script

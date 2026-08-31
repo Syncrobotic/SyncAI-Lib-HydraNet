@@ -31,6 +31,17 @@ pass that turns those proposals into named zones; `zone_draw.py` is the manual r
 click the floor, get metres; `zones_apply.py` writes human assertions and metre-zone
 proposals back into the commissioning artefacts.
 
+**Two 3D panels, and neither replaced the other.** `syncai_bev3d/scene_mesh.py` takes a
+camera *name* and draws what commissioning measured for it -- solid geometry, GLB/OBJ
+export -- so it can only draw the **8 of 48** cameras that have a `camera.json`.
+`syncai_bev3d/bev3d.py` takes arrays from a live forward pass and draws what the network
+sees in the frame, needing no commissioning at all, which makes it the only 3D panel
+available for the other 40. The README's figures moved to the mesh panel on 2026-08-25 and
+the perspective one has looked superseded ever since; the commit that introduced the mesh
+scene does not mention it, and nothing said otherwise until 2026-08-30. Retiring either
+removes an answer rather than a duplicate. `tests/test_renderer_generations.py` holds the
+distinction.
+
 **Look at what was built.** `scene3d.py` and `scene_mesh.py` (the flat diagnostic panel
 and the solid-mesh scene, with GLB/OBJ export), `scene_overlay.py` (project the
 commissioned scene back through its own camera onto its own plate — the check that the

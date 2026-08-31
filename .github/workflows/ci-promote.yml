@@ -43,6 +43,24 @@ name: CI (promote)
 on:
   pull_request:
     branches: [stage, main]
+  # And on the push that a promotion actually produces. Two reasons, and the second is
+  # the one that is not obvious:
+  #
+  #   1. A `pull_request` check is the only thing gating `stage`, and it only exists if
+  #      somebody opens a PR. A direct push had no check at all.
+  #   2. **A `pull_request` run tests a merge that does not exist yet.** GitHub builds a
+  #      simulated merge of head into base and runs against that; the commit this repo
+  #      actually keeps is a different object, created afterwards. They agree almost
+  #      always, which is exactly why the case where they do not would be missed.
+  #
+  # `main` is deliberately absent here: `release.yml` already runs on that push, and a
+  # release-please PR merging into `main` would otherwise pay for this whole suite a
+  # second time to re-check a version bump.
+  #
+  # Cost is one extra run per promotion, not per commit -- pushes to `stage` only happen
+  # when a promotion lands.
+  push:
+    branches: [stage]
 
 # Least-privilege default: jobs only check out code.
 permissions:
@@ -92,8 +110,14 @@ jobs:
       # kind of thing that only shows up once branches are combined. Same number as
       # ci.yml's, deliberately -- two tiers disagreeing about the floor is how the
       # looser one becomes the real one.
+      #
+      # 83 -> 85 on 2026-08-30, and 85 is what CI measures, not what a laptop does.
+      # Locally this tree reads 86% because `test_run_depth.py` runs there: the model is
+      # cached and there is a GPU, so `run_depth` is covered. CI syncs `--extra export`
+      # only, that file skips, and every matrix row reports **85.23%**. Setting the floor
+      # from the local number would have failed all three rows on the first push.
       - name: Tests on the combined state
-        run: uv run pytest --cov --cov-fail-under=83
+        run: uv run pytest --cov --cov-fail-under=85
       # Security moves here too, and for the same combined-state reason as the tests --
       # not as a blanket copy of ci.yml. `pip-audit` reads the *merged* `uv.lock`, and a
       # lock neither branch produced is exactly what two Dependabot PRs make: each was

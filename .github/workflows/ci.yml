@@ -4,28 +4,18 @@ name: CI (dev)
 # where new code first enters. Runs format · lint · unit tests (coverage matrix) ·
 # ONNX export parity · release-bundle refusals.
 #
-# The export and bundler checks used to sit on stage/main (the since-removed
-# release-gate.yml) with the stated reason that "a broken export is discovered on
-# the robot otherwise". That reason argues for the opposite placement: the earliest
-# tier is where the fix is cheapest, and an export regression that only reds at
-# dev→stage has already travelled a whole tier past the branch that caused it. They
-# take ~2 min on random weights and no dataset, so there is no cost argument for
-# deferring them either.
+# The export and bundler checks run here, at the earliest tier, because that is where a
+# fix is cheapest -- an export regression that only reds at dev→stage has already
+# travelled a whole tier past the branch that caused it. They take ~2 min on random
+# weights and no dataset, so there is no cost argument for deferring them.
 #
 # Both triggers, and the `push` one is here because the `pull_request` one alone let
 # `dev` sit red for a day. Twice.
 #
-# The argument this comment used to make -- "promotion is strictly PR-based and the PR
-# already tests the merge result, so a post-merge push re-run would just duplicate this
-# gate" -- is sound and does not describe how this repository is worked. Sessions commit
-# straight onto `dev`; there is frequently no PR into `dev` at all, so there was nothing
-# for a push run to duplicate and the gate simply never ran. `e2dfb3d` landed a test
-# importing another test module, which fails under `uv run pytest` and passes under
-# `python -m pytest`, and the suite was red by the documented command for a full day while
-# being reported green. `.pre-commit-config.yaml`'s ty-ratchet block records the identical
-# shape from the other direction -- `src/` over its baseline since `ef9b53c`, every commit
-# for a day on a red tree -- and names this same cause verbatim. A gate only a PR can run
-# is not a gate on a branch nobody opens a PR against.
+# **`push` as well as `pull_request`, because sessions commit straight onto `dev`.**
+# There is frequently no PR into `dev` at all, so a PR-only trigger has nothing to run on
+# and the gate simply never fires. That has cost a day of a red suite reported green.
+# A gate only a PR can run is not a gate on a branch nobody opens a PR against.
 #
 # An ADDITION, not a replacement. The `pull_request` trigger stays: a PR into `dev` still
 # has to gate before it merges, and swapping the trigger would move the hole rather than
@@ -130,18 +120,22 @@ jobs:
   # The suite runs in ~30 s, so it is not sharded. Revisit if it passes a few minutes;
   # the sibling Gateway repo's 4-way shard + merged-threshold pattern is the model.
   #
-  # The matrix is the floor, the newest claimed version, and nothing in between. 3.10 is
-  # `requires-python`'s floor and what the working `.venv` on this box actually runs
-  # (3.10.12), so it is the version a local run is measured on. 3.13 is the newest the
-  # classifiers claim, and a matrix that stops below its own claim leaves the claim
-  # untested. 3.12 sits between them because the lock resolves a different numpy per
-  # Python version and the middle row is where that has broken before.
+  # The matrix is the floor, the newest claimed version, and nothing in between. 3.11 is
+  # `requires-python`'s floor since 2026-08-31 and 3.13 is the newest the classifiers
+  # claim; a matrix that stops below its own claim leaves the claim untested. 3.12 sits
+  # between them because the lock resolves a different numpy per Python version and the
+  # middle row is where that has broken before.
   #
-  # This comment used to say 3.13 was "what the maintainer's venv actually runs". It is
-  # not, and had not been for some time -- the venv is 3.10.12. The row is right for the
-  # reason above; only its justification was wrong, which is the harder kind to notice.
-  # 3.11 is claimed but not tested: a pre-existing gap, add a row if it ever costs
-  # anything.
+  # **The floor moved because a dependency moved first.** onnxruntime 1.23 dropped cp310
+  # wheels and 1.24 needs cp311+, so `export`'s cap and a Dependabot ignore both existed
+  # to hold a bump that could never pass while 3.10 was claimed -- an unmergeable PR
+  # permanently occupying one of five slots. Raising the floor was the decision that
+  # released all three.
+  #
+  # **These rows are justified by `requires-python` and the classifiers, not by what any
+  # box happens to run.** Two earlier revisions of this comment named a contributor's venv
+  # and were wrong about it both times; a repository fact moves only when someone edits
+  # it.
   test:
     name: Unit tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -149,7 +143,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.10', '3.12', '3.13']
+        python-version: ['3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -167,7 +161,7 @@ jobs:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
       - run: uv sync --locked --group dev --extra export
-      - run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=83
+      - run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=85
 
   # No checkpoint and no dataset: a randomly initialised model exercises the same
   # graph. Catches an operator that stopped exporting cleanly, a shape that drifted,
