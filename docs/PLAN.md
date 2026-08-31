@@ -600,7 +600,7 @@ order. A component with no step is not scheduled, it is assumed.
    vocabulary change silently empties `analytics/events/zones.py:346`'s default class list
    — the stock-removal alarm stops firing without an exception. Decide at step 4.
 
-6. **The best terrain checkpoint in the tree is not the one anything uses.** Measured
+28. **The best terrain checkpoint in the tree is not the one anything uses.** Measured
    2026-08-31, final epoch of each run (which is what `last.pt` is), the same recipe:
 
    | metric | `runs/…b03_cw_xl` (the default) | `runs/…b03_cw_xl-20260825-162131` |
