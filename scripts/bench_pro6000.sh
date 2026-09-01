@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Throughput sweep for the 96-stream x 15 fps target (= 1,440 frames/s) on the RTX PRO
+# Throughput sweep for the 96-stream x 5 fps target (= 480 frames/s) on the RTX PRO
 # 6000 Blackwell Max-Q. Run ONLY on an idle GPU -- numbers taken while training shares
 # the card are not measurements (rule 2: thresholds relative to a measured baseline).
 #
@@ -8,7 +8,7 @@
 # Engines are fixed-batch on purpose: one engine per batch size composes with CUDA
 # graphs, and the serving plan is "fill a batch from N streams every tick" rather than
 # dynamic shapes. Throughput line to read: trtexec's "Throughput: X qps" -> X * batch
-# = frames/s; the target line is 1,440.
+# = frames/s; the target line is 480 (PLAN §7.4, revised 2026-08-26 from 1,440).
 set -euo pipefail
 SRC=${1:-exports/pro6000}
 OUT=${2:-runs/bench_pro6000}
@@ -29,4 +29,4 @@ for onnx in "$SRC"/xl_b*.onnx; do
         echo "$(basename "$onnx") $prec batch=$b  ${qps:-?} qps  -> $fps frames/s"
     done
 done
-echo; echo "target: 1440 frames/s (96 streams x 15 fps)"; column -t "$OUT/results.tsv"
+echo; echo "target: 480 frames/s (96 streams x 5 fps)"; column -t "$OUT/results.tsv"

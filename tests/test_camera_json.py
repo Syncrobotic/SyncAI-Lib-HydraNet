@@ -10,7 +10,6 @@ from __future__ import annotations
 import dataclasses
 import json
 import math
-import pathlib
 
 import pytest
 
@@ -140,25 +139,42 @@ def test_a_version_this_reader_does_not_know_is_still_refused(tmp_path):
 # ------------------------------------- which teacher produced these metres
 
 
-def test_a_v2_file_reads_as_teachers_not_recorded_rather_than_none_used():
-    """The 8 cameras commissioned before v3 must stay readable, and stay honest.
+def test_a_v2_file_reads_as_teachers_not_recorded_rather_than_none_used(tmp_path):
+    """A file written before v3 must stay readable, and stay honest.
 
     `READABLE_VERSIONS` is a claim that nothing a file of that version holds has changed
     meaning, so a v2 file has to keep loading. What it must not do is come back saying it
     used no teacher: it used one and did not write it down, and the two are different
     facts. `None` is "not recorded"; `{}` would be "recorded as none".
+
+    **The v2 payload is written here rather than borrowed from `runs/commission01`.** It
+    used to read the first shipped camera.json and assert its version was 2, which held
+    only while nothing legitimately re-wrote those files -- correcting their drifted
+    geometry on 2026-09-01 stamped them v3 and this test failed for a reason that had
+    nothing to do with v2 files. A schema fixture that a valid re-commissioning can break
+    was pinning the wrong thing.
     """
-    src = pathlib.Path(__file__).resolve().parents[1] / "runs" / "commission01"
-    v2_files = sorted(src.glob("*.camera.json"))
-    if not v2_files:
-        pytest.skip("no commissioned cameras in this checkout")
+    payload = {
+        "schema_version": 2,
+        "camera_id": "Test-cam01",
+        "image_size_px": [960, 540],
+        "camera": {"fx": 700.0, "fy": 700.0, "cx": 480.0, "cy": 270.0},
+        "plane": {"height": 2.49, "pitch": 0.8645, "roll": 0.0147},
+        "lens": None,
+        "zones": [],
+        "shelf_rois_px": [],
+        "false_positive_polygons_px": [],
+        "mask_files": {},
+        "mask_ignore": 255,
+        "plate_file": None,
+        "plate_sha256": None,
+        "commissioned_at": "2026-08-19",
+    }
+    assert "teachers" not in payload, "a v2 file is one written before the field existed"
+    path = tmp_path / "v2.camera.json"
+    path.write_text(json.dumps(payload))
 
-    raw = json.loads(v2_files[0].read_text())
-    assert raw["schema_version"] == 2, "this fixture is here to pin the OLD version"
-    assert "teachers" not in raw
-
-    loaded = CameraFile.load(v2_files[0])
-    assert loaded.teachers is None
+    assert CameraFile.load(path).teachers is None
 
 
 def test_teachers_survives_a_save_and_load_round_trip(tmp_path):

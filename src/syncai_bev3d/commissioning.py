@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import math
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -95,6 +96,61 @@ def from_onboard_calib(path: str | Path) -> CameraFile:
     )
     out.validate()
     return out
+
+
+def regeometry_from_calib(camera_json: str | Path, calib: str | Path) -> CameraFile:
+    """Push a corrected calibration into a camera.json without losing what came after it.
+
+    **The pipeline was one-directional and this is the missing return leg.**
+    :func:`from_onboard_calib` writes a file carrying only what the scan measured, so
+    re-running it on a camera that has since been commissioned discards the later passes:
+    on Taichung-cam10 that is 13 mask files, 14 zones, 5 shelf ROIs and 3 false-positive
+    polygons. There was therefore no supported way to correct the geometry of a
+    commissioned camera, and on 2026-09-01 seven of the eight shipped cameras had drifted
+    without anything saying so -- Taichung-cam10 by 0.30 m, its camera.json still reading
+    2.87 m against a calib.json that had been re-fitted to 2.57 m, both stamped with the
+    same `commissioned_at`.
+
+    **Zones are in metres and therefore move with the geometry.** They are rescaled rather
+    than preserved: with pitch and roll unchanged, `pixel_to_ground` puts a floor pixel at
+    a distance proportional to the plane height, so multiplying every zone point by
+    `height_new / height_old` is exact, not an approximation. Everything in pixel space --
+    mask files, shelf ROIs, false-positive polygons -- is unaffected by a height change and
+    is carried across untouched.
+
+    **A pitch or roll change is refused.** That linearity is what makes the rescale exact,
+    and it does not hold when the plane's orientation moves: the zones would have to be
+    re-derived from the masks rather than scaled. Refusing is the honest answer, because a
+    scaled zone under a changed pitch is wrong in a way nothing downstream would notice.
+    """
+    existing = CameraFile.load(camera_json)
+    fresh = from_onboard_calib(calib)
+
+    d_pitch = abs(math.degrees(fresh.plane.pitch - existing.plane.pitch))
+    d_roll = abs(math.degrees(fresh.plane.roll - existing.plane.roll))
+    if max(d_pitch, d_roll) > 0.05:
+        raise ValueError(
+            f"{existing.camera_id}: pitch moved {d_pitch:.2f} deg and roll {d_roll:.2f} deg. "
+            "The metre zones can only be rescaled while the plane's orientation holds; "
+            "re-derive them from the masks instead of scaling them."
+        )
+
+    ratio = fresh.plane.height / existing.plane.height
+    zones = tuple(
+        replace(z, points_m=tuple((x * ratio, z_m * ratio) for x, z_m in z.points_m))
+        for z in existing.zones
+    )
+    return replace(
+        existing,
+        camera=fresh.camera,
+        plane=fresh.plane,
+        lens=fresh.lens,
+        plate_file=fresh.plate_file,
+        plate_sha256=fresh.plate_sha256,
+        commissioned_at=fresh.commissioned_at,
+        teachers=fresh.teachers,
+        zones=zones,
+    )
 
 
 def render_metre_grid(

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TensorRT throughput sweep for the 96-stream x 15 fps target (= 1,440 frames/s).
+"""TensorRT throughput sweep for the 96-stream x 5 fps target (= 480 frames/s).
 
     python3 scripts/bench_trt.py exports/pro6000/xl_b*.onnx --out runs/bench_pro6000
 
@@ -35,7 +35,11 @@ import tensorrt as trt
 from cuda.bindings import runtime as cudart  # ships with tensorrt's cuda dependency
 
 LOGGER = trt.Logger(trt.Logger.WARNING)
-TARGET_FPS = 1440.0  # 96 streams x 15 fps
+# PLAN §7.4 revised the delivery target to 96 streams at 5 fps on 2026-08-26. This
+# constant kept the 1,440 it replaced, so every row this script printed for six days
+# was scored against a requirement the project had already dropped -- and read as a
+# 3.5x shortfall on 2026-09-01 what is actually 0.77x of the real target.
+TARGET_FPS = 480.0  # 96 streams x 5 fps (PLAN §7.4, revised 2026-08-26)
 
 
 def check(err):
@@ -57,6 +61,22 @@ def to_fp16(onnx: Path) -> Path:
 
     model = onnx_lib.load(str(onnx))
     model = float16.convert_float_to_float16(model, keep_io_types=True)
+
+    # **The converter rewrites tensors, not a Cast's stated destination**, and a graph
+    # that takes a uint8 image casts it to float32 as its first act. That Cast keeps
+    # saying FLOAT while the mean/std beside it become FLOAT16, and TensorRT refuses the
+    # subtraction: "SUB must have same input types. But they are of types Float and Half".
+    # Only the cast fed by the graph input is rewritten -- the ones `keep_io_types` adds
+    # at the outputs say FLOAT on purpose, and rewriting those would change the contract
+    # the harness and every host read the buffers under.
+    entry = {i.name for i in model.graph.input}
+    for node in model.graph.node:
+        if node.op_type != "Cast" or not set(node.input) & entry:
+            continue
+        for attr in node.attribute:
+            if attr.name == "to" and attr.i == onnx_lib.TensorProto.FLOAT:
+                attr.i = onnx_lib.TensorProto.FLOAT16
+
     onnx_lib.save(model, str(out))
     return out
 

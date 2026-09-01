@@ -600,24 +600,35 @@ order. A component with no step is not scheduled, it is assumed.
    vocabulary change silently empties `analytics/events/zones.py:346`'s default class list
    — the stock-removal alarm stops firing without an exception. Decide at step 4.
 
-29. **The serving target is bound by PCIe, and by the input rather than the output.**
-   Measured 2026-08-31 on the RTX PRO 6000 at 640x1120, fp16, from
-   `exports/pro6000_xl20260825/` (batch 16): compute clears the 1,440 f/s target, and
-   **end to end nothing comes within a third of it** — plain 1149.8 compute / 354.1 with
-   copies, `--argmax-seg` 1097.6 / 412.5.
+29. ~~The serving target is bound by PCIe~~ — **cleared 2026-09-01, and the entry that
+   said otherwise was scored against a target this document had already replaced.**
+   `bench_trt.py` still held `TARGET_FPS = 1440` — 96 streams at 15 fps — six days after
+   §7.4 revised delivery to **96 x 5 fps = 480 f/s**, so the first version of this entry
+   read a 3.5x shortfall where the real figure was 0.77x.
 
-   The flag wins by 16.5%, but far less than its payload saving suggests: it takes the
-   outputs from 296.03 MB to 32.25 MB (9.2x) while the **fp32 input stays at 137 MB**, so
-   total transfer only falls 433 → 169 MB. **The remaining cost is the upload.** Two ways
-   out, neither started: a uint8 input contract (4x off the input), or keeping frames off
-   PCIe entirely via the NVDEC path §7 decision 8 already chose.
+   Measured on the RTX PRO 6000 at 640x1120, fp16, batch 16, end to end with both copies:
 
-   Two caveats bind these numbers. `bench_trt.py`'s end-to-end figure **never copied the
-   outputs back** until `69ede66` — it was engine + upload, so any earlier `results.json`
-   is upload-only and the flag it was cited to evaluate was the one thing it could not
-   see. And the numbers are not repeatable on a shared card: the same engine measured
-   1468 and 1149.8 compute on two runs. Both are indicative until something re-runs them
-   on an idle GPU.
+   | export | compute | + copies | vs 480 |
+   |---|---|---|---|
+   | plain | 916.2 | 368.8 | 0.77x |
+   | `--argmax-seg` | 848.0 | 433.3 | 0.90x |
+   | `--argmax-seg --uint8-input` | 848.9 | **633.3** | **1.32x** |
+
+   **`--uint8-input` is what clears it** (`exports/pro6000_xl20260825/xl_last_u8in_b*`).
+   The image is the larger half of the round trip once the outputs are class ids rather
+   than logits — 137 MB of fp32 against 32 MB of uint8 output at batch 16 — and a byte
+   holds 0-255 exactly, so the pixels are identical and `--check-parity` holds it to that
+   (worst 1.52e-05 against a 1e-4 tolerance). The binding is renamed `image_rgb_255_u8`
+   so a float host fails to find it rather than misreading it.
+
+   Two things this cost on the way, both now fixed: `bench_trt.py`'s end-to-end figure
+   never copied the outputs back (`69ede66`), and its fp16 conversion left an input-side
+   `Cast` saying FLOAT while the constants beside it became FLOAT16, which TensorRT
+   refuses — the shape any non-float input contract produces.
+
+   **Still not measured on an idle card.** Three ~800 MB processes sit on the GPU, and the
+   same engine has read 1468 and 916 compute on different runs. The ordering above is
+   stable across runs; the absolute numbers are not.
 
 28. **The best terrain checkpoint in the tree is not the one anything uses.** Measured
    2026-08-31, final epoch of each run (which is what `last.pt` is), the same recipe:
