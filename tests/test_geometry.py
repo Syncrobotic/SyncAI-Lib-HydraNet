@@ -26,6 +26,10 @@ from syncai_hydranet.geometry import (
     pixel_to_ground,
     unproject,
 )
+from syncai_hydranet.geometry.ground import (
+    distort_points_equidistant,
+    undistort_points_equidistant,
+)
 from syncai_hydranet.labels import IGNORE
 
 CAM = Camera.from_vfov(512, 288, 65.0)
@@ -316,3 +320,106 @@ def test_intrinsics_rescale_with_the_image():
     u1, v1, _ = ground_to_pixel(np.array([1.0]), np.array([4.0]), half, PLANE)
     assert u1[0] == pytest.approx(u0[0] / 2, abs=1e-6)
     assert v1[0] == pytest.approx(v0[0] / 2, abs=1e-6)
+
+
+# --- the lens model with no pole in the frame ------------------------------------------
+
+FISHEYE_W, FISHEYE_H = 3840, 2160
+FISHEYE_C = (FISHEYE_W / 2.0, FISHEYE_H / 2.0)
+FISHEYE_R = math.hypot(FISHEYE_H, FISHEYE_W) / 2.0
+
+
+def _radii(pts):
+    d = np.asarray(pts, float) - np.asarray(FISHEYE_C)
+    return np.hypot(d[:, 0], d[:, 1]) / FISHEYE_R
+
+
+def _frame_points():
+    """Centre, mid-field, near-edge and both corners of a 4K frame."""
+    return np.array(
+        [
+            [FISHEYE_C[0], FISHEYE_C[1]],
+            [2900.0, 1300.0],
+            [3700.0, 1200.0],
+            [3830.0, 2150.0],
+            [FISHEYE_W - 1.0, FISHEYE_H - 1.0],
+        ]
+    )
+
+
+@pytest.mark.parametrize("theta_max", [15.0, 30.0, 60.0, 80.0, 89.0])
+def test_the_equidistant_model_has_no_pole_inside_the_frame(theta_max):
+    """The property the division model does not have, and the reason this model exists.
+
+    ``r_u = r_d / (1 + k1 r_d^2)`` puts its pole at ``r_d = 1/sqrt(-k1)``, which is inside
+    a frame whose corner is ``r_d = 1`` as soon as ``|k1| >= 1``. At the ``k1 = -1.05``
+    this project inherited, a pixel at ``r_d = 0.994`` maps to ``(-49617, -27791)``.
+    Here every point in the frame stays in the frame, at every legal field angle.
+    """
+    out = undistort_points_equidistant(_frame_points(), theta_max, FISHEYE_C, FISHEYE_R)
+    assert np.isfinite(out).all(), "no pixel in the frame may map to a non-number"
+    r = _radii(out)
+    assert (r <= 1.0 + 1e-9).all(), f"a point left the frame: radii {r}"
+    assert (r >= -1e-9).all()
+
+
+@pytest.mark.parametrize("theta_max", [15.0, 45.0, 75.0, 89.0])
+def test_the_corner_is_fixed_so_a_frame_bound_still_means_something(theta_max):
+    """`r_d = 1 -> r_u = 1`, which is what makes an edge gate legible after the transform.
+
+    The person-box edge gate asks "did the frame cut this person in half" by comparing
+    against the frame's own width. Under the division model that comparison silently
+    became "is this person far off the optical axis": at the fleet's mild `k1 = -0.225` it
+    dropped whole people at raw x 3552-3738 from a 3840-wide frame. A model that maps the
+    corner to itself cannot produce that class of error.
+    """
+    # The exact corner of the normalisation, not the last pixel: `radius` is the half
+    # diagonal, so `r = 1` sits at centre + (W/2, H/2). Pixel (W-1, H-1) is r = 0.999 and
+    # would test the model's interior while claiming to test its corner.
+    corner = np.array([[FISHEYE_W, FISHEYE_H]], float)
+    assert _radii(corner)[0] == pytest.approx(1.0), "the fixture is the corner it names"
+    r_out = _radii(undistort_points_equidistant(corner, theta_max, FISHEYE_C, FISHEYE_R))[0]
+    assert r_out == pytest.approx(1.0, rel=1e-9)
+
+
+@pytest.mark.parametrize("theta_max", [10.0, 35.0, 60.0, 85.0])
+def test_undistort_and_distort_are_inverses(theta_max):
+    """Closed form both ways, with no branch to choose and no region that returns NaN."""
+    pts = _frame_points()
+    back = distort_points_equidistant(
+        undistort_points_equidistant(pts, theta_max, FISHEYE_C, FISHEYE_R),
+        theta_max,
+        FISHEYE_C,
+        FISHEYE_R,
+    )
+    assert back == pytest.approx(pts, abs=1e-6)
+
+
+def test_no_lens_is_an_interior_point_of_the_range_not_a_boundary():
+    """`theta_max -> 0` is the identity, which is what lets a flat control read as a peak.
+
+    Under the division model "no distortion" is `k1 = 0`, also interior -- but its search
+    has to be widened to reach a strong lens, and widening reaches the pole. Here the
+    whole legal range `(0, 90)` is usable, so a control that returns "no lens" is a
+    measurement rather than a refusal at a bound.
+    """
+    pts = _frame_points()
+    assert undistort_points_equidistant(pts, 1e-9, FISHEYE_C, FISHEYE_R) == pytest.approx(pts)
+    gentle = undistort_points_equidistant(pts, 0.5, FISHEYE_C, FISHEYE_R)
+    assert gentle == pytest.approx(pts, abs=1.0), "half a degree is nearly the identity"
+
+
+def test_a_stronger_field_angle_pulls_the_interior_in_further():
+    """Monotone in the parameter, which a fit needs and which names its direction.
+
+    Barrel distortion compresses the edges, so undoing it expands them relative to the
+    interior. A larger field half-angle means a stronger lens, and the mid-field point has
+    to move further in as it grows -- if this were not monotone the objective would have
+    two answers for one lens.
+    """
+    mid = np.array([[2900.0, 1300.0]])
+    radii = [
+        _radii(undistort_points_equidistant(mid, t, FISHEYE_C, FISHEYE_R))[0]
+        for t in (10.0, 30.0, 50.0, 70.0, 85.0)
+    ]
+    assert radii == sorted(radii, reverse=True), f"not monotone: {radii}"
