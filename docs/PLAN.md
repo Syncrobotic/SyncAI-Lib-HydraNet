@@ -652,9 +652,21 @@ order. A component with no step is not scheduled, it is assumed.
    Two things to settle before promoting, because promotion re-cuts every published
    figure and re-runs the fleet: whether the dated run was deliberately not promoted, and
    whether the two web-metric regressions matter for anything shipped. **Deferred by the
-   user on 2026-08-31 until there is more information.** Note also that the dated run's
-   `selection.json` names `terrain_mIoU/site_seg03` as its primary metric but records
-   0.7030, which is that run's best plain `terrain_mIoU`; its `site_seg03` best is 0.6681.
+   user on 2026-08-31 until there is more information.**
+
+   The `selection.json` discrepancy noted here on 2026-08-31 — the file names
+   `terrain_mIoU/site_seg03` as its primary metric but records 0.7030, which is that run's
+   best plain `terrain_mIoU`, while its `site_seg03` best is 0.6681 — **was a reporting
+   bug, fixed 2026-09-01.** `runmeta.HEAD_METRICS` matched metric names exactly, and
+   `evaluator._det_metrics` writes an unqualified key only for a run with a single
+   detection val set. Every retail run has three or four, so the report skipped the
+   detection head entirely and showed the bare `terrain_mIoU` in place of the qualified
+   primary. Replayed over the same `metrics.jsonl`, it now adds a third figure to the
+   promotion decision: **the dated run's `best.pt` (epoch 15) gives up 0.0576 on
+   `detection_mAP/coco_person`** against the 0.2022 it reaches at epoch 60, which is the
+   `last.pt` number tabled above. The table compares `last.pt` to `last.pt` and is
+   unaffected; what changes is that promoting the dated run and then reading its `best.pt`
+   for anything person-shaped costs more than the table shows.
 
 5. **Retail dashboard surface unscoped** — the numbers fall out of L1 free; what a store
    manager opens, at what cadence, is a product question. Blocks nothing before step 6.

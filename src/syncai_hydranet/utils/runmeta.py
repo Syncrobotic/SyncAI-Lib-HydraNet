@@ -212,8 +212,43 @@ def append_metrics(out_dir: Path, record: dict) -> None:
 # `depth_delta1` joins these because a depth head is otherwise invisible to the
 # selection report: a checkpoint chosen on segmentation could have given up half its
 # depth accuracy and nothing would say so. Scaled like mIoU (0-1, higher better), so the
-# report's 0.02 regression threshold means the same thing for it.
-HEAD_METRICS = ("terrain_mIoU", "traversability_mIoU", "detection_mAP", "depth_delta1")
+# report's 0.02 regression threshold means the same thing for it. `pose_PCK@0.2h` joins
+# them for the same reason and is scaled the same way.
+HEAD_METRICS = (
+    "terrain_mIoU",
+    "traversability_mIoU",
+    "detection_mAP",
+    "depth_delta1",
+    "pose_PCK@0.2h",
+)
+
+
+def head_metric_keys(rows: list[dict]) -> list[str]:
+    """Every head-level key present in `rows`, qualified by dataset or not.
+
+    These are names, not keys. `detection_mAP` is what a run with ONE detection val set
+    writes; a run with two or more writes `detection_mAP/<dataset>` for each and no
+    unqualified key at all, because `evaluator._det_metrics` sets its suffix from
+    `len(det_results)`. Matching the bare name therefore matched nothing on every
+    multi-detection-dataset run this project has, which is all of the retail ones:
+    `hydranet_retail_pose02` and `...b03_cw_xl-20260825-162131` both have a
+    `selection.json` whose `heads` block holds `terrain_mIoU` alone, while the second
+    one's `best.pt` scores 0.1447 on `detection_mAP/coco_person` against the 0.2022 its
+    `last.pt` reaches. A 40% worse person detector is exactly what this report exists to
+    print, and it was found by hand on 2026-08-31 instead.
+
+    The same blindness misreports the head that *is* shown. That run's `selection.json`
+    names `terrain_mIoU/site_seg03` as its primary metric and records 0.7030 beside it,
+    which is its best plain `terrain_mIoU`; its `site_seg03` best is 0.6681. The two keys
+    now appear under their own names, so neither is read as the other.
+
+    Split on the first `/` rather than testing a prefix: `detection_mAP50/coco_person`
+    and `terrain_mIoU_classes` both begin with a head metric's name and neither is one --
+    the first is a second IoU threshold on the same head, the second is a list of class
+    names that `float()` would refuse.
+    """
+    present = {k for r in rows for k in r}
+    return [k for m in HEAD_METRICS for k in sorted(present) if k.partition("/")[0] == m]
 
 
 def selection_report(rows: list[dict], primary_metric: str) -> tuple[dict, list[str]]:
@@ -241,10 +276,8 @@ def selection_report(rows: list[dict], primary_metric: str) -> tuple[dict, list[
     summary: dict[str, dict] = {}
     warnings: list[str] = []
 
-    for m in HEAD_METRICS:
+    for m in head_metric_keys(rows):
         have = [r for r in rows if m in r]
-        if not have:
-            continue
         top = max(have, key=lambda r: r[m])
         at_sel = chosen.get(m)
         summary[m] = {
