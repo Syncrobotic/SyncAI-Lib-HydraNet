@@ -1701,6 +1701,56 @@ something it does not support.
    checkpoint that traded real person detection for teacher agreement would have shipped
    with `selection.json` naming `terrain_mIoU` and nothing else. It now prints the trade.
 
+   **ANSWERED 2026-09-02: the site person boxes help every head and cost nothing
+   measurable.** The run completed 07:33, all 120 epochs, `runs/hydranet_retail_person01`.
+   `last.pt` to `last.pt` against pose02, same recipe, one dataset block apart:
+
+   | metric | pose02 | person01 | delta |
+   |---|---|---|---|
+   | `detection_mAP/coco_person` | 0.2106 | **0.2157** | +0.0050 |
+   | `detection_mAP/site_boxes` | 0.1246 | **0.1444** | +0.0198 |
+   | `detection_mAP/site_boxes03` | 0.1446 | **0.1518** | +0.0071 |
+   | `detection_mAP/site_person` | n/a | 0.7386 | new |
+   | `pose_PCK@0.2h` | 0.9345 | 0.9327 | -0.0019 |
+   | `terrain_mIoU/site_seg03` | 0.5843 | **0.6718** | +0.0874 |
+   | `terrain_mIoU/ade20k` | 0.6798 | 0.6770 | -0.0028 |
+
+   **The failure mode did not occur.** `coco_person` is the teacher-independent number --
+   COCO person boxes are human-labelled -- and it rose. The run did not buy teacher
+   agreement with real person detection. Read the shape rather than the endpoint, though:
+   person01 was far ahead early (0.1890 at epoch 15 against pose02's 0.1342) and the lead
+   closed to +0.0050 by epoch 120. What the site labels bought on COCO is **speed**; the
+   endpoint difference is within what one seed can say.
+
+   **The largest gain is not in detection and not in the `person` class.** Terrain rose
+   +0.0874 on `site_seg03` and -0.0028 on `ade20k`, and the per-class split is floor
+   +0.0739, wall +0.0620, fixture +0.0560, `05_person` **-0.0047**. So this is not the
+   `person` channel helping itself: the block's 14,654 site images supervise detection
+   only and carry `class_mask [1, 0, 0, 0]`, but they still pass through the shared
+   backbone and neck, and they are the same domain as `site_seg`/`site_seg03`. The site
+   person block acted as site-domain representation data. `03_column` reads +0.1158 and
+   should not be quoted: it is the class that scores on val and predicts nothing in the
+   store, so a val IoU on it is not a measurement of the class.
+
+   **`detection_mAP/site_person` 0.7386 is agreement with Grounding DINO at 0.35, its own
+   training teacher, and has no prior.** It is not 74% accuracy at finding people and must
+   not be quoted as one.
+
+   **Costs, all visible for the first time because of `2387ef6`.** `best.pt` is epoch 118
+   and gives up 0.0341-0.0415 of terrain mIoU, which peaked at epochs 18-22; every
+   detection head and the pose head sit within 0.001 of their own best at that checkpoint.
+   Before that commit `selection.json` would have carried one line and none of this.
+
+   **Provenance.** systemd-oomd SIGKILLed the unit five times (00:19, 00:55, 01:12, 01:37,
+   02:12) on PSI memory pressure, not real OOM -- a second training run,
+   `quadhydra-train`, started at 00:51 and competed for RAM and the card. Each restart
+   resumed from `last.pt`; all 120 epochs are present, with epochs 34 and 40 logged twice
+   where a resume re-ran them. Wall clock 8 h 33 min. **No throughput or epoch-time figure
+   from this run is usable** -- it shared the GPU for most of its length.
+
+   **Single seed.** These deltas have no seed-variance context; `hydranet_retail_security_seeds`
+   is the shape that would give them one.
+
    **Pre-flight, 2026-09-01, built on CPU from the config rather than read off it**:
    `split_leaks` clean, `check_config` silent, `site_person` 14,654 train images at 0.2 →
    91 detection steps carrying `class_mask [1, 0, 0, 0]`. `detection_class_steps` is
