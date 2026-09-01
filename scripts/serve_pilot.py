@@ -544,8 +544,11 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--out", type=Path, default=Path("runs/serve_pilot01"))
     r.add_argument("--seconds", type=float, default=60.0)
     r.add_argument("--streams", type=int, default=16)
-    r.add_argument("--config", default="configs/hydranet_retail_security_b03_cw_xl.yaml",
-                   help="read only for data.terrain_classes")  # fmt: skip
+    r.add_argument(
+        "--config",
+        default="runs/hydranet_retail_security_b03_cw_xl-20260825-162131/config.yaml",
+        help="read only for data.terrain_classes",
+    )
     r.add_argument("--stream-fps", type=float, default=15.0,
                    help="pace each simulated stream at this rate (the 96x15 target "
                    "rate per stream); 0 free-runs the decoders, which saturates the "

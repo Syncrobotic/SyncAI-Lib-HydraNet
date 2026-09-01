@@ -62,6 +62,7 @@ from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 from syncai_hydranet.models.hydranet import build_model
+from syncai_hydranet.shipped import SHIPPED_RUN
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
 from syncai_hydranet.utils.face_blur import (
     BLUR_THR,
@@ -71,7 +72,10 @@ from syncai_hydranet.utils.face_blur import (
 from syncai_hydranet.utils.visualize import preprocess
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
-RUN = ROOT / "runs/hydranet_retail_security_b03_cw_xl"
+
+# The run the tools ship from, named once in `syncai_hydranet.shipped`. Six files
+# used to carry their own copy of this string and the best run was in none of them.
+RUN = SHIPPED_RUN
 TRACK_COLORS = [
     (255, 99, 71), (65, 180, 255), (255, 200, 60), (120, 220, 120),
     (220, 120, 255), (255, 150, 100), (100, 230, 210), (250, 100, 160),

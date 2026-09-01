@@ -2,8 +2,8 @@
 """Three inference-side output stabilisers, measured with flicker_baseline's own ruler.
 
   nice -n 10 .venv/bin/python scripts/stable_infer.py --suite \
-    --config configs/hydranet_retail_security_b03_cw_xl.yaml \
-    --checkpoint runs/hydranet_retail_security_b03_cw_xl/best.pt \
+    --config runs/hydranet_retail_security_b03_cw_xl-20260825-162131/config.yaml \
+    --checkpoint runs/hydranet_retail_security_b03_cw_xl-20260825-162131/best.pt \
     --input datasets/studioa_clips/Kaohsiung-cam04/archive_20260816-112757_20260816-113301.mp4 \
     --static-mask datasets/studioa_static/Kaohsiung-cam04/static_20260816-112757.png \
     --out runs/stable01
