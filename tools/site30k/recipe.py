@@ -298,7 +298,7 @@ class CameraGeometry:
                 flush=True,
             )
             return
-        self.geom = M.GeomTeacher(camera, third)
+        self.geom = M.GeomTeacher(camera, third, calib_root=self.CALIB_ROOT)
         # A default, not a constant: a second fleet was onboarded to `runs/onboard02`
         # on 2026-08-27 and its cameras carry the same schema. Rebindable by a caller
         # (`CameraGeometry.CALIB_ROOT = ...`) the same way `CACHE` above already is,

@@ -308,13 +308,27 @@ class GeomTeacher:
     """Per-camera geometry: floor backprojection and height-above-ground maps.
 
     Everything is derived from artifacts other sessions measured -- calib
-    (runs/onboard01), zones (runs/zones01), the static plate -- through the package's
-    own geometry code (undistort_points, pixel_to_ground, unproject). Heights are in
-    metres via the calib's person-height scale; its stated systematic band is 6-11%,
-    which is why the class bands must come from a sweep, not from a guess.
+    (`runs/onboard01` by default), zones (runs/zones01), the static plate -- through the
+    package's own geometry code (undistort_points, pixel_to_ground, unproject). Heights
+    are in metres via the calib's person-height scale; its stated systematic band is
+    6-11%, which is why the class bands must come from a sweep, not from a guess.
+
+    **`calib_root` is an argument because a second reader of it already existed and this
+    one ignored it.** `tools/site30k/recipe.py`'s `CameraGeometry.CALIB_ROOT` is
+    rebindable exactly so a caller can point at another sweep -- `masks_pass.py` exposes
+    it as `--calib-root` -- but the rebinding stopped here, at a hardcoded
+    `runs/onboard01`. The flag therefore worked for cameras that were in `onboard01`
+    anyway and failed for the ones it existed for: `runs/onboard02`'s ten RTSP channels,
+    and `dingpu-1f/test1`, which is where it surfaced on 2026-09-01.
     """
 
-    def __init__(self, camera: str, third: ThirdOpinion, frame_hw=(1080, 1920)):
+    def __init__(
+        self,
+        camera: str,
+        third: ThirdOpinion,
+        frame_hw=(1080, 1920),
+        calib_root: Path | None = None,
+    ):
         import math as _math
 
         from matplotlib.path import Path as MplPath
@@ -333,7 +347,8 @@ class GeomTeacher:
             unproject,
         )
 
-        calib = json.loads((HERE.parent / f"runs/onboard01/{camera}.calib.json").read_text())
+        root = Path(calib_root) if calib_root is not None else HERE.parent / "runs/onboard01"
+        calib = json.loads((root / f"{camera}.calib.json").read_text())
         zones = json.loads((HERE.parent / f"runs/zones01/{camera}.zones.json").read_text())
         if zones.get("units") != "m" or calib.get("scale") is None:
             raise SystemExit(f"{camera}: zones/calib not metric; v2 floor recipe needs both")
