@@ -1672,11 +1672,44 @@ something it does not support.
    should be able to attribute a change to the new labels, and a ratio that drowns COCO
    cannot.
 
-   **Still open, and it still gates the run**: what `primary_metric` the run selects on.
-   §7.9's trap fires when the metric belongs to a different head, so it should be a
-   `person` detection metric and not `terrain_mIoU`; which one is a decision, because
-   `person` mAP on the **site** split is what the run exists to move and the val split's
-   person labels come from the same teacher.
+   ~~**Still open, and it still gates the run**: what `primary_metric` the run selects
+   on.~~ **Decided `detection_mAP/site_person`** — taken in
+   `configs/hydranet_retail_person01.yaml` on 2026-08-28 and confirmed 2026-09-01 before
+   spending the card. It is the head the run exists to move, on the footage it exists to
+   move it on, which is what §7.9's trap asks for; `detection_val_interval` is therefore 1,
+   which `config_schema._check_detection_val_interval` requires.
+
+   **The caveat in the question above is not answered by the choice, it is answered by
+   reading three numbers.** Those val person boxes are Grounding DINO at 0.35, the same
+   teacher as the training labels, so this metric rises with agreement and cannot
+   distinguish a better detector from a better imitation. It selects `best.pt`; it is not
+   the run's verdict. The verdict is:
+
+   | number | what it answers | prior |
+   |---|---|---|
+   | `detection_mAP/site_person` | did the new labels move the head at all | none — first run |
+   | `detection_mAP/coco_person` | is real person detection still there | 0.2106 (pose02 `last.pt`) |
+   | `detection_mAP/site_boxes03` | did the product classes pay for it | 0.1496 (pose02, epoch 65) |
+
+   A `site_person` gain bought with a `coco_person` collapse is the failure mode, not the
+   result. Against pose02 the comparison is **`last.pt` to `last.pt`**, both at epoch 120
+   of the same recipe, for the reason 7a.28's table is built that way: `best.pt` is
+   selected by one head and is a different question.
+
+   **What made this safe to leave as-is rather than re-pointed at `coco_person`**: until
+   `2387ef6` the selection report could not see any detection metric at all, so a
+   checkpoint that traded real person detection for teacher agreement would have shipped
+   with `selection.json` naming `terrain_mIoU` and nothing else. It now prints the trade.
+
+   **Pre-flight, 2026-09-01, built on CPU from the config rather than read off it**:
+   `split_leaks` clean, `check_config` silent, `site_person` 14,654 train images at 0.2 →
+   91 detection steps carrying `class_mask [1, 0, 0, 0]`. `detection_class_steps` is
+   person 193/206 (94%), bag 102/206 (50%), `boxed_stock` and `device` 13/206 (6%) — the
+   product classes fall as a share and not as an amount, 13 steps before and 13 after.
+   The epoch grows 287 → 378 steps (1.32x; the *detection* steps grow 115 → 206, 1.79x)
+   and detection validation grows to 11,609 images every epoch. Estimated ~9 h from
+   pose02's measured 139 s non-detection epoch plus 26 s per 2,961 detection val images,
+   so a 23:00 start finishes around 08:00 — consistent with the timer unit's own estimate.
 
 21. **`masks_pass` is not the bev-3d bottleneck, and three explanations for the missing
    furniture are ruled out.** Opened 2026-08-28 on the handoff's statement that the render
