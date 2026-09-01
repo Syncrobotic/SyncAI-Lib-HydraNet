@@ -37,6 +37,9 @@ def run_camera(camera, third, proc, model, static_concepts, plates_root=None, ou
     plates_root = plates_root or ROOT / "datasets/studioa_static"
     out_root = out_root or ROOT / "runs/commission01"
     geo = R.CameraGeometry(camera, third)
+    # Fills lx/lz on a camera with no cache yet. Without it this tool only ever worked
+    # on cameras the campaign had already been run for.
+    geo.ensure_level_frame()
     plate_dir = Path(plates_root) / camera
     slots = [p.stem.split("_", 1)[1] for p in sorted(plate_dir.glob("plate_*.png"))]
     plate_imgs, plate_cache = {}, {}

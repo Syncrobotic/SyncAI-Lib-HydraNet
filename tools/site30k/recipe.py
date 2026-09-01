@@ -335,6 +335,49 @@ class CameraGeometry:
             f"measurable geometry (undistort samples outside the plate)"
         )
 
+    def ensure_level_frame(self):
+        """Fill `lx`/`lz` -- the level-frame X/Z used for footprints -- and cache them.
+
+        **This lived in the campaign loop until 2026-09-01, which made `masks_pass.py`
+        work only on cameras whose cache someone else had already built.** The
+        constructor sets `lx`/`lz` to None on the fresh path and only the campaign filled
+        them, so a genuinely new camera reached `decide_structure` with None and died in
+        `np.isfinite(None)` several GPU-minutes in. Studio A's twenty-three never showed
+        it because their caches predate the tool. It belongs here: this class already owns
+        the cache and its `CALIB_ROOT`.
+        """
+        if self.lx is not None:
+            return
+        import math as _math
+
+        from syncai_bev3d.plate_calibration import run_depth, undistort_image
+        from syncai_hydranet.geometry.ground import unproject
+
+        calib = json.loads((self.CALIB_ROOT / f"{self.camera}.calib.json").read_text())
+        k1 = float(calib.get("k1_division_model") or 0.0)
+        vfov = float(calib["vfov_assumed_deg"])
+        plane = GroundPlane(
+            height=float(calib["height_m"]),
+            pitch=_math.radians(calib["pitch_deg"]),
+            roll=_math.radians(calib["roll_deg"]),
+        )
+        native = np.asarray(Image.open(calib["plate_used"]).convert("RGB"))
+        ph, pw = native.shape[:2]
+        depth = run_depth(undistort_image(native, k1)) * float(calib["scale"])
+        level = unproject(depth, GCamera.from_vfov(ph, pw, vfov)) @ plane.rotation
+        vv, uu = np.mgrid[0:H, 0:W].astype(np.float64)
+        und = undistort_points(
+            np.stack([uu.ravel(), vv.ravel()], 1),
+            k1,
+            (W / 2.0, H / 2.0),
+            _math.hypot(H, W) / 2.0,
+        )
+        su = np.clip(np.round(und[:, 0].reshape(H, W) * (pw / W)).astype(int), 0, pw - 1)
+        sv = np.clip(np.round(und[:, 1].reshape(H, W) * (ph / H)).astype(int), 0, ph - 1)
+        self.lx = level[..., 0][sv, su].astype(np.float32)
+        self.lz = level[..., 2][sv, su].astype(np.float32)
+        self.save_cache()
+
     def save_cache(self):
         """Written only once lx/lz exist, so the cache is never a partial one."""
         if self.lx is None or (self.CACHE / f"{self.camera}.npz").exists():
@@ -734,35 +777,7 @@ def main():
             f"  [{camera}] superpixels from the cleanest plate ({cleanest}, "
             f"{100 * float((plate_cache[(camera, cleanest)] == 5).mean()):.1f}% dirty)"
         )
-        if geo.lx is None:
-            # level-frame X/Z from the same depth the teacher used, for footprints
-            calib = json.loads((ROOT / f"runs/onboard01/{camera}.calib.json").read_text())
-            from syncai_bev3d.plate_calibration import run_depth, undistort_image
-            from syncai_hydranet.geometry.ground import unproject
-
-            k1 = float(calib.get("k1_division_model") or 0.0)
-            vfov = float(calib["vfov_assumed_deg"])
-            plane = GroundPlane(
-                height=float(calib["height_m"]),
-                pitch=math.radians(calib["pitch_deg"]),
-                roll=math.radians(calib["roll_deg"]),
-            )
-            native = np.asarray(Image.open(calib["plate_used"]).convert("RGB"))
-            ph, pw = native.shape[:2]
-            depth = run_depth(undistort_image(native, k1)) * float(calib["scale"])
-            level = unproject(depth, GCamera.from_vfov(ph, pw, vfov)) @ plane.rotation
-            vv, uu = np.mgrid[0:H, 0:W].astype(np.float64)
-            und = undistort_points(
-                np.stack([uu.ravel(), vv.ravel()], 1),
-                k1,
-                (W / 2.0, H / 2.0),
-                math.hypot(H, W) / 2.0,
-            )
-            su = np.clip(np.round(und[:, 0].reshape(H, W) * (pw / W)).astype(int), 0, pw - 1)
-            sv = np.clip(np.round(und[:, 1].reshape(H, W) * (ph / H)).astype(int), 0, ph - 1)
-            geo.lx = level[..., 0][sv, su].astype(np.float32)
-            geo.lz = level[..., 2][sv, su].astype(np.float32)
-            geo.save_cache()
+        geo.ensure_level_frame()
 
         floor_cam[camera], strict_only[camera] = camera_floor(camera, geo, slots, plate_cache)
 
