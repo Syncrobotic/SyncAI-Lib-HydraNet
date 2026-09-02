@@ -36,6 +36,7 @@ ffprobe cannot open.
 import argparse
 import hashlib
 import json
+import math
 import os
 import subprocess
 import sys
@@ -104,6 +105,297 @@ ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
 RUN = SHIPPED_RUN
 
 
+def _records_pass(
+    args, clip, src_w, src_h, size, model, device, cf, person_label, rng, staff_model
+):
+    """Every frame's model outputs the render loop consumes, recorded for replay.
+
+    The pre-pass a chunked render needs, `heads_video`'s pattern with one improvement
+    this tool's shape allows: the record carries the BLUR boxes and (when posed) the
+    keypoints too, so a render worker needs no model at all -- its whole job is
+    decode, blur, draw, encode. **Nothing is rounded**: boxes replay into the tracker,
+    the EMA and the stature medians, and a rounded box was measured to move one frame
+    in twenty-four under a lossless encoder.
+
+    Staff probabilities are recorded here, not left to the workers: a verdict is
+    accumulated over a track's whole life, and they are read off the RAW frame because
+    the face blur covers the torso band the classifier reads.
+    """
+    lo, hi = rng if rng else (0, args.frames)
+    out = []
+    for n, frame in enumerate(decode_frames(str(clip), src_w, src_h, args.fps)):
+        if n >= hi:
+            break
+        if n < lo:
+            continue
+        img = Image.fromarray(frame)
+        x, _canvas, region = preprocess(img, size)
+        with torch.no_grad():
+            res = model.predict(x.to(device), score_thr=min(BLUR_THR, args.score_thr))
+        det = res.get("detection", [{}])[0]
+        boxes = np.zeros((0, 4), np.float32)
+        kps = None
+        blur: list[list[float]] = []
+        if det and len(det.get("boxes", [])):
+            b_all = det["boxes"].cpu().numpy()
+            lab = det["labels"].cpu().numpy()
+            sc = det["scores"].cpu().numpy()
+            x0, y0, cw, _ch = region
+            b_all = (b_all - np.array([x0, y0, x0, y0])) * (src_w / cw)
+            person = lab == person_label
+            blur = [list(map(float, v)) for v in b_all[person & (sc >= BLUR_THR)]]
+            b = b_all[person & (sc >= args.score_thr)]
+            keep = [
+                i
+                for i, bb in enumerate(b)
+                if not in_fp_zone(cf, (bb[0] + bb[2]) / 4, (bb[1] + bb[3]) / 4)
+            ]
+            boxes = b[keep]
+            pose_rows = res.get("pose", [None])[0]
+            if pose_rows is not None and args.posed_figures:
+                kp = pose_rows.cpu().numpy()[person & (sc >= args.score_thr)][keep].copy()
+                kp[:, :, 0] = (kp[:, :, 0] - x0) * (src_w / cw)
+                kp[:, :, 1] = (kp[:, :, 1] - y0) * (src_w / cw)
+                kps = np.asarray(kp, np.float64).tolist()
+            n_dropped = len(b) - len(keep)
+        else:
+            n_dropped = 0
+        sp = (
+            None
+            if staff_model is None
+            else [
+                float(staff_model.probability_of_crop(_torso_crop(frame, bb))) for bb in boxes
+            ]
+        )
+        out.append(
+            {
+                "boxes": np.asarray(boxes, np.float64).tolist(),
+                "staff": sp,
+                "blur": blur,
+                "kps": kps,
+                "n_det": int(len(boxes) + n_dropped),
+                "n_fp": int(n_dropped),
+            }
+        )
+        if len(out) % 200 == 0:
+            print(f"  records {lo + len(out)}/{hi}", flush=True)
+    return out
+
+
+def _write_demo_tracks(args, camera, clip, staff_model, n_frames, positions) -> None:
+    """The track log that makes the right-hand panel checkable instead of merely
+    convincing: every figure in the video has a frame, an id and a floor position in
+    metres here. Written by the single-process path and the chunk orchestrator alike --
+    one function, so the two records cannot drift."""
+    log_path = ROOT / f"runs/commission01/{camera}.demo_tracks.json"
+    log_path.write_text(
+        json.dumps(
+            {
+                # **Every argument, wholesale, and not a hand-picked list.** This record
+                # held eight fields against a parser of ten, and on 2026-08-29 that cost
+                # a figure: a second session re-cut `demo_Taichung-cam10` without
+                # `--staff-colours` -- undoing `65a6b78`, which made it two-colour on
+                # purpose -- and nothing in the verdict named the flag, so the audit, the
+                # blur check and the staleness guard all passed on a figure that had
+                # silently changed. `--metre-scale` was missing on the same principle and
+                # is worse: `positions` below are in metres and two runs at 1.0 and
+                # 0.8824 produce different numbers under identical-looking provenance.
+                # An allowlist is broken again the day flag eleven lands;
+                # `tests/test_figures_are_audited.py` reads the parser and checks this.
+                "args": vars(args),
+                # And what the arguments RESOLVED to, because a path is not identity:
+                # `runs/` is gitignored and regenerable, so the same model file can be
+                # refitted at the same path with a different accuracy and no record
+                # would move. The figure's own legend prints this number.
+                "staff_model": None
+                if staff_model is None
+                else {
+                    "path": args.staff_colours,
+                    "sha256": hashlib.sha256(Path(args.staff_colours).read_bytes()).hexdigest(),
+                    "accuracy": staff_model.accuracy,
+                    "held_out": staff_model.held_out,
+                    "held_out_n": staff_model.held_out_n,
+                    "min_accuracy_required": args.staff_min_accuracy,
+                },
+                "camera": camera,
+                "clip": clip.name,
+                "checkpoint": args.checkpoint,
+                "score_thr": args.score_thr,
+                # The threshold the faces were blurred at, recorded because an auditor
+                # has to reconstruct the blur set THIS render applied. Reading the
+                # current constant instead answers "would today's threshold have covered
+                # them", which is a different and more flattering question -- and the
+                # constant moved on 2026-08-28 (0.10 -> 0.07), so the two now differ.
+                "blur_score_thr": BLUR_THR,
+                "blur_faces": not args.no_blur,
+                "fps": args.fps,
+                "frames": n_frames,
+                "positions": positions,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+
+
+def _worker_cmd(args, camera):
+    """This script re-invoked with the caller's own flags, minus the fan-out ones."""
+    cmd = [sys.executable, str(Path(__file__).resolve()), camera,
+           "--frames", str(args.frames), "--fps", str(args.fps),
+           "--checkpoint", args.checkpoint, "--score-thr", str(args.score_thr),
+           "--metre-scale", str(args.metre_scale)]  # fmt: skip
+    if args.clip:
+        cmd += ["--clip", args.clip]
+    if args.no_blur:
+        cmd.append("--no-blur")
+    if args.posed_figures:
+        cmd.append("--posed-figures")
+    if args.staff_colours:
+        cmd += ["--staff-colours", args.staff_colours]
+        if args.staff_min_accuracy is not None:
+            cmd += ["--staff-min-accuracy", str(args.staff_min_accuracy)]
+    return cmd
+
+
+def _render_in_chunks(args, camera, clip, cf, bounds, staff_model) -> int:
+    """Fan the frames out over processes, then join the segments back into one file.
+
+    `heads_video`'s orchestration shape: a fanned-out records pass (each worker runs
+    the model over a frame range), then render workers that REPLAY the track state
+    from the merged record and draw only their own chunk -- no model loaded, which is
+    what makes a demo render worker cheap enough that the fan-out is nearly linear.
+    """
+    t0 = time.time()
+    per = math.ceil(args.frames / args.workers)
+    edges = [(i, min(i + per, args.frames)) for i in range(0, args.frames, per)]
+    dev = ROOT / "assets/dev"
+    r_paths, procs = [], []
+    for k, (lo, hi) in enumerate(edges):
+        rp = dev / f"_demo_{camera}_{os.getpid()}_rec{k:02d}.json"
+        r_paths.append(rp)
+        procs.append(
+            subprocess.Popen(
+                [*_worker_cmd(args, camera), "--chunk", f"{lo}:{hi}", "--records-only", str(rp)]
+            )
+        )
+    if any(pr.wait() for pr in procs):
+        for rp in r_paths:
+            rp.unlink(missing_ok=True)
+        print(f"{camera}: a records pass failed; nothing written", file=sys.stderr)
+        return 1
+    records = []
+    for rp in r_paths:
+        records += json.loads(rp.read_text())
+        rp.unlink(missing_ok=True)
+    rec_path = dev / f"_demo_{camera}_{os.getpid()}.records.json"
+    rec_path.write_text(json.dumps(records))
+    print(f"  records pass: {len(records)} frames in {time.time() - t0:.0f} s", flush=True)
+
+    segs, procs = [], []
+    for k, (lo, hi) in enumerate(edges):
+        seg = dev / f"_demo_{camera}_{os.getpid()}_seg{k:02d}.mp4"
+        segs.append(seg)
+        procs.append(
+            subprocess.Popen(
+                [
+                    *_worker_cmd(args, camera),
+                    "--chunk",
+                    f"{lo}:{hi}",
+                    "--chunk-out",
+                    str(seg),
+                    "--records",
+                    str(rec_path),
+                ]
+            )
+        )
+    codes = [pr.wait() for pr in procs]
+    if any(codes):
+        rec_path.unlink(missing_ok=True)
+        for seg in segs:
+            seg.unlink(missing_ok=True)
+        print(f"{camera}: a chunk failed with {codes}; nothing written", file=sys.stderr)
+        return 1
+
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    final = dev / f"demo_{camera}_{stamp}.mp4"
+    listing = dev / f"_demo_{camera}_{os.getpid()}.concat.txt"
+    listing.write_text("".join(f"file '{s}'\n" for s in segs))
+    rc = subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0",
+         "-i", str(listing), "-c", "copy", str(final)],
+    ).returncode  # fmt: skip
+    listing.unlink(missing_ok=True)
+    for seg in segs:
+        seg.unlink(missing_ok=True)
+    if rc != 0:
+        rec_path.unlink(missing_ok=True)
+        print(f"{camera}: concat failed", file=sys.stderr)
+        return 1
+    rec_path.unlink(missing_ok=True)
+
+    # The sidecar and summary come from replaying the records through the same
+    # `track_states` the workers ran -- one input, one function, so the record cannot
+    # disagree with the picture.
+    tracker = Tracker()
+    state: dict = {
+        "smoothed": {},
+        "statures": {},
+        "history": {},
+        "last_heading": {},
+        "n_skipped": 0,
+    }
+    vel_window = max(1, round(VEL_WINDOW_S * args.fps))
+    positions, seen_ids = [], set()
+    staff_on = staff_model is not None
+    for n, rec in enumerate(records):
+        b = np.asarray(rec["boxes"], np.float32).reshape(-1, 4)
+        sp = None if rec["staff"] is None else np.asarray(rec["staff"], float)
+        tracks = [t for t in tracker.update(b, n, staff_scores=sp) if t.hits >= 3]
+        for t in tracks:
+            seen_ids.add(t.track_id)
+        for st in track_states(
+            tracks, n, cf, state, vel_window, args.metre_scale, args.fps, bounds, staff_on
+        ):
+            positions.append(
+                {
+                    "frame": n,
+                    "track_id": int(st.track_id),
+                    "x_m": round(st.x_m, 3),
+                    "z_m": round(st.z_m, 3),
+                    "in_walkable": bool(point_in_walkable(cf, st.sm[0], st.sm[1])),
+                    "speed_ms": round(st.speed, 3),
+                    "stature_m": round(st.stature, 3),
+                    "stature_frame_m": (
+                        None if not np.isfinite(st.h_one) else round(st.h_one, 3)
+                    ),
+                    "heading_rad": None if st.heading is None else round(st.heading, 4),
+                    "staff": st.verdict,
+                }
+            )
+    latest = dev / f"demo_{camera}.mp4"
+    if args.no_blur:
+        print(
+            f"  --no-blur: {latest.name} left pointing at the last blurred render. "
+            f"This file is unpublishable; it is at {final.name} only."
+        )
+    else:
+        latest.write_bytes(final.read_bytes())
+    _write_demo_tracks(args, camera, clip, staff_model, len(records), positions)
+    print(f"wrote {final} ({len(records)} frames @ {args.fps} fps)")
+    if not args.no_blur:
+        print(f"  newest also at {latest}")
+    n_placed = len(positions)
+    print(
+        f"  person detections {sum(r['n_det'] for r in records)}, dropped by FP zone "
+        f"{sum(r['n_fp'] for r in records)}; track placements {n_placed}, outside "
+        f"walkable+{PLACE_MARGIN_M:g}m {state['n_skipped']}; "
+        f"{sum(p['in_walkable'] for p in positions)} of {n_placed} inside the walkable "
+        f"polygon; {len(seen_ids)} distinct track ids; stature median "
+        f"{np.median([p['stature_m'] for p in positions]):.2f} m"
+    )
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("camera")
@@ -163,6 +455,19 @@ def main() -> int:
         "person is doing and must not be measured -- the lift is the cheap one "
         "(PLAN 7c.30).",
     )
+    ap.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="render the frames in this many processes -- heads_video's replay "
+        "mechanism: a fanned-out records pass runs the model once, then render workers "
+        "replay the track state from the record and draw their own chunk with no model "
+        "loaded at all.",
+    )
+    ap.add_argument("--chunk", default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--chunk-out", default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--records", default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--records-only", default=None, help=argparse.SUPPRESS)
     args = ap.parse_args()
     camera = args.camera
 
@@ -197,13 +502,46 @@ def main() -> int:
     )  # archive names are UTC: *11* is 19:29 local, an open and populated store
 
     cf = CameraFile.load(ROOT / f"runs/commission01/{camera}.camera.json")
+    x_lo, x_hi, z_lo, z_hi = walkable_bounds(cf)  # camera.json metres, like the zone
+    if args.workers > 1 and not args.chunk:
+        return _render_in_chunks(args, camera, clip, cf, (x_lo, x_hi, z_lo, z_hi), staff_model)
+
     cfg = load_config(str(RUN / "config.yaml"), validate=False)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = build_model(cfg).to(device).eval()
-    model.load_state_dict(select_weights(load_checkpoint(RUN / args.checkpoint), "ema"))
     size = cfg["data"]["input_size"]
     person_label = list(cfg["model"]["heads"]["detection"]["classes"]).index("person")
-    x_lo, x_hi, z_lo, z_hi = walkable_bounds(cf)  # camera.json metres, like the zone
+    # A render worker replays recorded model outputs and never loads the network --
+    # that is what makes the fan-out nearly linear on a box the GPU is busy on.
+    records = None
+    if args.records:
+        records = json.loads(Path(args.records).read_text())
+        model = device = None
+    else:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model = build_model(cfg).to(device).eval()
+        model.load_state_dict(select_weights(load_checkpoint(RUN / args.checkpoint), "ema"))
+    frame_lo, frame_hi = 0, args.frames
+    if args.chunk:
+        frame_lo, frame_hi = (int(v) for v in args.chunk.split(":"))
+    if args.records_only:
+        w, h, _ = probe_video(str(clip))
+        Path(args.records_only).write_text(
+            json.dumps(
+                _records_pass(
+                    args,
+                    clip,
+                    w,
+                    h,
+                    size,
+                    model,
+                    device,
+                    cf,
+                    person_label,
+                    (frame_lo, frame_hi),
+                    staff_model,
+                )
+            )
+        )
+        return 0
 
     # the static scene, built once; the view frozen so the room does not swim
     scene_mesh.SS = 1
@@ -244,6 +582,8 @@ def main() -> int:
     dev.mkdir(parents=True, exist_ok=True)
     out_path = dev / f"demo_{camera}_{stamp}.mp4"
     latest = dev / f"demo_{camera}.mp4"
+    if args.chunk_out:  # a worker writes its segment and nothing else
+        out_path = Path(args.chunk_out)
     part_path = out_path.with_suffix(".mp4.part")
     enc = subprocess.Popen(
         ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
@@ -281,10 +621,10 @@ def main() -> int:
     bounds = (x_lo, x_hi, z_lo, z_hi)
     vel_window = max(1, round(VEL_WINDOW_S * args.fps))
     n = n_det = n_fp = n_placed = n_outside = n_blur = n_posed = 0
+    src_w, src_h, _ = probe_video(str(clip))
     # The plate is this camera's own empty shop, named by its camera.json. Missing is a
     # refusal rather than a silent single-instrument run: the whole argument for two
     # instruments is that neither is trusted alone.
-    src_w, src_h, _ = probe_video(str(clip))
     plate_arr = None
     if not args.no_blur:
         plate_path = ROOT / cf.plate_file if cf.plate_file else None
@@ -298,19 +638,39 @@ def main() -> int:
         plate_arr = np.asarray(
             Image.open(plate_path).convert("RGB").resize((src_w, src_h)), np.uint8
         )
+    # `model` is None exactly when `records` is not: a render worker replays instead of
+    # predicting, and the branch below never dereferences the side it does not have.
+    assert (model is None) == (records is not None)
     for frame in decode_frames(str(clip), src_w, src_h, args.fps):
-        if n >= args.frames:
+        if n >= min(args.frames, frame_hi):
             break
         img = Image.fromarray(frame)
-        x, _canvas, region = preprocess(img, size)
-        with torch.no_grad():
-            # One forward pass at the LOWER of the two thresholds: the display set is
-            # filtered out of it below, so the blur set costs nothing extra.
-            out = model.predict(x.to(device), score_thr=min(BLUR_THR, args.score_thr))
-        det = out.get("detection", [{}])[0]
-        boxes_src = np.zeros((0, 4), np.float32)
-        kps_src = np.zeros((0, 17, 3), np.float32)
-        blur_boxes: list[tuple] = []
+        if records is not None:
+            # A render worker: the model already ran in the records pass; everything
+            # the loop would have computed from it is read back, unrounded.
+            rec = records[n]
+            boxes_src = np.asarray(rec["boxes"], np.float32).reshape(-1, 4)
+            kps_src = (
+                np.zeros((0, 17, 3), np.float32)
+                if rec["kps"] is None
+                else np.asarray(rec["kps"], np.float32).reshape(-1, 17, 3)
+            )
+            blur_boxes = [tuple(v) for v in rec["blur"]]
+            n_det += rec["n_det"]
+            n_fp += rec["n_fp"]
+            staff_p = None if rec["staff"] is None else np.asarray(rec["staff"], float)
+            det = None
+        else:
+            assert model is not None  # no records means the model was loaded above
+            x, _canvas, region = preprocess(img, size)
+            with torch.no_grad():
+                # One forward pass at the LOWER of the two thresholds: the display set is
+                # filtered out of it below, so the blur set costs nothing extra.
+                out = model.predict(x.to(device), score_thr=min(BLUR_THR, args.score_thr))
+            det = out.get("detection", [{}])[0]
+            boxes_src = np.zeros((0, 4), np.float32)
+            kps_src = np.zeros((0, 17, 3), np.float32)
+            blur_boxes = []
         if det and len(det.get("boxes", [])):
             b_all = det["boxes"].cpu().numpy()
             lab = det["labels"].cpu().numpy()
@@ -340,12 +700,41 @@ def main() -> int:
         # BEFORE the blur block below, and `frame` rather than `img` for the same reason:
         # the face blur covers the torso band this reads (the argument lives beside
         # STAFF_COLOR in syncai_bev3d.figures, where it moved on 2026-09-02).
-        staff_p = None
-        if staff_model is not None:
-            staff_p = np.array(
-                [staff_model.probability_of_crop(_torso_crop(frame, bb)) for bb in boxes_src]
-            )
+        if records is None:
+            staff_p = None
+            if staff_model is not None:
+                staff_p = np.array(
+                    [
+                        staff_model.probability_of_crop(_torso_crop(frame, bb))
+                        for bb in boxes_src
+                    ]
+                )
         tracks = [t for t in tracker.update(boxes_src, n, staff_scores=staff_p) if t.hits >= 3]
+        # The sequential half -- lens-corrected foot points, position EMA, stature
+        # medians, headings -- is the shared `figures.track_states`, replayable by any
+        # chunked render. This file carried an inline copy until 2026-09-02, and the
+        # copies had already diverged twice: stale literals for the measured constants,
+        # and a fallback stature this copy forgot to scale under --metre-scale. Its
+        # skip count is this file's `n_outside`.
+        skips_before = state["n_skipped"]
+        states = track_states(
+            tracks,
+            n,
+            cf,
+            state,
+            vel_window,
+            args.metre_scale,
+            args.fps,
+            bounds,
+            staff_on=staff_model is not None,
+        )
+        n_outside += state["n_skipped"] - skips_before
+        n_placed += len(states)
+        if n < frame_lo:
+            # A worker replaying its way to its own chunk: the tracker and the state
+            # dicts advance, nothing is drawn or encoded.
+            n += 1
+            continue
 
         # Two instruments, applied to the SOURCE image before anything is drawn on it, so
         # a box outline can never sit on top of an unblurred face. The detector set is
@@ -371,26 +760,6 @@ def main() -> int:
             d.rectangle(list(bx), outline=box_col, width=2)
             d.text((bx[0] + 3, bx[1] + 2), f"#{t.track_id}", fill=box_col)
 
-        # The sequential half -- lens-corrected foot points, position EMA, stature
-        # medians, headings -- is the shared `figures.track_states`, replayable by any
-        # chunked render. This file carried an inline copy until 2026-09-02, and the
-        # copies had already diverged twice: stale literals for the measured constants,
-        # and a fallback stature this copy forgot to scale under --metre-scale. Its
-        # skip count is this file's `n_outside`.
-        skips_before = state["n_skipped"]
-        states = track_states(
-            tracks,
-            n,
-            cf,
-            state,
-            vel_window,
-            args.metre_scale,
-            args.fps,
-            bounds,
-            staff_on=staff_model is not None,
-        )
-        n_outside += state["n_skipped"] - skips_before
-        n_placed += len(states)
         for st in states:
             heading, speed, stature = st.heading, st.speed, st.stature
             at = Placement(st.x_m, st.z_m, heading)
@@ -535,6 +904,10 @@ def main() -> int:
         print(f"ffmpeg exited {rc}; leaving {part_path}", file=sys.stderr)
         return 1
     part_path.replace(out_path)
+    if args.chunk_out:
+        # a worker's whole deliverable is its segment; the orchestrator owns the
+        # stable name, the track log and the summary
+        return 0
     # a copy, not a symlink: these get opened by players and copied to other machines,
     # and a dangling link is a worse failure than a duplicated 7 MB
     #
@@ -551,57 +924,7 @@ def main() -> int:
         )
     else:
         latest.write_bytes(out_path.read_bytes())
-    # the track log makes the right-hand panel checkable instead of merely convincing:
-    # every figure in the video has a frame, an id and a floor position in metres here
-    log_path = ROOT / f"runs/commission01/{camera}.demo_tracks.json"
-    log_path.write_text(
-        json.dumps(
-            {
-                # **Every argument, wholesale, and not a hand-picked list.** This record
-                # held eight fields against a parser of ten, and on 2026-08-29 that cost
-                # a figure: a second session re-cut `demo_Taichung-cam10` without
-                # `--staff-colours` -- undoing `65a6b78`, which made it two-colour on
-                # purpose -- and nothing in the verdict named the flag, so the audit, the
-                # blur check and the staleness guard all passed on a figure that had
-                # silently changed. `--metre-scale` was missing on the same principle and
-                # is worse: `positions` below are in metres and two runs at 1.0 and
-                # 0.8824 produce different numbers under identical-looking provenance.
-                # An allowlist is broken again the day flag eleven lands;
-                # `tests/test_figures_are_audited.py` reads the parser and checks this.
-                "args": vars(args),
-                # And what the arguments RESOLVED to, because a path is not identity:
-                # `runs/` is gitignored and regenerable, so the same model file can be
-                # refitted at the same path with a different accuracy and no record
-                # would move. The figure's own legend prints this number.
-                "staff_model": None
-                if staff_model is None
-                else {
-                    "path": args.staff_colours,
-                    "sha256": hashlib.sha256(Path(args.staff_colours).read_bytes()).hexdigest(),
-                    "accuracy": staff_model.accuracy,
-                    "held_out": staff_model.held_out,
-                    "held_out_n": staff_model.held_out_n,
-                    "min_accuracy_required": args.staff_min_accuracy,
-                },
-                "camera": camera,
-                "clip": clip.name,
-                "checkpoint": args.checkpoint,
-                "score_thr": args.score_thr,
-                # The threshold the faces were blurred at, recorded because an auditor
-                # has to reconstruct the blur set THIS render applied. Reading the
-                # current constant instead answers "would today's threshold have covered
-                # them", which is a different and more flattering question -- and the
-                # constant moved on 2026-08-28 (0.10 -> 0.07), so the two now differ.
-                "blur_score_thr": BLUR_THR,
-                "blur_faces": not args.no_blur,
-                "fps": args.fps,
-                "frames": n,
-                "positions": positions,
-            },
-            indent=2,
-        )
-        + "\n"
-    )
+    _write_demo_tracks(args, camera, clip, staff_model, n, positions)
     print(f"wrote {out_path} ({n} frames @ {args.fps} fps)")
     if not args.no_blur:
         print(f"  newest also at {latest}")
