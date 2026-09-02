@@ -875,7 +875,15 @@ def main() -> int:
             x_m, z_m = st.x_m, st.z_m
             t = st
             at = Placement(x_m, z_m, heading)
-            key = f"person_{t.track_id % len(TRACK_COLORS)}"
+            # The key has to partition figures the same way `col` does -- `demo_video`
+            # carries the argument: keying on `track_id % 8` while `col` follows a
+            # verdict lets two tracks with different verdicts share one key, and the
+            # last one written wins, a staff member silently repainted as a shopper.
+            key = (
+                (f"person_{'staff' if col == STAFF_COLOR else 'customer'}")
+                if args.staff_colours
+                else f"person_{t.track_id % len(TRACK_COLORS)}"
+            )
             scene_mesh.PALETTE[key] = col
             # The figure shows what the person is doing, when the pose can carry it.
             joints = None
