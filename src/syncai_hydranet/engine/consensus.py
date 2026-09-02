@@ -128,7 +128,7 @@ def fleet_summary(results: Mapping[str, ConsensusResult]) -> dict:
     **This exists so that nobody writes it themselves, and the reason is specific.**
     A camera with no eligible pixels reports NaN rather than 0.0, which defeats
     ``np.mean``. It does not defeat ``np.nanmean`` -- and ``np.nanmean`` is this
-    codebase's established idiom for exactly this shape: ``ConfusionMatrix.mean_iou``
+    codebase's established idiom for exactly this shape: ``ConfusionMatrix.miou``
     uses it, and its docstring argues at length that dropping the NaN entries is the
     only defensible choice there. So the next person aggregating six cameras will follow
     the local precedent, reach for ``nanmean``, and report a mean over five as a mean over

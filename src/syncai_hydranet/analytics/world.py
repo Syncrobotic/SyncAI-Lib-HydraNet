@@ -5,8 +5,10 @@ computation.
 shape was "what one frame hands the stage". It typed the **pixel** side -- `BoxFrame`
 opens with "Boxes are in image pixels, xyxy". The metre side never got the same
 treatment, and the cost is already visible in three places that each rebuild it by hand:
-`dwell.track_ground_path`, `events/zones.py` and `cli/scene.py` all call
-`pixel_to_ground` themselves and each keeps the result in a shape of its own. That is the
+`dwell.track_ground_path` and `events/zones.py` both call
+`pixel_to_ground` themselves and each keeps the result in a shape of its own (an earlier
+version of this list also named `cli/scene.py`, which delegates projection to
+`syncai_bev3d` and calls no `pixel_to_ground` of its own). That is the
 same failure `stage.py` records as the reason it exists, one coordinate system later.
 
 ---------------------------------------------------------------------------
@@ -67,9 +69,10 @@ THE LENS, WHICH IS A CORRECTION AND NOT A FEATURE
 `camera_json.py` states the contract in its header: the lens "applies to *points* on
 their way to the floor (`undistort_points`), never to the pixel-space artefacts", and
 `undistort_points` itself says "every runtime consumer of `camera.json` must undo the
-lens with the exact same model or the metres drift silently". Nothing on the serving path
-does. `dwell.track_ground_path` projects the raw foot point, and the only callers of
-`undistort_points` in the tree are two commissioning modules.
+lens with the exact same model or the metres drift silently". `dwell.track_ground_path`
+still projects the raw foot point; this producer, `clip_tracks.undistort_boxes` and
+`events/pose.py` undo the lens, and a dozen commissioning modules and scripts do too --
+the census "only two commissioning modules call it" stopped being true long ago.
 
 This producer undistorts. `track_ground_path` is **left alone deliberately**: correcting
 it changes every dwell, path and heatmap number already reported, which is a re-baseline

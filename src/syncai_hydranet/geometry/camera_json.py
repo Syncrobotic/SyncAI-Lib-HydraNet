@@ -41,8 +41,10 @@ from .ground import Camera, GroundPlane
 SCHEMA_VERSION = 3
 
 # Versions this reader accepts, and why each older one is safe to read rather than
-# re-commission. A refusal is the default -- "schema_version 3" from a newer writer means
-# fields whose meaning this code does not know -- so an entry here is a claim that nothing
+# re-commission. A refusal is the default -- a "schema_version 4" from a newer writer
+# would mean fields whose meaning this code does not know (the example tracks
+# SCHEMA_VERSION + 1; it read "3" when the current version was 2 and a v3 file was
+# briefly, wrongly, described as refusable) -- so an entry here is a claim that nothing
 # a file of that version can contain has changed meaning.
 READABLE_VERSIONS = {
     # v1 -> v2 added the `display` zone kind and changed nothing else. Every v1 file is a

@@ -104,17 +104,17 @@ class Track:
     boxes: list[np.ndarray] = field(default_factory=list)  # observed boxes, one per frame
     confirmed: bool = False
     # (17, 3) COCO keypoints per observed frame -- x, y in image pixels and a score --
-    # or empty, which is the state of every track this tracker produces today.
+    # or empty, when the caller runs detection without the pose head.
     #
     # It is a field rather than a parallel structure because the alignment with `frames`
     # and `boxes` is the whole contract: `events.pose_posture_events` reads keypoints[i]
     # against frames[i], and two containers that have to stay index-aligned across a
     # module boundary drift the first time one of them is filtered.
     #
-    # **Filled by the second stage's pose model, which does not exist yet.** Empty is
-    # therefore the normal case and every consumer has to say what it does with it;
-    # `require_keypoints` in events.py is that refusal, in one place, naming the missing
-    # model rather than returning no events as if none had happened.
+    # **Filled by the P3 pose head via `update(..., keypoints=...)`** -- see the wire
+    # note on `update` below; `tools/pose/pose_overlay.py` is a live caller. Empty is
+    # still a legal state and every consumer has to say what it does with it;
+    # `require_keypoints` in `analytics/events/pose.py` is that refusal, in one place.
     keypoints: list[np.ndarray] = field(default_factory=list)
     # The detector score of each observed box, index-aligned with `frames` and `boxes`
     # for the same reason `keypoints` is a field rather than a parallel structure.
