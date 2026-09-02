@@ -37,8 +37,12 @@ from PIL import Image, ImageDraw, ImageFont
 from syncai_bev3d import scene_mesh
 from syncai_bev3d.figures import (
     CUSTOMER_COLOR,
+    FALLBACK_STATURE_M,
     KP_MIN_CONF,
+    POS_EMA,
     STAFF_COLOR,
+    STATURE_MIN_N,
+    STATURE_RANGE_M,
     TRACK_COLORS,
     VEL_FLOOR_MS,
     VEL_SECONDS_SHOWN,
@@ -243,16 +247,21 @@ def _track_states(tracks, n, cf, state, vel_window, metre_scale, fps, bounds, st
         sm = (
             raw
             if prev_s is None
-            else (0.35 * raw[0] + 0.65 * prev_s[0], 0.35 * raw[1] + 0.65 * prev_s[1])
+            else (
+                POS_EMA * raw[0] + (1 - POS_EMA) * prev_s[0],
+                POS_EMA * raw[1] + (1 - POS_EMA) * prev_s[1],
+            )
         )
         smoothed[t.track_id] = sm
         if not (x_lo <= sm[0] <= x_hi and z_lo <= sm[1] <= z_hi):
             continue
         h_one = stature_m(sm[0], sm[1], float(pts[1, 1]), cf)
-        if 1.2 <= h_one <= 2.6:
+        if STATURE_RANGE_M[0] <= h_one <= STATURE_RANGE_M[1]:
             statures.setdefault(t.track_id, []).append(h_one)
         seen_h = statures.get(t.track_id, [])
-        stature = (float(np.median(seen_h)) if len(seen_h) >= 3 else 1.70) * metre_scale
+        stature = (
+            float(np.median(seen_h)) if len(seen_h) >= STATURE_MIN_N else FALLBACK_STATURE_M
+        ) * metre_scale
         x_m, z_m = sm[0] * metre_scale, sm[1] * metre_scale
         hist = history.setdefault(t.track_id, {})
         hist[n] = (x_m, z_m)
