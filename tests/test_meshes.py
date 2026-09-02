@@ -27,6 +27,7 @@ from syncai_bev3d.meshes import (
     extrude,
     ground_disc,
     human,
+    human_posed,
     place,
     shelf_levels,
     shelving,
@@ -429,3 +430,49 @@ def test_shelving_stands_on_a_kick_plate_rather_than_a_slab_on_the_floor():
 def test_shelving_refuses_nonsense(call, word):
     with pytest.raises(ValueError, match=word):
         call()
+
+
+def _upright_joints():
+    """A plain standing skeleton in COCO order, in metres, feet on the floor."""
+    j = np.zeros((17, 3), float)
+    j[0] = (0.0, 1.58, 0.0)  # nose
+    j[5], j[6] = (-0.20, 1.39, 0.0), (0.20, 1.39, 0.0)  # shoulders
+    j[7], j[8] = (-0.24, 1.07, 0.0), (0.24, 1.07, 0.0)  # elbows
+    j[9], j[10] = (-0.25, 0.77, 0.0), (0.25, 0.77, 0.0)  # wrists
+    j[11], j[12] = (-0.09, 0.90, 0.0), (0.09, 0.90, 0.0)  # hips
+    j[13], j[14] = (-0.09, 0.48, 0.0), (0.09, 0.48, 0.0)  # knees
+    j[15], j[16] = (-0.09, 0.07, 0.0), (0.09, 0.07, 0.0)  # ankles
+    return j
+
+
+def test_a_measured_limb_of_zero_length_is_drawn_as_nothing_rather_than_raised():
+    """`_tube` refuses coincident endpoints, which is right for geometry somebody authored
+    and wrong for geometry somebody measured: a forearm pointing straight at the camera
+    projects to a point, and two low-confidence keypoints collapse onto each other. It
+    killed a 900-frame render partway through, so `human_posed` skips the segment."""
+    j = _upright_joints()
+    j[9] = j[7]  # left wrist lands on the left elbow
+    verts, faces = human_posed(j, 1.70)
+    assert len(verts) and len(faces)
+    # and the limb that survived is still there: the figure is not silently emptied
+    assert _bbox(human_posed(j, 1.70))[1][0] > 0.2
+
+
+def test_a_posed_figure_keeps_the_pose_rather_than_the_stature():
+    """`human` normalises its mesh to `height_m`; `human_posed` must not, or a crouch is
+    stretched back up into a standing person and the panel lies about what happened."""
+    j = _upright_joints()
+    j[:, 1] *= 0.5  # the same person, crouched
+    _lo, hi = _bbox(human_posed(j, 1.70))
+    assert hi[1] < 1.1, f"a crouch was stretched to {hi[1]:.2f} m"
+
+
+def test_a_posed_figure_refuses_joints_it_cannot_trust():
+    """Non-finite joints and the wrong shape are faults in the lift, and a figure drawn
+    from them is worse than no figure: the caller can fall back to the mannequin."""
+    with pytest.raises(ValueError):
+        human_posed(np.zeros((16, 3)), 1.70)
+    j = _upright_joints()
+    j[3] = (np.nan, np.nan, np.nan)
+    with pytest.raises(ValueError):
+        human_posed(j, 1.70)

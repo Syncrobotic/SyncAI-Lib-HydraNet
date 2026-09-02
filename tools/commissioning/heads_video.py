@@ -522,9 +522,14 @@ def main() -> int:
             if joints is None:
                 body = place(human(stature), at)
             else:
-                # already absolute in scene metres, so it is not `place`d -- only scaled
-                body = human_posed(joints * args.metre_scale, stature)
-                n_posed += 1
+                # already absolute in scene metres, so it is not `place`d -- only scaled.
+                # A geometry failure on one figure must not cost the other 899 frames.
+                try:
+                    body = human_posed(joints * args.metre_scale, stature)
+                    n_posed += 1
+                except ValueError as exc:
+                    print(f"  frame {n}: posed figure refused ({exc}); standing instead")
+                    body = place(human(stature), at)
             disc = place(ground_disc(0.45), at)
             figures += [(body, key, 255, True), (disc, key, 200, False)]
             ghosts += [(body, col, 62), (disc, col, 80)]

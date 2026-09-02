@@ -231,6 +231,8 @@ def human(height_m: float = 1.70, sides: int = 10) -> Mesh:
 # COCO's 17 keypoints, in the order every pose head in this project emits them.
 COCO_NOSE, COCO_LSH, COCO_RSH, COCO_LEL, COCO_REL, COCO_LWR, COCO_RWR = 0, 5, 6, 7, 8, 9, 10
 COCO_LHI, COCO_RHI, COCO_LKN, COCO_RKN, COCO_LAN, COCO_RAN = 11, 12, 13, 14, 15, 16
+#: A limb shorter than this is drawn as nothing rather than as a degenerate sliver.
+DEGENERATE_LIMB_M = 1e-4
 
 
 def human_posed(joints: np.ndarray, height_m: float = 1.70, sides: int = 10) -> Mesh:
@@ -267,21 +269,32 @@ def human_posed(joints: np.ndarray, height_m: float = 1.70, sides: int = 10) -> 
     # The crown sits beyond the nose along the neck's own direction, so a head that is
     # tilted forward renders tilted forward rather than upright on a leaning body.
     head_c = j[COCO_NOSE] + (j[COCO_NOSE] - mid_sh) * 0.35
-    parts = [
-        _sphere(head_c, p["head_r"], sides=sides),
-        _tube(mid_sh, head_c, p["waist_r"] * 0.55, p["torso_r"] * 0.7, sides),
-        _tube(mid_sh, mid_hip, p["torso_r"], p["waist_r"], sides),
+    # A limb of zero length is what a *lift* produces when two keypoints land on the same
+    # ray at the same depth -- a fully foreshortened forearm pointing at the camera, or two
+    # low-confidence joints collapsing onto each other. `_tube` refuses coincident
+    # endpoints, which is right for geometry somebody authored and wrong for geometry
+    # somebody measured: it killed a 900-frame render partway through. Drawing nothing is
+    # the correct picture of a limb with no extent; raising is not.
+    segments = [
+        (mid_sh, head_c, p["waist_r"] * 0.55, p["torso_r"] * 0.7),
+        (mid_sh, mid_hip, p["torso_r"], p["waist_r"]),
     ]
     for sh, el, wr, hi, kn, an in (
         (COCO_LSH, COCO_LEL, COCO_LWR, COCO_LHI, COCO_LKN, COCO_LAN),
         (COCO_RSH, COCO_REL, COCO_RWR, COCO_RHI, COCO_RKN, COCO_RAN),
     ):
-        parts += [
-            _tube(j[sh], j[el], p["upper_arm_r"], p["upper_arm_r"] * 0.82, sides),
-            _tube(j[el], j[wr], p["forearm_r"], p["forearm_r"] * 0.8, sides),
-            _tube(j[hi], j[kn], p["thigh_r"], p["calf_r"] * 1.15, sides),
-            _tube(j[kn], j[an], p["calf_r"], p["calf_r"] * 0.62, sides),
+        segments += [
+            (j[sh], j[el], p["upper_arm_r"], p["upper_arm_r"] * 0.82),
+            (j[el], j[wr], p["forearm_r"], p["forearm_r"] * 0.8),
+            (j[hi], j[kn], p["thigh_r"], p["calf_r"] * 1.15),
+            (j[kn], j[an], p["calf_r"], p["calf_r"] * 0.62),
         ]
+    parts = [_sphere(head_c, p["head_r"], sides=sides)]
+    parts += [
+        _tube(a, b, r0, r1, sides)
+        for a, b, r0, r1 in segments
+        if float(np.linalg.norm(np.asarray(b) - np.asarray(a))) >= DEGENERATE_LIMB_M
+    ]
     return _merge(*parts)
 
 
