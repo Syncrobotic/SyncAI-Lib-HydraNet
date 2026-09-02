@@ -206,3 +206,40 @@ def test_the_calib_scan_carries_its_depth_model_into_the_camera_file():
     }
     assert _teachers_of({"provenance": {"depth_model": "m"}}) is None
     assert _teachers_of({}) is None
+
+
+# ------------------------------------------- the resolution and singularity gates
+
+
+def test_a_principal_point_in_the_outer_quarter_is_refused():
+    """The half-res trap, caught in the file: intrinsics fitted at 1920x1080 paired
+    with a 960x540 image_size_px put cx at the frame's right edge, and every consumer
+    that trusted the pair got metres, not an error."""
+    from syncai_hydranet.geometry.ground import Camera
+
+    broken = dataclasses.replace(
+        a_camera_file(), camera=Camera(fx=1490.0, fy=1490.0, cx=1720.0, cy=540.0)
+    )
+    with pytest.raises(ValueError, match="outer quarter"):
+        broken.validate()
+
+
+def test_a_k1_past_the_singularity_is_refused():
+    """k1 = -1.05 broke point mapping silently while undistort_image still looked
+    right -- load_person_boxes returned 0 boxes with no error anywhere. The file
+    refuses to carry such a value, whoever wrote it."""
+    broken = dataclasses.replace(
+        a_camera_file(), lens=Lens(k1=-1.05, centre_px=(960.0, 540.0), radius_px=960.0)
+    )
+    with pytest.raises(ValueError, match="singularity"):
+        broken.validate()
+
+
+def test_a_lens_radius_from_another_resolution_is_refused():
+    """radius_px is the normalisation k1's value is measured in; a half-res radius on
+    a full-res frame rescales what k1 means without changing a single pixel."""
+    broken = dataclasses.replace(
+        a_camera_file(), lens=Lens(k1=-0.18, centre_px=(960.0, 540.0), radius_px=300.0)
+    )
+    with pytest.raises(ValueError, match="half-diagonal"):
+        broken.validate()

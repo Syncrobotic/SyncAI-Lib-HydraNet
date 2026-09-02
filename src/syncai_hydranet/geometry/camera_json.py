@@ -212,6 +212,45 @@ class CameraFile:
                     f"shelf_rois_px[{i}] {(x0, y0, x1, y1)} is not inside {w}x{h} -- an ROI "
                     "outside the frame crops nothing and the product classes go quietly blind"
                 )
+        # The principal point of a real mount sits near the frame centre. One in the
+        # outer quarter means the intrinsics were fitted at a different resolution than
+        # `image_size_px` declares -- the half-res trap, which returns metres rather
+        # than an error when a consumer divides by the wrong factor.
+        if (w > 0 and h > 0) and (
+            not (0.25 * w <= self.camera.cx <= 0.75 * w)
+            or not (0.25 * h <= self.camera.cy <= 0.75 * h)
+        ):
+            problems.append(
+                f"principal point ({self.camera.cx}, {self.camera.cy}) is in the outer "
+                f"quarter of a {w}x{h} frame -- intrinsics fitted at one resolution "
+                "paired with another's image_size_px is the usual way this happens"
+            )
+        if self.lens is not None:
+            # Past k1 = -1 the division model's singularity moves inside the frame:
+            # `undistort_image` still LOOKS right while point mapping silently breaks
+            # (`load_person_boxes` returned 0 boxes under k1 = -1.05, no error anywhere).
+            # `calibrate.fit_k1` refuses to search there; this refuses a file that
+            # carries such a value regardless of who wrote it.
+            if not (-1.0 < self.lens.k1 < 1.0):
+                problems.append(
+                    f"lens.k1={self.lens.k1} is outside (-1, 1): the division model's "
+                    "singularity is inside the frame and point mapping breaks silently "
+                    "while the undistorted image still looks right"
+                )
+            lcx, lcy = self.lens.centre_px
+            if not (0 <= lcx <= w and 0 <= lcy <= h):
+                problems.append(
+                    f"lens.centre_px {self.lens.centre_px} is outside the {w}x{h} frame"
+                )
+            half_diag = math.hypot(w, h) / 2.0
+            if half_diag > 0 and not (
+                0.5 * half_diag <= self.lens.radius_px <= 1.5 * half_diag
+            ):
+                problems.append(
+                    f"lens.radius_px={self.lens.radius_px} is far from the half-diagonal "
+                    f"({half_diag:.1f}) the k1 convention is normalised to -- a radius from "
+                    "another resolution rescales k1's meaning silently"
+                )
         if self.mask_ignore != IGNORE:
             problems.append(
                 f"mask_ignore={self.mask_ignore}, this build masks with {IGNORE} -- the file "
