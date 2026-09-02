@@ -62,15 +62,25 @@ from syncai_bev3d.figures import (
     VEL_SECONDS_SHOWN,
     VEL_WINDOW_S,
     _torso_crop,
+    box_iou,
     content_crop,
     facing_wedge,
     in_fp_zone,
+    lift_fronto_parallel,
     point_in_walkable,
     stature_m,
     velocity_arrow,
     walkable_bounds,
 )
-from syncai_bev3d.meshes import Placement, box, extrude, ground_disc, human, place
+from syncai_bev3d.meshes import (
+    Placement,
+    box,
+    extrude,
+    ground_disc,
+    human,
+    human_posed,
+    place,
+)
 from syncai_bev3d.shading import draw_scene
 from syncai_hydranet.analytics.staff import (
     StaffModel,
@@ -144,6 +154,14 @@ def main() -> int:
         "The default floor is derived (see MIN_DEPLOY_ACCURACY); passing this is the "
         "explicit exception the refusal message asks for, and the number used is printed "
         "and recorded, so a figure never carries a threshold nobody can see.",
+    )
+    ap.add_argument(
+        "--standing-figures",
+        action="store_true",
+        help="draw every figure standing at 1.70-scale, as the demo did before the pose "
+        "head drove it. Without it, a figure whose track has confident keypoints is "
+        "drawn from them (`meshes.human_posed`) and shows what the person is doing; a "
+        "posed figure must not be measured -- the lift is the cheap one (PLAN 7c.30).",
     )
     args = ap.parse_args()
     camera = args.camera
@@ -257,7 +275,7 @@ def main() -> int:
     smoothed: dict[int, tuple[float, float]] = {}
     statures: dict[int, list[float]] = {}
     vel_window = max(1, round(VEL_WINDOW_S * args.fps))
-    n = n_det = n_fp = n_placed = n_outside = n_blur = 0
+    n = n_det = n_fp = n_placed = n_outside = n_blur = n_posed = 0
     # The plate is this camera's own empty shop, named by its camera.json. Missing is a
     # refusal rather than a silent single-instrument run: the whole argument for two
     # instruments is that neither is trusted alone.
@@ -286,6 +304,7 @@ def main() -> int:
             out = model.predict(x.to(device), score_thr=min(BLUR_THR, args.score_thr))
         det = out.get("detection", [{}])[0]
         boxes_src = np.zeros((0, 4), np.float32)
+        kps_src = np.zeros((0, 17, 3), np.float32)
         blur_boxes: list[tuple] = []
         if det and len(det.get("boxes", [])):
             b_all = det["boxes"].cpu().numpy()
@@ -304,6 +323,15 @@ def main() -> int:
             ]
             n_fp += len(b) - len(keep)
             boxes_src = b[keep]
+            # The pose rows are index-aligned with the detections, so the same filters
+            # have to be applied to them or a figure wears another person's skeleton.
+            # They are carried in source pixels to match `boxes_src`.
+            pose_rows = out.get("pose", [None])[0]
+            if pose_rows is not None and not args.standing_figures:
+                kp = pose_rows.cpu().numpy()[person & (sc >= args.score_thr)][keep].copy()
+                kp[:, :, 0] = (kp[:, :, 0] - x0) * (src_w / cw)
+                kp[:, :, 1] = (kp[:, :, 1] - y0) * (src_w / cw)
+                kps_src = kp
         # BEFORE the blur block below, and `frame` rather than `img` for the same reason:
         # the face blur covers the torso band this reads (see STAFF_COLOR above).
         staff_p = None
@@ -407,7 +435,23 @@ def main() -> int:
             # snapping back to a default nobody measured
             heading = last_heading.get(t.track_id)
             at = Placement(x_m, z_m, heading)
-            body = place(human(stature), at)
+            # The figure shows what the person is doing, when the pose can carry it.
+            joints = None
+            if not args.standing_figures and len(kps_src):
+                iou = box_iou(t.box, boxes_src)
+                if iou.size and float(iou.max()) > 0.3:
+                    joints = lift_fronto_parallel(kps_src[int(iou.argmax())], sm[0], sm[1], cf)
+            body = None
+            if joints is not None:
+                # already absolute in scene metres, so it is not `place`d -- only scaled.
+                # A geometry failure on one figure must not cost the other 899 frames.
+                try:
+                    body = human_posed(joints * args.metre_scale, stature)
+                    n_posed += 1
+                except ValueError as exc:
+                    print(f"  frame {n}: posed figure refused ({exc}); standing instead")
+            if body is None:
+                body = place(human(stature), at)
             disc = place(ground_disc(0.45), at)
             figures.append((body, key, 255, True))
             figures.append((disc, key, 200, False))
@@ -589,7 +633,8 @@ def main() -> int:
         f"track placements {n_placed}, outside walkable+{PLACE_MARGIN_M:g}m {n_outside}; "
         f"{sum(p['in_walkable'] for p in positions)} of {n_placed} inside the walkable "
         f"polygon; {len(seen_ids)} distinct track ids; stature median "
-        f"{np.median([p['stature_m'] for p in positions]):.2f} m"
+        f"{np.median([p['stature_m'] for p in positions]):.2f} m; "
+        f"{n_posed} of {n_placed} figures pose-driven"
     )
     return 0
 

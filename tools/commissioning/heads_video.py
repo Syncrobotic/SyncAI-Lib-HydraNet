@@ -37,15 +37,18 @@ from PIL import Image, ImageDraw, ImageFont
 from syncai_bev3d import scene_mesh
 from syncai_bev3d.figures import (
     CUSTOMER_COLOR,
+    KP_MIN_CONF,
     STAFF_COLOR,
     TRACK_COLORS,
     VEL_FLOOR_MS,
     VEL_SECONDS_SHOWN,
     VEL_WINDOW_S,
     _torso_crop,
+    box_iou,
     content_crop,
     facing_wedge,
     in_fp_zone,
+    lift_fronto_parallel,
     stature_m,
     velocity_arrow,
     walkable_bounds,
@@ -101,7 +104,6 @@ SKELETON = (
     (5, 6), (5, 11), (6, 12), (11, 12),
     (0, 1), (0, 2), (1, 3), (2, 4),
 )  # fmt: skip
-KP_MIN_CONF = 0.2
 # A 2 px stroke and an 11 px default-bitmap label survive a full-resolution still and do
 # not survive the thing this video actually is: a 960x540 panel, h.264 at crf 22, watched
 # scaled down. The first render drew every box correctly and was reported as having none.
@@ -283,67 +285,6 @@ def _track_states(tracks, n, cf, state, vel_window, metre_scale, fps, bounds, st
             )
         )
     return out
-
-
-def _box_iou(box, boxes):
-    """IoU of one xyxy box against many. The tracker returns a box, not the index of the
-    detection it came from, so the keypoints are found by overlap."""
-    boxes = np.asarray(boxes, dtype=float).reshape(-1, 4)
-    if not len(boxes):
-        return np.zeros(0)
-    x0 = np.maximum(box[0], boxes[:, 0])
-    y0 = np.maximum(box[1], boxes[:, 1])
-    x1 = np.minimum(box[2], boxes[:, 2])
-    y1 = np.minimum(box[3], boxes[:, 3])
-    inter = np.clip(x1 - x0, 0, None) * np.clip(y1 - y0, 0, None)
-    a = (box[2] - box[0]) * (box[3] - box[1])
-    b = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
-    return inter / np.maximum(a + b - inter, 1e-9)
-
-
-def _lift_fronto_parallel(kp_src, x_m, z_m, cf):
-    """2D keypoints -> (17, 3) joints in scene metres, or None if the frame cannot carry it.
-
-    Every joint is put on the vertical plane through the track's floor point that is
-    perpendicular to the camera's horizontal view direction there. That is the cheapest
-    lift there is: it fixes the depth of all seventeen at the feet's range, so the heights
-    and the limb directions come out right and the depth content of the pose is discarded.
-
-    **It is chosen here over the solvers that fix the bone lengths because those fold.**
-    Both a per-bone depth solve and a constrained least-squares over the whole skeleton
-    satisfied every bone length and put a 1.95 m person's head at 0.73 m -- the figure
-    sinks to the floor and hinges at the hips while the internal distances stay correct
-    (PLAN 7c.30). This one is wrong in a way that stays readable: limbs come out 0.67-1.15x
-    their true length and a foot that is forward reads as a foot that is raised.
-    """
-    kp = np.asarray(kp_src, dtype=float)
-    if kp.shape != (17, 3) or not np.isfinite(kp).all():
-        return None
-    if float(np.median(kp[:, 2])) < KP_MIN_CONF:
-        return None
-    half = kp[:, :2] / 2.0  # camera.json is calibrated at half res
-    if cf.lens is not None:
-        half = undistort_points(half, cf.lens.k1, cf.lens.centre_px, cf.lens.radius_px)
-    cam = cf.camera
-    rays = np.stack(
-        [(half[:, 0] - cam.cx) / cam.fx, (half[:, 1] - cam.cy) / cam.fy, np.ones(len(half))],
-        axis=-1,
-    )
-    d = rays @ cf.plane.rotation
-    rng = float(np.hypot(x_m, z_m))
-    denom = x_m * d[:, 0] + z_m * d[:, 2]
-    if rng < 1e-6 or np.any(np.abs(denom) < 1e-9):
-        return None
-    t = rng * rng / denom
-    j = np.stack([d[:, 0] * t, cf.plane.height - d[:, 1] * t, d[:, 2] * t], axis=-1)
-    if not np.isfinite(j).all():
-        return None
-    # The feet are on the floor whatever the lift says: pin the lower ankle and carry the
-    # rest with it, so a figure never floats or sinks even when the ankle keypoint is poor.
-    j[:, 1] -= min(j[15, 1], j[16, 1])
-    if not (0.5 < float(j[:, 1].max()) < 2.6):
-        return None  # a figure this tall or this short is a fault
-    return j
 
 
 def _positions_from_boxes(boxes_all, cf, args, bounds):
@@ -939,9 +880,9 @@ def main() -> int:
             # The figure shows what the person is doing, when the pose can carry it.
             joints = None
             if not args.standing_figures and len(kps_src):
-                iou = _box_iou(t.box, boxes_src)
+                iou = box_iou(t.box, boxes_src)
                 if iou.size and float(iou.max()) > 0.3:
-                    joints = _lift_fronto_parallel(kps_src[int(iou.argmax())], sm[0], sm[1], cf)
+                    joints = lift_fronto_parallel(kps_src[int(iou.argmax())], sm[0], sm[1], cf)
             if joints is None:
                 body = place(human(stature), at)
             else:
