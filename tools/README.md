@@ -15,7 +15,7 @@ everything else is.
 
 Everything that turns one camera's plates into its `camera.json`, its zones, and its 3D
 scene. Each is idempotent from the caches; re-runs cost no GPU except the two teacher
-passes. Eighteen tools, in the four groups they actually fall into — this section listed
+passes. Twenty tools, in the five groups they actually fall into — this section listed
 six of them until 2026-08-29, and the whole figure pipeline, which is where the face-blur
 work lives, was among the twelve it did not mention.
 
@@ -49,6 +49,14 @@ metres agree with the pixels), `masks_diagnose.py` (why `masks_pass` gave a came
 structure it did, per cluster, with the picture), `cluster_rules.py` (replay a merge rule
 against the cached SAM 3 proposals on every camera, no GPU).
 
+**Question the geometry itself.** `geometry_bench.py` scores any depth source against the
+floor the commissioned camera already knows is at height zero — no labels, and a flat
+control so flatness cannot be read as a verdict; it is what caught MapAnything's rise as a
+scale offset rather than a fix (2026-08-30). `map_anything_eval.py` asks an independent
+metric model the two questions the fleet cannot check from inside — what the vfov is
+(38.26° against the pinned 70.4°, still unresolved) and whether cross-camera registration
+holds, with a negative control.
+
 **Figures, and the audit that licenses them.** `demo_video.py` renders the three-minute
 demo and **blurs every face by two instruments before any panel is drawn**;
 `heads_video.py` shows every head of the network in one frame from one forward pass and
@@ -57,10 +65,18 @@ audit verdict that says it may be published**; `social_card.py` does the same fo
 GitHub social preview. Renders go to `assets/dev/`, which is ignored wholesale — `assets/`
 itself holds only results. See CONTRIBUTING.md for the third step a store figure needs.
 
-## [`pose/`](pose/) — the pose head's teacher
+## [`pose/`](pose/) — the pose head's teacher, and its instruments
 
 `vitpose_teacher.py` labels the Gold person boxes with ViTPose keypoints — the
-distillation source for the bottom-up P3 head (PLAN §2.2).
+distillation source for the bottom-up P3 head (PLAN §2.2). The other three measure what
+that head learned. `eval_student.py` is gate 3's instrument: per-joint L2 and
+PCK@0.2·box_height against the teacher on the test split — agreement with the teacher,
+not accuracy, and PLAN carries that caveat wherever its numbers appear. `pose_overlay.py`
+answers the question a person actually asks — does it look right on our own cameras —
+one forward pass per frame, and gate 3's `reach_to_shelf`/`crouch` check is judged
+against it. `dense_vs_box.py` crops every dense-head person the box head missed into a
+contact sheet with a matched control, because whether those regions are recall or noise
+decides if the dense head can supervise the box head at all.
 
 ## [`site30k/`](site30k/) — the campaign toolchain
 
