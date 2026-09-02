@@ -2281,3 +2281,22 @@ something it does not support.
    Prototypes are scratch, not in the tree. The subject frame, the four joint sets and the
    renders are reproducible from `runs/hydranet_retail_person01/last.pt` plus
    `runs/commission01/Kaohsiung-cam04.camera.json`.
+
+   **Addendum 2026-09-02: route A shipped behind a bone gate, and confidence cannot be
+   the gate.** Route A drove the demo figures for one afternoon (the user reverted the
+   look the same day; the capability stays behind `demo_video --posed-figures` and is
+   heads_video's default). Shipping it surfaced the occlusion failure the single-subject
+   comparison could not: a person whose lower body a counter hides lifts to metre-long
+   tubes, roughly one placement in ten on Kaohsiung-cam04's gif window (20 of 321 past
+   3 m, p99 90 m, max 7.6 km). Two measurements worth keeping:
+
+   * **Keypoint confidence does not separate the exploded lifts — it inverts.** Their
+     minimum limb confidence (p50 0.649) is HIGHER than the clean lifts' (0.481): the
+     pose head is confidently wrong about joints it cannot see, so no confidence
+     threshold exists that keeps the good and drops the bad.
+   * **The bones separate perfectly.** Coherent lifts top out at a 1.46 m longest edge;
+     exploded ones start past 3 m; the band between is empty on both README cameras.
+     `lift_fronto_parallel` therefore refuses any skeleton edge over `MAX_BONE_M = 1.5`
+     (`syncai_bev3d/figures.py`, numbers inline) and the figure stands instead. Same
+     family as §7.19's lesson: the check that works is external to the model being
+     checked.
