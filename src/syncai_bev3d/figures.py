@@ -21,7 +21,6 @@ from typing import NamedTuple
 
 import numpy as np
 
-from syncai_hydranet.analytics.staff import track_staff
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 
@@ -226,19 +225,22 @@ class TrackState(NamedTuple):
     verdict: bool | None
 
 
-def track_colour(track, staff_on: bool) -> tuple:
+def track_colour(track, verdict_of=None) -> tuple:
     """Staff blue, everyone else green -- and per-track-id colours without a model.
 
     The cost is stated on STAFF_COLOR above: a track with too few observations has no
-    verdict and is drawn as a customer.
+    verdict and is drawn as a customer. ``verdict_of`` is `analytics.staff.track_staff`,
+    passed in by the caller rather than imported: the staff classifier is student-side
+    machinery and `test_package_boundaries` names the only hydranet edges this package
+    may import. `None` means no staff model -- colour by track id.
     """
-    if not staff_on:
+    if verdict_of is None:
         return TRACK_COLORS[track.track_id % len(TRACK_COLORS)]
-    return STAFF_COLOR if track_staff(track) is True else CUSTOMER_COLOR
+    return STAFF_COLOR if verdict_of(track) is True else CUSTOMER_COLOR
 
 
 def track_states(
-    tracks, n, cf, state, vel_window, metre_scale, fps, bounds, staff_on=False
+    tracks, n, cf, state, vel_window, metre_scale, fps, bounds, verdict_of=None
 ) -> list[TrackState]:
     """The sequential half of the 3D panel: everything that depends on the frames before.
 
@@ -305,12 +307,12 @@ def track_states(
             speed = math.hypot(dx, dz) / (vel_window / fps)
             if speed >= VEL_FLOOR_MS:
                 last_heading[t.track_id] = math.atan2(dx, dz)
-        verdict = track_staff(t) if staff_on else None
+        verdict = None if verdict_of is None else verdict_of(t)
         out.append(
             TrackState(
                 t.track_id,
                 t.box,
-                track_colour(t, staff_on),
+                track_colour(t, verdict_of),
                 sm,
                 x_m,
                 z_m,

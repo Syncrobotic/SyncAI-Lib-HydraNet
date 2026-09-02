@@ -65,7 +65,7 @@ from syncai_bev3d.meshes import (
 )
 from syncai_bev3d.shading import draw_scene
 from syncai_hydranet.analytics import Tracker
-from syncai_hydranet.analytics.staff import StaffModel, require_camera
+from syncai_hydranet.analytics.staff import StaffModel, require_camera, track_staff
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.data.video import probe as probe_video
@@ -651,7 +651,7 @@ def main() -> int:
                 args.metre_scale,
                 args.fps,
                 bounds,
-                staff_on=staff_model is not None,
+                verdict_of=None if staff_model is None else track_staff,
             )
             n += 1
             continue
@@ -789,7 +789,7 @@ def main() -> int:
             args.metre_scale,
             args.fps,
             bounds,
-            staff_on=staff_model is not None,
+            verdict_of=None if staff_model is None else track_staff,
         )
         figures, ghosts = [], []
         n_posed = 0

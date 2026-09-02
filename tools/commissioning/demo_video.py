@@ -82,6 +82,7 @@ from syncai_bev3d.shading import draw_scene
 from syncai_hydranet.analytics.staff import (
     StaffModel,
     require_camera,
+    track_staff,
 )
 from syncai_hydranet.analytics.tracker import Tracker
 from syncai_hydranet.config import load_config
@@ -346,7 +347,7 @@ def _render_in_chunks(args, camera, clip, cf, bounds, staff_model) -> int:
     }
     vel_window = max(1, round(VEL_WINDOW_S * args.fps))
     positions, seen_ids = [], set()
-    staff_on = staff_model is not None
+    verdict_of = None if staff_model is None else track_staff
     for n, rec in enumerate(records):
         b = np.asarray(rec["boxes"], np.float32).reshape(-1, 4)
         sp = None if rec["staff"] is None else np.asarray(rec["staff"], float)
@@ -354,7 +355,7 @@ def _render_in_chunks(args, camera, clip, cf, bounds, staff_model) -> int:
         for t in tracks:
             seen_ids.add(t.track_id)
         for st in track_states(
-            tracks, n, cf, state, vel_window, args.metre_scale, args.fps, bounds, staff_on
+            tracks, n, cf, state, vel_window, args.metre_scale, args.fps, bounds, verdict_of
         ):
             positions.append(
                 {
@@ -726,7 +727,7 @@ def main() -> int:
             args.metre_scale,
             args.fps,
             bounds,
-            staff_on=staff_model is not None,
+            verdict_of=None if staff_model is None else track_staff,
         )
         n_outside += state["n_skipped"] - skips_before
         n_placed += len(states)
@@ -756,7 +757,7 @@ def main() -> int:
         for t in tracks:
             seen_ids.add(t.track_id)
             bx = np.asarray(t.box, float) / 2.0
-            box_col = track_colour(t, staff_model is not None)
+            box_col = track_colour(t, None if staff_model is None else track_staff)
             d.rectangle(list(bx), outline=box_col, width=2)
             d.text((bx[0] + 3, bx[1] + 2), f"#{t.track_id}", fill=box_col)
 
