@@ -177,11 +177,15 @@ def test_a_posture_too_early_in_a_track_to_judge_is_refused_rather_than_guessed(
     assert ev.pose_posture_events([no_history], FPS, "cam01") == []
 
 
-def test_a_pose_event_on_a_track_with_no_pose_names_the_missing_model():
-    """Not an empty list. An empty list is indistinguishable from "nobody fell"."""
+def test_a_pose_event_on_a_track_with_no_pose_names_the_missing_wire():
+    """Not an empty list. An empty list is indistinguishable from "nobody fell".
+
+    The refusal used to name a pose model that did not exist; the P3 head exists now,
+    so it names the wire the caller did not pass instead.
+    """
     box = np.array([0.0, 0.0, 10.0, 20.0])
     bare = Track(1, box, frames=[0, 1], boxes=[box, box], confirmed=True)
-    with pytest.raises(NotImplementedError, match="second-stage pose model"):
+    with pytest.raises(NotImplementedError, match="keypoints"):
         ev.pose_posture_events([bare], FPS, "cam01")
 
 
@@ -439,14 +443,14 @@ def test_no_start_is_a_no_op_rather_than_an_error():
 
 
 def _cam_file(camera_id="Kaohsiung-cam04"):
+    from _cameras import HALF_RES_CAM, HALF_RES_PLANE, HALF_RES_SIZE
     from syncai_hydranet.geometry.camera_json import CameraFile
-    from syncai_hydranet.geometry.ground import Camera, GroundPlane
 
     return CameraFile(
         camera_id=camera_id,
-        image_size_px=(960, 540),
-        camera=Camera(fx=382.7, fy=382.7, cx=480.0, cy=270.0),
-        plane=GroundPlane(height=2.49, pitch=math.radians(49.5)),
+        image_size_px=HALF_RES_SIZE,
+        camera=HALF_RES_CAM,
+        plane=HALF_RES_PLANE,
     )
 
 

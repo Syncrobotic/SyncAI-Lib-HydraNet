@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import math
 
 import pytest
 
+from _cameras import FULL_RES_CAM, FULL_RES_PLANE, FULL_RES_SIZE
 from syncai_hydranet.geometry.camera_json import (
     SCHEMA_VERSION,
     ZONE_KINDS,
@@ -20,16 +20,16 @@ from syncai_hydranet.geometry.camera_json import (
     Lens,
     Zone,
 )
-from syncai_hydranet.geometry.ground import Camera, GroundPlane
+from syncai_hydranet.geometry.ground import GroundPlane
 from syncai_hydranet.labels import IGNORE
 
 
 def a_camera_file() -> CameraFile:
     return CameraFile(
         camera_id="Tao-Hsin-cam03",
-        image_size_px=(1920, 1080),
-        camera=Camera(fx=1490.0, fy=1490.0, cx=960.0, cy=540.0),
-        plane=GroundPlane(height=2.38, pitch=math.radians(50.2)),
+        image_size_px=FULL_RES_SIZE,
+        camera=FULL_RES_CAM,
+        plane=FULL_RES_PLANE,
         lens=Lens(k1=-0.18, centre_px=(960.0, 540.0), radius_px=960.0),
         zones=(
             Zone("entrance", "entrance_line", ((-1.0, 2.0), (1.0, 2.0))),
