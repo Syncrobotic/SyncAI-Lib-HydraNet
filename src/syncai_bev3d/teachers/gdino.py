@@ -32,6 +32,7 @@ MODEL_ID = "IDEA-Research/grounding-dino-base"
 # already in PLAN was actually made with; bumping it is then a reviewed event with a
 # re-measure attached, which is what `.github/dependabot.yml` says about torch for the
 # same reason.
+# This paragraph is the canonical copy; four other pins cite it.
 MODEL_REVISION = "12bdfa3120f3e7ec7b434d90674b3396eccf88eb"
 
 # The measured day/night gap; see the module docstring. A working threshold, not a floor:

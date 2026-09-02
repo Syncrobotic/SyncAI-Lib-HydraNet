@@ -80,14 +80,9 @@ import torch.nn.functional as F
 # `embed_dim: int = 512` default comes from. Changing the encoder changes that default
 # and the config has to say so, which is why the encoder id travels in the output.
 DEFAULT_ENCODER = "openai/clip-vit-base-patch32"
-# The revision this project's numbers were measured on, pinned rather than floating.
-# `from_pretrained` with no `revision=` resolves whatever `main` points at today, so an
-# upstream push silently changes what a teacher produces -- and for the models here that
-# means different masks, different boxes and different metres, under artefacts that look
-# identical. Taken from the local cache on 2026-08-28, i.e. the commit every measurement
-# already in PLAN was actually made with; bumping it is then a reviewed event with a
-# re-measure attached, which is what `.github/dependabot.yml` says about torch for the
-# same reason.
+# Pinned rather than floating, for the reason argued in full on
+# `syncai_bev3d/teachers/gdino.py`'s revision pin: an unpinned `from_pretrained`
+# silently changes what a teacher produces when upstream pushes.
 DEFAULT_ENCODER_REVISION = "3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268"
 
 # Prompt ensembling, CLIP's own recipe: encode several phrasings, average the normalised

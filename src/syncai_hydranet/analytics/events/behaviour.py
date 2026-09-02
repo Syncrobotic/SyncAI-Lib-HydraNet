@@ -34,11 +34,8 @@ from .zones import line_events
 # ordered by the instrument that can resolve one. This first section needs no model that
 # does not already exist and no data that has not already been captured: a floor path in
 # metres and a clock. That is worth stating plainly, because the behaviour ask usually
-# arrives attached to an annotation budget, and a good share of it is geometry.
-#
-# The unit is metres per second and not pixels per frame, and that is the whole reason
-# these transfer between cameras. A pixel speed threshold tuned on Kaohsiung-cam08 is a
-# statement about that lens and that mount.
+# arrives attached to an annotation budget, and a good share of it is geometry. The
+# metres-not-pixels argument is in the module docstring above; it is not repeated here.
 
 
 def speed_events(
