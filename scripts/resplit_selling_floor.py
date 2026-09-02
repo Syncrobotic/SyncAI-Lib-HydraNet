@@ -8,8 +8,9 @@ A camera is the unit because the split's whole purpose is that none appears on t
 and `retail_objects_batch03/split.json` inherits batch02's assignment to keep it that way.
 So moving one in a single batch is the one edit that silently breaks the invariant the
 files were arranged to hold: batch02 would still train on a camera batch03 scores. Every
-batch moves together here, and `--check` refuses the whole operation if any of them would
-end up disagreeing.
+batch moves together here, and the check is unconditional: the whole operation is refused
+if any batch would end up disagreeing. (There is no `--check` flag and never was; an
+earlier version of this sentence named one.)
 
 **Train-only supplements are checked too, and this is the failure that put it here.**
 `datasets/retail_objects_columns_clean` is a `column` supplement with no val and no test,
@@ -208,16 +209,24 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{r.name}: {cam}  {src} -> {args.to}   {len(dirs)} clips, {n} frames")
     would = check_after(args.cameras, args.to)
     if would:
-        print("\nREFUSED: this move invalidates a train-only supplement:", file=sys.stderr)
+        # The verdict word must match what happens next: this used to print REFUSED
+        # unconditionally and then, with --allow-stale-supplements, proceed anyway.
+        verdict = (
+            "PROCEEDING ANYWAY (--allow-stale-supplements): this move invalidates "
+            "a train-only supplement:"
+            if args.allow_stale_supplements
+            else "REFUSED: this move invalidates a train-only supplement:"
+        )
+        print(f"\n{verdict}", file=sys.stderr)
         for line in would:
             print(f"  {line}", file=sys.stderr)
-        print(
-            "\nRebuild the supplement without those cameras and update its "
-            "clean_against digest, or pass --allow-stale-supplements if you are "
-            "rebuilding it in the same breath.",
-            file=sys.stderr,
-        )
         if not args.allow_stale_supplements:
+            print(
+                "\nRebuild the supplement without those cameras and update its "
+                "clean_against digest, or pass --allow-stale-supplements if you are "
+                "rebuilding it in the same breath.",
+                file=sys.stderr,
+            )
             return 1
 
     if not args.apply:
