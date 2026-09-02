@@ -1,7 +1,7 @@
 {
  "camera": "Kaohsiung-cam04",
  "gif": "demo_Kaohsiung-cam04.gif",
- "render": "demo_Kaohsiung-cam04_20260902-152916.mp4",
+ "render": "demo_Kaohsiung-cam04_20260902-163852.mp4",
  "source_clip": "archive_20260816-112757_20260816-113301.mp4",
  "render_args": {
   "camera": "Kaohsiung-cam04",
@@ -13,7 +13,8 @@
   "metre_scale": 1.0,
   "no_blur": false,
   "staff_colours": "runs/staff_model01/model_Kaohsiung-cam04.json",
-  "staff_min_accuracy": 0.9
+  "staff_min_accuracy": 0.9,
+  "standing_figures": false
  },
  "staff_model": {
   "path": "runs/staff_model01/model_Kaohsiung-cam04.json",
@@ -23,7 +24,7 @@
   "held_out_n": 15,
   "min_accuracy_required": 0.9
  },
- "commit": "e17d0cda74ed81abe19777f2d0a5cfaa446be4bf",
+ "commit": "871f512eaa4a15e8b6baea322f1cc6f6f35aa623",
  "start_frame": 33,
  "frames": 120,
  "stride": 1,
