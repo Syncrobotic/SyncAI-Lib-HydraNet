@@ -5,15 +5,19 @@ model. `HydraNet.predict` runs the shared trunk once and each head decodes off t
 so the terrain map, the boxes and the skeletons in any given frame of this video came out
 of the same convolution. Nothing here runs a second network.
 
-Four panels:
+Six panels, in a 2x3 grid:
 
   detection   all four classes, colour-coded, with the tracker's ids
   terrain     the dense class map, `data.terrain_classes`' own palette
   pose        17 COCO keypoints per detected person, decoded inside their box
   metres      L1: the commissioned scene with a figure at each track's floor position
+  masks       the commissioning masks camera.json ships, on the plate they came from
+  legend      both taxonomies' colour keys, side by side
 
-The fourth panel is the only one that needs commissioning, and it is the one that shows
-what the other three are *for*: pixels become a person standing at a measured place.
+The metres panel is the only one that needs commissioning, and it is the one that shows
+what the network panels are *for*: pixels become a person standing at a measured place.
+(This docstring said "four panels" until 2026-09-02; the masks and legend panels
+arrived later and it was never updated.)
 
 Usage:
   uv run python tools/commissioning/heads_video.py <camera> --checkpoint PATH
@@ -557,12 +561,6 @@ def main() -> int:
     ap.add_argument("--fps", type=float, default=5.0)
     ap.add_argument("--score-thr", type=float, default=0.35)
     ap.add_argument("--metre-scale", type=float, default=1.0)
-    # Default ON, and the flag exists to be refused rather than to be convenient. This
-    # tool renders a customer's shop floor across three of its four panels and had **no
-    # blur at all** until 2026-08-29, while writing to `assets/heads_<camera>.mp4` -- a
-    # shared filename, in the directory whose whole convention is that nothing enters it
-    # unaudited. `demo_video.py` has carried the two instruments for days; there was never
-    # a reason for this one not to, only nobody had asked.
     ap.add_argument(
         "--workers",
         type=int,
@@ -591,6 +589,14 @@ def main() -> int:
         action="store_true",
         help="draw the L1 figures as the standing mannequin instead of the measured pose",
     )
+    # Blur is default ON, and the flag exists to be refused rather than to be
+    # convenient. This tool renders a customer's shop floor across most of its panels
+    # and had **no blur at all** until 2026-08-29, while writing to
+    # `assets/heads_<camera>.mp4` -- a shared filename, in the directory whose whole
+    # convention is that nothing enters it unaudited. `demo_video.py` has carried the
+    # two instruments for days; there was never a reason for this one not to, only
+    # nobody had asked. (This comment sat above --workers for a while after the flags
+    # between them were inserted.)
     ap.add_argument(
         "--no-blur",
         action="store_true",

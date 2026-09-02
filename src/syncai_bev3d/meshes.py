@@ -5,8 +5,9 @@ licence to track, a CDN or an LFS pointer to serve it from, and no way to ask it
 1.62 m person instead of a 1.70 m one. Everything here is a function of its dimensions,
 which is what makes it usable for a scene where the dimensions are the output.
 
-**On what a human-shaped mesh does and does not claim.** `bev_page.py` draws objects as
-wireframe cuboids and argues, correctly, that a solid asset asserts a shape nobody
+**On what a human-shaped mesh does and does not claim.** `bev_page.py` (removed in
+`500cdd2`; readable at `git show 500cdd2^:scripts/bev_page.py`) drew objects as
+wireframe cuboids and argued, correctly, that a solid asset asserts a shape nobody
 measured. That argument is about *shape*. It is not an argument for a crude mesh, because
 the thing actually uncertain in a retail scene is **position** -- `analytics/dwell.py`
 records the mechanism: a shopper behind a counter has their feet occluded, the box bottom

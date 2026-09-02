@@ -3,7 +3,8 @@
 Colours, the velocity and smoothing constants those renders were tuned to, and the
 handful of `camera.json`-derived geometry calls that turn a person box into a floor
 position. **They lived inside `demo_video.py` until 2026-09-02**, which made a CLI script
-the de facto library for every other render -- `heads_video` imported ten names from it --
+the de facto library for every other render -- `heads_video` imported thirteen names from
+it --
 and the split had started to cost: staff colouring existed only in one front-end,
 frame-parallel rendering only in the other, and the sidecar `demo_gif` audits against was
 written by only one of them, so a verdict could describe a different render than the
@@ -35,10 +36,12 @@ TRACK_COLORS = [
 # shopper arrived grey for their first second, which read as a defect.
 STAFF_COLOR = (70, 150, 255)
 CUSTOMER_COLOR = (105, 215, 120)
-# The torso band is 0.18-0.55 of a box and `_blur_region` covers the top 45% plus padding,
-# so the face blur lands squarely on the pixels the classifier reads. Features are taken
-# from the source frame BEFORE either blur instrument runs; nothing about the order is
-# incidental, and reversing it would silently classify blurred shirts.
+# On the staff classifier those colours report for: its torso band is 0.18-0.55 of a
+# box and `face_blur.blur_region` covers the top 45% plus padding, so the face blur
+# would land squarely on the pixels the classifier reads. That is why features are
+# taken from the source frame BEFORE either blur instrument runs -- nothing about the
+# order is incidental, and reversing it would silently classify blurred shirts. See
+# `_torso_crop` below.
 PLACE_MARGIN_M = 2.0  # beyond the commissioned walkable zone a floor position is a guess
 # Velocity is measured over a WINDOW, not between adjacent frames, and only asserted
 # above a floor. Both numbers come from this camera's own tracks (1,607 steps):

@@ -339,7 +339,8 @@ def main() -> int:
                 kp[:, :, 1] = (kp[:, :, 1] - y0) * (src_w / cw)
                 kps_src = kp
         # BEFORE the blur block below, and `frame` rather than `img` for the same reason:
-        # the face blur covers the torso band this reads (see STAFF_COLOR above).
+        # the face blur covers the torso band this reads (the argument lives beside
+        # STAFF_COLOR in syncai_bev3d.figures, where it moved on 2026-09-02).
         staff_p = None
         if staff_model is not None:
             staff_p = np.array(
@@ -517,7 +518,7 @@ def main() -> int:
             + ("" if args.metre_scale == 1.0 else f"  ·  metres x{args.metre_scale:g}"),
             fill=(216, 224, 236),
         )
-        # Two lines: the panel is 898 px and the per-class caption does not fit on one.
+        # Two lines: the panel is 890 px and the per-class caption does not fit on one.
         # It used to fit because it said less -- a single "measured p85:" over every
         # class, which was the shorter sentence and the wrong one.
         left, _, right = header.partition("|")
