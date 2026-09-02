@@ -604,7 +604,7 @@ def cmd_annotate(args) -> int:
         split = split_of.get(camera, args.default_split)
         kept, day = load_clip(clip, args.sample_fps)
         if not kept:
-            print(f"{session}: no frames decoded, skipped")
+            log_progress(f"{session}: no frames decoded, skipped")
             manifest["clips"].append({"session": session, "skipped": "no frames"})
             continue
         night_clip = sum(day) < len(day) / 2
@@ -902,10 +902,9 @@ def cmd_annotate(args) -> int:
 
         manifest["clips"].append(clip_entry)
         share_str = static_share if static_share is None else round(static_share, 3)
-        print(
+        log_progress(
             f"{session}: split={split} night={night_clip} frames={len(picks)} "
-            f"static_share={share_str} {time.time() - t0:.0f}s",
-            flush=True,
+            f"static_share={share_str} {time.time() - t0:.0f}s"
         )
 
     # write COCO files per split
