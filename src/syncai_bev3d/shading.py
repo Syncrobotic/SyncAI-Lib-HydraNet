@@ -198,20 +198,6 @@ def draw_scene(
         draw.polygon(points, fill=colour)
 
 
-def draw_mesh(
-    draw: ImageDraw.ImageDraw,
-    view: View,
-    mesh: Mesh,
-    rgb,
-    *,
-    bg,
-    alpha: int = 255,
-    fog: bool = True,
-) -> None:
-    """One mesh, for a caller that has only one. `draw_scene` for anything else."""
-    draw_scene(draw, view, [(mesh, rgb, alpha)], bg=bg, fog=fog)
-
-
 def contact_shadows(
     size: tuple[int, int],
     view: View,
