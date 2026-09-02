@@ -1775,6 +1775,12 @@ something it does not support.
    **Single seed.** These deltas have no seed-variance context; `hydranet_retail_security_seeds`
    is the shape that would give them one.
 
+   **PROMOTED 2026-09-02** (the user's call): `shipped.SHIPPED_RUN` now names this run.
+   Both `for_terrain` and `for_detection` return `last.pt` -- the saved checkpoints
+   coincide to three decimals because selection picked epoch 118 off a flat tail; the
+   per-head doctrine stands and the reasoning is on the functions. Every tool renders
+   with person01 from here on, so its numbers may now be quoted beside the figures.
+
    **Pre-flight, 2026-09-01, built on CPU from the config rather than read off it**:
    `split_leaks` clean, `check_config` silent, `site_person` 14,654 train images at 0.2 →
    91 detection steps carrying `class_mask [1, 0, 0, 0]`. `detection_class_steps` is

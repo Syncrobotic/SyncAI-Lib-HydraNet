@@ -42,7 +42,11 @@ REPO = Path(__file__).resolve().parents[2]
 #: The run every tool ships from. A timestamped directory rather than a stable name on
 #: purpose: the name says when the weights were trained, and promoting a new run is an
 #: edit here rather than a copy over the old one, so the previous run stays readable.
-SHIPPED_RUN = REPO / "runs/hydranet_retail_security_b03_cw_xl-20260825-162131"
+#:
+#: **Promoted to person01 on 2026-09-02** (user's decision, PLAN 7c.20): it beats
+#: `..._b03_cw_xl-20260825-162131` on every site metric and on the teacher-independent
+#: `coco_person` (0.2157 against 0.2022), losing only ~0.003 mIoU on ADE20K.
+SHIPPED_RUN = REPO / "runs/hydranet_retail_person01"
 
 #: The config that trained it. Read from the run rather than from `configs/`, because a
 #: config in `configs/` is what the *next* run will use and may already have moved.
@@ -52,18 +56,21 @@ SHIPPED_CONFIG = SHIPPED_RUN / "config.yaml"
 def for_terrain() -> Path:
     """The checkpoint to use when the answer is judged on segmentation.
 
-    Floor and wall masks, plate structure, traversability -- anything reading the terrain
-    head. `best.pt` is selected on `terrain_mIoU`, which is exactly this question.
+    For person01 the two saved checkpoints are the same model to three decimals --
+    selection ran on `detection_mAP/site_person`, picked epoch 118, and the curve was
+    flat: `last.pt` (epoch 120) reads `site_seg03` 0.6718 against `best.pt`'s 0.6716,
+    and marginally >= on every other head in `selection.json`. So both questions get
+    `last.pt`. The two-answers doctrine above still stands -- this run's answers happen
+    to coincide, and a future run's may not; read its `selection.json` before assuming.
     """
-    return SHIPPED_RUN / "best.pt"
+    return SHIPPED_RUN / "last.pt"
 
 
 def for_detection() -> Path:
     """The checkpoint to use when the answer is judged on finding people or objects.
 
-    Figures, tracking, person counts, anything the detection head decides. `best.pt` is
-    epoch 15 and reads 0.1447 mAP on `coco_person` against `last.pt`'s 0.2022, so a
-    terrain-selected checkpoint here would lose two people in five for a metric nobody
-    asked it about.
+    Figures, tracking, person counts, anything the detection head decides. `last.pt`,
+    for the reason on :func:`for_terrain`: person01's saved checkpoints coincide, and
+    `last.pt` is the marginally better of the two on every head.
     """
     return SHIPPED_RUN / "last.pt"
