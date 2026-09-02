@@ -2220,7 +2220,7 @@ something it does not support.
    already knows; and the commissioning record carries it per camera, so the count is a
    number that can be watched rather than a line in a scrollback.
 
-28. **The mesh figure can be driven by the pose head, and the thing that stops it is
+30. **The mesh figure can be driven by the pose head, and the thing that stops it is
    constraint design rather than data.** Opened 2026-09-02 on the question "can the 3D
    figure replicate what the person is doing". Four solvers, one subject: the single
    confident person on `Kaohsiung-cam04` at 10:58 local, standing at the counter typing,

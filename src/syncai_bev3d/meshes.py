@@ -228,6 +228,63 @@ def human(height_m: float = 1.70, sides: int = 10) -> Mesh:
     return verts, faces
 
 
+# COCO's 17 keypoints, in the order every pose head in this project emits them.
+COCO_NOSE, COCO_LSH, COCO_RSH, COCO_LEL, COCO_REL, COCO_LWR, COCO_RWR = 0, 5, 6, 7, 8, 9, 10
+COCO_LHI, COCO_RHI, COCO_LKN, COCO_RKN, COCO_LAN, COCO_RAN = 11, 12, 13, 14, 15, 16
+
+
+def human_posed(joints: np.ndarray, height_m: float = 1.70, sides: int = 10) -> Mesh:
+    """:func:`human`'s limbs, between measured joints instead of the standing constants.
+
+    ``joints`` is ``(17, 3)`` in the scene's own metres -- x right, y up from the floor,
+    z forward -- in COCO keypoint order. Twelve of those seventeen land on a tube endpoint
+    :func:`human` already has, which is why this needs no rig and no skinning: the figure
+    was always a set of tubes between named joints, and this passes different names in.
+
+    **What this is not.** The joints it is given come from lifting 2D keypoints, and on a
+    single frame that lift is not solved (PLAN 7c.30). The cheapest lift puts every joint
+    on one vertical plane at the feet's range, which gets the heights and the limb
+    directions right and the bone lengths wrong by 0.67-1.15x; the solvers that fix the
+    bone lengths fold the skeleton instead. So a figure drawn from this shows *what the
+    person is doing* and must not be measured: a limb length or a joint separation read
+    off it is a property of the lift, not of the person.
+
+    Unlike :func:`human` the mesh is NOT normalised to ``height_m``. The height is the
+    joints' own, because scaling a posed figure to a standing person's stature would
+    stretch a crouch into something taller than the crouch was.
+    """
+    j = np.asarray(joints, dtype=float)
+    if j.shape != (17, 3):
+        raise ValueError(f"joints must be (17, 3) in COCO order, got {j.shape}")
+    if not np.isfinite(j).all():
+        raise ValueError("joints contains non-finite values; drop the figure instead")
+    h = float(height_m)
+    if h <= 0:
+        raise ValueError(f"height_m must be positive, got {h}")
+    p = {k: v * h for k, v in _P.items()}
+    mid_sh = (j[COCO_LSH] + j[COCO_RSH]) / 2
+    mid_hip = (j[COCO_LHI] + j[COCO_RHI]) / 2
+    # The crown sits beyond the nose along the neck's own direction, so a head that is
+    # tilted forward renders tilted forward rather than upright on a leaning body.
+    head_c = j[COCO_NOSE] + (j[COCO_NOSE] - mid_sh) * 0.35
+    parts = [
+        _sphere(head_c, p["head_r"], sides=sides),
+        _tube(mid_sh, head_c, p["waist_r"] * 0.55, p["torso_r"] * 0.7, sides),
+        _tube(mid_sh, mid_hip, p["torso_r"], p["waist_r"], sides),
+    ]
+    for sh, el, wr, hi, kn, an in (
+        (COCO_LSH, COCO_LEL, COCO_LWR, COCO_LHI, COCO_LKN, COCO_LAN),
+        (COCO_RSH, COCO_REL, COCO_RWR, COCO_RHI, COCO_RKN, COCO_RAN),
+    ):
+        parts += [
+            _tube(j[sh], j[el], p["upper_arm_r"], p["upper_arm_r"] * 0.82, sides),
+            _tube(j[el], j[wr], p["forearm_r"], p["forearm_r"] * 0.8, sides),
+            _tube(j[hi], j[kn], p["thigh_r"], p["calf_r"] * 1.15, sides),
+            _tube(j[kn], j[an], p["calf_r"], p["calf_r"] * 0.62, sides),
+        ]
+    return _merge(*parts)
+
+
 def box(width_m: float, height_m: float, depth_m: float) -> Mesh:
     """An axis-aligned box standing on y = 0, centred on x and z.
 

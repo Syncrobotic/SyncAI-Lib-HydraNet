@@ -47,7 +47,14 @@ from demo_video import (
 )
 
 from syncai_bev3d import scene_mesh
-from syncai_bev3d.meshes import Placement, extrude, ground_disc, human, place
+from syncai_bev3d.meshes import (
+    Placement,
+    extrude,
+    ground_disc,
+    human,
+    human_posed,
+    place,
+)
 from syncai_bev3d.shading import draw_scene
 from syncai_hydranet.analytics import Tracker
 from syncai_hydranet.config import load_config
@@ -182,6 +189,67 @@ def label(img: Image.Image, text: str, sub: str = "") -> None:
         d.text((10, 24), sub, fill=(185, 195, 210), font=FONT_SMALL)
 
 
+def _box_iou(box, boxes):
+    """IoU of one xyxy box against many. The tracker returns a box, not the index of the
+    detection it came from, so the keypoints are found by overlap."""
+    boxes = np.asarray(boxes, dtype=float).reshape(-1, 4)
+    if not len(boxes):
+        return np.zeros(0)
+    x0 = np.maximum(box[0], boxes[:, 0])
+    y0 = np.maximum(box[1], boxes[:, 1])
+    x1 = np.minimum(box[2], boxes[:, 2])
+    y1 = np.minimum(box[3], boxes[:, 3])
+    inter = np.clip(x1 - x0, 0, None) * np.clip(y1 - y0, 0, None)
+    a = (box[2] - box[0]) * (box[3] - box[1])
+    b = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+    return inter / np.maximum(a + b - inter, 1e-9)
+
+
+def _lift_fronto_parallel(kp_src, x_m, z_m, cf):
+    """2D keypoints -> (17, 3) joints in scene metres, or None if the frame cannot carry it.
+
+    Every joint is put on the vertical plane through the track's floor point that is
+    perpendicular to the camera's horizontal view direction there. That is the cheapest
+    lift there is: it fixes the depth of all seventeen at the feet's range, so the heights
+    and the limb directions come out right and the depth content of the pose is discarded.
+
+    **It is chosen here over the solvers that fix the bone lengths because those fold.**
+    Both a per-bone depth solve and a constrained least-squares over the whole skeleton
+    satisfied every bone length and put a 1.95 m person's head at 0.73 m -- the figure
+    sinks to the floor and hinges at the hips while the internal distances stay correct
+    (PLAN 7c.30). This one is wrong in a way that stays readable: limbs come out 0.67-1.15x
+    their true length and a foot that is forward reads as a foot that is raised.
+    """
+    kp = np.asarray(kp_src, dtype=float)
+    if kp.shape != (17, 3) or not np.isfinite(kp).all():
+        return None
+    if float(np.median(kp[:, 2])) < KP_MIN_CONF:
+        return None
+    half = kp[:, :2] / 2.0  # camera.json is calibrated at half res
+    if cf.lens is not None:
+        half = undistort_points(half, cf.lens.k1, cf.lens.centre_px, cf.lens.radius_px)
+    cam = cf.camera
+    rays = np.stack(
+        [(half[:, 0] - cam.cx) / cam.fx, (half[:, 1] - cam.cy) / cam.fy, np.ones(len(half))],
+        axis=-1,
+    )
+    d = rays @ cf.plane.rotation
+    rng = float(np.hypot(x_m, z_m))
+    denom = x_m * d[:, 0] + z_m * d[:, 2]
+    if rng < 1e-6 or np.any(np.abs(denom) < 1e-9):
+        return None
+    t = rng * rng / denom
+    j = np.stack([d[:, 0] * t, cf.plane.height - d[:, 1] * t, d[:, 2] * t], axis=-1)
+    if not np.isfinite(j).all():
+        return None
+    # The feet are on the floor whatever the lift says: pin the lower ankle and carry the
+    # rest with it, so a figure never floats or sinks even when the ankle keypoint is poor.
+    j[:, 1] -= min(j[15, 1], j[16, 1])
+    if not (0.5 < float(j[:, 1].max()) < 2.6):
+        return None  # a figure this tall or this short is a fault
+    return j
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("camera")
@@ -198,6 +266,11 @@ def main() -> int:
     # shared filename, in the directory whose whole convention is that nothing enters it
     # unaudited. `demo_video.py` has carried the two instruments for days; there was never
     # a reason for this one not to, only nobody had asked.
+    ap.add_argument(
+        "--standing-figures",
+        action="store_true",
+        help="draw the L1 figures as the standing mannequin instead of the measured pose",
+    )
     ap.add_argument(
         "--no-blur",
         action="store_true",
@@ -324,6 +397,7 @@ def main() -> int:
         d = ImageDraw.Draw(p_det, "RGBA")
         counts: dict[str, int] = {}
         boxes_src = np.zeros((0, 4), np.float32)
+        kps_src = np.zeros((0, 17, 3), np.float32)
         if det and len(det.get("boxes", [])):
             b = det["boxes"].cpu().numpy()
             lab = det["labels"].cpu().numpy()
@@ -336,9 +410,18 @@ def main() -> int:
                 chip(d, (bb[0], bb[1]), name, col)
             keep = lab == person
             pb = (b[keep] - np.array([x0, y0, x0, y0])) * (src_w / cw)
-            boxes_src = pb[
-                [i for i, bb in enumerate(pb) if not in_fp_zone(cf, bb[0] / 2, bb[1] / 2)]
+            surviving = [
+                i for i, bb in enumerate(pb) if not in_fp_zone(cf, bb[0] / 2, bb[1] / 2)
             ]
+            boxes_src = pb[surviving]
+            # The pose rows are index-aligned with the detections, so the same two filters
+            # have to be applied to them or the figure in panel 4 wears another person's
+            # skeleton. They are carried in source pixels to match `boxes_src`.
+            if pose_rows is not None:
+                kp = pose_rows.cpu().numpy()[keep][surviving].copy()
+                kp[:, :, 0] = (kp[:, :, 0] - x0) * (src_w / cw)
+                kp[:, :, 1] = (kp[:, :, 1] - y0) * (src_w / cw)
+                kps_src = kp
         label(
             p_det,
             "detection head - 4 classes",
@@ -389,6 +472,7 @@ def main() -> int:
         # --- 4. metres, which is what the other three are for ------------------------
         tracks = [t for t in tracker.update(boxes_src, n) if t.hits >= 3]
         figures, ghosts = [], []
+        n_posed = 0
         for t in tracks:
             col = TRACK_COLORS[t.track_id % len(TRACK_COLORS)]
             mid_x = (t.box[0] + t.box[2]) / 2 / 2.0
@@ -429,7 +513,18 @@ def main() -> int:
             at = Placement(x_m, z_m, heading)
             key = f"person_{t.track_id % len(TRACK_COLORS)}"
             scene_mesh.PALETTE[key] = col
-            body = place(human(stature), at)
+            # The figure shows what the person is doing, when the pose can carry it.
+            joints = None
+            if not args.standing_figures and len(kps_src):
+                iou = _box_iou(t.box, boxes_src)
+                if iou.size and float(iou.max()) > 0.3:
+                    joints = _lift_fronto_parallel(kps_src[int(iou.argmax())], sm[0], sm[1], cf)
+            if joints is None:
+                body = place(human(stature), at)
+            else:
+                # already absolute in scene metres, so it is not `place`d -- only scaled
+                body = human_posed(joints * args.metre_scale, stature)
+                n_posed += 1
             disc = place(ground_disc(0.45), at)
             figures += [(body, key, 255, True), (disc, key, 200, False)]
             ghosts += [(body, col, 62), (disc, col, 80)]
@@ -453,7 +548,8 @@ def main() -> int:
         label(
             p_m,
             "L1 - tracks on the commissioned floor, in metres",
-            f"{len(tracks)} tracks  wedge = facing  arrow = 1 s of travel"
+            f"{len(tracks)} tracks, {n_posed} drawn in their measured pose  "
+            f"wedge = facing  arrow = 1 s of travel"
             + (f"   |   {not_believed}" if not_believed else ""),
         )
 
