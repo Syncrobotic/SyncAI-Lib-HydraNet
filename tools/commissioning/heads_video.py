@@ -36,10 +36,13 @@ from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, str(Path(__file__).parent))
 from demo_video import (
+    CUSTOMER_COLOR,
+    STAFF_COLOR,
     TRACK_COLORS,
     VEL_FLOOR_MS,
     VEL_SECONDS_SHOWN,
     VEL_WINDOW_S,
+    _torso_crop,
     content_crop,
     facing_wedge,
     in_fp_zone,
@@ -59,6 +62,7 @@ from syncai_bev3d.meshes import (
 )
 from syncai_bev3d.shading import draw_scene
 from syncai_hydranet.analytics import Tracker
+from syncai_hydranet.analytics.staff import StaffModel, require_camera, track_staff
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.data.video import probe as probe_video
@@ -205,7 +209,7 @@ class _TrackState(NamedTuple):
     speed: float
 
 
-def _track_states(tracks, n, cf, state, vel_window, metre_scale, fps, bounds):
+def _track_states(tracks, n, cf, state, vel_window, metre_scale, fps, bounds, staff_on=False):
     """The sequential half of panel 4: everything that depends on the frames before it.
 
     Split out of the drawing because a chunked render has to **replay** it. A worker that
@@ -259,11 +263,19 @@ def _track_states(tracks, n, cf, state, vel_window, metre_scale, fps, bounds):
             speed = math.hypot(dx, dz) / (vel_window / fps)
             if speed >= VEL_FLOOR_MS:
                 last_heading[t.track_id] = math.atan2(dx, dz)
+        # Staff blue, everyone else green -- `demo_video`'s rule and its cost: a track
+        # with too few observations has no verdict and is drawn as a customer. Without a
+        # model the colour is per track id, which is what tells two tracks apart.
+        col = (
+            (STAFF_COLOR if track_staff(t) is True else CUSTOMER_COLOR)
+            if staff_on
+            else TRACK_COLORS[t.track_id % len(TRACK_COLORS)]
+        )
         out.append(
             _TrackState(
                 t.track_id,
                 t.box,
-                TRACK_COLORS[t.track_id % len(TRACK_COLORS)],
+                col,
                 sm,
                 x_m,
                 z_m,
@@ -336,6 +348,82 @@ def _lift_fronto_parallel(kp_src, x_m, z_m, cf):
     return j
 
 
+def _positions_from_boxes(boxes_all, cf, args, bounds):
+    """Replay the track state over recorded boxes to get every figure's floor position.
+
+    The sidecar has to describe the render that wrote it, and the cheapest way to be sure
+    of that is to derive it from the same input and the same function the render used --
+    `_track_states` over the same boxes, which is deterministic and costs microseconds a
+    frame. Building it a second way would let the record and the picture disagree, which
+    is the failure the sidecar exists to prevent.
+    """
+    tracker = Tracker()
+    state: dict = {"history": {}, "last_heading": {}, "smoothed": {}, "statures": {}}
+    vel_window = max(1, round(VEL_WINDOW_S * args.fps))
+    out = []
+    for n, rec in enumerate(boxes_all):
+        b = np.asarray(rec["boxes"], np.float32).reshape(-1, 4)
+        sp = None if rec.get("staff") is None else np.asarray(rec["staff"], float)
+        tracks = [t for t in tracker.update(b, n, staff_scores=sp) if t.hits >= 3]
+        for st in _track_states(
+            tracks, n, cf, state, vel_window, args.metre_scale, args.fps, bounds
+        ):
+            out.append(
+                {
+                    "frame": n,
+                    "track_id": int(st.track_id),
+                    "x_m": round(float(st.x_m), 4),
+                    "z_m": round(float(st.z_m), 4),
+                    "stature_m": round(float(st.stature), 4),
+                    "speed_ms": round(float(st.speed), 4),
+                    "heading_rad": None if st.heading is None else round(float(st.heading), 4),
+                }
+            )
+    return out
+
+
+def _write_sidecar(path, args, camera, clip, n_frames, positions):
+    """`<render>.render.json`, the record `demo_gif` reads in preference to the per-camera log.
+
+    **Written because not writing it made a verdict describe a different render.** `demo_gif`
+    falls back to `runs/commission01/<camera>.demo_tracks.json` when a render has no sidecar,
+    and that file belongs to `demo_video`. Cutting a gif from a `heads_video` render therefore
+    produced an audit naming `--staff-colours` and a `--checkpoint` this tool never had, and
+    read `source_clip` from it too -- so had the two tools defaulted to different clips, the
+    blur audit would have run against footage the figure does not contain, and passed.
+
+    Every argument wholesale, for the reason `demo_video`'s own log gives: an allowlist is
+    broken again the day the next flag lands.
+    """
+    path.write_text(
+        json.dumps(
+            {
+                "args": vars(args),
+                "tool": "heads_video.py",
+                "camera": camera,
+                "clip": Path(clip).name,
+                "checkpoint": args.checkpoint,
+                "score_thr": args.score_thr,
+                "blur_score_thr": BLUR_THR,
+                "blur_faces": not args.no_blur,
+                "fps": args.fps,
+                "frames": n_frames,
+                # `heads_video` has no staff/customer model. Stated rather than omitted:
+                # a missing key reads as "not recorded", and this is "not applicable".
+                "staff_model": None
+                if args.staff_colours is None
+                else {
+                    "path": args.staff_colours,
+                    "min_accuracy_required": args.staff_min_accuracy,
+                },
+                "positions": positions,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+
+
 def _worker_cmd(args, camera, n_frames=None):
     """The invariant half of a worker's command line: this script, this model, this clip."""
     cmd = [sys.executable, str(Path(__file__).resolve()), camera,
@@ -349,11 +437,14 @@ def _worker_cmd(args, camera, n_frames=None):
         cmd.append("--no-blur")
     if args.standing_figures:
         cmd.append("--standing-figures")
+    if args.staff_colours:
+        cmd += ["--staff-colours", args.staff_colours,
+                "--staff-min-accuracy", str(args.staff_min_accuracy)]  # fmt: skip
     return cmd
 
 
 def _person_boxes_per_frame(
-    args, clip, src_w, src_h, size, model, device, cf, person, rng=None
+    args, clip, src_w, src_h, size, model, device, cf, person, rng=None, staff_model=None
 ):
     """Every frame's person boxes, in source pixels, filtered exactly as the render does.
 
@@ -383,13 +474,29 @@ def _person_boxes_per_frame(
             boxes = pb[
                 [i for i, bb in enumerate(pb) if not in_fp_zone(cf, bb[0] / 2, bb[1] / 2)]
             ]
-        out.append(np.asarray(boxes, np.float32).round(3).tolist())
+        # **Staff probabilities are recorded here, not left to the workers.** A track's
+        # verdict is accumulated over its whole life, so a worker replaying the state has
+        # to be handed the same per-box evidence a single-process run saw. Read off the
+        # RAW frame: the face blur covers the torso band this classifier reads.
+        sp = (
+            None
+            if staff_model is None
+            else [
+                float(staff_model.probability_of_crop(_torso_crop(frame, bb))) for bb in boxes
+            ]
+        )
+        # **Not rounded.** These boxes are replayed into the tracker, the position EMA and
+        # the stature median, and a worker that replays a rounded box arrives at frame 600
+        # holding marginally different state from the single-process run -- which showed up
+        # as one frame of twenty-four differing under a lossless encoder. The record has to
+        # be exactly what the model produced.
+        out.append({"boxes": np.asarray(boxes, np.float64).tolist(), "staff": sp})
         if len(out) % 200 == 0:
             print(f"  boxes {lo + len(out)}/{hi}", flush=True)
     return out
 
 
-def _render_in_chunks(args, model):
+def _render_in_chunks(args, model, cf, bounds, clip):
     """Fan the frames out over processes, then join the segments back into one file."""
     camera = args.camera
     t0 = time.time()
@@ -463,8 +570,19 @@ def _render_in_chunks(args, model):
     if rc != 0:
         print(f"{camera}: concat failed", file=sys.stderr)
         return 1
+    _write_sidecar(
+        final.with_suffix(".render.json"),
+        args,
+        camera,
+        clip,
+        n_frames,
+        _positions_from_boxes(boxes, cf, args, bounds),
+    )
     latest = ROOT / f"assets/dev/heads_{camera}.mp4"
     latest.write_bytes(final.read_bytes())
+    (latest.with_suffix(".render.json")).write_bytes(
+        final.with_suffix(".render.json").read_bytes()
+    )
     print(
         f"wrote {final} ({n_frames} frames @ {args.fps} fps, {args.workers} workers, "
         f"{time.time() - t0:.0f} s)"
@@ -503,6 +621,15 @@ def main() -> int:
     ap.add_argument("--chunk-out", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--boxes", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--boxes-only", default=None, help=argparse.SUPPRESS)
+    ap.add_argument(
+        "--staff-colours",
+        default=None,
+        help="colour the L1 figures staff blue and customers green using this "
+        "`analytics.staff` model, the same rule and the same gate `demo_video` applies. "
+        "Without it the figures keep one colour per track id, which is what tells two "
+        "tracks apart when nothing is classifying them.",
+    )
+    ap.add_argument("--staff-min-accuracy", type=float, default=None)
     ap.add_argument(
         "--standing-figures",
         action="store_true",
@@ -559,19 +686,47 @@ def main() -> int:
         crop_meshes.append(np.stack([zone_xz[:, 0], np.zeros(len(zone_xz)), zone_xz[:, 1]], 1))
     x_lo, x_hi, z_lo, z_hi = walkable_bounds(cf)
 
+    staff_model = None
+    if args.staff_colours:
+        from syncai_hydranet.analytics.staff import MIN_DEPLOY_ACCURACY
+
+        # Written back onto the namespace for the reason `demo_video` gives: the sidecar
+        # records `vars(args)`, and a floor computed into a local would record as null.
+        args.staff_min_accuracy = (
+            MIN_DEPLOY_ACCURACY if args.staff_min_accuracy is None else args.staff_min_accuracy
+        )
+        staff_model = require_camera(
+            StaffModel.load(args.staff_colours), camera, min_accuracy=args.staff_min_accuracy
+        )
+        print(
+            f"{camera}: staff colours from {args.staff_colours} -- "
+            f"{staff_model.accuracy:.3f} held out on this camera "
+            f"({staff_model.held_out_n} crops)"
+        )
+
     src_w, src_h, _ = probe_video(str(clip))
     if args.boxes_only:
         lo, hi = (int(v) for v in args.chunk.split(":"))
         Path(args.boxes_only).write_text(
             json.dumps(
                 _person_boxes_per_frame(
-                    args, clip, src_w, src_h, size, model, device, cf, person, (lo, hi)
+                    args,
+                    clip,
+                    src_w,
+                    src_h,
+                    size,
+                    model,
+                    device,
+                    cf,
+                    person,
+                    (lo, hi),
+                    staff_model,
                 )
             )
         )
         return 0
     if args.workers > 1 and not args.chunk:
-        return _render_in_chunks(args, model)
+        return _render_in_chunks(args, model, cf, (x_lo, x_hi, z_lo, z_hi), clip)
 
     out_w, out_h = PANEL[0] * 2, PANEL[1] * 3
     stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -591,15 +746,13 @@ def main() -> int:
     tmp = ROOT / f"assets/dev/_heads_{camera}_{os.getpid()}.png"
     crop = None
     seq_state: dict = {"history": {}, "last_heading": {}, "smoothed": {}, "statures": {}}
+    boxes_log: list = []
     bounds = (x_lo, x_hi, z_lo, z_hi)
     frame_lo, frame_hi = 0, args.frames
     boxes_all: list | None = None
     if args.chunk:
         frame_lo, frame_hi = (int(v) for v in args.chunk.split(":"))
-        boxes_all = [
-            np.asarray(b, np.float32).reshape(-1, 4)
-            for b in json.loads(Path(args.boxes).read_text())
-        ]
+        boxes_all = json.loads(Path(args.boxes).read_text())
     vel_window = max(1, round(VEL_WINDOW_S * args.fps))
     n = 0
     # The plate is this camera's own empty shop, named by its camera.json. Missing is a
@@ -627,10 +780,12 @@ def main() -> int:
         # them costs microseconds, and it is what makes a chunked render produce the same
         # track ids, colours and smoothed positions a single-process one does.
         if boxes_all is not None and n < frame_lo:
-            boxes_src = np.asarray(boxes_all[n], np.float32).reshape(-1, 4)
+            rec = boxes_all[n]
+            boxes_src = np.asarray(rec["boxes"], np.float32).reshape(-1, 4)
+            sp = None if rec.get("staff") is None else np.asarray(rec["staff"], float)
             kps_src = np.zeros((0, 17, 3), np.float32)
             _track_states(
-                [t for t in tracker.update(boxes_src, n) if t.hits >= 3],
+                [t for t in tracker.update(boxes_src, n, staff_scores=sp) if t.hits >= 3],
                 n,
                 cf,
                 seq_state,
@@ -638,6 +793,7 @@ def main() -> int:
                 args.metre_scale,
                 args.fps,
                 bounds,
+                staff_on=staff_model is not None,
             )
             n += 1
             continue
@@ -748,9 +904,30 @@ def main() -> int:
         label(p_pose, "pose head - 17 keypoints per person", f"{n_people} skeletons this frame")
 
         # --- 4. metres, which is what the other three are for ------------------------
-        tracks = [t for t in tracker.update(boxes_src, n) if t.hits >= 3]
+        staff_p = (
+            None
+            if staff_model is None
+            else np.array(
+                [staff_model.probability_of_crop(_torso_crop(frame, bb)) for bb in boxes_src]
+            )
+        )
+        boxes_log.append(
+            {
+                "boxes": np.asarray(boxes_src, np.float64).tolist(),
+                "staff": None if staff_p is None else [float(v) for v in staff_p],
+            }
+        )
+        tracks = [t for t in tracker.update(boxes_src, n, staff_scores=staff_p) if t.hits >= 3]
         states = _track_states(
-            tracks, n, cf, seq_state, vel_window, args.metre_scale, args.fps, bounds
+            tracks,
+            n,
+            cf,
+            seq_state,
+            vel_window,
+            args.metre_scale,
+            args.fps,
+            bounds,
+            staff_on=staff_model is not None,
         )
         figures, ghosts = [], []
         n_posed = 0
@@ -834,6 +1011,18 @@ def main() -> int:
         print(f"ffmpeg exited {rc}", file=sys.stderr)
         return 1
     part.replace(final)
+    # A chunk worker holds only its own frames' boxes, so its positions would describe a
+    # slice while reading as a whole render. The parent writes the sidecar for the joined
+    # file, from the boxes every worker was given.
+    if not args.chunk:
+        _write_sidecar(
+            final.with_suffix(".render.json"),
+            args,
+            camera,
+            clip,
+            n,
+            _positions_from_boxes(boxes_log, cf, args, bounds),
+        )
     # Not under `--no-blur`: that flag says "never for anything shared" and this is the
     # filename everything else reads as this camera's render. Same fix as `demo_video`.
     if args.no_blur:
