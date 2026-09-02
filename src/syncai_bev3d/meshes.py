@@ -646,6 +646,14 @@ def place(mesh: Mesh, at: Placement) -> Mesh:
 CREASE_COS = math.cos(math.radians(40.0))
 
 
+#: Shading normals by mesh content. Cleared wholesale rather than evicted one at a
+#: time: the working set is a scene's worth of furniture plus a few figures, so a
+#: cache that has grown past this is a render whose geometry changes every frame,
+#: and for that one nothing is worth keeping.
+_NORMALS_CACHE: dict[tuple, np.ndarray] = {}
+NORMALS_CACHE_MAX = 512
+
+
 def smooth_normals(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
     """One shading normal per face, averaged over its neighbours across smooth joins only.
 
@@ -663,9 +671,34 @@ def smooth_normals(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
     diagonal seam down it. A reviewer reading those images on 2026-08-27 called it a tent
     roof and, on a thin slab, a "45-degree tilted panel, physically impossible" -- a
     shading artefact read as a geometry failure, which is the expensive kind of wrong.
+
+    **Memoised, because a video render asks the same question 900 times.** The normals are
+    a pure function of the mesh and a commissioning render draws the same shop on every
+    frame: profiling `heads_video` over 20 frames put 10.4 s of a 31 s render inside this
+    function, 784 calls for 20 frames, and all but a handful were the furniture -- built
+    once, outside the frame loop, and re-normalled for each of them. Only the *figures*
+    change frame to frame, so the cache is bounded and the misses are the ones that should
+    miss. Keyed on the content rather than on `id()`, so a mesh rebuilt into fresh arrays
+    still hits and a recycled address cannot collide.
+
+    The returned array is read-only: it is shared between callers now, so a caller that
+    wrote through it would corrupt another frame's shading rather than its own.
     """
     if len(faces) == 0:
         return np.zeros((0, 3))
+    verts = np.ascontiguousarray(verts)
+    faces = np.ascontiguousarray(faces)
+    key = (
+        verts.shape,
+        faces.shape,
+        verts.dtype.str,
+        faces.dtype.str,
+        hash(verts.tobytes()),
+        hash(faces.tobytes()),
+    )
+    cached = _NORMALS_CACHE.get(key)
+    if cached is not None:
+        return cached
     fn = np.cross(
         verts[faces[:, 1]] - verts[faces[:, 0]], verts[faces[:, 2]] - verts[faces[:, 0]]
     )
@@ -683,6 +716,10 @@ def smooth_normals(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
                     acc += fn[fj]
         norm = float(np.linalg.norm(acc))
         out[fi] = acc / norm if norm > 1e-12 else fn[fi]
+    out.flags.writeable = False
+    if len(_NORMALS_CACHE) >= NORMALS_CACHE_MAX:
+        _NORMALS_CACHE.clear()
+    _NORMALS_CACHE[key] = out
     return out
 
 
