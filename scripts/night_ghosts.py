@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Does the shipped detector see people in an empty shop at 03:00, and does the veto help?
+"""Does the shipped detector see people in an empty shop at night, and does the veto help?
 
     python3 scripts/night_ghosts.py --out runs/night_ghosts01
 
@@ -30,9 +30,11 @@ Three outcomes and each means something different:
 * **boxes the veto keeps** -- something moves that is not a person, and neither the plate
   nor the threshold reaches it. That would be the case worth a journal entry.
 
-The 03:00 clip is chosen by name rather than by a luma test on purpose: `gdino_person_boxes`
-records per-frame luma exactly because an IR frame is monochrome by day too, and a
-threshold on brightness is a second thing to get wrong when the filename already says 3 am.
+The night clip (23:58 store-local -- see NIGHT_PREFIX below, and the note there on the
+03:00-labelled attempt that was really 11:00) is chosen by name rather than by a luma
+test on purpose: `gdino_person_boxes` records per-frame luma exactly because an IR frame
+is monochrome by day too, and a threshold on brightness is a second thing to get wrong
+when the filename already says when it was recorded.
 """
 
 from __future__ import annotations

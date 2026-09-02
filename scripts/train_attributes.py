@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Train the second-stage crop encoder on PA-100K, and score its embedding on Market-1501.
+"""Train the second-stage crop encoder on PA-100K. `eval_attributes.py` scores it.
 
     python3 scripts/train_attributes.py --out runs/crop_encoder01 --epochs 8
 
-Two numbers come out and they answer different questions, which is the whole point of one
+This script trains and reports the **attributes** half only; the **association** half
+(`score_association` below) is defined here beside the model it measures but is driven
+by `scripts/eval_attributes.py` -- running this file alone does not produce it. Two
+numbers exist and they answer different questions, which is the whole point of one
 encoder rather than two models:
 
 * **attributes** -- per-attribute recall and precision on PA-100K val, each printed beside
