@@ -2219,3 +2219,65 @@ something it does not support.
    in the picture rather than on stdout, so a reader of the figure sees what the code
    already knows; and the commissioning record carries it per camera, so the count is a
    number that can be watched rather than a line in a scrollback.
+
+28. **The mesh figure can be driven by the pose head, and the thing that stops it is
+   constraint design rather than data.** Opened 2026-09-02 on the question "can the 3D
+   figure replicate what the person is doing". Four solvers, one subject: the single
+   confident person on `Kaohsiung-cam04` at 10:58 local, standing at the counter typing,
+   keypoint confidence min 0.69 / median 0.90.
+
+   **The mesh side needs nothing built.** `meshes.human()` is not a rigged model, it is one
+   `_tube(start, end, r0, r1)` per limb, and `_P` names exactly the joints COCO gives —
+   shoulder, elbow, wrist, hip, knee, ankle. Twelve of the seventeen keypoints land on a
+   tube endpoint. Driving it is replacing the standing constants with measured joints; no
+   skinning, no SMPL, no new training.
+
+   **What each solver fixed and what it broke**, on that one frame, with the absolute
+   heights that decide it:
+
+   | | bone ratio | shoulder→wrist | hip sep | head height | torso lean |
+   |---|---|---|---|---|---|
+   | target | 1.00 | 0.50–0.65 m | 0.204 m | ~1.8 m | ~15° |
+   | A, fronto-parallel | 0.67–1.15 | **0.50 / 0.49** | 0.144 | **1.62** | **16°** |
+   | B, per-bone depth solve | **1.00** | 0.23 / 0.19 | 0.100 | 1.73 | 23° |
+   | A-seeded + constraints | 0.84–1.04 | 0.52 / 0.58 | 0.136 | **0.73** | **65°** |
+   | same, 60-frame track | 0.51–1.13 | 0.33–0.64 | **0.182** | — | 53° |
+
+   **A is the only one that puts the person in the right place.** It forces every joint
+   onto one vertical plane at the feet's range, which is wrong about depth by construction
+   — and that same construction is what preserves the vertical structure. Its costs are
+   the bone lengths and a foot 0.26 m in the air, which is a forward foot with its depth
+   turned into height.
+
+   **B's failure is worth keeping.** Each bone was individually correct — ratio 1.00 across
+   the board — and the arm was impossible: 0.19 m from shoulder to wrist on a person whose
+   upper arm alone is 0.371 m, because a per-bone sign chosen with nothing holding the limb
+   together folds the elbow back through the shoulder.
+
+   **The reported win was an artefact of the metrics.** The A-seeded solve was written up
+   as the best of the three on bone ratio, arm span and hip separation. All three are
+   *relative*: a skeleton that sinks to the floor and folds at the hips satisfies every one
+   of them. It put a 1.95 m person's head at 0.73 m. The check that catches it — absolute
+   joint height against stature — was printed by the first version of route A and dropped
+   from the comparison table when the solver changed.
+
+   **The scale hypothesis is half right and is worth recording as a measurement.** Every
+   solver wanted a bigger person than the geometry allowed, pinning against whatever clamp
+   it was given. Sweeping the stature with everything else fixed puts the residual minimum
+   at **1.70 m** — this fleet's own calibration prior (§7c.19), so `stature_m`'s 1.95 m
+   reading for this subject is not independent evidence about him. At 1.70 m: residual
+   297 → 137 mm single-frame and 371 → 233 mm over the track, hip separation 0.136 → 0.171
+   against a 0.177 target, its across-frame spread 57 → 17 mm, and the fitted scale stops
+   sitting on the clamp. **The picture does not improve**: the head goes 0.73 → 1.02 m
+   against ~1.6. So 1.70 m fixes the skeleton's argument with itself and not the pose.
+
+   **Where this leaves it.** Bone lengths do not encode "the torso is upright" or "the head
+   is above the hips", so a constraint set made only of them can fold. A got the heights
+   right and the depths wrong; the solve that followed freed both and lost the half that
+   was already correct. The next version holds A's per-joint height and solves only depth
+   against the bone lengths. That is a different constraint structure, not a tuning pass,
+   and nothing here needs a model or a label that does not exist.
+
+   Prototypes are scratch, not in the tree. The subject frame, the four joint sets and the
+   renders are reproducible from `runs/hydranet_retail_person01/last.pt` plus
+   `runs/commission01/Kaohsiung-cam04.camera.json`.
