@@ -200,6 +200,21 @@ def walkable_bounds(cf: CameraFile) -> tuple[float, float, float, float]:
 
 
 KP_MIN_CONF = 0.2
+# The skeleton edges a lifted figure is judged by, and the longest any of them may be.
+# Measured 2026-09-02 on both README cameras' gif windows: coherent lifts top out at
+# 1.46 m (stretched, but reading as a person) while an occluded person's lift jumps
+# straight past 3 m -- 20 of 321 on Kaohsiung-cam04, one every few frames, a figure of
+# metre-long tubes sprawled over the desk. The two populations do not touch, so 1.5 is
+# a gap, not a tuning knob. Keypoint confidence CANNOT stand in for this check: the
+# exploded lifts' minimum limb confidence (p50 0.649) is HIGHER than the clean ones'
+# (0.481) -- the pose head is confidently wrong about a body a counter is hiding.
+LIFT_EDGES = (
+    (5, 7), (7, 9), (6, 8), (8, 10),
+    (11, 13), (13, 15), (12, 14), (14, 16),
+    (5, 6), (5, 11), (6, 12), (11, 12),
+    (0, 5), (0, 6),
+)  # fmt: skip
+MAX_BONE_M = 1.5
 
 
 def box_iou(box, boxes):
@@ -260,6 +275,8 @@ def lift_fronto_parallel(kp_src, x_m, z_m, cf: CameraFile):
     j[:, 1] -= min(j[15, 1], j[16, 1])
     if not (0.5 < float(j[:, 1].max()) < 2.6):
         return None  # a figure this tall or this short is a fault
+    if any(float(np.linalg.norm(j[a] - j[b])) > MAX_BONE_M for a, b in LIFT_EDGES):
+        return None  # an exploded skeleton, not a long-limbed person; see MAX_BONE_M
     return j
 
 
