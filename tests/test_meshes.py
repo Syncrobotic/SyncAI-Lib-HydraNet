@@ -71,9 +71,14 @@ def test_shoulder_span_is_anthropometric():
 
 def test_a_human_has_a_facing():
     """The feet reach forward, so `heading_rad` renders as a visible change. A figure
-    symmetric in z would make a measured heading look like no measurement at all."""
+    symmetric in z would make a measured heading look like no measurement at all.
+
+    The check is front-vs-back, not magnitude: `max > 0.10` alone passed for a
+    perfectly z-symmetric figure, which is the exact failure the docstring names.
+    """
     v = human(1.70)[0]
-    assert v[:, 2].max() > 0.10
+    assert v[:, 2].max() > 0.10  # the figure has depth at all
+    assert v[:, 2].max() > -v[:, 2].min()  # and more of it in front than behind
 
 
 def test_heights_scale_every_part_not_just_the_total():

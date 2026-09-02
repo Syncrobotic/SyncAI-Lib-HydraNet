@@ -89,12 +89,17 @@ def test_score_classes_is_not_set_on_the_training_configs():
     """Narrowing what is *scored* on a training config would change every run's
     reported mAP without changing what the model learned -- the one thing `score_classes`
     must never be used for."""
-    for path in sorted(CONFIGS.glob("hydranet_*.yaml")):
+    paths = sorted(CONFIGS.glob("hydranet_*.yaml"))
+    assert paths, "no configs found; the loop below would silently pass"
+    checked = 0
+    for path in paths:
         raw = yaml.safe_load(path.read_text())
         for ds in (raw.get("data") or {}).get("datasets") or []:
+            checked += 1
             assert "score_classes" not in ds, (
                 f"{path.name} sets score_classes; put it in an eval-only config instead"
             )
+    assert checked, "no config carried a datasets list; the assertion above never ran"
 
 
 @pytest.mark.skipif(

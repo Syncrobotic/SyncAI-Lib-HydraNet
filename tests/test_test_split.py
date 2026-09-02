@@ -33,7 +33,21 @@ def test_negative_fraction_assigns_nothing():
 
 
 def test_assignment_is_deterministic():
-    assert _members(NAMES, 0.5) == _members(NAMES, 0.5)
+    """Pinned to values computed once, not to a same-process re-run.
+
+    `_members(x) == _members(x)` held even for the builtin salted `hash()`, which is
+    stable within one process and different across processes -- exactly the migration
+    this file exists to prevent. The golden set below was computed from the sha1
+    implementation on 2026-09-02; if membership ever changes across versions or
+    processes, this is the test that says so.
+    """
+    first_ten = [f"ADE_val_{i:08d}" for i in range(1, 11)]
+    assert _members(first_ten, 0.5) == {
+        "ADE_val_00000003",
+        "ADE_val_00000007",
+        "ADE_val_00000008",
+        "ADE_val_00000009",
+    }
 
 
 def test_assignment_does_not_depend_on_iteration_order():
