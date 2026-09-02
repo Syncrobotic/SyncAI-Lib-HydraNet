@@ -17,11 +17,13 @@ kept with it; none of these numbers is a default anybody chose by feel.
 from __future__ import annotations
 
 import math
+from typing import NamedTuple
 
 import numpy as np
 
+from syncai_hydranet.analytics.staff import track_staff
 from syncai_hydranet.geometry.camera_json import CameraFile
-from syncai_hydranet.geometry.ground import undistort_points
+from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 
 TRACK_COLORS = [
     (255, 99, 71), (65, 180, 255), (255, 200, 60), (120, 220, 120),
@@ -200,6 +202,126 @@ def walkable_bounds(cf: CameraFile) -> tuple[float, float, float, float]:
         max(0.0, float(p[:, 1].min()) - m),
         float(p[:, 1].max()) + m,
     )
+
+
+class TrackState(NamedTuple):
+    """One track's 3D-panel state for one frame, after everything sequential is applied.
+
+    ``h_one`` is the single-frame stature reading (NaN when the box top projects
+    outside `STATURE_RANGE_M`) and ``verdict`` the staff call (`None` without a model
+    or below `staff.MIN_OBSERVATIONS`); both ride along for `demo_video`'s per-frame
+    record and cost `heads_video` nothing.
+    """
+
+    track_id: int
+    box: np.ndarray
+    col: tuple
+    sm: tuple
+    x_m: float
+    z_m: float
+    stature: float
+    heading: float | None
+    speed: float
+    h_one: float
+    verdict: bool | None
+
+
+def track_colour(track, staff_on: bool) -> tuple:
+    """Staff blue, everyone else green -- and per-track-id colours without a model.
+
+    The cost is stated on STAFF_COLOR above: a track with too few observations has no
+    verdict and is drawn as a customer.
+    """
+    if not staff_on:
+        return TRACK_COLORS[track.track_id % len(TRACK_COLORS)]
+    return STAFF_COLOR if track_staff(track) is True else CUSTOMER_COLOR
+
+
+def track_states(
+    tracks, n, cf, state, vel_window, metre_scale, fps, bounds, staff_on=False
+) -> list[TrackState]:
+    """The sequential half of the 3D panel: everything that depends on the frames before.
+
+    Split out of the drawing because a chunked render has to **replay** it. A worker that
+    draws frames 600-750 must arrive at frame 600 holding the tracker, the smoothed floor
+    positions and the stature medians a single-process render would hold there, and the
+    only way to be sure of that is for both to run this function rather than two copies of
+    it. Two copies agree with themselves and drift from each other, and the drift would
+    surface as a track changing colour or jumping half a metre at a chunk boundary --
+    visible in the figure, and attributable to nothing. It lived in `heads_video` while
+    `demo_video` carried an inline copy, until 2026-09-02; the copies had already diverged
+    once (this file's constants against stale literals).
+
+    `state` is mutated: it carries the four dicts that outlive the frame, plus
+    ``n_skipped``, the count of track-frames whose floor point was non-finite or outside
+    ``bounds`` (`demo_video` reports it as ``n_outside``).
+    """
+    smoothed, statures, history, last_heading = (
+        state["smoothed"],
+        state["statures"],
+        state["history"],
+        state["last_heading"],
+    )
+    state.setdefault("n_skipped", 0)
+    x_lo, x_hi, z_lo, z_hi = bounds
+    out = []
+    for t in tracks:
+        mid_x = (t.box[0] + t.box[2]) / 2 / 2.0
+        pts = np.array([[mid_x, t.box[3] / 2.0], [mid_x, t.box[1] / 2.0]])
+        if cf.lens is not None:
+            pts = undistort_points(pts, cf.lens.k1, cf.lens.centre_px, cf.lens.radius_px)
+        fx, fz = pixel_to_ground(pts[:1, 0], pts[:1, 1], cf.camera, cf.plane)
+        if not (np.isfinite(fx[0]) and np.isfinite(fz[0])):
+            state["n_skipped"] += 1
+            continue
+        raw = (float(fx[0]), float(fz[0]))
+        prev_s = smoothed.get(t.track_id)
+        sm = (
+            raw
+            if prev_s is None
+            else (
+                POS_EMA * raw[0] + (1 - POS_EMA) * prev_s[0],
+                POS_EMA * raw[1] + (1 - POS_EMA) * prev_s[1],
+            )
+        )
+        smoothed[t.track_id] = sm
+        if not (x_lo <= sm[0] <= x_hi and z_lo <= sm[1] <= z_hi):
+            state["n_skipped"] += 1
+            continue
+        h_one = stature_m(sm[0], sm[1], float(pts[1, 1]), cf)
+        if STATURE_RANGE_M[0] <= h_one <= STATURE_RANGE_M[1]:
+            statures.setdefault(t.track_id, []).append(h_one)
+        seen_h = statures.get(t.track_id, [])
+        stature = (
+            float(np.median(seen_h)) if len(seen_h) >= STATURE_MIN_N else FALLBACK_STATURE_M
+        ) * metre_scale
+        x_m, z_m = sm[0] * metre_scale, sm[1] * metre_scale
+        hist = history.setdefault(t.track_id, {})
+        hist[n] = (x_m, z_m)
+        speed = 0.0
+        prev = hist.get(n - vel_window)
+        if prev is not None:
+            dx, dz = x_m - prev[0], z_m - prev[1]
+            speed = math.hypot(dx, dz) / (vel_window / fps)
+            if speed >= VEL_FLOOR_MS:
+                last_heading[t.track_id] = math.atan2(dx, dz)
+        verdict = track_staff(t) if staff_on else None
+        out.append(
+            TrackState(
+                t.track_id,
+                t.box,
+                track_colour(t, staff_on),
+                sm,
+                x_m,
+                z_m,
+                stature,
+                last_heading.get(t.track_id),
+                speed,
+                h_one,
+                verdict,
+            )
+        )
+    return out
 
 
 KP_MIN_CONF = 0.2

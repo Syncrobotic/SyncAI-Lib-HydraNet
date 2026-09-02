@@ -36,7 +36,6 @@ ffprobe cannot open.
 import argparse
 import hashlib
 import json
-import math
 import os
 import subprocess
 import sys
@@ -50,13 +49,9 @@ from PIL import Image, ImageDraw
 from syncai_bev3d import scene_mesh
 from syncai_bev3d.figures import (
     CUSTOMER_COLOR,
-    FALLBACK_STATURE_M,
     PLACE_MARGIN_M,
     PLUMB_W_M,
-    POS_EMA,
     STAFF_COLOR,
-    STATURE_MIN_N,
-    STATURE_RANGE_M,
     TRACK_COLORS,
     VEL_FLOOR_MS,
     VEL_SECONDS_SHOWN,
@@ -68,7 +63,8 @@ from syncai_bev3d.figures import (
     in_fp_zone,
     lift_fronto_parallel,
     point_in_walkable,
-    stature_m,
+    track_colour,
+    track_states,
     velocity_arrow,
     walkable_bounds,
 )
@@ -85,14 +81,12 @@ from syncai_bev3d.shading import draw_scene
 from syncai_hydranet.analytics.staff import (
     StaffModel,
     require_camera,
-    track_staff,
 )
 from syncai_hydranet.analytics.tracker import Tracker
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
-from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 from syncai_hydranet.models.hydranet import build_model
 from syncai_hydranet.shipped import SHIPPED_RUN
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
@@ -276,10 +270,15 @@ def main() -> int:
     not_believed = scene_mesh.implausible_caption(shapes)
     seen_ids: set[int] = set()
     positions: list[dict] = []
-    history: dict[int, dict[int, tuple[float, float]]] = {}
-    last_heading: dict[int, float] = {}
-    smoothed: dict[int, tuple[float, float]] = {}
-    statures: dict[int, list[float]] = {}
+    # The dicts that outlive a frame, owned and mutated by `figures.track_states`.
+    state: dict = {
+        "smoothed": {},
+        "statures": {},
+        "history": {},
+        "last_heading": {},
+        "n_skipped": 0,
+    }
+    bounds = (x_lo, x_hi, z_lo, z_hi)
     vel_window = max(1, round(VEL_WINDOW_S * args.fps))
     n = n_det = n_fp = n_placed = n_outside = n_blur = n_posed = 0
     # The plate is this camera's own empty shop, named by its camera.json. Missing is a
@@ -367,87 +366,56 @@ def main() -> int:
         moving = 0
         for t in tracks:
             seen_ids.add(t.track_id)
-            verdict = None if staff_model is None else track_staff(t)
-            col = (
-                TRACK_COLORS[t.track_id % len(TRACK_COLORS)]
-                if staff_model is None
-                else (STAFF_COLOR if verdict is True else CUSTOMER_COLOR)
-            )
             bx = np.asarray(t.box, float) / 2.0
-            d.rectangle(list(bx), outline=col, width=2)
-            d.text((bx[0] + 3, bx[1] + 2), f"#{t.track_id}", fill=col)
-            # foot point and box top go through the lens together: camera_json's contract
-            # is that the lens applies to points on their way to the floor, and the top is
-            # on its way to a height above that same floor
-            mid_x = (t.box[0] + t.box[2]) / 2 / 2.0
-            pts = np.array([[mid_x, t.box[3] / 2.0], [mid_x, t.box[1] / 2.0]])
-            if cf.lens is not None:
-                pts = undistort_points(pts, cf.lens.k1, cf.lens.centre_px, cf.lens.radius_px)
-            fx, fz = pixel_to_ground(pts[:1, 0], pts[:1, 1], cf.camera, cf.plane)
-            if not (np.isfinite(fx[0]) and np.isfinite(fz[0])):
-                n_outside += 1
-                continue
-            raw = (float(fx[0]), float(fz[0]))  # camera.json metres until the last step
-            # EMA before anything reads the position, so the arrow, the log and the
-            # figure all agree on where the shopper is
-            prev_s = smoothed.get(t.track_id)
-            sm = (
-                raw
-                if prev_s is None
-                else (
-                    POS_EMA * raw[0] + (1 - POS_EMA) * prev_s[0],
-                    POS_EMA * raw[1] + (1 - POS_EMA) * prev_s[1],
-                )
-            )
-            smoothed[t.track_id] = sm
-            if not (x_lo <= sm[0] <= x_hi and z_lo <= sm[1] <= z_hi):
-                n_outside += 1
-                continue
-            n_placed += 1
+            box_col = track_colour(t, staff_model is not None)
+            d.rectangle(list(bx), outline=box_col, width=2)
+            d.text((bx[0] + 3, bx[1] + 2), f"#{t.track_id}", fill=box_col)
+
+        # The sequential half -- lens-corrected foot points, position EMA, stature
+        # medians, headings -- is the shared `figures.track_states`, replayable by any
+        # chunked render. This file carried an inline copy until 2026-09-02, and the
+        # copies had already diverged twice: stale literals for the measured constants,
+        # and a fallback stature this copy forgot to scale under --metre-scale. Its
+        # skip count is this file's `n_outside`.
+        skips_before = state["n_skipped"]
+        states = track_states(
+            tracks,
+            n,
+            cf,
+            state,
+            vel_window,
+            args.metre_scale,
+            args.fps,
+            bounds,
+            staff_on=staff_model is not None,
+        )
+        n_outside += state["n_skipped"] - skips_before
+        n_placed += len(states)
+        for st in states:
+            heading, speed, stature = st.heading, st.speed, st.stature
+            at = Placement(st.x_m, st.z_m, heading)
             # the figure carries its track's colour, so the same shopper is the same
             # colour in both panels and the two views can be read against each other
             # The key selects the figure's colour in the 3D panel, so it has to partition
-            # figures the same way `col` does. Keeping it on `track_id % 8` while `col`
-            # follows a verdict lets two tracks with different verdicts share one key, and
-            # the last one written wins -- a staff member silently repainted as a shopper.
+            # figures the same way the colour does. Keeping it on `track_id % 8` while the
+            # colour follows a verdict lets two tracks with different verdicts share one
+            # key, and the last one written wins -- a staff member silently repainted as
+            # a shopper.
             key = (
-                f"person_{t.track_id % len(TRACK_COLORS)}"
+                f"person_{st.track_id % len(TRACK_COLORS)}"
                 if staff_model is None
-                else ("person_staff" if verdict is True else "person_customer")
+                else ("person_staff" if st.verdict is True else "person_customer")
             )
-            scene_mesh.PALETTE[key] = col
-            # stature from the box top, running-median per track: a single frame's
-            # answer moves with the box, the median over a track does not
-            h_one = stature_m(sm[0], sm[1], float(pts[1, 1]), cf)
-            if STATURE_RANGE_M[0] <= h_one <= STATURE_RANGE_M[1]:
-                statures.setdefault(t.track_id, []).append(h_one)
-            seen_h = statures.get(t.track_id, [])
-            h_track = float(np.median(seen_h)) if len(seen_h) >= STATURE_MIN_N else None
-            # everything metric leaves camera.json's units together, in one place
-            x_m, z_m = sm[0] * args.metre_scale, sm[1] * args.metre_scale
-            stature = FALLBACK_STATURE_M if h_track is None else h_track * args.metre_scale
-            hist = history.setdefault(t.track_id, {})
-            hist[n] = (x_m, z_m)
-            speed = 0.0
-            prev = hist.get(n - vel_window)
-            if prev is not None:
-                dx, dz = x_m - prev[0], z_m - prev[1]
-                speed = math.hypot(dx, dz) / (vel_window / args.fps)
-                if speed >= VEL_FLOOR_MS:
-                    # the figure's own facing is +z and place() sends +z to (sin, cos),
-                    # so the heading that aims it along (dx, dz) is atan2(dx, dz) --
-                    # not the atan2(dz, dx) of the usual maths convention
-                    last_heading[t.track_id] = math.atan2(dx, dz)
-            # a stopped shopper keeps the facing it was last measured at, rather than
-            # snapping back to a default nobody measured
-            heading = last_heading.get(t.track_id)
-            at = Placement(x_m, z_m, heading)
+            scene_mesh.PALETTE[key] = st.col
+            col = st.col
             # The figure shows what the person is doing, when the pose can carry it.
             joints = None
             if args.posed_figures and len(kps_src):
-                iou = box_iou(t.box, boxes_src)
+                iou = box_iou(st.box, boxes_src)
                 if iou.size and float(iou.max()) > 0.3:
-                    joints = lift_fronto_parallel(kps_src[int(iou.argmax())], sm[0], sm[1], cf)
+                    joints = lift_fronto_parallel(
+                        kps_src[int(iou.argmax())], st.sm[0], st.sm[1], cf
+                    )
             body = None
             if joints is not None:
                 # already absolute in scene metres, so it is not `place`d -- only scaled.
@@ -489,15 +457,17 @@ def main() -> int:
             positions.append(
                 {
                     "frame": n,
-                    "track_id": int(t.track_id),
-                    "x_m": round(x_m, 3),
-                    "z_m": round(z_m, 3),
-                    "in_walkable": bool(point_in_walkable(cf, sm[0], sm[1])),
+                    "track_id": int(st.track_id),
+                    "x_m": round(st.x_m, 3),
+                    "z_m": round(st.z_m, 3),
+                    "in_walkable": bool(point_in_walkable(cf, st.sm[0], st.sm[1])),
                     "speed_ms": round(speed, 3),
                     "stature_m": round(stature, 3),
-                    "stature_frame_m": None if not np.isfinite(h_one) else round(h_one, 3),
+                    "stature_frame_m": (
+                        None if not np.isfinite(st.h_one) else round(st.h_one, 3)
+                    ),
                     "heading_rad": None if heading is None else round(heading, 4),
-                    "staff": verdict,
+                    "staff": st.verdict,
                 }
             )
 

@@ -32,7 +32,6 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import NamedTuple
 
 import numpy as np
 import torch
@@ -40,13 +39,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 from syncai_bev3d import scene_mesh
 from syncai_bev3d.figures import (
-    CUSTOMER_COLOR,
-    FALLBACK_STATURE_M,
     KP_MIN_CONF,
-    POS_EMA,
     STAFF_COLOR,
-    STATURE_MIN_N,
-    STATURE_RANGE_M,
     TRACK_COLORS,
     VEL_FLOOR_MS,
     VEL_SECONDS_SHOWN,
@@ -57,7 +51,7 @@ from syncai_bev3d.figures import (
     facing_wedge,
     in_fp_zone,
     lift_fronto_parallel,
-    stature_m,
+    track_states,
     velocity_arrow,
     walkable_bounds,
 )
@@ -71,12 +65,11 @@ from syncai_bev3d.meshes import (
 )
 from syncai_bev3d.shading import draw_scene
 from syncai_hydranet.analytics import Tracker
-from syncai_hydranet.analytics.staff import StaffModel, require_camera, track_staff
+from syncai_hydranet.analytics.staff import StaffModel, require_camera
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
-from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 from syncai_hydranet.models.hydranet import build_model
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
 from syncai_hydranet.utils.face_blur import BLUR_THR, blur_region, plate_person_boxes
@@ -203,103 +196,6 @@ def label(img: Image.Image, text: str, sub: str = "") -> None:
         d.text((10, 24), sub, fill=(185, 195, 210), font=FONT_SMALL)
 
 
-class _TrackState(NamedTuple):
-    """One track's panel-4 state for one frame, after everything sequential is applied."""
-
-    track_id: int
-    box: np.ndarray
-    col: tuple
-    sm: tuple
-    x_m: float
-    z_m: float
-    stature: float
-    heading: float | None
-    speed: float
-
-
-def _track_states(tracks, n, cf, state, vel_window, metre_scale, fps, bounds, staff_on=False):
-    """The sequential half of panel 4: everything that depends on the frames before it.
-
-    Split out of the drawing because a chunked render has to **replay** it. A worker that
-    draws frames 600-750 must arrive at frame 600 holding the tracker, the smoothed floor
-    positions and the stature medians a single-process render would hold there, and the
-    only way to be sure of that is for both to run this function rather than two copies of
-    it. Two copies agree with themselves and drift from each other, and the drift would
-    surface as a track changing colour or jumping half a metre at a chunk boundary --
-    visible in the figure, and attributable to nothing.
-
-    `state` is mutated: it carries the four dicts that outlive the frame.
-    """
-    smoothed, statures, history, last_heading = (
-        state["smoothed"],
-        state["statures"],
-        state["history"],
-        state["last_heading"],
-    )
-    x_lo, x_hi, z_lo, z_hi = bounds
-    out = []
-    for t in tracks:
-        mid_x = (t.box[0] + t.box[2]) / 2 / 2.0
-        pts = np.array([[mid_x, t.box[3] / 2.0], [mid_x, t.box[1] / 2.0]])
-        if cf.lens is not None:
-            pts = undistort_points(pts, cf.lens.k1, cf.lens.centre_px, cf.lens.radius_px)
-        fx, fz = pixel_to_ground(pts[:1, 0], pts[:1, 1], cf.camera, cf.plane)
-        if not (np.isfinite(fx[0]) and np.isfinite(fz[0])):
-            continue
-        raw = (float(fx[0]), float(fz[0]))
-        prev_s = smoothed.get(t.track_id)
-        sm = (
-            raw
-            if prev_s is None
-            else (
-                POS_EMA * raw[0] + (1 - POS_EMA) * prev_s[0],
-                POS_EMA * raw[1] + (1 - POS_EMA) * prev_s[1],
-            )
-        )
-        smoothed[t.track_id] = sm
-        if not (x_lo <= sm[0] <= x_hi and z_lo <= sm[1] <= z_hi):
-            continue
-        h_one = stature_m(sm[0], sm[1], float(pts[1, 1]), cf)
-        if STATURE_RANGE_M[0] <= h_one <= STATURE_RANGE_M[1]:
-            statures.setdefault(t.track_id, []).append(h_one)
-        seen_h = statures.get(t.track_id, [])
-        stature = (
-            float(np.median(seen_h)) if len(seen_h) >= STATURE_MIN_N else FALLBACK_STATURE_M
-        ) * metre_scale
-        x_m, z_m = sm[0] * metre_scale, sm[1] * metre_scale
-        hist = history.setdefault(t.track_id, {})
-        hist[n] = (x_m, z_m)
-        speed = 0.0
-        prev = hist.get(n - vel_window)
-        if prev is not None:
-            dx, dz = x_m - prev[0], z_m - prev[1]
-            speed = math.hypot(dx, dz) / (vel_window / fps)
-            if speed >= VEL_FLOOR_MS:
-                last_heading[t.track_id] = math.atan2(dx, dz)
-        # Staff blue, everyone else green -- `demo_video`'s rule and its cost: a track
-        # with too few observations has no verdict and is drawn as a customer. Without a
-        # model the colour is per track id, which is what tells two tracks apart.
-        col = (
-            (STAFF_COLOR if track_staff(t) is True else CUSTOMER_COLOR)
-            if staff_on
-            else TRACK_COLORS[t.track_id % len(TRACK_COLORS)]
-        )
-        out.append(
-            _TrackState(
-                t.track_id,
-                t.box,
-                col,
-                sm,
-                x_m,
-                z_m,
-                stature,
-                last_heading.get(t.track_id),
-                speed,
-            )
-        )
-    return out
-
-
 def _positions_from_boxes(boxes_all, cf, args, bounds):
     """Replay the track state over recorded boxes to get every figure's floor position.
 
@@ -317,7 +213,7 @@ def _positions_from_boxes(boxes_all, cf, args, bounds):
         b = np.asarray(rec["boxes"], np.float32).reshape(-1, 4)
         sp = None if rec.get("staff") is None else np.asarray(rec["staff"], float)
         tracks = [t for t in tracker.update(b, n, staff_scores=sp) if t.hits >= 3]
-        for st in _track_states(
+        for st in track_states(
             tracks, n, cf, state, vel_window, args.metre_scale, args.fps, bounds
         ):
             out.append(
@@ -746,7 +642,7 @@ def main() -> int:
             boxes_src = np.asarray(rec["boxes"], np.float32).reshape(-1, 4)
             sp = None if rec.get("staff") is None else np.asarray(rec["staff"], float)
             kps_src = np.zeros((0, 17, 3), np.float32)
-            _track_states(
+            track_states(
                 [t for t in tracker.update(boxes_src, n, staff_scores=sp) if t.hits >= 3],
                 n,
                 cf,
@@ -884,7 +780,7 @@ def main() -> int:
             }
         )
         tracks = [t for t in tracker.update(boxes_src, n, staff_scores=staff_p) if t.hits >= 3]
-        states = _track_states(
+        states = track_states(
             tracks,
             n,
             cf,
