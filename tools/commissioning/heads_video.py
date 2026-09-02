@@ -419,8 +419,16 @@ def _person_boxes_per_frame(
             b = det["boxes"].cpu().numpy()
             lab = det["labels"].cpu().numpy()
             pb = (b[lab == person] - np.array([x0, y0, x0, y0])) * (src_w / cw)
+            # The membership point is the box CENTRE at half res: fp_polygons.py derives
+            # the zones from gray-box centres, and demo_video tests the same point. This
+            # file tested the top-left corner until 2026-09-02, so the two renders
+            # dropped different detections through the same polygons.
             boxes = pb[
-                [i for i, bb in enumerate(pb) if not in_fp_zone(cf, bb[0] / 2, bb[1] / 2)]
+                [
+                    i
+                    for i, bb in enumerate(pb)
+                    if not in_fp_zone(cf, (bb[0] + bb[2]) / 4, (bb[1] + bb[3]) / 4)
+                ]
             ]
         # **Staff probabilities are recorded here, not left to the workers.** A track's
         # verdict is accumulated over its whole life, so a worker replaying the state has
@@ -792,8 +800,12 @@ def main() -> int:
                 chip(d, (bb[0], bb[1]), name, col)
             keep = lab == person
             pb = (b[keep] - np.array([x0, y0, x0, y0])) * (src_w / cw)
+            # Box CENTRE at half res, matching fp_polygons.py's derivation and
+            # demo_video -- see the comment at the other call site above.
             surviving = [
-                i for i, bb in enumerate(pb) if not in_fp_zone(cf, bb[0] / 2, bb[1] / 2)
+                i
+                for i, bb in enumerate(pb)
+                if not in_fp_zone(cf, (bb[0] + bb[2]) / 4, (bb[1] + bb[3]) / 4)
             ]
             boxes_src = pb[surviving]
             # The pose rows are index-aligned with the detections, so the same two filters
