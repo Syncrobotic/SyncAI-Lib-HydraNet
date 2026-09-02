@@ -53,8 +53,10 @@ never carries a threshold nobody can see. **Its metres used to need a caveat and
 longer do**: this camera read 1.21x too large (PLAN §7.10), which stood its figures at
 1.98 m rather than 1.70. The person-box edge gate was measuring in the wrong space and
 dropping whole people for sitting off the optical axis; fixing it moved this camera 2.87 m
-to 2.57 m, and the figure above now stands its shoppers at a median **1.77 m**. What is
-left is 1.04x, and the 1.70 m prior it is measured against is itself an assumption.*
+to 2.57 m, and the figure above now stands its shoppers at a median **1.80 m** (re-cut
+2026-09-02 under the promoted person01 run, which finds the further, more foreshortened
+shoppers the previous model missed). What is left is 1.06x, and the 1.70 m prior it is
+measured against is itself an assumption.*
 
 The whole plan — architecture, data strategy, build order, and the measurements behind
 every decision — lives in **one document: [docs/PLAN.md](docs/PLAN.md)**. Everything the
