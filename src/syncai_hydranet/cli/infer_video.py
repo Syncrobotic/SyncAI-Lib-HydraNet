@@ -22,8 +22,6 @@ import torch
 from PIL import Image, ImageDraw
 
 from ..config import load_config
-from ..data.coco_subsets import COCO_NAMES, retail_box_label
-from ..data.label_maps_retail_security import get_det_vocab
 
 # Re-exported: seven scripts import these from here, and the move is not
 # theirs to absorb. `data/video.py` is where they live now.
@@ -40,6 +38,7 @@ from ..utils.visualize import (
     preprocess,
     terrain_palette,
 )
+from .scene import apply_vocab, detection_class_names
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -216,23 +215,13 @@ def main(argv: list[str] | None = None) -> None:
     depth_cfg = (cfg.get("model", {}).get("heads", {}) or {}).get("depth") or {}
     model_max_depth = float(depth_cfg.get("max_depth", 10.0))
     terrain_colors = terrain_palette(cfg["data"].get("terrain_classes"))
-    # See infer_image: the class id is the least useful of the three things known about
-    # a detection, and scene.py already drew names rather than integers.
-    name_of = (
-        retail_box_label
-        if args.vocab == "retail"
-        else (lambda i: COCO_NAMES[i] if i < len(COCO_NAMES) else str(i))
-    )
-    # Both --vocab options assume an 80-class COCO head. A checkpoint trained against a
-    # shared `det_vocab` numbers its classes from that vocabulary instead, and naming its
-    # id 2 "car" (COCO) or "product" (retail rename) is wrong twice over -- measured on
-    # the first b03 demo render, where every `boxed_stock` drew as `car`. The config
-    # already says which vocabulary froze the ids, so it outranks the flag.
-    vocabs = {d["det_vocab"] for d in cfg["data"].get("datasets", []) if d.get("det_vocab")}
-    if len(vocabs) == 1:
-        vocab_classes = get_det_vocab(next(iter(vocabs))).classes
-        name_of = lambda i: vocab_classes[i] if i < len(vocab_classes) else str(i)  # noqa: E731
-        print(f"det_vocab {next(iter(vocabs))!r} names the boxes; --vocab ignored")
+    # See infer_image: the resolver is imported rather than reimplemented, because two
+    # copies would be two answers. This file hand-rolled its own det_vocab override with
+    # a different precedence until 2026-09-02; `detection_class_names` carries the
+    # documented rule ordering (head classes > det_vocab > COCO narrowing > COCO by
+    # exact count) and `apply_vocab` the retail rename with its refusal.
+    names = apply_vocab(detection_class_names(cfg), args.vocab)
+    name_of = (lambda i: names[i] if i < len(names) else str(i)) if names else str
     src_w, src_h, src_fps = probe(args.input)
     out_fps = args.fps or src_fps
     print(
