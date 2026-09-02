@@ -34,8 +34,8 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw, ImageFont
 
-sys.path.insert(0, str(Path(__file__).parent))
-from demo_video import (
+from syncai_bev3d import scene_mesh
+from syncai_bev3d.figures import (
     CUSTOMER_COLOR,
     STAFF_COLOR,
     TRACK_COLORS,
@@ -50,8 +50,6 @@ from demo_video import (
     velocity_arrow,
     walkable_bounds,
 )
-
-from syncai_bev3d import scene_mesh
 from syncai_bev3d.meshes import (
     Placement,
     extrude,

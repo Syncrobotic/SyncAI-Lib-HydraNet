@@ -1,0 +1,230 @@
+"""What a commissioning render needs to know about drawing one camera.
+
+Colours, the velocity and smoothing constants those renders were tuned to, and the
+handful of `camera.json`-derived geometry calls that turn a person box into a floor
+position. **They lived inside `demo_video.py` until 2026-09-02**, which made a CLI script
+the de facto library for every other render -- `heads_video` imported ten names from it --
+and the split had started to cost: staff colouring existed only in one front-end,
+frame-parallel rendering only in the other, and the sidecar `demo_gif` audits against was
+written by only one of them, so a verdict could describe a different render than the
+figure beside it.
+
+The reasoning behind every constant here was measured on this fleet's own tracks and is
+kept with it; none of these numbers is a default anybody chose by feel.
+"""
+
+from __future__ import annotations
+
+import math
+
+import numpy as np
+
+from syncai_hydranet.geometry.camera_json import CameraFile
+
+TRACK_COLORS = [
+    (255, 99, 71), (65, 180, 255), (255, 200, 60), (120, 220, 120),
+    (220, 120, 255), (255, 150, 100), (100, 230, 210), (250, 100, 160),
+]  # fmt: skip
+# **Two colours, not three: staff blue, everything else green.** The user's rule, and it
+# is a product decision rather than a measurement one, so it is stated here rather than
+# argued with. What it costs is worth writing down: a track shorter than
+# `staff.MIN_OBSERVATIONS` has no verdict, and this draws it as a customer, so a member of
+# staff who crosses the frame in under about a second is green. The alternative -- a third
+# grey state -- put a colour on screen that a viewer had to be told how to read, and every
+# shopper arrived grey for their first second, which read as a defect.
+STAFF_COLOR = (70, 150, 255)
+CUSTOMER_COLOR = (105, 215, 120)
+# The torso band is 0.18-0.55 of a box and `_blur_region` covers the top 45% plus padding,
+# so the face blur lands squarely on the pixels the classifier reads. Features are taken
+# from the source frame BEFORE either blur instrument runs; nothing about the order is
+# incidental, and reversing it would silently classify blurred shirts.
+PLACE_MARGIN_M = 2.0  # beyond the commissioned walkable zone a floor position is a guess
+# Velocity is measured over a WINDOW, not between adjacent frames, and only asserted
+# above a floor. Both numbers come from this camera's own tracks (1,607 steps):
+# frame-to-frame heading below 0.1 m/s turns a mean of 92.5 deg per step with 51% of
+# turns past 90 -- that is uniform noise, an arrow drawn from it points nowhere. A
+# 1.0 s window brings the median turn to 16.9 deg; 2.0 s gives 16.3 and only adds lag.
+# The median shopper here moves 0.22 m/s, so most of the time there is no vector to
+# draw and the honest thing is to draw none.
+VEL_WINDOW_S = 1.0
+# Position EMA, chosen against this camera's own tracks rather than by feel. A standing
+# shopper's floor point moves a median 3.2 cm per frame with nothing but noise driving
+# it -- 0.16 m/s against a median real speed of 0.22, which is why the raw heading was
+# indistinguishable from random. Measured over 9 tracks: EMA 0.35 halves the still
+# jitter (3.2 -> 1.7 cm) and keeps 92% of the path length on fast segments; 0.25 gets to
+# 1.4 cm but cuts 11% of the corners; a trailing median filter scores *above* 100% path
+# because it holds still and then jumps, which is a worse artefact than the jitter.
+POS_EMA = 0.35
+FALLBACK_STATURE_M = 1.70  # only until a track has been measured STATURE_MIN_N times
+STATURE_MIN_N = 3
+PLUMB_W_M = 0.035  # the drop line under a figure: thin enough not to read as an object
+STATURE_RANGE_M = (1.2, 2.6)  # outside this the box top is not a head top
+VEL_FLOOR_MS = 0.3
+VEL_SECONDS_SHOWN = 1.0  # arrow length IS one second of travel, so it reads in metres
+
+
+def _torso_crop(frame: np.ndarray, box) -> np.ndarray:
+    """The person's pixels for one box, clipped to the frame.
+
+    Clipped rather than trusted: a tracked box can predict past the frame edge on the
+    coast frames, and numpy would return an empty or short slice without complaint --
+    which `torso_stats` turns into nine zeros, a perfectly usable-looking feature vector
+    for a person who is half out of shot. One pixel of margin is kept in each direction so
+    the band is always taken over something.
+    """
+    h, w = frame.shape[:2]
+    x0, y0, x1, y1 = (float(v) for v in box)
+    ix0 = int(np.clip(x0, 0, w - 2))
+    iy0 = int(np.clip(y0, 0, h - 2))
+    ix1 = int(np.clip(x1, ix0 + 1, w))
+    iy1 = int(np.clip(y1, iy0 + 1, h))
+    return frame[iy0:iy1, ix0:ix1]
+
+
+def stature_m(x_m: float, z_m: float, v_top_px: float, cf: CameraFile) -> float:
+    """How tall the person standing at (x, z) must be for their box top to land on v_top.
+
+    The figure was drawn at a hard-coded 1.70 m for everyone, which is the one number in
+    the panel that was never measured. A head top at level-frame height `plane.height - h`
+    projects linearly in h, so this is one linear solve, not a search. Round-trips
+    exactly on synthetic people at nine positions and three heights.
+
+    NaN when the ray is degenerate. The caller decides what an implausible answer means:
+    here it means the box top was not a head top -- a merged box, a truncated person --
+    and the sample is dropped rather than averaged in.
+    """
+    rot = cf.plane.rotation
+    a = rot @ np.array([x_m, cf.plane.height, z_m])
+    b = rot @ np.array([0.0, 1.0, 0.0])
+    k = (v_top_px - cf.camera.cy) / cf.camera.fy
+    den = b[1] - k * b[2]
+    if abs(den) < 1e-9:
+        return float("nan")
+    return float((a[1] - k * a[2]) / den)
+
+
+def facing_wedge(radius_m: float = 0.42, half_deg: float = 26.0, sides: int = 7):
+    """A compass wedge on the position disc, pointing +z like `human()` does.
+
+    The figure is rotated by its measured heading and this is what makes that visible.
+    Measured on this camera's own geometry: turning the mesh a full 180 degrees changes
+    0.14% of its pixels, and 90 degrees changes 1.4% -- `human()` is very nearly
+    rotationally symmetric at 1.70 m seen from 7 m, and its own docstring says the foot
+    is the only feature carrying a facing. A heading that cannot be seen is a heading
+    that was not drawn.
+
+    It sits inside the velocity arrow's tail radius so the two never overlap, and it is
+    drawn whenever a heading is known -- which includes a stopped shopper, where the
+    arrow is deliberately absent.
+    """
+    a = math.radians(half_deg)
+    pts = [(0.0, 0.0)]
+    for i in range(sides + 1):
+        t = -a + (2 * a) * i / sides
+        pts.append((radius_m * math.sin(t), radius_m * math.cos(t)))
+    return pts
+
+
+def velocity_arrow(length_m: float, width_m: float = 0.16, start_m: float = 0.45):
+    """Floor arrow pointing +z, starting clear of the figure -- `human()` faces +z too.
+
+    Returned as a footprint for `extrude`, because that is how every other object in
+    this scene is built and an arrow that is a decal on the floor cannot be mistaken
+    for a measured piece of furniture. `start_m` is the position disc's radius: an
+    arrow drawn from the figure's own feet is under the figure and invisible from the
+    one fixed viewpoint, which is the mistake this argument exists to correct.
+    """
+    length = max(float(length_m), 0.30)
+    head = min(0.26, length * 0.5)
+    tip = start_m + length
+    shoulder = tip - head
+    w, hw = width_m / 2, width_m
+    return [
+        (-w, start_m), (w, start_m), (w, shoulder), (hw, shoulder),
+        (0.0, tip), (-hw, shoulder), (-w, shoulder),
+    ]  # fmt: skip
+
+
+def _point_in_poly(px: float, py: float, poly) -> bool:
+    """Ray-cast containment. Shared so pixel zones and metre zones agree on `inside`."""
+    inside = False
+    j = len(poly) - 1
+    for i, (xi, yi) in enumerate(poly):
+        xj, yj = poly[j]
+        if (yi > py) != (yj > py) and px < (xj - xi) * (py - yi) / (yj - yi) + xi:
+            inside = not inside
+        j = i
+    return inside
+
+
+def point_in_walkable(cf: CameraFile, x_m: float, z_m: float) -> bool:
+    """Is this floor position inside a zone the commissioning actually walked?
+
+    Recorded per placement rather than enforced: a tracked shopper standing outside the
+    walkable polygon is evidence about the polygon, not a reason to hide the shopper.
+    """
+    return any(_point_in_poly(x_m, z_m, z.points_m) for z in cf.zones if z.kind == "walkable")
+
+
+def in_fp_zone(cf: CameraFile, cx: float, cy: float) -> bool:
+    """Ray-cast point-in-polygon, not the polygon's bounding box.
+
+    Today's polygons are axis-aligned 64 px grid cells, for which a bbox test is exactly
+    equivalent -- so this changes no current result. It is here because the zone tool
+    will draw arbitrary polygons, and a bbox test would then quietly veto detections
+    outside the shape the operator drew.
+    """
+    return any(_point_in_poly(cx, cy, poly) for poly in cf.false_positive_polygons_px)
+
+
+def walkable_bounds(cf: CameraFile) -> tuple[float, float, float, float]:
+    """(x_min, x_max, z_min, z_max) of the commissioned walkable zone, plus a margin.
+
+    Replaces a hard-coded `0 < z < 14, |x| < 12`, which was a guess wide enough to
+    admit positions this camera was never commissioned for. On Taichung-cam10 the
+    walkable zone is x[-5.8, 3.7] z[0.55, 10.3]; the old constants dropped nothing at
+    all over 900 frames, so this tightens a gate rather than opening one.
+    """
+    pts = [np.asarray(z.points_m, float) for z in cf.zones if z.kind == "walkable"]
+    if not pts:
+        return (-12.0, 12.0, 0.0, 14.0)
+    p = np.vstack(pts)
+    m = PLACE_MARGIN_M
+    return (
+        float(p[:, 0].min()) - m,
+        float(p[:, 0].max()) + m,
+        max(0.0, float(p[:, 1].min()) - m),
+        float(p[:, 1].max()) + m,
+    )
+
+
+def content_crop(view, meshes, img_size, aspect, pad=26.0):
+    """Fixed crop onto the projected scene, so the panel is room and not dead space.
+
+    Computed once from the static scene plus the walkable zone -- the region a figure
+    can legally occupy -- and then reused for every frame, because a crop recomputed
+    per frame would make the room swim behind the people.
+    """
+    us, vs = [], []
+    for verts in meshes:
+        uv, depth = view.project_points(np.asarray(verts, float))
+        keep = depth > 0
+        if keep.any():
+            us.append(uv[keep, 0])
+            vs.append(uv[keep, 1])
+    if not us:
+        return (0, 0, img_size[0], img_size[1])
+    u, v = np.concatenate(us), np.concatenate(vs)
+    x0, x1 = float(u.min()) - pad, float(u.max()) + pad
+    y0, y1 = float(v.min()) - pad, float(v.max()) + pad
+    w, h = x1 - x0, y1 - y0
+    if w / h < aspect:  # too tall: widen
+        need = h * aspect
+        cx = (x0 + x1) / 2
+        x0, x1 = cx - need / 2, cx + need / 2
+    else:  # too wide: heighten
+        need = w / aspect
+        cy = (y0 + y1) / 2
+        y0, y1 = cy - need / 2, cy + need / 2
+    w_px, h_px = img_size
+    return (max(0, int(x0)), max(0, int(y0)), min(w_px, int(x1)), min(h_px, int(y1)))
