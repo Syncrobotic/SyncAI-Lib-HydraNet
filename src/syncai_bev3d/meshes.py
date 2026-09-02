@@ -269,25 +269,27 @@ def human_posed(joints: np.ndarray, height_m: float = 1.70, sides: int = 10) -> 
     p = {k: v * h for k, v in _P.items()}
     mid_sh = (j[COCO_LSH] + j[COCO_RSH]) / 2
     mid_hip = (j[COCO_LHI] + j[COCO_RHI]) / 2
-    # **The head's DIRECTION is measured; its distance is not.** A lift that flattens depth
-    # foreshortens the neck worst of all, because from a ceiling camera that is the segment
-    # pointing most directly at the lens: measured over 120 figures on Taichung-cam10 the
-    # nose came out a median 12 cm above the shoulders where a person's is about 20, and
-    # with an 11 cm head radius the sphere then sits in the shoulders and every figure
-    # reads as hunched. The angle from the shoulders to the nose is exact -- a flattening
-    # lift preserves image-plane angles -- so the fix is to keep that direction and take
-    # the length from the canon.
+    # **The head sits on the spine, and the nose is on the front of the head.** Two wrong
+    # versions of this, and the second is the instructive one. Deriving the head centre
+    # from the nose alone put it a median 12 cm above the shoulders where a person's is
+    # about 20 -- the lift flattens depth and from a ceiling camera the neck points most
+    # directly at the lens, so it foreshortens worst -- and with an 11 cm head radius the
+    # sphere sat inside the shoulders. Placing it along the shoulders-to-nose direction at
+    # the canon's distance fixed the distance and kept the direction, which was the error:
+    # that direction points forward and up, because the nose is on the FRONT of the head.
+    # Every figure then craned its neck forward and still read as hunched.
     #
-    # This is done for the head and for nothing else on purpose. The crown is not a
-    # measured point; the nose stands in for it. A wrist *is* measured, and moving one to
-    # its canonical distance would take the hand off the thing the person is holding.
-    neck = j[COCO_NOSE] - mid_sh
-    neck_len = float(np.linalg.norm(neck))
-    head_c = (
-        mid_sh + neck / neck_len * (HEAD_CENTRE_FRAC * h)
-        if neck_len > 1e-6
-        else mid_sh + np.array([0.0, HEAD_CENTRE_FRAC * h, 0.0])
-    )
+    # The head centre is above the neck, so the direction that places it is the spine's --
+    # hips to shoulders. A person leaning over a counter leans their head with their torso
+    # and the figure shows it. What this does NOT show is the head's own tilt: someone
+    # standing straight while looking down at a phone renders looking ahead. The nose is
+    # not used to place the head at all, because the one thing it reliably says is which
+    # way the face points, and a sphere has no face.
+    spine = mid_sh - mid_hip
+    spine_len = float(np.linalg.norm(spine))
+    up = spine / spine_len if spine_len > 1e-6 else np.array([0.0, 1.0, 0.0])
+    head_c = mid_sh + up * (HEAD_CENTRE_FRAC * h)
+
     # A limb of zero length is what a *lift* produces when two keypoints land on the same
     # ray at the same depth -- a fully foreshortened forearm pointing at the camera, or two
     # low-confidence joints collapsing onto each other. `_tube` refuses coincident

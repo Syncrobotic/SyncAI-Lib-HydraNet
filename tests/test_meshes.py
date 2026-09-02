@@ -496,12 +496,42 @@ def test_a_foreshortened_neck_does_not_bury_the_head_in_the_shoulders():
     )
 
 
-def test_the_head_still_follows_where_the_person_is_looking():
-    """Placing the head at a fixed distance must not place it at a fixed *angle*: a person
-    leaning over a counter has their head forward of their shoulders and the figure has to
-    show that, or the fix for the hunch has traded one wrong pose for another."""
-    j = _upright_joints()
-    mid_sh = (j[5] + j[6]) / 2
-    j[0] = mid_sh + np.array([0.0, 0.10, 0.18])  # nose well forward, head down
-    _lo, hi = _bbox(human_posed(j, 1.70))
-    assert hi[2] > mid_sh[2] + 0.05, "a head leaning forward was drawn upright"
+def test_the_head_follows_the_torso_when_the_person_leans():
+    """Placing the head at a fixed distance must not place it at a fixed *attitude*: a
+    person leaning over a counter leans their head with their torso, and the figure has to
+    show it or the fix for the hunch has traded one wrong pose for another.
+
+    Asserted on the head's own extent, not the mesh bounding box. The first version of
+    this test compared `_bbox(...)[1][2]` against a 0.05 m threshold, which the head's own
+    0.11 m radius clears on an upright figure -- it passed whatever the head did.
+    """
+    up = _upright_joints()
+    lean = _upright_joints()
+    lean[[5, 6]] += np.array([0.0, -0.06, 0.30])  # shoulders forward: a torso bent at the hip
+
+    def head_z(j):
+        verts, _f = human_posed(j, 1.70)
+        top = verts[verts[:, 1] > verts[:, 1].max() - 0.22]  # the head sphere alone
+        return float(top[:, 2].mean())
+
+    moved = head_z(lean) - head_z(up)
+    assert moved > 0.20, f"the torso leaned 0.30 m and the head followed by {moved:.2f} m"
+
+
+def test_the_head_is_not_placed_from_the_nose():
+    """The nose is on the FRONT of the head, so shoulders-to-nose points forward and up.
+    Placing the head along it craned every figure's neck forward and the render still read
+    as hunched -- the second wrong version of this, after the one that buried the head.
+    Where the person is looking is not represented, and a sphere could not show it anyway.
+    """
+    ahead, down = _upright_joints(), _upright_joints()
+    mid_sh = (ahead[5] + ahead[6]) / 2
+    ahead[0] = mid_sh + np.array([0.0, 0.19, 0.02])  # looking level
+    down[0] = mid_sh + np.array([0.0, 0.04, 0.20])  # looking down at a phone
+
+    def head_c(j):
+        verts, _f = human_posed(j, 1.70)
+        top = verts[verts[:, 1] > verts[:, 1].max() - 0.22]
+        return top.mean(0)
+
+    assert float(np.linalg.norm(head_c(ahead) - head_c(down))) < 1e-6
