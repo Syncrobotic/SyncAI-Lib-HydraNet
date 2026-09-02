@@ -262,7 +262,7 @@ def main(argv=None) -> int:
             indent=2,
         )
     )
-    print(f"\ntarget {TARGET_FPS:.0f} f/s (96x15). Wrote {args.out}/results.json")
+    print(f"\ntarget {TARGET_FPS:.0f} f/s (96x5). Wrote {args.out}/results.json")
     return 0
 
 
