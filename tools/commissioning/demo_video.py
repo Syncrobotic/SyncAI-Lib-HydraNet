@@ -155,13 +155,19 @@ def main() -> int:
         "explicit exception the refusal message asks for, and the number used is printed "
         "and recorded, so a figure never carries a threshold nobody can see.",
     )
+    # Standing is the DEFAULT by decision (2026-09-02): the user saw the posed README
+    # figures shipped and reverted them the same day. The capability stays -- heads_video
+    # poses its figures because showing the pose head is its point -- but this tool's
+    # output is the published README figure, and a decision about a published figure is
+    # encoded as the default, not as a flag the next re-cut has to remember (the same
+    # morning, a re-cut went red for forgetting `--staff-colours`).
     ap.add_argument(
-        "--standing-figures",
+        "--posed-figures",
         action="store_true",
-        help="draw every figure standing at 1.70-scale, as the demo did before the pose "
-        "head drove it. Without it, a figure whose track has confident keypoints is "
-        "drawn from them (`meshes.human_posed`) and shows what the person is doing; a "
-        "posed figure must not be measured -- the lift is the cheap one (PLAN 7c.30).",
+        help="drive each figure from the pose head's keypoints (`meshes.human_posed`) "
+        "where they can carry it, standing otherwise. A posed figure shows what the "
+        "person is doing and must not be measured -- the lift is the cheap one "
+        "(PLAN 7c.30).",
     )
     args = ap.parse_args()
     camera = args.camera
@@ -327,7 +333,7 @@ def main() -> int:
             # have to be applied to them or a figure wears another person's skeleton.
             # They are carried in source pixels to match `boxes_src`.
             pose_rows = out.get("pose", [None])[0]
-            if pose_rows is not None and not args.standing_figures:
+            if pose_rows is not None and args.posed_figures:
                 kp = pose_rows.cpu().numpy()[person & (sc >= args.score_thr)][keep].copy()
                 kp[:, :, 0] = (kp[:, :, 0] - x0) * (src_w / cw)
                 kp[:, :, 1] = (kp[:, :, 1] - y0) * (src_w / cw)
@@ -437,7 +443,7 @@ def main() -> int:
             at = Placement(x_m, z_m, heading)
             # The figure shows what the person is doing, when the pose can carry it.
             joints = None
-            if not args.standing_figures and len(kps_src):
+            if args.posed_figures and len(kps_src):
                 iou = box_iou(t.box, boxes_src)
                 if iou.size and float(iou.max()) > 0.3:
                     joints = lift_fronto_parallel(kps_src[int(iou.argmax())], sm[0], sm[1], cf)
