@@ -626,9 +626,33 @@ order. A component with no step is not scheduled, it is assumed.
    `Cast` saying FLOAT while the constants beside it became FLOAT16, which TensorRT
    refuses — the shape any non-float input contract produces.
 
-   **Still not measured on an idle card.** Three ~800 MB processes sit on the GPU, and the
-   same engine has read 1468 and 916 compute on different runs. The ordering above is
-   stable across runs; the absolute numbers are not.
+   ~~**Still not measured on an idle card.**~~ **Re-measured 2026-09-02 on an idle card,
+   three runs, and the contamination was worth 56% of the end-to-end figure.** The only
+   neighbour was `tools/lite3_web/server.py` holding 790 MB at 0% GPU utilisation, against
+   the three ~800 MB processes of the first attempt. `runs/bench_idle_20260902{,_r2,_r3}`:
+
+   | export | compute | + copies | spread | vs 480 | vs 960 | old + copies |
+   |---|---|---|---|---|---|---|
+   | plain | 1471.7 | 476.5 | 8.6 | 0.99x | 0.50x | 368.8 |
+   | `--argmax-seg` | 1369.5 | 592.6 | 7.8 | 1.23x | 0.62x | 433.3 |
+   | `--argmax-seg --uint8-input` | 1364.4 | **990.5** | 16.1 | **2.06x** | **1.03x** | 633.3 |
+
+   Run-to-run spread is **1.6%** on the figure that matters, not the factor of 1.6 the old
+   note warned about -- that spread was the neighbours, not the card. The ordering is
+   unchanged and `--uint8-input` is still what clears the target.
+
+   **So 96 x 10 fps = 960 f/s passes the engine and the PCIe path, at 1.03x** (985.0,
+   985.5 and 1001.1 over the three runs; every run clears it, by 2.6-4.3%). Two things
+   that follow, and the second is the one that decides:
+
+   * **3% is not a shipping margin.** Compute drifts down within a session (plain reads
+     1506.7, 1479.1, 1429.3 across the three runs, -5%), so a figure this close to the
+     line is a thermal question as much as an architectural one.
+   * **The serving path cannot feed 96 streams at any frame rate.** `data/video.py` is
+     still the CPU decode pipe at 63-69 streams; NVDEC reaches ~520 and is what decision 8
+     chose, and migrating serving onto it "is not done" by that decision's own words. The
+     engine is no longer the binding leg for 96 x 10 -- decode is, and it binds below 96
+     streams before frame rate enters the question.
 
 28. **The best terrain checkpoint in the tree is not the one anything uses.** Measured
    2026-08-31, final epoch of each run (which is what `last.pt` is), the same recipe:
