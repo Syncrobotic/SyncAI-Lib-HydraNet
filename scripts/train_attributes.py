@@ -186,8 +186,10 @@ def _market_split(root: Path, folder: str):
 def market_embeddings(model, items, device, batch_size: int = 256):
     from PIL import Image
 
-    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-    std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+    # preprocessing.py exists specifically to end copies of these two rows.
+    from syncai_hydranet.preprocessing import IMAGENET_MEAN, IMAGENET_STD
+
+    mean, std = IMAGENET_MEAN, IMAGENET_STD
     feats = []
     for start in range(0, len(items), batch_size):
         chunk = items[start : start + batch_size]

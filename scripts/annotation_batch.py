@@ -51,9 +51,9 @@ from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
 from syncai_hydranet.labels import IGNORE  # noqa: E402
 from syncai_hydranet.models.hydranet import build_model  # noqa: E402
-from syncai_hydranet.preprocessing import IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
+from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -116,9 +116,10 @@ def main(argv: list[str] | None = None) -> int:
         for n, idx in enumerate(picks):
             frame = kept[idx]
             img = Image.fromarray(frame)
-            small = img.resize((size[1], size[0]), Image.Resampling.BILINEAR)
-            arr = (np.asarray(small, np.float32) / 255.0 - IMAGENET_MEAN) / IMAGENET_STD
-            x = torch.from_numpy(arr.transpose(2, 0, 1))[None].to(device)
+            # visualize.preprocess exists because this block "existed four times"; this
+            # was the fifth, hand-rolled. use_letterbox=False is the same resize path.
+            x, _small, _region = preprocess(img, size, use_letterbox=False)
+            x = x.to(device)
             with torch.no_grad():
                 logits = model(x)["terrain"]
                 prob = logits.softmax(1)
