@@ -21,12 +21,14 @@ Usage:
 """
 
 import argparse
+import json
 import math
 import os
 import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import torch
@@ -189,6 +191,90 @@ def label(img: Image.Image, text: str, sub: str = "") -> None:
         d.text((10, 24), sub, fill=(185, 195, 210), font=FONT_SMALL)
 
 
+class _TrackState(NamedTuple):
+    """One track's panel-4 state for one frame, after everything sequential is applied."""
+
+    track_id: int
+    box: np.ndarray
+    col: tuple
+    sm: tuple
+    x_m: float
+    z_m: float
+    stature: float
+    heading: float | None
+    speed: float
+
+
+def _track_states(tracks, n, cf, state, vel_window, metre_scale, fps, bounds):
+    """The sequential half of panel 4: everything that depends on the frames before it.
+
+    Split out of the drawing because a chunked render has to **replay** it. A worker that
+    draws frames 600-750 must arrive at frame 600 holding the tracker, the smoothed floor
+    positions and the stature medians a single-process render would hold there, and the
+    only way to be sure of that is for both to run this function rather than two copies of
+    it. Two copies agree with themselves and drift from each other, and the drift would
+    surface as a track changing colour or jumping half a metre at a chunk boundary --
+    visible in the figure, and attributable to nothing.
+
+    `state` is mutated: it carries the four dicts that outlive the frame.
+    """
+    smoothed, statures, history, last_heading = (
+        state["smoothed"],
+        state["statures"],
+        state["history"],
+        state["last_heading"],
+    )
+    x_lo, x_hi, z_lo, z_hi = bounds
+    out = []
+    for t in tracks:
+        mid_x = (t.box[0] + t.box[2]) / 2 / 2.0
+        pts = np.array([[mid_x, t.box[3] / 2.0], [mid_x, t.box[1] / 2.0]])
+        if cf.lens is not None:
+            pts = undistort_points(pts, cf.lens.k1, cf.lens.centre_px, cf.lens.radius_px)
+        fx, fz = pixel_to_ground(pts[:1, 0], pts[:1, 1], cf.camera, cf.plane)
+        if not (np.isfinite(fx[0]) and np.isfinite(fz[0])):
+            continue
+        raw = (float(fx[0]), float(fz[0]))
+        prev_s = smoothed.get(t.track_id)
+        sm = (
+            raw
+            if prev_s is None
+            else (0.35 * raw[0] + 0.65 * prev_s[0], 0.35 * raw[1] + 0.65 * prev_s[1])
+        )
+        smoothed[t.track_id] = sm
+        if not (x_lo <= sm[0] <= x_hi and z_lo <= sm[1] <= z_hi):
+            continue
+        h_one = stature_m(sm[0], sm[1], float(pts[1, 1]), cf)
+        if 1.2 <= h_one <= 2.6:
+            statures.setdefault(t.track_id, []).append(h_one)
+        seen_h = statures.get(t.track_id, [])
+        stature = (float(np.median(seen_h)) if len(seen_h) >= 3 else 1.70) * metre_scale
+        x_m, z_m = sm[0] * metre_scale, sm[1] * metre_scale
+        hist = history.setdefault(t.track_id, {})
+        hist[n] = (x_m, z_m)
+        speed = 0.0
+        prev = hist.get(n - vel_window)
+        if prev is not None:
+            dx, dz = x_m - prev[0], z_m - prev[1]
+            speed = math.hypot(dx, dz) / (vel_window / fps)
+            if speed >= VEL_FLOOR_MS:
+                last_heading[t.track_id] = math.atan2(dx, dz)
+        out.append(
+            _TrackState(
+                t.track_id,
+                t.box,
+                TRACK_COLORS[t.track_id % len(TRACK_COLORS)],
+                sm,
+                x_m,
+                z_m,
+                stature,
+                last_heading.get(t.track_id),
+                speed,
+            )
+        )
+    return out
+
+
 def _box_iou(box, boxes):
     """IoU of one xyxy box against many. The tracker returns a box, not the index of the
     detection it came from, so the keypoints are found by overlap."""
@@ -250,6 +336,143 @@ def _lift_fronto_parallel(kp_src, x_m, z_m, cf):
     return j
 
 
+def _worker_cmd(args, camera, n_frames=None):
+    """The invariant half of a worker's command line: this script, this model, this clip."""
+    cmd = [sys.executable, str(Path(__file__).resolve()), camera,
+           "--checkpoint", args.checkpoint, "--config", args.config,
+           "--frames", str(n_frames if n_frames is not None else args.frames),
+           "--fps", str(args.fps), "--score-thr", str(args.score_thr),
+           "--metre-scale", str(args.metre_scale)]  # fmt: skip
+    if args.clip:
+        cmd += ["--clip", str(args.clip)]
+    if args.no_blur:
+        cmd.append("--no-blur")
+    if args.standing_figures:
+        cmd.append("--standing-figures")
+    return cmd
+
+
+def _person_boxes_per_frame(
+    args, clip, src_w, src_h, size, model, device, cf, person, rng=None
+):
+    """Every frame's person boxes, in source pixels, filtered exactly as the render does.
+
+    The pre-pass a chunked render needs. It is the model over the whole clip, which is the
+    price of a tracker whose state a worker can rebuild: the boxes are the only input that
+    state has, they are small enough to hand to six processes as JSON, and replaying them
+    is microseconds where re-running the model would be a third of the work again.
+    """
+    lo, hi = rng if rng else (0, args.frames)
+    out = []
+    for n, frame in enumerate(decode_frames(str(clip), src_w, src_h, args.fps)):
+        if n >= hi:
+            break
+        if n < lo:
+            continue
+        img = Image.fromarray(frame)
+        x, _canvas, region = preprocess(img, size)
+        with torch.no_grad():
+            res = model.predict(x.to(device), score_thr=args.score_thr)
+        det = res.get("detection", [{}])[0]
+        x0, y0, cw, _ch = region
+        boxes = np.zeros((0, 4), np.float32)
+        if det and len(det.get("boxes", [])):
+            b = det["boxes"].cpu().numpy()
+            lab = det["labels"].cpu().numpy()
+            pb = (b[lab == person] - np.array([x0, y0, x0, y0])) * (src_w / cw)
+            boxes = pb[
+                [i for i, bb in enumerate(pb) if not in_fp_zone(cf, bb[0] / 2, bb[1] / 2)]
+            ]
+        out.append(np.asarray(boxes, np.float32).round(3).tolist())
+        if len(out) % 200 == 0:
+            print(f"  boxes {lo + len(out)}/{hi}", flush=True)
+    return out
+
+
+def _render_in_chunks(args, model):
+    """Fan the frames out over processes, then join the segments back into one file."""
+    camera = args.camera
+    t0 = time.time()
+    # The box pass runs the model and never touches the tracker, so it fans out the same
+    # way the drawing does. Leaving it sequential was 270 s of a 535 s render.
+    del model
+    torch.cuda.empty_cache()
+    per_b = math.ceil(args.frames / args.workers)
+    b_edges = [(i, min(i + per_b, args.frames)) for i in range(0, args.frames, per_b)]
+    b_paths, b_procs = [], []
+    for k, (lo, hi) in enumerate(b_edges):
+        bp = ROOT / f"assets/dev/_heads_{camera}_{os.getpid()}_box{k:02d}.json"
+        b_paths.append(bp)
+        b_procs.append(
+            subprocess.Popen(
+                [*_worker_cmd(args, camera), "--chunk", f"{lo}:{hi}", "--boxes-only", str(bp)]
+            )
+        )
+    if any(pr.wait() for pr in b_procs):
+        for bp in b_paths:
+            bp.unlink(missing_ok=True)
+        print(f"{camera}: a box pass failed; nothing written", file=sys.stderr)
+        return 1
+    boxes = []
+    for bp in b_paths:
+        boxes += json.loads(bp.read_text())
+        bp.unlink(missing_ok=True)
+    n_frames = len(boxes)
+    box_path = ROOT / f"assets/dev/_heads_{camera}_{os.getpid()}.boxes.json"
+    box_path.write_text(json.dumps(boxes))
+    print(f"  pre-pass: {n_frames} frames of boxes in {time.time() - t0:.0f} s", flush=True)
+
+    per = math.ceil(n_frames / args.workers)
+    edges = [(i, min(i + per, n_frames)) for i in range(0, n_frames, per)]
+    segs, procs = [], []
+    for k, (lo, hi) in enumerate(edges):
+        seg = ROOT / f"assets/dev/_heads_{camera}_{os.getpid()}_seg{k:02d}.mp4"
+        segs.append(seg)
+        procs.append(
+            subprocess.Popen(
+                [
+                    *_worker_cmd(args, camera, n_frames),
+                    "--chunk",
+                    f"{lo}:{hi}",
+                    "--chunk-out",
+                    str(seg),
+                    "--boxes",
+                    str(box_path),
+                ]
+            )
+        )
+    codes = [pr.wait() for pr in procs]
+    box_path.unlink(missing_ok=True)
+    if any(codes):
+        for seg in segs:
+            seg.unlink(missing_ok=True)
+        print(f"{camera}: a chunk failed with {codes}; nothing written", file=sys.stderr)
+        return 1
+
+    listing = ROOT / f"assets/dev/_heads_{camera}_{os.getpid()}.concat.txt"
+    listing.write_text("".join(f"file '{s}'\n" for s in segs))
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    final = ROOT / f"assets/dev/heads_{camera}_{stamp}.mp4"
+    rc = subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0",
+         "-i", str(listing), "-c", "copy", str(final)],
+    ).returncode  # fmt: skip
+    listing.unlink(missing_ok=True)
+    for seg in segs:
+        seg.unlink(missing_ok=True)
+    if rc != 0:
+        print(f"{camera}: concat failed", file=sys.stderr)
+        return 1
+    latest = ROOT / f"assets/dev/heads_{camera}.mp4"
+    latest.write_bytes(final.read_bytes())
+    print(
+        f"wrote {final} ({n_frames} frames @ {args.fps} fps, {args.workers} workers, "
+        f"{time.time() - t0:.0f} s)"
+    )
+    print(f"  newest also at {latest}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("camera")
@@ -266,6 +489,20 @@ def main() -> int:
     # shared filename, in the directory whose whole convention is that nothing enters it
     # unaudited. `demo_video.py` has carried the two instruments for days; there was never
     # a reason for this one not to, only nobody had asked.
+    ap.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="render the frames in this many processes. The tracker is sequential by "
+        "nature, so a pre-pass runs the model over every frame to record the person "
+        "boxes, and each worker REPLAYS the track state from those before drawing its "
+        "own chunk -- replaying costs microseconds a frame and keeps every track id, "
+        "colour and smoothed position identical to a single-process render.",
+    )
+    ap.add_argument("--chunk", default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--chunk-out", default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--boxes", default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--boxes-only", default=None, help=argparse.SUPPRESS)
     ap.add_argument(
         "--standing-figures",
         action="store_true",
@@ -322,10 +559,26 @@ def main() -> int:
         crop_meshes.append(np.stack([zone_xz[:, 0], np.zeros(len(zone_xz)), zone_xz[:, 1]], 1))
     x_lo, x_hi, z_lo, z_hi = walkable_bounds(cf)
 
+    src_w, src_h, _ = probe_video(str(clip))
+    if args.boxes_only:
+        lo, hi = (int(v) for v in args.chunk.split(":"))
+        Path(args.boxes_only).write_text(
+            json.dumps(
+                _person_boxes_per_frame(
+                    args, clip, src_w, src_h, size, model, device, cf, person, (lo, hi)
+                )
+            )
+        )
+        return 0
+    if args.workers > 1 and not args.chunk:
+        return _render_in_chunks(args, model)
+
     out_w, out_h = PANEL[0] * 2, PANEL[1] * 3
     stamp = time.strftime("%Y%m%d-%H%M%S")
     final = ROOT / f"assets/dev/heads_{camera}_{stamp}.mp4"
     latest = ROOT / f"assets/dev/heads_{camera}.mp4"
+    if args.chunk_out:
+        final = latest = Path(args.chunk_out)
     part = final.with_suffix(".mp4.part")
     enc = subprocess.Popen(
         ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
@@ -337,13 +590,18 @@ def main() -> int:
     tracker = Tracker()
     tmp = ROOT / f"assets/dev/_heads_{camera}_{os.getpid()}.png"
     crop = None
-    history: dict[int, dict[int, tuple[float, float]]] = {}
-    last_heading: dict[int, float] = {}
-    smoothed: dict[int, tuple[float, float]] = {}
-    statures: dict[int, list[float]] = {}
+    seq_state: dict = {"history": {}, "last_heading": {}, "smoothed": {}, "statures": {}}
+    bounds = (x_lo, x_hi, z_lo, z_hi)
+    frame_lo, frame_hi = 0, args.frames
+    boxes_all: list | None = None
+    if args.chunk:
+        frame_lo, frame_hi = (int(v) for v in args.chunk.split(":"))
+        boxes_all = [
+            np.asarray(b, np.float32).reshape(-1, 4)
+            for b in json.loads(Path(args.boxes).read_text())
+        ]
     vel_window = max(1, round(VEL_WINDOW_S * args.fps))
     n = 0
-    src_w, src_h, _ = probe_video(str(clip))
     # The plate is this camera's own empty shop, named by its camera.json. Missing is a
     # refusal rather than a silent single-instrument run: the whole argument for two
     # instruments is that neither is trusted alone.
@@ -361,8 +619,28 @@ def main() -> int:
             Image.open(plate_path).convert("RGB").resize((src_w, src_h)), np.uint8
         )
     for frame in decode_frames(str(clip), src_w, src_h, args.fps):
-        if n >= args.frames:
+        if n >= frame_hi:
             break
+        # Frames before this worker's chunk are REPLAYED, not rendered: the tracker, the
+        # position smoothing and the stature median are sequential state, and the only
+        # input they need is the person boxes the pre-pass already recorded. Replaying
+        # them costs microseconds, and it is what makes a chunked render produce the same
+        # track ids, colours and smoothed positions a single-process one does.
+        if boxes_all is not None and n < frame_lo:
+            boxes_src = np.asarray(boxes_all[n], np.float32).reshape(-1, 4)
+            kps_src = np.zeros((0, 17, 3), np.float32)
+            _track_states(
+                [t for t in tracker.update(boxes_src, n) if t.hits >= 3],
+                n,
+                cf,
+                seq_state,
+                vel_window,
+                args.metre_scale,
+                args.fps,
+                bounds,
+            )
+            n += 1
+            continue
         img = Image.fromarray(frame)
         x, _canvas, region = preprocess(img, size)
         with torch.no_grad():
@@ -471,45 +749,15 @@ def main() -> int:
 
         # --- 4. metres, which is what the other three are for ------------------------
         tracks = [t for t in tracker.update(boxes_src, n) if t.hits >= 3]
+        states = _track_states(
+            tracks, n, cf, seq_state, vel_window, args.metre_scale, args.fps, bounds
+        )
         figures, ghosts = [], []
         n_posed = 0
-        for t in tracks:
-            col = TRACK_COLORS[t.track_id % len(TRACK_COLORS)]
-            mid_x = (t.box[0] + t.box[2]) / 2 / 2.0
-            pts = np.array([[mid_x, t.box[3] / 2.0], [mid_x, t.box[1] / 2.0]])
-            if cf.lens is not None:
-                pts = undistort_points(pts, cf.lens.k1, cf.lens.centre_px, cf.lens.radius_px)
-            fx, fz = pixel_to_ground(pts[:1, 0], pts[:1, 1], cf.camera, cf.plane)
-            if not (np.isfinite(fx[0]) and np.isfinite(fz[0])):
-                continue
-            raw = (float(fx[0]), float(fz[0]))
-            prev_s = smoothed.get(t.track_id)
-            sm = (
-                raw
-                if prev_s is None
-                else (0.35 * raw[0] + 0.65 * prev_s[0], 0.35 * raw[1] + 0.65 * prev_s[1])
-            )
-            smoothed[t.track_id] = sm
-            if not (x_lo <= sm[0] <= x_hi and z_lo <= sm[1] <= z_hi):
-                continue
-            h_one = stature_m(sm[0], sm[1], float(pts[1, 1]), cf)
-            if 1.2 <= h_one <= 2.6:
-                statures.setdefault(t.track_id, []).append(h_one)
-            seen_h = statures.get(t.track_id, [])
-            stature = (
-                float(np.median(seen_h)) if len(seen_h) >= 3 else 1.70
-            ) * args.metre_scale
-            x_m, z_m = sm[0] * args.metre_scale, sm[1] * args.metre_scale
-            hist = history.setdefault(t.track_id, {})
-            hist[n] = (x_m, z_m)
-            speed = 0.0
-            prev = hist.get(n - vel_window)
-            if prev is not None:
-                dx, dz = x_m - prev[0], z_m - prev[1]
-                speed = math.hypot(dx, dz) / (vel_window / args.fps)
-                if speed >= VEL_FLOOR_MS:
-                    last_heading[t.track_id] = math.atan2(dx, dz)
-            heading = last_heading.get(t.track_id)
+        for st in states:
+            col, sm, stature, heading, speed = (st.col, st.sm, st.stature, st.heading, st.speed)
+            x_m, z_m = st.x_m, st.z_m
+            t = st
             at = Placement(x_m, z_m, heading)
             key = f"person_{t.track_id % len(TRACK_COLORS)}"
             scene_mesh.PALETTE[key] = col
@@ -595,7 +843,7 @@ def main() -> int:
         )
     else:
         latest.write_bytes(final.read_bytes())
-    print(f"wrote {final} ({n} frames @ {args.fps} fps)")
+    print(f"wrote {final} ({n - frame_lo} frames @ {args.fps} fps)")
     if not args.no_blur:
         print(f"  newest also at {latest}")
     return 0
