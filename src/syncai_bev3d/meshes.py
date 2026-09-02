@@ -233,6 +233,9 @@ COCO_NOSE, COCO_LSH, COCO_RSH, COCO_LEL, COCO_REL, COCO_LWR, COCO_RWR = 0, 5, 6,
 COCO_LHI, COCO_RHI, COCO_LKN, COCO_RKN, COCO_LAN, COCO_RAN = 11, 12, 13, 14, 15, 16
 #: A limb shorter than this is drawn as nothing rather than as a degenerate sliver.
 DEGENERATE_LIMB_M = 1e-4
+#: Shoulder line to head centre, as a fraction of stature: `_P`'s neck_y plus the
+#: head radius, less shoulder_y. `human` puts the head there and so must a posed one.
+HEAD_CENTRE_FRAC = 0.870 + 0.0665 * 1.15 - 0.818
 
 
 def human_posed(joints: np.ndarray, height_m: float = 1.70, sides: int = 10) -> Mesh:
@@ -266,9 +269,25 @@ def human_posed(joints: np.ndarray, height_m: float = 1.70, sides: int = 10) -> 
     p = {k: v * h for k, v in _P.items()}
     mid_sh = (j[COCO_LSH] + j[COCO_RSH]) / 2
     mid_hip = (j[COCO_LHI] + j[COCO_RHI]) / 2
-    # The crown sits beyond the nose along the neck's own direction, so a head that is
-    # tilted forward renders tilted forward rather than upright on a leaning body.
-    head_c = j[COCO_NOSE] + (j[COCO_NOSE] - mid_sh) * 0.35
+    # **The head's DIRECTION is measured; its distance is not.** A lift that flattens depth
+    # foreshortens the neck worst of all, because from a ceiling camera that is the segment
+    # pointing most directly at the lens: measured over 120 figures on Taichung-cam10 the
+    # nose came out a median 12 cm above the shoulders where a person's is about 20, and
+    # with an 11 cm head radius the sphere then sits in the shoulders and every figure
+    # reads as hunched. The angle from the shoulders to the nose is exact -- a flattening
+    # lift preserves image-plane angles -- so the fix is to keep that direction and take
+    # the length from the canon.
+    #
+    # This is done for the head and for nothing else on purpose. The crown is not a
+    # measured point; the nose stands in for it. A wrist *is* measured, and moving one to
+    # its canonical distance would take the hand off the thing the person is holding.
+    neck = j[COCO_NOSE] - mid_sh
+    neck_len = float(np.linalg.norm(neck))
+    head_c = (
+        mid_sh + neck / neck_len * (HEAD_CENTRE_FRAC * h)
+        if neck_len > 1e-6
+        else mid_sh + np.array([0.0, HEAD_CENTRE_FRAC * h, 0.0])
+    )
     # A limb of zero length is what a *lift* produces when two keypoints land on the same
     # ray at the same depth -- a fully foreshortened forearm pointing at the camera, or two
     # low-confidence joints collapsing onto each other. `_tube` refuses coincident

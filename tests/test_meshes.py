@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 
 from syncai_bev3d.meshes import (
+    HEAD_CENTRE_FRAC,
     Placement,
     box,
     cabinet,
@@ -476,3 +477,31 @@ def test_a_posed_figure_refuses_joints_it_cannot_trust():
     j[3] = (np.nan, np.nan, np.nan)
     with pytest.raises(ValueError):
         human_posed(j, 1.70)
+
+
+def test_a_foreshortened_neck_does_not_bury_the_head_in_the_shoulders():
+    """The lift flattens depth, and from a ceiling camera the neck is the segment pointing
+    most directly at the lens, so it foreshortens worst: measured over 120 figures on
+    Taichung-cam10 the nose landed a median 12 cm above the shoulders against a person's
+    20. With an 11 cm head radius the sphere then sits inside the shoulders and every
+    figure reads as hunched. The direction is exact -- a flattening lift preserves
+    image-plane angles -- so the head is placed along it at the canon's distance."""
+    j = _upright_joints()
+    mid_sh_y = (j[5][1] + j[6][1]) / 2
+    j[0] = (0.0, mid_sh_y + 0.05, 0.0)  # a nose only 5 cm up: badly foreshortened
+    _lo, hi = _bbox(human_posed(j, 1.70))
+    assert hi[1] > mid_sh_y + HEAD_CENTRE_FRAC * 1.70, (
+        f"the head crown reached {hi[1]:.2f} m against a shoulder line at {mid_sh_y:.2f}: "
+        "the sphere is sitting in the shoulders"
+    )
+
+
+def test_the_head_still_follows_where_the_person_is_looking():
+    """Placing the head at a fixed distance must not place it at a fixed *angle*: a person
+    leaning over a counter has their head forward of their shoulders and the figure has to
+    show that, or the fix for the hunch has traded one wrong pose for another."""
+    j = _upright_joints()
+    mid_sh = (j[5] + j[6]) / 2
+    j[0] = mid_sh + np.array([0.0, 0.10, 0.18])  # nose well forward, head down
+    _lo, hi = _bbox(human_posed(j, 1.70))
+    assert hi[2] > mid_sh[2] + 0.05, "a head leaning forward was drawn upright"
