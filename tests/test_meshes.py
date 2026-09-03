@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 
 from syncai_bev3d.meshes import (
+    HEAD_CENTRE_FRAC,
     Placement,
     box,
     cabinet,
@@ -27,6 +28,7 @@ from syncai_bev3d.meshes import (
     extrude,
     ground_disc,
     human,
+    human_posed,
     place,
     shelf_levels,
     shelving,
@@ -69,9 +71,14 @@ def test_shoulder_span_is_anthropometric():
 
 def test_a_human_has_a_facing():
     """The feet reach forward, so `heading_rad` renders as a visible change. A figure
-    symmetric in z would make a measured heading look like no measurement at all."""
+    symmetric in z would make a measured heading look like no measurement at all.
+
+    The check is front-vs-back, not magnitude: `max > 0.10` alone passed for a
+    perfectly z-symmetric figure, which is the exact failure the docstring names.
+    """
     v = human(1.70)[0]
-    assert v[:, 2].max() > 0.10
+    assert v[:, 2].max() > 0.10  # the figure has depth at all
+    assert v[:, 2].max() > -v[:, 2].min()  # and more of it in front than behind
 
 
 def test_heights_scale_every_part_not_just_the_total():
@@ -429,3 +436,107 @@ def test_shelving_stands_on_a_kick_plate_rather_than_a_slab_on_the_floor():
 def test_shelving_refuses_nonsense(call, word):
     with pytest.raises(ValueError, match=word):
         call()
+
+
+def _upright_joints():
+    """A plain standing skeleton in COCO order, in metres, feet on the floor."""
+    j = np.zeros((17, 3), float)
+    j[0] = (0.0, 1.58, 0.0)  # nose
+    j[5], j[6] = (-0.20, 1.39, 0.0), (0.20, 1.39, 0.0)  # shoulders
+    j[7], j[8] = (-0.24, 1.07, 0.0), (0.24, 1.07, 0.0)  # elbows
+    j[9], j[10] = (-0.25, 0.77, 0.0), (0.25, 0.77, 0.0)  # wrists
+    j[11], j[12] = (-0.09, 0.90, 0.0), (0.09, 0.90, 0.0)  # hips
+    j[13], j[14] = (-0.09, 0.48, 0.0), (0.09, 0.48, 0.0)  # knees
+    j[15], j[16] = (-0.09, 0.07, 0.0), (0.09, 0.07, 0.0)  # ankles
+    return j
+
+
+def test_a_measured_limb_of_zero_length_is_drawn_as_nothing_rather_than_raised():
+    """`_tube` refuses coincident endpoints, which is right for geometry somebody authored
+    and wrong for geometry somebody measured: a forearm pointing straight at the camera
+    projects to a point, and two low-confidence keypoints collapse onto each other. It
+    killed a 900-frame render partway through, so `human_posed` skips the segment."""
+    j = _upright_joints()
+    j[9] = j[7]  # left wrist lands on the left elbow
+    verts, faces = human_posed(j, 1.70)
+    assert len(verts) and len(faces)
+    # and the limb that survived is still there: the figure is not silently emptied
+    assert _bbox(human_posed(j, 1.70))[1][0] > 0.2
+
+
+def test_a_posed_figure_keeps_the_pose_rather_than_the_stature():
+    """`human` normalises its mesh to `height_m`; `human_posed` must not, or a crouch is
+    stretched back up into a standing person and the panel lies about what happened."""
+    j = _upright_joints()
+    j[:, 1] *= 0.5  # the same person, crouched
+    _lo, hi = _bbox(human_posed(j, 1.70))
+    assert hi[1] < 1.1, f"a crouch was stretched to {hi[1]:.2f} m"
+
+
+def test_a_posed_figure_refuses_joints_it_cannot_trust():
+    """Non-finite joints and the wrong shape are faults in the lift, and a figure drawn
+    from them is worse than no figure: the caller can fall back to the mannequin."""
+    with pytest.raises(ValueError):
+        human_posed(np.zeros((16, 3)), 1.70)
+    j = _upright_joints()
+    j[3] = (np.nan, np.nan, np.nan)
+    with pytest.raises(ValueError):
+        human_posed(j, 1.70)
+
+
+def test_a_foreshortened_neck_does_not_bury_the_head_in_the_shoulders():
+    """The lift flattens depth, and from a ceiling camera the neck is the segment pointing
+    most directly at the lens, so it foreshortens worst: measured over 120 figures on
+    Taichung-cam10 the nose landed a median 12 cm above the shoulders against a person's
+    20. With an 11 cm head radius the sphere then sits inside the shoulders and every
+    figure reads as hunched. The direction is exact -- a flattening lift preserves
+    image-plane angles -- so the head is placed along it at the canon's distance."""
+    j = _upright_joints()
+    mid_sh_y = (j[5][1] + j[6][1]) / 2
+    j[0] = (0.0, mid_sh_y + 0.05, 0.0)  # a nose only 5 cm up: badly foreshortened
+    _lo, hi = _bbox(human_posed(j, 1.70))
+    assert hi[1] > mid_sh_y + HEAD_CENTRE_FRAC * 1.70, (
+        f"the head crown reached {hi[1]:.2f} m against a shoulder line at {mid_sh_y:.2f}: "
+        "the sphere is sitting in the shoulders"
+    )
+
+
+def test_the_head_follows_the_torso_when_the_person_leans():
+    """Placing the head at a fixed distance must not place it at a fixed *attitude*: a
+    person leaning over a counter leans their head with their torso, and the figure has to
+    show it or the fix for the hunch has traded one wrong pose for another.
+
+    Asserted on the head's own extent, not the mesh bounding box. The first version of
+    this test compared `_bbox(...)[1][2]` against a 0.05 m threshold, which the head's own
+    0.11 m radius clears on an upright figure -- it passed whatever the head did.
+    """
+    up = _upright_joints()
+    lean = _upright_joints()
+    lean[[5, 6]] += np.array([0.0, -0.06, 0.30])  # shoulders forward: a torso bent at the hip
+
+    def head_z(j):
+        verts, _f = human_posed(j, 1.70)
+        top = verts[verts[:, 1] > verts[:, 1].max() - 0.22]  # the head sphere alone
+        return float(top[:, 2].mean())
+
+    moved = head_z(lean) - head_z(up)
+    assert moved > 0.20, f"the torso leaned 0.30 m and the head followed by {moved:.2f} m"
+
+
+def test_the_head_is_not_placed_from_the_nose():
+    """The nose is on the FRONT of the head, so shoulders-to-nose points forward and up.
+    Placing the head along it craned every figure's neck forward and the render still read
+    as hunched -- the second wrong version of this, after the one that buried the head.
+    Where the person is looking is not represented, and a sphere could not show it anyway.
+    """
+    ahead, down = _upright_joints(), _upright_joints()
+    mid_sh = (ahead[5] + ahead[6]) / 2
+    ahead[0] = mid_sh + np.array([0.0, 0.19, 0.02])  # looking level
+    down[0] = mid_sh + np.array([0.0, 0.04, 0.20])  # looking down at a phone
+
+    def head_c(j):
+        verts, _f = human_posed(j, 1.70)
+        top = verts[verts[:, 1] > verts[:, 1].max() - 0.22]
+        return top.mean(0)
+
+    assert float(np.linalg.norm(head_c(ahead) - head_c(down))) < 1e-6

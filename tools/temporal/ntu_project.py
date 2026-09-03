@@ -35,8 +35,9 @@ clipped skeleton is a different posture, not the same one at the edge.
 
 **The pinhole is the shipped one.** `geometry.ground.ground_to_pixel` projects floor
 points; a skeleton needs points *above* the floor, so `_project` generalises it by one
-term -- and `--self-check` asserts the generalisation reproduces `ground_to_pixel`
-exactly at zero height, rather than assuming a one-line change is safe.
+term -- and an unconditional self-check on startup asserts the generalisation
+reproduces `ground_to_pixel` exactly at zero height, rather than assuming a one-line
+change is safe. (There is no `--self-check` flag; the check always runs.)
 """
 
 from __future__ import annotations
@@ -101,7 +102,7 @@ def _project(pts_level: np.ndarray, cam: Camera, plane: GroundPlane) -> np.ndarr
 
     `ground_to_pixel` is this with the height fixed at zero; the only change is that the
     camera-frame y becomes `plane.height - height` instead of `plane.height`. Asserted
-    against it in `--self-check`.
+    against it by `self_check`, which runs unconditionally on startup.
     """
     p = np.stack(
         [pts_level[..., 0], plane.height - pts_level[..., 1], pts_level[..., 2]], axis=-1

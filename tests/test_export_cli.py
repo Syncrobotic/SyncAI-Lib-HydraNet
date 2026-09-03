@@ -26,30 +26,19 @@ import pytest
 import torch
 import yaml
 
+from _export_cfg import INPUT_SIZE, det_head, seg_head, tiny_trunk
 from syncai_hydranet.cli import export_onnx
 
 BASE = {
     "experiment": "export_cli_test",
     "output_dir": "runs/export_cli_test",
     "model": {
-        "backbone": {"name": "resnet18", "pretrained": False},
-        "neck": {"name": "fpn", "out_channels": 32, "num_repeats": 1, "num_levels": 5},
-        "heads": {
-            "traversability": {
-                "type": "semantic_fpn",
-                "num_classes": 3,
-                "in_levels": [0, 1, 2],
-                "channels": 32,
-            },
-            "detection": {"type": "fcos", "num_classes": 80, "channels": 32, "num_convs": 1},
-        },
+        **tiny_trunk(),
+        "heads": {"traversability": seg_head(), "detection": det_head()},
     },
-    # Small on purpose -- this exercises control flow and every test builds a model -- but
-    # not smaller than 128x160. At 64x80 the deepest FPN level is 1x1 and `F.group_norm`
-    # in the FCOS tower refuses a 1-element map outright. That is a real constraint on any
-    # export, not a test artefact: the smallest resolution this project ships is 384x512.
+    # Why this size and no smaller: the argument lives on tests/_export_cfg.INPUT_SIZE.
     "data": {
-        "input_size": [128, 160],
+        "input_size": INPUT_SIZE,
         "datasets": [
             {
                 "name": "coco",

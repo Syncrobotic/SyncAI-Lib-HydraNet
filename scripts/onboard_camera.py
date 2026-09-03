@@ -62,6 +62,7 @@ sys.path.insert(0, str(HERE.parent / "src"))
 from syncai_bev3d import plate_calibration as pc  # noqa: E402
 from syncai_bev3d.calibrate import horizon_row  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera  # noqa: E402
+from syncai_hydranet.shipped import SHIPPED_CONFIG, for_terrain  # noqa: E402
 
 SCHEMA = "hydranet-onboard-calib/v1"
 # Defaults, not constants. A second fleet arrived 2026-08-27 -- ten RTSP channels with
@@ -71,8 +72,11 @@ SCHEMA = "hydranet-onboard-calib/v1"
 # run actually used and a global would record whichever one was set last.
 CAMERAS_JSON = Path("datasets/studioa_clips/cameras.json")
 PERSON_ANNS = Path("datasets/retail_person_gdino01/annotations/instances_all.json")
-PLATE_MODEL_CONFIG = Path("configs/hydranet_retail_security_b03_cw_xl.yaml")
-PLATE_MODEL_CKPT = Path("runs/hydranet_retail_security_b03_cw_xl/best.pt")
+# The plate meter reads the terrain head's `person` channel, so it takes the
+# terrain-selected checkpoint -- see `syncai_hydranet.shipped` for why that is a question
+# with two answers and why a caller has to name which one it is asking.
+PLATE_MODEL_CONFIG = SHIPPED_CONFIG
+PLATE_MODEL_CKPT = for_terrain()
 K1_FLEET = -0.225  # tile-grid measured on Taichung-cam01; fleet-hardware assumption elsewhere
 VFOV_PRIMARY = 70.4  # likewise: pinned on cam01, a fleet assumption for the rest
 MIN_HEIGHTS = 10  # min samples for the person-height statistic to emit a number (task spec)

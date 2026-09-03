@@ -11,15 +11,14 @@ pytest tests/test_zone_bridge.py -v
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 
 import numpy as np
 import pytest
 
+from _cameras import HALF_RES_CAM, HALF_RES_PLANE, HALF_RES_SIZE
 from syncai_hydranet.analytics import events as ev
 from syncai_hydranet.geometry.camera_json import CameraFile, Zone
-from syncai_hydranet.geometry.ground import Camera, GroundPlane
 
 SQUARE = ((0.0, 1.0), (1.0, 1.0), (1.0, 2.0), (0.0, 2.0))
 
@@ -27,9 +26,9 @@ SQUARE = ((0.0, 1.0), (1.0, 1.0), (1.0, 2.0), (0.0, 2.0))
 def a_camera_file(*zones: Zone) -> CameraFile:
     return CameraFile(
         camera_id="Taichung-cam01",
-        image_size_px=(960, 540),
-        camera=Camera(fx=382.7, fy=382.7, cx=480.0, cy=270.0),
-        plane=GroundPlane(height=2.49, pitch=math.radians(49.5)),
+        image_size_px=HALF_RES_SIZE,
+        camera=HALF_RES_CAM,
+        plane=HALF_RES_PLANE,
         zones=zones,
     )
 

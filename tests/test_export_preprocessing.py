@@ -21,6 +21,7 @@ import pytest
 import torch
 from PIL import Image
 
+from _export_cfg import seg_head, tiny_trunk
 from syncai_hydranet.cli.export_onnx import INPUT_NORMALISED, INPUT_RAW, ExportWrapper
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.transforms import build_transforms
@@ -34,16 +35,8 @@ SIZE = (64, 80)
 def model():
     cfg = {
         "model": {
-            "backbone": {"name": "resnet18", "pretrained": False},
-            "neck": {"name": "fpn", "out_channels": 32, "num_levels": 3},
-            "heads": {
-                "terrain": {
-                    "type": "semantic_fpn",
-                    "num_classes": 12,
-                    "in_levels": [0, 1, 2],
-                    "channels": 16,
-                }
-            },
+            **tiny_trunk(num_levels=3),
+            "heads": {"terrain": seg_head(num_classes=12, channels=16)},
         }
     }
     torch.manual_seed(0)

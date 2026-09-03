@@ -27,6 +27,7 @@ import numpy as np
 import pytest
 import torch
 
+from _export_cfg import seg_head, tiny_trunk
 from syncai_hydranet.cli.export_onnx import ExportWrapper, check_parity
 from syncai_hydranet.models.hydranet import build_model
 
@@ -34,21 +35,10 @@ from syncai_hydranet.models.hydranet import build_model
 def _cfg(num_classes: int = 7) -> dict:
     return {
         "model": {
-            "backbone": {"name": "resnet18", "pretrained": False},
-            "neck": {"name": "fpn", "out_channels": 32, "num_repeats": 1, "num_levels": 5},
+            **tiny_trunk(),
             "heads": {
-                "terrain": {
-                    "type": "semantic_fpn",
-                    "num_classes": num_classes,
-                    "in_levels": [0, 1, 2],
-                    "channels": 32,
-                },
-                "traversability": {
-                    "type": "semantic_fpn",
-                    "num_classes": 3,
-                    "in_levels": [0, 1, 2],
-                    "channels": 32,
-                },
+                "terrain": seg_head(num_classes=num_classes),
+                "traversability": seg_head(),
             },
             "loss_balancing": "fixed",
             "fixed_weights": {"terrain": 1.0, "traversability": 1.0},

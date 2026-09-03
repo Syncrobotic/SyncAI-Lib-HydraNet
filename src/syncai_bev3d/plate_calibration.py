@@ -57,14 +57,9 @@ from syncai_hydranet.geometry.ground import (
 from .bev import box_extents
 
 MODEL = "depth-anything/Depth-Anything-V2-Metric-Indoor-Large-hf"
-# The revision this project's numbers were measured on, pinned rather than floating.
-# `from_pretrained` with no `revision=` resolves whatever `main` points at today, so an
-# upstream push silently changes what a teacher produces -- and for the models here that
-# means different masks, different boxes and different metres, under artefacts that look
-# identical. Taken from the local cache on 2026-08-28, i.e. the commit every measurement
-# already in PLAN was actually made with; bumping it is then a reviewed event with a
-# re-measure attached, which is what `.github/dependabot.yml` says about torch for the
-# same reason.
+# Pinned rather than floating, for the reason argued in full on
+# `syncai_bev3d/teachers/gdino.py`'s revision pin: an unpinned `from_pretrained`
+# silently changes what a teacher produces when upstream pushes.
 MODEL_REVISION = "d2fc6a93601aabb1139a3bf0ebfcb4e89c67817f"
 ADULT_M = 1.70  # the standing-adult prior; pose bias makes it a ±11% systematic term
 PLATES = Path("datasets/studioa_static")

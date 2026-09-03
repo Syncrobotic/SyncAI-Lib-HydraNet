@@ -24,6 +24,7 @@ import json
 import pytest
 import torch
 
+from _export_cfg import INPUT_SIZE, det_head, seg_head, tiny_trunk
 from syncai_hydranet.cli.export_onnx import (
     ExportWrapper,
     det_output_names,
@@ -46,22 +47,13 @@ from syncai_hydranet.models.hydranet import build_model
 
 CFG = {
     "model": {
-        "backbone": {"name": "resnet18", "pretrained": False},
-        "neck": {"name": "fpn", "out_channels": 32, "num_repeats": 1, "num_levels": 5},
-        "heads": {
-            "traversability": {
-                "type": "semantic_fpn",
-                "num_classes": 3,
-                "in_levels": [0, 1, 2],
-                "channels": 32,
-            },
-            "detection": {"type": "fcos", "num_classes": 80, "channels": 32, "num_convs": 1},
-        },
+        **tiny_trunk(),
+        "heads": {"traversability": seg_head(), "detection": det_head()},
         "loss_balancing": "fixed",
         "fixed_weights": {"traversability": 1.0, "detection": 1.0},
     },
     "data": {
-        "input_size": [128, 160],
+        "input_size": INPUT_SIZE,
         "datasets": [
             {"name": "coco", "type": "coco", "supervises": ["detection"]},
         ],

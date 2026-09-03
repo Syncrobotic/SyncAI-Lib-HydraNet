@@ -143,16 +143,29 @@ def focal_disagreement(measured_vfov_deg: float, predicted_vfov_deg: float) -> f
     return fp / fm
 
 
+#: A shipped camera's plate lives under this root. `runs/commission01/` is a working
+#: directory, not a manifest, so a camera commissioned there for an experiment would
+#: otherwise enter this baseline: `dingpu-1f/test1` was commissioned on 2026-09-01 and
+#: became a ninth row in a comparison of the Studio A fleet against itself. The plate
+#: path is the discriminator because it is written into the artefact by the commissioning
+#: that produced it -- no second list to keep in step.
+SHIPPED_PLATE_ROOT = "datasets/studioa_static/"
+
+
 def commissioned() -> dict[str, dict]:
-    """The eight shipped `camera.json`, as the baseline to compare against.
+    """The shipped `camera.json` -- the Studio A fleet -- as the baseline to compare against.
 
     Every `height` here is fitted from the 1.70 m person prior (PLAN 7.19), not measured
     with a tape, so a comparison against them is two estimates meeting -- which the
     reporting says in words rather than leaving to be inferred.
+
+    Filtered by plate root rather than counted: see :data:`SHIPPED_PLATE_ROOT`.
     """
     out = {}
     for f in sorted((REPO / "runs/commission01").glob("*.camera.json")):
         d = json.loads(f.read_text())
+        if not str(d.get("plate_file", "")).startswith(SHIPPED_PLATE_ROOT):
+            continue
         out[d["camera_id"]] = {
             "height_m": d["plane"]["height"],
             "pitch_deg": round(math.degrees(d["plane"]["pitch"]), 2),

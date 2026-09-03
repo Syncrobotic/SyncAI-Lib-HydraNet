@@ -1,11 +1,11 @@
 {
  "camera": "Taichung-cam10",
  "gif": "demo_Taichung-cam10.gif",
- "render": "demo_Taichung-cam10_20260831-111436.mp4",
+ "render": "demo_Taichung-cam10_20260903-102518.mp4",
  "source_clip": "archive_20260816-112916_20260816-113416.mp4",
  "render_args": {
   "camera": "Taichung-cam10",
-  "clip": "datasets/studioa_clips/Taichung-cam10/archive_20260816-112916_20260816-113416.mp4",
+  "clip": null,
   "frames": 900,
   "fps": 5.0,
   "checkpoint": "last.pt",
@@ -13,7 +13,14 @@
   "metre_scale": 1.0,
   "no_blur": false,
   "staff_colours": "runs/staff_model01/model_Taichung-cam10.json",
-  "staff_min_accuracy": 0.85
+  "staff_min_accuracy": 0.85,
+  "posed_figures": false,
+  "no_heatmap": false,
+  "workers": 6,
+  "chunk": null,
+  "chunk_out": null,
+  "records": null,
+  "records_only": null
  },
  "staff_model": {
   "path": "runs/staff_model01/model_Taichung-cam10.json",
@@ -23,14 +30,14 @@
   "held_out_n": 127,
   "min_accuracy_required": 0.85
  },
- "commit": "3032bba27d709757cce57b7465a5e81cee4581c1",
- "start_frame": 88,
+ "commit": "6a0dd8fac518063354476f0dc952347fac7d4095",
+ "start_frame": 83,
  "frames": 120,
  "stride": 1,
  "audit_score_thr": 0.03,
  "blur_score_thr": 0.07,
  "head_coverage_required": 0.98,
- "person_boxes_checked": 409,
+ "person_boxes_checked": 489,
  "person_boxes_failing": 0,
  "failing_examples": [],
  "contact_sheets": "runs/commission01/Taichung-cam10.gif_check"

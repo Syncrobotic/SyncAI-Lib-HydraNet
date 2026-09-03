@@ -16,15 +16,16 @@ import math
 import numpy as np
 import pytest
 
+from _cameras import FULL_RES_CAM, FULL_RES_PLANE
 from syncai_hydranet.analytics.events._types import Zone
 from syncai_hydranet.analytics.journey import journeys
 from syncai_hydranet.analytics.tracker import Track
 from syncai_hydranet.analytics.world import world_frame
 from syncai_hydranet.geometry.camera_json import CameraFile
-from syncai_hydranet.geometry.ground import Camera, GroundPlane, ground_to_pixel
+from syncai_hydranet.geometry.ground import GroundPlane, ground_to_pixel
 
-CAM = Camera(fx=1490.0, fy=1490.0, cx=960.0, cy=540.0)
-PLANE = GroundPlane(height=2.38, pitch=math.radians(50.2))
+CAM = FULL_RES_CAM  # the measured store mount, from _cameras
+PLANE = FULL_RES_PLANE
 FPS = 5.0
 
 

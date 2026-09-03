@@ -107,6 +107,15 @@ Two things follow, and both are cheap:
   invisible without it, and the day before, a green local run of the export loop is
   exactly what let the job stay red.
 
+## `exports/` is a deployment surface, not clutter
+
+`exports/` sits beside `runs/` -- gitignored because engines are gigabytes, but its
+paths are API: `serve_pilot.py`, `bench_trt.py`, `bench_e2e.py` and
+`serving/uint8_input.py` all reference `exports/pro6000/...` by literal path, and
+PLAN quotes results by those names. Do not move or rename its subdirectories without
+updating all four; a report or scratch file, by contrast, belongs in the `runs/`
+directory of the run that produced it, not at the repository root.
+
 ## Figures under `assets/`
 
 `assets/` is an **allowlist**, not a denylist: `.gitignore` ignores `assets/*` and names

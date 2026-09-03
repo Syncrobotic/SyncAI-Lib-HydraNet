@@ -473,7 +473,7 @@ test can catch that. The convention is the only mechanism.
 | # | step | artefact | gate |
 |---|---|---|---|
 | 1 | **package split** — create `src/syncai_bev3d`, move the §2.1 code, define the `camera.json` schema; archive non-current configs | two importable packages, green tests | **DONE 2026-08-25** (`64eafd8`, `6e0eb36`, `1395e2c`) — 1,824 tests green, boundary enforced by `test_package_boundaries.py`, GPU idle and no training unit running when the tree moved. Config archiving deferred: which of the 30 yamls are current needs a decision, not a guess |
-| 2 | **commission all 48 cameras** — build the 4-click tool and zone tool, run the pipeline | per-camera `camera.json` + a 1 m grid rendered on one real frame per camera | the grid looks right **to my own eyes on every camera**. **8 of 48 shipped** (`runs/commission01/REVIEW.md`), Taichung-cam05 withdrawn — two furniture checks agree its cells are over-scaled. **"Scale-measured" means the 1.70 m person-height prior, not a tape measure** (§7.19): every shipped `scale_source` reads `person_height_median_vs_1.7m_prior_nNN`, on 15–37 boxes. Masks, walkable outline, shelf ROIs and a commissioning 3D scene are written for all 8 (`masks_pass.py`, `scene3d.py`; tables 0.78–0.97 m fleet-wide); 5 mask sets clean, the Tao-Hsin pair partial and Kaohsiung-cam04 missing its pillar. **The Tao-Hsin caveat is measured (§7.21) and is the whole of what limits the 3D render's coverage** — the fixtures are proposed and then classified `wall`, and neither clustering nor paint order moves that camera's map by a pixel. **71 service zones across the 8, fully automatic** (§7.19): a zone is the floor *beside* a fixture, not its footprint, because a footprint is a region no shopper can occupy. Blocked on the physical world for the rest: 14 cameras need a per-store visual reference, 4 need mount-type triage, Taichung-cam05 needs its NVR stream setting; the 7 Kaohsiung person-score cameras are answered per camera in §7.12. Remaining tools: the 4-point ground-calibration click tool (§2.1b) and the tamper reference (§2.1h) |
+| 2 | **commission all 48 cameras** — build the 4-click tool and zone tool, run the pipeline | per-camera `camera.json` + a 1 m grid rendered on one real frame per camera | the grid looks right **to my own eyes on every camera**. **8 of 48 shipped** (`runs/commission01/REVIEW.md`), Taichung-cam05 withdrawn — two furniture checks agree its cells are over-scaled. **"Scale-measured" means the 1.70 m person-height prior, not a tape measure** (§7.19): every shipped `scale_source` reads `person_height_median_vs_1.7m_prior_nNN`, on 15–37 boxes. Masks, walkable outline, shelf ROIs and a commissioning 3D scene are written for all 8 (`masks_pass.py`, `scene3d.py`; tables 0.78–0.97 m fleet-wide); 5 mask sets clean, the Tao-Hsin pair partial and Kaohsiung-cam04 missing its pillar. **The Tao-Hsin caveat is measured (§7.21) and is the whole of what limits the 3D render's coverage** — the fixtures are proposed and then classified `wall`, and neither clustering nor paint order moves that camera's map by a pixel. **71 service zones across the 8, fully automatic** (§7.19): a zone is the floor *beside* a fixture, not its footprint, because a footprint is a region no shopper can occupy. Blocked on the physical world for the rest: 14 cameras need a per-store visual reference, 4 need mount-type triage, Taichung-cam05 needs its NVR stream setting; the 7 Kaohsiung person-score cameras are answered per camera in §7.12. Remaining tools: the 4-point ground-calibration click tool (§2.1b) and the tamper reference (§2.1h). **Inventoried 2026-09-03**: of 48 cameras, 23 are `selling_floor` and ALL 23 are onboarded (calib.json exists, `fleet_hardware_assumed` vfov on 22, tile-grid on Taichung-cam01); 8 of the 23 are commissioned, so the real stage-0 backlog is **15 selling-floor cameras**, each needing only the teacher passes plus the zones/FP human confirmation — no new calibration work. The other 25 are 17 back_of_house (out of product scope), 6 dead (luma 1.1), and 2 already counted. |
 | 3 | **pose head resident** — trained, 60/60 epochs, final val `coco_person` mAP 0.2022. **Two traps this step paid for, both live.** Its run directory is `runs/hydranet_retail_security_b03_cw_xl-20260825-162131`: the pose config inherited `output_dir` from the security run, so the directory is named for a different model and only the `config.yaml` inside it is authoritative. And `primary_metric` is `terrain_mIoU/site_seg03`, so **`best.pt` is epoch 15 and is not the pose checkpoint** — read `selection.json` before using either. **The exporter's shape is the third**: `cli/export_onnx.py`'s `ExportWrapper` lists the ModuleDicts it knows about, so every new head is silently absent from every engine until someone adds a line, and the only thing that catches it is a config whose *only* head is the missing one — which is how a graph with **zero outputs** passed `onnx.checker` and onnxsim and left CI's export-parity job red for nine days. **Throughput** (§7.8): NVDEC saturates at ~520 streams against the CPU pipe's 63–69, so decode is no longer the binding leg; host NMS and the tracker cost 3.4 of 24 cores at target. Both checkpoints on the full test split (2,862 images / 6,360 persons / 93,967 judged joints):
 
 | checkpoint | PCK@0.2h | L2 p50 | mean | p90 |
@@ -600,6 +600,60 @@ order. A component with no step is not scheduled, it is assumed.
    vocabulary change silently empties `analytics/events/zones.py:346`'s default class list
    — the stock-removal alarm stops firing without an exception. Decide at step 4.
 
+29. ~~The serving target is bound by PCIe~~ — **cleared 2026-09-01, and the entry that
+   said otherwise was scored against a target this document had already replaced.**
+   `bench_trt.py` still held `TARGET_FPS = 1440` — 96 streams at 15 fps — six days after
+   §7.4 revised delivery to **96 x 5 fps = 480 f/s**, so the first version of this entry
+   read a 3.5x shortfall where the real figure was 0.77x.
+
+   Measured on the RTX PRO 6000 at 640x1120, fp16, batch 16, end to end with both copies:
+
+   | export | compute | + copies | vs 480 |
+   |---|---|---|---|
+   | plain | 916.2 | 368.8 | 0.77x |
+   | `--argmax-seg` | 848.0 | 433.3 | 0.90x |
+   | `--argmax-seg --uint8-input` | 848.9 | **633.3** | **1.32x** |
+
+   **`--uint8-input` is what clears it** (`exports/pro6000_xl20260825/xl_last_u8in_b*`).
+   The image is the larger half of the round trip once the outputs are class ids rather
+   than logits — 137 MB of fp32 against 32 MB of uint8 output at batch 16 — and a byte
+   holds 0-255 exactly, so the pixels are identical and `--check-parity` holds it to that
+   (worst 1.52e-05 against a 1e-4 tolerance). The binding is renamed `image_rgb_255_u8`
+   so a float host fails to find it rather than misreading it.
+
+   Two things this cost on the way, both now fixed: `bench_trt.py`'s end-to-end figure
+   never copied the outputs back (`69ede66`), and its fp16 conversion left an input-side
+   `Cast` saying FLOAT while the constants beside it became FLOAT16, which TensorRT
+   refuses — the shape any non-float input contract produces.
+
+   ~~**Still not measured on an idle card.**~~ **Re-measured 2026-09-02 on an idle card,
+   three runs, and the contamination was worth 56% of the end-to-end figure.** The only
+   neighbour was `tools/lite3_web/server.py` holding 790 MB at 0% GPU utilisation, against
+   the three ~800 MB processes of the first attempt. `runs/bench_idle_20260902{,_r2,_r3}`:
+
+   | export | compute | + copies | spread | vs 480 | vs 960 | old + copies |
+   |---|---|---|---|---|---|---|
+   | plain | 1471.7 | 476.5 | 8.6 | 0.99x | 0.50x | 368.8 |
+   | `--argmax-seg` | 1369.5 | 592.6 | 7.8 | 1.23x | 0.62x | 433.3 |
+   | `--argmax-seg --uint8-input` | 1364.4 | **990.5** | 16.1 | **2.06x** | **1.03x** | 633.3 |
+
+   Run-to-run spread is **1.6%** on the figure that matters, not the factor of 1.6 the old
+   note warned about -- that spread was the neighbours, not the card. The ordering is
+   unchanged and `--uint8-input` is still what clears the target.
+
+   **So 96 x 10 fps = 960 f/s passes the engine and the PCIe path, at 1.03x** (985.0,
+   985.5 and 1001.1 over the three runs; every run clears it, by 2.6-4.3%). Two things
+   that follow, and the second is the one that decides:
+
+   * **3% is not a shipping margin.** Compute drifts down within a session (plain reads
+     1506.7, 1479.1, 1429.3 across the three runs, -5%), so a figure this close to the
+     line is a thermal question as much as an architectural one.
+   * **The serving path cannot feed 96 streams at any frame rate.** `data/video.py` is
+     still the CPU decode pipe at 63-69 streams; NVDEC reaches ~520 and is what decision 8
+     chose, and migrating serving onto it "is not done" by that decision's own words. The
+     engine is no longer the binding leg for 96 x 10 -- decode is, and it binds below 96
+     streams before frame rate enters the question.
+
 28. **The best terrain checkpoint in the tree is not the one anything uses.** Measured
    2026-08-31, final epoch of each run (which is what `last.pt` is), the same recipe:
 
@@ -622,9 +676,21 @@ order. A component with no step is not scheduled, it is assumed.
    Two things to settle before promoting, because promotion re-cuts every published
    figure and re-runs the fleet: whether the dated run was deliberately not promoted, and
    whether the two web-metric regressions matter for anything shipped. **Deferred by the
-   user on 2026-08-31 until there is more information.** Note also that the dated run's
-   `selection.json` names `terrain_mIoU/site_seg03` as its primary metric but records
-   0.7030, which is that run's best plain `terrain_mIoU`; its `site_seg03` best is 0.6681.
+   user on 2026-08-31 until there is more information.**
+
+   The `selection.json` discrepancy noted here on 2026-08-31 — the file names
+   `terrain_mIoU/site_seg03` as its primary metric but records 0.7030, which is that run's
+   best plain `terrain_mIoU`, while its `site_seg03` best is 0.6681 — **was a reporting
+   bug, fixed 2026-09-01.** `runmeta.HEAD_METRICS` matched metric names exactly, and
+   `evaluator._det_metrics` writes an unqualified key only for a run with a single
+   detection val set. Every retail run has three or four, so the report skipped the
+   detection head entirely and showed the bare `terrain_mIoU` in place of the qualified
+   primary. Replayed over the same `metrics.jsonl`, it now adds a third figure to the
+   promotion decision: **the dated run's `best.pt` (epoch 15) gives up 0.0576 on
+   `detection_mAP/coco_person`** against the 0.2022 it reaches at epoch 60, which is the
+   `last.pt` number tabled above. The table compares `last.pt` to `last.pt` and is
+   unaffected; what changes is that promoting the dated run and then reading its `best.pt`
+   for anything person-shaped costs more than the table shows.
 
 5. **Retail dashboard surface unscoped** — the numbers fall out of L1 free; what a store
    manager opens, at what cadence, is a product question. Blocks nothing before step 6.
@@ -1630,11 +1696,100 @@ something it does not support.
    should be able to attribute a change to the new labels, and a ratio that drowns COCO
    cannot.
 
-   **Still open, and it still gates the run**: what `primary_metric` the run selects on.
-   §7.9's trap fires when the metric belongs to a different head, so it should be a
-   `person` detection metric and not `terrain_mIoU`; which one is a decision, because
-   `person` mAP on the **site** split is what the run exists to move and the val split's
-   person labels come from the same teacher.
+   ~~**Still open, and it still gates the run**: what `primary_metric` the run selects
+   on.~~ **Decided `detection_mAP/site_person`** — taken in
+   `configs/hydranet_retail_person01.yaml` on 2026-08-28 and confirmed 2026-09-01 before
+   spending the card. It is the head the run exists to move, on the footage it exists to
+   move it on, which is what §7.9's trap asks for; `detection_val_interval` is therefore 1,
+   which `config_schema._check_detection_val_interval` requires.
+
+   **The caveat in the question above is not answered by the choice, it is answered by
+   reading three numbers.** Those val person boxes are Grounding DINO at 0.35, the same
+   teacher as the training labels, so this metric rises with agreement and cannot
+   distinguish a better detector from a better imitation. It selects `best.pt`; it is not
+   the run's verdict. The verdict is:
+
+   | number | what it answers | prior |
+   |---|---|---|
+   | `detection_mAP/site_person` | did the new labels move the head at all | none — first run |
+   | `detection_mAP/coco_person` | is real person detection still there | 0.2106 (pose02 `last.pt`) |
+   | `detection_mAP/site_boxes03` | did the product classes pay for it | 0.1496 (pose02, epoch 65) |
+
+   A `site_person` gain bought with a `coco_person` collapse is the failure mode, not the
+   result. Against pose02 the comparison is **`last.pt` to `last.pt`**, both at epoch 120
+   of the same recipe, for the reason 7a.28's table is built that way: `best.pt` is
+   selected by one head and is a different question.
+
+   **What made this safe to leave as-is rather than re-pointed at `coco_person`**: until
+   `2387ef6` the selection report could not see any detection metric at all, so a
+   checkpoint that traded real person detection for teacher agreement would have shipped
+   with `selection.json` naming `terrain_mIoU` and nothing else. It now prints the trade.
+
+   **ANSWERED 2026-09-02: the site person boxes help every head and cost nothing
+   measurable.** The run completed 07:33, all 120 epochs, `runs/hydranet_retail_person01`.
+   `last.pt` to `last.pt` against pose02, same recipe, one dataset block apart:
+
+   | metric | pose02 | person01 | delta |
+   |---|---|---|---|
+   | `detection_mAP/coco_person` | 0.2106 | **0.2157** | +0.0050 |
+   | `detection_mAP/site_boxes` | 0.1246 | **0.1444** | +0.0198 |
+   | `detection_mAP/site_boxes03` | 0.1446 | **0.1518** | +0.0071 |
+   | `detection_mAP/site_person` | n/a | 0.7386 | new |
+   | `pose_PCK@0.2h` | 0.9345 | 0.9327 | -0.0019 |
+   | `terrain_mIoU/site_seg03` | 0.5843 | **0.6718** | +0.0874 |
+   | `terrain_mIoU/ade20k` | 0.6798 | 0.6770 | -0.0028 |
+
+   **The failure mode did not occur.** `coco_person` is the teacher-independent number --
+   COCO person boxes are human-labelled -- and it rose. The run did not buy teacher
+   agreement with real person detection. Read the shape rather than the endpoint, though:
+   person01 was far ahead early (0.1890 at epoch 15 against pose02's 0.1342) and the lead
+   closed to +0.0050 by epoch 120. What the site labels bought on COCO is **speed**; the
+   endpoint difference is within what one seed can say.
+
+   **The largest gain is not in detection and not in the `person` class.** Terrain rose
+   +0.0874 on `site_seg03` and -0.0028 on `ade20k`, and the per-class split is floor
+   +0.0739, wall +0.0620, fixture +0.0560, `05_person` **-0.0047**. So this is not the
+   `person` channel helping itself: the block's 14,654 site images supervise detection
+   only and carry `class_mask [1, 0, 0, 0]`, but they still pass through the shared
+   backbone and neck, and they are the same domain as `site_seg`/`site_seg03`. The site
+   person block acted as site-domain representation data. `03_column` reads +0.1158 and
+   should not be quoted: it is the class that scores on val and predicts nothing in the
+   store, so a val IoU on it is not a measurement of the class.
+
+   **`detection_mAP/site_person` 0.7386 is agreement with Grounding DINO at 0.35, its own
+   training teacher, and has no prior.** It is not 74% accuracy at finding people and must
+   not be quoted as one.
+
+   **Costs, all visible for the first time because of `2387ef6`.** `best.pt` is epoch 118
+   and gives up 0.0341-0.0415 of terrain mIoU, which peaked at epochs 18-22; every
+   detection head and the pose head sit within 0.001 of their own best at that checkpoint.
+   Before that commit `selection.json` would have carried one line and none of this.
+
+   **Provenance.** systemd-oomd SIGKILLed the unit five times (00:19, 00:55, 01:12, 01:37,
+   02:12) on PSI memory pressure, not real OOM -- a second training run,
+   `quadhydra-train`, started at 00:51 and competed for RAM and the card. Each restart
+   resumed from `last.pt`; all 120 epochs are present, with epochs 34 and 40 logged twice
+   where a resume re-ran them. Wall clock 8 h 33 min. **No throughput or epoch-time figure
+   from this run is usable** -- it shared the GPU for most of its length.
+
+   **Single seed.** These deltas have no seed-variance context; `hydranet_retail_security_seeds`
+   is the shape that would give them one.
+
+   **PROMOTED 2026-09-02** (the user's call): `shipped.SHIPPED_RUN` now names this run.
+   Both `for_terrain` and `for_detection` return `last.pt` -- the saved checkpoints
+   coincide to three decimals because selection picked epoch 118 off a flat tail; the
+   per-head doctrine stands and the reasoning is on the functions. Every tool renders
+   with person01 from here on, so its numbers may now be quoted beside the figures.
+
+   **Pre-flight, 2026-09-01, built on CPU from the config rather than read off it**:
+   `split_leaks` clean, `check_config` silent, `site_person` 14,654 train images at 0.2 →
+   91 detection steps carrying `class_mask [1, 0, 0, 0]`. `detection_class_steps` is
+   person 193/206 (94%), bag 102/206 (50%), `boxed_stock` and `device` 13/206 (6%) — the
+   product classes fall as a share and not as an amount, 13 steps before and 13 after.
+   The epoch grows 287 → 378 steps (1.32x; the *detection* steps grow 115 → 206, 1.79x)
+   and detection validation grows to 11,609 images every epoch. Estimated ~9 h from
+   pose02's measured 139 s non-detection epoch plus 26 s per 2,961 detection val images,
+   so a 23:00 start finishes around 08:00 — consistent with the timer unit's own estimate.
 
 21. **`masks_pass` is not the bev-3d bottleneck, and three explanations for the missing
    furniture are ruled out.** Opened 2026-08-28 on the handoff's statement that the render
@@ -2070,3 +2225,112 @@ something it does not support.
    in the picture rather than on stdout, so a reader of the figure sees what the code
    already knows; and the commissioning record carries it per camera, so the count is a
    number that can be watched rather than a line in a scrollback.
+
+30. **The mesh figure can be driven by the pose head, and the thing that stops it is
+   constraint design rather than data.** Opened 2026-09-02 on the question "can the 3D
+   figure replicate what the person is doing". Four solvers, one subject: the single
+   confident person on `Kaohsiung-cam04` at 10:58 local, standing at the counter typing,
+   keypoint confidence min 0.69 / median 0.90.
+
+   **The mesh side needs nothing built.** `meshes.human()` is not a rigged model, it is one
+   `_tube(start, end, r0, r1)` per limb, and `_P` names exactly the joints COCO gives —
+   shoulder, elbow, wrist, hip, knee, ankle. Twelve of the seventeen keypoints land on a
+   tube endpoint. Driving it is replacing the standing constants with measured joints; no
+   skinning, no SMPL, no new training.
+
+   **What each solver fixed and what it broke**, on that one frame, with the absolute
+   heights that decide it:
+
+   | | bone ratio | shoulder→wrist | hip sep | head height | torso lean |
+   |---|---|---|---|---|---|
+   | target | 1.00 | 0.50–0.65 m | 0.204 m | ~1.8 m | ~15° |
+   | A, fronto-parallel | 0.67–1.15 | **0.50 / 0.49** | 0.144 | **1.62** | **16°** |
+   | B, per-bone depth solve | **1.00** | 0.23 / 0.19 | 0.100 | 1.73 | 23° |
+   | A-seeded + constraints | 0.84–1.04 | 0.52 / 0.58 | 0.136 | **0.73** | **65°** |
+   | same, 60-frame track | 0.51–1.13 | 0.33–0.64 | **0.182** | — | 53° |
+
+   **A is the only one that puts the person in the right place.** It forces every joint
+   onto one vertical plane at the feet's range, which is wrong about depth by construction
+   — and that same construction is what preserves the vertical structure. Its costs are
+   the bone lengths and a foot 0.26 m in the air, which is a forward foot with its depth
+   turned into height.
+
+   **B's failure is worth keeping.** Each bone was individually correct — ratio 1.00 across
+   the board — and the arm was impossible: 0.19 m from shoulder to wrist on a person whose
+   upper arm alone is 0.371 m, because a per-bone sign chosen with nothing holding the limb
+   together folds the elbow back through the shoulder.
+
+   **The reported win was an artefact of the metrics.** The A-seeded solve was written up
+   as the best of the three on bone ratio, arm span and hip separation. All three are
+   *relative*: a skeleton that sinks to the floor and folds at the hips satisfies every one
+   of them. It put a 1.95 m person's head at 0.73 m. The check that catches it — absolute
+   joint height against stature — was printed by the first version of route A and dropped
+   from the comparison table when the solver changed.
+
+   **The scale hypothesis is half right and is worth recording as a measurement.** Every
+   solver wanted a bigger person than the geometry allowed, pinning against whatever clamp
+   it was given. Sweeping the stature with everything else fixed puts the residual minimum
+   at **1.70 m** — this fleet's own calibration prior (§7c.19), so `stature_m`'s 1.95 m
+   reading for this subject is not independent evidence about him. At 1.70 m: residual
+   297 → 137 mm single-frame and 371 → 233 mm over the track, hip separation 0.136 → 0.171
+   against a 0.177 target, its across-frame spread 57 → 17 mm, and the fitted scale stops
+   sitting on the clamp. **The picture does not improve**: the head goes 0.73 → 1.02 m
+   against ~1.6. So 1.70 m fixes the skeleton's argument with itself and not the pose.
+
+   **Where this leaves it.** Bone lengths do not encode "the torso is upright" or "the head
+   is above the hips", so a constraint set made only of them can fold. A got the heights
+   right and the depths wrong; the solve that followed freed both and lost the half that
+   was already correct. The next version holds A's per-joint height and solves only depth
+   against the bone lengths. That is a different constraint structure, not a tuning pass,
+   and nothing here needs a model or a label that does not exist.
+
+   Prototypes are scratch, not in the tree. The subject frame, the four joint sets and the
+   renders are reproducible from `runs/hydranet_retail_person01/last.pt` plus
+   `runs/commission01/Kaohsiung-cam04.camera.json`.
+
+   **Addendum 2026-09-02: route A shipped behind a bone gate, and confidence cannot be
+   the gate.** Route A drove the demo figures for one afternoon (the user reverted the
+   look the same day; the capability stays behind `demo_video --posed-figures` and is
+   heads_video's default). Shipping it surfaced the occlusion failure the single-subject
+   comparison could not: a person whose lower body a counter hides lifts to metre-long
+   tubes, roughly one placement in ten on Kaohsiung-cam04's gif window (20 of 321 past
+   3 m, p99 90 m, max 7.6 km). Two measurements worth keeping:
+
+   * **Keypoint confidence does not separate the exploded lifts — it inverts.** Their
+     minimum limb confidence (p50 0.649) is HIGHER than the clean lifts' (0.481): the
+     pose head is confidently wrong about joints it cannot see, so no confidence
+     threshold exists that keeps the good and drops the bad.
+   * **The bones separate perfectly.** Coherent lifts top out at a 1.46 m longest edge;
+     exploded ones start past 3 m; the band between is empty on both README cameras.
+     `lift_fronto_parallel` therefore refuses any skeleton edge over `MAX_BONE_M = 1.5`
+     (`syncai_bev3d/figures.py`, numbers inline) and the figure stands instead. Same
+     family as §7.19's lesson: the check that works is external to the model being
+     checked.
+
+   **7.28 — colour flicker was fragmentation, and the fixes were swept before they
+   shipped (2026-09-03).** The person01 README cut flickered staff/customer colours,
+   and the measurement inverted the intuition: on Kaohsiung-cam04's 900 frames only
+   **5** verdicts genuinely flipped, against **66** warm-up pops (a figure appearing
+   green and turning blue at its sixth observation) and 33 tracks that never reached
+   a verdict -- all fragmentation (89 tracks, median life 12 frames, the §7.18 knot).
+   Three levers, each measured on recorded boxes before touching a render:
+
+   * **Staff-memory inheritance** (`Tracker(staff_memory_gap=15, staff_memory_iou=0.2)`):
+     a newborn overlapping a just-retired confirmed track's last box seeds its staff
+     evidence, one heir per donor. 15/0.2 read ZERO contamination across 15 decidable
+     donor/heir pairs; the wider 25/0.15 popped less but handed one person's evidence
+     to another and was rejected. Pops 66 -> 46.
+   * **The display verdict floor is the tracker's confirmation delay.** Figures draw at
+     3 hits, so deciding at 3 observations (`track_staff(min_observations=3)`) makes
+     the verdict exist at first appearance: pops 46 -> **0** on both cameras' rendered
+     tracks. Floor 4 measured WORSE than 6 (56 pops -- every track decided one frame
+     after appearing). Cost: the 3-obs median disagrees with the 6-obs one on 3 of 69
+     tracks and self-corrects, so no latch; events keep the floor of 6.
+   * **The crop-quality hypothesis was DROPPED**: gating staff probabilities on box
+     height (60/80 px) changed nothing. `staff_verdict` keeps only the NaN contract.
+
+   The 3D panel also carries the **live dwell field** now (`--no-heatmap` to disable):
+   `syncai_bev3d.heatmap`'s construction -- 0.25 m cells, occupancy-seconds, Gaussian
+   at the position noise, p99 scale top, walkable-clipped -- accumulating per frame,
+   replay-identical under `--workers`. `heatmap3d.py` renders the same field offline
+   for arbitrary windows, dwell or traffic (distinct tracks per cell).

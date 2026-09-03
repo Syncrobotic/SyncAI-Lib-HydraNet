@@ -442,9 +442,7 @@ def _draw_geometry(
     ]
     scr = [tuple(map(float, view.project(x, 0.0, z)[:2])) for x, z in corners_m]
     coeffs = _perspective_coeffs(scr, corners_px)
-    # NEAREST, not BILINEAR: this raster is a label map wearing colours, and interpolating
-    # across a class edge invents a colour that belongs to no class. Supersampling is what
-    # keeps the edge smooth, and it does it without inventing anything.
+    # NEAREST, not BILINEAR -- the module docstring's first bullet carries the argument.
     ground = Image.fromarray(src).transform(
         (w, h), Image.Transform.PERSPECTIVE, coeffs, Image.Resampling.NEAREST, fillcolor=bg
     )

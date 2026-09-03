@@ -9,11 +9,10 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import math
-import pathlib
 
 import pytest
 
+from _cameras import FULL_RES_CAM, FULL_RES_PLANE, FULL_RES_SIZE
 from syncai_hydranet.geometry.camera_json import (
     SCHEMA_VERSION,
     ZONE_KINDS,
@@ -21,16 +20,16 @@ from syncai_hydranet.geometry.camera_json import (
     Lens,
     Zone,
 )
-from syncai_hydranet.geometry.ground import Camera, GroundPlane
+from syncai_hydranet.geometry.ground import GroundPlane
 from syncai_hydranet.labels import IGNORE
 
 
 def a_camera_file() -> CameraFile:
     return CameraFile(
         camera_id="Tao-Hsin-cam03",
-        image_size_px=(1920, 1080),
-        camera=Camera(fx=1490.0, fy=1490.0, cx=960.0, cy=540.0),
-        plane=GroundPlane(height=2.38, pitch=math.radians(50.2)),
+        image_size_px=FULL_RES_SIZE,
+        camera=FULL_RES_CAM,
+        plane=FULL_RES_PLANE,
         lens=Lens(k1=-0.18, centre_px=(960.0, 540.0), radius_px=960.0),
         zones=(
             Zone("entrance", "entrance_line", ((-1.0, 2.0), (1.0, 2.0))),
@@ -140,25 +139,42 @@ def test_a_version_this_reader_does_not_know_is_still_refused(tmp_path):
 # ------------------------------------- which teacher produced these metres
 
 
-def test_a_v2_file_reads_as_teachers_not_recorded_rather_than_none_used():
-    """The 8 cameras commissioned before v3 must stay readable, and stay honest.
+def test_a_v2_file_reads_as_teachers_not_recorded_rather_than_none_used(tmp_path):
+    """A file written before v3 must stay readable, and stay honest.
 
     `READABLE_VERSIONS` is a claim that nothing a file of that version holds has changed
     meaning, so a v2 file has to keep loading. What it must not do is come back saying it
     used no teacher: it used one and did not write it down, and the two are different
     facts. `None` is "not recorded"; `{}` would be "recorded as none".
+
+    **The v2 payload is written here rather than borrowed from `runs/commission01`.** It
+    used to read the first shipped camera.json and assert its version was 2, which held
+    only while nothing legitimately re-wrote those files -- correcting their drifted
+    geometry on 2026-09-01 stamped them v3 and this test failed for a reason that had
+    nothing to do with v2 files. A schema fixture that a valid re-commissioning can break
+    was pinning the wrong thing.
     """
-    src = pathlib.Path(__file__).resolve().parents[1] / "runs" / "commission01"
-    v2_files = sorted(src.glob("*.camera.json"))
-    if not v2_files:
-        pytest.skip("no commissioned cameras in this checkout")
+    payload = {
+        "schema_version": 2,
+        "camera_id": "Test-cam01",
+        "image_size_px": [960, 540],
+        "camera": {"fx": 700.0, "fy": 700.0, "cx": 480.0, "cy": 270.0},
+        "plane": {"height": 2.49, "pitch": 0.8645, "roll": 0.0147},
+        "lens": None,
+        "zones": [],
+        "shelf_rois_px": [],
+        "false_positive_polygons_px": [],
+        "mask_files": {},
+        "mask_ignore": 255,
+        "plate_file": None,
+        "plate_sha256": None,
+        "commissioned_at": "2026-08-19",
+    }
+    assert "teachers" not in payload, "a v2 file is one written before the field existed"
+    path = tmp_path / "v2.camera.json"
+    path.write_text(json.dumps(payload))
 
-    raw = json.loads(v2_files[0].read_text())
-    assert raw["schema_version"] == 2, "this fixture is here to pin the OLD version"
-    assert "teachers" not in raw
-
-    loaded = CameraFile.load(v2_files[0])
-    assert loaded.teachers is None
+    assert CameraFile.load(path).teachers is None
 
 
 def test_teachers_survives_a_save_and_load_round_trip(tmp_path):
@@ -190,3 +206,40 @@ def test_the_calib_scan_carries_its_depth_model_into_the_camera_file():
     }
     assert _teachers_of({"provenance": {"depth_model": "m"}}) is None
     assert _teachers_of({}) is None
+
+
+# ------------------------------------------- the resolution and singularity gates
+
+
+def test_a_principal_point_in_the_outer_quarter_is_refused():
+    """The half-res trap, caught in the file: intrinsics fitted at 1920x1080 paired
+    with a 960x540 image_size_px put cx at the frame's right edge, and every consumer
+    that trusted the pair got metres, not an error."""
+    from syncai_hydranet.geometry.ground import Camera
+
+    broken = dataclasses.replace(
+        a_camera_file(), camera=Camera(fx=1490.0, fy=1490.0, cx=1720.0, cy=540.0)
+    )
+    with pytest.raises(ValueError, match="outer quarter"):
+        broken.validate()
+
+
+def test_a_k1_past_the_singularity_is_refused():
+    """k1 = -1.05 broke point mapping silently while undistort_image still looked
+    right -- load_person_boxes returned 0 boxes with no error anywhere. The file
+    refuses to carry such a value, whoever wrote it."""
+    broken = dataclasses.replace(
+        a_camera_file(), lens=Lens(k1=-1.05, centre_px=(960.0, 540.0), radius_px=960.0)
+    )
+    with pytest.raises(ValueError, match="singularity"):
+        broken.validate()
+
+
+def test_a_lens_radius_from_another_resolution_is_refused():
+    """radius_px is the normalisation k1's value is measured in; a half-res radius on
+    a full-res frame rescales what k1 means without changing a single pixel."""
+    broken = dataclasses.replace(
+        a_camera_file(), lens=Lens(k1=-0.18, centre_px=(960.0, 540.0), radius_px=300.0)
+    )
+    with pytest.raises(ValueError, match="half-diagonal"):
+        broken.validate()

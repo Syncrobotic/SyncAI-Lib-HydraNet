@@ -11,6 +11,7 @@ from PIL import Image
 
 from syncai_hydranet.data.datasets import SPLITS, build_dataset, resolve_split
 from syncai_hydranet.data.transforms import LetterboxResize, LetterboxScaleCrop
+from syncai_hydranet.engine.trainer import _build_datasets
 
 ADE_FLOOR, ADE_WALL = 4, 1  # ids from objectInfo150.txt
 SIZE = (128, 160)
@@ -174,3 +175,54 @@ def test_differently_nested_trees_fall_back_to_stem_matching(tmp_path):
     Image.fromarray(np.zeros((8, 8, 3), np.uint8)).save(img_dir / "nested" / "y.jpg")
     Image.fromarray(np.zeros((8, 8), np.uint8)).save(ann_dir / "y.png")
     assert len(_index_pairs(img_dir, ann_dir)) == 1
+
+
+# --- the config actually reaching the transform ---------------------------------------
+
+
+def test_data_augment_reaches_the_transform_the_trainer_builds(dataset_root):
+    """**The link nothing covered.** Mutation-tested 2026-09-01 by a peer session, which
+    severed `data.augment` between the config and the transform and watched 2,359 tests
+    pass. Eight tests cover the transform honouring a dict it is handed; none covered the
+    config being what hands it one, so every checkpoint could have trained unaugmented
+    under a config stating a policy, and the run's own `meta.json` would have recorded the
+    policy it did not follow.
+
+    A probe rather than an assertion about structure: it calls the trainer's own
+    `_build_datasets` and reads the value back off the object that came out. Asserting
+    that some function passes some argument would agree with a reimplementation of the
+    wiring rather than with the wiring -- which is the way the peer's first two fixes
+    failed before they built the real thing and looked at it.
+
+    `scale_range` is the carrier because it is unlike any default: `AUGMENT_DEFAULTS`
+    cannot produce (0.31, 0.37) by accident, so finding it proves it travelled.
+    """
+    marker = (0.31, 0.37)
+    dcfg = {
+        "datasets": [_cfg(dataset_root)],
+        "augment": {"scale_range": list(marker)},
+    }
+    train_sets, *_ = _build_datasets(dcfg, (64, 96))
+
+    found = [t.scale_range for t in train_sets[0].transform.ts if hasattr(t, "scale_range")]
+    assert found, (
+        "no transform in the built train set carries a scale_range at all; the "
+        "augmentation pipeline changed shape and this probe now checks nothing"
+    )
+    assert any(tuple(s) == pytest.approx(marker) for s in found), (
+        f"data.augment did not reach the transform: scale_range is {found}, not {marker}. "
+        "The config states an augmentation policy that training does not follow."
+    )
+
+
+def test_the_probe_would_notice_a_severed_link(dataset_root):
+    """The control for the probe above: a config with no `augment` must NOT read as the
+    marker. Without this, a probe that always found (0.31, 0.37) -- because it read a
+    constant rather than the config -- would pass the test above and prove nothing."""
+    train_sets, *_ = _build_datasets({"datasets": [_cfg(dataset_root)]}, (64, 96))
+    found = [t.scale_range for t in train_sets[0].transform.ts if hasattr(t, "scale_range")]
+    assert found, "same shape check as above"
+    assert not any(tuple(s) == pytest.approx((0.31, 0.37)) for s in found), (
+        "the default pipeline reports the marker value, so the probe cannot distinguish "
+        "a config that travelled from one that did not"
+    )

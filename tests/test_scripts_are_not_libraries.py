@@ -143,18 +143,23 @@ def test_the_measurement_still_finds_the_pairs_it_was_written_against():
 
 # ---------------------------------------------------------------- the same rule, `tools/`
 
-# Lower it when a pair is moved into `src/`; never raise it. The three that remain:
+# Lower it when a pair is moved into `src/`; never raise it. The two that remain:
 #
 #   footprints_from_masks -> zones_confirm    `_font`, `_plate`, `_to_px`, `PALETTE`
 #   service_zones         -> zones_confirm    `_font`
-#   heads_video           -> demo_video
 #
-# The first two are the ones with a name on them. `zones_confirm.py` is a confirm-sheet
-# renderer and three underscore-prefixed names in it are now the drawing convention every
-# commissioning sheet shares -- which makes them an interface, and an interface spelled
-# with a leading underscore is one nobody can change without breaking a caller they were
-# never told about.
-BASELINE_TOOL_PAIRS = 3
+# `zones_confirm.py` is a confirm-sheet renderer and three underscore-prefixed names in it
+# are now the drawing convention every commissioning sheet shares -- which makes them an
+# interface, and an interface spelled with a leading underscore is one nobody can change
+# without breaking a caller they were never told about.
+#
+# **`heads_video -> demo_video` left on 2026-09-02** and is what this counter is for. It
+# was ten names -- the track colours, the velocity constants, the `camera.json` geometry --
+# and the debt was not the import: it was that a CLI script had become the library, so
+# staff colouring existed in one front-end, frame-parallel rendering in the other, and the
+# sidecar `demo_gif` audits against was written by only one of them. They now both read
+# `syncai_bev3d.figures`.
+BASELINE_TOOL_PAIRS = 2
 
 
 def _tool_to_tool_imports() -> list[tuple[str, str]]:
@@ -188,8 +193,12 @@ def test_the_tools_measurement_still_finds_the_pairs_it_was_written_against():
     debt this test exists to remove. The `scripts/` sibling above holds `import x` on a
     real pair, and both directories run through the same `_sibling_imports`, so the form
     is still witnessed.
+
+    `heads_video -> demo_video` was pinned here until 2026-09-02 and is not replaced
+    either, for the same reason: it went into `syncai_bev3d.figures`, which is where a
+    pair pinned by this test is supposed to end up.
     """
     pairs = _tool_to_tool_imports()
     assert pairs, "the scan found no imports at all -- has tools/ moved?"
     assert ("footprints_from_masks.py", "zones_confirm") in pairs
-    assert ("heads_video.py", "demo_video") in pairs
+    assert ("service_zones.py", "zones_confirm") in pairs

@@ -326,25 +326,41 @@ def require_camera(
     )
 
 
-def track_staff(track) -> bool | None:
+def track_staff(track, min_observations: int = MIN_OBSERVATIONS) -> bool | None:
     """One verdict for one `analytics.tracker.Track`, from the scores it carries.
 
     The reduction lives here rather than as a property on `Track` so that `tracker.py`
     stays free of this module's crop geometry, minimum-observation rule and classifier --
     a track records the evidence, and the thing that knows what the evidence means says
     what it means.
+
+    ``min_observations`` exists for one caller class: a DISPLAY that draws a figure the
+    moment the tracker confirms it (3 hits) and colours undecided as customer. At the
+    default floor of 6 every such figure appears green and pops to its verdict three
+    frames later -- 46 visible colour pops on Kaohsiung-cam04's 900 frames. A floor
+    equal to the confirmation delay makes the verdict exist at first appearance: pops
+    measured 46 -> 0, at the cost of the 3-observation median disagreeing with the
+    6-observation one on 3 of 69 decidable tracks (4.3%), each of which self-corrects
+    as the median accumulates. Events and anything that ACTS on a verdict keep the
+    default.
     """
-    return staff_verdict(track.staff_scores)
+    return staff_verdict(track.staff_scores, min_observations)
 
 
-def staff_verdict(probabilities) -> bool | None:
+def staff_verdict(probabilities, min_observations: int = MIN_OBSERVATIONS) -> bool | None:
     """One decision for one person: `True` staff, `False` customer, `None` not enough.
 
     The median rather than the mean, because a track's tail can coast onto a neighbour
     (§7.18's two-stage measurement found exactly that on the longest Taichung-cam01
     tracks) and a handful of another person's crops should not move the answer.
+
+    NaN entries are quality refusals, not evidence: a producer that judged a crop too
+    small to read (see `MIN_CROP_H_PX`) records NaN so the score list stays aligned
+    with the track's frames, and NaN counts toward neither the median nor the
+    `MIN_OBSERVATIONS` floor.
     """
     p = np.asarray(list(probabilities), dtype=float)
-    if len(p) < MIN_OBSERVATIONS:
+    p = p[~np.isnan(p)]
+    if len(p) < min_observations:
         return None
     return bool(np.median(p) >= 0.5)

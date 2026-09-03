@@ -85,8 +85,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--min-hits", type=int, default=3)
     ap.add_argument("--max-age", type=int, default=5)
     ap.add_argument("--iou", type=float, default=0.3)
-    # Pose. Per camera, and the defaults are Taichung-cam01's corrected fit from
-    # measured on Taichung-cam01 -- right for that camera, an assumption for any other.
+    # Pose. Per camera, and the defaults are Taichung-cam01's corrected tile-grid fit --
+    # right for that camera, an assumption for any other.
     ap.add_argument("--camera-height", type=float, default=2.38, metavar="M")
     ap.add_argument("--pitch", type=float, default=50.2, metavar="DEG")
     # 70.4, not 55. The comment above says these defaults are Taichung-cam01's corrected

@@ -33,14 +33,9 @@ ANN_DIR = ROOT / "datasets/site30k_v1/annotations"
 IMG_DIR = ROOT / "datasets/site30k_v1/images"
 GOLD_MIN = 0.50
 POSE_MODEL = "usyd-community/vitpose-base-simple"
-# The revision this project's numbers were measured on, pinned rather than floating.
-# `from_pretrained` with no `revision=` resolves whatever `main` points at today, so an
-# upstream push silently changes what a teacher produces -- and for the models here that
-# means different masks, different boxes and different metres, under artefacts that look
-# identical. Taken from the local cache on 2026-08-28, i.e. the commit every measurement
-# already in PLAN was actually made with; bumping it is then a reviewed event with a
-# re-measure attached, which is what `.github/dependabot.yml` says about torch for the
-# same reason.
+# Pinned rather than floating, for the reason argued in full on
+# `syncai_bev3d/teachers/gdino.py`'s revision pin: an unpinned `from_pretrained`
+# silently changes what a teacher produces when upstream pushes.
 POSE_MODEL_REVISION = "a93ac0c67e0b7e2c55287d21d4c460c8f3c54d45"
 
 

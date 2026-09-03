@@ -22,15 +22,11 @@ from __future__ import annotations
 
 import json
 import math
+from dataclasses import replace
 from pathlib import Path
 
-import numpy as np
-from PIL import Image, ImageDraw
-
 from syncai_hydranet.geometry.camera_json import CameraFile, Lens
-from syncai_hydranet.geometry.ground import Camera, GroundPlane, ground_to_pixel
-
-from .plate_calibration import undistort_image
+from syncai_hydranet.geometry.ground import Camera, GroundPlane
 
 
 def _teachers_of(raw: dict) -> dict[str, str] | None:
@@ -97,71 +93,56 @@ def from_onboard_calib(path: str | Path) -> CameraFile:
     return out
 
 
-def render_metre_grid(
-    camera_file: CameraFile,
-    frame: Image.Image,
-    *,
-    extent_m: float = 8.0,
-    step_m: float = 1.0,
-    z_near_m: float = 0.3,
-) -> Image.Image:
-    """Draw the floor grid this calibration believes in, for a human to disbelieve.
+def regeometry_from_calib(camera_json: str | Path, calib: str | Path) -> CameraFile:
+    """Push a corrected calibration into a camera.json without losing what came after it.
 
-    Grid lines every `step_m` in floor metres, the x = 0 axis (straight ahead under the
-    camera) emphasised, and a range label where each metre line crosses it. What the
-    judge checks: do the lines land on the tile joints, is a known ~1 m object about one
-    cell, does the grid stay parallel to the fixtures it runs along.
+    **The pipeline was one-directional and this is the missing return leg.**
+    :func:`from_onboard_calib` writes a file carrying only what the scan measured, so
+    re-running it on a camera that has since been commissioned discards the later passes:
+    on Taichung-cam10 that is 13 mask files, 14 zones, 5 shelf ROIs and 3 false-positive
+    polygons. There was therefore no supported way to correct the geometry of a
+    commissioned camera, and on 2026-09-01 seven of the eight shipped cameras had drifted
+    without anything saying so -- Taichung-cam10 by 0.30 m, its camera.json still reading
+    2.87 m against a calib.json that had been re-fitted to 2.57 m, both stamped with the
+    same `commissioned_at`.
+
+    **Zones are in metres and therefore move with the geometry.** They are rescaled rather
+    than preserved: with pitch and roll unchanged, `pixel_to_ground` puts a floor pixel at
+    a distance proportional to the plane height, so multiplying every zone point by
+    `height_new / height_old` is exact, not an approximation. Everything in pixel space --
+    mask files, shelf ROIs, false-positive polygons -- is unaffected by a height change and
+    is carried across untouched.
+
+    **A pitch or roll change is refused.** That linearity is what makes the rescale exact,
+    and it does not hold when the plane's orientation moves: the zones would have to be
+    re-derived from the masks rather than scaled. Refusing is the honest answer, because a
+    scaled zone under a changed pitch is wrong in a way nothing downstream would notice.
     """
-    w, h = camera_file.image_size_px
-    if frame.size != (w, h):
-        frame = frame.resize((w, h), Image.Resampling.LANCZOS)
-    art = np.asarray(frame.convert("RGB"))
-    if camera_file.lens is not None:
-        art = undistort_image(art, camera_file.lens.k1)
-    img = Image.fromarray(art)
-    draw = ImageDraw.Draw(img, "RGBA")
-    cam, plane = camera_file.camera, camera_file.plane
+    existing = CameraFile.load(camera_json)
+    fresh = from_onboard_calib(calib)
 
-    def polyline(xs: np.ndarray, zs: np.ndarray, colour, width):
-        u, v, depth = ground_to_pixel(xs, zs, cam, plane)
-        ok = np.isfinite(u) & np.isfinite(v) & (depth > 0)
-        # Split at every invisible sample so a line never bridges the horizon.
-        run: list[tuple[float, float]] = []
-        for ui, vi, oki in zip(u, v, ok, strict=True):
-            if oki and -w <= ui <= 2 * w and -h <= vi <= 2 * h:
-                run.append((float(ui), float(vi)))
-            else:
-                if len(run) > 1:
-                    draw.line(run, fill=colour, width=width)
-                run = []
-        if len(run) > 1:
-            draw.line(run, fill=colour, width=width)
-
-    n = int(extent_m / step_m)
-    zs_dense = np.linspace(z_near_m, extent_m, 240)
-    xs_dense = np.linspace(-extent_m, extent_m, 480)
-    minor = (90, 220, 120, 160)
-    axis = (255, 210, 60, 220)
-    for i in range(-n, n + 1):
-        x = i * step_m
-        polyline(
-            np.full_like(zs_dense, x), zs_dense, axis if i == 0 else minor, 3 if i == 0 else 1
+    d_pitch = abs(math.degrees(fresh.plane.pitch - existing.plane.pitch))
+    d_roll = abs(math.degrees(fresh.plane.roll - existing.plane.roll))
+    if max(d_pitch, d_roll) > 0.05:
+        raise ValueError(
+            f"{existing.camera_id}: pitch moved {d_pitch:.2f} deg and roll {d_roll:.2f} deg. "
+            "The metre zones can only be rescaled while the plane's orientation holds; "
+            "re-derive them from the masks instead of scaling them."
         )
-    for j in range(1, n + 1):
-        z = j * step_m
-        polyline(xs_dense, np.full_like(xs_dense, z), minor, 1)
-        u, v, depth = ground_to_pixel(np.array([0.0]), np.array([z]), cam, plane)
-        if depth[0] > 0 and 0 <= u[0] < w and 0 <= v[0] < h:
-            draw.text(
-                (float(u[0]) + 4, float(v[0]) - 12), f"{z:g} m", fill=(255, 255, 255, 230)
-            )
 
-    stamp = (
-        f"{camera_file.camera_id}  h={plane.height:.2f} m  "
-        f"pitch={math.degrees(plane.pitch):.1f}\N{DEGREE SIGN}  "
-        f"roll={math.degrees(plane.roll):.1f}\N{DEGREE SIGN}  grid={step_m:g} m  "
-        f"(undistorted frame; scale from person-height prior -- judge, don't trust)"
+    ratio = fresh.plane.height / existing.plane.height
+    zones = tuple(
+        replace(z, points_m=tuple((x * ratio, z_m * ratio) for x, z_m in z.points_m))
+        for z in existing.zones
     )
-    draw.rectangle([0, h - 18, w, h], fill=(0, 0, 0, 170))
-    draw.text((6, h - 15), stamp, fill=(255, 255, 255, 240))
-    return img
+    return replace(
+        existing,
+        camera=fresh.camera,
+        plane=fresh.plane,
+        lens=fresh.lens,
+        plate_file=fresh.plate_file,
+        plate_sha256=fresh.plate_sha256,
+        commissioned_at=fresh.commissioned_at,
+        teachers=fresh.teachers,
+        zones=zones,
+    )

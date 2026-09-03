@@ -53,7 +53,7 @@ def test_a_flat_decay_would_not():
 
 
 def test_short_run_is_no_longer_dominated_by_the_initialisation():
-    """160 steps used to leave 45% of the random initialisation in the EMA."""
+    """160 steps used to leave 97% of the random initialisation in the EMA (0.9998^160)."""
     ema = ModelEMA(_model(0.0), DECAY, WARMUP)
     assert ema.residual_init_fraction(160) < 0.01
     assert ModelEMA(_model(0.0), DECAY, 0).residual_init_fraction(160) > 0.95
