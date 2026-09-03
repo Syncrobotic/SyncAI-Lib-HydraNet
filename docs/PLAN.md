@@ -2341,3 +2341,220 @@ something it does not support.
    at the position noise, p99 scale top, walkable-clipped -- accumulating per frame,
    replay-identical under `--workers`. `heatmap3d.py` renders the same field offline
    for arbitrary windows, dwell or traffic (distinct tracks per cell).
+
+31. **The shipped model was walked into three foreign venues — metro, mall, airport —
+   and the failure is a confidence slide, not a collapse.** 2026-09-03, seven public
+   fixed-camera clips (Taipei MRT platform day x2 + elevated night, UK shopping-centre
+   entrance + retail store, Hanoi terminal gate hall timelapse, LaGuardia apron) beside
+   a Taichung-cam01 in-domain control; person01 `last.pt` EMA at 1 fps sampling.
+   Apparatus and per-frame JSONs: `runs/domain_probe_20260903/` (probe + stats scripts
+   copied in), sources and caveats in `datasets/domain_probe_20260903/SOURCES.md`.
+
+   | clip | person/frame @0.15→0.30 | drop | median conf @0.30 |
+   |---|---|---|---|
+   | baseline_retail | 2.8 → 2.5 | **11%** | **0.66** |
+   | mall_store | 16.2 → 10.3 | 36% | 0.47 |
+   | metro_day1/2 | ~28 → ~16 | 40-46% | 0.40 |
+   | mall_entrance | 14.1 → 6.8 | 51% | 0.48 |
+   | airport_hall | 21.0 → 7.0 | 67% | 0.40 |
+   | airport_apron | 1.6 → 0.2 | 90% | 0.40 (n≈14) |
+
+   What that table is agreement with: no ground truth exists on these clips, so the
+   0.15-cut count is the model's own recall ceiling, not a measured recall. The
+   readable findings:
+
+   * **Out of domain the score distribution slides into the threshold band.** In
+     domain, the 0.15→0.30 cut costs 11%; in every foreign venue it costs 36-67%.
+     The §2.1 audit's lesson (62→112 people as the cut fell 0.35→0.15 on
+     Taichung-cam01) is 3-6x stronger abroad. A fixed 0.30 serving threshold is a
+     per-domain decision pretending to be a constant.
+   * **Advertising posters detect as people and never move.** The Zhongxiao Fuxing
+     cosmetics ad face reads person 0.30-0.39 from both cameras, every frame. A
+     static-box test (same spot ≥70% of frames) catches it — but on a metro platform
+     it also catches genuinely waiting passengers, so poster suppression cannot ship
+     as a bare stillness rule there; it needs the terrain head's wall class under the
+     box, and the ad face indeed sits on `wall` pixels, not `floor`.
+   * **Night + OSD text mints phantom `device`s**: 20 device hits across 25 frames of
+     an EMPTY IR platform, parked on the timestamp/watermark text —
+     the night-ghost pattern (14 false people on an empty IR frame, §7c) in a different class. Empty
+     frames stayed person-clean, which the night-ghost sweep predicted.
+   * **Terrain generalises by material, not by venue.** Airport granite and MRT
+     platform tile paint `floor` correctly (0.28/0.15 of pixels); the outdoor apron's
+     concrete reads mostly `wall` (0.82). `fixture` is ~0.00 in metro/airport against
+     0.44-0.51 in retail — platform screen doors and gate seating read `wall` — so
+     §7.19 service zones (floor beside fixture) would find NOTHING in a metro; zone
+     logic needs a per-venue fixture vocabulary before any non-retail deployment.
+   * **Person-seg smears under crowding**: 26% of mall-entrance pixels read `person`
+     with ~7 boxed people; masks bleed across neighbours and onto reflections. The
+     detection boxes stay usable; anything consuming the mask (blur, occupancy) is
+     what degrades.
+   * **The apron's people are a few pixels and effectively invisible** (0.2/frame at
+     0.30) — the same resolution wall SAM 3's product prompts hit at 352x240: no threshold
+     rescues a person the sensor gave 8 px to.
+
+   Verdict for the product story: detection survives venue transfer at reduced
+   confidence and needs a calibrated (or lowered) threshold per venue plus a
+   poster/static-FP gate; terrain's floor transfers; fixture vocabulary and the crowd
+   person-mask are the two heads that need venue work before metro/airport pilots.
+
+   **Addendum, same day — can these venues self-calibrate into a 3D scene?**
+   `fit_pose_from_people` over the probe's own gated boxes (`runs/domain_probe_20260903/
+   probe_calib.py`), control first: Taichung-cam01's boxes reproduce the known answer
+   (2.22 m / 39 deg at vfov 70.4, spread 0.045), so the apparatus is sound.
+
+   * **Metro (1,234 boxes, mezzanine + poster excluded by a y-cut — two floor levels
+     in one frame): interior fit**, 5.0-6.4 m / ~30 deg, spread 0.068-0.072, but height
+     moves 17% across vfov 60-80 (a deep scene, against retail's 2%) — vfov must be
+     pinned first, and the platform's tile grid offers the same pin cam01 used. Lens
+     is visibly barrel; k1 fit required. Verdict: 3D scene feasible; zones still
+     blocked on fixture vocabulary (screen doors read `wall`).
+   * **Mall entrance (444 boxes): the cleanest fit of the three** once the shop prior's
+     2.2 m floor is dropped — 1.9-2.1 m / 30-42 deg, spread 0.025-0.049, better than
+     the control. A doorway camera at head height. Spread is monotone in vfov (the
+     known trap), so vfov needs an external pin; scale rests on the 1.70 m prior as
+     fleet-standard. Shallow wedge of a world, heavy occlusion behind the first row.
+   * **Airport hall (110 boxes): non-convergent** — spread 0.12-0.14 (3x control),
+     height rides whichever prior bound it is given (3.0, then 4.0), pitch lands at a
+     physically absurd 51-73 deg for a near-horizontal view. Causes stack: true pitch
+     near zero is the method's degenerate direction, granite reflections double the
+     feet, timelapse blur, 20-40 m standoff. This is a verdict on the FOOTAGE (a
+     tripod at human height), not the venue — an actual ceiling-mounted airport camera
+     would resemble the metro case.
+
+   **Addendum 2, 2026-09-03 — the two feasible venues were BUILT.**
+   `runs/domain_probe_20260903/scenes/`: per-venue `camera.json` (passes `validate()`),
+   provenance sidecars, 1 m grid acceptance overlays, union-floor masks, BEV dwell
+   maps, scene renders and orbitable GLBs; build scripts archived beside them.
+
+   * **The tile-grid vfov pin REFUSED on the metro footage** — `fit_k1`'s sweep came
+     back flat (top-5 scores within 0.2%) with the burned-in VMS queue-zone lines
+     chroma-filtered out, and single-line curvature traces drowned in clutter. The
+     grout signal cam01 had is simply not in this footage (grazing angle + HEVC). So
+     both venues ship the fleet band instead: vfov 70.4 assumed, 60/80 band in
+     provenance, `lens: None`, scale on the 1.70 m person prior.
+   * **Acceptance held anyway, with an independent witness on the metro**: the 1 m
+     grid spans 1.6-1.8 platform tiles per cell against TRTC's 60 cm standard tile —
+     agreement to ~10%, inside the vfov band's spread. The mall grid agrees with
+     person heights to ~15%.
+   * **Both scenes are the first consumers of `stairs()` and `glass_panel()`**
+     (b3a64d3): the platform's half-height glazed screen-door run + hoarding +
+     mezzanine + connecting flight, the mall's two glass door leaves in a framed
+     vestibule. Captions separate measured (floor extents, door lines, people) from
+     convention (every height).
+   * **BEV dwell reads correctly**: metro heat sits in the queue band 1-3 m before
+     the door line with per-door hotspots; the two cells past the line are people
+     seen OVER the half-height doors (in-train/far-platform), a mix-in source any
+     half-height-PSD deployment will need a door-line clip for.
+
+   **Addendum 3, 2026-09-03 — stage-0 against the point-cloud->SpatialLM recipe, and
+   where Cosmos fits.** Researched on request; sources in the session log.
+
+   * SpatialLM (NeurIPS 2025): point cloud -> walls(endpoints+height)/doors/windows/
+     oriented boxes, fine-tuned 0.5-1B LLMs on 12,328 SYNTHETIC Kujiale interiors. Its
+     video front-end (MASt3R-SLAM) needs camera MOTION -- on a fixed CCTV it degrades
+     to single-frame metric depth, this fleet's measured weak link (DA-V2 1.45-1.6x,
+     white-wall collapse), and glass (the metro's key structure) is a point-cloud
+     front-end's worst case while our floor-edge door line sidesteps it. So it is not
+     a stage-0 replacement; it IS a candidate offline commissioning teacher for the
+     fixture/door vocabulary gap (screen doors read `wall`, metro zones = 0), refereed
+     by the floor bench and person-flow contradiction, never by its own benchmark --
+     the `column` lesson pre-registered against the residential->venue domain gap.
+   * Worth stealing regardless of the model: the structured layout DSL (walls as
+     endpoints+height) as the fixture head's target format -- scene3d hand-builds
+     exactly this today, and the probe scenes' three stair mistakes are what manual
+     structure reading costs.
+   * NVIDIA Cosmos 2.5 (Predict/Transfer/Reason) outputs no vfov/pose/metric layout:
+     it cannot directly sharpen stage-0. Indirect fits: Transfer2.5 as a
+     LICENCE-CLEAN night/IR synthetic engine over our own scene3d layouts (the LLVIP
+     non-commercial dead end, open item 4) and as fixture-vocabulary training data;
+     Reason2 as a zone/FP confirmation teacher for the 15-camera backlog. Sim2real
+     measured before trusted ("STUDIO A reads as a bathroom" is the prior).
+   * Cheap probes proposed: (1) SpatialLM1.1-Qwen-0.5B on MapAnything single-frame
+     point clouds for cam01 (anchored) + one metro frame, walls/doors projected back
+     through the calibrated camera vs our masks (~1 day); (2) Cosmos Transfer night
+     variants of one scene3d layout re-scored by the night-ghost sweep (days, heavy).
+
+   **Addendum 4, same day — the SpatialLM probe RAN, and the verdict is measured.**
+   Artifacts + environment record: `runs/domain_probe_20260903/spatiallm_probe/`.
+   Recipe as proposed: frame -> MapAnything (same pinned revision as
+   `map_anything_eval.py`) -> RANSAC z-up -> SpatialLM1.1-Qwen-0.5B.
+
+   * **The front-end reproduced its own indictment**: MapAnything read cam01 at
+     vfov 38.27 deg (the recorded 38.26 vs the tile grid's 70.4 — reproducibility
+     holds), and its cloud gives the store a **1.41 m ceiling**. Metro read 52.72 deg.
+   * **SpatialLM's residential prior OVERRIDES geometry silently**: on that 1.41 m
+     cloud it output twelve walls at a uniform **2.84 m** — accidentally nearer the
+     truth than its input, which is worse, not better: an instrument that corrects
+     its front-end invisibly masks front-end failure from every consumer. It also
+     invented 7 doors and rooms beyond the observed cloud, and read display tables
+     as desk/sofa/carpet (the Kujiale vocabulary, as predicted).
+   * **Glass fails again**: the platform screen-door line came back as a 6.48 m WALL;
+     the ad band as an 8.4 m `cupboard`. No door/window on the PSD.
+   * **k1 is a circular dependency the recipe does not solve**: the unmeasured metro
+     lens turned the platform into **78 micro-wall segments tracing the barrel
+     curve** — undistortion is a prerequisite, and undistortion is calibration.
+   * Cost record: ~18 s/scene inference after a 2-venv setup with three environment
+     deviations (Blackwell torch, flash-attn off, a segment_csr shim), all in the
+     probe README.
+
+   Verdict: the recipe is NOT a stage-0 replacement and, as shipped, not even the
+   fixture/door teacher hoped for — the usable imports remain the layout DSL and
+   the synthetic-data recipe (venue-specific scenes with our vocabulary), not the
+   weights. The Cosmos night probe stays queued.
+
+   **Addendum 5, same day — the Cosmos Transfer night probe RAN; the dial exists and
+   is bracketed.** Artifacts: `runs/domain_probe_20260903/cosmos_night_probe/`.
+   Edge-controlled Cosmos-Transfer2.5-2B over 93 frames of a populated cam01 clip,
+   ~4-5 min diffusion per chunk on this card.
+
+   * **Geometry preservation at edge weight 1.0 is exact where it matters**: layout,
+     signage and all three people survive so faithfully that person01 reads the
+     variant identically to the day input (person 3.0/frame at 0.667 median vs
+     3.0 at 0.670). Two working conclusions: the mechanism can carry our scenes,
+     and this first variant is NOT yet night data — an appearance shift the
+     detector cannot feel is no domain shift at all.
+   * **The texture cost is real**: re-imagined shelves lose merchandise detail,
+     boxed_stock 12.9 -> 5.3/frame (-59%). Edge control keeps outlines, not
+     products — depth/seg/multicontrol are untested and are where that fix lives.
+   * **v2 (weight 0.5, guidance 7, aggressive IR prompt) overshoots to a black
+     frame with one green IR hotspot** — atmosphere right, scene gone, 0
+     detections of anything. So the two runs bracket the knob; the sweet spot
+     (IR look AND surviving structure) needs a small sweep (~5 generations, about
+     an hour) plus a check against real IR frames from the fleet's own night
+     clips before any training decision.
+   * Environment potholes recorded in the probe README (three HF license gates
+     accepted by the user, Blackwell needs the cu130 extra, CUDA_HOME to the
+     venv's cu13 libs, a PyAV shim replacing decord's system-ffmpeg linkage).
+
+   Verdict so far: the licence-clean night engine is PLAUSIBLE and now cheap to
+   iterate; nothing is proven about training value until a swept variant both
+   looks like the fleet's real IR nights and moves the detector the way real
+   night does.
+
+   **Addendum 6, same day — the night sweep FOUND the sweet spot, against a real
+   IR reference.** `runs/domain_probe_20260903/cosmos_night_probe/` (sweep videos,
+   specs, sweep_results.json, comparison figures).
+
+   * **The fleet already had the ruler**: archive_20260816-1558 (23:58 local) is
+     genuine IR night — saturation 0.000, luma 129.6 — and the detector's real
+     empty-store night profile is the behavioural target: person ghosts
+     0.73/frame (one verified firing on a paper bag at a shelf foot — the
+     hanging-packets phenomenon reproduced on our own retail fleet), boxed_stock
+     0.0 (IR washes products to nothing), device 2.88.
+   * **A prompt written from what the real frame LOOKS like beat both movie-night
+     prompts**: all five configs land luma 124-130 / sat ~0.03 with all three
+     people kept at day confidence; the knob that moves is product wash-out,
+     boxed_stock 1.72 -> 0.92 -> ~0 as edge weight falls 1.0 -> 0.9 -> 0.8.
+   * **Winner D (weight 0.9, guidance 7)**: boxed_stock 0.03 vs real 0.0, device
+     3.42 vs 2.88, and the IR character matches by eye (washed packaging, soft
+     bloom on signage). Runner-up B (0.9/5) with the closest device count.
+   * **Residual unknown, stated**: no real night-with-people footage exists, so
+     whether real IR degrades person confidence (synthetic holds it at day level)
+     is uncheckable from here — a staged night visit or the veto-era clips would
+     answer it before any training decision.
+
+   Night-engine status: mechanism proven, look matched, behavioural profile
+   matched on empty-store axes, per-clip cost ~6 min. What remains before
+   training on it is volume (all 8 commissioned cameras x day variety), the
+   person-degradation unknown above, and an ablation showing a night-trained
+   head actually cuts the real ghosts.
