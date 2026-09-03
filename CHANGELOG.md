@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.4.0](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/compare/v0.3.0...v0.4.0) (2026-09-03)
+
+
+### Features
+
+* **bev3d:** the scene vocabulary gains stairs and glass ([b3a64d3](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/b3a64d3902cabeb5e57934d1653fdb5e712b1b7a))
+
+
+### Documentation
+
+* stage-0 measured against the SpatialLM recipe, Cosmos placed ([4261e2c](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/4261e2c40d82d37b68ce9791e52c436d94876f67))
+* the Cosmos night probe brackets the dial ([bab85c4](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/bab85c422128ef165057e9ffa166e46095153726))
+* the metro and mall probe venues are built as 3D scenes ([90f551c](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/90f551c10a787a6d1841d3df44c96b70629d8492))
+* the night sweep lands on D, judged against real fleet IR ([010eb1d](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/010eb1db8f5dbd2195995f17d7abcc57dbf13683))
+* the shipped model measured in metro, mall and airport venues ([a6bdfd6](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/a6bdfd6c47268cf76a859cc124b9156d9ebe5410))
+* the SpatialLM probe ran and measured its own answer ([5ebe13c](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/5ebe13ceb94734fa045a95d13057f9b56070ca86))
+* the three foreign venues asked to self-calibrate, and two answer ([94024dd](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/94024dd45a6275ac2d486735935591246ebc54cd))
+
+
+### CI
+
+* **release:** return release-please to the standard flow ([12e93b3](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/12e93b38f88792af44fbdfdc18a6a07c831bee46))
+
 ## [0.3.0](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/compare/v0.2.0...v0.3.0) (2026-09-03)
 
 
