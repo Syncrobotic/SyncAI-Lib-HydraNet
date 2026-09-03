@@ -2341,3 +2341,58 @@ something it does not support.
    at the position noise, p99 scale top, walkable-clipped -- accumulating per frame,
    replay-identical under `--workers`. `heatmap3d.py` renders the same field offline
    for arbitrary windows, dwell or traffic (distinct tracks per cell).
+
+31. **The shipped model was walked into three foreign venues — metro, mall, airport —
+   and the failure is a confidence slide, not a collapse.** 2026-09-03, seven public
+   fixed-camera clips (Taipei MRT platform day x2 + elevated night, UK shopping-centre
+   entrance + retail store, Hanoi terminal gate hall timelapse, LaGuardia apron) beside
+   a Taichung-cam01 in-domain control; person01 `last.pt` EMA at 1 fps sampling.
+   Apparatus and per-frame JSONs: `runs/domain_probe_20260903/` (probe + stats scripts
+   copied in), sources and caveats in `datasets/domain_probe_20260903/SOURCES.md`.
+
+   | clip | person/frame @0.15→0.30 | drop | median conf @0.30 |
+   |---|---|---|---|
+   | baseline_retail | 2.8 → 2.5 | **11%** | **0.66** |
+   | mall_store | 16.2 → 10.3 | 36% | 0.47 |
+   | metro_day1/2 | ~28 → ~16 | 40-46% | 0.40 |
+   | mall_entrance | 14.1 → 6.8 | 51% | 0.48 |
+   | airport_hall | 21.0 → 7.0 | 67% | 0.40 |
+   | airport_apron | 1.6 → 0.2 | 90% | 0.40 (n≈14) |
+
+   What that table is agreement with: no ground truth exists on these clips, so the
+   0.15-cut count is the model's own recall ceiling, not a measured recall. The
+   readable findings:
+
+   * **Out of domain the score distribution slides into the threshold band.** In
+     domain, the 0.15→0.30 cut costs 11%; in every foreign venue it costs 36-67%.
+     The §2.1 audit's lesson (62→112 people as the cut fell 0.35→0.15 on
+     Taichung-cam01) is 3-6x stronger abroad. A fixed 0.30 serving threshold is a
+     per-domain decision pretending to be a constant.
+   * **Advertising posters detect as people and never move.** The Zhongxiao Fuxing
+     cosmetics ad face reads person 0.30-0.39 from both cameras, every frame. A
+     static-box test (same spot ≥70% of frames) catches it — but on a metro platform
+     it also catches genuinely waiting passengers, so poster suppression cannot ship
+     as a bare stillness rule there; it needs the terrain head's wall class under the
+     box, and the ad face indeed sits on `wall` pixels, not `floor`.
+   * **Night + OSD text mints phantom `device`s**: 20 device hits across 25 frames of
+     an EMPTY IR platform, parked on the timestamp/watermark text —
+     the night-ghost pattern (14 false people on an empty IR frame, §7c) in a different class. Empty
+     frames stayed person-clean, which the night-ghost sweep predicted.
+   * **Terrain generalises by material, not by venue.** Airport granite and MRT
+     platform tile paint `floor` correctly (0.28/0.15 of pixels); the outdoor apron's
+     concrete reads mostly `wall` (0.82). `fixture` is ~0.00 in metro/airport against
+     0.44-0.51 in retail — platform screen doors and gate seating read `wall` — so
+     §7.19 service zones (floor beside fixture) would find NOTHING in a metro; zone
+     logic needs a per-venue fixture vocabulary before any non-retail deployment.
+   * **Person-seg smears under crowding**: 26% of mall-entrance pixels read `person`
+     with ~7 boxed people; masks bleed across neighbours and onto reflections. The
+     detection boxes stay usable; anything consuming the mask (blur, occupancy) is
+     what degrades.
+   * **The apron's people are a few pixels and effectively invisible** (0.2/frame at
+     0.30) — the same resolution wall SAM 3's product prompts hit at 352x240: no threshold
+     rescues a person the sensor gave 8 px to.
+
+   Verdict for the product story: detection survives venue transfer at reduced
+   confidence and needs a calibrated (or lowered) threshold per venue plus a
+   poster/static-FP gate; terrain's floor transfers; fixture vocabulary and the crowd
+   person-mask are the two heads that need venue work before metro/airport pilots.
