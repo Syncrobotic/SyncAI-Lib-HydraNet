@@ -532,6 +532,62 @@ def cabinet(width_m: float, depth_m: float, height_m: float, *, shelves: int = 3
 
 KICK_PLATE_M = 0.10  # the recess a shop fixture stands on, whatever its height
 
+RISER_M = 0.16  # building-code territory: risers land in 0.15-0.18 whatever the venue
+
+
+def stairs(
+    width_m: float, height_m: float, depth_m: float, *, steps: int | None = None
+) -> Mesh:
+    """A solid flight standing on y = 0, ascending toward +z, centred on x and z.
+
+    Terraced boxes rather than floating treads: from a commissioning viewpoint the flight
+    is read by its silhouette, and open risers render as a comb that reads as shelving.
+    `steps` defaults from the riser height, not from an even split, so a 4 m mezzanine
+    flight gets ~25 steps and a 3-step entrance podium stays a podium -- a flight drawn
+    with the wrong step count reads as the wrong scale even when its extents are measured.
+    """
+    for name, value in (("width_m", width_m), ("height_m", height_m), ("depth_m", depth_m)):
+        if value <= 0:
+            raise ValueError(f"{name} must be positive, got {value}")
+    n = steps if steps is not None else max(2, round(height_m / RISER_M))
+    if n < 1:
+        raise ValueError(f"steps must be at least 1, got {n}")
+    run = depth_m / n
+    parts = []
+    for i in range(n):
+        tread = box(width_m, height_m * (i + 1) / n, run)
+        parts.append((tread[0] + [0, 0, -depth_m / 2 + (i + 0.5) * run], tread[1]))
+    return _merge(*parts)
+
+
+def glass_panel(points, height_m: float, *, frame_t: float = 0.05) -> Mesh:
+    """A glazed run along a polyline of (x, z) metres: thin panes in a slim frame.
+
+    Geometry only -- translucency is the render item's alpha, and the palette key
+    (``glass``) is the caller's to state. Separate from `wall()` because a platform
+    screen door or a shopfront drawn at wall thickness reads as masonry and hides
+    everything behind it in every orbit view, which defeats the reason it was modelled.
+    """
+    pts = np.asarray(points, float)
+    if pts.ndim != 2 or pts.shape[1] != 2 or len(pts) < 2:
+        raise ValueError(f"points must be (N>=2, 2) of (x, z), got shape {pts.shape}")
+    parts = []
+    for a, b in itertools.pairwise(pts):
+        d = b - a
+        length = float(np.hypot(*d))
+        if length < 1e-9:
+            continue
+        nrm = np.array([-d[1], d[0]]) / length * 0.01  # 2 cm pane
+        parts.append(extrude([a + nrm, b + nrm, b - nrm, a - nrm], height_m))
+        # top and bottom rails, slightly proud of the pane, so the run reads as built
+        rail_n = np.array([-d[1], d[0]]) / length * (frame_t / 2)
+        for y0, t in ((0.0, frame_t), (height_m - frame_t, frame_t)):
+            rail = extrude([a + rail_n, b + rail_n, b - rail_n, a - rail_n], t)
+            parts.append((rail[0] + [0, y0, 0], rail[1]))
+    if not parts:
+        raise ValueError("every glass segment had zero length")
+    return _merge(*parts)
+
 
 def shelf_levels(height_m: float, *, pitch_m: float = 0.32) -> list[float]:
     """The heights `shelving` puts its shelf surfaces at, feet at y = 0.
