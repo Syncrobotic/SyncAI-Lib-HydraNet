@@ -2473,3 +2473,31 @@ something it does not support.
      point clouds for cam01 (anchored) + one metro frame, walls/doors projected back
      through the calibrated camera vs our masks (~1 day); (2) Cosmos Transfer night
      variants of one scene3d layout re-scored by the night-ghost sweep (days, heavy).
+
+   **Addendum 4, same day — the SpatialLM probe RAN, and the verdict is measured.**
+   Artifacts + environment record: `runs/domain_probe_20260903/spatiallm_probe/`.
+   Recipe as proposed: frame -> MapAnything (same pinned revision as
+   `map_anything_eval.py`) -> RANSAC z-up -> SpatialLM1.1-Qwen-0.5B.
+
+   * **The front-end reproduced its own indictment**: MapAnything read cam01 at
+     vfov 38.27 deg (the recorded 38.26 vs the tile grid's 70.4 — reproducibility
+     holds), and its cloud gives the store a **1.41 m ceiling**. Metro read 52.72 deg.
+   * **SpatialLM's residential prior OVERRIDES geometry silently**: on that 1.41 m
+     cloud it output twelve walls at a uniform **2.84 m** — accidentally nearer the
+     truth than its input, which is worse, not better: an instrument that corrects
+     its front-end invisibly masks front-end failure from every consumer. It also
+     invented 7 doors and rooms beyond the observed cloud, and read display tables
+     as desk/sofa/carpet (the Kujiale vocabulary, as predicted).
+   * **Glass fails again**: the platform screen-door line came back as a 6.48 m WALL;
+     the ad band as an 8.4 m `cupboard`. No door/window on the PSD.
+   * **k1 is a circular dependency the recipe does not solve**: the unmeasured metro
+     lens turned the platform into **78 micro-wall segments tracing the barrel
+     curve** — undistortion is a prerequisite, and undistortion is calibration.
+   * Cost record: ~18 s/scene inference after a 2-venv setup with three environment
+     deviations (Blackwell torch, flash-attn off, a segment_csr shim), all in the
+     probe README.
+
+   Verdict: the recipe is NOT a stage-0 replacement and, as shipped, not even the
+   fixture/door teacher hoped for — the usable imports remain the layout DSL and
+   the synthetic-data recipe (venue-specific scenes with our vocabulary), not the
+   weights. The Cosmos night probe stays queued.
