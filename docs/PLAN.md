@@ -2501,3 +2501,32 @@ something it does not support.
    fixture/door teacher hoped for — the usable imports remain the layout DSL and
    the synthetic-data recipe (venue-specific scenes with our vocabulary), not the
    weights. The Cosmos night probe stays queued.
+
+   **Addendum 5, same day — the Cosmos Transfer night probe RAN; the dial exists and
+   is bracketed.** Artifacts: `runs/domain_probe_20260903/cosmos_night_probe/`.
+   Edge-controlled Cosmos-Transfer2.5-2B over 93 frames of a populated cam01 clip,
+   ~4-5 min diffusion per chunk on this card.
+
+   * **Geometry preservation at edge weight 1.0 is exact where it matters**: layout,
+     signage and all three people survive so faithfully that person01 reads the
+     variant identically to the day input (person 3.0/frame at 0.667 median vs
+     3.0 at 0.670). Two working conclusions: the mechanism can carry our scenes,
+     and this first variant is NOT yet night data — an appearance shift the
+     detector cannot feel is no domain shift at all.
+   * **The texture cost is real**: re-imagined shelves lose merchandise detail,
+     boxed_stock 12.9 -> 5.3/frame (-59%). Edge control keeps outlines, not
+     products — depth/seg/multicontrol are untested and are where that fix lives.
+   * **v2 (weight 0.5, guidance 7, aggressive IR prompt) overshoots to a black
+     frame with one green IR hotspot** — atmosphere right, scene gone, 0
+     detections of anything. So the two runs bracket the knob; the sweet spot
+     (IR look AND surviving structure) needs a small sweep (~5 generations, about
+     an hour) plus a check against real IR frames from the fleet's own night
+     clips before any training decision.
+   * Environment potholes recorded in the probe README (three HF license gates
+     accepted by the user, Blackwell needs the cu130 extra, CUDA_HOME to the
+     venv's cu13 libs, a PyAV shim replacing decord's system-ffmpeg linkage).
+
+   Verdict so far: the licence-clean night engine is PLAUSIBLE and now cheap to
+   iterate; nothing is proven about training value until a swept variant both
+   looks like the fleet's real IR nights and moves the detector the way real
+   night does.
