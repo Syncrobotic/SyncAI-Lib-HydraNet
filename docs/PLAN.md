@@ -2530,3 +2530,31 @@ something it does not support.
    iterate; nothing is proven about training value until a swept variant both
    looks like the fleet's real IR nights and moves the detector the way real
    night does.
+
+   **Addendum 6, same day — the night sweep FOUND the sweet spot, against a real
+   IR reference.** `runs/domain_probe_20260903/cosmos_night_probe/` (sweep videos,
+   specs, sweep_results.json, comparison figures).
+
+   * **The fleet already had the ruler**: archive_20260816-1558 (23:58 local) is
+     genuine IR night — saturation 0.000, luma 129.6 — and the detector's real
+     empty-store night profile is the behavioural target: person ghosts
+     0.73/frame (one verified firing on a paper bag at a shelf foot — the
+     hanging-packets phenomenon reproduced on our own retail fleet), boxed_stock
+     0.0 (IR washes products to nothing), device 2.88.
+   * **A prompt written from what the real frame LOOKS like beat both movie-night
+     prompts**: all five configs land luma 124-130 / sat ~0.03 with all three
+     people kept at day confidence; the knob that moves is product wash-out,
+     boxed_stock 1.72 -> 0.92 -> ~0 as edge weight falls 1.0 -> 0.9 -> 0.8.
+   * **Winner D (weight 0.9, guidance 7)**: boxed_stock 0.03 vs real 0.0, device
+     3.42 vs 2.88, and the IR character matches by eye (washed packaging, soft
+     bloom on signage). Runner-up B (0.9/5) with the closest device count.
+   * **Residual unknown, stated**: no real night-with-people footage exists, so
+     whether real IR degrades person confidence (synthetic holds it at day level)
+     is uncheckable from here — a staged night visit or the veto-era clips would
+     answer it before any training decision.
+
+   Night-engine status: mechanism proven, look matched, behavioural profile
+   matched on empty-store axes, per-clip cost ~6 min. What remains before
+   training on it is volume (all 8 commissioned cameras x day variety), the
+   person-degradation unknown above, and an ablation showing a night-trained
+   head actually cuts the real ghosts.
