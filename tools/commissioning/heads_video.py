@@ -205,7 +205,10 @@ def _positions_from_boxes(boxes_all, cf, args, bounds):
     frame. Building it a second way would let the record and the picture disagree, which
     is the failure the sidecar exists to prevent.
     """
-    tracker = Tracker()
+    # staff-memory on in BOTH the render and its replay, or a chunked render's
+    # colours diverge from a single-process one. 15/0.2 measured 2026-09-03:
+    # warm-up colour pops 66->46, zero contamination in 15 decidable pairs.
+    tracker = Tracker(staff_memory_gap=15, staff_memory_iou=0.2)
     state: dict = {"history": {}, "last_heading": {}, "smoothed": {}, "statures": {}}
     vel_window = max(1, round(VEL_WINDOW_S * args.fps))
     out = []
@@ -600,7 +603,10 @@ def main() -> int:
         stdin=subprocess.PIPE,
     )  # fmt: skip
 
-    tracker = Tracker()
+    # staff-memory on in BOTH the render and its replay, or a chunked render's
+    # colours diverge from a single-process one. 15/0.2 measured 2026-09-03:
+    # warm-up colour pops 66->46, zero contamination in 15 decidable pairs.
+    tracker = Tracker(staff_memory_gap=15, staff_memory_iou=0.2)
     tmp = ROOT / f"assets/dev/_heads_{camera}_{os.getpid()}.png"
     crop = None
     seq_state: dict = {"history": {}, "last_heading": {}, "smoothed": {}, "statures": {}}

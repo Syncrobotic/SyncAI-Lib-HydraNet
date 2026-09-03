@@ -343,8 +343,14 @@ def staff_verdict(probabilities) -> bool | None:
     The median rather than the mean, because a track's tail can coast onto a neighbour
     (§7.18's two-stage measurement found exactly that on the longest Taichung-cam01
     tracks) and a handful of another person's crops should not move the answer.
+
+    NaN entries are quality refusals, not evidence: a producer that judged a crop too
+    small to read (see `MIN_CROP_H_PX`) records NaN so the score list stays aligned
+    with the track's frames, and NaN counts toward neither the median nor the
+    `MIN_OBSERVATIONS` floor.
     """
     p = np.asarray(list(probabilities), dtype=float)
+    p = p[~np.isnan(p)]
     if len(p) < MIN_OBSERVATIONS:
         return None
     return bool(np.median(p) >= 0.5)

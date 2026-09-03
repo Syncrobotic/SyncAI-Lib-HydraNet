@@ -337,7 +337,10 @@ def _render_in_chunks(args, camera, clip, cf, bounds, staff_model) -> int:
     # The sidecar and summary come from replaying the records through the same
     # `track_states` the workers ran -- one input, one function, so the record cannot
     # disagree with the picture.
-    tracker = Tracker()
+    # staff-memory on in BOTH the render and its replay, or a chunked render's
+    # colours diverge from a single-process one. 15/0.2 measured 2026-09-03:
+    # warm-up colour pops 66->46, zero contamination in 15 decidable pairs.
+    tracker = Tracker(staff_memory_gap=15, staff_memory_iou=0.2)
     state: dict = {
         "smoothed": {},
         "statures": {},
@@ -594,7 +597,10 @@ def main() -> int:
         stdin=subprocess.PIPE,
     )  # fmt: skip
 
-    tracker = Tracker()
+    # staff-memory on in BOTH the render and its replay, or a chunked render's
+    # colours diverge from a single-process one. 15/0.2 measured 2026-09-03:
+    # warm-up colour pops 66->46, zero contamination in 15 decidable pairs.
+    tracker = Tracker(staff_memory_gap=15, staff_memory_iou=0.2)
     # frame 0 can never show a track -- the tracker confirms at 3 hits -- so the
     # frame-check samples land where there is something to check
     checks = {args.frames // 8, args.frames // 2, args.frames - 1}
