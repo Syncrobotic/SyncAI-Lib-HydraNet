@@ -1,5 +1,85 @@
 # Changelog
 
+## [0.3.0](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/compare/v0.2.0...v0.3.0) (2026-09-03)
+
+
+### Features
+
+* **analytics:** a newborn track inherits a just-dead neighbour's staff evidence ([b61e3bf](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/b61e3bff0f9184ee31dd1ca67f09a431d95b296b))
+* **assets:** the README figures carry the live dwell field, popless ([cb26eb5](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/cb26eb5978a38def2b618b6ee5fae9e90cdc18e7))
+* **assets:** the README figures colour with staff memory ([b2230f9](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/b2230f9c57e93baec9d544e52a47c450feb15636))
+* **assets:** the README figures render with person01, and quote its metres ([72a44ae](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/72a44ae78edbc210368f3810caa7ac690c153b54))
+* **assets:** the README figures show what each person is doing ([591b352](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/591b352c1b3b8700cd827e5c74773874601b53cd))
+* **commissioning:** a dwell/traffic heatmap on the commissioned scene's floor ([00199c0](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/00199c0f0d5f29f2bab554182018169de970b8ab))
+* **commissioning:** the demo's figures show what the person is doing ([d2b26e8](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/d2b26e8b992be86e78bca64cf21db60e6515aa37))
+* **commissioning:** the dwell field lives on the demo's floor, and figures wear their colour from frame one ([ed0ba6e](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/ed0ba6e770de6dd2c88538ab61933832e496f481))
+* **commissioning:** the L1 figure shows what the person is doing ([ff93b20](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/ff93b2001d2e0173c1f69b09411b84f49f62eb4a))
+* **geometry:** an equidistant lens model with no pole inside the frame ([c28f362](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/c28f362408069f29c9f45a491d28699f8426d5e7))
+* **geometry:** camera.json refuses the resolution and singularity traps ([652ddf4](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/652ddf4ca4907921add09f1de87afb7f18adb6a9))
+* **serving:** a uint8 input contract, and the target it was being scored against ([7fa9a94](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/7fa9a94db4d81622a6cd4cc927a4f9967f73f94c))
+* **shipped:** name the run once, and make "which checkpoint" a question with a head ([b204593](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/b204593bff38b62ee2150525aafce74654ca217a))
+* **shipped:** person01 is the run the tools ship ([9ab0aec](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/9ab0aec7e5f67fd4539be095e098f7a20b22e035))
+
+
+### Fixes
+
+* **bench:** the end-to-end figure never copied the outputs back ([69ede66](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/69ede6649edce6ca5a5e3cca0fbaa1f2daf07e45))
+* **bench:** the printed target said 96x15 beside a constant that is 96x5 ([1cf1121](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/1cf11212d8c95835896a35a20c576d069d61507e))
+* **bev3d:** fit_k1 refuses a range that reaches the model's singularity ([9bfe00d](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/9bfe00dfc2233ce5e026a663b1f410f6288e80eb))
+* **bev3d:** gate person boxes on the frame the detector saw, not the undistorted one ([4c8566d](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/4c8566da4de7b8087ecf899255645ce902cee2db))
+* **commissioning:** heads_video reads the measured constants, not their old values ([322aeee](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/322aeee35d3c78071c563dcb72888aab51278c25))
+* **commissioning:** heads_video tests the box centre against the FP polygons ([bfb68ee](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/bfb68ee88c54890d77b2e7ac5a62881e02cc883d))
+* **commissioning:** heads_video writes its own record, and can colour staff ([df95b2b](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/df95b2ba53b2dbe2ad9c74bf094ec68234730701))
+* **commissioning:** heads_video's figure key partitions the way its colours do ([759c7cd](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/759c7cd6dc2c5a284e33cdf628001f6253f63fe8))
+* **data:** the crop branch drops the skeleton with its box ([1452791](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/1452791b5e564ec4cb89d2ddea6f708dbd84f28b))
+* **figures:** an exploded skeleton is refused by its own bones ([871f512](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/871f512eaa4a15e8b6baea322f1cc6f6f35aa623))
+* **figures:** the staff verdict is passed in, not imported ([e4834d9](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/e4834d9c0ca71f0e01002f7fa15b5c5d0f55aed1))
+* **meshes:** a measured limb of zero length killed a 900-frame render ([2c359d2](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/2c359d2a8bd68845ab42251237bca205b2a32c72))
+* **meshes:** the head goes on the spine, not toward the nose ([754cd4f](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/754cd4fbe3fb6c41d86a7265d395f6c6a8050b80))
+* **meshes:** the posed figure had its head buried in its shoulders ([b67ae84](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/b67ae84ee56727d9a92d8e82a55e9feb476a035b))
+* **runmeta:** the selection report could not see a dataset-qualified head ([2387ef6](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/2387ef62777e99c6d25662c24bc95213cef2a39c))
+* **scripts:** resplit's refusal says what it does, and does what it says ([8e6ca07](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/8e6ca077cf15ec1e24498b78a353f544ec85f439))
+* **scripts:** the campaign's progress log gets its wire ([be8091b](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/be8091bf60ceb4f0375662f1273ddf6d337dee21))
+* **site30k:** --calib-root stopped at the first of two readers ([759d4bc](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/759d4bc31f4b6e0274dc3059148cdd900fdfbad7))
+* **site30k:** masks_pass could only commission a camera someone else had already built ([d44b0a1](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/d44b0a12e36bf969473f7488cf20566d55933537))
+
+
+### Performance
+
+* **commissioning:** demo_video renders in parallel, with the track state replayed ([22515ab](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/22515ab4257fd4dc28b9054f857e83a52591be7f))
+* **commissioning:** render the frames in parallel, with the track state replayed ([5e107f6](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/5e107f676dad088e0d56b7d3a2623c5ba5a03cdd))
+* **meshes:** the shop's normals were recomputed on all 900 frames ([087b088](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/087b0887d5978b75fc19dbd734cb6a85d5fdfd51))
+
+
+### Refactoring
+
+* **bev3d:** the two functions nothing calls leave the tree ([5c209c7](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/5c209c79bd087679f3e86f0e0cecb7286b9af1e4))
+* **cli:** infer_video imports the class-name resolver it was reimplementing ([137b44f](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/137b44fab868307c9a51cbc9b446f832f82c67b6))
+* **figures:** the sequential track-state loop has one home ([a79d372](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/a79d372fb92faa7b21eb6c18a07c38058f6733ec))
+* **figures:** the shared render code leaves the CLI script it lived in ([e17d0cd](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/e17d0cda74ed81abe19777f2d0a5cfaa446be4bf))
+* **models:** the FCOS level flatten has one in-model home ([e346f49](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/e346f49d2788a8bb64b6971cad86b58a128f0dae))
+* **scripts:** two hand-rolled normalisations go through the shared ones ([dd8b5a6](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/dd8b5a6bfc2e9a49b281263b02b388c650d13545))
+
+
+### Documentation
+
+* **contributing:** exports/ is named as the deployment surface it already is ([7195581](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/71955811f2f28069258942f2aac48cdfa17d0adc))
+* **figures:** seven render-side comments catch up to the code ([1cad87e](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/1cad87e91a01caff24bb350b460f425836b81a61))
+* **hydranet:** sixteen comments catch up to the code they describe ([c36cf0f](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/c36cf0fddc37c4d34d2ce8a9e964ba05f1478931))
+* **plan:** person01 answers item 20 -- the site person boxes help every head ([f48527e](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/f48527ea851119517a13b143d1e214d5561d056c))
+* **plan:** person01's selection metric was decided in the config and never written back ([083a2d6](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/083a2d698d87d45e89943d9b86bb4fa6156e6a16))
+* **plan:** the lift's occlusion failure and its bone gate join 7c.30 ([7161df6](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/7161df6eac52957d7b74ba02040226d9b7e445b3))
+* **plan:** the mesh can be driven by the pose head, and the metrics that said it worked could not see it fold ([5ad572b](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/5ad572bed44466b4a827873d308a9e17d49836af))
+* **plan:** the serving target is bound by the upload, not the model ([f8181b0](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/f8181b08a04b653503aa2b3668f47ffbd1901bf3))
+* **plan:** the stage-0 backlog is 15 selling-floor cameras, counted ([4d4fd12](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/4d4fd12eef2053b1043e2810d5e92ded4dbae884))
+* **plan:** the throughput figure was measured against neighbours, not against the card ([ebeadbf](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/ebeadbf9cdad7b8b1f5a6b1d508ecc48e090a634))
+* **plan:** the tree's best terrain checkpoint is not the one anything points at ([9022373](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/9022373e6526d422cb5aad85850505b225773b33))
+* **readme:** the retail configs train three heads, not two ([1322c00](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/1322c00ff0b96ece3992bb24ab40adcfd97bf2d5))
+* **scripts:** four docstrings stop promising what the code does not do ([82e80b7](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/82e80b78171c30d426e4a1580e8999e42707e9ef))
+* the dwell field and the popless colours reach the documents ([6a0dd8f](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/6a0dd8fac518063354476f0dc952347fac7d4095))
+* three duplicated explanations get one canonical home each ([d89649d](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/d89649d040b9dd394d104814e992ed66b1e969f3))
+* **tools:** the README catches up to the twenty tools that exist ([59529b8](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/59529b843c82c899c90aee7d2ee9d60a5d510474))
+
 ## [0.2.0](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/compare/v0.1.0...v0.2.0) (2026-08-31)
 
 
