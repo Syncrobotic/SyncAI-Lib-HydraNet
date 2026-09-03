@@ -26,6 +26,13 @@ import math
 import numpy as np
 import pytest
 
+from _cameras import (
+    FULL_RES_CAM,
+    FULL_RES_PLANE,
+    HALF_RES_CAM,
+    HALF_RES_PLANE,
+    HALF_RES_SIZE,
+)
 from syncai_hydranet.analytics.tracker import Track
 from syncai_hydranet.analytics.world import (
     BASES,
@@ -37,17 +44,15 @@ from syncai_hydranet.analytics.world import (
 )
 from syncai_hydranet.geometry.camera_json import CameraFile, Lens
 from syncai_hydranet.geometry.ground import (
-    Camera,
     GroundPlane,
     ground_to_pixel,
     pixel_to_ground,
     undistort_points,
 )
 
-# The measured store mount: height 2.38 m, pitch 50.2 deg -- the pose `hm3d_cctv` renders
-# at and the one docs/PLAN.md quotes, so a metre here is the same metre as everywhere else.
-CAM = Camera(fx=1490.0, fy=1490.0, cx=960.0, cy=540.0)
-PLANE = GroundPlane(height=2.38, pitch=math.radians(50.2))
+# The measured store mount and the half-res commissioning shape both live in _cameras.
+CAM = FULL_RES_CAM
+PLANE = FULL_RES_PLANE
 
 
 def a_camera_file(camera_id: str = "Tao-Hsin-cam03", lens: Lens | None = None) -> CameraFile:
@@ -220,9 +225,9 @@ def _half_res_camera_file() -> CameraFile:
     """Taichung-cam01's real shape: intrinsics fitted on 960x540, clips decode at 1920x1080."""
     return CameraFile(
         camera_id="Taichung-cam01",
-        image_size_px=(960, 540),
-        camera=Camera(fx=382.7, fy=382.7, cx=480.0, cy=270.0),
-        plane=GroundPlane(height=2.49, pitch=math.radians(49.5)),
+        image_size_px=HALF_RES_SIZE,
+        camera=HALF_RES_CAM,
+        plane=HALF_RES_PLANE,
     )
 
 

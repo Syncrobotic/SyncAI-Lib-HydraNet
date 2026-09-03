@@ -132,8 +132,9 @@ class HydraNet(nn.Module):
         registered modules rather than owning them, which is what keeps `det_head.*` and
         `seg_heads.*` as the state_dict keys every checkpoint written so far uses.
 
-        Segmentation first, then detection. The order reaches the loss balancer, which
-        stacks the terms it is given, so it is part of the arithmetic and not cosmetic.
+        Segmentation, then depth, then detection, then pose. The order reaches the loss
+        balancer, which stacks the terms it is given, so it is part of the arithmetic
+        and not cosmetic.
         """
         heads: list[Head] = [
             SegmentationHead(name, self.seg_heads[name], self.seg_losses[name])

@@ -1,14 +1,16 @@
 """SyncAI-Lib-HydraNet: multi-head perception network for fixed store CCTV.
 
-A single backbone and BiFPN neck feed three lightweight heads that all run in one
-forward pass:
+A single backbone and neck (BiFPN or FPN, per config) feed four lightweight head
+families that all run in one forward pass:
 
-1. Traversability segmentation: is this floor free space?
-2. Terrain segmentation: what is the surface made of?
+1. Segmentation: terrain / traversability, semantic FPN.
+2. Monocular depth: defined here; the retail-security configs do not name it.
 3. Object detection: FCOS, anchor-free.
+4. Pose: 17 COCO keypoint heatmaps at P3, decoded inside the detection boxes.
 
-The shared trunk holds ~84% of the parameters, so adding a fourth head costs only a
-few percent more compute while reusing everything already paid for.
+Each config trains the subset of heads it names. The shared trunk holds most of the
+parameters, so another head costs only a few percent more compute while reusing
+everything already paid for.
 """
 
 from .config import Config, load_config

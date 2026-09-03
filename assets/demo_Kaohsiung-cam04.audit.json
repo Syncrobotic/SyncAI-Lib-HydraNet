@@ -1,11 +1,11 @@
 {
  "camera": "Kaohsiung-cam04",
  "gif": "demo_Kaohsiung-cam04.gif",
- "render": "demo_Kaohsiung-cam04_20260831-110316.mp4",
+ "render": "demo_Kaohsiung-cam04_20260903-101716.mp4",
  "source_clip": "archive_20260816-112757_20260816-113301.mp4",
  "render_args": {
   "camera": "Kaohsiung-cam04",
-  "clip": "datasets/studioa_clips/Kaohsiung-cam04/archive_20260816-112757_20260816-113301.mp4",
+  "clip": null,
   "frames": 900,
   "fps": 5.0,
   "checkpoint": "last.pt",
@@ -13,7 +13,14 @@
   "metre_scale": 1.0,
   "no_blur": false,
   "staff_colours": "runs/staff_model01/model_Kaohsiung-cam04.json",
-  "staff_min_accuracy": 0.9
+  "staff_min_accuracy": 0.9,
+  "posed_figures": false,
+  "no_heatmap": false,
+  "workers": 6,
+  "chunk": null,
+  "chunk_out": null,
+  "records": null,
+  "records_only": null
  },
  "staff_model": {
   "path": "runs/staff_model01/model_Kaohsiung-cam04.json",
@@ -23,14 +30,14 @@
   "held_out_n": 15,
   "min_accuracy_required": 0.9
  },
- "commit": "3032bba27d709757cce57b7465a5e81cee4581c1",
- "start_frame": 242,
+ "commit": "6a0dd8fac518063354476f0dc952347fac7d4095",
+ "start_frame": 517,
  "frames": 120,
  "stride": 1,
  "audit_score_thr": 0.03,
  "blur_score_thr": 0.07,
  "head_coverage_required": 0.98,
- "person_boxes_checked": 3335,
+ "person_boxes_checked": 3674,
  "person_boxes_failing": 0,
  "failing_examples": [],
  "contact_sheets": "runs/commission01/Kaohsiung-cam04.gif_check"

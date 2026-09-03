@@ -97,6 +97,24 @@ SCORE_THR_VIEW = 0.30
 SCORE_THR_RETAIL = 0.20
 
 
+def flatten_levels(cls_out, reg_out, ctr_out, num_classes: int):
+    """Per-level [B,C,H,W] maps -> per-image [B,N,*] rows, in level order, as LOGITS.
+
+    Three copies of this concatenation existed: `FCOSHead.decode`, `FCOSLoss.forward`
+    and `serving/decode.py`. The serving copy stays its own on purpose -- it is the
+    numpy host-side mirror a parity test pins -- but the two in-model copies were one
+    answer written twice, and the loss's copy was the one nothing pinned. Callers apply
+    their own sigmoid: decode wants probabilities, the loss wants logits for BCE.
+    """
+    b_size = cls_out[0].shape[0]
+    flat_cls = torch.cat(
+        [c.permute(0, 2, 3, 1).reshape(b_size, -1, num_classes) for c in cls_out], dim=1
+    )
+    flat_reg = torch.cat([r.permute(0, 2, 3, 1).reshape(b_size, -1, 4) for r in reg_out], dim=1)
+    flat_ctr = torch.cat([c.permute(0, 2, 3, 1).reshape(b_size, -1) for c in ctr_out], dim=1)
+    return flat_cls, flat_reg, flat_ctr
+
+
 class FCOSHead(nn.Module):
     def __init__(
         self,
@@ -226,17 +244,12 @@ class FCOSHead(nn.Module):
         device = cls_out[0].device
         shapes = [c.shape[-2:] for c in cls_out]
         points, _ = self._grid_points(shapes, device)
-        b_size = cls_out[0].shape[0]
-        flat_cls = torch.cat(
-            [c.permute(0, 2, 3, 1).reshape(b_size, -1, self.num_classes) for c in cls_out],
-            dim=1,
-        ).sigmoid()
-        flat_reg = torch.cat(
-            [r.permute(0, 2, 3, 1).reshape(b_size, -1, 4) for r in reg_out], dim=1
+        flat_cls, flat_reg, flat_ctr = flatten_levels(
+            cls_out, reg_out, ctr_out, self.num_classes
         )
-        flat_ctr = torch.cat(
-            [c.permute(0, 2, 3, 1).reshape(b_size, -1) for c in ctr_out], dim=1
-        ).sigmoid()
+        b_size = cls_out[0].shape[0]
+        flat_cls = flat_cls.sigmoid()
+        flat_ctr = flat_ctr.sigmoid()
         results = []
         for b in range(b_size):
             scores = flat_cls[b] * flat_ctr[b][:, None]

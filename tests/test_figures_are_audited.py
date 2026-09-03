@@ -127,6 +127,10 @@ SCENE_PATHS = (
     "src/syncai_bev3d/scene_mesh.py",
     "src/syncai_bev3d/floorplan.py",
     "src/syncai_bev3d/meshes.py",
+    # Moved out of `demo_video.py` on 2026-09-02 and listed the same day: it is the
+    # colours, the smoothing constants and the floor geometry every figure is drawn
+    # with, so a change here changes what the figures show exactly as one there did.
+    "src/syncai_bev3d/figures.py",
     "src/syncai_bev3d/shading.py",
     "src/syncai_hydranet/utils/face_blur.py",
 )

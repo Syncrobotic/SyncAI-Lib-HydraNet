@@ -5,8 +5,9 @@ licence to track, a CDN or an LFS pointer to serve it from, and no way to ask it
 1.62 m person instead of a 1.70 m one. Everything here is a function of its dimensions,
 which is what makes it usable for a scene where the dimensions are the output.
 
-**On what a human-shaped mesh does and does not claim.** `bev_page.py` draws objects as
-wireframe cuboids and argues, correctly, that a solid asset asserts a shape nobody
+**On what a human-shaped mesh does and does not claim.** `bev_page.py` (removed in
+`500cdd2`; readable at `git show 500cdd2^:scripts/bev_page.py`) drew objects as
+wireframe cuboids and argued, correctly, that a solid asset asserts a shape nobody
 measured. That argument is about *shape*. It is not an argument for a crude mesh, because
 the thing actually uncertain in a retail scene is **position** -- `analytics/dwell.py`
 records the mechanism: a shopper behind a counter has their feet occluded, the box bottom
@@ -226,6 +227,97 @@ def human(height_m: float = 1.70, sides: int = 10) -> Mesh:
     lo = float(verts[:, 1].min())
     verts[:, 1] = (verts[:, 1] - lo) * (h / (float(verts[:, 1].max()) - lo))
     return verts, faces
+
+
+# COCO's 17 keypoints, in the order every pose head in this project emits them.
+COCO_NOSE, COCO_LSH, COCO_RSH, COCO_LEL, COCO_REL, COCO_LWR, COCO_RWR = 0, 5, 6, 7, 8, 9, 10
+COCO_LHI, COCO_RHI, COCO_LKN, COCO_RKN, COCO_LAN, COCO_RAN = 11, 12, 13, 14, 15, 16
+#: A limb shorter than this is drawn as nothing rather than as a degenerate sliver.
+DEGENERATE_LIMB_M = 1e-4
+#: Shoulder line to head centre, as a fraction of stature: `_P`'s neck_y plus the
+#: head radius, less shoulder_y. `human` puts the head there and so must a posed one.
+HEAD_CENTRE_FRAC = 0.870 + 0.0665 * 1.15 - 0.818
+
+
+def human_posed(joints: np.ndarray, height_m: float = 1.70, sides: int = 10) -> Mesh:
+    """:func:`human`'s limbs, between measured joints instead of the standing constants.
+
+    ``joints`` is ``(17, 3)`` in the scene's own metres -- x right, y up from the floor,
+    z forward -- in COCO keypoint order. Twelve of those seventeen land on a tube endpoint
+    :func:`human` already has, which is why this needs no rig and no skinning: the figure
+    was always a set of tubes between named joints, and this passes different names in.
+
+    **What this is not.** The joints it is given come from lifting 2D keypoints, and on a
+    single frame that lift is not solved (PLAN 7c.30). The cheapest lift puts every joint
+    on one vertical plane at the feet's range, which gets the heights and the limb
+    directions right and the bone lengths wrong by 0.67-1.15x; the solvers that fix the
+    bone lengths fold the skeleton instead. So a figure drawn from this shows *what the
+    person is doing* and must not be measured: a limb length or a joint separation read
+    off it is a property of the lift, not of the person.
+
+    Unlike :func:`human` the mesh is NOT normalised to ``height_m``. The height is the
+    joints' own, because scaling a posed figure to a standing person's stature would
+    stretch a crouch into something taller than the crouch was.
+    """
+    j = np.asarray(joints, dtype=float)
+    if j.shape != (17, 3):
+        raise ValueError(f"joints must be (17, 3) in COCO order, got {j.shape}")
+    if not np.isfinite(j).all():
+        raise ValueError("joints contains non-finite values; drop the figure instead")
+    h = float(height_m)
+    if h <= 0:
+        raise ValueError(f"height_m must be positive, got {h}")
+    p = {k: v * h for k, v in _P.items()}
+    mid_sh = (j[COCO_LSH] + j[COCO_RSH]) / 2
+    mid_hip = (j[COCO_LHI] + j[COCO_RHI]) / 2
+    # **The head sits on the spine, and the nose is on the front of the head.** Two wrong
+    # versions of this, and the second is the instructive one. Deriving the head centre
+    # from the nose alone put it a median 12 cm above the shoulders where a person's is
+    # about 20 -- the lift flattens depth and from a ceiling camera the neck points most
+    # directly at the lens, so it foreshortens worst -- and with an 11 cm head radius the
+    # sphere sat inside the shoulders. Placing it along the shoulders-to-nose direction at
+    # the canon's distance fixed the distance and kept the direction, which was the error:
+    # that direction points forward and up, because the nose is on the FRONT of the head.
+    # Every figure then craned its neck forward and still read as hunched.
+    #
+    # The head centre is above the neck, so the direction that places it is the spine's --
+    # hips to shoulders. A person leaning over a counter leans their head with their torso
+    # and the figure shows it. What this does NOT show is the head's own tilt: someone
+    # standing straight while looking down at a phone renders looking ahead. The nose is
+    # not used to place the head at all, because the one thing it reliably says is which
+    # way the face points, and a sphere has no face.
+    spine = mid_sh - mid_hip
+    spine_len = float(np.linalg.norm(spine))
+    up = spine / spine_len if spine_len > 1e-6 else np.array([0.0, 1.0, 0.0])
+    head_c = mid_sh + up * (HEAD_CENTRE_FRAC * h)
+
+    # A limb of zero length is what a *lift* produces when two keypoints land on the same
+    # ray at the same depth -- a fully foreshortened forearm pointing at the camera, or two
+    # low-confidence joints collapsing onto each other. `_tube` refuses coincident
+    # endpoints, which is right for geometry somebody authored and wrong for geometry
+    # somebody measured: it killed a 900-frame render partway through. Drawing nothing is
+    # the correct picture of a limb with no extent; raising is not.
+    segments = [
+        (mid_sh, head_c, p["waist_r"] * 0.55, p["torso_r"] * 0.7),
+        (mid_sh, mid_hip, p["torso_r"], p["waist_r"]),
+    ]
+    for sh, el, wr, hi, kn, an in (
+        (COCO_LSH, COCO_LEL, COCO_LWR, COCO_LHI, COCO_LKN, COCO_LAN),
+        (COCO_RSH, COCO_REL, COCO_RWR, COCO_RHI, COCO_RKN, COCO_RAN),
+    ):
+        segments += [
+            (j[sh], j[el], p["upper_arm_r"], p["upper_arm_r"] * 0.82),
+            (j[el], j[wr], p["forearm_r"], p["forearm_r"] * 0.8),
+            (j[hi], j[kn], p["thigh_r"], p["calf_r"] * 1.15),
+            (j[kn], j[an], p["calf_r"], p["calf_r"] * 0.62),
+        ]
+    parts = [_sphere(head_c, p["head_r"], sides=sides)]
+    parts += [
+        _tube(a, b, r0, r1, sides)
+        for a, b, r0, r1 in segments
+        if float(np.linalg.norm(np.asarray(b) - np.asarray(a))) >= DEGENERATE_LIMB_M
+    ]
+    return _merge(*parts)
 
 
 def box(width_m: float, height_m: float, depth_m: float) -> Mesh:
@@ -576,6 +668,14 @@ def place(mesh: Mesh, at: Placement) -> Mesh:
 CREASE_COS = math.cos(math.radians(40.0))
 
 
+#: Shading normals by mesh content. Cleared wholesale rather than evicted one at a
+#: time: the working set is a scene's worth of furniture plus a few figures, so a
+#: cache that has grown past this is a render whose geometry changes every frame,
+#: and for that one nothing is worth keeping.
+_NORMALS_CACHE: dict[tuple, np.ndarray] = {}
+NORMALS_CACHE_MAX = 512
+
+
 def smooth_normals(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
     """One shading normal per face, averaged over its neighbours across smooth joins only.
 
@@ -593,9 +693,34 @@ def smooth_normals(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
     diagonal seam down it. A reviewer reading those images on 2026-08-27 called it a tent
     roof and, on a thin slab, a "45-degree tilted panel, physically impossible" -- a
     shading artefact read as a geometry failure, which is the expensive kind of wrong.
+
+    **Memoised, because a video render asks the same question 900 times.** The normals are
+    a pure function of the mesh and a commissioning render draws the same shop on every
+    frame: profiling `heads_video` over 20 frames put 10.4 s of a 31 s render inside this
+    function, 784 calls for 20 frames, and all but a handful were the furniture -- built
+    once, outside the frame loop, and re-normalled for each of them. Only the *figures*
+    change frame to frame, so the cache is bounded and the misses are the ones that should
+    miss. Keyed on the content rather than on `id()`, so a mesh rebuilt into fresh arrays
+    still hits and a recycled address cannot collide.
+
+    The returned array is read-only: it is shared between callers now, so a caller that
+    wrote through it would corrupt another frame's shading rather than its own.
     """
     if len(faces) == 0:
         return np.zeros((0, 3))
+    verts = np.ascontiguousarray(verts)
+    faces = np.ascontiguousarray(faces)
+    key = (
+        verts.shape,
+        faces.shape,
+        verts.dtype.str,
+        faces.dtype.str,
+        hash(verts.tobytes()),
+        hash(faces.tobytes()),
+    )
+    cached = _NORMALS_CACHE.get(key)
+    if cached is not None:
+        return cached
     fn = np.cross(
         verts[faces[:, 1]] - verts[faces[:, 0]], verts[faces[:, 2]] - verts[faces[:, 0]]
     )
@@ -613,6 +738,10 @@ def smooth_normals(verts: np.ndarray, faces: np.ndarray) -> np.ndarray:
                     acc += fn[fj]
         norm = float(np.linalg.norm(acc))
         out[fi] = acc / norm if norm > 1e-12 else fn[fi]
+    out.flags.writeable = False
+    if len(_NORMALS_CACHE) >= NORMALS_CACHE_MAX:
+        _NORMALS_CACHE.clear()
+    _NORMALS_CACHE[key] = out
     return out
 
 

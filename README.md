@@ -18,7 +18,11 @@ drawn as a customer, so a member of staff crossing in under about a second is gr
 cost of not putting a third colour on screen that a viewer has to be told how to read.
 Right: the
 same moment in metres, the store's own furniture reconstructed from one static plate, a
-figure at every tracked shopper's floor position. Nothing is drawn by hand and no second
+figure at every tracked shopper's floor position — wearing its verdict colour from its
+first frame, because the verdict floor equals the tracker's confirmation delay. **The
+amber floor tiles are the live dwell field**: occupancy-seconds accumulating as the clip
+plays, clipped to the walkable polygon, scale-topped at its own p99 so one queue cannot
+eat the ramp. Nothing is drawn by hand and no second
 sensor is involved.*
 
 *Three things to read the panels with. **Every face is blurred by `demo_video.py` itself**,
@@ -49,9 +53,14 @@ license colouring them, and the gate refused it (PLAN §7.23). It has 127 crops 
 staff, 65 customer, 6 unclear — and the model reads **0.874** held out on them. That is
 below the derived 0.90 floor, so the exception is stated at the call site with
 `--staff-min-accuracy 0.85`, printed on the figure, and recorded in its verdict: a figure
-never carries a threshold nobody can see. **Read its metres with the caveat**: this
-camera's scale is known to be 1.21x too large (PLAN §7.10, a decision to leave rather than
-an oversight), which is why its figures stand 1.98 m rather than 1.70.*
+never carries a threshold nobody can see. **Its metres used to need a caveat and mostly no
+longer do**: this camera read 1.21x too large (PLAN §7.10), which stood its figures at
+1.98 m rather than 1.70. The person-box edge gate was measuring in the wrong space and
+dropping whole people for sitting off the optical axis; fixing it moved this camera 2.87 m
+to 2.57 m, and the figure above now stands its shoppers at a median **1.80 m** (re-cut
+2026-09-02 under the promoted person01 run, which finds the further, more foreshortened
+shoppers the previous model missed). What is left is 1.06x, and the 1.70 m prior it is
+measured against is itself an assumption.*
 
 The whole plan — architecture, data strategy, build order, and the measurements behind
 every decision — lives in **one document: [docs/PLAN.md](docs/PLAN.md)**. Everything the
@@ -65,12 +74,15 @@ builds a static plate, fits the ground geometry, runs the teachers one time, and
 products down to `iphone / ipad / macbook / boxed_stock`, shelf ROIs, and the derived
 false-positive polygons. The same artefacts render a metric 3D scene per camera, exported
 as `scene.glb` / `scene.obj`. `syncai_hydranet` runs **every frame**: a shared
-RegNetX-800MF + BiFPN trunk carrying **the two heads this product trains** — detection
-(`person`, `bag`, `device`, `boxed_stock`) and pose (17 keypoint heatmaps at P3, decoded
-inside the detection boxes) — whose boxes become tracks *in metres* through the cached
-geometry. The model defines two more families, segmentation and monocular depth, and each
-config trains the subset it names; the retail-security configs name neither, which is why
-this paragraph says two where `models/hydranet.py` holds four. Everything above that
+RegNetX-800MF + BiFPN trunk carrying **the three heads this product trains** — detection
+(`person`, `bag`, `device`, `boxed_stock`), pose (17 keypoint heatmaps at P3, decoded
+inside the detection boxes), and terrain segmentation (`floor`, `wall`, `column`,
+`fixture`, `person`) — whose boxes become tracks *in metres* through the cached geometry.
+`models/hydranet.py` defines a fourth family, monocular depth, and each config trains the
+subset it names; the retail-security configs do not name depth. **Terrain is not a
+leftover**: it is what the commissioning pass reads to find the floor, the walls and the
+fixtures, so `terrain_mIoU/site_seg03` is the metric a checkpoint for this product is
+chosen on as much as its detection mAP is. Everything above that
 is rules, a tiny temporal model, and a VLM on trigger.
 
 **Anything constant on a fixed camera is cached, never learned; only what changes

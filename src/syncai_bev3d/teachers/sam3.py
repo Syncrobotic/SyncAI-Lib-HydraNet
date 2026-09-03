@@ -53,14 +53,9 @@ MIN_BOX_PIXELS = 40
 # the summary prints what the cut discarded so that case is visible rather than silent.
 MAX_BOX_FRAC = 0.02  # a pixel two classes on one layer both claim; resolved to IGNORE
 MODEL_ID = "facebook/sam3"
-# The revision this project's numbers were measured on, pinned rather than floating.
-# `from_pretrained` with no `revision=` resolves whatever `main` points at today, so an
-# upstream push silently changes what a teacher produces -- and for the models here that
-# means different masks, different boxes and different metres, under artefacts that look
-# identical. Taken from the local cache on 2026-08-28, i.e. the commit every measurement
-# already in PLAN was actually made with; bumping it is then a reviewed event with a
-# re-measure attached, which is what `.github/dependabot.yml` says about torch for the
-# same reason.
+# Pinned rather than floating, for the reason argued in full on
+# `syncai_bev3d/teachers/gdino.py`'s revision pin: an unpinned `from_pretrained`
+# silently changes what a teacher produces when upstream pushes.
 MODEL_REVISION = "3c879f39826c281e95690f02c7821c4de09afae7"
 
 

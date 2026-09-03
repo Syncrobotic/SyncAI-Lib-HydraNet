@@ -24,6 +24,7 @@ from syncai_hydranet.serving.dispositions import (
     day_path,
     file_hash,
     iter_records,
+    model_identity,
     record_alert,
     record_disposition,
 )
@@ -224,3 +225,16 @@ def test_filters_narrow_without_lying(tmp_path):
         "disposition",
     ]
     assert list(iter_records(tmp_path / "no-such-dir")) == []
+
+
+def test_model_identity_builds_the_dict_the_records_expect():
+    """The constructor for AlertRecord.model, wired to the suite like its siblings.
+
+    It had zero callers anywhere -- the tests hand-built the dict -- so nothing pinned
+    its shape to the one `record_alert`'s docstring promises.
+    """
+    ident = model_identity("runs/x/best.pt", config={"a": 1})
+    assert set(ident) == set(MODEL)
+    assert ident["checkpoint"] == "runs/x/best.pt"
+    assert ident["config_hash"] == config_hash({"a": 1})
+    assert isinstance(ident["git"], dict) and "available" in ident["git"]

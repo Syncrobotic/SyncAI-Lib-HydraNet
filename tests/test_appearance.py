@@ -125,4 +125,14 @@ def test_the_region_does_not_move_when_the_box_around_it_does():
     on 2026-08-27 that moved nine joins across a threshold on people who did nothing.
     """
     k = _kps(ls=(40, 100), rs=(80, 100), lh=(45, 200), rh=(75, 200))
-    assert torso_region(k) == torso_region(k)  # same keypoints, any box
+    r_full = torso_region(k)
+    # A waist crop, keypoint-wise: every joint that is not a shoulder or a hip moves
+    # and loses confidence -- legs gone, face gone. The region is fixed by shoulders
+    # and hips alone, so it must not move. (This assertion replaces a
+    # `torso_region(k) == torso_region(k)` tautology that could not fail.)
+    cropped = k.copy()
+    other = [i for i in range(17) if i not in (5, 6, 11, 12)]
+    cropped[other, 0] = 999.0
+    cropped[other, 1] = 999.0
+    cropped[other, 2] = 0.0
+    assert torso_region(cropped) == r_full

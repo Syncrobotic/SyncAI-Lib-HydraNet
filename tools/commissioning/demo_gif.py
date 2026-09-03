@@ -63,12 +63,16 @@ from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.models.hydranet import build_model
+from syncai_hydranet.shipped import SHIPPED_RUN
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
 from syncai_hydranet.utils.face_blur import blur_rect, plate_person_boxes
 from syncai_hydranet.utils.visualize import preprocess
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
-RUN = ROOT / "runs/hydranet_retail_security_b03_cw_xl"
+
+# The run the tools ship from, named once in `syncai_hydranet.shipped`. Six files
+# used to carry their own copy of this string and the best run was in none of them.
+RUN = SHIPPED_RUN
 GIF_W = 760  # what `assets/demo_Taichung-cam10.gif` ships at, kept so the README is even
 AUDIT_THR = 0.03  # far under the render's 0.35: the audit has to see what the render did not
 # A head is "covered" when this much of it lies inside the union of blurred rectangles.

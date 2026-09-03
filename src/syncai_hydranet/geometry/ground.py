@@ -192,6 +192,66 @@ def undistort_points(xy: np.ndarray, k1: float, centre, radius: float) -> np.nda
     return centred / (1.0 + k1 * r2)[:, None] + np.asarray(centre, float)
 
 
+def undistort_points_equidistant(
+    xy: np.ndarray, theta_max_deg: float, centre, radius: float
+) -> np.ndarray:
+    """Equidistant fisheye, applied to points. The model with no pole inside the frame.
+
+    ``r_u = tan(r_d * t) / tan(t)`` with ``r`` normalised by ``radius`` and ``t`` the
+    half-diagonal field half-angle. One parameter, like the division model, and the same
+    dimensionless comparability between resolutions.
+
+    **It exists because the division model cannot describe these lenses and fails in a way
+    that looks like an answer.** ``r_u = r_d / (1 + k1 r_d^2)`` has a pole at
+    ``r_d = 1/sqrt(-k1)``, so for ``|k1| >= 1`` the singular ring is inside the frame: a
+    point near it maps to an enormous radius, and on `dingpu-1f` a `k1 = -1.05` mapped a
+    near-corner pixel to ``(-49617, -27791)``. The straightness objective that fits ``k1``
+    then rewards that collapse rather than any lens -- a zero-distortion grid scores
+    ``peak/median`` 32-54 at ``k1 ~ -1.29``, higher than a true lens ever scores -- so the
+    model's failure and its success are indistinguishable from the fit alone.
+
+    Three properties, each answering something that cost this project a day:
+
+    * **No singularity for ``t < 90 deg``.** ``tan`` is finite over ``[0, t]``, so every
+      pixel in the frame has a defined image and no search range can reach a pole.
+    * **The corner is fixed**: ``r_d = 1`` gives ``r_u = 1``. Undistorted points stay
+      inside the frame, so a gate comparing them against the frame's own bounds is
+      meaningful -- the division model pushed whole people outside a 3840-wide frame at
+      the fleet's mild ``k1 = -0.225`` and the person-box edge gate dropped them.
+    * **``t -> 0`` is the identity**, so "no lens" is an interior point of the parameter
+      range rather than a boundary, and a flat control returns it as a peak rather than
+      as a refusal.
+
+    ``t`` is also a field half-angle rather than an abstract coefficient, so a fit
+    constrains the geometry the division model's ``k1`` never touched.
+    """
+    t = math.radians(float(theta_max_deg))
+    centred = np.asarray(xy, float) - np.asarray(centre, float)
+    if t < 1e-9:
+        return np.asarray(xy, float).copy()
+    r = np.hypot(centred[:, 0], centred[:, 1]) / radius
+    scale = np.where(r > 1e-12, np.tan(r * t) / (math.tan(t) * np.maximum(r, 1e-12)), 1.0)
+    return centred * scale[:, None] + np.asarray(centre, float)
+
+
+def distort_points_equidistant(
+    xy: np.ndarray, theta_max_deg: float, centre, radius: float
+) -> np.ndarray:
+    """The exact inverse of :func:`undistort_points_equidistant`.
+
+    ``r_d = atan(r_u * tan(t)) / t``. Closed form, defined for every ``r_u >= 0``, and
+    unlike the division model's inverse it has no branch to choose and no region that
+    comes back NaN -- there is no ``q < 0`` because there is no turning point.
+    """
+    t = math.radians(float(theta_max_deg))
+    centred = np.asarray(xy, float) - np.asarray(centre, float)
+    if t < 1e-9:
+        return np.asarray(xy, float).copy()
+    r = np.hypot(centred[:, 0], centred[:, 1]) / radius
+    scale = np.where(r > 1e-12, np.arctan(r * math.tan(t)) / (t * np.maximum(r, 1e-12)), 1.0)
+    return centred * scale[:, None] + np.asarray(centre, float)
+
+
 def distort_points(xy: np.ndarray, k1: float, centre, radius: float) -> np.ndarray:
     """The exact inverse of `undistort_points`: ideal pixels -> the raw frame's pixels.
 

@@ -33,7 +33,9 @@ def _drop_dataset(cfg, name):
 
 def test_shipped_configs_supervise_every_head():
     """If this fails, a shipped config would export a head trained on nothing."""
-    for path in sorted(CONFIG_DIR.glob("*.yaml")):
+    paths = sorted(CONFIG_DIR.glob("*.yaml"))
+    assert paths, "no configs found; the loop below would silently pass"
+    for path in paths:
         cfg = load_config(path)
         assert unsupervised_heads(cfg) == set(), f"{path.name} strands a head"
 

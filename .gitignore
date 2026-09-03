@@ -87,3 +87,4 @@ gcp-key*.json
 # checkpoint and its per-target builds, and git is not where those belong. MANIFEST.json
 # is what makes a bundle verifiable wherever it lives; see docs/RELEASE.md.
 releases/
+dingpu_report.html

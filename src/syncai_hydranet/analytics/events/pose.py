@@ -72,20 +72,22 @@ KP = {name: i for i, name in enumerate(KEYPOINT_NAMES)}
 
 
 def require_keypoints(tracks: list[Track]) -> None:
-    """Refuse a pose event on tracks that carry no pose, naming the missing model.
+    """Refuse a pose event on tracks that carry no pose, naming the missing wire.
 
-    An empty `Track.keypoints` is the normal state today -- nothing fills it, because the
-    second-stage pose model is not built. Returning no events for that would be
-    indistinguishable from "nobody fell", which is the failure this project ranks worst:
-    plausible output, no error.
+    An empty `Track.keypoints` means the caller ran detection without the pose head --
+    the P3 head exists and `Tracker.update(..., keypoints=...)` is its wire, but not
+    every producer passes it. Returning no events for that would be indistinguishable
+    from "nobody fell", which is the failure this project ranks worst: plausible
+    output, no error.
     """
     for track in tracks:
         if len(track.keypoints) != len(track.frames):
             raise NotImplementedError(
                 f"track {track.track_id} carries {len(track.keypoints)} keypoint sets for "
                 f"{len(track.frames)} observed frames. Pose events need one (17, 3) array "
-                "per observed frame, written by the second-stage pose model -- which does "
-                "not exist yet. Tier-1 `fall_candidates` is what runs without it."
+                "per observed frame -- pass the P3 head's decode to "
+                "`Tracker.update(..., keypoints=...)`. Tier-1 `fall_candidates` is what "
+                "runs without it."
             )
 
 
@@ -124,7 +126,7 @@ def _shrank(
     minutes of footage: 61 posture events fired, and their box height during the
     event against the same track's median over the preceding window had a
     **median ratio of 1.00** -- 57 of 59 judgeable events came from tracks whose
-    box never moved. `events/pose.py` argues the box cannot *distinguish* a crouch
+    box never moved. `events/behaviour.py` argues the box cannot *distinguish* a crouch
     from a reach into a low shelf, which is true and is a different claim: a box
     that does not change at all refutes both.
 
@@ -396,7 +398,7 @@ def _require_terrain_in_image_space(
             "off the map and produce zero events that read as 'nobody reached'. The "
             "caller must upsample the terrain map back to the image resolution "
             "(nearest-neighbour -- class ids, so interpolation invents classes) before "
-            "building the frame payloads; events.py cannot do it because it cannot "
+            "building the frame payloads; events/pose.py cannot do it because it cannot "
             "know which of the two spaces the keypoints were measured in."
         )
 

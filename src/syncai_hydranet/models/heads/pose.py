@@ -61,7 +61,9 @@ class PoseP3Head(nn.Module):
 
 
 class PoseHeatmapLoss(nn.Module):
-    """Focal BCE against Gaussians rendered from the teacher's keypoints, on the fly.
+    """Focal-modulated MSE against Gaussians rendered from the teacher's keypoints, on
+    the fly. (An earlier version of this line said Focal BCE; the forward has always
+    been a weighted squared error -- see the modulation comment inside it.)
 
     Targets arrive as per-image keypoint arrays rather than pre-rendered maps: rendering
     here costs a few kernel launches and keeps the dataset format one line per person --

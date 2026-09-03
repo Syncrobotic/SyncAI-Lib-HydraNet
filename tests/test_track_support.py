@@ -172,3 +172,81 @@ def test_the_same_fall_at_high_confidence_reports_the_difference():
     (event,) = ev.pose_posture_events([track], fps=5.0, camera="cam01")
     assert event.support is not None
     assert event.support.score_p50 == pytest.approx(0.8)
+
+
+# ----------------------------------------------------- staff-memory inheritance
+
+
+def _walk(tr, frames_boxes, probs):
+    for n, (box, p) in enumerate(zip(frames_boxes, probs, strict=True)):
+        b = np.array(box, float).reshape(-1, 4)
+        sp = np.array(p, float).reshape(-1)
+        tr.update(b, n, staff_scores=sp)
+
+
+def test_a_newborn_where_a_track_just_died_inherits_its_staff_evidence():
+    """The measured cause of colour flicker is fragmentation: 89 tracks at median life
+    12 frames, 66 warm-up colour pops against 5 real flips (Kaohsiung-cam04, 900
+    frames). Each fragment restarting its evidence from zero is the flicker; the heir
+    starting from the donor's evidence is the fix, and 15/0.2 measured zero
+    contamination across 15 decidable donor/heir pairs."""
+    from syncai_hydranet.analytics.tracker import Tracker
+
+    tr = Tracker(max_age=1, min_hits=1, staff_memory_gap=15, staff_memory_iou=0.2)
+    spot = [10.0, 10.0, 60.0, 150.0]
+    # a confirmed track accumulates three staff observations, then vanishes
+    _walk(tr, [[spot]] * 3 + [np.zeros((0, 4))] * 3, [[0.9]] * 3 + [[]] * 3)
+    assert not tr.tracks  # the donor is dead and retired
+    # a newborn appears on the same spot within the gap
+    tr.update(np.array([spot]), 6, staff_scores=np.array([0.8]))
+    (heir,) = tr.tracks
+    assert heir.staff_scores == [0.9, 0.9, 0.9, 0.8], "the donor's evidence seeds the heir"
+
+
+def test_a_dead_track_feeds_at_most_one_heir():
+    from syncai_hydranet.analytics.tracker import Tracker
+
+    tr = Tracker(max_age=1, min_hits=1, staff_memory_gap=15, staff_memory_iou=0.2)
+    spot = [10.0, 10.0, 60.0, 150.0]
+    _walk(tr, [[spot]] * 3 + [np.zeros((0, 4))] * 3, [[0.9]] * 3 + [[]] * 3)
+    tr.update(np.array([spot]), 6, staff_scores=np.array([0.8]))
+    # the first heir dies too; a SECOND newborn on the spot must not inherit from the
+    # original donor again (its evidence already lives on in heir #1's line)
+    tr.update(np.zeros((0, 4)), 7, staff_scores=np.zeros(0))
+    tr.update(np.zeros((0, 4)), 8, staff_scores=np.zeros(0))
+    tr.update(np.array([spot]), 9, staff_scores=np.array([0.7]))
+    newest = max(tr.tracks, key=lambda t: t.track_id)
+    assert 0.9 in newest.staff_scores or newest.staff_scores.count(0.9) == 0
+    donors_used = tr._inherited_from
+    assert len(donors_used) == len(set(donors_used))
+
+
+def test_inheritance_off_by_default_and_gated_by_gap_and_overlap():
+    from syncai_hydranet.analytics.tracker import Tracker
+
+    spot = [10.0, 10.0, 60.0, 150.0]
+    far = [500.0, 10.0, 550.0, 150.0]
+    # default: off
+    tr = Tracker(max_age=1, min_hits=1)
+    _walk(tr, [[spot]] * 3 + [np.zeros((0, 4))] * 3, [[0.9]] * 3 + [[]] * 3)
+    tr.update(np.array([spot]), 6, staff_scores=np.array([0.8]))
+    assert tr.tracks[0].staff_scores == [0.8]
+    # outside the gap: no inheritance
+    tr = Tracker(max_age=1, min_hits=1, staff_memory_gap=2, staff_memory_iou=0.2)
+    _walk(tr, [[spot]] * 3 + [np.zeros((0, 4))] * 5, [[0.9]] * 3 + [[]] * 5)
+    tr.update(np.array([spot]), 8, staff_scores=np.array([0.8]))
+    assert tr.tracks[0].staff_scores == [0.8]
+    # no overlap: no inheritance
+    tr = Tracker(max_age=1, min_hits=1, staff_memory_gap=15, staff_memory_iou=0.2)
+    _walk(tr, [[spot]] * 3 + [np.zeros((0, 4))] * 3, [[0.9]] * 3 + [[]] * 3)
+    tr.update(np.array([far]), 6, staff_scores=np.array([0.8]))
+    assert tr.tracks[0].staff_scores == [0.8]
+
+
+def test_nan_staff_scores_are_quality_refusals_not_evidence():
+    from syncai_hydranet.analytics.staff import MIN_OBSERVATIONS, staff_verdict
+
+    assert staff_verdict([0.9] * MIN_OBSERVATIONS) is True
+    padded = [0.9] * (MIN_OBSERVATIONS - 1) + [float("nan")] * 10
+    assert staff_verdict(padded) is None, "NaN must not count toward the floor"
+    assert staff_verdict([0.9] * MIN_OBSERVATIONS + [float("nan")] * 10) is True

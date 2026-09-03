@@ -25,8 +25,8 @@ class ConfusionMatrix:
     matrix -- ``n x n`` integers -- comes back, in ``miou``.
 
     The arithmetic is unchanged: same indices, same integer counts, so a mIoU computed
-    either way is bit-identical. ``tests/test_evaluator.py`` asserts that rather than
-    assuming it.
+    either way is bit-identical. ``tests/test_evaluator_equivalence.py`` asserts that
+    against a numpy reference implementation rather than assuming it.
     """
 
     def __init__(self, num_classes: int):

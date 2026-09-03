@@ -148,16 +148,10 @@ class FCOSLoss(nn.Module):
         device = cls_out[0].device
         shapes = [c.shape[-2:] for c in cls_out]
         _, cls_t, reg_t, ctr_t = head.get_targets(shapes, boxes_list, labels_list, device)
-        b_size = cls_out[0].shape[0]
-        flat_cls = torch.cat(
-            [c.permute(0, 2, 3, 1).reshape(b_size, -1, self.num_classes) for c in cls_out],
-            dim=1,
-        )
-        flat_reg = torch.cat(
-            [r.permute(0, 2, 3, 1).reshape(b_size, -1, 4) for r in reg_out], dim=1
-        )
-        flat_ctr = torch.cat(
-            [c.permute(0, 2, 3, 1).reshape(b_size, -1) for c in ctr_out], dim=1
+        from .heads.detection import flatten_levels
+
+        flat_cls, flat_reg, flat_ctr = flatten_levels(
+            cls_out, reg_out, ctr_out, self.num_classes
         )
 
         pos = cls_t < self.num_classes

@@ -104,17 +104,17 @@ class Track:
     boxes: list[np.ndarray] = field(default_factory=list)  # observed boxes, one per frame
     confirmed: bool = False
     # (17, 3) COCO keypoints per observed frame -- x, y in image pixels and a score --
-    # or empty, which is the state of every track this tracker produces today.
+    # or empty, when the caller runs detection without the pose head.
     #
     # It is a field rather than a parallel structure because the alignment with `frames`
     # and `boxes` is the whole contract: `events.pose_posture_events` reads keypoints[i]
     # against frames[i], and two containers that have to stay index-aligned across a
     # module boundary drift the first time one of them is filtered.
     #
-    # **Filled by the second stage's pose model, which does not exist yet.** Empty is
-    # therefore the normal case and every consumer has to say what it does with it;
-    # `require_keypoints` in events.py is that refusal, in one place, naming the missing
-    # model rather than returning no events as if none had happened.
+    # **Filled by the P3 pose head via `update(..., keypoints=...)`** -- see the wire
+    # note on `update` below; `tools/pose/pose_overlay.py` is a live caller. Empty is
+    # still a legal state and every consumer has to say what it does with it;
+    # `require_keypoints` in `analytics/events/pose.py` is that refusal, in one place.
     keypoints: list[np.ndarray] = field(default_factory=list)
     # The detector score of each observed box, index-aligned with `frames` and `boxes`
     # for the same reason `keypoints` is a field rather than a parallel structure.
@@ -182,6 +182,8 @@ class Tracker:
         min_hits: int = 3,
         assignment: str = "greedy",
         match_against: str = "both",
+        staff_memory_gap: int = 0,
+        staff_memory_iou: float = 0.3,
     ) -> None:
         self.iou_threshold = iou_threshold
         self.max_age = max_age
@@ -197,10 +199,22 @@ class Tracker:
         # 2026-08-18. `both` is the default because it more than halved fragmentation on
         # the one case where the right answer was independently known.
         self.match_against = match_against
+        # A new track born where a confirmed one just died inherits its accumulated
+        # staff evidence, when `staff_memory_gap` > 0 frames. Fragmentation is the
+        # measured cause of colour flicker (Kaohsiung-cam04, 900 frames: 89 tracks at
+        # median life 12 frames produced 66 warm-up colour pops and 33 tracks that
+        # never reached a verdict, against 5 genuine flips), and each fragment
+        # restarting its evidence from zero is what turns one shopper into a chain of
+        # colour changes. Inheritance requires the dead track be CONFIRMED, its last
+        # box overlap the newborn's at `staff_memory_iou`, and each dead track feeds
+        # at most one heir -- the same evidence must not colour two people.
+        self.staff_memory_gap = int(staff_memory_gap)
+        self.staff_memory_iou = float(staff_memory_iou)
         self.tracks: list[Track] = []
         # Retired tracks, kept because dwell is computed after the clip ends and a
         # shopper who left the frame is exactly the one whose visit is complete.
         self.retired: list[Track] = []
+        self._inherited_from: set[int] = set()  # retired track ids already consumed
         self._next_id = 1
         # None until the first update decides. See `update` -- keypoints and scores are
         # all frames or none, because a gap in either cannot be recovered afterwards.
@@ -295,6 +309,20 @@ class Tracker:
                 t.confirmed = True
 
         for di in set(range(len(boxes))) - set(matched.values()):
+            inherited: list[float] = []
+            if self.staff_memory_gap > 0 and staff_scores is not None:
+                donor, best = None, self.staff_memory_iou
+                for rt in self.retired:
+                    if rt.track_id in self._inherited_from or not rt.staff_scores:
+                        continue
+                    if frame_idx - rt.frames[-1] > self.staff_memory_gap:
+                        continue
+                    overlap = float(iou(boxes[di][None, :], rt.boxes[-1][None, :])[0, 0])
+                    if overlap >= best:
+                        donor, best = rt, overlap
+                if donor is not None:
+                    inherited = list(donor.staff_scores)
+                    self._inherited_from.add(donor.track_id)
             t = Track(
                 self._next_id,
                 boxes[di].copy(),
@@ -302,7 +330,8 @@ class Tracker:
                 boxes=[boxes[di].copy()],
                 keypoints=[] if keypoints is None else [keypoints[di].copy()],
                 scores=[] if scores is None else [float(scores[di])],
-                staff_scores=[] if staff_scores is None else [float(staff_scores[di])],
+                staff_scores=inherited
+                + ([] if staff_scores is None else [float(staff_scores[di])]),
             )
             t.confirmed = self.min_hits <= 1
             self.tracks.append(t)

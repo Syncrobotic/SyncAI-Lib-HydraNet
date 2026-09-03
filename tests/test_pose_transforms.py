@@ -14,6 +14,7 @@ from syncai_hydranet.data.transforms import (
     POSE_LR_SWAP,
     LetterboxResize,
     RandomHorizontalFlip,
+    RandomScaleCrop,
     Sample,
     _paste,
     _resize,
@@ -60,3 +61,31 @@ def test_paste_keeps_the_person_but_silences_offscreen_joints():
     assert s["pose"].shape[0] == 1
     assert s["pose"][0, 0, 2] == 0.0
     assert np.allclose(s["pose"][0, 1], [50.0, 10.0, 0.9])
+
+
+def test_scale_crop_drops_the_skeleton_with_its_box(monkeypatch):
+    """The crop branch of RandomScaleCrop, pinned to the `_paste` contract.
+
+    `_paste` filters the pose rows with the same `keep` mask as the boxes; the crop
+    branch did not until 2026-09-02, so a person cropped out of frame left their
+    skeleton behind and every consumer that zips the parallel arrays scored person i
+    against person i+1's geometry -- the exact desynchronisation
+    `engine/evaluator.py` raises on.
+    """
+    import syncai_hydranet.data.transforms as T
+
+    monkeypatch.setattr(T.random, "uniform", lambda *_a: 2.0)  # force the crop branch
+    monkeypatch.setattr(T.random, "randint", lambda *_a: 0)  # crop from the top-left
+    boxes = np.array([[5.0, 5.0, 20.0, 20.0], [60.0, 5.0, 90.0, 20.0]], np.float32)
+    kp = np.zeros((2, 17, 3), dtype=np.float32)
+    kp[0, :, :2], kp[0, :, 2] = (10.0, 10.0), 0.9
+    kp[1, :, :2], kp[1, :, 2] = (70.0, 10.0), 0.9
+    s = Sample(
+        image=Image.new("RGB", (100, 50)),
+        boxes=boxes,
+        labels=np.array([0, 0]),
+        pose=kp,
+    )
+    s = RandomScaleCrop((50, 100))(s)
+    assert len(s["boxes"]) == 1  # the second person left the frame
+    assert s["pose"].shape[0] == len(s["boxes"])  # and took their skeleton with them

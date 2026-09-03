@@ -49,6 +49,10 @@ from ..utils.checkpoint import load_checkpoint, select_weights
 # means a runtime written for one fails to find its binding in the other, loudly, instead
 # of feeding the wrong range and producing plausible nonsense.
 INPUT_RAW = "image_rgb_255"
+#: Renamed rather than left alone when the dtype changes, for the reason the
+#: `--argmax-seg` bindings are: a host written for the float contract must fail to
+#: find its binding rather than hand a uint8 buffer to a float reader.
+INPUT_RAW_U8 = "image_rgb_255_u8"
 INPUT_NORMALISED = "images"
 
 
@@ -97,7 +101,13 @@ class ExportWrapper(nn.Module):
     rather than silently changing dtype and rank underneath a host that would keep running.
     """
 
-    def __init__(self, model, embed_preprocessing: bool = True, argmax_seg: bool = False):
+    def __init__(
+        self,
+        model,
+        embed_preprocessing: bool = True,
+        argmax_seg: bool = False,
+        uint8_input: bool = False,
+    ):
         super().__init__()
         self.model = model
         self.seg_names = list(model.seg_heads.keys())
@@ -124,6 +134,12 @@ class ExportWrapper(nn.Module):
         self.depth_names = list(getattr(model, "depth_heads", {}).keys())
         self.embed_preprocessing = embed_preprocessing
         self.argmax_seg = argmax_seg
+        if uint8_input and not embed_preprocessing:
+            raise SystemExit(
+                "--uint8-input needs the embedded preprocessing: a pre-normalised tensor "
+                "is not 0-255 and cannot be carried in a byte."
+            )
+        self.uint8_input = uint8_input
         if argmax_seg:
             wide = {
                 name: head.num_classes
@@ -153,7 +169,9 @@ class ExportWrapper(nn.Module):
 
     @property
     def input_name(self) -> str:
-        return INPUT_RAW if self.embed_preprocessing else INPUT_NORMALISED
+        if not self.embed_preprocessing:
+            return INPUT_NORMALISED
+        return INPUT_RAW_U8 if self.uint8_input else INPUT_RAW
 
     @property
     def pose_output_names(self) -> list[str]:
@@ -185,6 +203,11 @@ class ExportWrapper(nn.Module):
         return [f"{n}{suffix}" for n in self.seg_names]
 
     def forward(self, images):
+        if self.uint8_input:
+            # The cast is the whole change. The arithmetic below is unchanged and the
+            # pixels are identical -- a byte holds 0-255 exactly -- so this is a transport
+            # decision, not a numerical one, and `--check-parity` holds it to that.
+            images = images.float()
         if self.embed_preprocessing:
             images = (images - self.pre_mean) / self.pre_std
         out = self.model(images)
@@ -436,6 +459,17 @@ def build_parser() -> argparse.ArgumentParser:
         "the mean/std -- which is the parity risk this defaults away from",
     )
     ap.add_argument(
+        "--uint8-input",
+        action="store_true",
+        help="take the image as uint8 rather than float32, cast inside the graph. The "
+        "pixels are identical -- a byte holds 0-255 exactly -- so this is transport, not "
+        "precision, and it is a quarter of the bytes on the bus. Measured 2026-09-01 on "
+        "the RTX PRO 6000 at 640x1120 batch 16: the fp32 image is 137 MB of a 169 MB "
+        "round trip once `--argmax-seg` has shrunk the outputs, and end to end the "
+        "engine reaches 412 f/s against a 1,440 target. Renames the binding to "
+        "'image_rgb_255_u8' so a float host fails to find it rather than misreading it",
+    )
+    ap.add_argument(
         "--argmax-seg",
         action="store_true",
         help="emit uint8 class maps for the segmentation heads instead of float logits, "
@@ -550,12 +584,22 @@ def main(argv: list[str] | None = None) -> None:
     h, w = ecfg.get("input_size") or cfg["data"]["input_size"]
     print(f"exporting at {h}x{w}")
     embed = not args.no_embed_preprocessing
-    wrapper = ExportWrapper(model, embed_preprocessing=embed, argmax_seg=args.argmax_seg)
+    wrapper = ExportWrapper(
+        model,
+        embed_preprocessing=embed,
+        argmax_seg=args.argmax_seg,
+        uint8_input=args.uint8_input,
+    )
     # Exercise the graph over the range it will actually see. Feeding a 0-255 graph
     # standard-normal noise would make the parity check pass on inputs no camera produces.
     dummy = (
         torch.rand(args.batch, 3, h, w) * 255.0 if embed else torch.randn(args.batch, 3, h, w)
     )
+    if args.uint8_input:
+        # Whole numbers, because that is what the binding can carry. Feeding the parity
+        # check fractional values it would have to round anyway would report a difference
+        # the deployment cannot have.
+        dummy = dummy.round().clamp(0, 255).to(torch.uint8)
     print(
         f"input '{wrapper.input_name}': "
         + ("raw RGB 0-255, normalisation is inside the graph" if embed else "pre-normalised")
