@@ -18,7 +18,11 @@ drawn as a customer, so a member of staff crossing in under about a second is gr
 cost of not putting a third colour on screen that a viewer has to be told how to read.
 Right: the
 same moment in metres, the store's own furniture reconstructed from one static plate, a
-figure at every tracked shopper's floor position. Nothing is drawn by hand and no second
+figure at every tracked shopper's floor position — wearing its verdict colour from its
+first frame, because the verdict floor equals the tracker's confirmation delay. **The
+amber floor tiles are the live dwell field**: occupancy-seconds accumulating as the clip
+plays, clipped to the walkable polygon, scale-topped at its own p99 so one queue cannot
+eat the ramp. Nothing is drawn by hand and no second
 sensor is involved.*
 
 *Three things to read the panels with. **Every face is blurred by `demo_video.py` itself**,

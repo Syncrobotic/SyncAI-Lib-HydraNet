@@ -6,7 +6,10 @@ The right panel is the standing instruction: the solid-furniture scene
 placed at every confirmed track's floor position, so a shopper's motion is visible in
 metres in the same picture that shows the furniture they walk between. The camera.json
 false-positive polygons are applied to the detections before tracking, which is those
-polygons doing their production job for the first time.
+polygons doing their production job for the first time. The floor also carries the
+LIVE dwell field: amber tiles that accumulate occupancy-seconds as the video plays,
+`heatmap3d.py`'s exact construction through `syncai_bev3d.heatmap` (walkable-clipped,
+p99-scaled), disabled with --no-heatmap.
 
 A figure standing behind a 2 m shelf is *correctly* invisible from any one fixed
 viewpoint -- three eye positions were rendered and the far shopper hid behind the same

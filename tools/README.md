@@ -15,7 +15,7 @@ everything else is.
 
 Everything that turns one camera's plates into its `camera.json`, its zones, and its 3D
 scene. Each is idempotent from the caches; re-runs cost no GPU except the two teacher
-passes. Twenty tools, in the five groups they actually fall into — this section listed
+passes. Twenty-one tools, in the five groups they actually fall into — this section listed
 six of them until 2026-08-29, and the whole figure pipeline, which is where the face-blur
 work lives, was among the twelve it did not mention.
 
@@ -62,7 +62,9 @@ demo and **blurs every face by two instruments before any panel is drawn**;
 `heads_video.py` shows every head of the network in one frame from one forward pass and
 blurs the same way; `demo_gif.py` cuts the README figure from a render **and writes the
 audit verdict that says it may be published**; `social_card.py` does the same for the
-GitHub social preview. Renders go to `assets/dev/`, which is ignored wholesale — `assets/`
+GitHub social preview; `heatmap3d.py` drapes a dwell or traffic heatmap over the
+commissioned scene's floor for any window of tracks (`syncai_bev3d.heatmap` holds the
+tested maths; `demo_video` accumulates the same field live on its 3D panel). Renders go to `assets/dev/`, which is ignored wholesale — `assets/`
 itself holds only results. See CONTRIBUTING.md for the third step a store figure needs.
 
 ## [`pose/`](pose/) — the pose head's teacher, and its instruments

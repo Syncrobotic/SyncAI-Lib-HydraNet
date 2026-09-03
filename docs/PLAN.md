@@ -2306,3 +2306,31 @@ something it does not support.
      (`syncai_bev3d/figures.py`, numbers inline) and the figure stands instead. Same
      family as §7.19's lesson: the check that works is external to the model being
      checked.
+
+   **7.28 — colour flicker was fragmentation, and the fixes were swept before they
+   shipped (2026-09-03).** The person01 README cut flickered staff/customer colours,
+   and the measurement inverted the intuition: on Kaohsiung-cam04's 900 frames only
+   **5** verdicts genuinely flipped, against **66** warm-up pops (a figure appearing
+   green and turning blue at its sixth observation) and 33 tracks that never reached
+   a verdict -- all fragmentation (89 tracks, median life 12 frames, the §7.18 knot).
+   Three levers, each measured on recorded boxes before touching a render:
+
+   * **Staff-memory inheritance** (`Tracker(staff_memory_gap=15, staff_memory_iou=0.2)`):
+     a newborn overlapping a just-retired confirmed track's last box seeds its staff
+     evidence, one heir per donor. 15/0.2 read ZERO contamination across 15 decidable
+     donor/heir pairs; the wider 25/0.15 popped less but handed one person's evidence
+     to another and was rejected. Pops 66 -> 46.
+   * **The display verdict floor is the tracker's confirmation delay.** Figures draw at
+     3 hits, so deciding at 3 observations (`track_staff(min_observations=3)`) makes
+     the verdict exist at first appearance: pops 46 -> **0** on both cameras' rendered
+     tracks. Floor 4 measured WORSE than 6 (56 pops -- every track decided one frame
+     after appearing). Cost: the 3-obs median disagrees with the 6-obs one on 3 of 69
+     tracks and self-corrects, so no latch; events keep the floor of 6.
+   * **The crop-quality hypothesis was DROPPED**: gating staff probabilities on box
+     height (60/80 px) changed nothing. `staff_verdict` keeps only the NaN contract.
+
+   The 3D panel also carries the **live dwell field** now (`--no-heatmap` to disable):
+   `syncai_bev3d.heatmap`'s construction -- 0.25 m cells, occupancy-seconds, Gaussian
+   at the position noise, p99 scale top, walkable-clipped -- accumulating per frame,
+   replay-identical under `--workers`. `heatmap3d.py` renders the same field offline
+   for arbitrary windows, dwell or traffic (distinct tracks per cell).
