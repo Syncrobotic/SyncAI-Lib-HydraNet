@@ -1580,6 +1580,13 @@ something it does not support.
    a tape measure. `visual_reference.status` is `needs_visual_reference` on cam01 too,
    the camera whose numbers everything else is compared against.
 
+   **Ruled 2026-09-03: the datasheet route is closed.** Asking for the fleet's camera
+   model so a spec sheet could settle the vfov was rejected by the user on principle:
+   adapting to unknown models and unknown mounts **is the product**, so per-device
+   hardware specs are not an input this pipeline may request. The 70.4° assumption is
+   confirmed or replaced by estimation only — people-fits as above, a tile grid where
+   one is visible, `geometry_bench.py` as the label-free score — never by a lookup.
+
    **So the new fleet is not held to a bar the old one clears.** People-only pose fitting
    over `plate_calibration.fit_pose_from_people`, with the shop-ceiling prior 2.2–3.6 m
    and vfov 70.4:

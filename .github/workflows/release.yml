@@ -90,6 +90,8 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write # create the tag, the release, and upload assets
+      pull-requests: write # flip the release PR's autorelease label after tagging
+      issues: write # labels ride the issues API, and the label may need creating
     env:
       GH_TOKEN: ${{ github.token }}
       INPUT_TAG: ${{ github.event.inputs.tag }}
@@ -178,6 +180,38 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "$TAG" \
             --notes-file release-notes.md
+        env:
+          TAG: ${{ steps.v.outputs.tag }}
+
+      # release-please decides "has this release PR shipped" from the PR's label, not
+      # from the tag: its own github-release phase would swap `autorelease: pending`
+      # for `autorelease: tagged`, but that phase is skipped here (`skip-github-release`
+      # in release-please-config.json, so the tag carries artifacts), and skipping it
+      # skips the bookkeeping too. While a merged release PR still wears `pending`,
+      # every release-please run aborts with "untagged, merged release PRs outstanding"
+      # before proposing the next version -- and the job stays green while doing so.
+      # v0.2.0's PR (#28) sat that way from 2026-08-31 to 2026-09-03, and no release PR
+      # could open. Since this job is what cuts the tag, it does the swap.
+      - name: Mark the release PR tagged
+        if: steps.v.outputs.release == 'new'
+        run: |
+          VERSION="${TAG#v}"
+          PR=$(gh pr list --repo "$GITHUB_REPOSITORY" --state merged \
+                --label "autorelease: pending" --json number,title \
+                --jq ".[] | select(.title | endswith(\"release ${VERSION}\")) | .number" \
+                | head -n1)
+          if [ -z "$PR" ]; then
+            # A tag can exist without a PR (a bootstrapped first release); not an error.
+            echo "No pending release PR carries ${VERSION}; nothing to relabel."
+            exit 0
+          fi
+          # `--force` so an existing label is not a failure; release-please normally
+          # creates this one itself, and here it never runs the phase that would.
+          gh label create "autorelease: tagged" --repo "$GITHUB_REPOSITORY" \
+            --color EDEDED --force \
+            --description "release-please: the version this PR carried has been tagged"
+          gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" \
+            --remove-label "autorelease: pending" --add-label "autorelease: tagged"
         env:
           TAG: ${{ steps.v.outputs.tag }}
 
