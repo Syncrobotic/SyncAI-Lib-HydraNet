@@ -69,6 +69,10 @@ from syncai_bev3d.figures import (
     velocity_arrow,
     walkable_bounds,
 )
+from syncai_bev3d.heatmap import DEFAULT_CELL_M as HEAT_CELL_M
+from syncai_bev3d.heatmap import LEVELS as HEAT_LEVELS
+from syncai_bev3d.heatmap import heat_colour, tile_specs
+from syncai_bev3d.heatmap import normalise as heat_normalise
 from syncai_bev3d.meshes import (
     Placement,
     box,
@@ -100,6 +104,14 @@ from syncai_hydranet.utils.face_blur import (
 from syncai_hydranet.utils.visualize import preprocess
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
+
+
+def _display_verdict(track):
+    """The figure-colour verdict: floor 3 = the tracker's confirmation delay, so the
+    verdict exists at a figure's first drawn frame and the green->blue pop measured at
+    46 per 900 frames goes to zero. See `track_staff` for the measured cost."""
+    return track_staff(track, min_observations=3)
+
 
 # The run the tools ship from, named once in `syncai_hydranet.shipped`. Six files
 # used to carry their own copy of this string and the best run was in none of them.
@@ -350,7 +362,7 @@ def _render_in_chunks(args, camera, clip, cf, bounds, staff_model) -> int:
     }
     vel_window = max(1, round(VEL_WINDOW_S * args.fps))
     positions, seen_ids = [], set()
-    verdict_of = None if staff_model is None else track_staff
+    verdict_of = None if staff_model is None else _display_verdict
     for n, rec in enumerate(records):
         b = np.asarray(rec["boxes"], np.float32).reshape(-1, 4)
         sp = None if rec["staff"] is None else np.asarray(rec["staff"], float)
@@ -458,6 +470,13 @@ def main() -> int:
         "where they can carry it, standing otherwise. A posed figure shows what the "
         "person is doing and must not be measured -- the lift is the cheap one "
         "(PLAN 7c.30).",
+    )
+    ap.add_argument(
+        "--no-heatmap",
+        action="store_true",
+        help="do NOT accumulate the amber dwell field on the 3D panel's floor. The "
+        "field is heatmap3d.py's construction, live: occupancy-seconds per 0.25 m "
+        "cell, p99-scaled, clipped to the walkable polygon.",
     )
     ap.add_argument(
         "--workers",
@@ -627,6 +646,28 @@ def main() -> int:
     }
     bounds = (x_lo, x_hi, z_lo, z_hi)
     vel_window = max(1, round(VEL_WINDOW_S * args.fps))
+    # The live dwell field: the same construction `heatmap3d.py` draws offline, kept
+    # honest by sharing `syncai_bev3d.heatmap`'s maths. The grid lives in camera.json
+    # metres (st.sm); tiles are scaled only at draw. Workers accumulate during REPLAY
+    # too, so a chunk's field equals a single-process one at every frame.
+    heat_grid = None
+    if not args.no_heatmap:
+        pad = 1.0
+        heat_x0, heat_z0 = x_lo - pad, z_lo - pad
+        heat_grid = np.zeros(
+            (
+                int(np.ceil((x_hi + pad - heat_x0) / HEAT_CELL_M)),
+                int(np.ceil((z_hi + pad - heat_z0) / HEAT_CELL_M)),
+            )
+        )
+        for k in range(HEAT_LEVELS):
+            scene_mesh.PALETTE[f"heat_{k:02d}"] = heat_colour((k + 1) / HEAT_LEVELS)
+        heat_sq = [
+            (-HEAT_CELL_M / 2 * args.metre_scale, -HEAT_CELL_M / 2 * args.metre_scale),
+            (HEAT_CELL_M / 2 * args.metre_scale, -HEAT_CELL_M / 2 * args.metre_scale),
+            (HEAT_CELL_M / 2 * args.metre_scale, HEAT_CELL_M / 2 * args.metre_scale),
+            (-HEAT_CELL_M / 2 * args.metre_scale, HEAT_CELL_M / 2 * args.metre_scale),
+        ]
     n = n_det = n_fp = n_placed = n_outside = n_blur = n_posed = 0
     src_w, src_h, _ = probe_video(str(clip))
     # The plate is this camera's own empty shop, named by its camera.json. Missing is a
@@ -733,10 +774,16 @@ def main() -> int:
             args.metre_scale,
             args.fps,
             bounds,
-            verdict_of=None if staff_model is None else track_staff,
+            verdict_of=None if staff_model is None else _display_verdict,
         )
         n_outside += state["n_skipped"] - skips_before
         n_placed += len(states)
+        if heat_grid is not None:
+            for st in states:
+                hgi = int((st.sm[0] - heat_x0) / HEAT_CELL_M)
+                hgj = int((st.sm[1] - heat_z0) / HEAT_CELL_M)
+                if 0 <= hgi < heat_grid.shape[0] and 0 <= hgj < heat_grid.shape[1]:
+                    heat_grid[hgi, hgj] += 1.0 / args.fps
         if n < frame_lo:
             # A worker replaying its way to its own chunk: the tracker and the state
             # dicts advance, nothing is drawn or encoded.
@@ -759,11 +806,20 @@ def main() -> int:
         view_img = img.resize((960, 540))
         d = ImageDraw.Draw(view_img)
         figures, ghosts = [], []
+        if heat_grid is not None and heat_grid.any():
+            hnorm, _htop = heat_normalise(heat_grid)
+            specs = tile_specs(hnorm, heat_x0, heat_z0, HEAT_CELL_M, cf=cf)
+            for hx, hz, hlevel, halpha in specs:
+                tile = place(
+                    extrude(heat_sq, 0.012),
+                    Placement(hx * args.metre_scale, hz * args.metre_scale, None),
+                )
+                figures.append((tile, f"heat_{hlevel:02d}", halpha, False))
         moving = 0
         for t in tracks:
             seen_ids.add(t.track_id)
             bx = np.asarray(t.box, float) / 2.0
-            box_col = track_colour(t, None if staff_model is None else track_staff)
+            box_col = track_colour(t, None if staff_model is None else _display_verdict)
             d.rectangle(list(bx), outline=box_col, width=2)
             d.text((bx[0] + 3, bx[1] + 2), f"#{t.track_id}", fill=box_col)
 
@@ -861,6 +917,7 @@ def main() -> int:
             (10, 8),
             f"{camera}  ·  figures at tracked floor positions, each drawn at its "
             f"own measured stature; arrow = 1 s of travel, above 0.3 m/s"
+            + ("" if heat_grid is None else "  ·  amber floor = cumulative dwell")
             + ("" if args.metre_scale == 1.0 else f"  ·  metres x{args.metre_scale:g}"),
             fill=(216, 224, 236),
         )

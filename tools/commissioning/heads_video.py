@@ -76,6 +76,15 @@ from syncai_hydranet.utils.face_blur import BLUR_THR, blur_region, plate_person_
 from syncai_hydranet.utils.visualize import preprocess, terrain_palette
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
+
+
+def _display_verdict(track):
+    """The figure-colour verdict: floor 3 = the tracker's confirmation delay, so the
+    verdict exists at a figure's first drawn frame and the green->blue pop measured at
+    46 per 900 frames goes to zero. See `track_staff` for the measured cost."""
+    return track_staff(track, min_observations=3)
+
+
 PANEL = (960, 540)
 # Commissioning's taxonomy, drawn in `syncai_bev3d.scene_mesh`'s own colours so the mask panel
 # and the 3D panel name the same thing the same way. Order is paint order: surfaces, then the
@@ -657,7 +666,7 @@ def main() -> int:
                 args.metre_scale,
                 args.fps,
                 bounds,
-                verdict_of=None if staff_model is None else track_staff,
+                verdict_of=None if staff_model is None else _display_verdict,
             )
             n += 1
             continue
@@ -795,7 +804,7 @@ def main() -> int:
             args.metre_scale,
             args.fps,
             bounds,
-            verdict_of=None if staff_model is None else track_staff,
+            verdict_of=None if staff_model is None else _display_verdict,
         )
         figures, ghosts = [], []
         n_posed = 0
