@@ -77,6 +77,11 @@ PALETTE = {
     "display_table": (172, 162, 148),
     "floor": (52, 96, 66),
     "disc": (242, 180, 78),
+    # venue vocabulary beyond the retail floor: a stair flight reads by silhouette, and
+    # glass is a colour that only works with a translucent item alpha (~70) -- opaque it
+    # reads as painted metal
+    "stair": (196, 190, 178),
+    "glass": (150, 200, 225),
     "door": (176, 126, 88),
     "product": (86, 214, 188),
     "product_boxed_stock": (190, 90, 235),

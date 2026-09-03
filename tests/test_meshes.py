@@ -26,6 +26,7 @@ from syncai_bev3d.meshes import (
     cabinet,
     column,
     extrude,
+    glass_panel,
     ground_disc,
     human,
     human_posed,
@@ -33,6 +34,7 @@ from syncai_bev3d.meshes import (
     shelf_levels,
     shelving,
     smooth_normals,
+    stairs,
     table,
     to_obj,
     wall,
@@ -540,3 +542,36 @@ def test_the_head_is_not_placed_from_the_nose():
         return top.mean(0)
 
     assert float(np.linalg.norm(head_c(ahead) - head_c(down))) < 1e-6
+
+
+# --- venue vocabulary: stairs and glass ------------------------------------
+
+
+def test_stairs_reach_their_stated_height_and_stand_on_the_floor():
+    lo, hi = _bbox(stairs(1.2, 4.0, 6.0))
+    assert lo[1] == pytest.approx(0.0, abs=1e-9)
+    assert hi[1] == pytest.approx(4.0, abs=1e-9)
+
+
+def test_stairs_step_count_follows_the_riser_not_an_even_split():
+    """A 4 m flight is ~25 steps at the 0.16 m riser; a podium of 0.45 m is 3. A flight
+    drawn with the wrong count reads as the wrong scale even with measured extents."""
+    v, _ = stairs(1.2, 4.0, 6.0)
+    tops = np.unique(np.round(v[:, 1], 6))
+    assert len(tops) - 1 == 25  # floor plus one distinct top per step
+    v, _ = stairs(1.0, 0.45, 0.9)
+    assert len(np.unique(np.round(v[:, 1], 6))) - 1 == 3
+
+
+def test_stairs_ascend_toward_positive_z():
+    v, _ = stairs(1.0, 1.0, 2.0, steps=4)
+    front = v[v[:, 2] < -0.4][:, 1].max()
+    back = v[v[:, 2] > 0.4][:, 1].max()
+    assert back > front
+
+
+def test_glass_panel_is_thin_and_full_height():
+    """The pane must not read as masonry: 2 cm against wall()'s 12 cm default."""
+    v, _ = glass_panel([(0.0, 0.0), (4.0, 0.0)], 2.0)
+    assert v[:, 1].max() == pytest.approx(2.0, abs=1e-9)
+    assert v[:, 2].max() - v[:, 2].min() < 0.06  # rails govern; wall() is 0.12 thick
