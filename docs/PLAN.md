@@ -2445,3 +2445,31 @@ something it does not support.
      the door line with per-door hotspots; the two cells past the line are people
      seen OVER the half-height doors (in-train/far-platform), a mix-in source any
      half-height-PSD deployment will need a door-line clip for.
+
+   **Addendum 3, 2026-09-03 — stage-0 against the point-cloud->SpatialLM recipe, and
+   where Cosmos fits.** Researched on request; sources in the session log.
+
+   * SpatialLM (NeurIPS 2025): point cloud -> walls(endpoints+height)/doors/windows/
+     oriented boxes, fine-tuned 0.5-1B LLMs on 12,328 SYNTHETIC Kujiale interiors. Its
+     video front-end (MASt3R-SLAM) needs camera MOTION -- on a fixed CCTV it degrades
+     to single-frame metric depth, this fleet's measured weak link (DA-V2 1.45-1.6x,
+     white-wall collapse), and glass (the metro's key structure) is a point-cloud
+     front-end's worst case while our floor-edge door line sidesteps it. So it is not
+     a stage-0 replacement; it IS a candidate offline commissioning teacher for the
+     fixture/door vocabulary gap (screen doors read `wall`, metro zones = 0), refereed
+     by the floor bench and person-flow contradiction, never by its own benchmark --
+     the `column` lesson pre-registered against the residential->venue domain gap.
+   * Worth stealing regardless of the model: the structured layout DSL (walls as
+     endpoints+height) as the fixture head's target format -- scene3d hand-builds
+     exactly this today, and the probe scenes' three stair mistakes are what manual
+     structure reading costs.
+   * NVIDIA Cosmos 2.5 (Predict/Transfer/Reason) outputs no vfov/pose/metric layout:
+     it cannot directly sharpen stage-0. Indirect fits: Transfer2.5 as a
+     LICENCE-CLEAN night/IR synthetic engine over our own scene3d layouts (the LLVIP
+     non-commercial dead end, open item 4) and as fixture-vocabulary training data;
+     Reason2 as a zone/FP confirmation teacher for the 15-camera backlog. Sim2real
+     measured before trusted ("STUDIO A reads as a bathroom" is the prior).
+   * Cheap probes proposed: (1) SpatialLM1.1-Qwen-0.5B on MapAnything single-frame
+     point clouds for cam01 (anchored) + one metro frame, walls/doors projected back
+     through the calibrated camera vs our masks (~1 day); (2) Cosmos Transfer night
+     variants of one scene3d layout re-scored by the night-ghost sweep (days, heavy).
