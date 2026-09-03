@@ -2396,3 +2396,27 @@ something it does not support.
    confidence and needs a calibrated (or lowered) threshold per venue plus a
    poster/static-FP gate; terrain's floor transfers; fixture vocabulary and the crowd
    person-mask are the two heads that need venue work before metro/airport pilots.
+
+   **Addendum, same day — can these venues self-calibrate into a 3D scene?**
+   `fit_pose_from_people` over the probe's own gated boxes (`runs/domain_probe_20260903/
+   probe_calib.py`), control first: Taichung-cam01's boxes reproduce the known answer
+   (2.22 m / 39 deg at vfov 70.4, spread 0.045), so the apparatus is sound.
+
+   * **Metro (1,234 boxes, mezzanine + poster excluded by a y-cut — two floor levels
+     in one frame): interior fit**, 5.0-6.4 m / ~30 deg, spread 0.068-0.072, but height
+     moves 17% across vfov 60-80 (a deep scene, against retail's 2%) — vfov must be
+     pinned first, and the platform's tile grid offers the same pin cam01 used. Lens
+     is visibly barrel; k1 fit required. Verdict: 3D scene feasible; zones still
+     blocked on fixture vocabulary (screen doors read `wall`).
+   * **Mall entrance (444 boxes): the cleanest fit of the three** once the shop prior's
+     2.2 m floor is dropped — 1.9-2.1 m / 30-42 deg, spread 0.025-0.049, better than
+     the control. A doorway camera at head height. Spread is monotone in vfov (the
+     known trap), so vfov needs an external pin; scale rests on the 1.70 m prior as
+     fleet-standard. Shallow wedge of a world, heavy occlusion behind the first row.
+   * **Airport hall (110 boxes): non-convergent** — spread 0.12-0.14 (3x control),
+     height rides whichever prior bound it is given (3.0, then 4.0), pitch lands at a
+     physically absurd 51-73 deg for a near-horizontal view. Causes stack: true pitch
+     near zero is the method's degenerate direction, granite reflections double the
+     feet, timelapse blur, 20-40 m standoff. This is a verdict on the FOOTAGE (a
+     tripod at human height), not the venue — an actual ceiling-mounted airport camera
+     would resemble the metro case.
