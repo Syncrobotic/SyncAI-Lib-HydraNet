@@ -2420,3 +2420,28 @@ something it does not support.
      feet, timelapse blur, 20-40 m standoff. This is a verdict on the FOOTAGE (a
      tripod at human height), not the venue — an actual ceiling-mounted airport camera
      would resemble the metro case.
+
+   **Addendum 2, 2026-09-03 — the two feasible venues were BUILT.**
+   `runs/domain_probe_20260903/scenes/`: per-venue `camera.json` (passes `validate()`),
+   provenance sidecars, 1 m grid acceptance overlays, union-floor masks, BEV dwell
+   maps, scene renders and orbitable GLBs; build scripts archived beside them.
+
+   * **The tile-grid vfov pin REFUSED on the metro footage** — `fit_k1`'s sweep came
+     back flat (top-5 scores within 0.2%) with the burned-in VMS queue-zone lines
+     chroma-filtered out, and single-line curvature traces drowned in clutter. The
+     grout signal cam01 had is simply not in this footage (grazing angle + HEVC). So
+     both venues ship the fleet band instead: vfov 70.4 assumed, 60/80 band in
+     provenance, `lens: None`, scale on the 1.70 m person prior.
+   * **Acceptance held anyway, with an independent witness on the metro**: the 1 m
+     grid spans 1.6-1.8 platform tiles per cell against TRTC's 60 cm standard tile —
+     agreement to ~10%, inside the vfov band's spread. The mall grid agrees with
+     person heights to ~15%.
+   * **Both scenes are the first consumers of `stairs()` and `glass_panel()`**
+     (b3a64d3): the platform's half-height glazed screen-door run + hoarding +
+     mezzanine + connecting flight, the mall's two glass door leaves in a framed
+     vestibule. Captions separate measured (floor extents, door lines, people) from
+     convention (every height).
+   * **BEV dwell reads correctly**: metro heat sits in the queue band 1-3 m before
+     the door line with per-door hotspots; the two cells past the line are people
+     seen OVER the half-height doors (in-train/far-platform), a mix-in source any
+     half-height-PSD deployment will need a door-line clip for.
