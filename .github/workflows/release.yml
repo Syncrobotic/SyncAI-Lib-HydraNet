@@ -2,27 +2,40 @@ name: Release (main)
 
 # Releasing, for the promotion flow feat/* -> dev -> stage -> main. `ci.yml` gates
 # feat->dev and `ci-promote.yml` gates dev->stage; this turns an arrival on `main` into a
-# tag and a GitHub Release, and does nothing anywhere else.
+# tag, a GitHub Release, and the wheel + sdist attached to it, and does nothing elsewhere.
 #
 # release-please opens a `chore(main): release X.Y.Z` PR against `main` carrying the bump
-# and the CHANGELOG entry, and merging it is the act of deciding to release. That arrival
-# carries a version with no tag, which is what the `release` job below exists for.
+# and the CHANGELOG entry, and merging it is the act of deciding to release. On that merge
+# release-please cuts the tag AND the Release AND flips the release PR's `autorelease`
+# label -- the standard flow, so the label bookkeeping cannot fall out of step. The
+# `publish` job then builds the distributions and attaches them to the release
+# release-please just made.
 #
-# `release-please-config.json` and `.release-please-manifest.json` are passed to the
-# action below, and are also what `tests/test_version_agreement.py` reads to check that
+# **Why release-please owns the release now.** It used to be told NOT to
+# (`skip-github-release`), because a sibling job cut the tag in order to attach a wheel and
+# release-please attaches nothing -- so letting it release would tag with no artifacts. The
+# cost of that split was hidden bookkeeping: skipping the release phase also skips the
+# label swap, and a merged release PR still wearing `autorelease: pending` makes every
+# later run abort ("untagged, merged release PRs outstanding") before proposing the next
+# version, while staying green. v0.2.0's PR (#28) froze the pipeline that way for three
+# days and v0.3.0's (#36) did it again, because the hand-rolled swap was gated on cutting a
+# NEW tag and so could never heal a tag that already existed. The standard flow removes the
+# whole class: release-please does the tag, the release, and the label in one place, and
+# `publish` uploads the artifacts afterwards.
+#
+# `release-please-config.json` and `.release-please-manifest.json` are passed to the action
+# below, and are also what `tests/test_version_agreement.py` reads to check that
 # `CITATION.cff` is listed among their `extra-files` -- the only thing holding the
 # citation's version to the package's.
 #
 # **`main` and `stage` resolve to the same tree and not the same commit, and nothing
-# asserts it.** Promotions go through GitHub PRs, and a PR merge writes a merge commit
-# onto the target, so `main` carries commits `stage` does not. Those merges carry no
-# content of their own, so what is tagged is the tree that was reviewed, reached by a
-# different commit. Restoring the strict form means promoting by `git merge --ff-only`
-# from a clone and re-aligning two shared branches; that has not been done.
+# asserts it.** Promotions go through GitHub PRs, and a PR merge writes a merge commit onto
+# the target, so `main` carries commits `stage` does not. Those merges carry no content of
+# their own, so what is tagged is the tree that was reviewed, reached by a different commit.
 #
-# Model releases are NOT this. Weights are versioned by `scripts/release_bundle.sh` into
-# an immutable checksummed bundle, because `runs/` is not in git and a commit on `main`
-# says nothing about which checkpoint a robot is running.
+# Model releases are NOT this. Weights are versioned by `scripts/release_bundle.sh` into an
+# immutable checksummed bundle, because `runs/` is not in git and a commit on `main` says
+# nothing about which checkpoint a robot is running.
 on:
   push:
     branches: [main]
@@ -32,7 +45,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to (re)build artifacts for, e.g. v0.2.0"
+        description: "Release tag to (re)build & attach artifacts for, e.g. v0.2.0"
         required: true
         type: string
 
@@ -40,65 +53,74 @@ permissions:
   contents: read
 
 # Serialize per branch, and never cancel mid-flight: a cancelled release run can
-# leave a tag without its artifacts.
+# leave a release without its artifacts.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  # release-please proposes the version; the job below turns an arrival carrying an
-  # untagged one into a tag and a release. Two jobs because they answer two questions:
-  # "what should the next version be" is a function of the commits, and "is this a
-  # release" is a function of whether that version already has a tag.
+  # release-please proposes the version on ordinary pushes, and on the push that merges its
+  # release PR it cuts the tag, the Release and the label swap, exposing `release_created`
+  # and `tag_name` for the publish job to key on.
   #
-  # **`target-branch: main`, and the release PR lands on `main` directly.** That is the
-  # one thing here that does not ride feat/* → dev → stage → main, and it is deliberate:
-  # a version bump and a CHANGELOG entry are metadata *about* a release, not work, and
-  # they cannot be written before the thing they describe has arrived. `main`'s
-  # `__version__` therefore runs ahead of `dev`'s between releases. Nothing conflicts on
-  # the next promotion -- git keeps `main`'s line, since `stage` never touched it -- and
-  # `test_version_agreement.py` holds `__init__.py` and `CITATION.cff` to each other on
-  # whichever branch it runs, both of which release-please updates together.
+  # **`target-branch: main`, and the release PR lands on `main` directly.** That is the one
+  # thing here that does not ride feat/* -> dev -> stage -> main, and it is deliberate: a
+  # version bump and a CHANGELOG entry are metadata *about* a release, not work, and cannot
+  # be written before the thing they describe has arrived. `main`'s `__version__` therefore
+  # runs ahead of `dev`'s between releases; git keeps `main`'s line on the next promotion
+  # since `stage` never touched it.
   #
   # **The base must be a branch with no required status check.** A PR opened with
-  # `secrets.GITHUB_TOKEN` does not trigger workflows -- GitHub's recursion guard -- so on
-  # a protected base the release PR would be permanently blocked on a check that can never
+  # `secrets.GITHUB_TOKEN` does not trigger workflows -- GitHub's recursion guard -- so on a
+  # protected base the release PR would be permanently blocked on a check that can never
   # run. `dev` requires `CI success`; `main` requires none, so the release PR merges on
   # inspection, which is what a version bump should be reviewed by anyway.
-  release-pr:
-    name: Version PR (main)
+  release-please:
+    name: Release Please (main)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write # push the release PR's branch
-      pull-requests: write
+      contents: write # push the release PR branch, and create the tag + Release
+      pull-requests: write # open the release PR and flip its autorelease label
+      issues: write # the autorelease labels ride the issues API
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           target-branch: main
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  release:
-    name: Tag & publish (main)
+  # Build the wheel + sdist and attach them to the release. Runs on a freshly-cut release
+  # (push, `release_created == true`) or a manual rebuild of an existing tag
+  # (workflow_dispatch). `always()` lets the dispatch path run even though release-please is
+  # skipped on manual runs.
+  publish:
+    name: Build & attach distributions (main)
+    needs: release-please
     if: |
-      github.event_name == 'workflow_dispatch'
-      || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      always()
+      && (
+        (github.event_name == 'push' && needs.release-please.outputs.release_created == 'true')
+        || github.event_name == 'workflow_dispatch'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write # create the tag, the release, and upload assets
-      pull-requests: write # flip the release PR's autorelease label after tagging
-      issues: write # labels ride the issues API, and the label may need creating
+      contents: write # upload the distributions to the release
     env:
       GH_TOKEN: ${{ github.token }}
       INPUT_TAG: ${{ github.event.inputs.tag }}
+      # The tag to build and attach to: the manual input, else the one just cut.
+      TAG: ${{ github.event.inputs.tag || needs.release-please.outputs.tag_name }}
     steps:
-      # The manual value flows into a checkout ref and a `gh release` target, so it
-      # is validated before either, and read from the environment rather than
-      # inlined into a shell.
+      # The manual value flows into a checkout ref and a `gh release` target, so it is
+      # validated before either, and read from the environment rather than inlined.
       - name: Validate tag (manual runs)
         if: github.event_name == 'workflow_dispatch'
         run: |
@@ -107,116 +129,31 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.inputs.tag || github.sha }}
-          fetch-depth: 0 # tags, so an already-released version is recognised
+          ref: ${{ env.TAG }} # the released tag's source, so a rebuild is byte-for-byte it
+          fetch-depth: 0
           persist-credentials: false
 
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
 
-      # Build first and take the version from the artifact rather than by parsing
-      # `__init__.py`. Whatever the wheel says is what a `pip install` will report,
-      # so deriving the tag from it removes the class of bug where the tag and the
-      # installed package disagree -- which is exactly what would happen if the
-      # `x-release-please-version` annotation were ever dropped from that file.
       - run: uv build
 
-      - name: Resolve version and decide whether this is a release
-        id: v
+      # Whatever the wheel says is what a `pip install` reports, so a wheel whose version
+      # disagrees with the tag it is about to hang on is a release that lies about itself --
+      # exactly what a dropped `x-release-please-version` annotation would produce. The old
+      # workflow derived the tag from the wheel to avoid this; here the tag comes from
+      # release-please, so the same guard is an assertion rather than a derivation.
+      - name: Verify the wheel matches the tag
         run: |
           WHEEL=$(ls dist/*.whl)
           VERSION=$(basename "$WHEEL" | cut -d- -f2)
-          TAG="v${VERSION}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          if [ -n "$INPUT_TAG" ]; then
-            # Manual rebuild: the tag exists by definition, and must match the source.
-            [ "$INPUT_TAG" = "$TAG" ] || {
-              echo "::error::tag $INPUT_TAG holds version $VERSION — refusing to attach mismatched artifacts"
-              exit 1
-            }
-            echo "release=rebuild" >> "$GITHUB_OUTPUT"
-          elif git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            # Ordinary promotion of code whose version was released earlier. Not an
-            # error and not a release -- most pushes to main are this.
-            echo "release=none" >> "$GITHUB_OUTPUT"
-            echo "$TAG already exists; nothing to release."
-          else
-            echo "release=new" >> "$GITHUB_OUTPUT"
-            echo "$TAG is new; cutting a release."
-          fi
+          [ "v${VERSION}" = "$TAG" ] || {
+            echo "::error::wheel holds $VERSION but the release tag is $TAG — refusing to attach mismatched artifacts"
+            exit 1
+          }
 
-      # The notes release-please already wrote, rather than `--generate-notes`:
-      # CHANGELOG.md is grouped by the Conventional Commit types this project
-      # enforces, and a raw commit list would discard that grouping.
-      #
-      # **The file is optional and is not in the tree yet**; release-please writes it on
-      # the first release PR. Reading it unconditionally raised `FileNotFoundError` before
-      # the fallback could run, and the tag and release steps are `if release == 'new'`
-      # and sit after this one -- so the version stayed untagged and the next push failed
-      # identically. A release that cannot be cut cannot un-break itself.
-      - name: Extract the CHANGELOG section
-        if: steps.v.outputs.release == 'new'
-        run: |
-          python3 - "$TAG" <<'PY' > release-notes.md
-          import re, sys, pathlib
-          tag = sys.argv[1].lstrip("v")
-          path = pathlib.Path("CHANGELOG.md")
-          text = path.read_text(encoding="utf-8") if path.is_file() else ""
-          # release-please writes "## [0.2.0](compare-url) (date)"; take that heading
-          # to the next one at the same level.
-          m = re.search(rf"^##\s+\[?{re.escape(tag)}\]?.*?$(.*?)(?=^##\s|\Z)",
-                        text, re.M | re.S)
-          print((m.group(1).strip() if m else f"Release {sys.argv[1]}."))
-          PY
-        env:
-          TAG: ${{ steps.v.outputs.tag }}
-
-      - name: Tag and release
-        if: steps.v.outputs.release == 'new'
-        run: |
-          gh release create "$TAG" dist/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --title "$TAG" \
-            --notes-file release-notes.md
-        env:
-          TAG: ${{ steps.v.outputs.tag }}
-
-      # release-please decides "has this release PR shipped" from the PR's label, not
-      # from the tag: its own github-release phase would swap `autorelease: pending`
-      # for `autorelease: tagged`, but that phase is skipped here (`skip-github-release`
-      # in release-please-config.json, so the tag carries artifacts), and skipping it
-      # skips the bookkeeping too. While a merged release PR still wears `pending`,
-      # every release-please run aborts with "untagged, merged release PRs outstanding"
-      # before proposing the next version -- and the job stays green while doing so.
-      # v0.2.0's PR (#28) sat that way from 2026-08-31 to 2026-09-03, and no release PR
-      # could open. Since this job is what cuts the tag, it does the swap.
-      - name: Mark the release PR tagged
-        if: steps.v.outputs.release == 'new'
-        run: |
-          VERSION="${TAG#v}"
-          PR=$(gh pr list --repo "$GITHUB_REPOSITORY" --state merged \
-                --label "autorelease: pending" --json number,title \
-                --jq ".[] | select(.title | endswith(\"release ${VERSION}\")) | .number" \
-                | head -n1)
-          if [ -z "$PR" ]; then
-            # A tag can exist without a PR (a bootstrapped first release); not an error.
-            echo "No pending release PR carries ${VERSION}; nothing to relabel."
-            exit 0
-          fi
-          # `--force` so an existing label is not a failure; release-please normally
-          # creates this one itself, and here it never runs the phase that would.
-          gh label create "autorelease: tagged" --repo "$GITHUB_REPOSITORY" \
-            --color EDEDED --force \
-            --description "release-please: the version this PR carried has been tagged"
-          gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" \
-            --remove-label "autorelease: pending" --add-label "autorelease: tagged"
-        env:
-          TAG: ${{ steps.v.outputs.tag }}
-
-      - name: Re-attach artifacts
-        if: steps.v.outputs.release == 'rebuild'
+      # `--clobber` so a re-run or a manual rebuild overwrites rather than fails; the
+      # release itself was created by release-please (push) or already exists (dispatch).
+      - name: Attach distributions to the release
         run: gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
-        env:
-          TAG: ${{ steps.v.outputs.tag }}
