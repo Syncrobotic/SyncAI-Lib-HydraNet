@@ -67,6 +67,7 @@ from syncai_hydranet.analytics.staff import StaffModel, require_camera, track_st
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
+from syncai_hydranet.serving.camera import BIRTH_REF
 from syncai_hydranet.shipped import load_model
 from syncai_hydranet.utils.face_blur import BLUR_THR, blur_region, plate_person_boxes
 from syncai_hydranet.utils.visualize import preprocess, terrain_palette
@@ -474,7 +475,7 @@ def main() -> int:
     ap.add_argument("--clip", default=None)
     ap.add_argument("--frames", type=int, default=900)
     ap.add_argument("--fps", type=float, default=5.0)
-    ap.add_argument("--score-thr", type=float, default=0.35)
+    ap.add_argument("--score-thr", type=float, default=BIRTH_REF)
     ap.add_argument("--metre-scale", type=float, default=1.0)
     ap.add_argument(
         "--workers",

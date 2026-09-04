@@ -68,6 +68,7 @@ from syncai_hydranet.analytics.dwell import track_ground_path  # noqa: E402
 from syncai_hydranet.analytics.tracker import SIMPLIFICATIONS, Tracker  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera, GroundPlane  # noqa: E402
+from syncai_hydranet.models.heads.detection import SCORE_THR_RETAIL  # noqa: E402
 from syncai_hydranet.shipped import load_model  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
@@ -90,7 +91,7 @@ def build_parser() -> argparse.ArgumentParser:
         "offset, so a security operator can pull the footage without converting anything. "
         "See scripts/pull_studioa.py, which learnt this by pulling a closed shop at 16:00",
     )
-    ap.add_argument("--score-thr", type=float, default=0.20)
+    ap.add_argument("--score-thr", type=float, default=SCORE_THR_RETAIL)
     ap.add_argument("--min-hits", type=int, default=3)
     ap.add_argument("--max-age", type=int, default=5)
     ap.add_argument("--iou", type=float, default=0.3)

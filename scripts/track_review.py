@@ -86,6 +86,7 @@ from syncai_hydranet.analytics.tracker import iou_pair
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.transforms import invert_geom
 from syncai_hydranet.data.video import frames, probe
+from syncai_hydranet.models.heads.detection import SCORE_THR_RETAIL
 from syncai_hydranet.models.hydranet import build_model
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
 from syncai_hydranet.utils.device import pick_device
@@ -490,7 +491,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", required=True)
     p.add_argument("--fps", type=float, default=5.0)
     p.add_argument("--max-frames", type=int, default=300, help="0 means the whole clip")
-    p.add_argument("--score-thr", type=float, default=0.25)
+    p.add_argument("--score-thr", type=float, default=SCORE_THR_RETAIL)
     p.add_argument("--weights", choices=("ema", "model"), default="ema")
     p.add_argument("--iou", type=float, default=0.3)
     p.add_argument("--max-age", type=int, default=5)

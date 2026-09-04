@@ -165,11 +165,18 @@ def load_thresholds(path: str | Path) -> ThresholdBook:
     return ThresholdBook(default=default, cameras=cameras, bases=bases)
 
 
-# The reference edge the injected tracker's single hysteresis is built on. A
+# The reference band the injected tracker's single hysteresis is built on. A
 # detection's score is rescaled by (BIRTH_REF / its class's birth) before the
-# tracker sees it, which turns the tracker's global 0.35/0.20 band into the
-# per-class band -- exact whenever a class keeps the default keep/birth ratio.
+# tracker sees it, which turns this global band into the per-class one -- exact
+# whenever a class keeps the default keep/birth ratio.
+#
+# Both edges are named because both are quoted elsewhere: nine `--score-thr`
+# defaults across scripts/ and tools/ read BIRTH_REF, and `serve_pilot.py`
+# constructs its tracker from the pair. A number that is the shipped operating
+# point in ten places and a literal in each of them drifts in one of them and
+# still runs.
 BIRTH_REF = 0.35
+KEEP_REF = 0.20
 
 
 class CameraState:
@@ -193,7 +200,7 @@ class CameraState:
         # Copy so two cameras can never share one dict by aliasing a default.
         base = dict(DEFAULT_THRESHOLDS if thresholds is None else thresholds)
         self.thresholds = {
-            c: base.get(c, ClassThresholds(birth=BIRTH_REF, keep=0.20))
+            c: base.get(c, ClassThresholds(birth=BIRTH_REF, keep=KEEP_REF))
             for c in self.det_classes
         }
         self.ema_alpha = float(ema_alpha)

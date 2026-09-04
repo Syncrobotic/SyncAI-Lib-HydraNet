@@ -76,3 +76,45 @@ def test_the_imagenet_normalisation_has_one_source():
         if hasattr(mod, "MEAN"):
             assert np.array_equal(mod.MEAN, IMAGENET_MEAN)
             assert np.array_equal(mod.STD, IMAGENET_STD)
+
+
+def test_the_shipped_score_band_has_one_source():
+    """Nine `--score-thr` defaults and the pilot's tracker are the same operating point.
+
+    Each wrote its number as a literal, so moving one meant finding every copy and a miss
+    would keep running -- rendering a figure at the old edge with nothing saying the two
+    figures were cut differently. There are three named operating points and every
+    `--score-thr` default now names the one it means: `serving.camera.BIRTH_REF` (0.35,
+    the shipped birth edge), `heads.detection.SCORE_THR_RETAIL` (0.20, the fixed-CCTV
+    compromise with the measurement table beside it) and `SCORE_THR_VIEW` (0.30, the
+    robot's forward camera). Which one a tool means is the whole content of the choice,
+    and a bare float states the value while hiding it.
+
+    The teacher's `teachers.gdino.PERSON_THRESHOLD` is *also* 0.35 and is deliberately
+    left alone: it is a Grounding DINO score chosen from a measured day/night gap, not the
+    shipped model's birth edge, and the two coinciding today is not a relationship. Tying
+    them together would move one when the other was retuned.
+    """
+    import re
+    from pathlib import Path
+
+    from syncai_hydranet.serving.camera import BIRTH_REF, KEEP_REF
+    from syncai_hydranet.serving.camera import DEFAULT_THRESHOLDS as BOOK
+
+    root = Path(__file__).resolve().parents[1]
+    pat = re.compile(r'"--score-thr",\s*type=float,\s*default=([^,)\s]+)')
+    found = {}
+    for tree in ("scripts", "tools"):
+        for f in sorted((root / tree).rglob("*.py")):
+            for m in pat.finditer(f.read_text()):
+                found[str(f.relative_to(root))] = m.group(1)
+    assert found, "the pattern stopped matching; this test is measuring nothing"
+    literals = {k: v for k, v in found.items() if re.fullmatch(r"[\d.]+", v)}
+    assert not literals, (
+        "a score threshold written as a bare number. The tree has three named operating "
+        f"points and each of these is one of them, unattributably: {literals}"
+    )
+
+    assert BOOK["person"].birth == BIRTH_REF and BOOK["person"].keep == KEEP_REF, (
+        "the reference band must be the band `person` actually ships with"
+    )

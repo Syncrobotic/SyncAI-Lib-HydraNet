@@ -27,6 +27,7 @@ from scipy import ndimage
 
 from syncai_hydranet.analytics.tracker import iou_pair
 from syncai_hydranet.data.video import frames as decode_frames
+from syncai_hydranet.serving.camera import BIRTH_REF
 from syncai_hydranet.shipped import load_model
 from syncai_hydranet.utils.visualize import preprocess
 
@@ -91,7 +92,7 @@ def main() -> int:
     )
     ap.add_argument("--frames", type=int, default=60)
     ap.add_argument("--stride", type=int, default=15)
-    ap.add_argument("--score-thr", type=float, default=0.35)
+    ap.add_argument("--score-thr", type=float, default=BIRTH_REF)
     ap.add_argument("--out", default="runs/dense_vs_box")
     args = ap.parse_args()
 

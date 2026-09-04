@@ -60,6 +60,7 @@ from syncai_hydranet.analytics.dwell import ground_map  # noqa: E402
 from syncai_hydranet.analytics.tracker import SIMPLIFICATIONS  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera, GroundPlane  # noqa: E402
+from syncai_hydranet.models.heads.detection import SCORE_THR_RETAIL  # noqa: E402
 from syncai_hydranet.shipped import load_model  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
@@ -77,10 +78,10 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--score-thr",
         type=float,
-        default=0.20,
-        help="0.20 rather than the 0.30 viewing default: measured on Taichung-cam01, "
-        "person detections went 62 -> 72 -> 112 as the cut fell 0.35 -> 0.25 -> 0.15, "
-        "and a tracker cannot associate what was never detected",
+        default=SCORE_THR_RETAIL,
+        help="the fixed-CCTV cut rather than the viewing one: a tracker cannot "
+        "associate what was never detected, and `models/heads/detection.py` carries "
+        "the two-camera table this was chosen from",
     )
     ap.add_argument("--min-hits", type=int, default=3)
     ap.add_argument("--max-age", type=int, default=5)

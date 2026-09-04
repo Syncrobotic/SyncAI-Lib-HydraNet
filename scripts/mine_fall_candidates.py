@@ -47,6 +47,7 @@ from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
 from syncai_hydranet.analytics.events import fall_candidates  # noqa: E402
 from syncai_hydranet.analytics.tracker import Tracker  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
+from syncai_hydranet.models.heads.detection import SCORE_THR_RETAIL  # noqa: E402
 from syncai_hydranet.shipped import load_model  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
@@ -63,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--max-frames", type=int, default=0, help="0 means the whole clip")
     # 0.20 rather than the 0.30 viewing default, for retail_flow's measured reason: a
     # tracker cannot associate what was never detected.
-    ap.add_argument("--score-thr", type=float, default=0.20)
+    ap.add_argument("--score-thr", type=float, default=SCORE_THR_RETAIL)
     ap.add_argument("--min-hits", type=int, default=3)
     ap.add_argument("--max-age", type=int, default=5)
     ap.add_argument("--iou", type=float, default=0.3)

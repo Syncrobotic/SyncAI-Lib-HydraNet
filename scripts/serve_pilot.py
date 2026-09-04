@@ -253,7 +253,7 @@ def make_tracker_factory(vel_scale: float):
     from scipy.optimize import linear_sum_assignment
 
     from syncai_hydranet.analytics.bytetrack import OfflineForward, iou
-    from syncai_hydranet.serving.camera import BIRTH_REF
+    from syncai_hydranet.serving.camera import BIRTH_REF, KEEP_REF
 
     class ScipyAssocForward(OfflineForward):
         """OfflineForward with the assignment done by scipy's C solver.
@@ -282,7 +282,7 @@ def make_tracker_factory(vel_scale: float):
             return pairs, set(range(len(boxes))) - set(pairs.values())
 
     # The tracker's global hysteresis; CameraState rescales per-class onto it.
-    return lambda: ScipyAssocForward(BIRTH_REF, 0.20, 0.3, 0.4, 5, 2, vel_scale)
+    return lambda: ScipyAssocForward(BIRTH_REF, KEEP_REF, 0.3, 0.4, 5, 2, vel_scale)
 
 
 def live_tracks(state: CameraState) -> int:

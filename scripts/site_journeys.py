@@ -57,6 +57,7 @@ from syncai_hydranet.analytics.tracker import SIMPLIFICATIONS, Tracker  # noqa: 
 from syncai_hydranet.analytics.world import world_frames  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
 from syncai_hydranet.geometry.camera_json import CameraFile  # noqa: E402
+from syncai_hydranet.serving.camera import BIRTH_REF  # noqa: E402
 from syncai_hydranet.shipped import load_model  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
@@ -146,7 +147,7 @@ def main() -> int:
     )
     ap.add_argument("--frames", type=int, default=900, help="900 at 5 fps is three minutes")
     ap.add_argument("--fps", type=float, default=5.0)
-    ap.add_argument("--score-thr", type=float, default=0.35, help="the shipped birth edge")
+    ap.add_argument("--score-thr", type=float, default=BIRTH_REF, help="the shipped birth edge")
     ap.add_argument("--iou", type=float, default=0.3)
     ap.add_argument("--max-age", type=int, default=5)
     ap.add_argument("--min-hits", type=int, default=3)

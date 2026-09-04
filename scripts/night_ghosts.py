@@ -56,6 +56,7 @@ from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
 from syncai_hydranet.data.night_person import NightPersonVeto  # noqa: E402
 from syncai_hydranet.data.video import frames as decode_frames  # noqa: E402
 from syncai_hydranet.data.video import probe  # noqa: E402
+from syncai_hydranet.serving.camera import BIRTH_REF  # noqa: E402
 from syncai_hydranet.shipped import load_model  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
@@ -130,7 +131,7 @@ def main() -> int:
     ap.add_argument("--checkpoint", default="runs/hydranet_retail_pose02/last.pt")
     ap.add_argument("--frames", type=int, default=150, help="30 s at 5 fps of an empty shop")
     ap.add_argument("--fps", type=float, default=5.0)
-    ap.add_argument("--score-thr", type=float, default=0.35, help="the shipped birth edge")
+    ap.add_argument("--score-thr", type=float, default=BIRTH_REF, help="the shipped birth edge")
     ap.add_argument("--person-label", type=int, default=-1)
     args = ap.parse_args()
 

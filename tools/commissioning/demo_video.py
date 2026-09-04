@@ -26,7 +26,7 @@ metre position of every figure meanwhile, which is what settles such a question.
 
 Usage:
   uv run python tools/commissioning/demo_video.py <camera> [--clip PATH]
-      [--frames 900] [--fps 5] [--checkpoint last.pt] [--score-thr 0.35]
+      [--frames 900] [--fps 5] [--checkpoint last.pt] [--score-thr BIRTH_REF]
 
 Writes assets/dev/demo_<camera>_<stamp>.mp4 and a stable assets/dev/demo_<camera>.mp4
 beside it (both ignored wholesale -- customer footage), plus three sample frames for the
@@ -97,6 +97,7 @@ from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.models.hydranet import build_model
+from syncai_hydranet.serving.camera import BIRTH_REF
 from syncai_hydranet.shipped import SHIPPED_RUN
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
 from syncai_hydranet.utils.device import pick_device
@@ -439,7 +440,7 @@ def main() -> int:
     ap.add_argument("--checkpoint", default="last.pt")
     # the model scores people 0.34-0.59 on this camera; 0.5 keeps almost nothing and
     # the tracker's 3-hit confirmation then never fires. Measured, not guessed.
-    ap.add_argument("--score-thr", type=float, default=0.35)
+    ap.add_argument("--score-thr", type=float, default=BIRTH_REF)
     # A uniform scale on the whole reconstruction -- scene, zone, people and eye alike --
     # so the rendered image is unchanged and only the units move. 1.0 leaves camera.json's
     # metres exactly as commissioned; 0.8824 is what this camera's own shoppers imply

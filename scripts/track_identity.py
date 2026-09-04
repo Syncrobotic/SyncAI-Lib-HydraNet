@@ -79,6 +79,7 @@ from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
 from syncai_hydranet.analytics.tracker import Tracker, iou  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
 from syncai_hydranet.geometry.camera_json import CameraFile  # noqa: E402
+from syncai_hydranet.serving.camera import BIRTH_REF  # noqa: E402
 from syncai_hydranet.shipped import load_model  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
@@ -429,7 +430,7 @@ def main() -> int:
     )
     ap.add_argument("--frames", type=int, default=900)
     ap.add_argument("--fps", type=float, default=5.0)
-    ap.add_argument("--score-thr", type=float, default=0.35)
+    ap.add_argument("--score-thr", type=float, default=BIRTH_REF)
     ap.add_argument("--low-thr", type=float, default=0.20)
     ap.add_argument("--iou", type=float, default=0.3)
     ap.add_argument("--iou-low", type=float, default=0.5)
