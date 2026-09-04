@@ -122,7 +122,7 @@ jobs:
       # becomes the real one -- the argument the coverage floor above already makes.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Tests on the combined state
-        run: uv run pytest --cov --cov-fail-under=85
+        run: ./scripts/coverage_ratchet.sh
       # Security moves here too, and for the same combined-state reason as the tests --
       # not as a blanket copy of ci.yml. `pip-audit` reads the *merged* `uv.lock`, and a
       # lock neither branch produced is exactly what two Dependabot PRs make: each was

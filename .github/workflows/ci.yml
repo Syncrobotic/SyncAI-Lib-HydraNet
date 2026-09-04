@@ -168,7 +168,11 @@ jobs:
       # the video path, which is the one path a fixed-camera product cannot do without.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: uv sync --locked --group dev --extra export
-      - run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=85
+      # Two floors, one test run: what ships and the dev-side trees, which are 7,453
+      # statements -- more than half the Python here -- and were measured by nothing
+      # until 2026-09-04. A single combined figure would be dominated by whichever
+      # tree grows faster; the script says why in full.
+      - run: ./scripts/coverage_ratchet.sh
 
   # No checkpoint and no dataset: a randomly initialised model exercises the same
   # graph. Catches an operator that stopped exporting cleanly, a shape that drifted,
