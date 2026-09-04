@@ -116,6 +116,11 @@ jobs:
       # cached and there is a GPU, so `run_depth` is covered. CI syncs `--extra export`
       # only, that file skips, and every matrix row reports **85.23%**. Setting the floor
       # from the local number would have failed all three rows on the first push.
+      # Same reason as ci.yml's: without it the eight ffmpeg-guarded tests skip, so the
+      # video path and the decode-error contract are unmeasured on the tier that gates
+      # a promotion. Two tiers disagreeing about what they run is how the looser one
+      # becomes the real one -- the argument the coverage floor above already makes.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Tests on the combined state
         run: uv run pytest --cov --cov-fail-under=85
       # Security moves here too, and for the same combined-state reason as the tests --

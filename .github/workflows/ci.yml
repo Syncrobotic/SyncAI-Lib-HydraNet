@@ -160,6 +160,13 @@ jobs:
         with:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
+      # Eight tests guard on ffmpeg being present, and the runner does not ship it -- so
+      # `hydranet-infer-video`, `hydranet-scene` and the whole decode-error contract
+      # (`serving/decode.py`, `data/video.py`) were exercised nowhere in CI. They skipped
+      # loudly, which is honest and is also why nobody had to notice: `-ra` reported them
+      # and the job stayed green. One apt line turns eight skips into eight gates over
+      # the video path, which is the one path a fixed-camera product cannot do without.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: uv sync --locked --group dev --extra export
       - run: uv run pytest --cov --cov-report=term-missing --cov-fail-under=85
 
