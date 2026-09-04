@@ -49,7 +49,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from collections import Counter
 from pathlib import Path
 
@@ -57,23 +56,27 @@ import numpy as np
 import torch
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
-
-from syncai_hydranet.analytics.staff import (  # noqa: E402
+from syncai_hydranet.analytics.staff import (
     crop_features,
     fit_logreg,
     fit_staff_model,
     predict,
 )
-from syncai_hydranet.data.attributes import ATTRIBUTES  # noqa: E402
-from syncai_hydranet.models.crop_encoder import CropEncoder  # noqa: E402
-from syncai_hydranet.utils.checkpoint import load_checkpoint  # noqa: E402
-from syncai_hydranet.utils.device import pick_device  # noqa: E402
+from syncai_hydranet.data.attributes import ATTRIBUTES
+from syncai_hydranet.models.crop_encoder import (
+    CropEncoder,
+    load_crop_encoder,
+)
+from syncai_hydranet.preprocessing import IMAGENET_MEAN, IMAGENET_STD
+from syncai_hydranet.utils.device import pick_device
+
+ROOT = Path(__file__).resolve().parent.parent
+
 
 SIZE = (256, 128)  # data/attributes.py's crop geometry, so the encoder sees what it trained on
-MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+# The canonical pair, imported rather than restated -- see `preprocessing`'s docstring
+# on why a second copy of these does not raise when it drifts.
+MEAN, STD = IMAGENET_MEAN, IMAGENET_STD
 # Known extraction defect rather than a labelling one -- see the module docstring.
 DROP_PEOPLE = {"Kaohsiung-cam04__20260816-063027_20260816-063527__t0002"}
 
@@ -174,12 +177,7 @@ def encoder(path: str | None, device):
     every other option in this project has had to clear."""
     if path is None:
         return CropEncoder(len(ATTRIBUTES), embed_dim=256, pretrained=True).to(device).eval()
-    ckpt = load_checkpoint(path)
-    model = CropEncoder(
-        len(ckpt["attributes"]), embed_dim=ckpt["model"]["embed.weight"].shape[0],
-        pretrained=False,
-    )  # fmt: skip
-    model.load_state_dict(ckpt["model"])
+    model, _ = load_crop_encoder(path, device)
     return model.to(device).eval()
 
 

@@ -3,7 +3,7 @@
 `floorplan.py` was measured at **0%** in `pyproject.toml`'s coverage note on 2026-08-28
 and reads 60% only because other tests import it on their way elsewhere. The parts nothing
 executes are `simplify_ring` and `_douglas_peucker` -- the whole of the polygon
-simplification -- and most of `BevGrid`. Those produce the walkable outline and all 71
+simplification -- and most of `FloorRaster`. Those produce the walkable outline and all 71
 service zones written into the eight shipped `camera.json`, so they are the shape of every
 zone event the product will ever raise.
 
@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 from syncai_bev3d.floorplan import (
-    BevGrid,
+    FloorRaster,
     polygon_area,
     resolve_overlaps,
     shoelace,
@@ -184,9 +184,9 @@ def test_a_simplified_ring_keeps_its_vertices_in_order():
 
 
 def test_the_two_constructors_disagree_about_z0_on_purpose():
-    """The asymmetry `BevGrid.over`'s docstring calls out, measured so it cannot drift.
+    """The asymmetry `FloorRaster.over`'s docstring calls out, measured so it cannot drift.
 
-    `BevGrid(x, z)` floors `z0` at zero; `BevGrid.over` does not, because a floor mask's
+    `FloorRaster(x, z)` floors `z0` at zero; `FloorRaster.over` does not, because a floor mask's
     nearest point can sit behind the camera origin on a wide mount and clamping silently
     drops that row of cells. On the same input the two differ by **1.5 m** here, which is
     six cells at the 0.25 m commissioning grid -- not a rounding difference, a band of
@@ -194,8 +194,8 @@ def test_the_two_constructors_disagree_about_z0_on_purpose():
     """
     x = np.array([-2.0, 3.0])
     z = np.array([-0.5, 6.0])
-    clamped = BevGrid(x, z, cell=0.25, pad=1.0)
-    unclamped = BevGrid.over(np.stack([x, z], axis=-1), cell=0.25, pad=1.0)
+    clamped = FloorRaster(x, z, cell=0.25, pad=1.0)
+    unclamped = FloorRaster.over(np.stack([x, z], axis=-1), cell=0.25, pad=1.0)
     assert clamped.z0 == 0.0
     assert unclamped.z0 == pytest.approx(-1.5)
     assert clamped.cell == unclamped.cell == 0.25
@@ -203,7 +203,7 @@ def test_the_two_constructors_disagree_about_z0_on_purpose():
 
 def test_points_outside_the_extent_are_dropped_rather_than_wrapped():
     """An out-of-extent point must not land on a cell; a negative index would wrap silently."""
-    grid = BevGrid(np.array([0.0, 2.0]), np.array([0.0, 2.0]), cell=1.0, pad=0.0)
+    grid = FloorRaster(np.array([0.0, 2.0]), np.array([0.0, 2.0]), cell=1.0, pad=0.0)
     raster = grid.raster(np.array([0.5, 99.0, -99.0]), np.array([0.5, 99.0, -99.0]))
     assert raster.shape == (grid.nz, grid.nx)
     assert raster.sum() == 1
@@ -216,14 +216,14 @@ def test_metres_come_back_at_cell_centres():
     dropping it shifts every polygon in `camera.json` by half a cell -- 0.125 m at the
     commissioning grid, in the same direction, on every zone at once.
     """
-    grid = BevGrid(np.array([0.0, 2.0]), np.array([0.0, 2.0]), cell=1.0, pad=0.0)
+    grid = FloorRaster(np.array([0.0, 2.0]), np.array([0.0, 2.0]), cell=1.0, pad=0.0)
     out = grid.to_metres(np.array([[0.0, 0.0], [1.0, 1.0]]))
     assert out.tolist() == [[0.5, 0.5], [1.5, 1.5]]
 
 
 def test_a_rastered_point_survives_the_round_trip_to_its_own_cell():
     """Bin a point, take the cell back to metres, and require it inside that cell."""
-    grid = BevGrid.over(np.array([[-1.0, 2.0], [4.0, 9.0]]), cell=0.25, pad=1.0)
+    grid = FloorRaster.over(np.array([[-1.0, 2.0], [4.0, 9.0]]), cell=0.25, pad=1.0)
     pt = np.array([[1.3, 5.7]])
     raster = grid.raster_points(pt)
     rows, cols = np.nonzero(raster)

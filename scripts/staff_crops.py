@@ -44,7 +44,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -52,17 +51,18 @@ import numpy as np
 import torch
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
+from syncai_hydranet.analytics.clip_tracks import PERSON, to_source_pixels
+from syncai_hydranet.analytics.tracker import Tracker
+from syncai_hydranet.config import load_config
+from syncai_hydranet.data.video import frames as decode_frames
+from syncai_hydranet.data.video import probe as probe_video
+from syncai_hydranet.models.hydranet import build_model
+from syncai_hydranet.serving.camera import BIRTH_REF
+from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
+from syncai_hydranet.utils.visualize import preprocess
 
-from syncai_hydranet.analytics.clip_tracks import PERSON, to_source_pixels  # noqa: E402
-from syncai_hydranet.analytics.tracker import Tracker  # noqa: E402
-from syncai_hydranet.config import load_config  # noqa: E402
-from syncai_hydranet.data.video import frames as decode_frames  # noqa: E402
-from syncai_hydranet.data.video import probe as probe_video  # noqa: E402
-from syncai_hydranet.models.hydranet import build_model  # noqa: E402
-from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
-from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
+ROOT = Path(__file__).resolve().parent.parent
+
 
 CLIPS = ROOT / "datasets/studioa_clips"
 DEFAULT_CONFIG = "configs/hydranet_retail_pose02.yaml"
@@ -181,7 +181,7 @@ def main() -> int:
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--fps", type=float, default=2.0)
     ap.add_argument("--frames", type=int, default=300, help="per clip, at --fps")
-    ap.add_argument("--score-thr", type=float, default=0.35)
+    ap.add_argument("--score-thr", type=float, default=BIRTH_REF)
     ap.add_argument("--per-track", type=int, default=3)
     ap.add_argument("--min-obs", type=int, default=5, help="a shorter track is a fragment")
     ap.add_argument("--min-height", type=int, default=90, help="source px")

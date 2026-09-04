@@ -17,11 +17,12 @@
     # 3. apply
     python3 scripts/track_review.py apply --out runs/gt_cam04
 
-`analytics/reid_metrics.idf1` has been armed since it was written and has never run on a
-site clip, because no site clip is labelled. `scripts/retail_flow.py` names the same
-blocker in its own docstring: *"this project has no hand-labelled site data at all.
-Sample an hour, count it by eye, compare. That is the acceptance test and there is no
-substitute for it."*
+`analytics/reid_metrics.idf1` was armed and unrun for as long as no site clip was
+labelled. **This is the tool that ended that**: seven sets exist now (`runs/gt_*`) and
+`runs/gt_cam01/idf1.json` holds both tracker arms scored against one of them. What is
+still unlabelled is a different thing, and `scripts/retail_flow.py` is the file that
+names it -- a hand COUNT of an hour of footfall, which is the acceptance test for the
+counting figures and which labelled track identities do not supply.
 
 There is no substitute for the judgement. There is one for most of the labour.
 
@@ -71,20 +72,18 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-
 from syncai_hydranet.analytics import Tracker, person_head
 from syncai_hydranet.analytics.tracker import iou_pair
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.transforms import invert_geom
 from syncai_hydranet.data.video import frames, probe
+from syncai_hydranet.models.heads.detection import SCORE_THR_RETAIL
 from syncai_hydranet.models.hydranet import build_model
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
 from syncai_hydranet.utils.device import pick_device
@@ -489,7 +488,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", required=True)
     p.add_argument("--fps", type=float, default=5.0)
     p.add_argument("--max-frames", type=int, default=300, help="0 means the whole clip")
-    p.add_argument("--score-thr", type=float, default=0.25)
+    p.add_argument("--score-thr", type=float, default=SCORE_THR_RETAIL)
     p.add_argument("--weights", choices=("ema", "model"), default="ema")
     p.add_argument("--iou", type=float, default=0.3)
     p.add_argument("--max-age", type=int, default=5)

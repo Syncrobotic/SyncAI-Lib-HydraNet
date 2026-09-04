@@ -168,6 +168,14 @@ def test_a_real_k1_moves_the_boxes_the_tracker_sees():
 
     The tracker matches on IoU, so boxes that differ are boxes that can link differently.
     This is the failure the two copies could produce on the same footage.
+
+    It is also what makes the ground projection safe downstream, which is worth naming
+    here because the consumers cannot show it: `dwell.track_ground_path` and
+    `bev.place_boxes` take `(cam, plane)` and so have no lens to undo, and
+    `geometry/ground.py` warns that projecting distorted pixels drifts the metres
+    silently rather than raising. They are safe because a Track holds pinhole boxes by
+    construction -- this assertion is that construction. An audit read those two
+    functions alone in 2026-09-04 and took them for the drift they are protected from.
     """
     _, plain = _run(BOXES, k1=None)
     _, lensed = _run(BOXES, k1=-0.225)

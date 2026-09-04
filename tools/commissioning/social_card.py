@@ -28,7 +28,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 from syncai_bev3d import scene_mesh
 
-ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
+# The repo root, derived rather than written out: every one of these 26 tools had it
+# as an absolute path, so a second checkout ran against the first one's `runs/` and
+# any machine but this one failed at import with a path and no reason. Two levels up
+# from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
+ROOT = Path(__file__).resolve().parents[2]
 CARD = (1280, 640)
 PANEL_W = 660  # the scene half; the text needs the rest at thumbnail size
 CAPTION_H = 62  # `scene_mesh.render`'s own caption band, rendered then cut

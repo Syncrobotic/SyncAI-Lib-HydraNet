@@ -11,7 +11,10 @@ import torch
 from syncai_hydranet.config import load_config
 from syncai_hydranet.models.hydranet import build_model
 
-CFG = str(Path(__file__).resolve().parents[1] / "configs" / "hydranet_regnet800mf.yaml")
+# A config that builds a multi-head model, which is all these tests need of it.
+# It was the off-road one until 2026-09-04, when that taxonomy was retired;
+# hydranet_indoor is the same shape and is still exercised elsewhere.
+CFG = str(Path(__file__).resolve().parents[1] / "configs" / "hydranet_indoor.yaml")
 H, W = 128, 160  # must be a multiple of 128: P7 has stride 128
 
 
@@ -78,6 +81,13 @@ def test_partial_supervision_isolates_heads(model):
 
 
 def test_train_step(model):
+    """One step of the training critical path, asserted rather than merely executed.
+
+    This ran forward -> backward -> step with **no assertion at all** until 2026-09-04,
+    so it passed with a NaN loss, with an optimizer that updated nothing, and with every
+    parameter turned to NaN by the step it had just taken. Its neighbour at the top of
+    this file already asserts `torch.isfinite(loss)`; this one had dropped it.
+    """
     opt = torch.optim.AdamW(model.parameters(), lr=1e-4)
     x = torch.randn(2, 3, H, W)
     out = model(x)
@@ -86,9 +96,16 @@ def test_train_step(model):
         "terrain": torch.randint(0, 12, (2, H, W)),
     }
     loss, _ = model.compute_losses(out, targets, ["traversability", "terrain"])
+    assert torch.isfinite(loss), "a non-finite loss poisons the parameters on the step below"
+    before = [p.detach().clone() for p in model.parameters() if p.requires_grad]
     opt.zero_grad()
     loss.backward()
     opt.step()
+    after = [p for p in model.parameters() if p.requires_grad]
+    assert all(torch.isfinite(p).all() for p in after), "the step wrote NaN into the weights"
+    assert any(not torch.equal(a, b) for a, b in zip(before, after, strict=True)), (
+        "the optimizer step changed nothing"
+    )
 
 
 def test_predict(model):

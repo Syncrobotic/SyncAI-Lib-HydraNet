@@ -184,10 +184,11 @@ def _load_model():
     `vggt-omega`, which conflicts with it -- while the plain `pip install -e .` loads the
     Apache weights and runs inference, fetching its DINOv2 backbone from torch hub.
     """
-    import torch
     from mapanything.models import MapAnything
 
-    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    from syncai_hydranet.utils.device import pick_device
+
+    dev = str(pick_device())
     return MapAnything.from_pretrained(MODEL_ID, revision=MODEL_REVISION).to(dev).eval(), dev
 
 

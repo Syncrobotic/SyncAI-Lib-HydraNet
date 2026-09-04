@@ -243,3 +243,45 @@ def test_a_lens_radius_from_another_resolution_is_refused():
     )
     with pytest.raises(ValueError, match="half-diagonal"):
         broken.validate()
+
+
+def test_ground_points_drops_the_horizon_for_masks_and_refuses_it_for_vertices():
+    """The one policy the three copies of this disagreed about, now an argument.
+
+    A pixel at or above the horizon has no floor point, and `pixel_to_ground` returns NaN
+    there rather than inventing a distance. Both answers below are correct, for different
+    inputs: a projected mask legitimately reaches past the horizon and the rows beyond it
+    are simply not floor, while a hand-drawn zone vertex up there is an operator error
+    that survives as a polygon testing False for every point inside it, forever.
+    """
+    import numpy as np
+
+    # The fixture camera is tilted 50 degrees down, so its horizon is above the frame and
+    # every pixel in it lands on the floor -- nothing to drop. A shallow mount is the case
+    # this argument exists for, and is the ordinary one on a shop's long aisle run.
+    cam = dataclasses.replace(
+        a_camera_file(), plane=dataclasses.replace(a_camera_file().plane, pitch=0.1)
+    )
+    on_floor = np.array([[960.0, 1000.0], [800.0, 900.0]])
+    above = np.array([[960.0, 100.0]])
+
+    kept = cam.ground_points(np.vstack([on_floor, above]))
+    assert len(kept) == 2, "the two floor pixels survive and the horizon row is dropped"
+    assert np.isfinite(kept).all()
+
+    with pytest.raises(ValueError, match="above the horizon"):
+        cam.ground_points(np.vstack([on_floor, above]), above_horizon="raise", what="till")
+
+    # A clean input passes the strict policy unchanged, so `raise` is a guard and not a
+    # refusal of the ordinary case.
+    strict = cam.ground_points(on_floor, above_horizon="raise")
+    assert np.allclose(strict, cam.ground_points(on_floor))
+
+
+def test_ground_points_rejects_a_policy_it_does_not_have():
+    """`drop` and `raise` are the whole vocabulary. A third word must not fall through to
+    the permissive branch, which is what a truthiness check on the argument would do."""
+    import numpy as np
+
+    with pytest.raises(ValueError, match="above_horizon must be"):
+        a_camera_file().ground_points(np.array([[960.0, 900.0]]), above_horizon="warn")

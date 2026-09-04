@@ -36,8 +36,8 @@ def _cfg():
 # the life of the run. They are recorded here so that they stay visible and so that a
 # *new* one fails this suite instead of joining them quietly.
 #
-# `hydranet_regnet800mf` and `hydranet_retail_cctv` are absent because this check reports
-# them clean -- but read the second one with the caveat below rather than as a result. It
+# `hydranet_retail_cctv` is absent because this check reports it clean -- but read that
+# with the caveat below rather than as a result. It
 # pairs ADE20K with site masks under a *native identity* scheme, and an identity scheme
 # expresses every class in the taxonomy whether or not a pixel of it was ever drawn. So it
 # silences this check by construction. It is silence, not evidence: those masks contain
@@ -85,10 +85,6 @@ KNOWN_UNSOURCED = {
 # and a reader who sees these needs to see why they are here. Found by `26251130`, who
 # counted the pixels instead of believing the label map.
 KNOWN_MINORITY_SOURCED = {
-    # UNVERIFIED. Both `rugd` and `rellis` are explicit maps, so unlike the entry below
-    # this is at least scheme-grounded -- rugd emits `rock`, rellis does not. Neither
-    # dataset is on this machine, so the pixels have not been counted. Do not act on it.
-    "hydranet_regnet800mf.yaml": ("rock",),
     # FALSE POSITIVES, per the paragraph above. 0 pixels in 0 of 408 masks.
     "hydranet_retail_cctv.yaml": ("floor_metal", "threshold_ramp", "wet_slippery"),
     # VERIFIED by counting: batch01 is 19.28% `product`. Real suppression, and the run that

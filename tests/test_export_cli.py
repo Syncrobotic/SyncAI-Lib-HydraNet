@@ -445,7 +445,7 @@ def test_the_artefact_carries_the_checkpoint_it_was_exported_from(tmp_path, expo
 
     monkey = pytest.MonkeyPatch()
     monkey.setattr(export_onnx, "load_checkpoint", lambda _p: {"model": {}, "ema": {}})
-    monkey.setattr(export_onnx, "select_weights", lambda ck, _prefer: ck["ema"])
+    monkey.setattr(export_onnx, "chosen_weights", lambda ck, _prefer: (ck["ema"], "ema"))
     monkey.setattr(torch.nn.Module, "load_state_dict", lambda _self, _sd, **_kw: None)
     try:
         export_onnx.main(

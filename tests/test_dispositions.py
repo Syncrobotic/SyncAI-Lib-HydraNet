@@ -9,7 +9,7 @@ pytest tests/test_dispositions.py -v
 
 import json
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -29,7 +29,7 @@ from syncai_hydranet.serving.dispositions import (
     record_disposition,
 )
 
-NOW = datetime(2026, 8, 19, 3, 30, tzinfo=timezone.utc)
+NOW = datetime(2026, 8, 19, 3, 30, tzinfo=UTC)
 
 MODEL = {
     "checkpoint": "runs/hydranet-retail-xl/best.pt",
@@ -101,7 +101,7 @@ def test_alert_without_pullable_footage_is_refused(tmp_path):
     with pytest.raises(ValueError, match="footage"):
         record_alert(tmp_path, event(), model=MODEL, now=NOW)
     # A stream timestamp on the event is an acceptable substitute for a clip path.
-    stamped = event(clip_start=datetime(2026, 8, 16, 11, 30, tzinfo=timezone.utc))
+    stamped = event(clip_start=datetime(2026, 8, 16, 11, 30, tzinfo=UTC))
     record_alert(tmp_path, stamped, model=MODEL, now=NOW)
 
 

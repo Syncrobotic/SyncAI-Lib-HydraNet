@@ -43,22 +43,16 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw
 
-HERE = Path(__file__).resolve().parent
-for candidate in (HERE.parent / "src", HERE / "src"):
-    if candidate.is_dir():
-        sys.path.insert(0, str(candidate))
-
 # The canonical implementation lives in the package, because `night_person.py` applies the
 # threshold this script's report is used to choose. Two copies of the maths would make the
 # instrument that measured the gap and the gate that sits in it different instruments.
-from syncai_hydranet.data.night_person import static_share  # noqa: E402
+from syncai_hydranet.data.night_person import static_share
 
 
 def parse_name(file_name: str) -> tuple[str, str, int]:

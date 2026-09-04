@@ -23,7 +23,15 @@ from .scene_types import PlaneObject, PlaneScene
 
 @dataclass(frozen=True)
 class BevGrid:
-    """The window of floor to map, in metres. Origin is under the camera."""
+    """The window of floor to map, in metres. Origin is under the camera.
+
+    **Row 0 is the FAR edge**, as `to_cell` states and as a map is read. Its counterpart
+    `floorplan.FloorRaster` -- one import away, and called `BevGrid` too until
+    2026-09-04 -- puts row 0 at the NEAR edge, because a contour tracer wants z ascending
+    with the row index. Both are correct for their consumer; a raster from one indexed
+    with the other's convention is a silent vertical mirror, which is why the names no
+    longer collide. `tests/test_bev_row_conventions.py` pins both.
+    """
 
     x_min: float = -4.0
     x_max: float = 4.0
@@ -76,6 +84,15 @@ def place_boxes(boxes: np.ndarray, cam: Camera, plane: GroundPlane) -> np.ndarra
     A box carries no range. Where its bottom edge meets the floor does, because that point
     is on the plane. It is the only ground position a single camera recovers, and it is
     wrong for anything not standing on the floor -- a wall-mounted screen, a mug on a table.
+
+    **Pixels in, and they must already be undistorted.** Taking `(cam, plane)` rather than
+    a `CameraFile` means there is no lens here to undo one with, and `geometry/ground.py`
+    states the cost of projecting distorted pixels: metres that drift silently instead of
+    an error. Its one caller inside this package is `scene()`, reached from
+    `cli/scene.py`, which builds its `Camera` from `--vfov` alone and has no lens to
+    apply -- a pinhole path end to end. The commissioned fleet path does not come through
+    here at all; it undistorts in `clip_tracks` before the tracker. Written down because
+    the signature cannot say it.
     """
     boxes = np.asarray(boxes, dtype=float).reshape(-1, 4)
     if len(boxes) == 0:

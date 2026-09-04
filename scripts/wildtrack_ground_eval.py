@@ -60,17 +60,13 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import sys
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
-
-from syncai_hydranet.geometry.ground import (  # noqa: E402
+from syncai_hydranet.geometry.ground import (
     Camera,
     GroundPlane,
     pixel_to_ground,

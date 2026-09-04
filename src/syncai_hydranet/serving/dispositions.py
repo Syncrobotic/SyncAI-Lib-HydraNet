@@ -54,7 +54,7 @@ import os
 import uuid
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -218,7 +218,7 @@ def day_path(root: str | Path, when: datetime) -> Path:
             "without guessing, and events.clip_start_from_name records what guessing "
             "cost the last time"
         )
-    return Path(root) / f"{when.astimezone(timezone.utc):%Y-%m-%d}.jsonl"
+    return Path(root) / f"{when.astimezone(UTC):%Y-%m-%d}.jsonl"
 
 
 def append_row(path: str | Path, row: Mapping[str, Any]) -> None:
@@ -348,7 +348,7 @@ def record_alert(
         )
     _require(model, ("checkpoint", "git", "config_hash"), "model identity")
 
-    when = now if now is not None else datetime.now(timezone.utc)
+    when = now if now is not None else datetime.now(UTC)
     if when.tzinfo is None:
         raise ValueError("now must be timezone-aware; this log never files naive times")
     calib_version = calib if calib is None or isinstance(calib, str) else file_hash(calib)
@@ -402,7 +402,7 @@ def record_disposition(
             f"alert_id {alert_id!r} is not in the log under {root}{skipped}; a "
             "disposition must attach to a recorded alert"
         )
-    when = at if at is not None else datetime.now(timezone.utc)
+    when = at if at is not None else datetime.now(UTC)
     if when.tzinfo is None:
         raise ValueError("at must be timezone-aware; this log never files naive times")
     record = DispositionRecord(

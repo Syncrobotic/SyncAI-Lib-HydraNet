@@ -41,26 +41,23 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import torch
+from PIL import Image
+
+from syncai_hydranet.analytics.clip_tracks import PERSON, to_source_pixels
+from syncai_hydranet.analytics.delivery import report_settings
+from syncai_hydranet.data.night_person import NightPersonVeto
+from syncai_hydranet.data.video import frames as decode_frames
+from syncai_hydranet.data.video import probe
+from syncai_hydranet.serving.camera import BIRTH_REF
+from syncai_hydranet.shipped import load_model
+from syncai_hydranet.utils.device import pick_device
+from syncai_hydranet.utils.visualize import preprocess
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
 
-from PIL import Image  # noqa: E402
-
-from syncai_hydranet.analytics.clip_tracks import PERSON, to_source_pixels  # noqa: E402
-from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
-from syncai_hydranet.config import load_config  # noqa: E402
-from syncai_hydranet.data.night_person import NightPersonVeto  # noqa: E402
-from syncai_hydranet.data.video import frames as decode_frames  # noqa: E402
-from syncai_hydranet.data.video import probe  # noqa: E402
-from syncai_hydranet.models.hydranet import build_model  # noqa: E402
-from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
-from syncai_hydranet.utils.device import pick_device  # noqa: E402
-from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
 CLIPS = ROOT / "datasets/studioa_clips"
 STATIC = ROOT / "datasets/studioa_static"
@@ -132,15 +129,13 @@ def main() -> int:
     ap.add_argument("--checkpoint", default="runs/hydranet_retail_pose02/last.pt")
     ap.add_argument("--frames", type=int, default=150, help="30 s at 5 fps of an empty shop")
     ap.add_argument("--fps", type=float, default=5.0)
-    ap.add_argument("--score-thr", type=float, default=0.35, help="the shipped birth edge")
+    ap.add_argument("--score-thr", type=float, default=BIRTH_REF, help="the shipped birth edge")
     ap.add_argument("--person-label", type=int, default=-1)
     args = ap.parse_args()
 
     cams = args.cameras or sorted(p.name for p in CLIPS.iterdir() if p.is_dir())
     device = pick_device(None)
-    cfg = load_config(args.config)
-    model = build_model(cfg).to(device).eval()
-    model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), "ema"))
+    model, cfg, _ = load_model(args.config, args.checkpoint, device=device)
     veto = NightPersonVeto(STATIC)
 
     args.out.mkdir(parents=True, exist_ok=True)

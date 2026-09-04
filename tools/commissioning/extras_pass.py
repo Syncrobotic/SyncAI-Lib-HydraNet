@@ -16,7 +16,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import torch
 from PIL import Image
 from scipy import ndimage
 
@@ -24,8 +23,13 @@ from syncai_bev3d.teachers import sam3 as SAM3
 from syncai_hydranet.data import sam3_prompts as P
 from syncai_hydranet.data import sam3_prompts_objects as O
 from syncai_hydranet.geometry.camera_json import CameraFile
+from syncai_hydranet.utils.device import pick_device
 
-ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
+# The repo root, derived rather than written out: every one of these 26 tools had it
+# as an absolute path, so a second checkout ran against the first one's `runs/` and
+# any machine but this one failed at import with a path and no reason. Two levels up
+# from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
+ROOT = Path(__file__).resolve().parents[2]
 W, H = 1920, 1080
 MIN_PX = 2000  # doors and the generic product union
 MIN_SUB_PX = 150  # a phone on a table is small and real
@@ -116,7 +120,7 @@ def run_camera(camera, proc, model, device, table):
 
 
 def main():
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     proc, model = SAM3.load_sam3(SAM3.MODEL_ID, device)
     table = concepts()
     for camera in sys.argv[1:]:

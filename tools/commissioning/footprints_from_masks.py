@@ -93,9 +93,12 @@ from PIL import Image, ImageDraw
 
 from syncai_bev3d.floorplan import polygon_area, simplify_chain
 from syncai_hydranet.geometry.camera_json import CameraFile
-from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 
-ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
+# The repo root, derived rather than written out: every one of these 26 tools had it
+# as an absolute path, so a second checkout ran against the first one's `runs/` and
+# any machine but this one failed at import with a path and no reason. Two levels up
+# from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
+ROOT = Path(__file__).resolve().parents[2]
 COMMISSIONED = ROOT / "runs/commission01"
 OUT = ROOT / "runs/footprints01"
 
@@ -131,16 +134,6 @@ def contact_pixels(part: np.ndarray, floor: np.ndarray) -> np.ndarray:
         if lo < hi and bool(floor[lo:hi, c].any()):
             pts.append((float(c), float(v)))
     return np.asarray(pts, dtype=float).reshape(-1, 2)
-
-
-def to_metres(pts_px: np.ndarray, cam_file: CameraFile) -> np.ndarray:
-    pts = pts_px
-    lens = cam_file.lens
-    if lens is not None:
-        pts = undistort_points(pts, lens.k1, lens.centre_px, lens.radius_px)
-    x, z = pixel_to_ground(pts[:, 0], pts[:, 1], cam_file.camera, cam_file.plane)
-    out = np.stack([x, z], axis=1)
-    return out[np.isfinite(out).all(axis=1)]
 
 
 def segments(base_m: np.ndarray, max_step_m: float) -> list[np.ndarray]:
@@ -207,7 +200,7 @@ def derive(camera: str, depth: float) -> dict:
             px = contact_pixels(part, floor)
             if len(px) < MIN_CONTACT_COLUMNS:
                 continue
-            base = to_metres(px, cam_file)
+            base = cam_file.ground_points(px)
             for part_i, seg in enumerate(segments(base, MAX_BASE_STEP_M)):
                 poly = footprint(seg, depth)
                 if poly is None or polygon_area(poly) < 0.10:

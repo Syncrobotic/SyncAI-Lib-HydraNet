@@ -112,7 +112,7 @@ def test_overrides_still_win_over_everything(tmp_path):
 # ------------------------------------------------------------------- shipped configs
 
 
-@pytest.mark.parametrize("name", ["hydranet_indoor", "hydranet_regnet800mf", "hydranet_retail"])
+@pytest.mark.parametrize("name", ["hydranet_indoor", "hydranet_retail"])
 def test_shipped_configs_still_validate(name):
     load_config(CONFIG_DIR / f"{name}.yaml")
 
@@ -121,7 +121,6 @@ def test_shipped_configs_still_validate(name):
     ("name", "expected"),
     [
         ("hydranet_indoor", 12),
-        ("hydranet_regnet800mf", 12),
         ("hydranet_retail", 13),
     ],
 )

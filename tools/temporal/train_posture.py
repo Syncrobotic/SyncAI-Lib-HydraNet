@@ -47,6 +47,8 @@ import numpy as np
 import torch
 from torch import nn
 
+from syncai_hydranet.utils.device import pick_device
+
 
 class PostureNet(nn.Module):
     """Two 1-D convolutions over time, masked pooling, a linear head.
@@ -125,7 +127,7 @@ def main() -> int:
 
     # standardise on the training half of each fold only -- fitting the scaler on
     # everything leaks the held-out performer's distribution into the model
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     n_params = sum(p.numel() for p in PostureNet(x_all.shape[2], len(classes)).parameters())
     print(
         f"{len(x_all)} sequences / {len(set(performer.tolist()))} performers / "

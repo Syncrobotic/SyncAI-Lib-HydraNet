@@ -73,7 +73,6 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import flicker_baseline as fb
@@ -81,6 +80,7 @@ import flicker_baseline as fb
 from syncai_hydranet.analytics.bytetrack import OfflineForward
 from syncai_hydranet.data.label_maps_retail_security import get_det_vocab
 from syncai_hydranet.data.video import finish_encoder, probe
+from syncai_hydranet.models.heads.detection import SCORE_THR_VIEW
 from syncai_hydranet.preprocessing import IMAGENET_MEAN, IMAGENET_STD
 from syncai_hydranet.utils.visualize import (
     letterbox,
@@ -729,7 +729,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--score-thr",
         type=float,
-        default=0.30,
+        default=SCORE_THR_VIEW,
         help="detection threshold on the non-track path",
     )
     ap.add_argument("--nms-thr", type=float, default=0.6)

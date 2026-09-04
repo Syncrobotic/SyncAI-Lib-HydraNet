@@ -30,7 +30,7 @@
   "held_out_n": 15,
   "min_accuracy_required": 0.9
  },
- "commit": "90f551c10a787a6d1841d3df44c96b70629d8492",
+ "commit": "597e25ea86ab4f7c3f6840cd7d2b55e60008cbfe",
  "start_frame": 517,
  "frames": 120,
  "stride": 1,

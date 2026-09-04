@@ -17,12 +17,15 @@ kept with it; none of these numbers is a default anybody chose by feel.
 from __future__ import annotations
 
 import math
+import warnings
 from typing import NamedTuple
 
 import numpy as np
 
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
+
+from .plate_calibration import ADULT_M
 
 TRACK_COLORS = [
     (255, 99, 71), (65, 180, 255), (255, 200, 60), (120, 220, 120),
@@ -60,7 +63,11 @@ VEL_WINDOW_S = 1.0
 # 1.4 cm but cuts 11% of the corners; a trailing median filter scores *above* 100% path
 # because it holds still and then jumps, which is a worse artefact than the jitter.
 POS_EMA = 0.35
-FALLBACK_STATURE_M = 1.70  # only until a track has been measured STATURE_MIN_N times
+# The one standing-adult prior, imported rather than restated: `plate_calibration`'s
+# module docstring says it "must exist exactly once", and every metre this project
+# reports is downstream of it -- a second 1.70 that drifted would move the figures and
+# the calibration apart with nothing raising.
+FALLBACK_STATURE_M = ADULT_M  # only until a track has been measured STATURE_MIN_N times
 STATURE_MIN_N = 3
 PLUMB_W_M = 0.035  # the drop line under a figure: thin enough not to read as an object
 STATURE_RANGE_M = (1.2, 2.6)  # outside this the box top is not a head top
@@ -239,8 +246,39 @@ def track_colour(track, verdict_of=None) -> tuple:
     return STAFF_COLOR if verdict_of(track) is True else CUSTOMER_COLOR
 
 
+def _calibration_scale(cf: CameraFile, source_size_px) -> tuple[float, float]:
+    """Decoded-stream pixels -> calibrated pixels, as an (sx, sy) multiplier.
+
+    The same conversion `analytics/world.py` makes, made the same way: from the camera
+    file's own `image_size_px` against the size the frames actually decoded at. When the
+    caller does not say, the historical 0.5 is kept so an un-updated caller is unchanged,
+    with a warning -- silence is what let a literal stand in for this for as long as it
+    did.
+    """
+    w, h = cf.image_size_px
+    if source_size_px is None:
+        warnings.warn(
+            "track_states was called without source_size_px; falling back to the "
+            "historical 0.5, which is correct only while the camera is commissioned at "
+            f"half the decode resolution (this one is {w}x{h})",
+            stacklevel=3,
+        )
+        return (0.5, 0.5)
+    sw, sh = source_size_px
+    return (w / float(sw), h / float(sh))
+
+
 def track_states(
-    tracks, n, cf, state, vel_window, metre_scale, fps, bounds, verdict_of=None
+    tracks,
+    n,
+    cf,
+    state,
+    vel_window,
+    metre_scale,
+    fps,
+    bounds,
+    verdict_of=None,
+    source_size_px: tuple[int, int] | None = None,
 ) -> list[TrackState]:
     """The sequential half of the 3D panel: everything that depends on the frames before.
 
@@ -257,7 +295,20 @@ def track_states(
     `state` is mutated: it carries the four dicts that outlive the frame, plus
     ``n_skipped``, the count of track-frames whose floor point was non-finite or outside
     ``bounds`` (`demo_video` reports it as ``n_outside``).
+
+    **`source_size_px` is the decoded frame's size, and it used to be the literal 2.0.**
+    Boxes arrive in decoded-stream pixels; `cf.camera` and `stature_m` want calibrated
+    ones. Every other consumer of that conversion derives the ratio from
+    `cf.image_size_px` -- `analytics/world.py`'s `_to_calibrated_pixels` does, and carries
+    a refusal when the result lands far outside the canvas. This function divided by two
+    instead, which is correct exactly while every camera is commissioned at half the
+    decode resolution: true of this fleet (960x540 against 1920x1080 clips) and not a
+    property of anything. A camera commissioned at full resolution would put every figure
+    at the wrong floor position and the wrong stature, with nothing raising. Omitting the
+    argument keeps the old ratio so a caller that has not been updated is unchanged, and
+    says so in a warning rather than silently.
     """
+    scale = _calibration_scale(cf, source_size_px)
     smoothed, statures, history, last_heading = (
         state["smoothed"],
         state["statures"],
@@ -268,8 +319,8 @@ def track_states(
     x_lo, x_hi, z_lo, z_hi = bounds
     out = []
     for t in tracks:
-        mid_x = (t.box[0] + t.box[2]) / 2 / 2.0
-        pts = np.array([[mid_x, t.box[3] / 2.0], [mid_x, t.box[1] / 2.0]])
+        mid_x = (t.box[0] + t.box[2]) / 2 * scale[0]
+        pts = np.array([[mid_x, t.box[3] * scale[1]], [mid_x, t.box[1] * scale[1]]])
         if cf.lens is not None:
             pts = undistort_points(pts, cf.lens.k1, cf.lens.centre_px, cf.lens.radius_px)
         fx, fz = pixel_to_ground(pts[:1, 0], pts[:1, 1], cf.camera, cf.plane)

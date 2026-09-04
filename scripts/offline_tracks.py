@@ -63,7 +63,6 @@ import numpy as np
 import torch
 from PIL import Image
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import itertools
@@ -76,8 +75,9 @@ from syncai_hydranet.analytics.reid_metrics import id_switches, idf1
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.transforms import invert_geom
 from syncai_hydranet.data.video import frames, probe
-from syncai_hydranet.models.crop_encoder import CropEncoder
+from syncai_hydranet.models.crop_encoder import load_crop_encoder
 from syncai_hydranet.models.hydranet import build_model
+from syncai_hydranet.preprocessing import IMAGENET_MEAN, IMAGENET_STD
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
 from syncai_hydranet.utils.device import pick_device
 from syncai_hydranet.utils.visualize import preprocess
@@ -131,11 +131,10 @@ def embed_fragments(frags, encoder_path, device) -> dict[int, np.ndarray]:
     # "attributes": [str, ...]}, which the restricted unpickler reads without complaint.
     # The risk was never in today's local file; it is that the next encoder to arrive
     # comes off a release page or a colleague's machine and nothing says so.
-    ck = load_checkpoint(encoder_path)
-    enc = CropEncoder(len(ck["attributes"])).to(device).eval()
-    enc.load_state_dict(ck["model"])
-    mean = np.array([0.485, 0.456, 0.406], np.float32)
-    std = np.array([0.229, 0.224, 0.225], np.float32)
+    # The shared loader: it reads embed_dim from the checkpoint rather than taking the
+    # 256 default, and does not fetch ImageNet weights it is about to overwrite.
+    enc, _ = load_crop_encoder(encoder_path, device)
+    mean, std = IMAGENET_MEAN, IMAGENET_STD
     out: dict[int, np.ndarray] = {}
     with torch.no_grad():
         for t in frags:

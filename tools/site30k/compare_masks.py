@@ -15,7 +15,10 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-R = Path("/home/paul/SyncAI-Lib-HydraNet/runs/site30k_qa")
+# Under the repo root rather than under this machine's: the corpus assumption -- that
+# these QA runs exist at all -- stays, and fails as a FileNotFoundError naming the
+# path, which is a better answer than reading another checkout's runs/ by accident.
+R = Path(__file__).resolve().parents[2] / "runs/site30k_qa"
 A, B = R / sys.argv[1] / "masks", R / sys.argv[2] / "masks"
 NAMES = {
     0: "void",

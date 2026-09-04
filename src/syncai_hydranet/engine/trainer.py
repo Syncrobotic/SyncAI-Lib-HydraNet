@@ -176,6 +176,13 @@ def _log_code_version(git: dict, out_dir: Path, logger) -> None:
         logger.info(f"code version: {git['commit'][:8]} ({git['branch']})")
 
 
+# How many non-finite optimizer steps a run may skip before it is called dead. Small on
+# purpose: a step that produces NaN gradients is usually the first of many, and the
+# alternative to aborting is an epoch of wall-clock spent on a model that is already
+# gone. Skipping exists for the isolated bad batch, not as a way to train through it.
+MAX_NONFINITE_STEPS = 5
+
+
 class Trainer:
     def __init__(self, cfg, resuming: bool = False):
         """Seven phases, in an order that three of them constrain.
@@ -354,6 +361,9 @@ class Trainer:
 
         self.amp, self.amp_dtype, self.scaler = _resolve_amp(tcfg, self.device)
         self.grad_clip = float(tcfg.get("grad_clip", 0.0))
+        # Counted across the run rather than per epoch: a handful of skips spread
+        # over a long run is the same illness as a burst, just slower.
+        self.nonfinite_steps = 0
         if self.accum_steps > 1:
             self.logger.info(
                 f"gradient accumulation: {self.accum_steps} x batch "
@@ -550,12 +560,49 @@ class Trainer:
             self.scaler.scale(loss / self.accum_steps).backward()
 
             if (i + 1) % self.accum_steps == 0:
-                if self.grad_clip > 0:
-                    self.scaler.unscale_(self.optimizer)
-                    nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-                self.optimizer.zero_grad(set_to_none=True)
+                # **The finiteness guard, and why it is here rather than on the loss.**
+                # `GradScaler` skips a step whose gradients hold inf or NaN, which is the
+                # free safety net every fp16 run gets -- but `needs_grad_scaler` correctly
+                # disables the scaler for bfloat16, bf16 is the default, and it is what
+                # every run in this project has trained on. So on the only path that
+                # actually trains, nothing skipped a poisoned step. `grad_clip` does not
+                # cover it either: a NaN gradient makes the norm NaN, and clipping by a
+                # NaN coefficient writes NaN into every parameter. The first visible sign
+                # was the log line up to `log_interval` micro-batches later, by which time
+                # the optimizer state and `last.pt` were poisoned too.
+                #
+                # It rides on the norm `clip_grad_norm_` already computes, so it adds no
+                # arithmetic -- only one host sync per *optimizer* step, which is the cost
+                # this file otherwise defers to `log_interval` (see the note below). That
+                # is a deliberate trade: a sync per step against a run that is silently
+                # dead and will not say so for another epoch.
+                self.scaler.unscale_(self.optimizer)
+                grad_norm = nn.utils.clip_grad_norm_(
+                    self.model.parameters(),
+                    self.grad_clip if self.grad_clip > 0 else float("inf"),
+                )
+                if not torch.isfinite(grad_norm):
+                    # Drop the whole accumulation group: its gradients are already summed
+                    # and cannot be separated, and stepping on them is what poisons the
+                    # parameters. The schedule still advances, so a skipped step costs one
+                    # position rather than desynchronising the LR from `global_step`.
+                    self.nonfinite_steps += 1
+                    self.logger.warning(
+                        f"E{epoch} [{i + 1}/{micro_batches}] non-finite gradient norm "
+                        f"({float(grad_norm)}); skipping this optimizer step "
+                        f"({self.nonfinite_steps} so far, aborting at {MAX_NONFINITE_STEPS})"
+                    )
+                    if self.nonfinite_steps >= MAX_NONFINITE_STEPS:
+                        raise RuntimeError(
+                            f"{self.nonfinite_steps} non-finite gradient norms; the run is "
+                            "not recoverable by skipping. Check the loss weights, the LR "
+                            "and the newest dataset in the mix."
+                        )
+                    self.optimizer.zero_grad(set_to_none=True)
+                else:
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                    self.optimizer.zero_grad(set_to_none=True)
                 self.scheduler.step()
                 if self.ema:
                     self.ema.update(self.model)

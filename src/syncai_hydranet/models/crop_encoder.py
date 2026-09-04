@@ -70,6 +70,47 @@ class CropEncoder(nn.Module):
         return self.forward(x)[0]
 
 
+def load_crop_encoder(path, device, *, expect: list[str] | tuple[str, ...] | None = None):
+    """A `CropEncoder` from a checkpoint, in eval mode, with its own attribute order.
+
+    **Three scripts each rolled this and each got a different piece of it wrong**, which
+    is why it is here rather than in any of them (measured 2026-09-04):
+
+    * `scripts/eval_attributes.py` returned `model.to(device)` with **no `.eval()`**.
+      `CropEncoder` carries resnet18's BatchNorm plus its own `embed_bn`, so every
+      attribute number that script reported was computed while the running statistics
+      were still being updated by the batch being scored. Verified: train-mode and
+      eval-mode outputs differ on the same input.
+    * `scripts/offline_tracks.py` built `CropEncoder(len(ck["attributes"]))`, taking the
+      **default** `embed_dim=256` and the **default** `pretrained=True` -- so it
+      downloaded ImageNet weights only to overwrite them, and would fail outright on a
+      checkpoint whose embedding is not 256 wide.
+    * Only `eval_attributes` checked the attribute order at all, so the other two would
+      embed happily against a checkpoint whose channels mean something else.
+
+    `expect` is the caller's attribute order. Pass it whenever the names matter --
+    scoring, or anything reading a named channel -- and leave it None when only the
+    embedding is used.
+    """
+    from ..utils.checkpoint import load_checkpoint
+
+    ckpt = load_checkpoint(str(path))
+    names = list(ckpt["attributes"])
+    if expect is not None and names != list(expect):
+        raise ValueError(
+            f"{path} was trained on a different attribute order than the caller expects; "
+            "scoring it against these columns would compare every channel to the wrong "
+            f"label. checkpoint={names} caller={list(expect)}"
+        )
+    model = CropEncoder(
+        len(names),
+        embed_dim=ckpt["model"]["embed.weight"].shape[0],
+        pretrained=False,  # the state dict below replaces every weight
+    )
+    model.load_state_dict(ckpt["model"])
+    return model.to(device).eval(), names
+
+
 class AttributeLoss(nn.Module):
     """Multi-label BCE, weighted per attribute by how rare it is.
 

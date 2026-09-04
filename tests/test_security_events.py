@@ -17,7 +17,7 @@ pytest tests/test_security_events.py -v
 from __future__ import annotations
 
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 import numpy as np
 import pytest
@@ -387,9 +387,7 @@ def test_the_filename_is_utc_and_the_store_is_not():
     assert ev.clip_start_from_name(CLIP, TAIPEI) == datetime(
         2026, 8, 16, 19, 30, 12, tzinfo=TAIPEI
     )
-    assert ev.clip_start_from_name(CLIP) == datetime(
-        2026, 8, 16, 11, 30, 12, tzinfo=timezone.utc
-    )
+    assert ev.clip_start_from_name(CLIP) == datetime(2026, 8, 16, 11, 30, 12, tzinfo=UTC)
 
 
 def test_a_clip_with_no_time_in_its_name_is_refused_rather_than_guessed():

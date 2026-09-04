@@ -47,6 +47,8 @@ import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
 
+from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD
+
 # Column order in the parquet, which is the channel order of the head trained on it.
 ATTRIBUTES = (
     "Female",
@@ -146,7 +148,11 @@ class PA100K(Dataset[dict[str, Any]]):
             # the label wrong -- which is the kind of augmentation that trains a head to
             # contradict its own targets.
             x = x[:, ::-1].copy()
-        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+        # Imported, not restated: `preprocessing`'s docstring is an argument that these
+        # must exist once, because a value that drifts between two of them does not raise
+        # -- it feeds the network inputs it was never trained on and the only symptom is
+        # predictions that are slightly worse. This was the copy inside `src/`, and it was
+        # rebuilding both arrays on every sample.
+        mean, std = IMAGENET_MEAN, IMAGENET_STD
         x = ((x - mean) / std).transpose(2, 0, 1)
         return {"image": torch.from_numpy(x), "labels": torch.from_numpy(self.labels[index])}

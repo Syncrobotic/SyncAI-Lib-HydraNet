@@ -90,6 +90,23 @@ def test_resumed_schedule_matches_uninterrupted_run():
     assert resumed == reference[60:]
 
 
+def test_the_first_optimizer_step_does_not_run_at_the_base_lr():
+    """The 500x bug: the trainer steps the optimizer BEFORE the scheduler, so the LR the
+    param groups hold at construction is what the first step runs at.
+
+    `WarmupCosine.__init__` recorded `base_lrs` and never applied the schedule, so that
+    LR was the base -- `2.0e-4` against a warmup wanting `4.0e-7` on the shipped config.
+    Asserted on the param group rather than on `_factor`, because the param group is what
+    the optimizer reads.
+    """
+    opt = _optimizer(nn.Linear(4, 2))
+    base = opt.param_groups[0]["lr"]
+    WarmupCosine(opt, WARMUP, TOTAL)
+    assert opt.param_groups[0]["lr"] < base / WARMUP * 2, (
+        "the schedule was not applied at construction; the first step runs at the base LR"
+    )
+
+
 def test_schedule_decays_and_ends_near_zero():
     opt = _optimizer(nn.Linear(4, 2))
     sched = WarmupCosine(opt, WARMUP, TOTAL)

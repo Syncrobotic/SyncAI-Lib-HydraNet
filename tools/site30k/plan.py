@@ -34,15 +34,21 @@ Writes campaign_plan.json: one entry per unit, ready for run_campaign.sh.
 import argparse
 import json
 import re
-import sys
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-sys.path.insert(0, "/home/paul/SyncAI-Lib-HydraNet/src")
+# Derived from this file rather than written out: an absolute path here breaks on any
+# machine but the one it was typed on, and `sys.path` is the one place where that
+# fails before anything else can report it. `parents[2]` is the repo root --
+# tools/site30k/<file>.py.
 from syncai_hydranet.data.video import probe
 
-ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
+# The repo root, derived rather than written out: every one of these 26 tools had it
+# as an absolute path, so a second checkout ran against the first one's `runs/` and
+# any machine but this one failed at import with a path and no reason. Two levels up
+# from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
+ROOT = Path(__file__).resolve().parents[2]
 PULL = ROOT / "datasets/studioa_pull_site30k"
 CALIB = ROOT / "runs/onboard01"
 # Filenames are UTC; the store is UTC+8. 23:00-06:00 local is the night tranche.

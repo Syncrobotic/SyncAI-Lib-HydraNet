@@ -21,33 +21,6 @@ from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD, PAD_COLOR
 # deployments, so it needs no selection.
 TRAV_COLORS = np.array([[220, 40, 40], [250, 200, 40], [40, 200, 80]], dtype=np.uint8)
 
-# Terrain colours are per taxonomy, because the taxonomies are not the same list of
-# things. There used to be a single TERRAIN_COLORS holding the off-road one, and every
-# indoor and retail run was rendered with it: `wall` came out sky blue, `glass` came out
-# water blue, `person` came out the orange belonging to `stairs_log`. Nothing failed --
-# an index is an index -- so a val_pred grid looked plausible while naming the wrong
-# things, in the one place meant to catch a model calling a floor a wall.
-#
-# Index order matches ``data.terrain_classes`` in the matching config.
-
-# configs/hydranet_regnet800mf.yaml
-TERRAIN_COLORS_OFFROAD = np.array(
-    [
-        [0, 0, 0],  # void
-        [139, 90, 43],  # dirt
-        [60, 180, 75],  # grass
-        [0, 100, 0],  # tree_bush
-        [128, 128, 128],  # pavement_concrete
-        [210, 180, 140],  # gravel_mulch
-        [178, 34, 34],  # building_wall
-        [135, 206, 235],  # sky
-        [30, 100, 220],  # water
-        [255, 215, 0],  # vehicle_object
-        [112, 128, 144],  # rock
-        [255, 140, 0],  # stairs_log
-    ],
-    dtype=np.uint8,
-)
 
 # configs/hydranet_indoor.yaml. Taken from scripts/live_view_orin.py, which had been
 # carrying the only indoor palette in the repo -- under a comment claiming it matched
@@ -142,7 +115,6 @@ _TERRAIN_PALETTES = (
     ("fixture", TERRAIN_COLORS_RETAIL_SURFACES),
     ("display_fixture", TERRAIN_COLORS_RETAIL),
     ("floor_hard", TERRAIN_COLORS_INDOOR),
-    ("dirt", TERRAIN_COLORS_OFFROAD),
 )
 
 

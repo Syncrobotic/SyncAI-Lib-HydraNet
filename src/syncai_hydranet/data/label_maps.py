@@ -1,12 +1,19 @@
-"""Off-road label maps: RUGD and RELLIS-3D to unified terrain and traversability.
+"""The label-scheme registry: source annotations to unified terrain and traversability.
 
 One pixel annotation drives two heads, which is the key to data efficiency here: the
 terrain label is mapped to traversability through a policy table rather than being
-labelled separately.
+labelled separately. Each scheme carries its own terrain vocabulary and its own policy
+table; `SCHEMES` is the whole set, and `get_scheme` is how a config reaches one.
 
-That policy is robot-specific. A quadruped can cross a log that a wheeled base cannot,
-so ``TERRAIN_TO_TRAV`` is the first thing to change when the platform changes, and it
-requires no re-annotation.
+**The off-road schemes are gone, retired 2026-09-04 with the product line that wanted
+them.** `rugd` and `rellis` mapped a 12-class outdoor vocabulary -- dirt, grass, rock,
+stairs_log -- shared with nothing else here: the shipped terrain head emits `void, floor,
+wall, column, fixture, person`, which overlaps it only at `void`. Their datasets have not
+been on disk since the quadruped line was deleted (2026-08-19, `cc80fc3`), so nothing
+could have trained on them either. Readable at
+`git show 9215a67:src/syncai_hydranet/data/label_maps.py` if outdoor terrain comes back;
+it will need a scheme that also carries floor, wall and person, so that will be a third
+vocabulary rather than this one restored.
 """
 
 from __future__ import annotations
@@ -20,114 +27,20 @@ from . import label_maps_retail as _ret
 from . import label_maps_retail_objects as _obj
 from . import label_maps_site30k as _s30
 
-# Unified 12-class terrain, aligned with ``data.terrain_classes`` in the configs.
-TERRAIN = {
-    "void": 0,
-    "dirt": 1,
-    "grass": 2,
-    "tree_bush": 3,
-    "pavement_concrete": 4,
-    "gravel_mulch": 5,
-    "building_wall": 6,
-    "sky": 7,
-    "water": 8,
-    "vehicle_object": 9,
-    "rock": 10,
-    "stairs_log": 11,
-}
 
-# Terrain to traversability. Quadruped defaults: grass and gravel are passable but
-# warrant caution, stairs and logs are crossable with a dedicated gait.
-TERRAIN_TO_TRAV = {
-    0: 255,  # void -> ignore
-    1: 2,  # dirt -> go
-    2: 1,  # grass -> caution (may hide holes or debris)
-    3: 0,  # tree/bush -> blocked
-    4: 2,  # pavement/concrete -> go
-    5: 1,  # gravel/mulch -> caution
-    6: 0,  # building/wall -> blocked
-    7: 0,  # sky -> blocked
-    8: 0,  # water -> blocked
-    9: 0,  # vehicle/object -> blocked
-    10: 1,  # rock -> caution
-    11: 1,  # stairs/log -> caution
-}
+def terrain_to_traversability(terrain_mask, trav_map):
+    """Map an ``HxW`` terrain id array to traversability ids (0/1/2, 255 = ignore).
 
-# RUGD ships 24 classes as an RGB palette. See http://rugd.vision/ for the colormap.
-RUGD_COLOR_TO_TERRAIN = {
-    (0, 0, 0): TERRAIN["void"],
-    (108, 64, 20): TERRAIN["dirt"],
-    (255, 229, 204): TERRAIN["gravel_mulch"],  # sand
-    (0, 102, 0): TERRAIN["grass"],
-    (0, 255, 0): TERRAIN["tree_bush"],  # tree
-    (0, 153, 153): TERRAIN["building_wall"],  # pole -> obstacle
-    (0, 128, 255): TERRAIN["water"],
-    (0, 0, 255): TERRAIN["sky"],
-    (255, 255, 0): TERRAIN["vehicle_object"],  # vehicle
-    (255, 0, 127): TERRAIN["vehicle_object"],  # container / generic object
-    (64, 64, 64): TERRAIN["pavement_concrete"],  # asphalt
-    (255, 128, 0): TERRAIN["gravel_mulch"],  # gravel
-    (255, 0, 0): TERRAIN["building_wall"],  # building
-    (153, 76, 0): TERRAIN["gravel_mulch"],  # mulch
-    (102, 102, 0): TERRAIN["rock"],  # rock-bed
-    (102, 0, 0): TERRAIN["stairs_log"],  # log
-    (0, 255, 128): TERRAIN["tree_bush"],  # bicycle (rare)
-    (204, 153, 255): TERRAIN["vehicle_object"],  # person
-    (102, 0, 204): TERRAIN["building_wall"],  # fence
-    (255, 153, 204): TERRAIN["tree_bush"],  # bush
-    (0, 102, 102): TERRAIN["vehicle_object"],  # sign
-    (153, 204, 255): TERRAIN["rock"],
-    (102, 255, 255): TERRAIN["building_wall"],  # bridge
-    (101, 101, 11): TERRAIN["pavement_concrete"],  # concrete
-}
-
-# RELLIS-3D uses integer ids.
-#
-# Three of these were inferred rather than read off the official table, and they are
-# listed in RELLIS_UNVERIFIED below. A wrong entry here is not a crash: it relabels a
-# whole class silently, and the run looks normal. Rather than leave that as a comment
-# nobody reads at the point of use, `get_scheme("rellis")` warns and names them.
-RELLIS_ID_TO_TERRAIN = {
-    0: TERRAIN["void"],
-    1: TERRAIN["dirt"],
-    3: TERRAIN["grass"],
-    4: TERRAIN["tree_bush"],
-    5: TERRAIN["building_wall"],  # pole
-    6: TERRAIN["water"],
-    7: TERRAIN["sky"],
-    8: TERRAIN["vehicle_object"],
-    9: TERRAIN["vehicle_object"],  # object
-    10: TERRAIN["pavement_concrete"],  # asphalt
-    12: TERRAIN["building_wall"],  # building
-    15: TERRAIN["stairs_log"],  # log
-    17: TERRAIN["vehicle_object"],  # person
-    18: TERRAIN["building_wall"],  # fence
-    19: TERRAIN["tree_bush"],  # bush
-    23: TERRAIN["gravel_mulch"],  # unverified, may be concrete
-    27: TERRAIN["building_wall"],  # barrier
-    31: TERRAIN["gravel_mulch"],  # unverified: puddle -- water is arguably right
-    33: TERRAIN["gravel_mulch"],  # unverified: mud
-    34: TERRAIN["gravel_mulch"],  # rubble
-}
-
-
-# Source ids whose meaning was inferred from the class name rather than confirmed
-# against RELLIS-3D's published table. 31 (puddle) is the one that matters: mapping it
-# to gravel_mulch makes standing water `caution`, while `water` would make it `blocked`
-# -- a safety-relevant difference on a real platform.
-RELLIS_UNVERIFIED = {
-    23: "may be concrete rather than gravel",
-    31: "puddle -> gravel_mulch (caution); water (blocked) may be correct",
-    33: "mud",
-}
-
-
-def terrain_to_traversability(terrain_mask, trav_map=None):
-    """Map an ``HxW`` terrain id array to traversability ids (0/1/2, 255 = ignore)."""
+    **`trav_map` is required.** It defaulted to the off-road policy table until
+    2026-09-04, so a caller that forgot it silently scored a retail mask against a
+    quadruped's idea of what is crossable. Every real caller already passed one -- the
+    default was only ever reachable by omission -- and the policy is a property of the
+    scheme, which `get_scheme(...).trav` supplies.
+    """
     import numpy as np
 
     out = np.full_like(terrain_mask, IGNORE)
-    for t_id, trav in (trav_map or TERRAIN_TO_TRAV).items():
+    for t_id, trav in trav_map.items():
         out[terrain_mask == t_id] = trav
     return out
 
@@ -162,8 +75,6 @@ def _scheme(name, fmt, mapping, trav, terrain_dict):
 
 
 SCHEMES: dict[str, LabelScheme] = {
-    "rugd": _scheme("rugd", "color", RUGD_COLOR_TO_TERRAIN, TERRAIN_TO_TRAV, TERRAIN),
-    "rellis": _scheme("rellis", "id", RELLIS_ID_TO_TERRAIN, TERRAIN_TO_TRAV, TERRAIN),
     "ade20k_indoor": _scheme(
         "ade20k_indoor",
         "id",
@@ -325,24 +236,15 @@ def get_scheme(name: str) -> LabelScheme:
     """
     if name not in SCHEMES:
         raise ValueError(f"unknown label_map: {name}, available: {list(SCHEMES)}")
-    if name == "rellis":
-        import warnings
-
-        detail = "; ".join(f"{k}: {v}" for k, v in sorted(RELLIS_UNVERIFIED.items()))
-        warnings.warn(
-            f"label_map 'rellis' contains {len(RELLIS_UNVERIFIED)} mappings inferred from "
-            f"class names rather than confirmed against the official table ({detail}). "
-            "A wrong entry relabels a whole class without any error. Confirm them before "
-            "reporting numbers from RELLIS-3D.",
-            stacklevel=2,
-        )
     if name == "retail_objects_migrated":
         import warnings
 
-        # Same shape of warning as rellis, and for the same reason: what is lost here is
-        # lost silently. These masks were drawn under a taxonomy where a column *is*
-        # wall, so migrating them cannot separate the two -- the run trains a `column`
-        # channel on nothing and reports a plausible-looking 0.000 sixty epochs later.
+        # Same shape of warning as the rellis one this used to sit beside (retired
+        # 2026-09-04 with the off-road taxonomy), and for the same reason: what is lost
+        # here is lost silently. These masks were drawn under a taxonomy where a column
+        # *is* wall, so migrating them cannot separate the two -- the run trains a
+        # `column` channel on nothing and reports a plausible-looking 0.000 sixty epochs
+        # later.
         warnings.warn(
             "label_map 'retail_objects_migrated' reads retail-13 masks under the object "
             "taxonomy. `column` (id 3) cannot survive the migration: those masks put "

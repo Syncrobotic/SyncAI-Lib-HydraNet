@@ -11,6 +11,14 @@ minutes in.
 
 A docstring said it and nothing checked it, which is the pattern both 2026-08-28 handoffs
 name. These tests are the check.
+
+**The fixture is noise, and that is the whole of the second lesson.** Until 2026-09-04
+every test here blurred an all-zeros image, and a Gaussian blur of a uniform image is
+the identity -- so `def blur_region(*a): return` passed all five. Measured on the day it
+was found: the blank fixture came back byte-identical after a blur, the noise fixture did
+not. The tests read as if they covered the blur and covered only the arithmetic around
+it, on the function `tests/test_never_do.py` calls the entire distance between this
+module and a breach.
 """
 
 from __future__ import annotations
@@ -21,21 +29,52 @@ from PIL import Image
 from syncai_hydranet.utils import face_blur
 
 
-def _blank(w: int = 200, h: int = 200) -> Image.Image:
-    return Image.fromarray(np.zeros((h, w, 3), np.uint8))
+def _noise(w: int = 200, h: int = 200) -> Image.Image:
+    """A frame a blur can be seen in, from a fixed seed so a failure is reproducible."""
+    rng = np.random.default_rng(20260904)
+    return Image.fromarray(rng.integers(0, 256, (h, w, 3), dtype=np.uint8))
 
 
 def test_a_numpy_box_blurs_rather_than_raising():
-    """The regression, in the exact shape the detector hands over: numpy float64."""
+    """The regression, in the exact shape the detector hands over: numpy float64.
+
+    Asserts the pixels moved, not merely that nothing raised: a `blur_region` that
+    returned early would satisfy "must not raise" and leave a face on screen.
+    """
     box = np.array([10.0, 10.0, 60.0, 160.0])
-    face_blur.blur_region(_blank(), *box)  # must not raise
+    img = _noise()
+    before = np.asarray(img).copy()
+    face_blur.blur_region(img, *box)
+    assert not np.array_equal(before, np.asarray(img))
+
+
+def test_the_head_is_blurred_and_the_torso_is_left_alone():
+    """The claim the whole module exists for, checked on pixels rather than on a rectangle.
+
+    Two consumers, as `test_the_rectangle_covers_the_head_and_not_the_whole_person`
+    records: the head going is the privacy contract, and the torso staying is what
+    `analytics.staff` reads its nine colour statistics from.
+    """
+    x0, y0, x1, y1 = 40.0, 20.0, 80.0, 180.0
+    img = _noise()
+    before = np.asarray(img).copy()
+    face_blur.blur_region(img, x0, y0, x1, y1)
+    after = np.asarray(img)
+
+    _, by0, _, by1 = face_blur.blur_rect(200, 200, x0, y0, x1, y1)
+    assert not np.array_equal(before[by0:by1], after[by0:by1]), "the head was not blurred"
+    assert np.array_equal(before[by1 : int(y1)], after[by1 : int(y1)]), "the torso was touched"
 
 
 def test_a_python_box_and_a_numpy_box_blur_the_same_pixels():
-    a, b = _blank(), _blank()
+    a, b = _noise(), _noise()
+    untouched = np.asarray(_noise()).copy()
     face_blur.blur_region(a, 10.0, 10.0, 60.0, 160.0)
     face_blur.blur_region(b, *np.array([10.0, 10.0, 60.0, 160.0]))
     assert np.array_equal(np.asarray(a), np.asarray(b))
+    # ... and that both of them actually did something, so the equality above is an
+    # agreement between two blurs rather than between two no-ops.
+    assert not np.array_equal(untouched, np.asarray(a))
 
 
 def test_the_rectangle_covers_the_head_and_not_the_whole_person():
@@ -63,7 +102,7 @@ def test_a_box_too_small_to_carry_a_face_is_declined_by_both():
     # deleting the width test left it green. Verified by deleting each in turn.
     sliver = (10.0, 10.0, 13.0, 50.0)
     assert face_blur.blur_rect(200, 200, *sliver) is None
-    before = _blank()
+    before = _noise()
     after = before.copy()
     face_blur.blur_region(after, *sliver)
     assert np.array_equal(np.asarray(before), np.asarray(after))

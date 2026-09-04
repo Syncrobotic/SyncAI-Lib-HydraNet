@@ -55,12 +55,9 @@ from scipy import ndimage
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-for candidate in (HERE.parent / "src", HERE / "src"):
-    if candidate.is_dir():
-        sys.path.insert(0, str(candidate))
 
 from syncai_bev3d.floorplan import (  # noqa: E402
-    BevGrid,
+    FloorRaster,
     shoelace,
     simplify_ring,
 )
@@ -182,7 +179,7 @@ def bisect_mask(mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def close_and_trace(
-    grid: np.ndarray, bev: BevGrid, max_vertices: int, close_iters: int = 2
+    grid: np.ndarray, bev: FloorRaster, max_vertices: int, close_iters: int = 2
 ) -> tuple[np.ndarray | None, np.ndarray]:
     """Close sampling gaps, keep the largest component, trace and simplify its outline."""
     g = ndimage.binary_closing(grid, iterations=close_iters)
@@ -268,7 +265,7 @@ CAMERA_COLOR = (200, 40, 40)
 
 
 def render_bev(
-    bev: BevGrid,
+    bev: FloorRaster,
     floor_grid: np.ndarray,
     floor_poly: np.ndarray | None,
     fixtures: list[tuple[str, np.ndarray]],
@@ -422,7 +419,7 @@ def propose_for_camera(camera: str, calib_path: Path, model, cfg, device, args) 
             "camera": camera,
             "skipped": f"only {len(fx_img)} floor pixels project inside range",
         }
-    bev = BevGrid(fx_img, fz_img, cell=args.cell)
+    bev = FloorRaster(fx_img, fz_img, cell=args.cell)
     floor_grid = bev.raster(fx_img, fz_img)
     floor_poly, floor_grid_closed = close_and_trace(floor_grid, bev, FLOOR_MAX_VERTICES)
     if floor_poly is not None:
