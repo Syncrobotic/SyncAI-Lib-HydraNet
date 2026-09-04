@@ -64,8 +64,6 @@ from syncai_hydranet.geometry.camera_json import CameraFile, Zone
 from syncai_hydranet.geometry.ground import (
     distort_points,
     ground_to_pixel,
-    pixel_to_ground,
-    undistort_points,
 )
 from syncai_hydranet.utils.device import pick_device
 
@@ -171,20 +169,12 @@ def contact_points_px(inst: np.ndarray, floor: np.ndarray) -> np.ndarray:
     return np.stack([xs.astype(float), ys.astype(float)], axis=1)
 
 
-def to_metres(px: np.ndarray, cam_file: CameraFile) -> np.ndarray:
-    lens = cam_file.lens
-    if lens is not None:
-        px = undistort_points(px, lens.k1, lens.centre_px, lens.radius_px)
-    x, z = pixel_to_ground(px[:, 0], px[:, 1], cam_file.camera, cam_file.plane)
-    out = np.stack([x, z], axis=1)
-    return out[np.isfinite(out).all(axis=1)]
-
-
 class FloorGrid(FloorRaster):
-    """This camera's floor raster: a  over the projected floor, closed once.
+    """This camera's floor raster: a `FloorRaster` over the projected floor, closed once.
 
-    The extent, the rasterisation and the cell->metres conversion are 's and are
-    shared with . What is this tool's own is the binary closing:
+    The extent, the rasterisation and the cell->metres conversion are `FloorRaster`'s and
+    are shared with `scripts/propose_zones.py`. What is this tool's own is the binary
+    closing:
     a projected floor mask is speckled with one-cell holes where a fixture leg or a
     reflection interrupted it, and a hole is a place a shopper reads as outside every zone.
     """
@@ -270,13 +260,13 @@ def derive(camera: str, device: str) -> dict:
     plate = Image.open(ROOT / cam_file.plate_file).convert("RGB")
     floor = np.asarray(Image.open(COMMISSIONED / cam_file.mask_files["floor"])) > 0
     ys, xs = np.nonzero(floor)
-    floor_m = to_metres(np.stack([xs.astype(float), ys.astype(float)], axis=1), cam_file)
+    floor_m = cam_file.ground_points(np.stack([xs.astype(float), ys.astype(float)], axis=1))
     if len(floor_m) < 100:
         raise SystemExit(f"{camera}: the floor mask projects to {len(floor_m)} points")
     grid = FloorGrid(floor_m)
 
     found = instances(plate, device)
-    contacts = [to_metres(contact_points_px(f["mask"], floor), cam_file) for f in found]
+    contacts = [cam_file.ground_points(contact_points_px(f["mask"], floor)) for f in found]
     regions = assign(grid, contacts)
 
     zones = []
