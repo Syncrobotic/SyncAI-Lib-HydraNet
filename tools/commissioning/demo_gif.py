@@ -55,7 +55,6 @@ import torch
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src"))
 
 
 from syncai_hydranet.data.video import frames as decode_frames

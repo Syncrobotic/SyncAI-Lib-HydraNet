@@ -41,26 +41,25 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
+from syncai_hydranet.analytics import events as ev
+from syncai_hydranet.analytics.clip_tracks import track_clip
+from syncai_hydranet.analytics.delivery import report_settings
+from syncai_hydranet.analytics.journey import journeys
+from syncai_hydranet.analytics.tracker import SIMPLIFICATIONS, Tracker
+from syncai_hydranet.analytics.world import world_frames
+from syncai_hydranet.data.video import frames, probe
+from syncai_hydranet.geometry.camera_json import CameraFile
+from syncai_hydranet.serving.camera import BIRTH_REF
+from syncai_hydranet.shipped import load_model
+from syncai_hydranet.utils.device import pick_device
+from syncai_hydranet.utils.visualize import preprocess
 
-from syncai_hydranet.analytics import events as ev  # noqa: E402
-from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
-from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
-from syncai_hydranet.analytics.journey import journeys  # noqa: E402
-from syncai_hydranet.analytics.tracker import SIMPLIFICATIONS, Tracker  # noqa: E402
-from syncai_hydranet.analytics.world import world_frames  # noqa: E402
-from syncai_hydranet.data.video import frames, probe  # noqa: E402
-from syncai_hydranet.geometry.camera_json import CameraFile  # noqa: E402
-from syncai_hydranet.serving.camera import BIRTH_REF  # noqa: E402
-from syncai_hydranet.shipped import load_model  # noqa: E402
-from syncai_hydranet.utils.device import pick_device  # noqa: E402
-from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
+ROOT = Path(__file__).resolve().parent.parent
+
 
 COMMISSIONED = ROOT / "runs/commission01"
 

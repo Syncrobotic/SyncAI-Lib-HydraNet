@@ -43,26 +43,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-for candidate in (HERE.parent / "src", HERE / "src"):
-    if candidate.is_dir():
-        sys.path.insert(0, str(candidate))
-
-from syncai_hydranet.analytics import Tracker, dwell_table, track_ground_path  # noqa: E402
-from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
-from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
-from syncai_hydranet.analytics.dwell import ground_map  # noqa: E402
-from syncai_hydranet.analytics.tracker import SIMPLIFICATIONS  # noqa: E402
-from syncai_hydranet.data.video import frames, probe  # noqa: E402
-from syncai_hydranet.geometry.ground import Camera, GroundPlane  # noqa: E402
-from syncai_hydranet.models.heads.detection import SCORE_THR_RETAIL  # noqa: E402
-from syncai_hydranet.shipped import load_model  # noqa: E402
-from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
+from syncai_hydranet.analytics import Tracker, dwell_table, track_ground_path
+from syncai_hydranet.analytics.clip_tracks import track_clip
+from syncai_hydranet.analytics.delivery import report_settings
+from syncai_hydranet.analytics.dwell import ground_map
+from syncai_hydranet.analytics.tracker import SIMPLIFICATIONS
+from syncai_hydranet.data.video import frames, probe
+from syncai_hydranet.geometry.ground import Camera, GroundPlane
+from syncai_hydranet.models.heads.detection import SCORE_THR_RETAIL
+from syncai_hydranet.shipped import load_model
+from syncai_hydranet.utils.visualize import preprocess
 
 
 def build_parser() -> argparse.ArgumentParser:

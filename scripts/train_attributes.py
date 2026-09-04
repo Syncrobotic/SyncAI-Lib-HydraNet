@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 from pathlib import Path
 
@@ -37,16 +36,11 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-HERE = Path(__file__).resolve().parent
-for candidate in (HERE.parent / "src", HERE / "src"):
-    if candidate.is_dir():
-        sys.path.insert(0, str(candidate))
-
-from syncai_hydranet.data.attributes import ATTRIBUTES, PA100K, SUPPORT  # noqa: E402
-from syncai_hydranet.models.crop_encoder import AttributeLoss, CropEncoder  # noqa: E402
-from syncai_hydranet.utils.checkpoint import save_checkpoint  # noqa: E402
-from syncai_hydranet.utils.device import pick_device  # noqa: E402
-from syncai_hydranet.utils.seeding import seed_everything  # noqa: E402
+from syncai_hydranet.data.attributes import ATTRIBUTES, PA100K, SUPPORT
+from syncai_hydranet.models.crop_encoder import AttributeLoss, CropEncoder
+from syncai_hydranet.utils.checkpoint import save_checkpoint
+from syncai_hydranet.utils.device import pick_device
+from syncai_hydranet.utils.seeding import seed_everything
 
 
 def build_parser() -> argparse.ArgumentParser:

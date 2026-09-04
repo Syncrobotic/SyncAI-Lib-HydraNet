@@ -42,9 +42,6 @@ from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-for candidate in (HERE.parent / "src", HERE / "src"):
-    if candidate.is_dir():
-        sys.path.insert(0, str(candidate))
 
 from syncai_hydranet.data.video import frames, probe  # noqa: E402  # isort: skip
 from syncai_hydranet.config import load_config  # noqa: E402

@@ -45,24 +45,20 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
-import sys
 import traceback
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "src"))
-
 # The geometry and its checks, all reused from the package -- not from
 # `calibrate_from_plate.py`, which was the same code's CLI: the pipeline moved into the
 # package on 2026-08-19 so a script would stop being another script's library, and
 # `500cdd2` deleted the emptied CLI on 2026-08-25.
-from syncai_bev3d import plate_calibration as pc  # noqa: E402
-from syncai_bev3d.calibrate import horizon_row  # noqa: E402
-from syncai_hydranet.geometry.ground import Camera  # noqa: E402
-from syncai_hydranet.shipped import SHIPPED_CONFIG, for_terrain  # noqa: E402
+from syncai_bev3d import plate_calibration as pc
+from syncai_bev3d.calibrate import horizon_row
+from syncai_hydranet.geometry.ground import Camera
+from syncai_hydranet.shipped import SHIPPED_CONFIG, for_terrain
 
 SCHEMA = "hydranet-onboard-calib/v1"
 # Defaults, not constants. A second fleet arrived 2026-08-27 -- ten RTSP channels with

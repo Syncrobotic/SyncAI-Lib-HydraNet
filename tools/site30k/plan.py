@@ -34,7 +34,6 @@ Writes campaign_plan.json: one entry per unit, ready for run_campaign.sh.
 import argparse
 import json
 import re
-import sys
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -43,9 +42,7 @@ from pathlib import Path
 # machine but the one it was typed on, and `sys.path` is the one place where that
 # fails before anything else can report it. `parents[2]` is the repo root --
 # tools/site30k/<file>.py.
-_REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(_REPO / "src"))
-from syncai_hydranet.data.video import probe  # noqa: E402
+from syncai_hydranet.data.video import probe
 
 # The repo root, derived rather than written out: every one of these 26 tools had it
 # as an absolute path, so a second checkout ran against the first one's `runs/` and

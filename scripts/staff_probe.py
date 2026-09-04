@@ -49,7 +49,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from collections import Counter
 from pathlib import Path
 
@@ -57,22 +56,22 @@ import numpy as np
 import torch
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
-
-from syncai_hydranet.analytics.staff import (  # noqa: E402
+from syncai_hydranet.analytics.staff import (
     crop_features,
     fit_logreg,
     fit_staff_model,
     predict,
 )
-from syncai_hydranet.data.attributes import ATTRIBUTES  # noqa: E402
-from syncai_hydranet.models.crop_encoder import (  # noqa: E402
+from syncai_hydranet.data.attributes import ATTRIBUTES
+from syncai_hydranet.models.crop_encoder import (
     CropEncoder,
     load_crop_encoder,
 )
-from syncai_hydranet.preprocessing import IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
-from syncai_hydranet.utils.device import pick_device  # noqa: E402
+from syncai_hydranet.preprocessing import IMAGENET_MEAN, IMAGENET_STD
+from syncai_hydranet.utils.device import pick_device
+
+ROOT = Path(__file__).resolve().parent.parent
+
 
 SIZE = (256, 128)  # data/attributes.py's crop geometry, so the encoder sees what it trained on
 # The canonical pair, imported rather than restated -- see `preprocessing`'s docstring

@@ -57,6 +57,8 @@ from pathlib import Path
 
 import numpy as np
 
+from syncai_hydranet.data.attributes import ATTRIBUTES
+
 REPO = Path(__file__).resolve().parent.parent
 PKL = REPO / "datasets/_incoming/attr_bundle/rap_zs.pkl"
 ANNOT_ZIP = REPO / "datasets/_incoming/attr_bundle/RAPV2/RAP_annotation.zip"
@@ -68,8 +70,6 @@ OUT = REPO / "datasets/RAP-v2/prepared"
 
 # The head's channel order. Imported, not copied: a drift here would train every channel
 # against the wrong column and the schema check would not notice.
-sys.path.insert(0, str(REPO / "src"))
-from syncai_hydranet.data.attributes import ATTRIBUTES  # noqa: E402
 
 LOW_SUPPORT_RATE = 0.01  # positive rate below this is flagged for pos_weight review
 

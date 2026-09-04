@@ -36,27 +36,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
-from syncai_hydranet.utils.device import pick_device
-
-HERE = Path(__file__).resolve().parent
-for candidate in (HERE.parent / "src", HERE / "src"):
-    if candidate.is_dir():
-        sys.path.insert(0, str(candidate))
-
-from syncai_bev3d.teachers.boxes import nms  # noqa: E402
-from syncai_bev3d.teachers.gdino import (  # noqa: E402
+from syncai_bev3d.teachers.boxes import nms
+from syncai_bev3d.teachers.gdino import (
     MODEL_ID,
     detect,
     load_gdino,
 )
-from syncai_bev3d.teachers.photometry import luma_chroma  # noqa: E402
+from syncai_bev3d.teachers.photometry import luma_chroma
+from syncai_hydranet.utils.device import pick_device
 
 THRESHOLD_LADDER = (0.25, 0.35, 0.50)  # reported per camera; nothing is filtered by them
 

@@ -27,22 +27,15 @@ is the form a decision gets made from.
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-for candidate in (HERE.parent / "src", HERE / "src"):
-    if candidate.is_dir():
-        sys.path.insert(0, str(candidate))
-
-
-from syncai_hydranet.engine.confusion import (  # noqa: E402
+from syncai_hydranet.engine.confusion import (
     per_image_confusions,
     run_config,
 )
-from syncai_hydranet.utils.device import pick_device  # noqa: E402
+from syncai_hydranet.utils.device import pick_device
 
 
 def build_parser() -> argparse.ArgumentParser:

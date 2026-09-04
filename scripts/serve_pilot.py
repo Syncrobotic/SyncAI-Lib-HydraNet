@@ -35,7 +35,6 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from syncai_hydranet.data.label_maps_retail_security import get_det_vocab  # noqa: E402

@@ -36,9 +36,6 @@ import torch
 from torch.utils.data import DataLoader
 
 HERE = Path(__file__).resolve().parent
-for candidate in (HERE.parent / "src", HERE / "src"):
-    if candidate.is_dir():
-        sys.path.insert(0, str(candidate))
 sys.path.insert(0, str(HERE))  # for train_attributes, which owns the Market protocol
 
 from train_attributes import score_association  # noqa: E402

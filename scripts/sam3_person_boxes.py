@@ -59,9 +59,6 @@ import numpy as np
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
-for candidate in (HERE.parent / "src", HERE / "src"):
-    if candidate.is_dir():
-        sys.path.insert(0, str(candidate))
 sys.path.insert(0, str(HERE))
 
 from syncai_bev3d.teachers.boxes import (  # noqa: E402

@@ -31,7 +31,6 @@ from scipy import ndimage
 # fails before anything else can report it. `parents[2]` is the repo root --
 # tools/site30k/<file>.py.
 _REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(_REPO / "src"))
 sys.path.insert(0, str(_REPO / "scripts"))
 spec = importlib.util.spec_from_file_location(
     "campaign", str(_REPO / "scripts/campaign_site30k.py")

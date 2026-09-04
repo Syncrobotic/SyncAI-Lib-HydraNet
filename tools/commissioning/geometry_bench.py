@@ -37,17 +37,17 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(ROOT / "src"))
-
-from syncai_hydranet.geometry.ground import (  # noqa: E402
+from syncai_hydranet.geometry.ground import (
     Camera as GCamera,
 )
-from syncai_hydranet.geometry.ground import (  # noqa: E402
+from syncai_hydranet.geometry.ground import (
     GroundPlane,
     undistort_points,
     unproject,
 )
+
+ROOT = Path(__file__).resolve().parent.parent.parent
+
 
 FRAME_H, FRAME_W = 1080, 1920
 

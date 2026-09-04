@@ -70,9 +70,6 @@ import torch
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
-for candidate in (HERE.parent / "src", HERE / "src"):
-    if candidate.is_dir():
-        sys.path.insert(0, str(candidate))
 sys.path.insert(0, str(HERE))
 
 # The teachers live in the wheel as of 2026-08-20 (52eb141 SAM 3, 556582b Grounding

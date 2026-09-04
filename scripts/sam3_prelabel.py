@@ -65,19 +65,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from collections import Counter
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
-HERE = Path(__file__).resolve().parent
-for candidate in (HERE.parent / "src", HERE / "src"):
-    if candidate.is_dir():
-        sys.path.insert(0, str(candidate))
-
-from syncai_bev3d.teachers.sam3 import (  # noqa: E402
+from syncai_bev3d.teachers.sam3 import (
     MAX_BOX_FRAC,
     MODEL_ID,
     consensus,
@@ -85,17 +79,17 @@ from syncai_bev3d.teachers.sam3 import (  # noqa: E402
     frame_masks,
     load_sam3,
 )
-from syncai_hydranet.data import sam3_prompts as _retail_prompts  # noqa: E402
-from syncai_hydranet.data import sam3_prompts_objects as _object_prompts  # noqa: E402
-from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
-from syncai_hydranet.data.video import (  # noqa: E402
+from syncai_hydranet.data import sam3_prompts as _retail_prompts
+from syncai_hydranet.data import sam3_prompts_objects as _object_prompts
+from syncai_hydranet.data.frame_selection import describe, farthest_first
+from syncai_hydranet.data.video import (
     frames,
     probe,
     session_names,
     validate_inputs,
 )
-from syncai_hydranet.labels import IGNORE  # noqa: E402
-from syncai_hydranet.utils.device import pick_device  # noqa: E402
+from syncai_hydranet.labels import IGNORE
+from syncai_hydranet.utils.device import pick_device
 
 # Two taxonomies, two prompt tables, and the pairing is not interchangeable: a concept
 # resolves its class id against the taxonomy it belongs to, so running the retail table

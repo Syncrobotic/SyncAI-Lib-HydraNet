@@ -54,7 +54,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from itertools import pairwise
 from pathlib import Path
 
@@ -62,26 +61,26 @@ import numpy as np
 import torch
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
-
-from syncai_hydranet.analytics.appearance import (  # noqa: E402
+from syncai_hydranet.analytics.appearance import (
     torso_region,
     torso_stats,
 )
-from syncai_hydranet.analytics.bytetrack import OfflineForward  # noqa: E402
-from syncai_hydranet.analytics.clip_tracks import (  # noqa: E402
+from syncai_hydranet.analytics.bytetrack import OfflineForward
+from syncai_hydranet.analytics.clip_tracks import (
     PERSON,
     to_source_pixels,
     undistort_boxes,
 )
-from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
-from syncai_hydranet.analytics.tracker import Tracker, iou  # noqa: E402
-from syncai_hydranet.data.video import frames, probe  # noqa: E402
-from syncai_hydranet.geometry.camera_json import CameraFile  # noqa: E402
-from syncai_hydranet.serving.camera import BIRTH_REF  # noqa: E402
-from syncai_hydranet.shipped import load_model  # noqa: E402
-from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
+from syncai_hydranet.analytics.delivery import report_settings
+from syncai_hydranet.analytics.tracker import Tracker, iou
+from syncai_hydranet.data.video import frames, probe
+from syncai_hydranet.geometry.camera_json import CameraFile
+from syncai_hydranet.serving.camera import BIRTH_REF
+from syncai_hydranet.shipped import load_model
+from syncai_hydranet.utils.visualize import preprocess
+
+ROOT = Path(__file__).resolve().parent.parent
+
 
 COMMISSIONED = ROOT / "runs/commission01"
 _SWEEP = json.loads((ROOT / "configs/sweep_clips.json").read_text())

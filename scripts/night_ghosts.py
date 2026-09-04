@@ -41,25 +41,23 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import torch
+from PIL import Image
+
+from syncai_hydranet.analytics.clip_tracks import PERSON, to_source_pixels
+from syncai_hydranet.analytics.delivery import report_settings
+from syncai_hydranet.data.night_person import NightPersonVeto
+from syncai_hydranet.data.video import frames as decode_frames
+from syncai_hydranet.data.video import probe
+from syncai_hydranet.serving.camera import BIRTH_REF
+from syncai_hydranet.shipped import load_model
+from syncai_hydranet.utils.device import pick_device
+from syncai_hydranet.utils.visualize import preprocess
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
 
-from PIL import Image  # noqa: E402
-
-from syncai_hydranet.analytics.clip_tracks import PERSON, to_source_pixels  # noqa: E402
-from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
-from syncai_hydranet.data.night_person import NightPersonVeto  # noqa: E402
-from syncai_hydranet.data.video import frames as decode_frames  # noqa: E402
-from syncai_hydranet.data.video import probe  # noqa: E402
-from syncai_hydranet.serving.camera import BIRTH_REF  # noqa: E402
-from syncai_hydranet.shipped import load_model  # noqa: E402
-from syncai_hydranet.utils.device import pick_device  # noqa: E402
-from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
 CLIPS = ROOT / "datasets/studioa_clips"
 STATIC = ROOT / "datasets/studioa_static"

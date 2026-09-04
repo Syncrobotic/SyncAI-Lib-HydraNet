@@ -55,9 +55,6 @@ from scipy import ndimage
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-for candidate in (HERE.parent / "src", HERE / "src"):
-    if candidate.is_dir():
-        sys.path.insert(0, str(candidate))
 
 from syncai_bev3d.floorplan import (  # noqa: E402
     FloorRaster,

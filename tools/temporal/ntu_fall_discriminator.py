@@ -40,16 +40,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import zipfile
 from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "src"))
-
-from syncai_hydranet.data.ntu_skeletons import (  # noqa: E402
+from syncai_hydranet.data.ntu_skeletons import (
     JOINTS,
     members,
     read_clip,

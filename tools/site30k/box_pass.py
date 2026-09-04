@@ -47,7 +47,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 from collections import Counter
 from pathlib import Path
@@ -60,12 +59,9 @@ from scipy import ndimage
 # as an absolute path, so a second checkout ran against the first one's `runs/` and
 # any machine but this one failed at import with a path and no reason. Two levels up
 # from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "src"))
-
-from syncai_bev3d.teachers import boxes as B  # noqa: E402
-from syncai_bev3d.teachers import gdino as G  # noqa: E402
-from syncai_hydranet.utils.device import pick_device  # noqa: E402
+from syncai_bev3d.teachers import boxes as B
+from syncai_bev3d.teachers import gdino as G
+from syncai_hydranet.utils.device import pick_device
 
 SCORE_FLOOR = 0.10  # keep both score populations visible; see the module docstring
 NMS_IOU = 0.55
