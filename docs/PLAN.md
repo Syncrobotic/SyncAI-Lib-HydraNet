@@ -2558,3 +2558,178 @@ something it does not support.
    training on it is volume (all 8 commissioned cameras x day variety), the
    person-degradation unknown above, and an ablation showing a night-trained
    head actually cuts the real ghosts.
+
+---
+
+## 8. Health remediation — a working section, deleted when it empties
+
+A best-practice audit ran on 2026-09-04 over the whole tree (8 sweeps: packaging,
+config, duplication, comment truth, tests, ML engineering, repo hygiene, privacy).
+Every item below was verified against the code, not inferred from a name; where a
+claim is empirical the measurement is quoted. **This section is scaffolding: each
+entry is struck through as it lands and the section is deleted when the last one
+does.** It is not a permanent record — what a fix taught belongs in the section it
+belongs to.
+
+The audit's one structural finding, which is why the P0 list looks the way it does:
+**this project's guards are trusted more widely than they reach.** `split_leaks`
+covers one dataset type of five; `CKPT_FORMAT` is written and never read;
+`deterministic` warns instead of enforcing; `check_parity` gates the ONNX and not
+the fp16 engine that ships; the face-blur tests cannot see a blur. A guard that
+half-covers is worse than an absent one, because its presence is read as coverage.
+
+### P0 — produces wrong results, or fails without saying so
+
+1. **The face-blur tests cannot detect a blur.** `tests/test_face_blur.py` blurs
+   `_blank()` = `np.zeros(...)`, and a Gaussian blur of a uniform image is the
+   identity. Measured: blank image unchanged by `blur_region`, noise image changed.
+   So `def blur_region(*a): return` keeps all five tests green, and
+   `test_a_numpy_box_blurs_rather_than_raising` has no assert at all. This is the
+   function `test_never_do.py:190` calls "the entire distance between
+   `utils/face_blur.py` and a breach", and the blur has failed before (132 readable
+   heads of 954 boxes). Fix: noise fixture, assert the head region moved and the
+   torso did not.
+2. **The first optimizer step of every run bypasses warmup.**
+   `engine/optim.py:50-71` — `WarmupCosine.__init__` records `base_lrs` and never
+   calls `_apply()`; `step()` increments then applies, and the trainer steps the
+   optimizer first. Measured: `param_groups[0]["lr"]` is `2e-4` after construction
+   where warmup wants `4e-7` — **500x**, on freshly initialised heads, carried
+   forward by AdamW's first moment. `load_state_dict` re-applies immediately and
+   says why, so the resume path is right and the fresh path is not. No test reads
+   the LR before the first step.
+3. **No NaN/Inf guard in the training step, on the only path that trains.**
+   `engine/trainer.py` has no `isfinite`/`isnan` anywhere. `GradScaler` would
+   normally skip a poisoned step, but `needs_grad_scaler` correctly returns False
+   for bf16 and bf16 is the default and what every run used. `grad_clip: 10.0` does
+   not help: a NaN gradient yields a NaN norm and writes NaN into every parameter.
+   Silent until the 50-step log, by which time the optimizer state and `last.pt`
+   are poisoned.
+4. **`split_leaks` covers one dataset type of five.** `data/datasets.py:500` filters
+   `type == "seg_folder"`; the tree also has `coco`, `pose_keypoints`,
+   `rendered_depth`, `nyu_depth`. The retail configs that mix COCO/site boxes with
+   site masks are exactly the ones at risk, and this guard's docstring — which names
+   the incident and its cost of three seeds — is what anyone will point at when
+   asked whether leakage is checked.
+5. **`figures.py` hardcodes the frame scale that three siblings derive.**
+   `syncai_bev3d/figures.py:271-272` writes `/ 2.0`; `analytics/world.py`'s
+   `_to_calibrated_pixels` derives it from `image_size_px` vs `source_size_px` and
+   carries a 1.5x-canvas refusal. Correct only while every camera is commissioned at
+   exactly half the decode resolution, which is today's fleet and not a property of
+   anything. A camera commissioned at full resolution puts every figure at the wrong
+   floor position and stature, with no guard to notice.
+
+### P1 — green lights wired to nothing
+
+6. `tests/test_serving_decode.py:81` compares only `[:min(len(f), len(q))]`, so the
+   truncation it exists to catch shortens both sides and passes. One line:
+   `assert len(f["boxes"]) == len(q["boxes"])`.
+7. **CI has no ffmpeg**, so 8 tests skip there: `hydranet-infer-video`,
+   `hydranet-scene` (two shipped console scripts) and the whole decode-error
+   contract run nowhere in CI. One `apt-get install ffmpeg` line converts 8 loud
+   skips into 8 real gates.
+8. `serving/engine.py` — 320 lines, the TensorRT executor every throughput figure
+   rests on — has **0 test references**. `serving/uint8_input.py` (a pure ONNX graph
+   transform, trivially testable) likewise. `shipped.py`, which decides which run and
+   which checkpoint ship, likewise — on a project that shipped a 40%-worse person
+   detector by trusting one metric.
+9. `tests/test_indoor25_baseline.py:106` guards on a path relative to the invocation
+   directory, so it skips silently from anywhere but the repo root. Every other guard
+   anchors to `parents[1]`, and `test_zone_bridge.py:91` cites *this file* as the
+   pattern to copy.
+10. `tests/test_trainer.py:135` asserts `mIoU > 0.0` on a 3-class problem (a constant
+    prediction clears it) while claiming "must beat chance"; `tests/test_smoke.py:80`
+    runs the whole training step with no assertion at all.
+11. Nothing bounds the suite's skip count. A path typo turns a running test into a
+    permanent skipper and only a reader notices — which is how item 9 was found.
+
+### P2 — duplicated logic, drifted copies first
+
+12. **Two `BevGrid` classes in one package with opposite row conventions**:
+    `bev.py:47` puts row 0 at the far edge (documented), `floorplan.py:78` at the
+    near edge. `analytics/dwell.py`'s `GroundMap` is a third copy with its own field
+    names. Reading one's raster with the other's convention is a vertical mirror.
+13. `bev.place_boxes` and `dwell.track_ground_path` project feet **without the lens**;
+    the four other copies of that arithmetic undistort first. `geometry/ground.py:186`
+    names this as the silent-drift case in as many words.
+14. Three CropEncoder load paths, drifted three ways: `scripts/eval_attributes.py:141`
+    omits `.eval()` (BatchNorm keeps updating while scoring),
+    `scripts/offline_tracks.py:135` takes the default `embed_dim` and
+    `pretrained=True`, and only `eval_attributes` validates the attribute order.
+15. Three `to_metres` in `tools/commissioning/`: two drop non-finite points silently,
+    the third raises — and the third's docstring explains why dropping is wrong.
+16. `select_weights`'s "every caller goes through this" is bypassed by three scripts.
+17. Constants that exist once and are restated: the 0.35 person threshold (3 named +
+    7 bare), the 1.70 m adult prior (4 places, whose canonical docstring says it
+    "must exist exactly once"), `k1 = -0.225` (4), ImageNet normalisation (4 outside
+    `preprocessing.py`, one of them inside `src/`).
+18. ~22 copies of `load_config -> pick_device -> build_model -> select_weights`, of
+    which **17 use a bare `torch.cuda.is_available()`** and so skip
+    `_refuse_a_build_with_no_kernels` — the check written because a build without
+    this card's kernels is 40x slower and says nothing.
+
+### P3 — comments that are false about the code beneath them
+
+19. **Four docstrings still say no labelled site clip exists**
+    (`analytics/reid_metrics.py:16`, `analytics/bytetrack.py:21`,
+    `scripts/track_review.py:20`, `scripts/retail_flow.py:25`). Seven exist
+    (`runs/gt_*`) and `idf1()` has run on them (`runs/gt_cam01/idf1.json`, IDF1
+    0.7387). `scripts/track_review.py` is the tool that labels them.
+20. `shipped.py:18-29` quotes an epoch-15-vs-60 table for a run it no longer ships;
+    `runs/hydranet_retail_person01/selection.json` says epoch 118, and `for_terrain()`
+    twelve lines below contradicts the table outright.
+21. Counts that disagree with the list beneath them: `analytics/world.py:7` says
+    "three places" over two (and misses a third that qualifies);
+    `analytics/stage.py:11` says "Four components" over a five-row table;
+    `tools/commissioning/heads_video.py:682` says "four panels" where six are pasted
+    and its own module docstring says six.
+22. `analytics/events/__init__.py:94` says the `_torso` re-export is load-bearing
+    because `pose_overlay.py` reads it; `pose_overlay.py:29` imports from the
+    submodule, so the re-export is exactly the leftover the comment denies.
+23. `models/heads/pose.py:125` cites a "measured 32 px floor" beside a
+    `min_box_px: float = 16.0` default, written so the two read as one number.
+24. `syncai_bev3d/bev3d.py:129` names deleted `scripts/mesh_preview.py` without the
+    `git show <sha>^:<path>` pointer this repo requires and its sibling `shading.py:5`
+    supplies.
+25. **Changelog inside docstrings**, against this project's own rule that a commit
+    explains the change: `heads_video.py:19` records the edit history of the docstring
+    it is inside (and did not stop item 21's stale copy 663 lines below); also
+    `serving/__init__.py:3`, `world.py:9`, `ema.py:23`, `camera_json.py:44`,
+    `resplit_selling_floor.py:12`.
+
+### P4 — configuration and hygiene
+
+26. `[tool.ruff] target-version = "py310"` against `requires-python = ">=3.11"`.
+    Measured: 6 UP017 fixes hidden, all autofixable.
+27. `known-first-party = ["syncai_hydranet"]` omits `syncai_bev3d`, the other shipped
+    package, so cross-package imports sort as third-party.
+28. The coverage floor covers `src/` only. `scripts/` (15.5k lines) and `tools/`
+    (10.9k) — more than half the Python in the tree — have no floor at all.
+29. `pyproject.toml`'s coverage comment says `plate_calibration.py` is at 10% and
+    `floorplan.py` at 0%; measured today they are **97% and 95%**, and the real floor
+    of the tree is `figures.py` at 39%. Its own neighbour 90 lines up states the rule
+    it breaks: "A count belongs where it is enforced."
+30. 28 files under `tools/` hardcode `/home/paul/...`, two of them into `sys.path`.
+    This is the root of 183 of the tree's 196 `noqa` (all E402). `src/` is clean.
+31. `.git` is 113 MB against ~80k lines of source: three GIFs carry 22 revisions with
+    no LFS, and the figure-tax workflow guarantees more.
+32. `dev` sits at `__version__ = "0.1.0"` and has no CHANGELOG while `v0.4.0` is
+    released, because release-please writes to `main` and nothing flows back.
+33. Configs for the deleted quadruped line (`RELLIS-3D`, `RUGD` in
+    `hydranet_regnet800mf.yaml`, `hydranet_indoor.yaml`) survive as test fixtures, so
+    real configs and fixtures share one directory.
+34. Privacy is a publication-time control, not a runtime one: `face_blur` is used by
+    the figure tools and one CLI, and by nothing on the serving or analytics path;
+    retention exists as `scripts/retention_sweep.py` rather than as policy in code.
+    Defensible as designed — recorded so it is not mistaken for runtime PII control.
+
+### What the audit found healthy, so it is not re-litigated
+
+`torch.load` safety (`weights_only=True` pinned, enforced by a grep test over `src/`
+and `scripts/`); `filterwarnings = ["error", ...]` with narrow justified exemptions;
+`ty_ratchet.sh` refusing exit code 2 rather than flattening it to zero;
+`test_deleted_docs_are_cited_as_history.py`, measured 16/16 compliant; gradient
+accumulation, AMP ordering, scheduler-per-optimizer-step and the EMA/channels_last
+ordering all correct; `_refuse_a_build_with_no_kernels`; export bindings renamed per
+contract so a mismatched host fails to find its binding; no `cv2` anywhere, so the
+BGR/RGB serving bug is structurally absent; no mocks, no sleeps, no bare `except`,
+no repo-tree writes in 2,446 tests; zero TODO/FIXME in the tree.
