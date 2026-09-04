@@ -21,9 +21,12 @@ counts -- so an error moves a percentile instead of accumulating into the headli
 are numbers retail pays for.
 
 **Every figure this writes is provisional until a manual audit.** The industry accepts
-+/-5% for counting; nothing here has been checked against a hand count, because this
-project has no hand-labelled site data at all. Sample an hour, count it by eye, compare.
-That is the acceptance test and there is no substitute for it.
++/-5% for counting; nothing here has been checked against a hand count, and none exists.
+Track IDENTITIES are hand-labelled now -- seven sets under `runs/gt_*`, which is what
+`reid_metrics.idf1` scores against -- and they are the wrong instrument for this: they
+say whether one track followed one person over 900 frames, not how many people entered
+in an hour. Sample an hour, count it by eye, compare. That is the acceptance test and
+there is no substitute for it.
 
 The camera pose is per-camera and it is the largest source of error in the metric
 output. The 2026-08-14 journal (`git show b7457c2:docs/journal/`) recorded what

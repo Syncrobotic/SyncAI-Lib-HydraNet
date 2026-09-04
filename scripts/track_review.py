@@ -17,11 +17,12 @@
     # 3. apply
     python3 scripts/track_review.py apply --out runs/gt_cam04
 
-`analytics/reid_metrics.idf1` has been armed since it was written and has never run on a
-site clip, because no site clip is labelled. `scripts/retail_flow.py` names the same
-blocker in its own docstring: *"this project has no hand-labelled site data at all.
-Sample an hour, count it by eye, compare. That is the acceptance test and there is no
-substitute for it."*
+`analytics/reid_metrics.idf1` was armed and unrun for as long as no site clip was
+labelled. **This is the tool that ended that**: seven sets exist now (`runs/gt_*`) and
+`runs/gt_cam01/idf1.json` holds both tracker arms scored against one of them. What is
+still unlabelled is a different thing, and `scripts/retail_flow.py` is the file that
+names it -- a hand COUNT of an hour of footfall, which is the acceptance test for the
+counting figures and which labelled track identities do not supply.
 
 There is no substitute for the judgement. There is one for most of the labour.
 
