@@ -148,6 +148,15 @@ class Placement:
 def human(height_m: float = 1.70, sides: int = 10) -> Mesh:
     """A standing human figure of the given height, feet at y = 0.
 
+    **The 1.70 default is `plate_calibration.ADULT_M`, restated rather than imported.**
+    That module is where the prior lives and where its ±11% pose-bias term is argued;
+    this file is pure geometry with numpy as its only dependency, and importing a module
+    that pulls PIL and the whole calibration stack to read one float would cost every
+    consumer of a mesh that weight. The number is a *default* here, overridden by every
+    caller that has measured a stature -- `figures.track_states` passes its per-track
+    median -- so a drift between the two would show as a figure drawn at the wrong height
+    beside metres that are right, not as a silent scale error.
+
     1.70 m is the same assumption `scripts/fit_camera_from_people.py` fitted camera pose
     against -- the script went in `500cdd2`, readable at
     `git show 500cdd2^:scripts/fit_camera_from_people.py` -- and it was an assumption

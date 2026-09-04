@@ -44,3 +44,23 @@ def test_omitting_the_source_size_keeps_the_old_ratio_but_says_so():
         assert _calibration_scale(_CF(), None) == (0.5, 0.5)
     assert len(caught) == 1
     assert "source_size_px" in str(caught[0].message)
+
+
+def test_the_standing_adult_prior_exists_once():
+    """`plate_calibration`'s docstring says the 1.70 m prior "must exist exactly once",
+    and it was stated in four places.
+
+    `figures.FALLBACK_STATURE_M` now imports it. `meshes.human`'s default restates it,
+    deliberately -- that module is pure geometry and importing the calibration stack to
+    read one float would cost every mesh consumer PIL -- so the agreement between them is
+    held here instead of by an import. A drift would draw figures at one height beside
+    metres computed from another.
+    """
+    import inspect
+
+    from syncai_bev3d.figures import FALLBACK_STATURE_M
+    from syncai_bev3d.meshes import human
+    from syncai_bev3d.plate_calibration import ADULT_M
+
+    assert FALLBACK_STATURE_M is ADULT_M
+    assert inspect.signature(human).parameters["height_m"].default == ADULT_M

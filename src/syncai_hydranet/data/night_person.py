@@ -67,11 +67,17 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from syncai_bev3d.teachers.gdino import PERSON_THRESHOLD
+
 # Centre of the 0.30-0.75 plateau measured above. A box at or above this share is furniture.
 DROP_ABOVE = 0.50
 
 # The working threshold for the detector itself, unchanged; this module never applies it.
-PERSON_SCORE = 0.35
+# Imported rather than restated: it is a property of the Grounding DINO teacher that
+# produced these boxes, and a second 0.35 that drifted would make this module describe a
+# population the teacher no longer emits. Three files stated it independently until
+# 2026-09-04.
+PERSON_SCORE = PERSON_THRESHOLD
 
 # Below this the share is computed over too few plate pixels to mean anything -- the same
 # concern `static_person_filter.py` raises: 1.00 over nine pixels is a box smaller than the

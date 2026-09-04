@@ -25,6 +25,8 @@ import numpy as np
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 
+from .plate_calibration import ADULT_M
+
 TRACK_COLORS = [
     (255, 99, 71), (65, 180, 255), (255, 200, 60), (120, 220, 120),
     (220, 120, 255), (255, 150, 100), (100, 230, 210), (250, 100, 160),
@@ -61,7 +63,11 @@ VEL_WINDOW_S = 1.0
 # 1.4 cm but cuts 11% of the corners; a trailing median filter scores *above* 100% path
 # because it holds still and then jumps, which is a worse artefact than the jitter.
 POS_EMA = 0.35
-FALLBACK_STATURE_M = 1.70  # only until a track has been measured STATURE_MIN_N times
+# The one standing-adult prior, imported rather than restated: `plate_calibration`'s
+# module docstring says it "must exist exactly once", and every metre this project
+# reports is downstream of it -- a second 1.70 that drifted would move the figures and
+# the calibration apart with nothing raising.
+FALLBACK_STATURE_M = ADULT_M  # only until a track has been measured STATURE_MIN_N times
 STATURE_MIN_N = 3
 PLUMB_W_M = 0.035  # the drop line under a figure: thin enough not to read as an object
 STATURE_RANGE_M = (1.2, 2.6)  # outside this the box top is not a head top

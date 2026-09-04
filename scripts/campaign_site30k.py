@@ -81,8 +81,11 @@ sys.path.insert(0, str(HERE))
 # only part of the surface, so this imports the package directly rather than through them.
 from syncai_bev3d.teachers.boxes import drop_static  # noqa: E402
 from syncai_bev3d.teachers.boxes import nms as gdino_nms  # noqa: E402
+from syncai_bev3d.teachers.gdino import (  # noqa: E402
+    PERSON_THRESHOLD,
+    load_gdino,
+)
 from syncai_bev3d.teachers.gdino import detect as gdino_detect  # noqa: E402
-from syncai_bev3d.teachers.gdino import load_gdino  # noqa: E402
 from syncai_bev3d.teachers.photometry import is_daylight, luma_chroma  # noqa: E402
 from syncai_bev3d.teachers.sam3 import (  # noqa: E402
     MAX_BOX_FRAC,
@@ -149,7 +152,10 @@ DETECTION_CATEGORIES = (
     {"id": 3, "name": "product"},
 )
 
-PERSON_TRAIN_THR = 0.35  # measured day/night gap: night IR tops out 0.326, day >= 0.35
+# The teacher's own threshold, imported rather than restated -- tools/site30k/boxes.py
+# read this name while its neighbour box_pass.py read gdino's, so one directory held two
+# routes to one number. Measured day/night gap: night IR tops out 0.326, day >= 0.35.
+PERSON_TRAIN_THR = PERSON_THRESHOLD
 FLOOR_TOL_M = 0.20  # on-plane tolerance; see the measured gap note in GeomTeacher
 SCORE_FLOOR = 0.10  # kept in instances_all so both populations stay visible
 CONSENSUS = 0.9  # the measured setting from sam3_prelabel
