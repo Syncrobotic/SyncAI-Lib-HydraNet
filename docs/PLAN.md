@@ -2607,28 +2607,39 @@ half-covers is worse than an absent one, because its presence is read as coverag
 
 ### P3 — comments that are false about the code beneath them
 
-19. **Four docstrings still say no labelled site clip exists**
+19. ~~DONE~~ -- all four corrected, and `tests/test_prose_matches_the_tree.py` is a
+    tripwire on the exact wording plus a read-back of the numbers they now quote.
+    retail_flow's was corrected precisely rather than deleted: its blocker is a hand
+    COUNT of an hour of footfall, which labelled identities do not supply. The finding:
     (`analytics/reid_metrics.py:16`, `analytics/bytetrack.py:21`,
     `scripts/track_review.py:20`, `scripts/retail_flow.py:25`). Seven exist
     (`runs/gt_*`) and `idf1()` has run on them (`runs/gt_cam01/idf1.json`, IDF1
     0.7387). `scripts/track_review.py` is the tool that labels them.
-20. `shipped.py:18-29` quotes an epoch-15-vs-60 table for a run it no longer ships;
+20. ~~DONE~~ -- the old table stays as what it is, the incident the module was written
+    after, beside person01's own numbers (118 of 120 on a flat curve), and a test reads
+    them back from selection.json. The finding:
     `runs/hydranet_retail_person01/selection.json` says epoch 118, and `for_terrain()`
     twelve lines below contradicts the table outright.
-21. Counts that disagree with the list beneath them: `analytics/world.py:7` says
+21. ~~DONE~~ -- world.py says three and lists three (events/pose.py was the uncounted
+    one), stage.py says five, heads_video says six. The finding: `analytics/world.py:7` says
     "three places" over two (and misses a third that qualifies);
     `analytics/stage.py:11` says "Four components" over a five-row table;
     `tools/commissioning/heads_video.py:682` says "four panels" where six are pasted
     and its own module docstring says six.
-22. `analytics/events/__init__.py:94` says the `_torso` re-export is load-bearing
+22. ~~DONE~~ -- the comment now says what is true: nothing reads `_torso` off the
+    package, so the re-export is the leftover it denied being. The finding:
     because `pose_overlay.py` reads it; `pose_overlay.py:29` imports from the
     submodule, so the re-export is exactly the leftover the comment denies.
-23. `models/heads/pose.py:125` cites a "measured 32 px floor" beside a
+23. ~~DONE~~ -- the docstring states the relationship: 16 is half the 32 px floor, and
+    deliberately, because gating at 32 would decline boxes the survey calls ordinary.
+    The finding:
     `min_box_px: float = 16.0` default, written so the two read as one number.
-24. `syncai_bev3d/bev3d.py:129` names deleted `scripts/mesh_preview.py` without the
+24. ~~DONE~~ -- the `git show` pointer is there now. The finding:
     `git show <sha>^:<path>` pointer this repo requires and its sibling `shading.py:5`
     supplies.
-25. **Changelog inside docstrings**, against this project's own rule that a commit
+25. **PARTLY DONE**: heads_video's -- the worst, a docstring narrating its own edit
+    history that did not prevent the stale copy 663 lines below -- is deleted along with
+    that copy. The others stand. The finding: changelog inside docstrings, against the rule that a commit
     explains the change: `heads_video.py:19` records the edit history of the docstring
     it is inside (and did not stop item 21's stale copy 663 lines below); also
     `serving/__init__.py:3`, `world.py:9`, `ema.py:23`, `camera_json.py:44`,
