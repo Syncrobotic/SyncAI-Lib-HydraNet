@@ -281,6 +281,9 @@ def _render_in_chunks(args, camera, clip, cf, bounds, staff_model) -> int:
     from the merged record and draw only their own chunk -- no model loaded, which is
     what makes a demo render worker cheap enough that the fan-out is nearly linear.
     """
+    # The decoded size the recorded boxes are in, so the replay converts to calibrated
+    # pixels the same way the recording pass did.
+    src_w, src_h, _ = probe_video(str(clip))
     t0 = time.time()
     per = math.ceil(args.frames / args.workers)
     edges = [(i, min(i + per, args.frames)) for i in range(0, args.frames, per)]
@@ -373,7 +376,16 @@ def _render_in_chunks(args, camera, clip, cf, bounds, staff_model) -> int:
         for t in tracks:
             seen_ids.add(t.track_id)
         for st in track_states(
-            tracks, n, cf, state, vel_window, args.metre_scale, args.fps, bounds, verdict_of
+            tracks,
+            n,
+            cf,
+            state,
+            vel_window,
+            args.metre_scale,
+            args.fps,
+            bounds,
+            verdict_of,
+            source_size_px=(src_w, src_h),
         ):
             positions.append(
                 {
@@ -778,6 +790,7 @@ def main() -> int:
             args.fps,
             bounds,
             verdict_of=None if staff_model is None else _display_verdict,
+            source_size_px=(src_w, src_h),
         )
         n_outside += state["n_skipped"] - skips_before
         n_placed += len(states)

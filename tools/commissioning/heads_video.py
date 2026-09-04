@@ -205,7 +205,7 @@ def label(img: Image.Image, text: str, sub: str = "") -> None:
         d.text((10, 24), sub, fill=(185, 195, 210), font=FONT_SMALL)
 
 
-def _positions_from_boxes(boxes_all, cf, args, bounds):
+def _positions_from_boxes(boxes_all, cf, args, bounds, source_size_px):
     """Replay the track state over recorded boxes to get every figure's floor position.
 
     The sidecar has to describe the render that wrote it, and the cheapest way to be sure
@@ -226,7 +226,15 @@ def _positions_from_boxes(boxes_all, cf, args, bounds):
         sp = None if rec.get("staff") is None else np.asarray(rec["staff"], float)
         tracks = [t for t in tracker.update(b, n, staff_scores=sp) if t.hits >= 3]
         for st in track_states(
-            tracks, n, cf, state, vel_window, args.metre_scale, args.fps, bounds
+            tracks,
+            n,
+            cf,
+            state,
+            vel_window,
+            args.metre_scale,
+            args.fps,
+            bounds,
+            source_size_px=source_size_px,
         ):
             out.append(
                 {
@@ -366,6 +374,9 @@ def _person_boxes_per_frame(
 
 def _render_in_chunks(args, model, cf, bounds, clip):
     """Fan the frames out over processes, then join the segments back into one file."""
+    # The decoded size the recorded boxes are in, so the replay converts to calibrated
+    # pixels the same way the recording pass did.
+    src_w, src_h, _ = probe_video(str(clip))
     camera = args.camera
     t0 = time.time()
     # The box pass runs the model and never touches the tracker, so it fans out the same
@@ -444,7 +455,7 @@ def _render_in_chunks(args, model, cf, bounds, clip):
         camera,
         clip,
         n_frames,
-        _positions_from_boxes(boxes, cf, args, bounds),
+        _positions_from_boxes(boxes, cf, args, bounds, (src_w, src_h)),
     )
     latest = ROOT / f"assets/dev/heads_{camera}.mp4"
     latest.write_bytes(final.read_bytes())
@@ -667,6 +678,7 @@ def main() -> int:
                 args.fps,
                 bounds,
                 verdict_of=None if staff_model is None else _display_verdict,
+                source_size_px=(src_w, src_h),
             )
             n += 1
             continue
@@ -805,6 +817,7 @@ def main() -> int:
             args.fps,
             bounds,
             verdict_of=None if staff_model is None else _display_verdict,
+            source_size_px=(src_w, src_h),
         )
         figures, ghosts = [], []
         n_posed = 0
@@ -906,7 +919,7 @@ def main() -> int:
             camera,
             clip,
             n,
-            _positions_from_boxes(boxes_log, cf, args, bounds),
+            _positions_from_boxes(boxes_log, cf, args, bounds, (src_w, src_h)),
         )
     # Not under `--no-blur`: that flag says "never for anything shared" and this is the
     # filename everything else reads as this camera's render. Same fix as `demo_video`.
