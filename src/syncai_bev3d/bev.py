@@ -23,7 +23,15 @@ from .scene_types import PlaneObject, PlaneScene
 
 @dataclass(frozen=True)
 class BevGrid:
-    """The window of floor to map, in metres. Origin is under the camera."""
+    """The window of floor to map, in metres. Origin is under the camera.
+
+    **Row 0 is the FAR edge**, as `to_cell` states and as a map is read. Its counterpart
+    `floorplan.FloorRaster` -- one import away, and called `BevGrid` too until
+    2026-09-04 -- puts row 0 at the NEAR edge, because a contour tracer wants z ascending
+    with the row index. Both are correct for their consumer; a raster from one indexed
+    with the other's convention is a silent vertical mirror, which is why the names no
+    longer collide. `tests/test_bev_row_conventions.py` pins both.
+    """
 
     x_min: float = -4.0
     x_max: float = 4.0

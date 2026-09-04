@@ -57,7 +57,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-from syncai_bev3d.floorplan import BevGrid, polygon_area, simplify_chain
+from syncai_bev3d.floorplan import FloorRaster, polygon_area, simplify_chain
 from syncai_bev3d.teachers.sam3 import MODEL_ID, load_sam3, segment, vision_features
 from syncai_hydranet.data.sam3_prompts import DEFAULT_MIN_SCORE
 from syncai_hydranet.geometry.camera_json import CameraFile, Zone
@@ -180,7 +180,7 @@ def to_metres(px: np.ndarray, cam_file: CameraFile) -> np.ndarray:
     return out[np.isfinite(out).all(axis=1)]
 
 
-class FloorGrid(BevGrid):
+class FloorGrid(FloorRaster):
     """This camera's floor raster: a  over the projected floor, closed once.
 
     The extent, the rasterisation and the cell->metres conversion are 's and are
@@ -192,7 +192,7 @@ class FloorGrid(BevGrid):
     def __init__(self, floor_m: np.ndarray):
         from scipy import ndimage
 
-        grid = BevGrid.over(floor_m, CELL_M)
+        grid = FloorRaster.over(floor_m, CELL_M)
         self.cell, self.x0, self.z0, self.nx, self.nz = (
             grid.cell,
             grid.x0,
