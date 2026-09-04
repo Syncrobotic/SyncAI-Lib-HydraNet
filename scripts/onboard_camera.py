@@ -77,7 +77,7 @@ PERSON_ANNS = Path("datasets/retail_person_gdino01/annotations/instances_all.jso
 # with two answers and why a caller has to name which one it is asking.
 PLATE_MODEL_CONFIG = SHIPPED_CONFIG
 PLATE_MODEL_CKPT = for_terrain()
-K1_FLEET = -0.225  # tile-grid measured on Taichung-cam01; fleet-hardware assumption elsewhere
+K1_FLEET = pc.K1_FLEET  # the fleet lens; defined once in syncai_bev3d.plate_calibration
 VFOV_PRIMARY = 70.4  # likewise: pinned on cam01, a fleet assumption for the rest
 MIN_HEIGHTS = 10  # min samples for the person-height statistic to emit a number (task spec)
 DIRTY_PLATE_FRAC = 0.05  # person share above this marks a dirty plate (cam04's 8.6% is above)

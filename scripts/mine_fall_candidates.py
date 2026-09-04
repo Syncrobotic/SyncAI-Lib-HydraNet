@@ -41,6 +41,7 @@ for candidate in (HERE.parent / "src", HERE / "src"):
 
 # The clip loop is in the package, not in a sibling script: a script other scripts import
 # is a module in the wrong place, and the copies here and in `site_events.py` had drifted.
+from syncai_bev3d.plate_calibration import K1_FLEET  # noqa: E402
 from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
 from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
 from syncai_hydranet.analytics.events import fall_candidates  # noqa: E402
@@ -73,7 +74,7 @@ def build_parser() -> argparse.ArgumentParser:
     # differently from tracking undistorted ones. The default is Taichung-cam01's
     # tile-grid fit and is an assumption on the other 47 cameras; `0.0` is the
     # no-correction arm, for comparing candidate sets across the change.
-    ap.add_argument("--k1", type=float, default=-0.225)
+    ap.add_argument("--k1", type=float, default=K1_FLEET)
     # Deliberately more permissive than the library default of 1.5 s. This is a mining
     # pass: a candidate costs a human ten seconds to dismiss and a missed one costs the
     # whole question. Precision is not the objective here and should not be tuned for.

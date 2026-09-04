@@ -60,6 +60,7 @@ for candidate in (HERE.parent / "src", HERE / "src"):
         sys.path.insert(0, str(candidate))
 
 from syncai_bev3d.calibrate import Pose  # noqa: E402
+from syncai_bev3d.plate_calibration import K1_FLEET  # noqa: E402
 from syncai_hydranet.analytics import events as ev  # noqa: E402
 from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
 from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
@@ -97,7 +98,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--max-age", type=int, default=5)
     ap.add_argument("--iou", type=float, default=0.3)
     # Taichung-cam01's tile-grid fit. Per camera, and an assumption anywhere else.
-    ap.add_argument("--k1", type=float, default=-0.225)
+    ap.add_argument("--k1", type=float, default=K1_FLEET)
     ap.add_argument("--vfov", type=float, default=70.4, metavar="DEG")
     ap.add_argument("--pitch", type=float, default=50.2, metavar="DEG")
     ap.add_argument("--camera-height", type=float, default=2.38, metavar="M")

@@ -71,11 +71,13 @@ from syncai_hydranet.models.crop_encoder import (  # noqa: E402
     CropEncoder,
     load_crop_encoder,
 )
+from syncai_hydranet.preprocessing import IMAGENET_MEAN, IMAGENET_STD  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
 
 SIZE = (256, 128)  # data/attributes.py's crop geometry, so the encoder sees what it trained on
-MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+# The canonical pair, imported rather than restated -- see `preprocessing`'s docstring
+# on why a second copy of these does not raise when it drifts.
+MEAN, STD = IMAGENET_MEAN, IMAGENET_STD
 # Known extraction defect rather than a labelling one -- see the module docstring.
 DROP_PEOPLE = {"Kaohsiung-cam04__20260816-063027_20260816-063527__t0002"}
 

@@ -78,6 +78,7 @@ from syncai_hydranet.data.transforms import invert_geom
 from syncai_hydranet.data.video import frames, probe
 from syncai_hydranet.models.crop_encoder import load_crop_encoder
 from syncai_hydranet.models.hydranet import build_model
+from syncai_hydranet.preprocessing import IMAGENET_MEAN, IMAGENET_STD
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
 from syncai_hydranet.utils.device import pick_device
 from syncai_hydranet.utils.visualize import preprocess
@@ -134,8 +135,7 @@ def embed_fragments(frags, encoder_path, device) -> dict[int, np.ndarray]:
     # The shared loader: it reads embed_dim from the checkpoint rather than taking the
     # 256 default, and does not fetch ImageNet weights it is about to overwrite.
     enc, _ = load_crop_encoder(encoder_path, device)
-    mean = np.array([0.485, 0.456, 0.406], np.float32)
-    std = np.array([0.229, 0.224, 0.225], np.float32)
+    mean, std = IMAGENET_MEAN, IMAGENET_STD
     out: dict[int, np.ndarray] = {}
     with torch.no_grad():
         for t in frags:
