@@ -50,3 +50,44 @@ def test_one_dataset_holding_its_own_split_is_not_a_leak(tmp_path):
     dataset must not be reported against itself for having a val split at all."""
     main = _make(tmp_path, "main", {"train": ["cam01"], "val": ["cam06"]})
     assert split_leaks([_seg("site", main, split_val="val")]) == []
+
+
+# ------------------------------------------------ beyond seg_folder, added 2026-09-04
+
+
+def _coco(name, root, **kw):
+    return {"name": name, "type": "coco", "root": str(root), **kw}
+
+
+def _make_flat(tmp_path, name, splits):
+    """The site `coco` layout: flat files named `<camera>__<clip>__<frame>.jpg`."""
+    for split, files in splits.items():
+        d = tmp_path / name / "images" / split
+        d.mkdir(parents=True)
+        for f in files:
+            (d / f).touch()
+    return tmp_path / name
+
+
+def test_a_coco_val_split_scoring_on_a_trained_camera_is_reported(tmp_path):
+    """The hole this check had until 2026-09-04.
+
+    `split_leaks` filtered `type == "seg_folder"`, one of the five types in the tree, so a
+    site box set could score on cameras a mask set trained on and nothing said anything --
+    and the retail configs that mix the two are exactly where that is possible. The
+    cameras are in the filenames, which is why the seg-only version saw nothing here.
+    """
+    masks = _make(tmp_path, "masks", {"train": ["Taichung-cam01__clipA"]})
+    boxes = _make_flat(tmp_path, "boxes", {"val": ["Taichung-cam01__clipB__0000.jpg"]})
+    leaks = split_leaks([_seg("masks", masks), _coco("boxes", boxes, split_val="val")])
+    assert leaks == [("masks", "boxes", "val", ["Taichung-cam01"])]
+
+
+def test_a_dataset_with_no_camera_convention_reports_nothing(tmp_path):
+    """ADE20K and COCO-Stuff put ordinary filenames under `images/<split>/`. Treating one
+    as a camera id would make any two web datasets that share a file name look like an
+    overlap -- which is why the flat branch requires the `__` rather than splitting on it.
+    """
+    a = _make_flat(tmp_path, "web_a", {"train": ["000001.jpg", "000002.jpg"]})
+    b = _make_flat(tmp_path, "web_b", {"val": ["000001.jpg"]})
+    assert split_leaks([_seg("web_a", a), _coco("web_b", b, split_val="val")]) == []
