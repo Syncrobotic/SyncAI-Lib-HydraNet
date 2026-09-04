@@ -2527,26 +2527,37 @@ half-covers is worse than an absent one, because its presence is read as coverag
 
 ### P1 — green lights wired to nothing
 
-6. `tests/test_serving_decode.py:81` compares only `[:min(len(f), len(q))]`, so the
+6. ~~DONE~~ (`assert len(f) == len(q)`; at `pre_nms_topk=3` the decode returns 3
+   against the full decode's 100, which the prefix comparison passed). It compared only `[:min(len(f), len(q))]`, so the
    truncation it exists to catch shortens both sides and passes. One line:
    `assert len(f["boxes"]) == len(q["boxes"])`.
-7. **CI has no ffmpeg**, so 8 tests skip there: `hydranet-infer-video`,
+7. ~~**CI has no ffmpeg.**~~ **DONE** -- installed in both tiers, so the video path is
+   gated rather than skipped. 8 tests skipped there: `hydranet-infer-video`,
    `hydranet-scene` (two shipped console scripts) and the whole decode-error
    contract run nowhere in CI. One `apt-get install ffmpeg` line converts 8 loud
    skips into 8 real gates.
-8. `serving/engine.py` — 320 lines, the TensorRT executor every throughput figure
-   rests on — has **0 test references**. `serving/uint8_input.py` (a pure ONNX graph
-   transform, trivially testable) likewise. `shipped.py`, which decides which run and
-   which checkpoint ship, likewise — on a project that shipped a 40%-worse person
+8. **PARTLY DONE**: `serving/uint8_input.py` 0% -> **98%** (the assertion that matters
+   is numerical -- the rewritten graph returns byte-identical output for the same frame)
+   and `shipped.py` 0% -> **100%**. `serving/engine.py` is still 0%: 320 lines of
+   TensorRT executor that needs the hardware, and the honest options are a
+   hardware-marked test or extracting the slot arithmetic. The original finding:
+   `serving/engine.py` — the executor every throughput figure rests on — has 0 test
+   references. `serving/uint8_input.py` likewise. `shipped.py`, which decides which run
+   and which checkpoint ship, likewise — on a project that shipped a 40%-worse person
    detector by trusting one metric.
-9. `tests/test_indoor25_baseline.py:106` guards on a path relative to the invocation
-   directory, so it skips silently from anywhere but the repo root. Every other guard
+9. ~~DONE~~ (anchored to `parents[1]`; run from `/tmp` it skipped before and all eight
+   tests run after). It guarded on a path relative to the invocation directory, so it skips silently from anywhere but the repo root. Every other guard
    anchors to `parents[1]`, and `test_zone_bridge.py:91` cites *this file* as the
    pattern to copy.
-10. `tests/test_trainer.py:135` asserts `mIoU > 0.0` on a 3-class problem (a constant
+10. ~~DONE~~, and the measurement corrected the fix: the fixture reads 0.0294 then
+    0.0743 against ~0.111 for a constant prediction, so it does NOT beat chance and the
+    docstring claiming it must was wrong too. It now asserts epoch-over-epoch
+    improvement, which four steps can show. `test_smoke` gained all three assertions.
+    The original finding: `test_trainer.py:135` asserts `mIoU > 0.0` on a 3-class problem (a constant
     prediction clears it) while claiming "must beat chance"; `tests/test_smoke.py:80`
     runs the whole training step with no assertion at all.
-11. Nothing bounds the suite's skip count. A path typo turns a running test into a
+11. ~~DONE~~ -- `tests/conftest.py` fails the session above 25 skips, verified by
+    setting the ceiling to 0 against a run with two. The original finding: A path typo turns a running test into a
     permanent skipper and only a reader notices — which is how item 9 was found.
 
 ### P2 — duplicated logic, drifted copies first
