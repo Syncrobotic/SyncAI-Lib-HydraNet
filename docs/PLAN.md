@@ -2562,25 +2562,45 @@ half-covers is worse than an absent one, because its presence is read as coverag
 
 ### P2 — duplicated logic, drifted copies first
 
-12. **Two `BevGrid` classes in one package with opposite row conventions**:
+12. ~~DONE~~ -- floorplan's is `FloorRaster`, each definition names the other, and
+    `tests/test_bev_row_conventions.py` pins both ends. The original finding:
     `bev.py:47` puts row 0 at the far edge (documented), `floorplan.py:78` at the
     near edge. `analytics/dwell.py`'s `GroundMap` is a third copy with its own field
     names. Reading one's raster with the other's convention is a vertical mirror.
-13. `bev.place_boxes` and `dwell.track_ground_path` project feet **without the lens**;
+13. ~~NOT A BUG~~, traced rather than taken: `clip_tracks.tracks_for_clip` undistorts
+    the corners before the tracker sees them (its `k1` is keyword-only with no default so
+    a caller cannot forget), and `bev.place_boxes`' one caller reaches it from
+    `cli/scene.py`, which builds its Camera from `--vfov` and has no lens at all. Both
+    docstrings now state the contract and the existing test says which consumers it
+    protects. The original reading:
     the four other copies of that arithmetic undistort first. `geometry/ground.py:186`
     names this as the silent-drift case in as many words.
-14. Three CropEncoder load paths, drifted three ways: `scripts/eval_attributes.py:141`
+14. ~~DONE~~ -- one `load_crop_encoder` in the package, four tests pinning the three
+    properties that differed. Measured on the way: train-mode and eval-mode outputs differ
+    on identical input, so the missing `.eval()` moved every number that script reported.
+    The original finding: `scripts/eval_attributes.py:141`
     omits `.eval()` (BatchNorm keeps updating while scoring),
     `scripts/offline_tracks.py:135` takes the default `embed_dim` and
     `pretrained=True`, and only `eval_attributes` validates the attribute order.
 15. Three `to_metres` in `tools/commissioning/`: two drop non-finite points silently,
     the third raises — and the third's docstring explains why dropping is wrong.
 16. `select_weights`'s "every caller goes through this" is bypassed by three scripts.
-17. Constants that exist once and are restated: the 0.35 person threshold (3 named +
+17. **PARTLY DONE**: the 1.70 m prior and the 0.35 threshold have one source each now,
+    held by `tests/test_shared_constants.py` and a check in `test_figures.py`.
+    `meshes.human` keeps a literal default deliberately -- importing the calibration stack
+    into a pure-geometry module to read one float would cost every mesh consumer PIL --
+    so the test holds that agreement instead. Still open: `k1 = -0.225` in four places,
+    ImageNet normalisation in four outside `preprocessing.py`, and the bare literals.
+    The original finding: the 0.35 person threshold (3 named +
     7 bare), the 1.70 m adult prior (4 places, whose canonical docstring says it
     "must exist exactly once"), `k1 = -0.225` (4), ImageNet normalisation (4 outside
     `preprocessing.py`, one of them inside `src/`).
-18. ~22 copies of `load_config -> pick_device -> build_model -> select_weights`, of
+18. **PARTLY DONE**: all 18 bare `torch.cuda.is_available()` ternaries are now
+    `str(pick_device())`, so the no-kernels refusal and MPS selection reach every script
+    and tool -- the type ratchet caught 37 downstream signature mismatches on the first
+    attempt, doing its job on a mechanical change. The four-line load sequence itself is
+    still copied ~22 times; a shared `model_from_run` is the remaining half. The original
+    finding: ~22 copies of that sequence, of
     which **17 use a bare `torch.cuda.is_available()`** and so skip
     `_refuse_a_build_with_no_kernels` — the check written because a build without
     this card's kernels is 40x slower and says nothing.
