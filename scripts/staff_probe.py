@@ -67,8 +67,10 @@ from syncai_hydranet.analytics.staff import (  # noqa: E402
     predict,
 )
 from syncai_hydranet.data.attributes import ATTRIBUTES  # noqa: E402
-from syncai_hydranet.models.crop_encoder import CropEncoder  # noqa: E402
-from syncai_hydranet.utils.checkpoint import load_checkpoint  # noqa: E402
+from syncai_hydranet.models.crop_encoder import (  # noqa: E402
+    CropEncoder,
+    load_crop_encoder,
+)
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
 
 SIZE = (256, 128)  # data/attributes.py's crop geometry, so the encoder sees what it trained on
@@ -174,12 +176,7 @@ def encoder(path: str | None, device):
     every other option in this project has had to clear."""
     if path is None:
         return CropEncoder(len(ATTRIBUTES), embed_dim=256, pretrained=True).to(device).eval()
-    ckpt = load_checkpoint(path)
-    model = CropEncoder(
-        len(ckpt["attributes"]), embed_dim=ckpt["model"]["embed.weight"].shape[0],
-        pretrained=False,
-    )  # fmt: skip
-    model.load_state_dict(ckpt["model"])
+    model, _ = load_crop_encoder(path, device)
     return model.to(device).eval()
 
 

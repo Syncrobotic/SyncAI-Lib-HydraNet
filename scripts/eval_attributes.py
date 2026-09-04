@@ -44,8 +44,10 @@ sys.path.insert(0, str(HERE))  # for train_attributes, which owns the Market pro
 from train_attributes import score_association  # noqa: E402
 
 from syncai_hydranet.data.attributes import ATTRIBUTES, PA100K  # noqa: E402
-from syncai_hydranet.models.crop_encoder import CropEncoder  # noqa: E402
-from syncai_hydranet.utils.checkpoint import load_checkpoint  # noqa: E402
+from syncai_hydranet.models.crop_encoder import (  # noqa: E402
+    CropEncoder,
+    load_crop_encoder,
+)
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
 
 
@@ -126,18 +128,13 @@ def score_attributes(model, loader, device) -> dict:
 
 
 def load_encoder(path: str, device) -> CropEncoder:
-    ckpt = load_checkpoint(path)
-    names = ckpt["attributes"]
-    if list(names) != list(ATTRIBUTES):
-        raise ValueError(
-            f"{path} was trained on a different attribute order than data.attributes."
-            "ATTRIBUTES; scoring it against these parquet columns would compare every "
-            "channel to the wrong label."
-        )
-    embed_dim = ckpt["model"]["embed.weight"].shape[0]
-    model = CropEncoder(len(names), embed_dim=embed_dim, pretrained=False)
-    model.load_state_dict(ckpt["model"])
-    return model.to(device)
+    """The shared loader, with this script's attribute order as the contract.
+
+    It used to build the model here and return it WITHOUT `.eval()`, so every number
+    below was scored while BatchNorm was still updating from the batch being scored.
+    """
+    model, _ = load_crop_encoder(path, device, expect=ATTRIBUTES)
+    return model
 
 
 def main(argv: list[str] | None = None) -> int:
