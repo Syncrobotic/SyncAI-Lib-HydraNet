@@ -29,7 +29,11 @@ from syncai_hydranet.analytics.events import pose as ev
 from syncai_hydranet.utils.device import pick_device
 from syncai_hydranet.utils.runmeta import git_state
 
-ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
+# The repo root, derived rather than written out: every one of these 26 tools had it
+# as an absolute path, so a second checkout ran against the first one's `runs/` and
+# any machine but this one failed at import with a path and no reason. Two levels up
+# from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
+ROOT = Path(__file__).resolve().parents[2]
 ANN_DIR = ROOT / "datasets/site30k_v1/annotations"
 IMG_DIR = ROOT / "datasets/site30k_v1/images"
 GOLD_MIN = 0.50

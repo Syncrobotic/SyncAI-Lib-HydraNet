@@ -61,7 +61,7 @@ sys.path.insert(0, str(_REPO / "scripts"))
 import importlib.util  # noqa: E402
 
 spec = importlib.util.spec_from_file_location(
-    "campaign", "/home/paul/SyncAI-Lib-HydraNet/scripts/campaign_site30k.py"
+    "campaign", str(_REPO / "scripts/campaign_site30k.py")
 )
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
@@ -77,7 +77,11 @@ from syncai_hydranet.geometry.ground import (  # noqa: E402
 )
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
 
-ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
+# The repo root, derived rather than written out: every one of these 26 tools had it
+# as an absolute path, so a second checkout ran against the first one's `runs/` and
+# any machine but this one failed at import with a path and no reason. Two levels up
+# from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
+ROOT = Path(__file__).resolve().parents[2]
 # The pilot ran off datasets/studioa_clips; the campaign runs off the phase-2 pull. Both
 # are the same layout (<root>/<camera>/<stem>.mp4), so the root is a setting rather than
 # a fork in the code, and the plates follow it so a campaign plate never lands in the

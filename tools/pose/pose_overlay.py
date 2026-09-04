@@ -36,7 +36,11 @@ from syncai_hydranet.serving.decode import MIN_PERSON_FRACTION, person_pixel_fra
 from syncai_hydranet.shipped import load_model
 from syncai_hydranet.utils.visualize import preprocess
 
-ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
+# The repo root, derived rather than written out: every one of these 26 tools had it
+# as an absolute path, so a second checkout ran against the first one's `runs/` and
+# any machine but this one failed at import with a path and no reason. Two levels up
+# from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
+ROOT = Path(__file__).resolve().parents[2]
 KP_MIN_CONF = 0.2
 SKELETON = (
     (5, 7), (7, 9), (6, 8), (8, 10),

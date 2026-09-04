@@ -34,7 +34,7 @@ _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "src"))
 sys.path.insert(0, str(_REPO / "scripts"))
 spec = importlib.util.spec_from_file_location(
-    "campaign", "/home/paul/SyncAI-Lib-HydraNet/scripts/campaign_site30k.py"
+    "campaign", str(_REPO / "scripts/campaign_site30k.py")
 )
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)

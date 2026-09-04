@@ -31,7 +31,11 @@ from syncai_hydranet.serving.camera import BIRTH_REF
 from syncai_hydranet.shipped import load_model
 from syncai_hydranet.utils.visualize import preprocess
 
-ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
+# The repo root, derived rather than written out: every one of these 26 tools had it
+# as an absolute path, so a second checkout ran against the first one's `runs/` and
+# any machine but this one failed at import with a path and no reason. Two levels up
+# from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
+ROOT = Path(__file__).resolve().parents[2]
 MIN_BLOB_PX = 300  # in the letterboxed map; a shopper at the far wall is bigger than this
 COVER_IOU = 0.3
 # A blob is not a person. An arm resting on a counter is segmented apart from the torso
