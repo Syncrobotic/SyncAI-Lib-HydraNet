@@ -102,13 +102,25 @@ def load_model(config, checkpoint, *, device=None, weights: str = "ema", validat
     Returns `(model, cfg, device)` -- the config and device because every caller needed
     them next, for `cfg["data"]["input_size"]` and for moving tensors.
     """
+    import warnings
+
     from .config import load_config
     from .models.hydranet import build_model
-    from .utils.checkpoint import load_checkpoint, select_weights
+    from .utils.checkpoint import chosen_weights, load_checkpoint
     from .utils.device import pick_device
 
     cfg = load_config(str(config), validate=validate)
     device = pick_device(cfg.get("device")) if device is None else device
     model = build_model(cfg).to(device).eval()
-    model.load_state_dict(select_weights(load_checkpoint(str(checkpoint)), weights))
+    state, taken = chosen_weights(load_checkpoint(str(checkpoint)), weights)
+    if taken != weights:
+        warnings.warn(
+            f"{checkpoint}: asked for {weights!r} weights and there are none, so the raw "
+            f"{taken!r} tensors were loaded. On a short run these are a different model "
+            "-- 0.16 mIoU against 0.95 in the case that put this check here -- so a "
+            "figure rendered from this is not the figure that was asked for.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    model.load_state_dict(state)
     return model, cfg, device

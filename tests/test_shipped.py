@@ -120,3 +120,62 @@ def test_load_model_takes_the_weights_choice_as_an_argument():
     sig = inspect.signature(shipped.load_model)
     assert sig.parameters["weights"].default == "ema"
     assert sig.parameters["weights"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_load_model_says_so_when_it_could_not_give_the_weights_asked_for():
+    """The fallback inside `select_weights` is the one that is worth a word.
+
+    Asking for EMA on a checkpoint that has none returns the raw tensors, which on a short
+    run is a different model -- 0.16 mIoU against 0.95 in the incident that put the
+    docstring there. Every caller before this defaulted to `"ema"` without checking, so a
+    run trained without EMA rendered from raw weights and said nothing.
+    """
+    import warnings
+
+    from syncai_hydranet.utils.checkpoint import chosen_weights
+
+    with_ema = {"model": {"a": 1}, "ema": {"a": 2}}
+    without = {"model": {"a": 1}}
+    assert chosen_weights(with_ema, "ema") == ({"a": 2}, "ema")
+    assert chosen_weights(without, "ema") == ({"a": 1}, "model"), "the fallback is named"
+    assert chosen_weights(with_ema, "model") == ({"a": 1}, "model")
+    # An empty EMA dict is not EMA weights, and falls back like a missing one.
+    assert chosen_weights({"model": {"a": 1}, "ema": {}}, "ema")[1] == "model"
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        chosen_weights(without, "ema")
+    assert not caught, "the primitive is silent; the warning belongs to load_model"
+
+
+def test_load_model_warns_on_the_real_checkpoint_it_cannot_satisfy(tmp_path):
+    """The branch above, on the path a caller actually takes.
+
+    `weights="ema"` is the default, so the run that trained without EMA is the one that
+    trips this, and it is exactly the run -- short -- on which the two sets of tensors
+    differ most.
+    """
+    import warnings
+
+    import torch
+
+    from syncai_hydranet.config import load_config
+    from syncai_hydranet.models.hydranet import build_model
+
+    cfg_path = Path(__file__).resolve().parents[1] / "configs" / "hydranet_indoor.yaml"
+    cfg = load_config(str(cfg_path), ["model.backbone.pretrained=false"])
+    ckpt = tmp_path / "no_ema.pt"
+    torch.save({"model": build_model(cfg).state_dict()}, ckpt)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        shipped.load_model(cfg_path, ckpt, device="cpu")  # weights="ema" by default
+    said = [str(w.message) for w in caught if issubclass(w.category, RuntimeWarning)]
+    assert said and "there are none" in said[0], f"loaded raw weights in silence: {caught}"
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        shipped.load_model(cfg_path, ckpt, device="cpu", weights="model")
+    assert not [w for w in caught if issubclass(w.category, RuntimeWarning)], (
+        "asking for what the checkpoint holds is not worth a warning"
+    )
