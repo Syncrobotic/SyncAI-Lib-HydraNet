@@ -93,7 +93,13 @@ def test_pre_nms_topk_leaves_the_kept_set_unchanged():
         *args, score_thr=0.05, img_size=IMG
     )
     for f, q in zip(full, fast, strict=True):
-        n = min(len(f["boxes"]), len(q["boxes"]))
-        assert n > 0
-        np.testing.assert_allclose(q["boxes"][:n], f["boxes"][:n])
-        np.testing.assert_array_equal(q["labels"][:n], f["labels"][:n])
+        # The lengths first, and that is the whole point of the test. Comparing
+        # `[:min(len(f), len(q))]` -- which this did until 2026-09-04 -- passes when
+        # truncation DROPS a detection, because the shorter list simply shortens the
+        # comparison. The regression this exists to catch was invisible to it.
+        assert len(f["boxes"]) > 0
+        assert len(q["boxes"]) == len(f["boxes"]), (
+            "pre_nms_topk changed how many boxes survived; the kept set is not unchanged"
+        )
+        np.testing.assert_allclose(q["boxes"], f["boxes"])
+        np.testing.assert_array_equal(q["labels"], f["labels"])
