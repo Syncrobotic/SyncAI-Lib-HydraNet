@@ -38,6 +38,16 @@ from .tracker import Track
 def track_ground_path(track: Track, cam: Camera, plane: GroundPlane) -> np.ndarray:
     """(N,2) floor positions in metres for one track's observed frames.
 
+    **The boxes must already be undistorted, and every production path does it upstream.**
+    This takes `(cam, plane)` rather than a `CameraFile`, so it has no lens and cannot undo
+    one -- and `geometry/ground.py` warns that a consumer projecting distorted pixels gets
+    metres that drift silently rather than an error. What makes that safe here is
+    `clip_tracks.tracks_for_clip`, whose `k1` is keyword-only with **no default** precisely
+    so a caller cannot forget: it calls `undistort_boxes` on the corners before the tracker
+    ever sees them, so a `Track` carries pinhole pixels by construction. Stated because
+    the signature cannot show it -- an audit read this function alone and took it for the
+    drift it is protected from.
+
     Rows are NaN where the foot point sits at or above the horizon, which
     `pixel_to_ground` refuses to turn into a very large distance. Keep them as NaN:
     dropping them silently would shorten a path without shortening its duration and

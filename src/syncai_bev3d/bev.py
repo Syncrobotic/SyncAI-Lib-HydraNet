@@ -84,6 +84,15 @@ def place_boxes(boxes: np.ndarray, cam: Camera, plane: GroundPlane) -> np.ndarra
     A box carries no range. Where its bottom edge meets the floor does, because that point
     is on the plane. It is the only ground position a single camera recovers, and it is
     wrong for anything not standing on the floor -- a wall-mounted screen, a mug on a table.
+
+    **Pixels in, and they must already be undistorted.** Taking `(cam, plane)` rather than
+    a `CameraFile` means there is no lens here to undo one with, and `geometry/ground.py`
+    states the cost of projecting distorted pixels: metres that drift silently instead of
+    an error. Its one caller inside this package is `scene()`, reached from
+    `cli/scene.py`, which builds its `Camera` from `--vfov` alone and has no lens to
+    apply -- a pinhole path end to end. The commissioned fleet path does not come through
+    here at all; it undistorts in `clip_tracks` before the tracker. Written down because
+    the signature cannot say it.
     """
     boxes = np.asarray(boxes, dtype=float).reshape(-1, 4)
     if len(boxes) == 0:
