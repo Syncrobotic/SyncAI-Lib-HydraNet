@@ -15,6 +15,7 @@ import json
 
 import numpy as np
 import pytest
+import torch
 from PIL import Image
 
 from syncai_hydranet.config import Config
@@ -214,3 +215,59 @@ def test_no_drift_reported_for_an_unchanged_config(data_root, finished_run):
     ckpt = load_checkpoint(finished_run.out_dir / "last.pt")
     ckpt["cfg"] = dict(cfg)
     assert trainer.report_config_drift(ckpt) == []
+
+
+# ----------------------------------------------------- the non-finite gradient guard
+
+
+def _nan_after(trainer, n_micro_batches: int):
+    """Wrap `compute_losses` so it returns NaN from the nth micro-batch onward."""
+    real = trainer.model.compute_losses
+    state = {"i": 0}
+
+    def wrapped(outputs, targets, supervises):
+        loss, logs = real(outputs, targets, supervises)
+        state["i"] += 1
+        if state["i"] > n_micro_batches:
+            loss = loss * float("nan")
+        return loss, logs
+
+    trainer.model.compute_losses = wrapped
+    return state
+
+
+def test_a_non_finite_loss_skips_the_step_instead_of_poisoning_the_weights(tmp_path, data_root):
+    """The guard `GradScaler` would provide if this project trained in fp16.
+
+    It does not: `needs_grad_scaler` disables the scaler for bfloat16, bf16 is the
+    default and what every run has used, so nothing skipped a poisoned step. Clipping is
+    no substitute -- a NaN gradient makes the norm NaN, and clipping by a NaN coefficient
+    writes NaN into every parameter. Runs the real loop rather than re-implementing it.
+    """
+    trainer = Trainer(_cfg(tmp_path / "exp", data_root, epochs=1))
+    _nan_after(trainer, 0)  # every batch is poisoned
+    trainer.train_one_epoch(0)
+
+    assert trainer.nonfinite_steps > 0, "the guard never fired on an all-NaN epoch"
+    params = list(trainer.model.parameters())
+    assert all(torch.isfinite(p).all() for p in params), "NaN reached the parameters"
+
+
+def test_the_guard_aborts_rather_than_training_through_a_dead_run(tmp_path, data_root):
+    """Skipping exists for the isolated bad batch. A run that keeps producing them is
+    gone, and an epoch of wall-clock spent proving it is what this refuses to pay."""
+    from syncai_hydranet.engine.trainer import MAX_NONFINITE_STEPS
+
+    trainer = Trainer(_cfg(tmp_path / "exp2", data_root, epochs=1))
+    _nan_after(trainer, 0)
+    trainer.nonfinite_steps = MAX_NONFINITE_STEPS - 1
+    with pytest.raises(RuntimeError, match="non-finite gradient norms"):
+        trainer.train_one_epoch(0)
+
+
+def test_a_clean_epoch_leaves_the_counter_at_zero(tmp_path, data_root):
+    """The other half: the guard must not fire on the fixture that trains fine, or it
+    would be skipping real steps and reporting a healthy run as sick."""
+    trainer = Trainer(_cfg(tmp_path / "exp3", data_root, epochs=1))
+    trainer.train_one_epoch(0)
+    assert trainer.nonfinite_steps == 0
