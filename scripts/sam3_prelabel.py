@@ -70,7 +70,6 @@ from collections import Counter
 from pathlib import Path
 
 import numpy as np
-import torch
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
@@ -96,6 +95,7 @@ from syncai_hydranet.data.video import (  # noqa: E402
     validate_inputs,
 )
 from syncai_hydranet.labels import IGNORE  # noqa: E402
+from syncai_hydranet.utils.device import pick_device  # noqa: E402
 
 # Two taxonomies, two prompt tables, and the pairing is not interchangeable: a concept
 # resolves its class id against the taxonomy it belongs to, so running the retail table
@@ -124,7 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--frames", type=int, default=40, help="frames to keep per clip")
     ap.add_argument("--sample-fps", type=float, default=1.0, help="rate to consider frames at")
     ap.add_argument("--model", default=MODEL_ID)
-    ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    ap.add_argument("--device", default=pick_device())
     ap.add_argument(
         "--upscale",
         type=float,

@@ -53,7 +53,6 @@ from collections import Counter
 from pathlib import Path
 
 import numpy as np
-import torch
 from PIL import Image, ImageDraw
 from scipy import ndimage
 
@@ -62,6 +61,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from syncai_bev3d.teachers import boxes as B  # noqa: E402
 from syncai_bev3d.teachers import gdino as G  # noqa: E402
+from syncai_hydranet.utils.device import pick_device  # noqa: E402
 
 SCORE_FLOOR = 0.10  # keep both score populations visible; see the module docstring
 NMS_IOU = 0.55
@@ -136,7 +136,7 @@ def main() -> int:
     print(f"{len(masks)} frames, {len(cached)} already in the cache")
 
     todo = [m for m in masks if m.stem not in cached]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     proc = model = None
     if todo:
         print(f"loading {args.model} on {device}")

@@ -72,6 +72,7 @@ from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.models.hydranet import build_model
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
+from syncai_hydranet.utils.device import pick_device
 from syncai_hydranet.utils.face_blur import BLUR_THR, blur_region, plate_person_boxes
 from syncai_hydranet.utils.visualize import preprocess, terrain_palette
 
@@ -531,7 +532,7 @@ def main() -> int:
     )
     cf = CameraFile.load(ROOT / f"runs/commission01/{camera}.camera.json")
     cfg = load_config(args.config, validate=False)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     model = build_model(cfg).to(device).eval()
     model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), "ema"))
     size = cfg["data"]["input_size"]

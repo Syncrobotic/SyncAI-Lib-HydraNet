@@ -99,6 +99,7 @@ from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.models.hydranet import build_model
 from syncai_hydranet.shipped import SHIPPED_RUN
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
+from syncai_hydranet.utils.device import pick_device
 from syncai_hydranet.utils.face_blur import (
     BLUR_THR,
     blur_region,
@@ -554,7 +555,7 @@ def main() -> int:
         records = json.loads(Path(args.records).read_text())
         model = device = None
     else:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = str(pick_device())
         model = build_model(cfg).to(device).eval()
         model.load_state_dict(select_weights(load_checkpoint(RUN / args.checkpoint), "ema"))
     frame_lo, frame_hi = 0, args.frames

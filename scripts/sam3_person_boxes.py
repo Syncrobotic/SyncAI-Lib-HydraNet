@@ -56,7 +56,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import torch
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
@@ -76,6 +75,7 @@ from syncai_bev3d.teachers.photometry import (  # noqa: E402
 )
 from syncai_bev3d.teachers.sam3 import load_sam3, segment  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
+from syncai_hydranet.utils.device import pick_device  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -101,7 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     proc, model = load_sam3(args.model_id, device)
     out_root = Path(args.out)
     (out_root / "images").mkdir(parents=True, exist_ok=True)

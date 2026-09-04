@@ -26,6 +26,7 @@ from PIL import Image
 
 from syncai_bev3d.teachers.boxes import nms
 from syncai_hydranet.analytics.events import pose as ev
+from syncai_hydranet.utils.device import pick_device
 from syncai_hydranet.utils.runmeta import git_state
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
@@ -78,7 +79,7 @@ def main() -> int:
     ap.add_argument("--render-first", type=int, default=0)
     args = ap.parse_args()
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     from transformers import AutoProcessor, VitPoseForPoseEstimation
 
     processor = AutoProcessor.from_pretrained(POSE_MODEL, revision=POSE_MODEL_REVISION)

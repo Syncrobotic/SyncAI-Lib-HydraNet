@@ -16,7 +16,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import torch
 from PIL import Image
 from scipy import ndimage
 
@@ -24,6 +23,7 @@ from syncai_bev3d.teachers import sam3 as SAM3
 from syncai_hydranet.data import sam3_prompts as P
 from syncai_hydranet.data import sam3_prompts_objects as O
 from syncai_hydranet.geometry.camera_json import CameraFile
+from syncai_hydranet.utils.device import pick_device
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
 W, H = 1920, 1080
@@ -116,7 +116,7 @@ def run_camera(camera, proc, model, device, table):
 
 
 def main():
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     proc, model = SAM3.load_sam3(SAM3.MODEL_ID, device)
     table = concepts()
     for camera in sys.argv[1:]:

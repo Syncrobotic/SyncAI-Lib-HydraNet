@@ -30,6 +30,7 @@ from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.models.hydranet import build_model
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
+from syncai_hydranet.utils.device import pick_device
 from syncai_hydranet.utils.visualize import preprocess
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
@@ -98,7 +99,7 @@ def main() -> int:
     args = ap.parse_args()
 
     cfg = load_config(args.config, validate=False)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     model = build_model(cfg).to(device).eval()
     model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), "ema"))
     size = cfg["data"]["input_size"]

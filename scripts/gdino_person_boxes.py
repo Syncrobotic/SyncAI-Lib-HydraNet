@@ -41,8 +41,9 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
-import torch
 from PIL import Image
+
+from syncai_hydranet.utils.device import pick_device
 
 HERE = Path(__file__).resolve().parent
 for candidate in (HERE.parent / "src", HERE / "src"):
@@ -114,7 +115,7 @@ def iter_clips(clips: list[str], per_clip: int, out_images: Path):
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     proc, model = load_gdino(args.model_id, device)
     out_root = Path(args.out)
     (out_root / "annotations").mkdir(parents=True, exist_ok=True)

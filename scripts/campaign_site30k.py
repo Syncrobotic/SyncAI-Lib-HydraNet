@@ -102,6 +102,7 @@ from syncai_hydranet.data.video import (  # noqa: E402
     validate_inputs,
 )
 from syncai_hydranet.labels import IGNORE  # noqa: E402
+from syncai_hydranet.utils.device import pick_device  # noqa: E402
 
 # ---------------------------------------------------------------------------------
 # The campaign taxonomy. New ids, deliberately NOT the retail_objects ids: id 4 there
@@ -555,7 +556,7 @@ def cmd_annotate(args) -> int:
         json.loads(Path(args.split_json).read_text())["assign"] if args.split_json else {}
     )
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     if args.recipe in ("v2", "v3"):
         static, moving = build_concepts_v2()  # v3 uses only the person concept
     else:
@@ -973,7 +974,7 @@ def cmd_floor_diag(args) -> int:
     furniture). Misprojection shows as offset bands of blue and yellow along the same
     boundary; a too-small polygon shows as blue with no yellow twin.
     """
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     third = ThirdOpinion(THIRD_OPINION_RUN, device)
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1043,7 +1044,7 @@ def cmd_sweep_fixture(args) -> int:
     split by surface orientation. The chosen edges are then passed to `annotate
     --recipe v2` explicitly and recorded in the QA report with this table.
     """
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     static, moving = build_concepts_v2()
     sam3_proc, sam3_model = load_sam3(SAM3_MODEL_ID, device)
     third = ThirdOpinion(THIRD_OPINION_RUN, device)
@@ -1107,7 +1108,7 @@ def cmd_sweep_fixture(args) -> int:
 
 
 def cmd_pet_census(args) -> int:
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     gd_proc, gd_model = load_gdino(args.gdino_model, device)
     clips = args.clips
     per_clip = max(1, args.sample // max(len(clips), 1))

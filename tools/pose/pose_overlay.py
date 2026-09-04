@@ -35,6 +35,7 @@ from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.models.hydranet import build_model
 from syncai_hydranet.serving.decode import MIN_PERSON_FRACTION, person_pixel_fraction
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
+from syncai_hydranet.utils.device import pick_device
 from syncai_hydranet.utils.visualize import preprocess
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
@@ -129,7 +130,7 @@ def main() -> int:
         else sorted((ROOT / "datasets/studioa_clips" / args.camera).glob("archive_*11*.mp4"))[0]
     )
     cfg = load_config(args.config, validate=False)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     model = build_model(cfg).to(device).eval()
     model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), "ema"))
     size = cfg["data"]["input_size"]

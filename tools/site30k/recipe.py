@@ -48,7 +48,6 @@ import time
 from pathlib import Path
 
 import numpy as np
-import torch
 from PIL import Image, ImageDraw
 from scipy import ndimage
 
@@ -71,6 +70,7 @@ from syncai_hydranet.geometry.ground import (  # noqa: E402
     pixel_to_ground,
     undistort_points,
 )
+from syncai_hydranet.utils.device import pick_device  # noqa: E402
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
 # The pilot ran off datasets/studioa_clips; the campaign runs off the phase-2 pull. Both
@@ -207,7 +207,7 @@ CHROMA_CHANGE = 4  # YCbCr levels; measured knee, see the withdrawal comment
 ISLAND_PX = 800
 PRODUCT_IOU, NEG_TIE, NEG_COVER, FLOOR_SUPPORT_MAX = 0.55, 0.15, 0.60, 0.30
 GUIDE_RADIUS, GUIDE_EPS = 8, 1e-4
-device = "cuda" if torch.cuda.is_available() else "cpu"
+device = str(pick_device())
 
 
 def box_sum(a, r):
