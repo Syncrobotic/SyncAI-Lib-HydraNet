@@ -48,12 +48,30 @@ def build_optimizer(model: nn.Module, tcfg) -> torch.optim.Optimizer:
 
 
 class WarmupCosine:
+    """Linear warmup into a cosine decay, applied to the optimizer's own param groups.
+
+    **The schedule is applied at construction, and that line is the whole of a bug this
+    class shipped with.** `Trainer.train_one_epoch` steps the optimizer *before* the
+    scheduler, so whatever the param groups hold when the loop starts is what the first
+    optimizer step runs at. Without the `_apply()` below they hold `base_lr` — measured
+    on the shipped `warmup_iters: 500`, `lr: 2.0e-4` pairing, the first step ran at
+    **500x** the intended warmup value, on freshly initialised heads, and AdamW's first
+    moment then carried it forward. `load_state_dict` had always re-applied immediately
+    and said why, so the resume path was right and the fresh-start path was not.
+
+    The first step now runs at `_factor(0) == 0`: a warmup that starts at zero costs one
+    no-op optimizer step and is the shape the rest of the schedule already assumed.
+    Making it start at `1/warmup` instead would shift every later iteration by one and
+    change what a restored `it` means, for one step of a run that takes thousands.
+    """
+
     def __init__(self, optimizer, warmup_iters: int, total_iters: int):
         self.opt = optimizer
         self.warmup = max(warmup_iters, 1)
         self.total = total_iters
         self.base_lrs = [g["lr"] for g in optimizer.param_groups]
         self.it = 0
+        self._apply()
 
     def _factor(self, it: int) -> float:
         if it <= self.warmup:
