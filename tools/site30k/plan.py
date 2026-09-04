@@ -39,8 +39,13 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-sys.path.insert(0, "/home/paul/SyncAI-Lib-HydraNet/src")
-from syncai_hydranet.data.video import probe
+# Derived from this file rather than written out: an absolute path here breaks on any
+# machine but the one it was typed on, and `sys.path` is the one place where that
+# fails before anything else can report it. `parents[2]` is the repo root --
+# tools/site30k/<file>.py.
+_REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO / "src"))
+from syncai_hydranet.data.video import probe  # noqa: E402
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
 PULL = ROOT / "datasets/studioa_pull_site30k"
