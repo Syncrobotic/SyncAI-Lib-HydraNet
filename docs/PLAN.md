@@ -2666,13 +2666,34 @@ half-covers is worse than an absent one, because its presence is read as coverag
     `floorplan.py` at 0%; measured today they are **97% and 95%**, and the real floor
     of the tree is `figures.py` at 39%. Its own neighbour 90 lines up states the rule
     it breaks: "A count belongs where it is enforced."
-30. 28 files under `tools/` hardcode `/home/paul/...`, two of them into `sys.path`.
+30. **PARTLY DONE, and the rest is a decision.** The `sys.path` half is fixed and
+    guarded (`tests/test_no_absolute_sys_path.py`, 347 files): those three failed at
+    import on any other machine, saying nothing about why. The remaining ~26 absolute
+    `ROOT` constants read `runs/` and `datasets/` and fail at a `FileNotFoundError` that
+    names the path, which is survivable -- and they encode a real assumption, that these
+    tools run on the box holding the corpus. **Decision needed**: derive `ROOT` and accept
+    that a tool then silently reads a different machine's empty `runs/`, or leave it. The
+    finding: 28 files under `tools/` hardcode `/home/paul/...`, two of them into
+    `sys.path`.
     This is the root of 183 of the tree's 196 `noqa` (all E402). `src/` is clean.
-31. `.git` is 113 MB against ~80k lines of source: three GIFs carry 22 revisions with
+31. **DECISION NEEDED, not a defect.** Migrating to LFS rewrites history on a repo three
+    branches and several sessions share, and `.gitattributes` alone only helps future
+    revisions -- the 113 MB is already written. The cheap half, if it is wanted, is to
+    stop tracking the figures at all and publish them from a release asset, which changes
+    what a README renders from. The finding:
     no LFS, and the figure-tax workflow guarantees more.
-32. `dev` sits at `__version__ = "0.1.0"` and has no CHANGELOG while `v0.4.0` is
+32. **DECISION NEEDED.** release.yml's own header argues the current shape is correct --
+    a version bump is metadata about a release and cannot precede it -- so the fix is
+    either a periodic main->dev back-merge or accepting the drift permanently. Worth
+    deciding rather than rediscovering: a contributor reading `dev`'s `__init__.py` today
+    is told this is 0.1.0. The finding: `dev` sits at `__version__ = "0.1.0"` and has no
+    CHANGELOG while `v0.4.0` is
     released, because release-please writes to `main` and nothing flows back.
-33. Configs for the deleted quadruped line (`RELLIS-3D`, `RUGD` in
+33. **DECISION NEEDED**: these are load-bearing as test fixtures (15 and 5 files
+    reference them, and `test_config_defaults.py` globs the whole directory), so deleting
+    them breaks the suite. Either move fixtures to `tests/`, or say that `configs/` holds
+    both and stop calling it sprawl. The finding: configs for the deleted quadruped line
+    (`RELLIS-3D`, `RUGD` in
     `hydranet_regnet800mf.yaml`, `hydranet_indoor.yaml`) survive as test fixtures, so
     real configs and fixtures share one directory.
 34. Privacy is a publication-time control, not a runtime one: `face_blur` is used by
