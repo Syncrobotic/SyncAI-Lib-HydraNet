@@ -62,6 +62,16 @@ MODEL = "depth-anything/Depth-Anything-V2-Metric-Indoor-Large-hf"
 # silently changes what a teacher produces when upstream pushes.
 MODEL_REVISION = "d2fc6a93601aabb1139a3bf0ebfcb4e89c67817f"
 ADULT_M = 1.70  # the standing-adult prior; pose bias makes it a ±11% systematic term
+# The fleet lens. Tile-grid measured on Taichung-cam01 and a hardware assumption on
+# every other camera, which is why `camera.json` carries its own `lens` and this is
+# only the default a tool starts from.
+#
+# It lives here rather than in `scripts/onboard_camera.py`, where it was named until
+# 2026-09-04: a script cannot be imported (`tests/test_scripts_are_not_libraries.py`),
+# so two other scripts each wrote the number out again as an argparse default. Three
+# statements of one fleet assumption, and a lens that drifts between them returns
+# metres rather than an error.
+K1_FLEET = -0.225
 PLATES = Path("datasets/studioa_static")
 
 

@@ -44,18 +44,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import zipfile
 from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "src"))
-
-from syncai_hydranet.analytics.pose_sequence import sequence_features  # noqa: E402
-from syncai_hydranet.data.ntu_skeletons import JOINTS, members, read_clip  # noqa: E402
-from syncai_hydranet.geometry.ground import Camera, GroundPlane, ground_to_pixel  # noqa: E402
+from syncai_hydranet.analytics.pose_sequence import sequence_features
+from syncai_hydranet.data.ntu_skeletons import JOINTS, members, read_clip
+from syncai_hydranet.geometry.ground import Camera, GroundPlane, ground_to_pixel
 
 # The camera `hm3d_cctv` renders at and PLAN §2.3 names, so a sequence projected here and
 # a frame rendered there describe the same room.

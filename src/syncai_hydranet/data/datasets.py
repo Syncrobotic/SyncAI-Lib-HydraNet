@@ -108,21 +108,19 @@ class SegFolderDataset(Dataset[dict[str, Any]]):
 
     def _decode_ann(self, ann_path: Path) -> np.ndarray:
         ann = Image.open(ann_path)
-        if self.scheme is not None:
-            fmt = "color" if self.scheme.fmt == "color" else "id"
-            mapping = self.scheme.mapping
-        else:
-            fmt = self.label_format
-            if fmt == "auto":
-                is_rgb = ann.mode in ("RGB", "P") and np.asarray(ann.convert("RGB")).ndim == 3
-                fmt = "color" if is_rgb else "id"
-            elif fmt == "rugd_color":
-                fmt = "color"
-            mapping = (
-                label_maps.RUGD_COLOR_TO_TERRAIN
-                if fmt == "color"
-                else label_maps.RELLIS_ID_TO_TERRAIN
+        # **A scheme is required, and the branch that made it optional is gone.** The
+        # fallback below it hardcoded `RUGD_COLOR_TO_TERRAIN` / `RELLIS_ID_TO_TERRAIN`,
+        # so a dataset without `label_map` silently decoded its annotations through an
+        # off-road vocabulary -- retired 2026-09-04 with the rest of that line. Every
+        # shipped config names a `label_map`, and `config_schema` requires one, so this
+        # raises where nothing reached before rather than changing what any of them do.
+        if self.scheme is None:
+            raise ValueError(
+                f"{ann_path}: this dataset has no label_map, so its annotations cannot be "
+                "decoded. Name one in the config; `label_maps.SCHEMES` lists them."
             )
+        fmt = "color" if self.scheme.fmt == "color" else "id"
+        mapping = self.scheme.mapping
 
         if fmt == "color":
             rgb = np.asarray(ann.convert("RGB"))
@@ -461,21 +459,30 @@ def build_dataset(
 
 
 def _session_cameras(root: Path, split: str) -> set[str]:
-    """Camera ids under one split of a `seg_folder` dataset, or empty if it has no sessions.
+    """Camera ids under one split of any dataset that names its images by camera.
 
-    `seg_folder` allows both layouts: ADE20K puts images directly under
-    ``images/train/``, the site sets put them under ``images/train/<session>/``. Only the
-    second has cameras to compare, so the first returns nothing and drops out of the check
-    below rather than being special-cased at the call site.
+    Three layouts, because the datasets that share cameras do not share a type:
 
-    A session directory is named ``<camera>__<clip>`` by the convention
-    ``sam3_prelabel.session_names`` recommends, and is a bare ``<camera>`` when the caller
-    passed one clip per camera. Splitting on ``__`` covers both.
+    * ``images/<split>/<session>/`` -- the site `seg_folder` sets. A session directory is
+      named ``<camera>__<clip>`` by the convention ``sam3_prelabel.session_names``
+      recommends, and is a bare ``<camera>`` when the caller passed one clip per camera.
+    * ``images/<split>/<camera>__<clip>__<frame>.jpg`` -- the site `coco` box sets and the
+      `pose_keypoints` sets that inherit their image ids. **Flat files, which is why this
+      function used to return nothing for them**, and why `split_leaks` covered one
+      dataset type of the five in the tree until 2026-09-04.
+    * ``images/<split>/<file>.jpg`` with no ``__`` -- ADE20K, COCO-Stuff, anything not
+      shot on this fleet. These return nothing and drop out of the check.
+
+    The ``__`` is required in the flat case and not merely split on: without it every
+    ordinary filename becomes a "camera", and two web datasets that happen to share a
+    file name would report an overlap that does not exist.
     """
     d = root / "images" / split
     if not d.is_dir():
         return set()
-    return {p.name.split("__")[0] for p in d.iterdir() if p.is_dir()}
+    cameras = {p.name.split("__")[0] for p in d.iterdir() if p.is_dir()}
+    cameras |= {p.name.split("__")[0] for p in d.iterdir() if p.is_file() and "__" in p.name}
+    return cameras
 
 
 def split_leaks(datasets: list[dict]) -> list[tuple[str, str, str, list[str]]]:
@@ -494,10 +501,18 @@ def split_leaks(datasets: list[dict]) -> list[tuple[str, str, str, list[str]]]:
     `minority_sourced_terrain_classes` makes for `MultiTaskLoader` knowing the realised
     step share that a config cannot.
 
+    **Every dataset with a root, not one type.** This read
+    ``type == "seg_folder"`` until 2026-09-04, which covered one of the five types in the
+    tree -- so a `coco` site-box set could score on cameras a `seg_folder` set trained on
+    and nothing said anything, and the retail configs that mix site boxes with site masks
+    are exactly the ones where that is possible. Enumerating the types that *can* carry
+    cameras would go stale the next time one is added; asking every dataset and letting
+    `_session_cameras` return nothing for the layouts that have no cameras cannot.
+
     Returns ``(train_dataset, eval_dataset, split, cameras)`` per overlap found.
     """
     out: list[tuple[str, str, str, list[str]]] = []
-    segs = [d for d in datasets if d.get("type") == "seg_folder" and d.get("root")]
+    segs = [d for d in datasets if d.get("root")]
     for a in segs:
         trained = _session_cameras(Path(a["root"]), a.get("split_train", "train"))
         if not trained:

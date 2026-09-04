@@ -21,9 +21,12 @@ counts -- so an error moves a percentile instead of accumulating into the headli
 are numbers retail pays for.
 
 **Every figure this writes is provisional until a manual audit.** The industry accepts
-+/-5% for counting; nothing here has been checked against a hand count, because this
-project has no hand-labelled site data at all. Sample an hour, count it by eye, compare.
-That is the acceptance test and there is no substitute for it.
++/-5% for counting; nothing here has been checked against a hand count, and none exists.
+Track IDENTITIES are hand-labelled now -- seven sets under `runs/gt_*`, which is what
+`reid_metrics.idf1` scores against -- and they are the wrong instrument for this: they
+say whether one track followed one person over 900 frames, not how many people entered
+in an hour. Sample an hour, count it by eye, compare. That is the acceptance test and
+there is no substitute for it.
 
 The camera pose is per-camera and it is the largest source of error in the metric
 output. The 2026-08-14 journal (`git show b7457c2:docs/journal/`) recorded what
@@ -40,28 +43,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-for candidate in (HERE.parent / "src", HERE / "src"):
-    if candidate.is_dir():
-        sys.path.insert(0, str(candidate))
-
-from syncai_hydranet.analytics import Tracker, dwell_table, track_ground_path  # noqa: E402
-from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
-from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
-from syncai_hydranet.analytics.dwell import ground_map  # noqa: E402
-from syncai_hydranet.analytics.tracker import SIMPLIFICATIONS  # noqa: E402
-from syncai_hydranet.config import load_config  # noqa: E402
-from syncai_hydranet.data.video import frames, probe  # noqa: E402
-from syncai_hydranet.geometry.ground import Camera, GroundPlane  # noqa: E402
-from syncai_hydranet.models.hydranet import build_model  # noqa: E402
-from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
-from syncai_hydranet.utils.device import pick_device  # noqa: E402
-from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
+from syncai_hydranet.analytics import Tracker, dwell_table, track_ground_path
+from syncai_hydranet.analytics.clip_tracks import track_clip
+from syncai_hydranet.analytics.delivery import report_settings
+from syncai_hydranet.analytics.dwell import ground_map
+from syncai_hydranet.analytics.tracker import SIMPLIFICATIONS
+from syncai_hydranet.data.video import frames, probe
+from syncai_hydranet.geometry.ground import Camera, GroundPlane
+from syncai_hydranet.models.heads.detection import SCORE_THR_RETAIL
+from syncai_hydranet.shipped import load_model
+from syncai_hydranet.utils.visualize import preprocess
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -77,10 +72,10 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument(
         "--score-thr",
         type=float,
-        default=0.20,
-        help="0.20 rather than the 0.30 viewing default: measured on Taichung-cam01, "
-        "person detections went 62 -> 72 -> 112 as the cut fell 0.35 -> 0.25 -> 0.15, "
-        "and a tracker cannot associate what was never detected",
+        default=SCORE_THR_RETAIL,
+        help="the fixed-CCTV cut rather than the viewing one: a tracker cannot "
+        "associate what was never detected, and `models/heads/detection.py` carries "
+        "the two-camera table this was chosen from",
     )
     ap.add_argument("--min-hits", type=int, default=3)
     ap.add_argument("--max-age", type=int, default=5)
@@ -103,10 +98,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    cfg = load_config(args.config)
-    device = pick_device(cfg.get("device"))
-    model = build_model(cfg).to(device).eval()
-    model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), "ema"))
+    model, cfg, device = load_model(args.config, args.checkpoint)
     size = cfg["data"]["input_size"]
     out_root = Path(args.out)
     out_root.mkdir(parents=True, exist_ok=True)

@@ -26,10 +26,14 @@ import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage
 
-sys.path.insert(0, "/home/paul/SyncAI-Lib-HydraNet/src")
-sys.path.insert(0, "/home/paul/SyncAI-Lib-HydraNet/scripts")
+# Derived from this file rather than written out: an absolute path here breaks on any
+# machine but the one it was typed on, and `sys.path` is the one place where that
+# fails before anything else can report it. `parents[2]` is the repo root --
+# tools/site30k/<file>.py.
+_REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO / "scripts"))
 spec = importlib.util.spec_from_file_location(
-    "campaign", "/home/paul/SyncAI-Lib-HydraNet/scripts/campaign_site30k.py"
+    "campaign", str(_REPO / "scripts/campaign_site30k.py")
 )
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)

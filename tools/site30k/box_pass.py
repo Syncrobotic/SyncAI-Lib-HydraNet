@@ -47,21 +47,21 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 from collections import Counter
 from pathlib import Path
 
 import numpy as np
-import torch
 from PIL import Image, ImageDraw
 from scipy import ndimage
 
-ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
-sys.path.insert(0, str(ROOT / "src"))
-
-from syncai_bev3d.teachers import boxes as B  # noqa: E402
-from syncai_bev3d.teachers import gdino as G  # noqa: E402
+# The repo root, derived rather than written out: every one of these 26 tools had it
+# as an absolute path, so a second checkout ran against the first one's `runs/` and
+# any machine but this one failed at import with a path and no reason. Two levels up
+# from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
+from syncai_bev3d.teachers import boxes as B
+from syncai_bev3d.teachers import gdino as G
+from syncai_hydranet.utils.device import pick_device
 
 SCORE_FLOOR = 0.10  # keep both score populations visible; see the module docstring
 NMS_IOU = 0.55
@@ -136,7 +136,7 @@ def main() -> int:
     print(f"{len(masks)} frames, {len(cached)} already in the cache")
 
     todo = [m for m in masks if m.stem not in cached]
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     proc = model = None
     if todo:
         print(f"loading {args.model} on {device}")

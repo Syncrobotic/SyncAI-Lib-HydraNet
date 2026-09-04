@@ -6,8 +6,9 @@ None of them crashes. Each produces a plausible number that is wrong:
   "the metric is depressed" looked the same;
 * a second detection dataset overwrote the first's ground truth, scoring every box
   against the wrong annotations;
-* three RELLIS mappings were inferred from class names, one of which decides whether
-  standing water is `caution` or `blocked`.
+* three RELLIS mappings were inferred from class names, one of which decided whether
+  standing water was `caution` or `blocked` -- retired 2026-09-04 with the off-road
+  taxonomy, so the follow-up is closed by deletion rather than by verification.
 
 pytest tests/test_review_followups.py -v
 """
@@ -19,7 +20,7 @@ import pytest
 import torch
 
 from syncai_hydranet.cli import infer_image, infer_video
-from syncai_hydranet.data.label_maps import RELLIS_UNVERIFIED, get_scheme
+from syncai_hydranet.data.label_maps import get_scheme
 from syncai_hydranet.models.heads.detection import SCORE_THR_EVAL, SCORE_THR_VIEW
 from syncai_hydranet.models.hydranet import build_model
 
@@ -67,30 +68,7 @@ def test_predict_defaults_to_the_viewing_threshold():
         model.predict(torch.zeros(1, 3, 64, 64))
 
 
-# ------------------------------------------------------------- unverified label maps
-
-
-def test_using_the_rellis_scheme_warns_about_the_inferred_entries():
-    with pytest.warns(UserWarning, match="inferred from"):
-        get_scheme("rellis")
-
-
-def test_the_warning_names_every_unverified_id():
-    with pytest.warns(UserWarning) as caught:
-        get_scheme("rellis")
-    message = str(caught[0].message)
-    for src_id in RELLIS_UNVERIFIED:
-        assert str(src_id) in message
-
-
-def test_the_puddle_entry_is_flagged_because_it_is_safety_relevant():
-    """31 maps to gravel_mulch, which is `caution`. If it is really water it is
-    `blocked`, and the difference is a robot walking into standing water."""
-    assert 31 in RELLIS_UNVERIFIED
-    assert "water" in RELLIS_UNVERIFIED[31]
-
-
-@pytest.mark.parametrize("name", ["rugd", "ade20k_indoor", "indoor_native", "retail_native"])
+@pytest.mark.parametrize("name", ["ade20k_indoor", "indoor_native", "retail_native"])
 def test_verified_schemes_are_silent(name):
     """A warning on every scheme would be a warning nobody reads."""
     with warnings.catch_warnings():

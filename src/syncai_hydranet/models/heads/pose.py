@@ -122,7 +122,11 @@ def decode_boxes(
 
     Coordinates come back in input pixels; the confidence is the sigmoid peak. A box
     shorter than `min_box_px` returns zero-confidence keypoints rather than an argmax
-    over two cells -- below the measured 32 px floor there is nothing to decode, and a
+    over two cells. **The default is 16, half the 32 px floor the module docstring
+    measures**, and deliberately: 32 is where 99.9% of verified site boxes sit, so
+    gating at it would decline boxes the survey says are ordinary. 16 declines only what
+    is too small to hold two heatmap cells. The two numbers read as one until 2026-09-04,
+    which is why the relationship is stated rather than left to be inferred. Below it a
     confident wrong skeleton is worse for the temporal model than an absent one.
     """
     k, h, w = heatmaps.shape

@@ -28,17 +28,14 @@ import argparse
 import collections
 import json
 import pathlib
-import sys
 
 import numpy as np
 from PIL import Image
 
-HERE = pathlib.Path(__file__).resolve().parent
-for candidate in (HERE.parent / "src", HERE / "src"):
-    if candidate.is_dir():
-        sys.path.insert(0, str(candidate))
+from syncai_hydranet.data.label_maps_retail_objects import RETAIL_OBJECTS
 
-from syncai_hydranet.data.label_maps_retail_objects import RETAIL_OBJECTS  # noqa: E402
+HERE = pathlib.Path(__file__).resolve().parent
+
 
 AMBIGUOUS = "AMBIGUOUS"
 # Under this share of a split's labelled pixels a class is "rare" for R4/R7 purposes.

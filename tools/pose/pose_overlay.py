@@ -28,16 +28,19 @@ from syncai_hydranet.analytics import Tracker
 from syncai_hydranet.analytics.events import pose_posture_events, reach_to_shelf_events
 from syncai_hydranet.analytics.events.pose import _torso
 from syncai_hydranet.analytics.tracker import iou
-from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
-from syncai_hydranet.models.hydranet import build_model
+from syncai_hydranet.serving.camera import BIRTH_REF
 from syncai_hydranet.serving.decode import MIN_PERSON_FRACTION, person_pixel_fraction
-from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
+from syncai_hydranet.shipped import load_model
 from syncai_hydranet.utils.visualize import preprocess
 
-ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
+# The repo root, derived rather than written out: every one of these 26 tools had it
+# as an absolute path, so a second checkout ran against the first one's `runs/` and
+# any machine but this one failed at import with a path and no reason. Two levels up
+# from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
+ROOT = Path(__file__).resolve().parents[2]
 KP_MIN_CONF = 0.2
 SKELETON = (
     (5, 7), (7, 9), (6, 8), (8, 10),
@@ -78,7 +81,7 @@ def main() -> int:
     ap.add_argument("--clip", default=None)
     ap.add_argument("--frames", type=int, default=1)
     ap.add_argument("--fps", type=float, default=5.0)
-    ap.add_argument("--score-thr", type=float, default=0.35)
+    ap.add_argument("--score-thr", type=float, default=BIRTH_REF)
     ap.add_argument(
         "--dense-confirm",
         action="store_true",
@@ -128,10 +131,7 @@ def main() -> int:
         if args.clip
         else sorted((ROOT / "datasets/studioa_clips" / args.camera).glob("archive_*11*.mp4"))[0]
     )
-    cfg = load_config(args.config, validate=False)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = build_model(cfg).to(device).eval()
-    model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), "ema"))
+    model, cfg, device = load_model(args.config, args.checkpoint, validate=False)
     size = cfg["data"]["input_size"]
     classes = list(cfg["model"]["heads"]["detection"]["classes"])
     person = classes.index("person")

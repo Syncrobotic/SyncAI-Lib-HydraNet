@@ -600,11 +600,9 @@ order. A component with no step is not scheduled, it is assumed.
    vocabulary change silently empties `analytics/events/zones.py:346`'s default class list
    — the stock-removal alarm stops firing without an exception. Decide at step 4.
 
-29. ~~The serving target is bound by PCIe~~ — **cleared 2026-09-01, and the entry that
-   said otherwise was scored against a target this document had already replaced.**
-   `bench_trt.py` still held `TARGET_FPS = 1440` — 96 streams at 15 fps — six days after
-   §7.4 revised delivery to **96 x 5 fps = 480 f/s**, so the first version of this entry
-   read a 3.5x shortfall where the real figure was 0.77x.
+29. ~~The serving target is bound by PCIe~~ — **cleared 2026-09-01.** The delivery
+   target is §7.4's **96 x 5 fps = 480 f/s**; `bench_trt.py` had held `TARGET_FPS = 1440`
+   for six days after that revision, which is what a stale constant costs a conclusion.
 
    Measured on the RTX PRO 6000 at 640x1120, fp16, batch 16, end to end with both copies:
 
@@ -626,8 +624,8 @@ order. A component with no step is not scheduled, it is assumed.
    `Cast` saying FLOAT while the constants beside it became FLOAT16, which TensorRT
    refuses — the shape any non-float input contract produces.
 
-   ~~**Still not measured on an idle card.**~~ **Re-measured 2026-09-02 on an idle card,
-   three runs, and the contamination was worth 56% of the end-to-end figure.** The only
+   **Measured on an idle card, 2026-09-02, three runs: contamination was worth 56% of
+   the end-to-end figure.** The only
    neighbour was `tools/lite3_web/server.py` holding 790 MB at 0% GPU utilisation, against
    the three ~800 MB processes of the first attempt. `runs/bench_idle_20260902{,_r2,_r3}`:
 
@@ -2397,164 +2395,128 @@ something it does not support.
    poster/static-FP gate; terrain's floor transfers; fixture vocabulary and the crowd
    person-mask are the two heads that need venue work before metro/airport pilots.
 
-   **Addendum, same day — can these venues self-calibrate into a 3D scene?**
-   `fit_pose_from_people` over the probe's own gated boxes (`runs/domain_probe_20260903/
-   probe_calib.py`), control first: Taichung-cam01's boxes reproduce the known answer
-   (2.22 m / 39 deg at vfov 70.4, spread 0.045), so the apparatus is sound.
+   **The venues asked to self-calibrate, and two of three answered** (same day,
+   `runs/domain_probe_20260903/scenes/`). `fit_pose_from_people` over each probe's own
+   gated boxes, control first: Taichung-cam01 reproduces its known pose (2.22 m / 39°
+   at vfov 70.4, spread 0.045), so the apparatus is sound.
 
-   * **Metro (1,234 boxes, mezzanine + poster excluded by a y-cut — two floor levels
-     in one frame): interior fit**, 5.0-6.4 m / ~30 deg, spread 0.068-0.072, but height
-     moves 17% across vfov 60-80 (a deep scene, against retail's 2%) — vfov must be
-     pinned first, and the platform's tile grid offers the same pin cam01 used. Lens
-     is visibly barrel; k1 fit required. Verdict: 3D scene feasible; zones still
-     blocked on fixture vocabulary (screen doors read `wall`).
+   * **Metro (1,234 boxes, mezzanine and poster excluded): interior fit**, 5.0-6.4 m /
+     ~30°, spread 0.068-0.072. Height moves 17% across vfov 60-80 against retail's 2% —
+     a deep scene needs its vfov pinned first.
    * **Mall entrance (444 boxes): the cleanest fit of the three** once the shop prior's
-     2.2 m floor is dropped — 1.9-2.1 m / 30-42 deg, spread 0.025-0.049, better than
-     the control. A doorway camera at head height. Spread is monotone in vfov (the
-     known trap), so vfov needs an external pin; scale rests on the 1.70 m prior as
-     fleet-standard. Shallow wedge of a world, heavy occlusion behind the first row.
-   * **Airport hall (110 boxes): non-convergent** — spread 0.12-0.14 (3x control),
-     height rides whichever prior bound it is given (3.0, then 4.0), pitch lands at a
-     physically absurd 51-73 deg for a near-horizontal view. Causes stack: true pitch
-     near zero is the method's degenerate direction, granite reflections double the
-     feet, timelapse blur, 20-40 m standoff. This is a verdict on the FOOTAGE (a
-     tripod at human height), not the venue — an actual ceiling-mounted airport camera
-     would resemble the metro case.
+     2.2 m floor is dropped — 1.9-2.1 m / 30-42°, spread 0.025-0.049, better than the
+     control. A doorway camera at head height; spread is monotone in vfov, so scale
+     rests on the 1.70 m prior as fleet-standard.
+   * **Airport hall (110 boxes): non-convergent** — spread 0.12-0.14, height rides
+     whichever prior bound it is given, pitch lands at an absurd 51-73° for a
+     near-horizontal view. Near-zero true pitch is this method's degenerate direction,
+     and granite reflections double the feet. A verdict on the FOOTAGE (a tripod at
+     head height), not the venue.
 
-   **Addendum 2, 2026-09-03 — the two feasible venues were BUILT.**
-   `runs/domain_probe_20260903/scenes/`: per-venue `camera.json` (passes `validate()`),
-   provenance sidecars, 1 m grid acceptance overlays, union-floor masks, BEV dwell
-   maps, scene renders and orbitable GLBs; build scripts archived beside them.
+   **Both feasible venues were then built** and are the first consumers of `stairs()`
+   and `glass_panel()` (b3a64d3). The tile-grid vfov pin was REFUSED on this footage —
+   `fit_k1`'s sweep came back flat, top-5 scores within 0.2% — so both ship the fleet
+   band (vfov 70.4 assumed, 60/80 recorded, `lens: None`, scale on the person prior).
+   Acceptance held anyway with an independent witness: the 1 m grid spans 1.6-1.8
+   platform tiles against TRTC's 60 cm standard, agreeing to ~10%. Two lessons cost
+   three iterations each: **structure read by eye from one view is not a measurement**
+   (the metro stairs were placed, corrected twice on the user's own knowledge of the
+   station, then removed), and a single view cannot separate "higher and nearer" from
+   "lower and further" — the mezzanine's height is drawn to convention while only its
+   occupants' bearing is measured.
 
-   * **The tile-grid vfov pin REFUSED on the metro footage** — `fit_k1`'s sweep came
-     back flat (top-5 scores within 0.2%) with the burned-in VMS queue-zone lines
-     chroma-filtered out, and single-line curvature traces drowned in clutter. The
-     grout signal cam01 had is simply not in this footage (grazing angle + HEVC). So
-     both venues ship the fleet band instead: vfov 70.4 assumed, 60/80 band in
-     provenance, `lens: None`, scale on the 1.70 m person prior.
-   * **Acceptance held anyway, with an independent witness on the metro**: the 1 m
-     grid spans 1.6-1.8 platform tiles per cell against TRTC's 60 cm standard tile —
-     agreement to ~10%, inside the vfov band's spread. The mall grid agrees with
-     person heights to ~15%.
-   * **Both scenes are the first consumers of `stairs()` and `glass_panel()`**
-     (b3a64d3): the platform's half-height glazed screen-door run + hoarding +
-     mezzanine + connecting flight, the mall's two glass door leaves in a framed
-     vestibule. Captions separate measured (floor extents, door lines, people) from
-     convention (every height).
-   * **BEV dwell reads correctly**: metro heat sits in the queue band 1-3 m before
-     the door line with per-door hotspots; the two cells past the line are people
-     seen OVER the half-height doors (in-train/far-platform), a mix-in source any
-     half-height-PSD deployment will need a door-line clip for.
+   **Two candidate imports were probed and measured** (`spatiallm_probe/`,
+   `cosmos_night_probe/`, each with its environment recipe, because both needed
+   several).
 
-   **Addendum 3, 2026-09-03 — stage-0 against the point-cloud->SpatialLM recipe, and
-   where Cosmos fits.** Researched on request; sources in the session log.
+   * **The point-cloud -> SpatialLM recipe is rejected for this input condition.**
+     MapAnything reproduces its own indictment — vfov 38.27° on cam01 (against the tile
+     grid's 70.4) and a 1.41 m store — and SpatialLM's residential prior then
+     **silently overrides that geometry**, answering 2.84 m walls, 7 invented doors and
+     Kujiale nouns (desk, sofa, carpet) for display tables. An instrument that corrects
+     its front-end invisibly is worse than one that fails. Glass fails again: the
+     platform screen-door line returns as a 6.48 m wall, the ad band as an 8.4 m
+     cupboard, no door or window on either. And the unmeasured metro `k1` becomes **78
+     micro-wall segments tracing the barrel curve** — undistortion is a prerequisite,
+     and undistortion is calibration. Its video front-end needs camera MOTION, which a
+     fixed CCTV does not have, so this is a verdict on single-fixed-frame input; a
+     walkthrough-scan variant is untested and plausible. What survives as an import is
+     the layout DSL as the fixture head's output format, not the weights.
+   * **Cosmos Transfer works as a licence-clean night engine.** The fleet already had
+     the ruler: the 23:58 archive is genuine IR (saturation 0.000, luma 129.6) and its
+     empty-store detector profile is the target — person ghosts 0.73/frame (one
+     verified firing on a paper bag at a shelf foot, the hanging-packets phenomenon on
+     our own retail fleet), `boxed_stock` 0.0, `device` 2.88. A prompt written from
+     what the real frame LOOKS like beat both movie-night-vision prompts; all five
+     swept configs hold luma 124-130 and keep every person at day confidence, and the
+     knob that moves is product wash-out (`boxed_stock` 1.72 -> 0.92 -> ~0 as edge
+     weight falls 1.0 -> 0.9 -> 0.8). **Winner: edge weight 0.9, guidance 7**
+     (`boxed_stock` 0.03 against the real 0.0, `device` 3.42 against 2.88), ~6 min per
+     clip. Before training on it: volume, an ablation showing a night-trained head
+     actually cuts the real ghosts, and the stated unknown that no
+     night-WITH-people footage exists on this fleet, so whether real IR degrades person
+     confidence cannot be checked from here.
 
-   * SpatialLM (NeurIPS 2025): point cloud -> walls(endpoints+height)/doors/windows/
-     oriented boxes, fine-tuned 0.5-1B LLMs on 12,328 SYNTHETIC Kujiale interiors. Its
-     video front-end (MASt3R-SLAM) needs camera MOTION -- on a fixed CCTV it degrades
-     to single-frame metric depth, this fleet's measured weak link (DA-V2 1.45-1.6x,
-     white-wall collapse), and glass (the metro's key structure) is a point-cloud
-     front-end's worst case while our floor-edge door line sidesteps it. So it is not
-     a stage-0 replacement; it IS a candidate offline commissioning teacher for the
-     fixture/door vocabulary gap (screen doors read `wall`, metro zones = 0), refereed
-     by the floor bench and person-flow contradiction, never by its own benchmark --
-     the `column` lesson pre-registered against the residential->venue domain gap.
-   * Worth stealing regardless of the model: the structured layout DSL (walls as
-     endpoints+height) as the fixture head's target format -- scene3d hand-builds
-     exactly this today, and the probe scenes' three stair mistakes are what manual
-     structure reading costs.
-   * NVIDIA Cosmos 2.5 (Predict/Transfer/Reason) outputs no vfov/pose/metric layout:
-     it cannot directly sharpen stage-0. Indirect fits: Transfer2.5 as a
-     LICENCE-CLEAN night/IR synthetic engine over our own scene3d layouts (the LLVIP
-     non-commercial dead end, open item 4) and as fixture-vocabulary training data;
-     Reason2 as a zone/FP confirmation teacher for the 15-camera backlog. Sim2real
-     measured before trusted ("STUDIO A reads as a bathroom" is the prior).
-   * Cheap probes proposed: (1) SpatialLM1.1-Qwen-0.5B on MapAnything single-frame
-     point clouds for cam01 (anchored) + one metro frame, walls/doors projected back
-     through the calibrated camera vs our masks (~1 day); (2) Cosmos Transfer night
-     variants of one scene3d layout re-scored by the night-ghost sweep (days, heavy).
+---
 
-   **Addendum 4, same day — the SpatialLM probe RAN, and the verdict is measured.**
-   Artifacts + environment record: `runs/domain_probe_20260903/spatiallm_probe/`.
-   Recipe as proposed: frame -> MapAnything (same pinned revision as
-   `map_anything_eval.py`) -> RANSAC z-up -> SpatialLM1.1-Qwen-0.5B.
+## 8. What the health audit changed, and what it taught
 
-   * **The front-end reproduced its own indictment**: MapAnything read cam01 at
-     vfov 38.27 deg (the recorded 38.26 vs the tile grid's 70.4 — reproducibility
-     holds), and its cloud gives the store a **1.41 m ceiling**. Metro read 52.72 deg.
-   * **SpatialLM's residential prior OVERRIDES geometry silently**: on that 1.41 m
-     cloud it output twelve walls at a uniform **2.84 m** — accidentally nearer the
-     truth than its input, which is worse, not better: an instrument that corrects
-     its front-end invisibly masks front-end failure from every consumer. It also
-     invented 7 doors and rooms beyond the observed cloud, and read display tables
-     as desk/sofa/carpet (the Kujiale vocabulary, as predicted).
-   * **Glass fails again**: the platform screen-door line came back as a 6.48 m WALL;
-     the ad band as an 8.4 m `cupboard`. No door/window on the PSD.
-   * **k1 is a circular dependency the recipe does not solve**: the unmeasured metro
-     lens turned the platform into **78 micro-wall segments tracing the barrel
-     curve** — undistortion is a prerequisite, and undistortion is calibration.
-   * Cost record: ~18 s/scene inference after a 2-venv setup with three environment
-     deviations (Blackwell torch, flash-attn off, a segment_csr shim), all in the
-     probe README.
+A best-practice audit ran on 2026-09-04 over the whole tree (8 sweeps: packaging,
+config, duplication, comment truth, tests, ML engineering, repo hygiene, privacy),
+raising 34 items. All 34 are closed. The working list they were tracked on is gone,
+as it said it would be: the fixes are in the code, the arguments are in the commits
+that made them, and what generalises is here.
 
-   Verdict: the recipe is NOT a stage-0 replacement and, as shipped, not even the
-   fixture/door teacher hoped for — the usable imports remain the layout DSL and
-   the synthetic-data recipe (venue-specific scenes with our vocabulary), not the
-   weights. The Cosmos night probe stays queued.
+**The structural finding, which is why the P0 list looked the way it did: this
+project's guards were trusted more widely than they reached.** `split_leaks` covered
+one dataset type of five; `deterministic` warned instead of enforcing; `check_parity`
+gated the ONNX and not the fp16 engine that ships; the face-blur tests could not see a
+blur -- their fixture was `np.zeros`, and a Gaussian blur of a uniform image is the
+identity, so all five passed against a no-op `blur_region`. A guard that half-covers is
+worse than an absent one, because its presence is read as coverage. Every fix in this
+pass was verified by reverting it and watching the test go red.
 
-   **Addendum 5, same day — the Cosmos Transfer night probe RAN; the dial exists and
-   is bracketed.** Artifacts: `runs/domain_probe_20260903/cosmos_night_probe/`.
-   Edge-controlled Cosmos-Transfer2.5-2B over 93 frames of a populated cam01 clip,
-   ~4-5 min diffusion per chunk on this card.
+**Four of the 34 findings were wrong, and the pattern in how is the useful part.** Each
+was wrong because it was read off a name or a grep rather than measured:
 
-   * **Geometry preservation at edge weight 1.0 is exact where it matters**: layout,
-     signage and all three people survive so faithfully that person01 reads the
-     variant identically to the day input (person 3.0/frame at 0.667 median vs
-     3.0 at 0.670). Two working conclusions: the mechanism can carry our scenes,
-     and this first variant is NOT yet night data — an appearance shift the
-     detector cannot feel is no domain shift at all.
-   * **The texture cost is real**: re-imagined shelves lose merchandise detail,
-     boxed_stock 12.9 -> 5.3/frame (-59%). Edge control keeps outlines, not
-     products — depth/seg/multicontrol are untested and are where that fix lives.
-   * **v2 (weight 0.5, guidance 7, aggressive IR prompt) overshoots to a black
-     frame with one green IR hotspot** — atmosphere right, scene gone, 0
-     detections of anything. So the two runs bracket the knob; the sweet spot
-     (IR look AND surviving structure) needs a small sweep (~5 generations, about
-     an hour) plus a check against real IR frames from the fleet's own night
-     clips before any training decision.
-   * Environment potholes recorded in the probe README (three HF license gates
-     accepted by the user, Blackwell needs the cu130 extra, CUDA_HOME to the
-     venv's cu13 libs, a PyAV shim replacing decord's system-ffmpeg linkage).
+* *"`place_boxes` and `track_ground_path` have drifted apart."* They had not.
+  `clip_tracks.tracks_for_clip` undistorts upstream and passes `k1` as a keyword-only
+  argument with no default, so the second call site cannot silently skip it.
+* *"`select_weights`'s 'every caller goes through this' is bypassed by three scripts."*
+  All three go through it. But it pointed at a real defect one level down: the
+  *fallback* was silent, and `cli/export_onnx.py` had already worked that out and
+  recovered the answer with an identity test on the returned dict.
+* *"Configs for the deleted quadruped line survive as fixtures."* The dangling dataset
+  path was inside a comment, and the config that looked orphaned was the only test of a
+  taxonomy `src/` still shipped. Retiring the taxonomy was the real question, and it was
+  taken deliberately rather than as cleanup.
+* *"The 26 absolute `ROOT` constants encode a real assumption -- leave them."* 26 of the
+  27 named the repo root itself, not `runs/` or `datasets/`, and each sat exactly two
+  levels below it, so `parents[2]` was the same directory computed. The failure they
+  caused was also worse than the one they were weighed against: with two checkouts on
+  one box, a tool run from the second reads the first's `runs/` and answers about the
+  wrong tree, with no error at all.
 
-   Verdict so far: the licence-clean night engine is PLAUSIBLE and now cheap to
-   iterate; nothing is proven about training value until a swept variant both
-   looks like the fleet's real IR nights and moves the detector the way real
-   night does.
+**Three decisions, so they are not rediscovered as findings:**
 
-   **Addendum 6, same day — the night sweep FOUND the sweet spot, against a real
-   IR reference.** `runs/domain_probe_20260903/cosmos_night_probe/` (sweep videos,
-   specs, sweep_results.json, comparison figures).
+* **No LFS.** The 113 MB was 88 MB of loose objects, not history; one `git gc` took
+  `.git` to 78 MB. LFS would have rewritten history on a repo three branches and several
+  sessions share, to reclaim space that was never in it. Re-run `git gc` if it grows.
+* **`dev` is meant to lag `main`.** `dev` sits at `0.1.0` with no CHANGELOG while `v0.4.0`
+  is released, because release-please writes to `main` and nothing flows back. That is the
+  design. A version bump is metadata *about a release* and putting it on the unreleased
+  branch would make `dev` claim something untrue. Do not back-merge to make them agree.
+* **Privacy is a publication-time control here, not a runtime one.** `face_blur` is used
+  by the figure tools and one CLI, and by nothing on the serving or analytics path;
+  retention is `scripts/retention_sweep.py` rather than policy in code. Coherent as
+  designed -- the analytics path keeps positions and dwell times, not faces, and the faces
+  that leave this repository leave through a figure. Do not read the blur as a runtime
+  guarantee it does not make.
 
-   * **The fleet already had the ruler**: archive_20260816-1558 (23:58 local) is
-     genuine IR night — saturation 0.000, luma 129.6 — and the detector's real
-     empty-store night profile is the behavioural target: person ghosts
-     0.73/frame (one verified firing on a paper bag at a shelf foot — the
-     hanging-packets phenomenon reproduced on our own retail fleet), boxed_stock
-     0.0 (IR washes products to nothing), device 2.88.
-   * **A prompt written from what the real frame LOOKS like beat both movie-night
-     prompts**: all five configs land luma 124-130 / sat ~0.03 with all three
-     people kept at day confidence; the knob that moves is product wash-out,
-     boxed_stock 1.72 -> 0.92 -> ~0 as edge weight falls 1.0 -> 0.9 -> 0.8.
-   * **Winner D (weight 0.9, guidance 7)**: boxed_stock 0.03 vs real 0.0, device
-     3.42 vs 2.88, and the IR character matches by eye (washed packaging, soft
-     bloom on signage). Runner-up B (0.9/5) with the closest device count.
-   * **Residual unknown, stated**: no real night-with-people footage exists, so
-     whether real IR degrades person confidence (synthetic holds it at day level)
-     is uncheckable from here — a staged night visit or the veto-era clips would
-     answer it before any training decision.
-
-   Night-engine status: mechanism proven, look matched, behavioural profile
-   matched on empty-store axes, per-clip cost ~6 min. What remains before
-   training on it is volume (all 8 commissioned cameras x day variety), the
-   person-degradation unknown above, and an ablation showing a night-trained
-   head actually cuts the real ghosts.
+**Two failures worth not repeating.** A shell glob expanded `[[...]]` while editing this
+document and replaced per character; the same class of accident had earlier eaten three
+backtick references out of a docstring in `tools/commissioning/service_zones.py`, where it
+sat unnoticed through two commits. Edit prose through a file-based script, not a shell
+one-liner. And a figure's audit must be re-cut *after* the code commit lands, not before,
+or it records a version the tree has already left -- which put a red `dev` on the board
+once in this pass.

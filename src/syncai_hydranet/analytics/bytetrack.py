@@ -18,9 +18,12 @@ rate, because MOT17 is 25-30 fps and these clips sample at 5. Borrowed-and-label
 different thing from guessed, but it is **not** the measured noise model `tracker.py` is
 holding out for, and nothing here supplies one.
 
-**So which tracker is right is an open question, and it is open in the honest direction:
-nobody has measured them against each other on this footage.** `reid_metrics.py` is where
-that comparison would live. Until it exists, pick by what the caller needs:
+**The comparison has been run, and it did not settle the question.** `scripts/track_idf1.py`
+scores both arms against a labelled clip; on `runs/gt_cam01` (900 frames, 5 identities)
+the shipped single-stage arm reads IDF1 0.7388 with 6 switches and the two-stage one
+0.7418 with 3 -- three tenths of a point of IDF1, which is inside what one hand-labelled
+clip can distinguish, against half the switches, which is not nothing. One clip is one
+clip. So the choice is still by what the caller needs:
 
     tracker.Tracker     greedy IoU, constant velocity, no Kalman. Dwell, ground paths,
                         footfall -- anything whose output is an integral over a clip.

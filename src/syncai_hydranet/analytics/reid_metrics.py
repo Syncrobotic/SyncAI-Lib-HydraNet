@@ -13,8 +13,13 @@ unfalsifiable without a metric. These are the two families that make it falsifia
 
 **Tracking identity** -- `idf1`, `id_switches`, `fragmentation`. They compare predicted
 tracks against ground-truth tracks on a video and answer "does one track follow one
-person". A labelled site clip does not exist yet; these work the moment one does, and
-they are tested here against hand-built sequences whose right answer is countable by eye.
+person". **Seven labelled site clips exist now** (`runs/gt_*`, built by
+`scripts/track_review.py`) and `idf1` has run on them: `runs/gt_cam01/idf1.json` reads
+0.7388 with 6 switches for the shipped single-stage arm against 0.7418 with 3 for the
+two-stage one, over 900 frames and 5 ground-truth identities. Read
+`runs/gt_cam01/provenance.json` before quoting either: a model labelled those
+identities by eye. Still tested here against hand-built sequences whose right answer
+is countable by eye, which is what holds the arithmetic itself.
 
 **Retrieval** -- `cmc_map`. Given an embedding per crop, does the same person rank first
 across cameras. This one runs today against `datasets/Market-1501`, which is why the

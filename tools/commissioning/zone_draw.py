@@ -56,9 +56,12 @@ from pathlib import Path
 import numpy as np
 
 from syncai_hydranet.geometry.camera_json import ZONE_KINDS, CameraFile, Zone
-from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 
-ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
+# The repo root, derived rather than written out: every one of these 26 tools had it
+# as an absolute path, so a second checkout ran against the first one's `runs/` and
+# any machine but this one failed at import with a path and no reason. Two levels up
+# from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
+ROOT = Path(__file__).resolve().parents[2]
 COMMISSIONED = ROOT / "runs/commission01"
 OUT = ROOT / "runs/zone_draw01"
 DRAWABLE_KINDS = sorted(ZONE_KINDS - {"walkable"})
@@ -220,24 +223,6 @@ def _to_px(points_m: np.ndarray, cam_file: CameraFile) -> np.ndarray:
     return px
 
 
-def to_metres(points_px: np.ndarray, cam_file: CameraFile, what: str) -> np.ndarray:
-    pts = points_px
-    lens = cam_file.lens
-    if lens is not None:
-        pts = undistort_points(pts, lens.k1, lens.centre_px, lens.radius_px)
-    x, z = pixel_to_ground(pts[:, 0], pts[:, 1], cam_file.camera, cam_file.plane)
-    out = np.stack([x, z], axis=1)
-    bad = ~np.isfinite(out).all(axis=1)
-    if bad.any():
-        raise SystemExit(
-            f"{what}: {int(bad.sum())} of {len(out)} points are at or above the horizon, "
-            "where `pixel_to_ground` declines to invent a distance. A zone with a NaN "
-            "corner tests False for every point inside it, forever and silently. Redraw "
-            "those vertices on visible floor."
-        )
-    return out
-
-
 def extrude(base_m: np.ndarray, depth: float) -> np.ndarray:
     """A base line offset `depth` metres to the side away from the camera, closed.
 
@@ -269,7 +254,9 @@ def apply(camera: str, drawn: Path) -> None:
     for s in payload["shapes"]:
         if s["kind"] not in ZONE_KINDS:
             raise SystemExit(f"{s['name']}: kind {s['kind']!r} not in {sorted(ZONE_KINDS)}")
-        pts = to_metres(np.asarray(s["points"], dtype=float), cam_file, s["name"])
+        pts = cam_file.ground_points(
+            np.asarray(s["points"], dtype=float), above_horizon="raise", what=s["name"]
+        )
         if s["mode"] == "base":
             pts = extrude(pts, float(s["depth_m"]))
         elif len(pts) < 3:

@@ -55,20 +55,23 @@ import torch
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src"))
 
 
-from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
-from syncai_hydranet.models.hydranet import build_model
-from syncai_hydranet.shipped import SHIPPED_RUN
-from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
+from syncai_hydranet.shipped import (
+    SHIPPED_RUN,
+    load_model,
+)
 from syncai_hydranet.utils.face_blur import blur_rect, plate_person_boxes
 from syncai_hydranet.utils.visualize import preprocess
 
-ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
+# The repo root, derived rather than written out: every one of these 26 tools had it
+# as an absolute path, so a second checkout ran against the first one's `runs/` and
+# any machine but this one failed at import with a path and no reason. Two levels up
+# from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
+ROOT = Path(__file__).resolve().parents[2]
 
 # The run the tools ship from, named once in `syncai_hydranet.shipped`. Six files
 # used to carry their own copy of this string and the best run was in none of them.
@@ -295,10 +298,9 @@ def main() -> int:
             )
             return 1
         render_blur_thr = float(meta["blur_score_thr"])
-        cfg = load_config(str(RUN / "config.yaml"), validate=False)
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        model = build_model(cfg).to(device).eval()
-        model.load_state_dict(select_weights(load_checkpoint(RUN / "last.pt"), "ema"))
+        model, cfg, device = load_model(
+            str(RUN / "config.yaml"), RUN / "last.pt", validate=False
+        )
         size = cfg["data"]["input_size"]
         person_label = list(cfg["model"]["heads"]["detection"]["classes"]).index("person")
         src_w, src_h, _ = probe_video(str(clip))

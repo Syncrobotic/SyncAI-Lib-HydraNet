@@ -42,7 +42,7 @@ from ..data.coco_subsets import (
 from ..models.heads.segmentation import SemanticFPNHead
 from ..models.hydranet import build_model
 from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD
-from ..utils.checkpoint import load_checkpoint, select_weights
+from ..utils.checkpoint import chosen_weights, load_checkpoint
 
 # The input name *is* the contract. A graph that normalises internally takes raw RGB in
 # 0-255; one that does not takes an already-normalised tensor. Naming them differently
@@ -538,11 +538,11 @@ def main(argv: list[str] | None = None) -> None:
     provenance = weights_provenance(args.checkpoint, args.weights)
     if args.checkpoint:
         ckpt = load_checkpoint(args.checkpoint)
-        chosen = select_weights(ckpt, args.weights)
         # `select_weights` silently falls back to the raw tensors when a checkpoint has
         # no EMA, and on a short run those are a different model -- so record what was
         # taken rather than what was asked for.
-        provenance["weights"] = "ema" if chosen is ckpt.get("ema") else "model"
+        chosen, taken = chosen_weights(ckpt, args.weights)
+        provenance["weights"] = taken
         model.load_state_dict(chosen)
     elif not args.allow_random_weights:
         raise SystemExit(

@@ -35,17 +35,19 @@ import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+import numpy as np
+
 from ..labels import IGNORE
-from .ground import Camera, GroundPlane
+from .ground import Camera, GroundPlane, pixel_to_ground, undistort_points
 
 SCHEMA_VERSION = 3
 
 # Versions this reader accepts, and why each older one is safe to read rather than
-# re-commission. A refusal is the default -- a "schema_version 4" from a newer writer
-# would mean fields whose meaning this code does not know (the example tracks
-# SCHEMA_VERSION + 1; it read "3" when the current version was 2 and a v3 file was
-# briefly, wrongly, described as refusable) -- so an entry here is a claim that nothing
-# a file of that version can contain has changed meaning.
+# re-commission. A refusal is the default -- a file from a *newer* writer carries fields
+# whose meaning this code does not know -- so an entry here is a claim that nothing a file
+# of that version can contain has changed meaning. Deliberately no literal version number
+# in this sentence: one written here goes stale the next time the schema moves, and then
+# names a perfectly readable file as refusable.
 READABLE_VERSIONS = {
     # v1 -> v2 added the `display` zone kind and changed nothing else. Every v1 file is a
     # valid v2 file: no field moved, no unit changed, and the widened set can only make a
@@ -170,6 +172,52 @@ class CameraFile:
             teachers=raw.get("teachers"),
         )
         out.validate()
+        return out
+
+    def ground_points(
+        self,
+        points_px: np.ndarray,
+        *,
+        above_horizon: str = "drop",
+        what: str = "points",
+    ) -> np.ndarray:
+        """Pixels on this camera's frame -> `(N, 2)` floor metres, lens included.
+
+        Three tools under `tools/commissioning/` each wrote this same undistort-then-
+        project pair, and the copies disagreed about the one thing that matters: what a
+        point at or above the horizon means. `pixel_to_ground` returns NaN there rather
+        than inventing a distance, and two of the three silently dropped those rows while
+        the third refused -- and the third's argument was the correct one *for its own
+        input*. So the disagreement is not resolved by picking a winner; it is made an
+        argument, because the two inputs are genuinely different:
+
+        `above_horizon="drop"` is for projected **masks**, thousands of pixels of which
+        some legitimately reach past the horizon; the floor is what is below it and the
+        rest is not a failure. `above_horizon="raise"` is for hand-drawn **vertices**,
+        where a single NaN is an operator who clicked above the floor line: a zone with a
+        NaN corner tests False for every point inside it, forever and silently, and the
+        commissioning session that would notice has already ended.
+
+        There is no third policy and no default of `None`: a caller that has not decided
+        which of these its input is has not understood its input.
+        """
+        pts = np.asarray(points_px, dtype=float)
+        if self.lens is not None:
+            pts = undistort_points(pts, self.lens.k1, self.lens.centre_px, self.lens.radius_px)
+        x, z = pixel_to_ground(pts[:, 0], pts[:, 1], self.camera, self.plane)
+        out = np.stack([x, z], axis=1)
+        finite = np.isfinite(out).all(axis=1)
+        if above_horizon == "drop":
+            return out[finite]
+        if above_horizon != "raise":
+            raise ValueError(f"above_horizon must be 'drop' or 'raise', not {above_horizon!r}")
+        if not finite.all():
+            raise ValueError(
+                f"{what}: {int((~finite).sum())} of {len(out)} points are at or above the "
+                "horizon, where `pixel_to_ground` declines to invent a distance. A zone "
+                "with a NaN corner tests False for every point inside it, forever and "
+                "silently. Redraw those vertices on visible floor."
+            )
         return out
 
     def validate(self) -> None:

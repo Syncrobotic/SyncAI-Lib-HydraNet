@@ -43,6 +43,37 @@ def _check(err: Any) -> Any:
     return err[1:] if isinstance(err, tuple) and len(err) > 1 else None
 
 
+def io_specs(
+    bindings: list[tuple[str, tuple[int, ...], np.dtype, bool]],
+    source: str = "engine",
+) -> tuple[tuple[str, tuple[int, ...], np.dtype], dict[str, tuple[tuple[int, ...], np.dtype]]]:
+    """Split an engine's bindings into its one input and its outputs.
+
+    Separated from :class:`TrtExecutor` because it is the only part of that class
+    that needs no GPU, and because both of its refusals are the ones worth having:
+    a two-input engine would otherwise have its second input silently classified as
+    an output and read back as garbage, and an engine with no input at all would
+    fail much later, at a `cudaMalloc` of zero bytes.
+
+    `bindings` is `(name, shape, dtype, is_input)` per binding, in engine order.
+    """
+    input_spec = None
+    outputs: dict[str, tuple[tuple[int, ...], np.dtype]] = {}
+    for name, shape, dtype, is_input in bindings:
+        if is_input:
+            if input_spec is not None:
+                raise ValueError(
+                    f"{source}: executor expects a single-input engine, and this one "
+                    f"binds both {input_spec[0]!r} and {name!r} as inputs"
+                )
+            input_spec = (name, shape, dtype)
+        else:
+            outputs[name] = (shape, dtype)
+    if input_spec is None:
+        raise ValueError(f"{source}: no input binding found")
+    return input_spec, outputs
+
+
 def build_plan(onnx_path: str | Path, plan_path: str | Path | None = None) -> Path:
     """Serialize a TensorRT engine for ``onnx_path``; cached next to the ONNX.
 
@@ -165,20 +196,20 @@ class TrtExecutor:
         self.engine = self._runtime.deserialize_cuda_engine(Path(plan).read_bytes())
         self.ctx = self.engine.create_execution_context()
 
-        self.input_name = ""
-        self.output_specs: dict[str, tuple[tuple[int, ...], np.dtype]] = {}
+        bindings = []
         for i in range(self.engine.num_io_tensors):
             name = self.engine.get_tensor_name(i)
-            shape = tuple(self.engine.get_tensor_shape(name))
-            dtype = np.dtype(trt.nptype(self.engine.get_tensor_dtype(name)))
-            if self.engine.get_tensor_mode(name) == trt.TensorIOMode.INPUT:
-                if self.input_name:
-                    raise ValueError("executor expects a single-input engine")
-                self.input_name, self.input_shape, self.input_dtype = name, shape, dtype
-            else:
-                self.output_specs[name] = (shape, dtype)
-        if not self.input_name:
-            raise ValueError(f"{plan}: no input binding found")
+            bindings.append(
+                (
+                    name,
+                    tuple(self.engine.get_tensor_shape(name)),
+                    np.dtype(trt.nptype(self.engine.get_tensor_dtype(name))),
+                    self.engine.get_tensor_mode(name) == trt.TensorIOMode.INPUT,
+                )
+            )
+        (self.input_name, self.input_shape, self.input_dtype), self.output_specs = io_specs(
+            bindings, str(plan)
+        )
         self.batch = int(self.input_shape[0])
 
         (self.copy_stream,) = _check(cudart.cudaStreamCreate())

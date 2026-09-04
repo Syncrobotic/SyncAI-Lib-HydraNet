@@ -87,11 +87,11 @@ class FixedCameraStabiliser:
             at exactly 0.0%, and a legitimately busy shop floor still leaves most of the
             frame unchanged, so this separates "sealed" from "crowded" with room to spare.
         seal_patience: consecutive frames a PIXEL's gate stays shut before that pixel
-            counts as sealed -- the per-pixel `_shut_for` threshold below, not a global
-            counter over `min_static_share` (an earlier version of this line described
-            one; nothing counts that). 60 is 10 s at 6 fps: long enough to ride out a
-            delivery trolley crossing the whole view, short enough to catch a seal
-            before a five-minute clip has been rendered.
+            counts as sealed -- the per-pixel `_shut_for` threshold below. Nothing here
+            keeps a global counter over `min_static_share`, which is the natural misread
+            and would seal the whole frame at once. 60 is 10 s at 6 fps: long enough to
+            ride out a delivery trolley crossing the whole view, short enough to catch a
+            seal before a five-minute clip has been rendered.
 
     `diff_thr` and `plate_alpha` had no provenance when this was written -- never
     committed, named in no config, and unreachable from `--stabilise`, which passes only

@@ -9,8 +9,7 @@ and `retail_objects_batch03/split.json` inherits batch02's assignment to keep it
 So moving one in a single batch is the one edit that silently breaks the invariant the
 files were arranged to hold: batch02 would still train on a camera batch03 scores. Every
 batch moves together here, and the check is unconditional: the whole operation is refused
-if any batch would end up disagreeing. (There is no `--check` flag and never was; an
-earlier version of this sentence named one.)
+if any batch would end up disagreeing. There is no flag to skip it.
 
 **Train-only supplements are checked too, and this is the failure that put it here.**
 `datasets/retail_objects_columns_clean` is a `column` supplement with no val and no test,

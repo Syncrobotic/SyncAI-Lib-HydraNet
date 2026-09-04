@@ -1,6 +1,6 @@
 """Training entry point.
 
-    hydranet-train --config configs/hydranet_regnet800mf.yaml
+    hydranet-train --config configs/hydranet_retail.yaml
 
     # override any config key with a dot path
     hydranet-train --config configs/hydranet_indoor.yaml \

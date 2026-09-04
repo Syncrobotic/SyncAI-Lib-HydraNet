@@ -45,24 +45,20 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
-import sys
 import traceback
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "src"))
-
 # The geometry and its checks, all reused from the package -- not from
 # `calibrate_from_plate.py`, which was the same code's CLI: the pipeline moved into the
 # package on 2026-08-19 so a script would stop being another script's library, and
 # `500cdd2` deleted the emptied CLI on 2026-08-25.
-from syncai_bev3d import plate_calibration as pc  # noqa: E402
-from syncai_bev3d.calibrate import horizon_row  # noqa: E402
-from syncai_hydranet.geometry.ground import Camera  # noqa: E402
-from syncai_hydranet.shipped import SHIPPED_CONFIG, for_terrain  # noqa: E402
+from syncai_bev3d import plate_calibration as pc
+from syncai_bev3d.calibrate import horizon_row
+from syncai_hydranet.geometry.ground import Camera
+from syncai_hydranet.shipped import SHIPPED_CONFIG, for_terrain
 
 SCHEMA = "hydranet-onboard-calib/v1"
 # Defaults, not constants. A second fleet arrived 2026-08-27 -- ten RTSP channels with
@@ -77,7 +73,7 @@ PERSON_ANNS = Path("datasets/retail_person_gdino01/annotations/instances_all.jso
 # with two answers and why a caller has to name which one it is asking.
 PLATE_MODEL_CONFIG = SHIPPED_CONFIG
 PLATE_MODEL_CKPT = for_terrain()
-K1_FLEET = -0.225  # tile-grid measured on Taichung-cam01; fleet-hardware assumption elsewhere
+K1_FLEET = pc.K1_FLEET  # the fleet lens; defined once in syncai_bev3d.plate_calibration
 VFOV_PRIMARY = 70.4  # likewise: pinned on cam01, a fleet assumption for the rest
 MIN_HEIGHTS = 10  # min samples for the person-height statistic to emit a number (task spec)
 DIRTY_PLATE_FRAC = 0.05  # person share above this marks a dirty plate (cam04's 8.6% is above)

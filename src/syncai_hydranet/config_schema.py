@@ -226,7 +226,7 @@ DATASET = {
     "split_test": Spec((str,)),
     "supervises": Spec((list,), required=True),
     "label_map": Spec((str,)),
-    "label_format": Spec((str,), choices=("auto", "color", "id", "rugd_color")),
+    "label_format": Spec((str,), choices=("auto", "color", "id")),
     "sample_ratio": Spec(NUMBER),
     # COCO only: train the head on this subset of category names instead of all 80.
     # The head's num_classes must match the length, and the check below enforces it --

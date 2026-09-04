@@ -16,8 +16,6 @@ Six panels, in a 2x3 grid:
 
 The metres panel is the only one that needs commissioning, and it is the one that shows
 what the network panels are *for*: pixels become a person standing at a measured place.
-(This docstring said "four panels" until 2026-09-02; the masks and legend panels
-arrived later and it was never updated.)
 
 Usage:
   uv run python tools/commissioning/heads_video.py <camera> --checkpoint PATH
@@ -66,16 +64,19 @@ from syncai_bev3d.meshes import (
 from syncai_bev3d.shading import draw_scene
 from syncai_hydranet.analytics import Tracker
 from syncai_hydranet.analytics.staff import StaffModel, require_camera, track_staff
-from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
-from syncai_hydranet.models.hydranet import build_model
-from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
+from syncai_hydranet.serving.camera import BIRTH_REF
+from syncai_hydranet.shipped import load_model
 from syncai_hydranet.utils.face_blur import BLUR_THR, blur_region, plate_person_boxes
 from syncai_hydranet.utils.visualize import preprocess, terrain_palette
 
-ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
+# The repo root, derived rather than written out: every one of these 26 tools had it
+# as an absolute path, so a second checkout ran against the first one's `runs/` and
+# any machine but this one failed at import with a path and no reason. Two levels up
+# from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _display_verdict(track):
@@ -205,7 +206,7 @@ def label(img: Image.Image, text: str, sub: str = "") -> None:
         d.text((10, 24), sub, fill=(185, 195, 210), font=FONT_SMALL)
 
 
-def _positions_from_boxes(boxes_all, cf, args, bounds):
+def _positions_from_boxes(boxes_all, cf, args, bounds, source_size_px):
     """Replay the track state over recorded boxes to get every figure's floor position.
 
     The sidecar has to describe the render that wrote it, and the cheapest way to be sure
@@ -226,7 +227,15 @@ def _positions_from_boxes(boxes_all, cf, args, bounds):
         sp = None if rec.get("staff") is None else np.asarray(rec["staff"], float)
         tracks = [t for t in tracker.update(b, n, staff_scores=sp) if t.hits >= 3]
         for st in track_states(
-            tracks, n, cf, state, vel_window, args.metre_scale, args.fps, bounds
+            tracks,
+            n,
+            cf,
+            state,
+            vel_window,
+            args.metre_scale,
+            args.fps,
+            bounds,
+            source_size_px=source_size_px,
         ):
             out.append(
                 {
@@ -366,6 +375,9 @@ def _person_boxes_per_frame(
 
 def _render_in_chunks(args, model, cf, bounds, clip):
     """Fan the frames out over processes, then join the segments back into one file."""
+    # The decoded size the recorded boxes are in, so the replay converts to calibrated
+    # pixels the same way the recording pass did.
+    src_w, src_h, _ = probe_video(str(clip))
     camera = args.camera
     t0 = time.time()
     # The box pass runs the model and never touches the tracker, so it fans out the same
@@ -444,7 +456,7 @@ def _render_in_chunks(args, model, cf, bounds, clip):
         camera,
         clip,
         n_frames,
-        _positions_from_boxes(boxes, cf, args, bounds),
+        _positions_from_boxes(boxes, cf, args, bounds, (src_w, src_h)),
     )
     latest = ROOT / f"assets/dev/heads_{camera}.mp4"
     latest.write_bytes(final.read_bytes())
@@ -467,7 +479,7 @@ def main() -> int:
     ap.add_argument("--clip", default=None)
     ap.add_argument("--frames", type=int, default=900)
     ap.add_argument("--fps", type=float, default=5.0)
-    ap.add_argument("--score-thr", type=float, default=0.35)
+    ap.add_argument("--score-thr", type=float, default=BIRTH_REF)
     ap.add_argument("--metre-scale", type=float, default=1.0)
     ap.add_argument(
         "--workers",
@@ -519,10 +531,7 @@ def main() -> int:
         else sorted((ROOT / "datasets/studioa_clips" / camera).glob("archive_*11*.mp4"))[0]
     )
     cf = CameraFile.load(ROOT / f"runs/commission01/{camera}.camera.json")
-    cfg = load_config(args.config, validate=False)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = build_model(cfg).to(device).eval()
-    model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), "ema"))
+    model, cfg, device = load_model(args.config, args.checkpoint, validate=False)
     size = cfg["data"]["input_size"]
     det_names = list(cfg["model"]["heads"]["detection"]["classes"])
     person = det_names.index("person")
@@ -667,6 +676,7 @@ def main() -> int:
                 args.fps,
                 bounds,
                 verdict_of=None if staff_model is None else _display_verdict,
+                source_size_px=(src_w, src_h),
             )
             n += 1
             continue
@@ -679,7 +689,7 @@ def main() -> int:
         x0, y0, cw, _ch = region
         to_panel = PANEL[0] / cw
 
-        # **Before any panel is drawn from `img`.** Three of the four panels are the
+        # **Before any panel is drawn from `img`.** Three of the six panels are the
         # source frame with something painted on it, so blurring after would leave two of
         # them showing the faces the third had covered. A second forward pass rather than
         # one at the lower threshold: the pose rows are index-aligned with the detections,
@@ -805,6 +815,7 @@ def main() -> int:
             args.fps,
             bounds,
             verdict_of=None if staff_model is None else _display_verdict,
+            source_size_px=(src_w, src_h),
         )
         figures, ghosts = [], []
         n_posed = 0
@@ -906,7 +917,7 @@ def main() -> int:
             camera,
             clip,
             n,
-            _positions_from_boxes(boxes_log, cf, args, bounds),
+            _positions_from_boxes(boxes_log, cf, args, bounds, (src_w, src_h)),
         )
     # Not under `--no-blur`: that flag says "never for anything shared" and this is the
     # filename everything else reads as this camera's render. Same fix as `demo_video`.

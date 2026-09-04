@@ -48,16 +48,19 @@ import time
 from pathlib import Path
 
 import numpy as np
-import torch
 from PIL import Image, ImageDraw
 from scipy import ndimage
 
-sys.path.insert(0, "/home/paul/SyncAI-Lib-HydraNet/src")
-sys.path.insert(0, "/home/paul/SyncAI-Lib-HydraNet/scripts")
-import importlib.util
+# Derived from this file rather than written out: an absolute path here breaks on any
+# machine but the one it was typed on, and `sys.path` is the one place where that
+# fails before anything else can report it. `parents[2]` is the repo root --
+# tools/site30k/<file>.py.
+_REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO / "scripts"))
+import importlib.util  # noqa: E402
 
 spec = importlib.util.spec_from_file_location(
-    "campaign", "/home/paul/SyncAI-Lib-HydraNet/scripts/campaign_site30k.py"
+    "campaign", str(_REPO / "scripts/campaign_site30k.py")
 )
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
@@ -71,8 +74,13 @@ from syncai_hydranet.geometry.ground import (  # noqa: E402
     pixel_to_ground,
     undistort_points,
 )
+from syncai_hydranet.utils.device import pick_device  # noqa: E402
 
-ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
+# The repo root, derived rather than written out: every one of these 26 tools had it
+# as an absolute path, so a second checkout ran against the first one's `runs/` and
+# any machine but this one failed at import with a path and no reason. Two levels up
+# from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
+ROOT = Path(__file__).resolve().parents[2]
 # The pilot ran off datasets/studioa_clips; the campaign runs off the phase-2 pull. Both
 # are the same layout (<root>/<camera>/<stem>.mp4), so the root is a setting rather than
 # a fork in the code, and the plates follow it so a campaign plate never lands in the
@@ -207,7 +215,7 @@ CHROMA_CHANGE = 4  # YCbCr levels; measured knee, see the withdrawal comment
 ISLAND_PX = 800
 PRODUCT_IOU, NEG_TIE, NEG_COVER, FLOOR_SUPPORT_MAX = 0.55, 0.15, 0.60, 0.30
 GUIDE_RADIUS, GUIDE_EPS = 8, 1e-4
-device = "cuda" if torch.cuda.is_available() else "cpu"
+device = str(pick_device())
 
 
 def box_sum(a, r):

@@ -24,8 +24,10 @@ import that only resolves because Python puts the entry script's own directory o
 
 Grouped **per directory**, because `tools/` has subdirectories and a bare `import boxes`
 in `tools/site30k/` can only ever find its own neighbour. `tools/site30k/recipe.py`
-reaching `scripts/` is a different (and worse) thing that this test does not measure; it
-does it with an absolute `/home/paul/...` path insert, which is its own problem.
+reaching `scripts/` is a different (and worse) thing that this test does not measure: it
+loads a script by file path through `importlib`, which is how a tool imports something the
+package layout says is not importable. It derives that path from `__file__` now rather
+than writing one machine's home directory into it, which was a second problem on top.
 
 **Tracked files only.** This measures what the gate that blocks a merge measures; an
 untracked script is not in the repository yet and its author is still writing it.

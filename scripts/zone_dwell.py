@@ -39,20 +39,19 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
+from syncai_hydranet.analytics import events as ev
+from syncai_hydranet.analytics.journey import journeys
+from syncai_hydranet.analytics.tracker import Track, iou_pair
+from syncai_hydranet.analytics.world import world_frames
+from syncai_hydranet.data.video import probe
+from syncai_hydranet.geometry.camera_json import CameraFile
 
-from syncai_hydranet.analytics import events as ev  # noqa: E402
-from syncai_hydranet.analytics.journey import journeys  # noqa: E402
-from syncai_hydranet.analytics.tracker import Track, iou_pair  # noqa: E402
-from syncai_hydranet.analytics.world import world_frames  # noqa: E402
-from syncai_hydranet.data.video import probe  # noqa: E402
-from syncai_hydranet.geometry.camera_json import CameraFile  # noqa: E402
+ROOT = Path(__file__).resolve().parent.parent
+
 
 COMMISSIONED = ROOT / "runs/commission01"
 

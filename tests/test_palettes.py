@@ -23,7 +23,6 @@ from PIL import Image
 
 from syncai_hydranet.utils.visualize import (
     TERRAIN_COLORS_INDOOR,
-    TERRAIN_COLORS_OFFROAD,
     TERRAIN_COLORS_RETAIL,
     TERRAIN_COLORS_RETAIL_OBJECTS,
     TERRAIN_COLORS_RETAIL_SURFACES,
@@ -45,7 +44,6 @@ def classes_of(name):
 @pytest.mark.parametrize(
     ("config", "expected"),
     [
-        ("hydranet_regnet800mf.yaml", TERRAIN_COLORS_OFFROAD),
         ("hydranet_indoor.yaml", TERRAIN_COLORS_INDOOR),
         ("hydranet_retail.yaml", TERRAIN_COLORS_RETAIL),
         ("hydranet_retail_objects.yaml", TERRAIN_COLORS_RETAIL_OBJECTS),
@@ -66,14 +64,26 @@ def test_retail_is_not_mistaken_for_indoor():
     assert not np.array_equal(retail, TERRAIN_COLORS_INDOOR)
 
 
-def test_indoor_and_offroad_are_the_same_length_and_different_colours():
-    """Why selection cannot be by class count."""
-    assert len(TERRAIN_COLORS_INDOOR) == len(TERRAIN_COLORS_OFFROAD) == 12
-    assert not np.array_equal(TERRAIN_COLORS_INDOOR, TERRAIN_COLORS_OFFROAD)
+def test_selection_is_by_class_name_and_not_by_class_count():
+    """Why the palette is chosen from a marker class rather than from `len(classes)`.
+
+    The counter-example used to be `TERRAIN_COLORS_OFFROAD`, which was 12 long like
+    `TERRAIN_COLORS_INDOOR` and entirely different; it went with the off-road taxonomy
+    on 2026-09-04, and no two palettes share a length today. That does not make count
+    selection safe -- it makes the collision one taxonomy away -- so the property is
+    asserted directly instead of through a pair that happened to demonstrate it.
+    """
+    indoor = classes_of("hydranet_indoor.yaml")
+    # A taxonomy of exactly indoor's size, named differently: a count-based selector would
+    # hand it indoor's colours. This refuses instead, which is the property.
+    disguised = tuple(f"class_{i}" for i in range(len(indoor)))
+    assert len(disguised) == len(indoor)
+    with pytest.raises(ValueError, match="no terrain palette"):
+        terrain_palette(disguised)
 
 
 def test_every_palette_covers_its_config():
-    for name in ("hydranet_regnet800mf.yaml", "hydranet_indoor.yaml", "hydranet_retail.yaml"):
+    for name in ("hydranet_indoor.yaml", "hydranet_retail.yaml"):
         classes = classes_of(name)
         assert len(terrain_palette(classes)) >= len(classes), name
 
@@ -81,7 +91,7 @@ def test_every_palette_covers_its_config():
 def test_colours_within_a_palette_are_distinct():
     """Two classes sharing a colour is the same failure as clamping, arrived at by
     typing rather than by indexing."""
-    for palette in (TERRAIN_COLORS_OFFROAD, TERRAIN_COLORS_INDOOR, TERRAIN_COLORS_RETAIL):
+    for palette in (TERRAIN_COLORS_INDOOR, TERRAIN_COLORS_RETAIL):
         assert len({tuple(c) for c in palette}) == len(palette)
 
 

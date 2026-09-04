@@ -28,29 +28,22 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
-HERE = Path(__file__).resolve().parent
-for candidate in (HERE.parent / "src", HERE / "src"):
-    if candidate.is_dir():
-        sys.path.insert(0, str(candidate))
-
 # The clip loop is in the package, not in a sibling script: a script other scripts import
 # is a module in the wrong place, and the copies here and in `site_events.py` had drifted.
-from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
-from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
-from syncai_hydranet.analytics.events import fall_candidates  # noqa: E402
-from syncai_hydranet.analytics.tracker import Tracker  # noqa: E402
-from syncai_hydranet.config import load_config  # noqa: E402
-from syncai_hydranet.data.video import frames, probe  # noqa: E402
-from syncai_hydranet.models.hydranet import build_model  # noqa: E402
-from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
-from syncai_hydranet.utils.device import pick_device  # noqa: E402
-from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
+from syncai_bev3d.plate_calibration import K1_FLEET
+from syncai_hydranet.analytics.clip_tracks import track_clip
+from syncai_hydranet.analytics.delivery import report_settings
+from syncai_hydranet.analytics.events import fall_candidates
+from syncai_hydranet.analytics.tracker import Tracker
+from syncai_hydranet.data.video import frames, probe
+from syncai_hydranet.models.heads.detection import SCORE_THR_RETAIL
+from syncai_hydranet.shipped import load_model
+from syncai_hydranet.utils.visualize import preprocess
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -65,7 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--max-frames", type=int, default=0, help="0 means the whole clip")
     # 0.20 rather than the 0.30 viewing default, for retail_flow's measured reason: a
     # tracker cannot associate what was never detected.
-    ap.add_argument("--score-thr", type=float, default=0.20)
+    ap.add_argument("--score-thr", type=float, default=SCORE_THR_RETAIL)
     ap.add_argument("--min-hits", type=int, default=3)
     ap.add_argument("--max-age", type=int, default=5)
     ap.add_argument("--iou", type=float, default=0.3)
@@ -73,7 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
     # differently from tracking undistorted ones. The default is Taichung-cam01's
     # tile-grid fit and is an assumption on the other 47 cameras; `0.0` is the
     # no-correction arm, for comparing candidate sets across the change.
-    ap.add_argument("--k1", type=float, default=-0.225)
+    ap.add_argument("--k1", type=float, default=K1_FLEET)
     # Deliberately more permissive than the library default of 1.5 s. This is a mining
     # pass: a candidate costs a human ten seconds to dismiss and a missed one costs the
     # whole question. Precision is not the objective here and should not be tuned for.
@@ -162,10 +155,7 @@ def dump(clip: str, spans: list[tuple[int, int]], out_dir: Path, args) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    cfg = load_config(args.config)
-    device = pick_device(cfg.get("device"))
-    model = build_model(cfg).to(device).eval()
-    model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), "ema"))
+    model, cfg, device = load_model(args.config, args.checkpoint)
     size = cfg["data"]["input_size"]
     out_root = Path(args.out)
     out_root.mkdir(parents=True, exist_ok=True)

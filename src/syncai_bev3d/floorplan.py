@@ -1,7 +1,7 @@
 """Floor geometry in metres: the BEV raster, and the two shape helpers that go with it.
 
 Three tools grew their own copy of this and the copies had begun to disagree.
-`scripts/propose_zones.py` has `BevGrid` and a Douglas-Peucker over a closed ring;
+`scripts/propose_zones.py` has `FloorRaster` and a Douglas-Peucker over a closed ring;
 `tools/commissioning/footprints_from_masks.py` has `_simplify` and `_area`;
 `tools/commissioning/service_zones.py` has `FloorGrid`, and a `_simplify` and an `_area`
 byte-identical to the other tool's except for one guard (`len < 4` against `len < 3`).
@@ -32,11 +32,20 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["BevGrid", "polygon_area", "shoelace", "simplify_chain", "simplify_ring"]
+__all__ = ["FloorRaster", "polygon_area", "shoelace", "simplify_chain", "simplify_ring"]
 
 
-class BevGrid:
+class FloorRaster:
     """A binary occupancy raster over ground coordinates (x lateral, z forward).
+
+    **Named `BevGrid` until 2026-09-04, which is what `bev.BevGrid` is also called, in
+    the same package, with the OPPOSITE row convention.** This one puts row 0 at the
+    NEAR edge -- `raster` computes `rows = (z - z0) / cell`, so z ascends with the row
+    index, which is what a contour tracer and `simplify_chain` expect. `bev.BevGrid`
+    puts row 0 at the FAR edge, `rows - 1 - ...`, because it is drawn as a map is read.
+    Both are right for their consumer and neither is wrong; reading one's raster with
+    the other's convention is a silent vertical mirror, and two identically-named
+    classes one import apart is how that happens. The names now differ so it cannot.
 
     One grid per camera rather than one per fixture, because zones on a floor have to
     **partition** it: a shopper standing between two display tables is at one of them, and
@@ -56,7 +65,7 @@ class BevGrid:
         self.nz = int(np.ceil((z.max() + pad - self.z0) / cell))
 
     @classmethod
-    def over(cls, points_m: np.ndarray, cell: float, pad: float = 1.0) -> BevGrid:
+    def over(cls, points_m: np.ndarray, cell: float, pad: float = 1.0) -> FloorRaster:
         """The (N, 2) form, which is what every caller that projects a mask actually holds.
 
         `z0` is **not** floored at zero here, unlike the two-array constructor: a floor

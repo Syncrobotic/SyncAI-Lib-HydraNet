@@ -62,7 +62,7 @@ import json
 import sys
 import time
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -70,9 +70,6 @@ import torch
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
-for candidate in (HERE.parent / "src", HERE / "src"):
-    if candidate.is_dir():
-        sys.path.insert(0, str(candidate))
 sys.path.insert(0, str(HERE))
 
 # The teachers live in the wheel as of 2026-08-20 (52eb141 SAM 3, 556582b Grounding
@@ -81,8 +78,11 @@ sys.path.insert(0, str(HERE))
 # only part of the surface, so this imports the package directly rather than through them.
 from syncai_bev3d.teachers.boxes import drop_static  # noqa: E402
 from syncai_bev3d.teachers.boxes import nms as gdino_nms  # noqa: E402
+from syncai_bev3d.teachers.gdino import (  # noqa: E402
+    PERSON_THRESHOLD,
+    load_gdino,
+)
 from syncai_bev3d.teachers.gdino import detect as gdino_detect  # noqa: E402
-from syncai_bev3d.teachers.gdino import load_gdino  # noqa: E402
 from syncai_bev3d.teachers.photometry import is_daylight, luma_chroma  # noqa: E402
 from syncai_bev3d.teachers.sam3 import (  # noqa: E402
     MAX_BOX_FRAC,
@@ -102,6 +102,7 @@ from syncai_hydranet.data.video import (  # noqa: E402
     validate_inputs,
 )
 from syncai_hydranet.labels import IGNORE  # noqa: E402
+from syncai_hydranet.utils.device import pick_device  # noqa: E402
 
 # ---------------------------------------------------------------------------------
 # The campaign taxonomy. New ids, deliberately NOT the retail_objects ids: id 4 there
@@ -148,7 +149,10 @@ DETECTION_CATEGORIES = (
     {"id": 3, "name": "product"},
 )
 
-PERSON_TRAIN_THR = 0.35  # measured day/night gap: night IR tops out 0.326, day >= 0.35
+# The teacher's own threshold, imported rather than restated -- tools/site30k/boxes.py
+# read this name while its neighbour box_pass.py read gdino's, so one directory held two
+# routes to one number. Measured day/night gap: night IR tops out 0.326, day >= 0.35.
+PERSON_TRAIN_THR = PERSON_THRESHOLD
 FLOOR_TOL_M = 0.20  # on-plane tolerance; see the measured gap note in GeomTeacher
 SCORE_FLOOR = 0.10  # kept in instances_all so both populations stay visible
 CONSENSUS = 0.9  # the measured setting from sam3_prelabel
@@ -164,7 +168,7 @@ PROGRESS_LOG = HERE.parent / "runs/site30k_qa/progress.log"
 
 
 def log_progress(msg: str) -> None:
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     PROGRESS_LOG.parent.mkdir(parents=True, exist_ok=True)
     with PROGRESS_LOG.open("a") as fh:
         fh.write(f"{stamp} {msg}\n")
@@ -555,7 +559,7 @@ def cmd_annotate(args) -> int:
         json.loads(Path(args.split_json).read_text())["assign"] if args.split_json else {}
     )
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     if args.recipe in ("v2", "v3"):
         static, moving = build_concepts_v2()  # v3 uses only the person concept
     else:
@@ -973,7 +977,7 @@ def cmd_floor_diag(args) -> int:
     furniture). Misprojection shows as offset bands of blue and yellow along the same
     boundary; a too-small polygon shows as blue with no yellow twin.
     """
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     third = ThirdOpinion(THIRD_OPINION_RUN, device)
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1043,7 +1047,7 @@ def cmd_sweep_fixture(args) -> int:
     split by surface orientation. The chosen edges are then passed to `annotate
     --recipe v2` explicitly and recorded in the QA report with this table.
     """
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     static, moving = build_concepts_v2()
     sam3_proc, sam3_model = load_sam3(SAM3_MODEL_ID, device)
     third = ThirdOpinion(THIRD_OPINION_RUN, device)
@@ -1107,7 +1111,7 @@ def cmd_sweep_fixture(args) -> int:
 
 
 def cmd_pet_census(args) -> int:
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = str(pick_device())
     gd_proc, gd_model = load_gdino(args.gdino_model, device)
     clips = args.clips
     per_clip = max(1, args.sample // max(len(clips), 1))

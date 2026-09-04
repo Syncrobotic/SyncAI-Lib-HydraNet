@@ -26,7 +26,7 @@ metre position of every figure meanwhile, which is what settles such a question.
 
 Usage:
   uv run python tools/commissioning/demo_video.py <camera> [--clip PATH]
-      [--frames 900] [--fps 5] [--checkpoint last.pt] [--score-thr 0.35]
+      [--frames 900] [--fps 5] [--checkpoint last.pt] [--score-thr BIRTH_REF]
 
 Writes assets/dev/demo_<camera>_<stamp>.mp4 and a stable assets/dev/demo_<camera>.mp4
 beside it (both ignored wholesale -- customer footage), plus three sample frames for the
@@ -97,8 +97,10 @@ from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.models.hydranet import build_model
+from syncai_hydranet.serving.camera import BIRTH_REF
 from syncai_hydranet.shipped import SHIPPED_RUN
 from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
+from syncai_hydranet.utils.device import pick_device
 from syncai_hydranet.utils.face_blur import (
     BLUR_THR,
     blur_region,
@@ -106,7 +108,11 @@ from syncai_hydranet.utils.face_blur import (
 )
 from syncai_hydranet.utils.visualize import preprocess
 
-ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
+# The repo root, derived rather than written out: every one of these 26 tools had it
+# as an absolute path, so a second checkout ran against the first one's `runs/` and
+# any machine but this one failed at import with a path and no reason. Two levels up
+# from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _display_verdict(track):
@@ -281,6 +287,9 @@ def _render_in_chunks(args, camera, clip, cf, bounds, staff_model) -> int:
     from the merged record and draw only their own chunk -- no model loaded, which is
     what makes a demo render worker cheap enough that the fan-out is nearly linear.
     """
+    # The decoded size the recorded boxes are in, so the replay converts to calibrated
+    # pixels the same way the recording pass did.
+    src_w, src_h, _ = probe_video(str(clip))
     t0 = time.time()
     per = math.ceil(args.frames / args.workers)
     edges = [(i, min(i + per, args.frames)) for i in range(0, args.frames, per)]
@@ -373,7 +382,16 @@ def _render_in_chunks(args, camera, clip, cf, bounds, staff_model) -> int:
         for t in tracks:
             seen_ids.add(t.track_id)
         for st in track_states(
-            tracks, n, cf, state, vel_window, args.metre_scale, args.fps, bounds, verdict_of
+            tracks,
+            n,
+            cf,
+            state,
+            vel_window,
+            args.metre_scale,
+            args.fps,
+            bounds,
+            verdict_of,
+            source_size_px=(src_w, src_h),
         ):
             positions.append(
                 {
@@ -426,7 +444,7 @@ def main() -> int:
     ap.add_argument("--checkpoint", default="last.pt")
     # the model scores people 0.34-0.59 on this camera; 0.5 keeps almost nothing and
     # the tracker's 3-hit confirmation then never fires. Measured, not guessed.
-    ap.add_argument("--score-thr", type=float, default=0.35)
+    ap.add_argument("--score-thr", type=float, default=BIRTH_REF)
     # A uniform scale on the whole reconstruction -- scene, zone, people and eye alike --
     # so the rendered image is unchanged and only the units move. 1.0 leaves camera.json's
     # metres exactly as commissioned; 0.8824 is what this camera's own shoppers imply
@@ -542,7 +560,7 @@ def main() -> int:
         records = json.loads(Path(args.records).read_text())
         model = device = None
     else:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = str(pick_device())
         model = build_model(cfg).to(device).eval()
         model.load_state_dict(select_weights(load_checkpoint(RUN / args.checkpoint), "ema"))
     frame_lo, frame_hi = 0, args.frames
@@ -778,6 +796,7 @@ def main() -> int:
             args.fps,
             bounds,
             verdict_of=None if staff_model is None else _display_verdict,
+            source_size_px=(src_w, src_h),
         )
         n_outside += state["n_skipped"] - skips_before
         n_placed += len(states)

@@ -89,8 +89,23 @@ def select_weights(ckpt: dict, prefer: str = "ema") -> dict:
     so on a short run they are different models. A tool that hardcodes
     `ckpt.get("ema") or ckpt["model"]` has no way to say which one it rendered.
     """
+    return chosen_weights(ckpt, prefer)[0]
+
+
+def chosen_weights(ckpt: dict, prefer: str = "ema") -> tuple[dict, str]:
+    """:func:`select_weights`, and *which* of the two it handed back.
+
+    The fallback above is silent: ask for `"ema"` on a checkpoint that has none and you
+    get the raw tensors, which by this function's own argument may be a different model.
+    `cli/export_onnx.py` had worked this out and recovered the answer with an identity
+    test on the returned dict -- `chosen is ckpt.get("ema")` -- which is correct and is
+    not something each caller should have to reinvent to record its own provenance.
+
+    So the name comes back beside the weights. `select_weights` keeps its one-value shape
+    because most of its 50-odd callers only load and do not report.
+    """
     if prefer not in ("ema", "model"):
         raise ValueError(f"prefer must be 'ema' or 'model', not {prefer!r}")
     if prefer == "ema" and ckpt.get("ema"):
-        return ckpt["ema"]
-    return ckpt["model"]
+        return ckpt["ema"], "ema"
+    return ckpt["model"], "model"

@@ -15,22 +15,29 @@ run would have drifted the same way.
 
 **There is no single best checkpoint in a run, and this module refuses to pretend there
 is.** `best.pt` is selected on one head's metric, so asking for "the" checkpoint is asking
-a question with two answers. Measured on the shipped run, epoch 15 (`best.pt`) against
-epoch 60 (`last.pt`):
+a question with two answers -- and on the run before this one it was answered wrongly:
+`..._b03_cw_xl`'s `best.pt` was epoch 15 against `last.pt`'s epoch 60, scoring
+`terrain_mIoU/site_seg03` 0.6681 to 0.6254 and `detection_mAP/coco_person` 0.1447 to
+0.2022. **A 40% worse person detector, shipped by six files that each hardcoded the path.**
 
-===========================  ==========  ==========
-metric                       best.pt     last.pt
-===========================  ==========  ==========
-terrain_mIoU/site_seg03      **0.6681**  0.6254
-detection_mAP/coco_person    0.1447      **0.2022**
-detection_mAP50/site_boxes03 0.3013      **0.3356**
-===========================  ==========  ==========
+**The shipped run's own numbers are different, and the difference is the point.**
+person01 selected on `detection_mAP/site_person` and picked epoch 118 of 120
+(`selection.json`); the curve was flat, so the two checkpoints are the same model:
 
-`best.pt` is a **40% worse person detector**. A caller therefore names the head it is
-judged on -- :func:`for_terrain` or :func:`for_detection` -- and gets the checkpoint that
-run actually won on. `tools/commissioning/demo_video.py` had already worked this out for
-itself and defaulted to `last.pt`; that reasoning is now in one place instead of one
-comment.
+============================  ==========  ==========
+metric                        best (118)  last (120)
+============================  ==========  ==========
+terrain_mIoU/site_seg03       0.6716      **0.6718**
+detection_mAP/site_person     **0.7387**  0.7386
+detection_mAP/coco_person     0.2155      **0.2157**
+============================  ==========  ==========
+
+So both questions get `last.pt` here, and the doctrine still stands rather than being
+retired by one lucky run: a caller names the head it is judged on -- :func:`for_terrain`
+or :func:`for_detection` -- and a future run's answers may diverge again. Read its
+`selection.json` before assuming. `tools/commissioning/demo_video.py` had already worked
+this out for itself and defaulted to `last.pt`; that reasoning is now in one place
+instead of one comment.
 """
 
 from __future__ import annotations
@@ -74,3 +81,46 @@ def for_detection() -> Path:
     `last.pt` is the marginally better of the two on every head.
     """
     return SHIPPED_RUN / "last.pt"
+
+
+def load_model(config, checkpoint, *, device=None, weights: str = "ema", validate: bool = True):
+    """A config and a checkpoint in, a model in eval mode on a device out.
+
+    **Twenty-six call sites wrote these four lines each**, and the copies had begun to
+    differ in ways that do not raise: eighteen chose their device with a bare
+    `torch.cuda.is_available()` ternary and so skipped the no-kernels refusal (fixed
+    2026-09-04), and each restated `"ema"` at the call site, which
+    `utils/checkpoint.select_weights` records as the shape of a real defect -- EMA weights
+    on a run too short to have earned them score 0.16 mIoU against the raw weights' 0.95,
+    and a tool that hardcodes the choice cannot say which one it rendered.
+
+    `weights` is therefore an argument with a default rather than a literal in the body,
+    and `validate=False` is exposed because ten of those call sites need it: a config
+    saved inside an old run may not satisfy today's schema, and refusing to load it would
+    make this helper unable to read the runs it exists to read.
+
+    Returns `(model, cfg, device)` -- the config and device because every caller needed
+    them next, for `cfg["data"]["input_size"]` and for moving tensors.
+    """
+    import warnings
+
+    from .config import load_config
+    from .models.hydranet import build_model
+    from .utils.checkpoint import chosen_weights, load_checkpoint
+    from .utils.device import pick_device
+
+    cfg = load_config(str(config), validate=validate)
+    device = pick_device(cfg.get("device")) if device is None else device
+    model = build_model(cfg).to(device).eval()
+    state, taken = chosen_weights(load_checkpoint(str(checkpoint)), weights)
+    if taken != weights:
+        warnings.warn(
+            f"{checkpoint}: asked for {weights!r} weights and there are none, so the raw "
+            f"{taken!r} tensors were loaded. On a short run these are a different model "
+            "-- 0.16 mIoU against 0.95 in the case that put this check here -- so a "
+            "figure rendered from this is not the figure that was asked for.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    model.load_state_dict(state)
+    return model, cfg, device
