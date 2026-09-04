@@ -31,10 +31,10 @@ SRC_FLOOR="${COV_SRC_FLOOR:-85}"
 # move. If a future environment does read lower, the honest fix is to find out which tests
 # stopped contributing, not to widen the gap.
 #
-# 11 since 2026-09-04: a full box reads 12, and this is set one point under it only until
-# the runner has printed its own number. Tighten it to what CI reports and delete this
-# paragraph -- headroom held longer than it takes to read one CI log is the decoration the
-# sentence above refuses.
+# 11 since 2026-09-04, and this one is NOT the two numbers agreeing. A full box reads 12
+# and run 33847687469 printed 11 on the runner -- the skew the paragraph above predicted
+# and did not see the first time. 11 is the true value here, so there is no headroom in
+# this floor either; raising it to a laptop's 12 would fail every CI run.
 DEV_FLOOR="${COV_DEV_FLOOR:-11}"
 
 if [ -z "${COV_SKIP_RUN:-}" ]; then
