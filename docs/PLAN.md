@@ -2517,13 +2517,13 @@ half-covers is worse than an absent one, because its presence is read as coverag
    site masks are exactly the ones at risk, and this guard's docstring — which names
    the incident and its cost of three seeds — is what anyone will point at when
    asked whether leakage is checked.
-5. **`figures.py` hardcodes the frame scale that three siblings derive.**
-   `syncai_bev3d/figures.py:271-272` writes `/ 2.0`; `analytics/world.py`'s
-   `_to_calibrated_pixels` derives it from `image_size_px` vs `source_size_px` and
-   carries a 1.5x-canvas refusal. Correct only while every camera is commissioned at
-   exactly half the decode resolution, which is today's fleet and not a property of
-   anything. A camera commissioned at full resolution puts every figure at the wrong
-   floor position and stature, with no guard to notice.
+5. ~~DONE~~ -- `_calibration_scale` derives it from `cf.image_size_px` against the
+   decoded frame's size, `track_states` takes `source_size_px` and warns when a caller
+   omits it, and all five call sites in `demo_video.py` and `heads_video.py` pass it (the
+   two chunk helpers probe the clip). The finding: `figures.py` wrote `/ 2.0` where
+   `analytics/world.py`'s `_to_calibrated_pixels` derives it and carries a 1.5x-canvas
+   refusal -- correct only while every camera is commissioned at exactly half the decode
+   resolution, which is today's fleet and not a property of anything.
 
 ### P1 — green lights wired to nothing
 
@@ -2536,15 +2536,26 @@ half-covers is worse than an absent one, because its presence is read as coverag
    `hydranet-scene` (two shipped console scripts) and the whole decode-error
    contract run nowhere in CI. One `apt-get install ffmpeg` line converts 8 loud
    skips into 8 real gates.
-8. **PARTLY DONE**: `serving/uint8_input.py` 0% -> **98%** (the assertion that matters
-   is numerical -- the rewritten graph returns byte-identical output for the same frame)
-   and `shipped.py` 0% -> **100%**. `serving/engine.py` is still 0%: 320 lines of
-   TensorRT executor that needs the hardware, and the honest options are a
-   hardware-marked test or extracting the slot arithmetic. The original finding:
-   `serving/engine.py` — the executor every throughput figure rests on — has 0 test
-   references. `serving/uint8_input.py` likewise. `shipped.py`, which decides which run
-   and which checkpoint ship, likewise — on a project that shipped a 40%-worse person
-   detector by trusting one metric.
+8. ~~DONE~~ as far as it honestly goes. `serving/uint8_input.py` 0% -> **98%** (the
+   assertion that matters is numerical -- the rewritten graph returns byte-identical
+   output for the same frame), `shipped.py` 0% -> **100%**, `serving/engine.py` 0% ->
+   **18%** by extracting `io_specs` from `TrtExecutor.__init__`: the binding split needs
+   no GPU, and it holds the two refusals that decide whether the rest of the executor is
+   pointed at the right tensors. The two-input case is the one worth having a test for --
+   without the guard the second input lands in `output_specs`, gets buffers, and is copied
+   *back* after every batch, so the executor reads uninitialised device memory and hands
+   it to the caller as a head's output, with nothing raising.
+
+   **The remaining 82% needs a card and is stated as the gap it is**, in
+   `tests/test_serving_engine.py`'s own docstring so the file cannot be mistaken for a
+   claim that the executor is tested: the stream and event choreography in `submit`, the
+   pinned-buffer lifetime rules, and `close`. The `scripts/` + `tools/` coverage floor
+   moves 9 -> 11 on the back of this (a full box reads 12).
+
+   The original finding: `serving/engine.py` -- the executor every throughput figure rests
+   on -- has 0 test references. `serving/uint8_input.py` likewise. `shipped.py`, which
+   decides which run and which checkpoint ship, likewise -- on a project that shipped a
+   40%-worse person detector by trusting one metric.
 9. ~~DONE~~ (anchored to `parents[1]`; run from `/tmp` it skipped before and all eight
    tests run after). It guarded on a path relative to the invocation directory, so it skips silently from anywhere but the repo root. Every other guard
    anchors to `parents[1]`, and `test_zone_bridge.py:91` cites *this file* as the
@@ -2582,28 +2593,44 @@ half-covers is worse than an absent one, because its presence is read as coverag
     omits `.eval()` (BatchNorm keeps updating while scoring),
     `scripts/offline_tracks.py:135` takes the default `embed_dim` and
     `pretrained=True`, and only `eval_attributes` validates the attribute order.
-15. Three `to_metres` in `tools/commissioning/`: two drop non-finite points silently,
-    the third raises — and the third's docstring explains why dropping is wrong.
-16. `select_weights`'s "every caller goes through this" is bypassed by three scripts.
-17. **PARTLY DONE**: the 1.70 m prior and the 0.35 threshold have one source each now,
-    held by `tests/test_shared_constants.py` and a check in `test_figures.py`.
+15. ~~DONE~~, and the disagreement was the content rather than the duplication. One
+    `CameraFile.ground_points(..., above_horizon=)`. Both answers were right for their own
+    input: a projected mask legitimately reaches past the horizon and those rows are not
+    floor, while a hand-drawn zone vertex up there is an operator error that survives as a
+    polygon testing False for every point inside it, forever. So the policy is an argument
+    with no permissive default, and a test pins the refusal of a third word -- falling
+    through to `drop` is exactly what a truthiness check would have done.
+16. ~~WRONG~~ as written -- all three go through `select_weights` -- but it pointed at a
+    real one. The *fallback* was silent: ask for `"ema"` on a checkpoint with none and you
+    get the raw tensors, which by that function's own docstring may be a different model
+    (0.16 mIoU against 0.95). `cli/export_onnx.py` had recovered the answer with an
+    identity test on the returned dict to keep its provenance honest. `chosen_weights`
+    returns the name beside the tensors now, and `shipped.load_model` warns when what it
+    got is not what was asked for -- `"ema"` is its default, so a run trained without EMA
+    was loaded from raw weights by every tool that never passed the flag.
+17. ~~DONE~~. The 1.70 m prior, `k1 = -0.225` (now `plate_calibration.K1_FLEET`) and
+    ImageNet normalisation each have one source, held by `tests/test_shared_constants.py`.
     `meshes.human` keeps a literal default deliberately -- importing the calibration stack
     into a pure-geometry module to read one float would cost every mesh consumer PIL --
-    so the test holds that agreement instead. Still open: `k1 = -0.225` in four places,
-    ImageNet normalisation in four outside `preprocessing.py`, and the bare literals.
-    The original finding: the 0.35 person threshold (3 named +
-    7 bare), the 1.70 m adult prior (4 places, whose canonical docstring says it
-    "must exist exactly once"), `k1 = -0.225` (4), ImageNet normalisation (4 outside
-    `preprocessing.py`, one of them inside `src/`).
-18. **PARTLY DONE**: all 18 bare `torch.cuda.is_available()` ternaries are now
+    so the test holds that agreement instead.
+
+    The thresholds turned out to be three operating points, not one, and the count was
+    the least of it. Fourteen `--score-thr` defaults wrote a bare float; the tree already
+    named `BIRTH_REF` (0.35), `SCORE_THR_RETAIL` (0.20) and `SCORE_THR_VIEW` (0.30), and
+    *which* a tool means is the entire content of the choice. `track_review propose`
+    defaulted to 0.25, which is none of them, and `detection.py`'s own table settles it:
+    at 0.25 Kaohsiung-cam08 returns 0.0 boxes per frame -- a review tool proposing nothing
+    on half the fleet looks like a quiet camera. `teachers.gdino.PERSON_THRESHOLD` is also
+    0.35 and is deliberately left alone: coinciding today is not a relationship.
+18. ~~DONE~~ -- both halves. All 18 bare `torch.cuda.is_available()` ternaries are
     `str(pick_device())`, so the no-kernels refusal and MPS selection reach every script
-    and tool -- the type ratchet caught 37 downstream signature mismatches on the first
-    attempt, doing its job on a mechanical change. The four-line load sequence itself is
-    still copied ~22 times; a shared `model_from_run` is the remaining half. The original
-    finding: ~22 copies of that sequence, of
-    which **17 use a bare `torch.cuda.is_available()`** and so skip
-    `_refuse_a_build_with_no_kernels` — the check written because a build without
-    this card's kernels is 40x slower and says nothing.
+    and tool (the type ratchet caught 37 downstream signature mismatches on the first
+    attempt, doing its job on a mechanical change), and `shipped.load_model` replaced the
+    four-line sequence at the 11 call sites whose copies matched exactly. The rest
+    interleave other work and are left. The original finding: ~22 copies, of which **17
+    use a bare `torch.cuda.is_available()`** and so skip
+    `_refuse_a_build_with_no_kernels` -- the check written because a build without this
+    card's kernels is 40x slower and says nothing.
 
 ### P3 — comments that are false about the code beneath them
 
@@ -2637,13 +2664,20 @@ half-covers is worse than an absent one, because its presence is read as coverag
 24. ~~DONE~~ -- the `git show` pointer is there now. The finding:
     `git show <sha>^:<path>` pointer this repo requires and its sibling `shading.py:5`
     supplies.
-25. **PARTLY DONE**: heads_video's -- the worst, a docstring narrating its own edit
-    history that did not prevent the stale copy 663 lines below -- is deleted along with
-    that copy. The others stand. The finding: changelog inside docstrings, against the rule that a commit
-    explains the change: `heads_video.py:19` records the edit history of the docstring
-    it is inside (and did not stop item 21's stale copy 663 lines below); also
-    `serving/__init__.py:3`, `world.py:9`, `ema.py:23`, `camera_json.py:44`,
-    `resplit_selling_floor.py:12`.
+25. ~~DONE~~ -- five more, and one of the six named was a false positive.
+    `serving/__init__.py` opened by saying what it used to say, `ema.py` carried a
+    parenthesis correcting an earlier draft of its own sentence, `resplit_selling_floor.py`
+    denied a flag it had once claimed, `temporal.py` (not on the list, found by the sweep)
+    described a misreading a previous version of its own line had made, and
+    `camera_json.py` recounted an off-by-one in itself. Two got better rather than shorter:
+    temporal.py now states the global counter as the natural misread and what it would do,
+    and camera_json.py drops the literal version number from its refusal sentence entirely
+    -- a number there goes stale the next time the schema moves and then names a readable
+    file as refusable, which is the very mistake the deleted narration was about.
+    `analytics/world.py` is **not** one of these: its history passage is design rationale
+    for where the module lives. The "X was wrong until \<date\>" lines elsewhere stay --
+    those are true about artefacts a reader may still hold, not about the sentence they
+    sit in.
 
 ### P4 — configuration and hygiene
 
@@ -2666,29 +2700,40 @@ half-covers is worse than an absent one, because its presence is read as coverag
     `floorplan.py` at 0%; measured today they are **97% and 95%**, and the real floor
     of the tree is `figures.py` at 39%. Its own neighbour 90 lines up states the rule
     it breaks: "A count belongs where it is enforced."
-30. **PARTLY DONE, and the rest is a decision.** The `sys.path` half is fixed and
-    guarded (`tests/test_no_absolute_sys_path.py`, 347 files): those three failed at
-    import on any other machine, saying nothing about why. The remaining ~26 absolute
-    `ROOT` constants read `runs/` and `datasets/` and fail at a `FileNotFoundError` that
-    names the path, which is survivable -- and they encode a real assumption, that these
-    tools run on the box holding the corpus. **Decision needed**: derive `ROOT` and accept
-    that a tool then silently reads a different machine's empty `runs/`, or leave it. The
-    finding: 28 files under `tools/` hardcode `/home/paul/...`, two of them into
-    `sys.path`.
-    This is the root of 183 of the tree's 196 `noqa` (all E402). `src/` is clean.
-31. **DECISION NEEDED, not a defect.** Migrating to LFS rewrites history on a repo three
-    branches and several sessions share, and `.gitattributes` alone only helps future
-    revisions -- the 113 MB is already written. The cheap half, if it is wanted, is to
-    stop tracking the figures at all and publish them from a release asset, which changes
-    what a README renders from. The finding:
-    no LFS, and the figure-tax workflow guarantees more.
-32. **DECISION NEEDED.** release.yml's own header argues the current shape is correct --
-    a version bump is metadata about a release and cannot precede it -- so the fix is
-    either a periodic main->dev back-merge or accepting the drift permanently. Worth
-    deciding rather than rediscovering: a contributor reading `dev`'s `__init__.py` today
-    is told this is 0.1.0. The finding: `dev` sits at `__version__ = "0.1.0"` and has no
-    CHANGELOG while `v0.4.0` is
-    released, because release-please writes to `main` and nothing flows back.
+30. ~~DONE~~, and **measuring it reversed the decision I had recorded here.** The
+    entry argued the 26 absolute `ROOT` constants encoded a real assumption -- that the
+    tool runs on the box holding the corpus -- and that deriving them would trade a
+    `FileNotFoundError` for a silent read of another machine's empty `runs/`. Wrong on the
+    premise: 26 of the 27 named the *repo root itself*, not `runs/` or `datasets/`, and
+    every one sits exactly two levels below it, so `parents[2]` is the same directory
+    computed rather than an approximation of what they said.
+
+    The failure it removes is also worse than the one it was weighed against. Absolute
+    paths do not merely break on another machine; with two checkouts on *this* one, a tool
+    run from the second reads the first's `runs/` and answers about the wrong tree,
+    plausibly and with no error at all. 32 files in total, including three loading
+    `recipe.py` by absolute path and two that had already derived `_REPO` and then wrote
+    the literal out beside it. `test_no_absolute_sys_path.py` widens from the `sys.path`
+    half to any hardcoded home directory, exempting only `analytics/delivery.py` and
+    `test_delivery.py`, where the path is payload a client sends rather than a path the
+    code takes.
+31. ~~DECISION NEEDED~~ -- **answered by measurement: no LFS, and nothing to do.** The
+    113 MB was 88 MB of loose objects, not history. A single `git gc` took `.git` to 78 MB
+    and the question with it. LFS would have rewritten history on a repo three branches
+    and several sessions share, to reclaim space that was never in the history. Re-run
+    `git gc` if it grows again; do not reach for LFS on this number.
+32. ~~DECISION NEEDED~~ -- **DECIDED 2026-09-04 by the user: `dev` is meant to lag, and
+    nothing back-merges into it.** `dev` sits at `__version__ = "0.1.0"` with no CHANGELOG
+    while `v0.4.0` is released; release-please writes to `main` and that is the whole
+    design, not drift to be repaired. The version on `dev` is not a claim about what is
+    released -- `main` is -- and a back-merge to make the string agree would put release
+    metadata on the branch that has not been released.
+
+    I merged `origin/main` into `dev` on the reading that a contributor reading `dev` is
+    told the wrong version, and was told to revert it. The merge was never pushed; `dev`
+    was reset to the pushed commit. **Do not do this again**, and do not treat the
+    `0.1.0` on `dev` as a finding: this entry is the record that it was raised and
+    answered.
 33. ~~Configs for the deleted quadruped line survive as test fixtures, so real configs
     and fixtures share one directory.~~ **WRONG ON BOTH COUNTS, investigated 2026-09-04
     when it came up for work.**

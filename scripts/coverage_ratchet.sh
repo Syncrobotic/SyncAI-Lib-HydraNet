@@ -30,7 +30,12 @@ SRC_FLOOR="${COV_SRC_FLOOR:-85}"
 # floor below the true value is decoration -- `ci.yml`'s own argument about its 80 -> 83
 # move. If a future environment does read lower, the honest fix is to find out which tests
 # stopped contributing, not to widen the gap.
-DEV_FLOOR="${COV_DEV_FLOOR:-9}"
+#
+# 11 since 2026-09-04: a full box reads 12, and this is set one point under it only until
+# the runner has printed its own number. Tighten it to what CI reports and delete this
+# paragraph -- headroom held longer than it takes to read one CI log is the decoration the
+# sentence above refuses.
+DEV_FLOOR="${COV_DEV_FLOOR:-11}"
 
 if [ -z "${COV_SKIP_RUN:-}" ]; then
   uv run pytest -q --cov=src --cov=scripts --cov=tools --cov-report=term-missing
