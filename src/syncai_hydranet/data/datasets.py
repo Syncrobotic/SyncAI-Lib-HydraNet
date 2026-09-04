@@ -108,21 +108,19 @@ class SegFolderDataset(Dataset[dict[str, Any]]):
 
     def _decode_ann(self, ann_path: Path) -> np.ndarray:
         ann = Image.open(ann_path)
-        if self.scheme is not None:
-            fmt = "color" if self.scheme.fmt == "color" else "id"
-            mapping = self.scheme.mapping
-        else:
-            fmt = self.label_format
-            if fmt == "auto":
-                is_rgb = ann.mode in ("RGB", "P") and np.asarray(ann.convert("RGB")).ndim == 3
-                fmt = "color" if is_rgb else "id"
-            elif fmt == "rugd_color":
-                fmt = "color"
-            mapping = (
-                label_maps.RUGD_COLOR_TO_TERRAIN
-                if fmt == "color"
-                else label_maps.RELLIS_ID_TO_TERRAIN
+        # **A scheme is required, and the branch that made it optional is gone.** The
+        # fallback below it hardcoded `RUGD_COLOR_TO_TERRAIN` / `RELLIS_ID_TO_TERRAIN`,
+        # so a dataset without `label_map` silently decoded its annotations through an
+        # off-road vocabulary -- retired 2026-09-04 with the rest of that line. Every
+        # shipped config names a `label_map`, and `config_schema` requires one, so this
+        # raises where nothing reached before rather than changing what any of them do.
+        if self.scheme is None:
+            raise ValueError(
+                f"{ann_path}: this dataset has no label_map, so its annotations cannot be "
+                "decoded. Name one in the config; `label_maps.SCHEMES` lists them."
             )
+        fmt = "color" if self.scheme.fmt == "color" else "id"
+        mapping = self.scheme.mapping
 
         if fmt == "color":
             rgb = np.asarray(ann.convert("RGB"))

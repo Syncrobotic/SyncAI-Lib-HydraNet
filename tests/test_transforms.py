@@ -202,14 +202,6 @@ def test_indoor_scheme_marks_glass_and_stairs():
     assert glass in sc.mapping.values(), "ADE20K should map some source class to glass"
 
 
-def test_outdoor_scheme_unchanged():
-    """The off-road scheme must not be affected by the indoor additions."""
-    sc = label_maps.get_scheme("rugd")
-    assert sc.fmt == "color"
-    assert sc.classes[2] == "grass"
-    assert sc.trav[sc.classes.index("grass")] == 1  # grass -> caution
-
-
 def test_unknown_scheme_raises():
     with pytest.raises(ValueError, match="unknown label_map"):
         label_maps.get_scheme("nope")

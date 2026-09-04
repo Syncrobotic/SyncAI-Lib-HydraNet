@@ -11,7 +11,10 @@ import torch
 from syncai_hydranet.config import load_config
 from syncai_hydranet.models.hydranet import build_model
 
-CFG = str(Path(__file__).resolve().parents[1] / "configs" / "hydranet_regnet800mf.yaml")
+# A config that builds a multi-head model, which is all these tests need of it.
+# It was the off-road one until 2026-09-04, when that taxonomy was retired;
+# hydranet_indoor is the same shape and is still exercised elsewhere.
+CFG = str(Path(__file__).resolve().parents[1] / "configs" / "hydranet_indoor.yaml")
 H, W = 128, 160  # must be a multiple of 128: P7 has stride 128
 
 
