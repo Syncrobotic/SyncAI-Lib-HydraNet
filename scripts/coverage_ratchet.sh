@@ -23,16 +23,14 @@
 set -euo pipefail
 
 SRC_FLOOR="${COV_SRC_FLOOR:-85}"
-# 7, against 9% measured on a full box on 2026-09-04, and the gap is deliberate for the
-# reason `ci-promote.yml` gives about the src floor: the number CI reads is not the number
-# a laptop reads. Roughly a dozen tests here guard on `runs/` and `datasets/`, which are
-# gitignored, so on a clean checkout they skip and whatever `scripts/` coverage they
-# carried goes with them. Two points of headroom rather than a guess at how much.
-#
-# **Tighten this to CI's own figure once CI has printed one** -- it prints on every run,
-# in the line above the error. A floor far below the true value is decoration, which is
-# the argument `ci.yml` makes about its own 80 -> 83 move.
-DEV_FLOOR="${COV_DEV_FLOOR:-7}"
+# 9, which is what BOTH a full box and CI read -- checked rather than assumed. This began
+# at 7 on the reasoning `ci-promote.yml` gives about the src floor, that CI reads a
+# different number than a laptop because the `runs/`- and `datasets/`-guarded tests skip
+# there; run 764961b then printed 9% on the runner, so the headroom bought nothing and a
+# floor below the true value is decoration -- `ci.yml`'s own argument about its 80 -> 83
+# move. If a future environment does read lower, the honest fix is to find out which tests
+# stopped contributing, not to widen the gap.
+DEV_FLOOR="${COV_DEV_FLOOR:-9}"
 
 if [ -z "${COV_SKIP_RUN:-}" ]; then
   uv run pytest -q --cov=src --cov=scripts --cov=tools --cov-report=term-missing
