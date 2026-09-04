@@ -2478,7 +2478,10 @@ half-covers is worse than an absent one, because its presence is read as coverag
 
 ### P0 — produces wrong results, or fails without saying so
 
-1. **The face-blur tests cannot detect a blur.** `tests/test_face_blur.py` blurs
+1. ~~**The face-blur tests cannot detect a blur.**~~ **DONE.** The fixture is seeded
+   noise, and a new test holds the contract on pixels: head region changed, torso region
+   untouched. Under a no-op `blur_region` three of six tests now fail; before, none did.
+   The original finding: `tests/test_face_blur.py` blurs
    `_blank()` = `np.zeros(...)`, and a Gaussian blur of a uniform image is the
    identity. Measured: blank image unchanged by `blur_region`, noise image changed.
    So `def blur_region(*a): return` keeps all five tests green, and
@@ -2487,7 +2490,9 @@ half-covers is worse than an absent one, because its presence is read as coverag
    `utils/face_blur.py` and a breach", and the blur has failed before (132 readable
    heads of 954 boxes). Fix: noise fixture, assert the head region moved and the
    torso did not.
-2. **The first optimizer step of every run bypasses warmup.**
+2. ~~**The first optimizer step of every run bypasses warmup.**~~ **DONE** --
+   `WarmupCosine.__init__` applies the schedule, and a test reads the param group before
+   the first step. The original finding:
    `engine/optim.py:50-71` — `WarmupCosine.__init__` records `base_lrs` and never
    calls `_apply()`; `step()` increments then applies, and the trainer steps the
    optimizer first. Measured: `param_groups[0]["lr"]` is `2e-4` after construction
@@ -2495,14 +2500,18 @@ half-covers is worse than an absent one, because its presence is read as coverag
    forward by AdamW's first moment. `load_state_dict` re-applies immediately and
    says why, so the resume path is right and the fresh path is not. No test reads
    the LR before the first step.
-3. **No NaN/Inf guard in the training step, on the only path that trains.**
+3. ~~**No NaN/Inf guard in the training step.**~~ **DONE** -- the optimizer step is
+   skipped when the gradient norm is not finite, counted, and the run aborts after five.
+   It rides on the norm `clip_grad_norm_` already computes. The original finding:
    `engine/trainer.py` has no `isfinite`/`isnan` anywhere. `GradScaler` would
    normally skip a poisoned step, but `needs_grad_scaler` correctly returns False
    for bf16 and bf16 is the default and what every run used. `grad_clip: 10.0` does
    not help: a NaN gradient yields a NaN norm and writes NaN into every parameter.
    Silent until the 50-step log, by which time the optimizer state and `last.pt`
    are poisoned.
-4. **`split_leaks` covers one dataset type of five.** `data/datasets.py:500` filters
+4. ~~**`split_leaks` covers one dataset type of five.**~~ **DONE** -- it now reads both
+   on-disk layouts and considers every dataset with a root, so a `coco` set scoring on a
+   trained camera is reported. The original finding: `data/datasets.py:500` filters
    `type == "seg_folder"`; the tree also has `coco`, `pose_keypoints`,
    `rendered_depth`, `nyu_depth`. The retail configs that mix COCO/site boxes with
    site masks are exactly the ones at risk, and this guard's docstring — which names
