@@ -5,10 +5,8 @@ computation.
 shape was "what one frame hands the stage". It typed the **pixel** side -- `BoxFrame`
 opens with "Boxes are in image pixels, xyxy". The metre side never got the same
 treatment, and the cost is already visible in three places that each rebuild it by hand:
-`dwell.track_ground_path` and `events/zones.py` both call
-`pixel_to_ground` themselves and each keeps the result in a shape of its own (an earlier
-version of this list also named `cli/scene.py`, which delegates projection to
-`syncai_bev3d` and calls no `pixel_to_ground` of its own). That is the
+`dwell.track_ground_path`, `events/zones.py` and `events/pose.py` all call
+`pixel_to_ground` themselves and each keeps the result in a shape of its own. That is the
 same failure `stage.py` records as the reason it exists, one coordinate system later.
 
 ---------------------------------------------------------------------------

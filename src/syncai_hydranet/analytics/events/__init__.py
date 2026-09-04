@@ -91,9 +91,13 @@ what the code does rather than what a second copy of the key list claims.
 # torso-angle distribution the fall detector would see. The script was measuring the
 # instrument rather than calling it, which is a fair use of a private helper -- and the
 # underscore still says it is not the contract, which is why it stays out of `__all__`.
-# The pilot went in `500cdd2` once its verdict was recorded; `tools/pose/pose_overlay.py`
-# is the live reader of `_torso`, so the export is still load-bearing rather than a
-# leftover. `git show 500cdd2^:scripts/pose_pilot.py`.
+# The pilot went in `500cdd2` once its verdict was recorded (`git show
+# 500cdd2^:scripts/pose_pilot.py`). This comment then claimed `tools/pose/pose_overlay.py`
+# kept the export load-bearing; it does not -- that file reads `from ...events.pose import
+# _torso`, straight from the submodule. Nothing in the tree reads `_torso` off this
+# package, so the re-export IS the leftover the sentence denied. It stays for now because
+# removing a name from a package is a wider change than this correction; delete it with
+# the next thing that touches this file.
 from ._types import (
     CLIP_NAME,
     EVENT_TYPES,

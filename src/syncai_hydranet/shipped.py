@@ -15,22 +15,29 @@ run would have drifted the same way.
 
 **There is no single best checkpoint in a run, and this module refuses to pretend there
 is.** `best.pt` is selected on one head's metric, so asking for "the" checkpoint is asking
-a question with two answers. Measured on the shipped run, epoch 15 (`best.pt`) against
-epoch 60 (`last.pt`):
+a question with two answers -- and on the run before this one it was answered wrongly:
+`..._b03_cw_xl`'s `best.pt` was epoch 15 against `last.pt`'s epoch 60, scoring
+`terrain_mIoU/site_seg03` 0.6681 to 0.6254 and `detection_mAP/coco_person` 0.1447 to
+0.2022. **A 40% worse person detector, shipped by six files that each hardcoded the path.**
 
-===========================  ==========  ==========
-metric                       best.pt     last.pt
-===========================  ==========  ==========
-terrain_mIoU/site_seg03      **0.6681**  0.6254
-detection_mAP/coco_person    0.1447      **0.2022**
-detection_mAP50/site_boxes03 0.3013      **0.3356**
-===========================  ==========  ==========
+**The shipped run's own numbers are different, and the difference is the point.**
+person01 selected on `detection_mAP/site_person` and picked epoch 118 of 120
+(`selection.json`); the curve was flat, so the two checkpoints are the same model:
 
-`best.pt` is a **40% worse person detector**. A caller therefore names the head it is
-judged on -- :func:`for_terrain` or :func:`for_detection` -- and gets the checkpoint that
-run actually won on. `tools/commissioning/demo_video.py` had already worked this out for
-itself and defaulted to `last.pt`; that reasoning is now in one place instead of one
-comment.
+============================  ==========  ==========
+metric                        best (118)  last (120)
+============================  ==========  ==========
+terrain_mIoU/site_seg03       0.6716      **0.6718**
+detection_mAP/site_person     **0.7387**  0.7386
+detection_mAP/coco_person     0.2155      **0.2157**
+============================  ==========  ==========
+
+So both questions get `last.pt` here, and the doctrine still stands rather than being
+retired by one lucky run: a caller names the head it is judged on -- :func:`for_terrain`
+or :func:`for_detection` -- and a future run's answers may diverge again. Read its
+`selection.json` before assuming. `tools/commissioning/demo_video.py` had already worked
+this out for itself and defaulted to `last.pt`; that reasoning is now in one place
+instead of one comment.
 """
 
 from __future__ import annotations

@@ -16,8 +16,6 @@ Six panels, in a 2x3 grid:
 
 The metres panel is the only one that needs commissioning, and it is the one that shows
 what the network panels are *for*: pixels become a person standing at a measured place.
-(This docstring said "four panels" until 2026-09-02; the masks and legend panels
-arrived later and it was never updated.)
 
 Usage:
   uv run python tools/commissioning/heads_video.py <camera> --checkpoint PATH
@@ -692,7 +690,7 @@ def main() -> int:
         x0, y0, cw, _ch = region
         to_panel = PANEL[0] / cw
 
-        # **Before any panel is drawn from `img`.** Three of the four panels are the
+        # **Before any panel is drawn from `img`.** Three of the six panels are the
         # source frame with something painted on it, so blurring after would leave two of
         # them showing the faces the third had covered. A second forward pass rather than
         # one at the lower threshold: the pose rows are index-aligned with the detections,

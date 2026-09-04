@@ -126,7 +126,9 @@ class VirtualCam:
     and how far round it swings -- and `view()` turns them into the `shading.View` that
     every other surface in this package is projected through, so the panel and the mesh
     renderers cannot end up with two different cameras again -- which is what the panel
-    and `scripts/mesh_preview.py` had done before `shading.py` settled it.
+    and `scripts/mesh_preview.py` had done before `shading.py` settled it
+    (deleted; `git show 500cdd2^:scripts/mesh_preview.py`, the pointer `cli/scene.py`
+    requires for a path that is gone).
 
     ``pitch_deg`` and ``orbit_deg`` are what make this read as a room rather than a plot.
     Straight down a floor plan is a diagram; the pitch tilts it until surfaces have faces,

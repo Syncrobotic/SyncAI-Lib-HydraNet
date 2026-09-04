@@ -61,3 +61,28 @@ def test_the_run_on_disk_actually_holds_what_this_module_promises():
     assert shipped.SHIPPED_CONFIG.is_file(), f"{shipped.SHIPPED_CONFIG} is missing"
     for resolve in (shipped.for_terrain, shipped.for_detection):
         assert resolve().is_file(), f"{resolve.__name__}() -> {resolve()} is missing"
+
+
+@pytest.mark.skipif(
+    not (shipped.SHIPPED_RUN / "selection.json").is_file(),
+    reason="runs/ is gitignored; the quoted numbers are checked where the run is",
+)
+def test_the_numbers_the_docstring_quotes_are_this_run_s_numbers():
+    """The module docstring carried an epoch-15-vs-60 table for a run it no longer ships.
+
+    It read as this run's evidence and belonged to `..._b03_cw_xl`, whose best.pt really
+    was a 40% worse person detector -- while person01 selected epoch 118 of 120 on a flat
+    curve, which is why both accessors return `last.pt`. A quoted measurement with nothing
+    checking it is this project's most familiar defect; this is the check.
+    """
+    import json
+
+    sel = json.loads((shipped.SHIPPED_RUN / "selection.json").read_text())
+    assert sel["primary_metric"] == "detection_mAP/site_person"
+    person = sel["heads"]["detection_mAP/site_person"]
+    assert person["selected_epoch"] == 118
+    assert round(person["at_selected"], 4) == 0.7387
+    # The claim that matters: the two checkpoints are the same model to three decimals,
+    # which is what lets both accessors return last.pt.
+    terrain = sel["heads"]["terrain_mIoU/site_seg03"]
+    assert abs(terrain["at_selected"] - 0.6716) < 5e-4

@@ -8,7 +8,7 @@ first, can live inside it.
 Everything the retail analytics programme wants is therefore on this side of that line:
 tracking, re-identification, dwell, temporal smoothing, and the crop encoder that will
 carry attributes and action. **That is a system, and until this module it had no name.**
-Four components of it, in three directories, sharing no stated interface:
+Five components of it, in three directories, sharing no stated interface:
 
     analytics/tracker.py       boxes           -> Track
     analytics/dwell.py         Track           -> dwell rows, ground occupancy
