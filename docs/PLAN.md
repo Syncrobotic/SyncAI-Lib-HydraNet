@@ -2689,13 +2689,31 @@ half-covers is worse than an absent one, because its presence is read as coverag
     is told this is 0.1.0. The finding: `dev` sits at `__version__ = "0.1.0"` and has no
     CHANGELOG while `v0.4.0` is
     released, because release-please writes to `main` and nothing flows back.
-33. **DECISION NEEDED**: these are load-bearing as test fixtures (15 and 5 files
-    reference them, and `test_config_defaults.py` globs the whole directory), so deleting
-    them breaks the suite. Either move fixtures to `tests/`, or say that `configs/` holds
-    both and stop calling it sprawl. The finding: configs for the deleted quadruped line
-    (`RELLIS-3D`, `RUGD` in
-    `hydranet_regnet800mf.yaml`, `hydranet_indoor.yaml`) survive as test fixtures, so
-    real configs and fixtures share one directory.
+33. ~~Configs for the deleted quadruped line survive as test fixtures, so real configs
+    and fixtures share one directory.~~ **WRONG ON BOTH COUNTS, investigated 2026-09-04
+    when it came up for work.**
+
+    * `hydranet_indoor.yaml`'s dangling `datasets/site` is a **commented-out** entry
+      (`# - name: syncrobotic_site`); the original grep matched a comment. The config is
+      healthy and heavily used -- 4 production references, 11 tests, 7 trained runs.
+    * `hydranet_regnet800mf.yaml` is not orphaned config for a deleted line. It is the
+      **only config exercising a taxonomy `src/` still ships**: `label_maps.py` registers
+      `rugd` and `rellis` schemes (~61 lines of colour and id maps), `visualize.py`
+      carries `TERRAIN_COLORS_OFFROAD` (~23 lines) selected by the `dirt` key, and
+      `config_schema.py` accepts `rugd_color` as a `label_format`. Delete the config and
+      ~84 lines of shipped code lose their only test.
+    * Only three configs are pure fixtures with no run history (`eval_indoor25`,
+      `hydranet_retail_cocostuff`, `hydranet_retail_security_b03_cw_hires_seed13`). Three
+      of thirty-four is not sprawl, and moving them out would exempt them from
+      `test_config_defaults.py`'s directory-wide conformance check, which is a feature.
+
+    **What is actually open, and it is a product decision rather than a cleanup**: the
+    off-road taxonomy is still shipped surface area more than two weeks after the
+    quadruped line was deleted (2026-08-19, `cc80fc3`). Either it is retained
+    deliberately -- the CCTV fleet has outdoor cameras and `dirt` is a real terrain -- or
+    it goes, and the config and its tests go with it. This is the case the unused-symbol
+    rule covers: a symbol with no caller is either outdated or early, and only the person
+    who wanted it can say which.
 34. Privacy is a publication-time control, not a runtime one: `face_blur` is used by
     the figure tools and one CLI, and by nothing on the serving or analytics path;
     retention exists as `scripts/retention_sweep.py` rather than as policy in code.
