@@ -53,12 +53,10 @@ from PIL import Image  # noqa: E402
 
 from syncai_hydranet.analytics.clip_tracks import PERSON, to_source_pixels  # noqa: E402
 from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
-from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.night_person import NightPersonVeto  # noqa: E402
 from syncai_hydranet.data.video import frames as decode_frames  # noqa: E402
 from syncai_hydranet.data.video import probe  # noqa: E402
-from syncai_hydranet.models.hydranet import build_model  # noqa: E402
-from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
+from syncai_hydranet.shipped import load_model  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
@@ -138,9 +136,7 @@ def main() -> int:
 
     cams = args.cameras or sorted(p.name for p in CLIPS.iterdir() if p.is_dir())
     device = pick_device(None)
-    cfg = load_config(args.config)
-    model = build_model(cfg).to(device).eval()
-    model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), "ema"))
+    model, cfg, _ = load_model(args.config, args.checkpoint, device=device)
     veto = NightPersonVeto(STATIC)
 
     args.out.mkdir(parents=True, exist_ok=True)

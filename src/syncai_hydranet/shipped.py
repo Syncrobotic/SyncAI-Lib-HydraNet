@@ -81,3 +81,34 @@ def for_detection() -> Path:
     `last.pt` is the marginally better of the two on every head.
     """
     return SHIPPED_RUN / "last.pt"
+
+
+def load_model(config, checkpoint, *, device=None, weights: str = "ema", validate: bool = True):
+    """A config and a checkpoint in, a model in eval mode on a device out.
+
+    **Twenty-six call sites wrote these four lines each**, and the copies had begun to
+    differ in ways that do not raise: eighteen chose their device with a bare
+    `torch.cuda.is_available()` ternary and so skipped the no-kernels refusal (fixed
+    2026-09-04), and each restated `"ema"` at the call site, which
+    `utils/checkpoint.select_weights` records as the shape of a real defect -- EMA weights
+    on a run too short to have earned them score 0.16 mIoU against the raw weights' 0.95,
+    and a tool that hardcodes the choice cannot say which one it rendered.
+
+    `weights` is therefore an argument with a default rather than a literal in the body,
+    and `validate=False` is exposed because ten of those call sites need it: a config
+    saved inside an old run may not satisfy today's schema, and refusing to load it would
+    make this helper unable to read the runs it exists to read.
+
+    Returns `(model, cfg, device)` -- the config and device because every caller needed
+    them next, for `cfg["data"]["input_size"]` and for moving tensors.
+    """
+    from .config import load_config
+    from .models.hydranet import build_model
+    from .utils.checkpoint import load_checkpoint, select_weights
+    from .utils.device import pick_device
+
+    cfg = load_config(str(config), validate=validate)
+    device = pick_device(cfg.get("device")) if device is None else device
+    model = build_model(cfg).to(device).eval()
+    model.load_state_dict(select_weights(load_checkpoint(str(checkpoint)), weights))
+    return model, cfg, device

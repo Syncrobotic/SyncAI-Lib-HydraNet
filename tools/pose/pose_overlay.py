@@ -28,14 +28,11 @@ from syncai_hydranet.analytics import Tracker
 from syncai_hydranet.analytics.events import pose_posture_events, reach_to_shelf_events
 from syncai_hydranet.analytics.events.pose import _torso
 from syncai_hydranet.analytics.tracker import iou
-from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
-from syncai_hydranet.models.hydranet import build_model
 from syncai_hydranet.serving.decode import MIN_PERSON_FRACTION, person_pixel_fraction
-from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
-from syncai_hydranet.utils.device import pick_device
+from syncai_hydranet.shipped import load_model
 from syncai_hydranet.utils.visualize import preprocess
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
@@ -129,10 +126,7 @@ def main() -> int:
         if args.clip
         else sorted((ROOT / "datasets/studioa_clips" / args.camera).glob("archive_*11*.mp4"))[0]
     )
-    cfg = load_config(args.config, validate=False)
-    device = str(pick_device())
-    model = build_model(cfg).to(device).eval()
-    model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), "ema"))
+    model, cfg, device = load_model(args.config, args.checkpoint, validate=False)
     size = cfg["data"]["input_size"]
     classes = list(cfg["model"]["heads"]["detection"]["classes"])
     person = classes.index("person")

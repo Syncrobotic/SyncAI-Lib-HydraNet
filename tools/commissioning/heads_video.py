@@ -64,13 +64,10 @@ from syncai_bev3d.meshes import (
 from syncai_bev3d.shading import draw_scene
 from syncai_hydranet.analytics import Tracker
 from syncai_hydranet.analytics.staff import StaffModel, require_camera, track_staff
-from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
-from syncai_hydranet.models.hydranet import build_model
-from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
-from syncai_hydranet.utils.device import pick_device
+from syncai_hydranet.shipped import load_model
 from syncai_hydranet.utils.face_blur import BLUR_THR, blur_region, plate_person_boxes
 from syncai_hydranet.utils.visualize import preprocess, terrain_palette
 
@@ -529,10 +526,7 @@ def main() -> int:
         else sorted((ROOT / "datasets/studioa_clips" / camera).glob("archive_*11*.mp4"))[0]
     )
     cf = CameraFile.load(ROOT / f"runs/commission01/{camera}.camera.json")
-    cfg = load_config(args.config, validate=False)
-    device = str(pick_device())
-    model = build_model(cfg).to(device).eval()
-    model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), "ema"))
+    model, cfg, device = load_model(args.config, args.checkpoint, validate=False)
     size = cfg["data"]["input_size"]
     det_names = list(cfg["model"]["heads"]["detection"]["classes"])
     person = det_names.index("person")

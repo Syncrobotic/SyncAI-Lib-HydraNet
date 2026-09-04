@@ -26,11 +26,8 @@ from PIL import Image, ImageDraw
 from scipy import ndimage
 
 from syncai_hydranet.analytics.tracker import iou_pair
-from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
-from syncai_hydranet.models.hydranet import build_model
-from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
-from syncai_hydranet.utils.device import pick_device
+from syncai_hydranet.shipped import load_model
 from syncai_hydranet.utils.visualize import preprocess
 
 ROOT = Path("/home/paul/SyncAI-Lib-HydraNet")
@@ -98,10 +95,7 @@ def main() -> int:
     ap.add_argument("--out", default="runs/dense_vs_box")
     args = ap.parse_args()
 
-    cfg = load_config(args.config, validate=False)
-    device = str(pick_device())
-    model = build_model(cfg).to(device).eval()
-    model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), "ema"))
+    model, cfg, device = load_model(args.config, args.checkpoint, validate=False)
     size = cfg["data"]["input_size"]
     det_names = list(cfg["model"]["heads"]["detection"]["classes"])
     person = det_names.index("person")

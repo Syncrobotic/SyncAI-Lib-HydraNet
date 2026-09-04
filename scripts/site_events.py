@@ -66,12 +66,9 @@ from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
 from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
 from syncai_hydranet.analytics.dwell import track_ground_path  # noqa: E402
 from syncai_hydranet.analytics.tracker import SIMPLIFICATIONS, Tracker  # noqa: E402
-from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
 from syncai_hydranet.geometry.ground import Camera, GroundPlane  # noqa: E402
-from syncai_hydranet.models.hydranet import build_model  # noqa: E402
-from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
-from syncai_hydranet.utils.device import pick_device  # noqa: E402
+from syncai_hydranet.shipped import load_model  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
 
@@ -165,10 +162,7 @@ def busiest_zone(tracks, cam, plane, side: float) -> tuple[ev.Zone, dict]:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    cfg = load_config(args.config)
-    device = pick_device(cfg.get("device"))
-    model = build_model(cfg).to(device).eval()
-    model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), "ema"))
+    model, cfg, device = load_model(args.config, args.checkpoint)
     size = cfg["data"]["input_size"]
     out_root = Path(args.out)
     out_root.mkdir(parents=True, exist_ok=True)

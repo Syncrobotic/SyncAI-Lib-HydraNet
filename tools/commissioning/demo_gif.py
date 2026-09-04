@@ -58,14 +58,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src"))
 
 
-from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.data.video import probe as probe_video
 from syncai_hydranet.geometry.camera_json import CameraFile
-from syncai_hydranet.models.hydranet import build_model
-from syncai_hydranet.shipped import SHIPPED_RUN
-from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
-from syncai_hydranet.utils.device import pick_device
+from syncai_hydranet.shipped import (
+    SHIPPED_RUN,
+    load_model,
+)
 from syncai_hydranet.utils.face_blur import blur_rect, plate_person_boxes
 from syncai_hydranet.utils.visualize import preprocess
 
@@ -296,10 +295,9 @@ def main() -> int:
             )
             return 1
         render_blur_thr = float(meta["blur_score_thr"])
-        cfg = load_config(str(RUN / "config.yaml"), validate=False)
-        device = str(pick_device())
-        model = build_model(cfg).to(device).eval()
-        model.load_state_dict(select_weights(load_checkpoint(RUN / "last.pt"), "ema"))
+        model, cfg, device = load_model(
+            str(RUN / "config.yaml"), RUN / "last.pt", validate=False
+        )
         size = cfg["data"]["input_size"]
         person_label = list(cfg["model"]["heads"]["detection"]["classes"]).index("person")
         src_w, src_h, _ = probe_video(str(clip))

@@ -86,3 +86,37 @@ def test_the_numbers_the_docstring_quotes_are_this_run_s_numbers():
     # which is what lets both accessors return last.pt.
     terrain = sel["heads"]["terrain_mIoU/site_seg03"]
     assert abs(terrain["at_selected"] - 0.6716) < 5e-4
+
+
+def test_load_model_returns_an_eval_model_with_its_config_and_device(tmp_path):
+    """The four lines twenty-six call sites each wrote.
+
+    Held on a tiny config rather than the shipped run, so it runs on a clean checkout:
+    what matters is the contract -- eval mode, the config back for `input_size`, and the
+    device back for moving tensors -- not which weights arrive.
+    """
+    import torch
+
+    from syncai_hydranet.config import load_config
+    from syncai_hydranet.models.hydranet import build_model
+
+    cfg_path = Path(__file__).resolve().parents[1] / "configs" / "hydranet_indoor.yaml"
+    cfg = load_config(str(cfg_path), ["model.backbone.pretrained=false"])
+    ckpt = tmp_path / "w.pt"
+    torch.save({"model": build_model(cfg).state_dict()}, ckpt)
+
+    model, out_cfg, device = shipped.load_model(cfg_path, ckpt, device="cpu", weights="model")
+    assert not model.training, "a loaded model must be in eval mode"
+    assert out_cfg["data"]["input_size"] == cfg["data"]["input_size"]
+    assert str(device) == "cpu"
+
+
+def test_load_model_takes_the_weights_choice_as_an_argument():
+    """`select_weights` records why: EMA weights on a run too short to have earned them
+    scored 0.16 mIoU against the raw weights' 0.95, and a tool that hardcodes the choice
+    cannot say which one it rendered. Twenty-six call sites hardcoded `"ema"`."""
+    import inspect
+
+    sig = inspect.signature(shipped.load_model)
+    assert sig.parameters["weights"].default == "ema"
+    assert sig.parameters["weights"].kind is inspect.Parameter.KEYWORD_ONLY

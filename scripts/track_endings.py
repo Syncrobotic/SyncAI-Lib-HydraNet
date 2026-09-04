@@ -113,12 +113,10 @@ from syncai_hydranet.analytics.clip_tracks import (  # noqa: E402
 )
 from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
 from syncai_hydranet.analytics.tracker import Tracker, iou  # noqa: E402
-from syncai_hydranet.config import load_config  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
 from syncai_hydranet.geometry.camera_json import CameraFile  # noqa: E402
 from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points  # noqa: E402
-from syncai_hydranet.models.hydranet import build_model  # noqa: E402
-from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights  # noqa: E402
+from syncai_hydranet.shipped import load_model  # noqa: E402
 from syncai_hydranet.utils.device import pick_device  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
@@ -536,9 +534,7 @@ def main() -> int:
 
     args.out.mkdir(parents=True, exist_ok=True)
     device = pick_device(None)
-    cfg = load_config(args.config)
-    model = build_model(cfg).to(device).eval()
-    model.load_state_dict(select_weights(load_checkpoint(args.checkpoint), "ema"))
+    model, cfg, _ = load_model(args.config, args.checkpoint, device=device)
 
     fleet, tot = [], {"exit": 0, "lost": 0, "gone": 0}
     wit: dict[str, int] = {}
