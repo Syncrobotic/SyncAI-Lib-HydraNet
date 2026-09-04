@@ -19,8 +19,8 @@ class ModelEMA:
     """Exponential moving average of the weights, with a warmed-up decay.
 
     The average starts from the model's *initial* random weights. At a fixed decay of
-    0.9998 that initialisation is still 97% of the EMA after 160 steps (0.9998^160;
-    an earlier version of this sentence said 45%, which takes ~4,000 steps), and validation
+    0.9998 that initialisation is still 97% of the EMA after 160 steps (0.9998^160 --
+    reaching 45% takes some 4,000), and validation
     -- which runs on the EMA -- reported 0.16 mIoU for a model whose raw weights scored
     0.95. The failure is silent and looks exactly like a model that did not learn.
 

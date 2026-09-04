@@ -43,11 +43,11 @@ from .ground import Camera, GroundPlane, pixel_to_ground, undistort_points
 SCHEMA_VERSION = 3
 
 # Versions this reader accepts, and why each older one is safe to read rather than
-# re-commission. A refusal is the default -- a "schema_version 4" from a newer writer
-# would mean fields whose meaning this code does not know (the example tracks
-# SCHEMA_VERSION + 1; it read "3" when the current version was 2 and a v3 file was
-# briefly, wrongly, described as refusable) -- so an entry here is a claim that nothing
-# a file of that version can contain has changed meaning.
+# re-commission. A refusal is the default -- a file from a *newer* writer carries fields
+# whose meaning this code does not know -- so an entry here is a claim that nothing a file
+# of that version can contain has changed meaning. Deliberately no literal version number
+# in this sentence: one written here goes stale the next time the schema moves, and then
+# names a perfectly readable file as refusable.
 READABLE_VERSIONS = {
     # v1 -> v2 added the `display` zone kind and changed nothing else. Every v1 file is a
     # valid v2 file: no field moved, no unit changed, and the widened set can only make a

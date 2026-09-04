@@ -1,12 +1,10 @@
 """Multi-stream serving pipeline for the 96-stream target.
 
-**96 streams at 5 fps = 480 frames/s** (PLAN 7.4, revised 2026-08-26). This file opened
-with "96-stream x 15 fps" until 2026-08-27, which was the target when it was written.
-(Historical measurements quoted against the 1,440 target survive in `scheduler.py` and
-`cli/export_onnx.py` as records, not as the live target.) The stream
-count is unchanged and is the part this package is built around; only the per-stream rate
-moved, and it moved because every measurement this project makes of its own analytics
-already runs at 5 fps and nothing downstream consumes 15.
+**96 streams at 5 fps = 480 frames/s** (PLAN 7.4). Measurements quoted against 1,440
+frames/s in `scheduler.py` and `cli/export_onnx.py` are records of what was measured, not
+the live target: the per-stream rate is 5 fps because every measurement this project makes
+of its own analytics runs at 5 fps and nothing downstream consumes 15. The stream count is
+the part this package is built around and it has not moved.
 
 Increment 1 of the plan recorded in
 `git show b7457c2:docs/journal/2026-08-19-security-retail-teachers-and-methodology.md`:
