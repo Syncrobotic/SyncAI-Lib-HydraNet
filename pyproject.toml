@@ -188,7 +188,11 @@ packages = ["src/syncai_hydranet", "src/syncai_bev3d"]
 # ---------------------------------------------------------------------------
 [tool.ruff]
 line-length = 96
-target-version = "py310"
+# Matches `requires-python` above. It said py310 until 2026-09-04, three days after
+# the floor moved to 3.11, so every 3.11-only modernisation UP knows about was
+# invisible -- six `datetime.timezone.utc` sites that `datetime.UTC` replaces.
+# A target below the floor is a linter told to check an interpreter nobody runs.
+target-version = "py311"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
@@ -223,7 +227,11 @@ ignore = [
 "tests/*" = ["E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["syncai_hydranet"]
+# BOTH shipped packages: `[tool.hatch.build.targets.wheel]` above lists
+# `syncai_bev3d` too, and omitting it here sorted every cross-package import --
+# `cli/scene.py` has three -- into the third-party block, which is where a reader
+# looks to find out what this project depends on.
+known-first-party = ["syncai_hydranet", "syncai_bev3d"]
 
 [tool.ruff.format]
 quote-style = "double"

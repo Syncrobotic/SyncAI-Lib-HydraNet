@@ -62,7 +62,7 @@ import json
 import sys
 import time
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -171,7 +171,7 @@ PROGRESS_LOG = HERE.parent / "runs/site30k_qa/progress.log"
 
 
 def log_progress(msg: str) -> None:
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     PROGRESS_LOG.parent.mkdir(parents=True, exist_ok=True)
     with PROGRESS_LOG.open("a") as fh:
         fh.write(f"{stamp} {msg}\n")

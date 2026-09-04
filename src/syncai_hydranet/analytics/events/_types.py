@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -346,7 +346,7 @@ def _iso(when: datetime | None) -> str | None:
 CLIP_NAME = re.compile(r"archive_(\d{8}-\d{6})_")
 
 
-def clip_start_from_name(path: str | Path, tz: timezone = timezone.utc) -> datetime:
+def clip_start_from_name(path: str | Path, tz: timezone = UTC) -> datetime:
     """`archive_20260816-113012_20260816-113518.mp4` -> when recording started.
 
     **The stamp in the name is UTC and the stores are UTC+8.** That is not a detail; it
@@ -366,7 +366,7 @@ def clip_start_from_name(path: str | Path, tz: timezone = timezone.utc) -> datet
             f"corpus's `archive_YYYYmmdd-HHMMSS_...` naming; pass the start explicitly "
             f"for a clip from anywhere else."
         )
-    utc = datetime.strptime(m.group(1), "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
+    utc = datetime.strptime(m.group(1), "%Y%m%d-%H%M%S").replace(tzinfo=UTC)
     return utc.astimezone(tz)
 
 
