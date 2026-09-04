@@ -2459,319 +2459,64 @@ something it does not support.
 
 ---
 
-## 8. Health remediation — a working section, deleted when it empties
+## 8. What the health audit changed, and what it taught
 
 A best-practice audit ran on 2026-09-04 over the whole tree (8 sweeps: packaging,
-config, duplication, comment truth, tests, ML engineering, repo hygiene, privacy).
-Every item below was verified against the code, not inferred from a name; where a
-claim is empirical the measurement is quoted. **This section is scaffolding: each
-entry is struck through as it lands and the section is deleted when the last one
-does.** It is not a permanent record — what a fix taught belongs in the section it
-belongs to.
+config, duplication, comment truth, tests, ML engineering, repo hygiene, privacy),
+raising 34 items. All 34 are closed. The working list they were tracked on is gone,
+as it said it would be: the fixes are in the code, the arguments are in the commits
+that made them, and what generalises is here.
 
-The audit's one structural finding, which is why the P0 list looks the way it does:
-**this project's guards are trusted more widely than they reach.** `split_leaks`
-covers one dataset type of five; `CKPT_FORMAT` is written and never read;
-`deterministic` warns instead of enforcing; `check_parity` gates the ONNX and not
-the fp16 engine that ships; the face-blur tests cannot see a blur. A guard that
-half-covers is worse than an absent one, because its presence is read as coverage.
+**The structural finding, which is why the P0 list looked the way it did: this
+project's guards were trusted more widely than they reached.** `split_leaks` covered
+one dataset type of five; `deterministic` warned instead of enforcing; `check_parity`
+gated the ONNX and not the fp16 engine that ships; the face-blur tests could not see a
+blur -- their fixture was `np.zeros`, and a Gaussian blur of a uniform image is the
+identity, so all five passed against a no-op `blur_region`. A guard that half-covers is
+worse than an absent one, because its presence is read as coverage. Every fix in this
+pass was verified by reverting it and watching the test go red.
 
-### P0 — produces wrong results, or fails without saying so
+**Four of the 34 findings were wrong, and the pattern in how is the useful part.** Each
+was wrong because it was read off a name or a grep rather than measured:
 
-1. ~~**The face-blur tests cannot detect a blur.**~~ **DONE.** The fixture is seeded
-   noise, and a new test holds the contract on pixels: head region changed, torso region
-   untouched. Under a no-op `blur_region` three of six tests now fail; before, none did.
-   The original finding: `tests/test_face_blur.py` blurs
-   `_blank()` = `np.zeros(...)`, and a Gaussian blur of a uniform image is the
-   identity. Measured: blank image unchanged by `blur_region`, noise image changed.
-   So `def blur_region(*a): return` keeps all five tests green, and
-   `test_a_numpy_box_blurs_rather_than_raising` has no assert at all. This is the
-   function `test_never_do.py:190` calls "the entire distance between
-   `utils/face_blur.py` and a breach", and the blur has failed before (132 readable
-   heads of 954 boxes). Fix: noise fixture, assert the head region moved and the
-   torso did not.
-2. ~~**The first optimizer step of every run bypasses warmup.**~~ **DONE** --
-   `WarmupCosine.__init__` applies the schedule, and a test reads the param group before
-   the first step. The original finding:
-   `engine/optim.py:50-71` — `WarmupCosine.__init__` records `base_lrs` and never
-   calls `_apply()`; `step()` increments then applies, and the trainer steps the
-   optimizer first. Measured: `param_groups[0]["lr"]` is `2e-4` after construction
-   where warmup wants `4e-7` — **500x**, on freshly initialised heads, carried
-   forward by AdamW's first moment. `load_state_dict` re-applies immediately and
-   says why, so the resume path is right and the fresh path is not. No test reads
-   the LR before the first step.
-3. ~~**No NaN/Inf guard in the training step.**~~ **DONE** -- the optimizer step is
-   skipped when the gradient norm is not finite, counted, and the run aborts after five.
-   It rides on the norm `clip_grad_norm_` already computes. The original finding:
-   `engine/trainer.py` has no `isfinite`/`isnan` anywhere. `GradScaler` would
-   normally skip a poisoned step, but `needs_grad_scaler` correctly returns False
-   for bf16 and bf16 is the default and what every run used. `grad_clip: 10.0` does
-   not help: a NaN gradient yields a NaN norm and writes NaN into every parameter.
-   Silent until the 50-step log, by which time the optimizer state and `last.pt`
-   are poisoned.
-4. ~~**`split_leaks` covers one dataset type of five.**~~ **DONE** -- it now reads both
-   on-disk layouts and considers every dataset with a root, so a `coco` set scoring on a
-   trained camera is reported. The original finding: `data/datasets.py:500` filters
-   `type == "seg_folder"`; the tree also has `coco`, `pose_keypoints`,
-   `rendered_depth`, `nyu_depth`. The retail configs that mix COCO/site boxes with
-   site masks are exactly the ones at risk, and this guard's docstring — which names
-   the incident and its cost of three seeds — is what anyone will point at when
-   asked whether leakage is checked.
-5. ~~DONE~~ -- `_calibration_scale` derives it from `cf.image_size_px` against the
-   decoded frame's size, `track_states` takes `source_size_px` and warns when a caller
-   omits it, and all five call sites in `demo_video.py` and `heads_video.py` pass it (the
-   two chunk helpers probe the clip). The finding: `figures.py` wrote `/ 2.0` where
-   `analytics/world.py`'s `_to_calibrated_pixels` derives it and carries a 1.5x-canvas
-   refusal -- correct only while every camera is commissioned at exactly half the decode
-   resolution, which is today's fleet and not a property of anything.
+* *"`place_boxes` and `track_ground_path` have drifted apart."* They had not.
+  `clip_tracks.tracks_for_clip` undistorts upstream and passes `k1` as a keyword-only
+  argument with no default, so the second call site cannot silently skip it.
+* *"`select_weights`'s 'every caller goes through this' is bypassed by three scripts."*
+  All three go through it. But it pointed at a real defect one level down: the
+  *fallback* was silent, and `cli/export_onnx.py` had already worked that out and
+  recovered the answer with an identity test on the returned dict.
+* *"Configs for the deleted quadruped line survive as fixtures."* The dangling dataset
+  path was inside a comment, and the config that looked orphaned was the only test of a
+  taxonomy `src/` still shipped. Retiring the taxonomy was the real question, and it was
+  taken deliberately rather than as cleanup.
+* *"The 26 absolute `ROOT` constants encode a real assumption -- leave them."* 26 of the
+  27 named the repo root itself, not `runs/` or `datasets/`, and each sat exactly two
+  levels below it, so `parents[2]` was the same directory computed. The failure they
+  caused was also worse than the one they were weighed against: with two checkouts on
+  one box, a tool run from the second reads the first's `runs/` and answers about the
+  wrong tree, with no error at all.
 
-### P1 — green lights wired to nothing
+**Three decisions, so they are not rediscovered as findings:**
 
-6. ~~DONE~~ (`assert len(f) == len(q)`; at `pre_nms_topk=3` the decode returns 3
-   against the full decode's 100, which the prefix comparison passed). It compared only `[:min(len(f), len(q))]`, so the
-   truncation it exists to catch shortens both sides and passes. One line:
-   `assert len(f["boxes"]) == len(q["boxes"])`.
-7. ~~**CI has no ffmpeg.**~~ **DONE** -- installed in both tiers, so the video path is
-   gated rather than skipped. 8 tests skipped there: `hydranet-infer-video`,
-   `hydranet-scene` (two shipped console scripts) and the whole decode-error
-   contract run nowhere in CI. One `apt-get install ffmpeg` line converts 8 loud
-   skips into 8 real gates.
-8. ~~DONE~~ as far as it honestly goes. `serving/uint8_input.py` 0% -> **98%** (the
-   assertion that matters is numerical -- the rewritten graph returns byte-identical
-   output for the same frame), `shipped.py` 0% -> **100%**, `serving/engine.py` 0% ->
-   **18%** by extracting `io_specs` from `TrtExecutor.__init__`: the binding split needs
-   no GPU, and it holds the two refusals that decide whether the rest of the executor is
-   pointed at the right tensors. The two-input case is the one worth having a test for --
-   without the guard the second input lands in `output_specs`, gets buffers, and is copied
-   *back* after every batch, so the executor reads uninitialised device memory and hands
-   it to the caller as a head's output, with nothing raising.
+* **No LFS.** The 113 MB was 88 MB of loose objects, not history; one `git gc` took
+  `.git` to 78 MB. LFS would have rewritten history on a repo three branches and several
+  sessions share, to reclaim space that was never in it. Re-run `git gc` if it grows.
+* **`dev` is meant to lag `main`.** `dev` sits at `0.1.0` with no CHANGELOG while `v0.4.0`
+  is released, because release-please writes to `main` and nothing flows back. That is the
+  design. A version bump is metadata *about a release* and putting it on the unreleased
+  branch would make `dev` claim something untrue. Do not back-merge to make them agree.
+* **Privacy is a publication-time control here, not a runtime one.** `face_blur` is used
+  by the figure tools and one CLI, and by nothing on the serving or analytics path;
+  retention is `scripts/retention_sweep.py` rather than policy in code. Coherent as
+  designed -- the analytics path keeps positions and dwell times, not faces, and the faces
+  that leave this repository leave through a figure. Do not read the blur as a runtime
+  guarantee it does not make.
 
-   **The remaining 82% needs a card and is stated as the gap it is**, in
-   `tests/test_serving_engine.py`'s own docstring so the file cannot be mistaken for a
-   claim that the executor is tested: the stream and event choreography in `submit`, the
-   pinned-buffer lifetime rules, and `close`. The `scripts/` + `tools/` coverage floor
-   moves 9 -> 11 on the back of this (a full box reads 12).
-
-   The original finding: `serving/engine.py` -- the executor every throughput figure rests
-   on -- has 0 test references. `serving/uint8_input.py` likewise. `shipped.py`, which
-   decides which run and which checkpoint ship, likewise -- on a project that shipped a
-   40%-worse person detector by trusting one metric.
-9. ~~DONE~~ (anchored to `parents[1]`; run from `/tmp` it skipped before and all eight
-   tests run after). It guarded on a path relative to the invocation directory, so it skips silently from anywhere but the repo root. Every other guard
-   anchors to `parents[1]`, and `test_zone_bridge.py:91` cites *this file* as the
-   pattern to copy.
-10. ~~DONE~~, and the measurement corrected the fix: the fixture reads 0.0294 then
-    0.0743 against ~0.111 for a constant prediction, so it does NOT beat chance and the
-    docstring claiming it must was wrong too. It now asserts epoch-over-epoch
-    improvement, which four steps can show. `test_smoke` gained all three assertions.
-    The original finding: `test_trainer.py:135` asserts `mIoU > 0.0` on a 3-class problem (a constant
-    prediction clears it) while claiming "must beat chance"; `tests/test_smoke.py:80`
-    runs the whole training step with no assertion at all.
-11. ~~DONE~~ -- `tests/conftest.py` fails the session above 25 skips, verified by
-    setting the ceiling to 0 against a run with two. The original finding: A path typo turns a running test into a
-    permanent skipper and only a reader notices — which is how item 9 was found.
-
-### P2 — duplicated logic, drifted copies first
-
-12. ~~DONE~~ -- floorplan's is `FloorRaster`, each definition names the other, and
-    `tests/test_bev_row_conventions.py` pins both ends. The original finding:
-    `bev.py:47` puts row 0 at the far edge (documented), `floorplan.py:78` at the
-    near edge. `analytics/dwell.py`'s `GroundMap` is a third copy with its own field
-    names. Reading one's raster with the other's convention is a vertical mirror.
-13. ~~NOT A BUG~~, traced rather than taken: `clip_tracks.tracks_for_clip` undistorts
-    the corners before the tracker sees them (its `k1` is keyword-only with no default so
-    a caller cannot forget), and `bev.place_boxes`' one caller reaches it from
-    `cli/scene.py`, which builds its Camera from `--vfov` and has no lens at all. Both
-    docstrings now state the contract and the existing test says which consumers it
-    protects. The original reading:
-    the four other copies of that arithmetic undistort first. `geometry/ground.py:186`
-    names this as the silent-drift case in as many words.
-14. ~~DONE~~ -- one `load_crop_encoder` in the package, four tests pinning the three
-    properties that differed. Measured on the way: train-mode and eval-mode outputs differ
-    on identical input, so the missing `.eval()` moved every number that script reported.
-    The original finding: `scripts/eval_attributes.py:141`
-    omits `.eval()` (BatchNorm keeps updating while scoring),
-    `scripts/offline_tracks.py:135` takes the default `embed_dim` and
-    `pretrained=True`, and only `eval_attributes` validates the attribute order.
-15. ~~DONE~~, and the disagreement was the content rather than the duplication. One
-    `CameraFile.ground_points(..., above_horizon=)`. Both answers were right for their own
-    input: a projected mask legitimately reaches past the horizon and those rows are not
-    floor, while a hand-drawn zone vertex up there is an operator error that survives as a
-    polygon testing False for every point inside it, forever. So the policy is an argument
-    with no permissive default, and a test pins the refusal of a third word -- falling
-    through to `drop` is exactly what a truthiness check would have done.
-16. ~~WRONG~~ as written -- all three go through `select_weights` -- but it pointed at a
-    real one. The *fallback* was silent: ask for `"ema"` on a checkpoint with none and you
-    get the raw tensors, which by that function's own docstring may be a different model
-    (0.16 mIoU against 0.95). `cli/export_onnx.py` had recovered the answer with an
-    identity test on the returned dict to keep its provenance honest. `chosen_weights`
-    returns the name beside the tensors now, and `shipped.load_model` warns when what it
-    got is not what was asked for -- `"ema"` is its default, so a run trained without EMA
-    was loaded from raw weights by every tool that never passed the flag.
-17. ~~DONE~~. The 1.70 m prior, `k1 = -0.225` (now `plate_calibration.K1_FLEET`) and
-    ImageNet normalisation each have one source, held by `tests/test_shared_constants.py`.
-    `meshes.human` keeps a literal default deliberately -- importing the calibration stack
-    into a pure-geometry module to read one float would cost every mesh consumer PIL --
-    so the test holds that agreement instead.
-
-    The thresholds turned out to be three operating points, not one, and the count was
-    the least of it. Fourteen `--score-thr` defaults wrote a bare float; the tree already
-    named `BIRTH_REF` (0.35), `SCORE_THR_RETAIL` (0.20) and `SCORE_THR_VIEW` (0.30), and
-    *which* a tool means is the entire content of the choice. `track_review propose`
-    defaulted to 0.25, which is none of them, and `detection.py`'s own table settles it:
-    at 0.25 Kaohsiung-cam08 returns 0.0 boxes per frame -- a review tool proposing nothing
-    on half the fleet looks like a quiet camera. `teachers.gdino.PERSON_THRESHOLD` is also
-    0.35 and is deliberately left alone: coinciding today is not a relationship.
-18. ~~DONE~~ -- both halves. All 18 bare `torch.cuda.is_available()` ternaries are
-    `str(pick_device())`, so the no-kernels refusal and MPS selection reach every script
-    and tool (the type ratchet caught 37 downstream signature mismatches on the first
-    attempt, doing its job on a mechanical change), and `shipped.load_model` replaced the
-    four-line sequence at the 11 call sites whose copies matched exactly. The rest
-    interleave other work and are left. The original finding: ~22 copies, of which **17
-    use a bare `torch.cuda.is_available()`** and so skip
-    `_refuse_a_build_with_no_kernels` -- the check written because a build without this
-    card's kernels is 40x slower and says nothing.
-
-### P3 — comments that are false about the code beneath them
-
-19. ~~DONE~~ -- all four corrected, and `tests/test_prose_matches_the_tree.py` is a
-    tripwire on the exact wording plus a read-back of the numbers they now quote.
-    retail_flow's was corrected precisely rather than deleted: its blocker is a hand
-    COUNT of an hour of footfall, which labelled identities do not supply. The finding:
-    (`analytics/reid_metrics.py:16`, `analytics/bytetrack.py:21`,
-    `scripts/track_review.py:20`, `scripts/retail_flow.py:25`). Seven exist
-    (`runs/gt_*`) and `idf1()` has run on them (`runs/gt_cam01/idf1.json`, IDF1
-    0.7387). `scripts/track_review.py` is the tool that labels them.
-20. ~~DONE~~ -- the old table stays as what it is, the incident the module was written
-    after, beside person01's own numbers (118 of 120 on a flat curve), and a test reads
-    them back from selection.json. The finding:
-    `runs/hydranet_retail_person01/selection.json` says epoch 118, and `for_terrain()`
-    twelve lines below contradicts the table outright.
-21. ~~DONE~~ -- world.py says three and lists three (events/pose.py was the uncounted
-    one), stage.py says five, heads_video says six. The finding: `analytics/world.py:7` says
-    "three places" over two (and misses a third that qualifies);
-    `analytics/stage.py:11` says "Four components" over a five-row table;
-    `tools/commissioning/heads_video.py:682` says "four panels" where six are pasted
-    and its own module docstring says six.
-22. ~~DONE~~ -- the comment now says what is true: nothing reads `_torso` off the
-    package, so the re-export is the leftover it denied being. The finding:
-    because `pose_overlay.py` reads it; `pose_overlay.py:29` imports from the
-    submodule, so the re-export is exactly the leftover the comment denies.
-23. ~~DONE~~ -- the docstring states the relationship: 16 is half the 32 px floor, and
-    deliberately, because gating at 32 would decline boxes the survey calls ordinary.
-    The finding:
-    `min_box_px: float = 16.0` default, written so the two read as one number.
-24. ~~DONE~~ -- the `git show` pointer is there now. The finding:
-    `git show <sha>^:<path>` pointer this repo requires and its sibling `shading.py:5`
-    supplies.
-25. ~~DONE~~ -- five more, and one of the six named was a false positive.
-    `serving/__init__.py` opened by saying what it used to say, `ema.py` carried a
-    parenthesis correcting an earlier draft of its own sentence, `resplit_selling_floor.py`
-    denied a flag it had once claimed, `temporal.py` (not on the list, found by the sweep)
-    described a misreading a previous version of its own line had made, and
-    `camera_json.py` recounted an off-by-one in itself. Two got better rather than shorter:
-    temporal.py now states the global counter as the natural misread and what it would do,
-    and camera_json.py drops the literal version number from its refusal sentence entirely
-    -- a number there goes stale the next time the schema moves and then names a readable
-    file as refusable, which is the very mistake the deleted narration was about.
-    `analytics/world.py` is **not** one of these: its history passage is design rationale
-    for where the module lives. The "X was wrong until \<date\>" lines elsewhere stay --
-    those are true about artefacts a reader may still hold, not about the sentence they
-    sit in.
-
-### P4 — configuration and hygiene
-
-26. ~~DONE~~ -- py311, and the six UP017 fixes it had been hiding are applied
-    (`datetime.UTC` is the same object as `timezone.utc`, so the autofix is a rename).
-    The finding:
-    Measured: 6 UP017 fixes hidden, all autofixable.
-27. ~~DONE~~ -- both shipped packages are first-party now. The finding: it omitted
-    `syncai_bev3d`, the other shipped
-    package, so cross-package imports sort as third-party.
-28. ~~DONE~~ -- `scripts/coverage_ratchet.sh` holds two floors against one test run:
-    `src/` at 85 (reading 87) and `scripts/` + `tools/` at 9 (reading 9). Two rather than
-    one because a combined figure is dominated by whichever tree grows faster and fails
-    in the direction nobody watches. The dev floor went in at 7 for headroom, CI printed
-    9, and it was tightened to 9 -- a floor below the true value is decoration. The
-    finding: the coverage floor covered `src/` only, leaving 7,453 statements, more than
-    half the Python in the tree, measured by nothing.
-29. ~~DONE~~ -- the block carries no figures at all now, which is what its own neighbour
-    prescribes. The finding: it said `plate_calibration.py` is at 10% and
-    `floorplan.py` at 0%; measured today they are **97% and 95%**, and the real floor
-    of the tree is `figures.py` at 39%. Its own neighbour 90 lines up states the rule
-    it breaks: "A count belongs where it is enforced."
-30. ~~DONE~~, and **measuring it reversed the decision I had recorded here.** The
-    entry argued the 26 absolute `ROOT` constants encoded a real assumption -- that the
-    tool runs on the box holding the corpus -- and that deriving them would trade a
-    `FileNotFoundError` for a silent read of another machine's empty `runs/`. Wrong on the
-    premise: 26 of the 27 named the *repo root itself*, not `runs/` or `datasets/`, and
-    every one sits exactly two levels below it, so `parents[2]` is the same directory
-    computed rather than an approximation of what they said.
-
-    The failure it removes is also worse than the one it was weighed against. Absolute
-    paths do not merely break on another machine; with two checkouts on *this* one, a tool
-    run from the second reads the first's `runs/` and answers about the wrong tree,
-    plausibly and with no error at all. 32 files in total, including three loading
-    `recipe.py` by absolute path and two that had already derived `_REPO` and then wrote
-    the literal out beside it. `test_no_absolute_sys_path.py` widens from the `sys.path`
-    half to any hardcoded home directory, exempting only `analytics/delivery.py` and
-    `test_delivery.py`, where the path is payload a client sends rather than a path the
-    code takes.
-31. ~~DECISION NEEDED~~ -- **answered by measurement: no LFS, and nothing to do.** The
-    113 MB was 88 MB of loose objects, not history. A single `git gc` took `.git` to 78 MB
-    and the question with it. LFS would have rewritten history on a repo three branches
-    and several sessions share, to reclaim space that was never in the history. Re-run
-    `git gc` if it grows again; do not reach for LFS on this number.
-32. ~~DECISION NEEDED~~ -- **DECIDED 2026-09-04 by the user: `dev` is meant to lag, and
-    nothing back-merges into it.** `dev` sits at `__version__ = "0.1.0"` with no CHANGELOG
-    while `v0.4.0` is released; release-please writes to `main` and that is the whole
-    design, not drift to be repaired. The version on `dev` is not a claim about what is
-    released -- `main` is -- and a back-merge to make the string agree would put release
-    metadata on the branch that has not been released.
-
-    I merged `origin/main` into `dev` on the reading that a contributor reading `dev` is
-    told the wrong version, and was told to revert it. The merge was never pushed; `dev`
-    was reset to the pushed commit. **Do not do this again**, and do not treat the
-    `0.1.0` on `dev` as a finding: this entry is the record that it was raised and
-    answered.
-33. ~~Configs for the deleted quadruped line survive as test fixtures, so real configs
-    and fixtures share one directory.~~ **WRONG ON BOTH COUNTS, investigated 2026-09-04
-    when it came up for work.**
-
-    * `hydranet_indoor.yaml`'s dangling `datasets/site` is a **commented-out** entry
-      (`# - name: syncrobotic_site`); the original grep matched a comment. The config is
-      healthy and heavily used -- 4 production references, 11 tests, 7 trained runs.
-    * `hydranet_regnet800mf.yaml` is not orphaned config for a deleted line. It is the
-      **only config exercising a taxonomy `src/` still ships**: `label_maps.py` registers
-      `rugd` and `rellis` schemes (~61 lines of colour and id maps), `visualize.py`
-      carries `TERRAIN_COLORS_OFFROAD` (~23 lines) selected by the `dirt` key, and
-      `config_schema.py` accepts `rugd_color` as a `label_format`. Delete the config and
-      ~84 lines of shipped code lose their only test.
-    * Only three configs are pure fixtures with no run history (`eval_indoor25`,
-      `hydranet_retail_cocostuff`, `hydranet_retail_security_b03_cw_hires_seed13`). Three
-      of thirty-four is not sprawl, and moving them out would exempt them from
-      `test_config_defaults.py`'s directory-wide conformance check, which is a feature.
-
-    **What is actually open, and it is a product decision rather than a cleanup**: the
-    off-road taxonomy is still shipped surface area more than two weeks after the
-    quadruped line was deleted (2026-08-19, `cc80fc3`). Either it is retained
-    deliberately -- the CCTV fleet has outdoor cameras and `dirt` is a real terrain -- or
-    it goes, and the config and its tests go with it. This is the case the unused-symbol
-    rule covers: a symbol with no caller is either outdated or early, and only the person
-    who wanted it can say which.
-34. Privacy is a publication-time control, not a runtime one: `face_blur` is used by
-    the figure tools and one CLI, and by nothing on the serving or analytics path;
-    retention exists as `scripts/retention_sweep.py` rather than as policy in code.
-    Defensible as designed — recorded so it is not mistaken for runtime PII control.
-
-### What the audit found healthy, so it is not re-litigated
-
-`torch.load` safety (`weights_only=True` pinned, enforced by a grep test over `src/`
-and `scripts/`); `filterwarnings = ["error", ...]` with narrow justified exemptions;
-`ty_ratchet.sh` refusing exit code 2 rather than flattening it to zero;
-`test_deleted_docs_are_cited_as_history.py`, measured 16/16 compliant; gradient
-accumulation, AMP ordering, scheduler-per-optimizer-step and the EMA/channels_last
-ordering all correct; `_refuse_a_build_with_no_kernels`; export bindings renamed per
-contract so a mismatched host fails to find its binding; no `cv2` anywhere, so the
-BGR/RGB serving bug is structurally absent; no mocks, no sleeps, no bare `except`,
-no repo-tree writes in 2,446 tests; zero TODO/FIXME in the tree.
+**Two failures worth not repeating.** A shell glob expanded `[[...]]` while editing this
+document and replaced per character; the same class of accident had earlier eaten three
+backtick references out of a docstring in `tools/commissioning/service_zones.py`, where it
+sat unnoticed through two commits. Edit prose through a file-based script, not a shell
+one-liner. And a figure's audit must be re-cut *after* the code commit lands, not before,
+or it records a version the tree has already left -- which put a red `dev` on the board
+once in this pass.
