@@ -138,11 +138,26 @@ def test_checkpoint_is_at_the_final_epoch(finished_run):
 
 
 def test_the_model_learned_something(finished_run):
-    """The fixture is trivially separable, so a working loop must beat chance."""
+    """The metric moves in the right direction between the two epochs.
+
+    **It does not beat chance, and the previous version of this test claimed it did.**
+    Measured on this fixture: mIoU 0.0294 after epoch 1 and 0.0743 after epoch 2, against
+    roughly 0.111 for predicting one class everywhere -- four optimizer steps do not clear
+    that, and `01_caution` carries zero support here so a third of the mean is pinned at
+    zero whatever the model does. The old assertion was `> 0.0`, which a constant
+    prediction satisfies, under a docstring saying a working loop "must beat chance".
+
+    Epoch-over-epoch improvement is what four steps CAN demonstrate, and it is not free:
+    a loop that stopped applying gradients, or applied them at the wrong LR, fails here.
+    The run is seeded, so this is deterministic rather than a coin flip -- three runs
+    returned the same two numbers to every decimal.
+    """
     rows = [
         json.loads(x) for x in (finished_run.out_dir / "metrics.jsonl").read_text().splitlines()
     ]
-    assert rows[-1]["traversability_mIoU"] > 0.0
+    assert len(rows) == 2, "the fixture trains two epochs; the comparison below needs both"
+    first, last = rows[0]["traversability_mIoU"], rows[-1]["traversability_mIoU"]
+    assert last > first, f"mIoU did not improve across epochs: {first} -> {last}"
 
 
 # ------------------------------------------------------------------- resume
