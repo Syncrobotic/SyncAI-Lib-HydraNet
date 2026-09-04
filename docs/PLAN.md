@@ -2647,13 +2647,22 @@ half-covers is worse than an absent one, because its presence is read as coverag
 
 ### P4 — configuration and hygiene
 
-26. `[tool.ruff] target-version = "py310"` against `requires-python = ">=3.11"`.
+26. ~~DONE~~ -- py311, and the six UP017 fixes it had been hiding are applied
+    (`datetime.UTC` is the same object as `timezone.utc`, so the autofix is a rename).
+    The finding:
     Measured: 6 UP017 fixes hidden, all autofixable.
-27. `known-first-party = ["syncai_hydranet"]` omits `syncai_bev3d`, the other shipped
+27. ~~DONE~~ -- both shipped packages are first-party now. The finding: it omitted
+    `syncai_bev3d`, the other shipped
     package, so cross-package imports sort as third-party.
-28. The coverage floor covers `src/` only. `scripts/` (15.5k lines) and `tools/`
-    (10.9k) — more than half the Python in the tree — have no floor at all.
-29. `pyproject.toml`'s coverage comment says `plate_calibration.py` is at 10% and
+28. ~~DONE~~ -- `scripts/coverage_ratchet.sh` holds two floors against one test run:
+    `src/` at 85 (reading 87) and `scripts/` + `tools/` at 9 (reading 9). Two rather than
+    one because a combined figure is dominated by whichever tree grows faster and fails
+    in the direction nobody watches. The dev floor went in at 7 for headroom, CI printed
+    9, and it was tightened to 9 -- a floor below the true value is decoration. The
+    finding: the coverage floor covered `src/` only, leaving 7,453 statements, more than
+    half the Python in the tree, measured by nothing.
+29. ~~DONE~~ -- the block carries no figures at all now, which is what its own neighbour
+    prescribes. The finding: it said `plate_calibration.py` is at 10% and
     `floorplan.py` at 0%; measured today they are **97% and 95%**, and the real floor
     of the tree is `figures.py` at 39%. Its own neighbour 90 lines up states the rule
     it breaks: "A count belongs where it is enforced."
