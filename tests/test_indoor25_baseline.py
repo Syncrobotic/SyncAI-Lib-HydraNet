@@ -22,6 +22,14 @@ from syncai_hydranet.config_schema import check_config
 from syncai_hydranet.data.coco_subsets import INDOOR_25
 
 CONFIGS = Path(__file__).resolve().parents[1] / "configs"
+# Anchored like CONFIGS above, and it was not until 2026-09-04: a bare relative
+# `datasets/...` resolves against the INVOCATION directory, so this guard skipped
+# from anywhere but the repo root and the test simply never ran. `test_zone_bridge`
+# cites this file as the pattern for an artefact the repository does not ship, which
+# is the reason to make the citation true rather than to fix it quietly.
+COCO_VAL_ANNOTATIONS = (
+    Path(__file__).resolve().parents[1] / "datasets/coco/annotations/instances_val2017.json"
+)
 EVAL_CFG = CONFIGS / "eval_indoor25.yaml"
 
 # From runs/hydranet_joint_coco10/best.pt on val2017, COCO block at sample_ratio 0.1.
@@ -103,7 +111,7 @@ def test_score_classes_is_not_set_on_the_training_configs():
 
 
 @pytest.mark.skipif(
-    not (Path("datasets/coco/annotations/instances_val2017.json")).exists(),
+    not COCO_VAL_ANNOTATIONS.exists(),
     reason="needs the real COCO annotations",
 )
 def test_every_name_is_a_real_coco_category():
@@ -114,6 +122,6 @@ def test_every_name_is_a_real_coco_category():
     from pycocotools.coco import COCO
 
     with contextlib.redirect_stdout(io.StringIO()):
-        coco = COCO("datasets/coco/annotations/instances_val2017.json")
+        coco = COCO(str(COCO_VAL_ANNOTATIONS))
     names = {c["name"] for c in coco.loadCats(coco.getCatIds())}
     assert not [n for n in INDOOR_25 if n not in names]
