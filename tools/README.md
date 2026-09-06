@@ -55,7 +55,11 @@ control so flatness cannot be read as a verdict; it is what caught MapAnything's
 scale offset rather than a fix (2026-08-30). `map_anything_eval.py` asks an independent
 metric model the two questions the fleet cannot check from inside — what the vfov is
 (38.26° against the pinned 70.4°, still unresolved) and whether cross-camera registration
-holds, with a negative control.
+holds, with a negative control. Both instruments take two more models since 2026-09-06
+(PLAN §7a.32): Depth Anything 3 and VGGT, through `syncai_bev3d.geometry_teachers`, each
+by its commit id on the command line — `--backend da3|vggt --revision <sha>` for the
+lens, `--source da3|vggt-floorfit --revision <sha>` for the depth. Neither has run yet;
+the predictions are written in the item.
 
 **Figures, and the audit that licenses them.** `demo_video.py` renders the three-minute
 demo and **blurs every face by two instruments before any panel is drawn**;

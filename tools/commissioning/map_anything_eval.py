@@ -3,6 +3,19 @@
 
     tools/commissioning/map_anything_eval.py intrinsics --out runs/mapany01
     tools/commissioning/map_anything_eval.py register   --out runs/mapany01
+    tools/commissioning/map_anything_eval.py intrinsics --backend da3  --revision <sha> \
+        --out runs/vfov_da3_01
+    tools/commissioning/map_anything_eval.py intrinsics --backend vggt --revision <sha> \
+        --out runs/vfov_vggt01
+
+**The intrinsics question now has three backends** (2026-09-06, PLAN §7a.32): MapAnything,
+Depth Anything 3 and VGGT, through `syncai_bev3d.geometry_teachers`. Same undistorted plate,
+same anchor, same focal ratio. The prediction written before either new one ran: both
+disagree with the tile grid the way MapAnything did, because single-image focal estimation
+resolves the focal/scale ambiguity from learned object-size priors and a shop from a
+ceiling corner is not what those priors were fitted on. A backend inside 5 deg of 70.4 on
+the anchor would be the first independent confirmation of the fleet's assumed vfov; one
+that is not is a third estimate beside two others, and no more.
 
 Two questions, and the second one only means anything because of the control.
 
@@ -238,17 +251,79 @@ def undistorted_plates(dest: Path) -> dict[str, Path]:
     return made
 
 
-def _vfov_of(k_matrix, height_px: int) -> float:
-    return math.degrees(2 * math.atan((height_px / 2) / float(k_matrix[1, 1])))
+# Loaded once per process; a dict rather than an attribute on the function so the type
+# checker can see it.
+_MAPANYTHING: dict = {}
 
 
-def run_intrinsics(plates: dict[str, Path]) -> dict[str, dict]:
-    """One reading per camera: what the model thinks the lens is."""
+def _vfov_mapanything(path: Path) -> tuple[float, dict]:
+    """MapAnything's answer for one plate: vfov, plus nothing it does not say."""
     import numpy as np
     import torch
     from mapanything.utils.image import load_images
 
-    model, _dev = _load_model()
+    from syncai_bev3d.geometry_teachers import vfov_from_intrinsics
+
+    if "model" not in _MAPANYTHING:
+        _MAPANYTHING["model"], _ = _load_model()
+    views = load_images([str(path)])
+    h = int(views[0]["img"].shape[-2])
+    with torch.no_grad():
+        pred = _MAPANYTHING["model"].infer(
+            views,
+            memory_efficient_inference=True,
+            use_amp=True,
+            amp_dtype="bf16",
+            apply_mask=True,
+        )
+    v = pred[0] if isinstance(pred, list) else pred
+    k_matrix = np.asarray(v["intrinsics"][0].float().cpu())
+    return vfov_from_intrinsics(k_matrix, h), {}
+
+
+def _vfov_teacher(backend: str, revision: str):
+    """DA3 or VGGT through `geometry_teachers`; the reading carries its own provenance."""
+
+    def _run(path: Path) -> tuple[float, dict]:
+        import numpy as np
+        from PIL import Image
+
+        from syncai_bev3d.geometry_teachers import READERS
+
+        rgb = np.asarray(Image.open(path).convert("RGB"))
+        r = READERS[backend](rgb, revision)
+        return r.vfov_deg, {
+            "model": r.model,
+            "revision": r.revision,
+            "processed_hw": list(r.processed_hw),
+            "aspect_drift": round(r.aspect_drift, 4),
+        }
+
+    return _run
+
+
+BACKENDS = ("mapanything", "da3", "vggt")
+
+
+def intrinsics_backend(backend: str, revision: str | None):
+    """The vfov function `backend` names, or a refusal that says what it needed."""
+    if backend == "mapanything":
+        return _vfov_mapanything
+    if backend in BACKENDS:
+        if not revision:
+            raise ValueError(
+                f"--backend {backend} loads a model outside this repository and needs "
+                "--revision <40-char commit id>; see syncai_bev3d.geometry_teachers.pinned"
+            )
+        return _vfov_teacher(backend, revision)
+    raise ValueError(f"unknown backend {backend!r}; one of {BACKENDS}")
+
+
+def run_intrinsics(
+    plates: dict[str, Path], backend: str = "mapanything", revision: str | None = None
+) -> dict[str, dict]:
+    """One reading per camera: what the model thinks the lens is."""
+    vfov_of = intrinsics_backend(backend, revision)
     base = commissioned()
     readings = {}
     # Only the commissioned cameras. `undistorted_plates` deliberately returns more than
@@ -258,23 +333,14 @@ def run_intrinsics(plates: dict[str, Path]) -> dict[str, dict]:
     for cam, path in sorted(plates.items()):
         if cam not in base:
             continue
-        views = load_images([str(path)])
-        h = int(views[0]["img"].shape[-2])
-        with torch.no_grad():
-            pred = model.infer(
-                views,
-                memory_efficient_inference=True,
-                use_amp=True,
-                amp_dtype="bf16",
-                apply_mask=True,
-            )
-        v = pred[0] if isinstance(pred, list) else pred
-        k_matrix = np.asarray(v["intrinsics"][0].float().cpu())
-        vf = round(_vfov_of(k_matrix, h), 2)
+        vfov, extra = vfov_of(path)
+        vf = round(vfov, 2)
         readings[cam] = {
+            "backend": backend,
             "vfov_deg": vf,
             "commissioned_height_m": base[cam]["height_m"],
             "commissioned_pitch_deg": base[cam]["pitch_deg"],
+            **extra,
         }
         if cam == ANCHOR_CAMERA:
             readings[cam]["focal_ratio_vs_tile_grid"] = round(
@@ -338,7 +404,26 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("mode", choices=("intrinsics", "register"))
     ap.add_argument("--out", required=True, help="run directory for the readings")
+    ap.add_argument(
+        "--backend",
+        default="mapanything",
+        choices=BACKENDS,
+        help="intrinsics only: which model is asked what the lens is",
+    )
+    ap.add_argument(
+        "--revision",
+        help="full commit id of the checkpoint; required for --backend da3 / vggt",
+    )
     a = ap.parse_args(argv)
+    if a.mode == "register" and a.backend != "mapanything":
+        print("::error::register runs on MapAnything only; --backend applies to intrinsics")
+        return 2
+    if a.mode == "intrinsics":
+        try:
+            intrinsics_backend(a.backend, a.revision)
+        except ValueError as e:
+            print(f"::error::{e}")
+            return 2
 
     out_dir = Path(a.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -352,8 +437,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if a.mode == "intrinsics":
-        readings = run_intrinsics(plates)
-        (out_dir / "intrinsics.json").write_text(json.dumps(readings, indent=2) + "\n")
+        readings = run_intrinsics(plates, a.backend, a.revision)
+        (out_dir / f"intrinsics_{a.backend}.json").write_text(
+            json.dumps(readings, indent=2) + "\n"
+        )
         anchor = readings.get(ANCHOR_CAMERA, {})
         if "focal_ratio_vs_tile_grid" in anchor:
             print(

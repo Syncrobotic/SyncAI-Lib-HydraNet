@@ -171,3 +171,47 @@ def test_the_bench_reads_heights_at_the_percentiles_the_renderer_draws():
         assert mesh.get(name) == pct, (
             f"the bench reads {name} at p{pct}; scene_mesh draws it at p{mesh.get(name)}"
         )
+
+
+# ---------------------------------------------------------------------------
+# the relative-depth refit, and the sources that need a pin
+
+
+def test_floor_fit_scale_recovers_the_factor_a_relative_depth_lost(tmp_path):
+    """Halve the ground plane's depth and the fit must say 'multiply by two'.
+
+    A relative depth is the true one times an unknown scalar; the only witness for that
+    scalar here is the floor at height zero. If this drifts, `vggt-floorfit`'s floor
+    columns stop being true by construction and start looking like a measurement.
+    """
+    geo = _fake_camera(tmp_path, "synth")
+    walk = gb._walkable_for(geo)
+    assert walk is not None
+    flat = gb.source_flat(geo)
+    assert gb.floor_fit_scale(flat, geo, walk) == pytest.approx(1.0, rel=1e-6)
+    assert gb.floor_fit_scale(flat * 0.5, geo, walk) == pytest.approx(2.0, rel=1e-6)
+    r = gb.score("synth", "vggt-floorfit", flat * 0.5 * 2.0, geo, tmp_path)
+    assert r.floor_offset_m == pytest.approx(0.0, abs=1e-6)
+
+
+def test_floor_fit_scale_abstains_without_enough_floor(tmp_path):
+    geo = _fake_camera(tmp_path, "synth")
+    walk = np.zeros_like(gb._walkable_for(geo))
+    assert math.isnan(gb.floor_fit_scale(gb.source_flat(geo), geo, walk))
+
+
+def test_a_pinned_source_without_a_revision_is_a_refusal_not_a_download():
+    """The two external models take their commit id on the command line; a bench that
+    silently resolved upstream `main` would re-base every reading on a model nobody named."""
+    for name in gb.PINNED_SOURCES:
+        with pytest.raises(ValueError, match="--revision"):
+            gb.resolve_source(name, None)
+        assert callable(gb.resolve_source(name, "0" * 40))
+    assert gb.resolve_source("dav2", None) is gb.source_dav2
+    with pytest.raises(ValueError, match="unknown"):
+        gb.resolve_source("moge", None)
+
+
+def test_the_geometry_carries_its_camera_and_root_so_a_source_can_find_its_masks(tmp_path):
+    geo = _fake_camera(tmp_path, "synth")
+    assert geo["camera"] == "synth" and geo["root"] == tmp_path

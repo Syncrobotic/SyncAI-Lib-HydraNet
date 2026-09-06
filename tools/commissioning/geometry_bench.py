@@ -23,6 +23,23 @@ floor numbers being read as a verdict on their own.
 The two halves are never summed. A single number would have to weight "the floor is
 0.06 m off" against "the shelf reads 1.2 m", and the exchange rate between those is
 exactly the judgement this tool exists to leave to a reader.
+
+**Two more sources, 2026-09-06, for PLAN §7a.32** -- Depth Anything 3 (`da3`, metres as
+it claims them) and VGGT (`vggt-floorfit`, relative depth pinned to the floor, so only its
+relief half means anything). Both load a model this repository does not depend on and
+both take the checkpoint's commit id on the command line, because the machine that wired
+them up could not read the Hub and a pin copied from memory pins nothing
+(`syncai_bev3d.geometry_teachers`):
+
+    uv run python tools/commissioning/geometry_bench.py --source dav2
+    uv run python tools/commissioning/geometry_bench.py --source da3 --revision <sha> \
+        --json runs/da3_bench01/readings.json
+    uv run python tools/commissioning/geometry_bench.py --source vggt-floorfit --revision <sha>
+
+The prediction, written before either has run: DA3 improves the relief half on the
+white-fixture cameras (Tao-Hsin-cam03/-cam04) and holds the floor within DA-V2's
+0.06 m; VGGT's relief is not better than DA-V2's, single-view being the case it was not
+trained for. Whichever way it comes out, the row for `flat(ctl)` sits beside them.
 """
 
 from __future__ import annotations
@@ -100,6 +117,8 @@ def _geometry(camera: str, root: Path):
     sui = np.clip(np.round(su).astype(int), 0, pw - 1)
     svi = np.clip(np.round(sv).astype(int), 0, ph - 1)
     return {
+        "camera": camera,
+        "root": root,
         "calib": calib,
         "plate": plate,
         "plane": plane,
@@ -222,7 +241,93 @@ def source_npy(path: Path):
     return _load
 
 
+def _walkable_for(geo: dict) -> np.ndarray | None:
+    path = geo["root"] / f"runs/commission01/{geo['camera']}.camera.json"
+    cf = json.loads(path.read_text())
+    return _mask(geo["root"], "walkable", cf)
+
+
+def floor_fit_scale(depth_plate: np.ndarray, geo: dict, walk: np.ndarray) -> float:
+    """The one scalar that puts a *relative* depth's floor at height zero. NaN if none does.
+
+    A depth that is only up to scale unprojects to points `s * p`, so the level-frame
+    height reads `H - s * y` and the median over the walkable mask is zero at exactly
+    `s = H / median(y)`. This is the refit `geometry_bench`'s own docstring warns about --
+    MapAnything's rise was a scale offset, and refitting it on the floor left the table
+    worse -- which is why a source that uses it carries `floorfit` in its label: the floor
+    half of its row is then true by construction and only the relief half says anything.
+    """
+    level = unproject(depth_plate, geo["cam_plate"]) @ geo["plane"].rotation
+    y = level[..., 1][geo["svi"], geo["sui"]]
+    ok = walk & ~geo["oob"] & np.isfinite(y)
+    if ok.sum() < 2000:
+        return float("nan")
+    med = float(np.median(y[ok]))
+    if not med > 0:
+        return float("nan")
+    return geo["plane"].height / med
+
+
+def source_da3(revision: str):
+    """Depth Anything 3, nested Giant-Large, on the undistorted plate. Metres as claimed.
+
+    **Not** multiplied by the calibration's person-prior scale: that scale was fitted for
+    DA-V2's depth and applying it to another model's would score the product of two
+    unrelated numbers. DA3 says its depth is in metres, and the floor half of the bench is
+    the test of that sentence.
+    """
+
+    def _run(geo: dict):
+        from syncai_bev3d.geometry_teachers import da3_reading
+        from syncai_bev3d.plate_calibration import undistort_image
+
+        k1 = float(geo["calib"].get("k1_division_model") or 0.0)
+        return da3_reading(undistort_image(geo["plate"], k1), revision).depth
+
+    return _run
+
+
+def source_vggt_floorfit(revision: str):
+    """VGGT-1B on the undistorted plate, its relative depth scaled so the floor sits at zero.
+
+    Read this row's floor columns as *the fit*, not as a measurement -- see
+    :func:`floor_fit_scale`. What it can tell is in the relief half: whether the model's
+    shape has fixtures standing at plausible heights once the floor is pinned.
+    """
+
+    def _run(geo: dict):
+        from syncai_bev3d.geometry_teachers import vggt_reading
+        from syncai_bev3d.plate_calibration import undistort_image
+
+        k1 = float(geo["calib"].get("k1_division_model") or 0.0)
+        depth = vggt_reading(undistort_image(geo["plate"], k1), revision).depth
+        walk = _walkable_for(geo)
+        if walk is None:
+            return None
+        s = floor_fit_scale(depth, geo, walk)
+        return None if not np.isfinite(s) else depth * s
+
+    return _run
+
+
 SOURCES = {"dav2": source_dav2, "flat": source_flat}
+#: Sources that load a model this repository does not depend on, and therefore need the
+#: commit id passed in (`syncai_bev3d.geometry_teachers` explains why it is not a constant).
+PINNED_SOURCES = {"da3": source_da3, "vggt-floorfit": source_vggt_floorfit}
+
+
+def resolve_source(name: str, revision: str | None):
+    """The depth source `name` asks for, or a refusal that says what it needed."""
+    if name in SOURCES:
+        return SOURCES[name]
+    if name in PINNED_SOURCES:
+        if not revision:
+            raise ValueError(
+                f"--source {name} loads a model outside this repository and needs "
+                "--revision <40-char commit id>; see syncai_bev3d.geometry_teachers.pinned"
+            )
+        return PINNED_SOURCES[name](revision)
+    raise ValueError(f"unknown depth source {name!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +360,16 @@ def render(readings: list[Reading]) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--cameras", nargs="*", help="default: every commissioned camera")
-    ap.add_argument("--source", default="dav2", choices=sorted(SOURCES), help="depth source")
+    ap.add_argument(
+        "--source",
+        default="dav2",
+        choices=sorted(SOURCES) + sorted(PINNED_SOURCES),
+        help="depth source; da3 and vggt-floorfit also need --revision",
+    )
+    ap.add_argument(
+        "--revision",
+        help="full commit id of the checkpoint, for a source that loads an external model",
+    )
     ap.add_argument("--npy", type=Path, help="score a depth map from another environment")
     ap.add_argument("--npy-label", default="npy", help="what to call the --npy source")
     ap.add_argument("--root", type=Path, default=ROOT)
@@ -266,6 +380,11 @@ def main() -> int:
     if not cams:
         print("no commissioned cameras; nothing to score", file=sys.stderr)
         return 2
+    try:
+        source_fn = resolve_source(a.source, a.revision)
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 2
     readings: list[Reading] = []
     for cam in cams:
         try:
@@ -273,7 +392,7 @@ def main() -> int:
         except (FileNotFoundError, KeyError) as e:
             readings.append(Reading(cam, a.source, abstained=f"no calibration ({e})"))
             continue
-        jobs = [(a.source, SOURCES[a.source])]
+        jobs = [(a.source, source_fn)]
         if a.npy:
             jobs.append((a.npy_label, source_npy(a.npy)))
         # The control is not optional. See `source_flat`.

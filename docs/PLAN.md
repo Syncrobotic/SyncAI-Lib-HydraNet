@@ -690,6 +690,47 @@ order. A component with no step is not scheduled, it is assumed.
    unaffected; what changes is that promoting the dated run and then reading its `best.pt`
    for anything person-shaped costs more than the table shows.
 
+32. **Two any-view geometry models are wired up as commissioning witnesses, and neither
+   has run.** Opened 2026-09-06. Depth Anything 3 (`DA3NESTED-GIANT-LARGE`, 1.15B, metres
+   as it claims them) and VGGT-1B (relative depth, intrinsics) are asked the two
+   questions the fleet cannot answer from inside: **what is the lens** and **how tall is
+   the furniture**. `syncai_bev3d/geometry_teachers.py` runs either on one undistorted
+   plate; `tools/commissioning/map_anything_eval.py intrinsics --backend da3|vggt` puts
+   the vfov beside the anchor the way MapAnything's was, and
+   `tools/commissioning/geometry_bench.py --source da3|vggt-floorfit` scores the depth
+   against the floor with `flat(ctl)` beside it. **The commit ids are arguments, not
+   constants**: the machine that built the instruments could not reach the Hub, a pin
+   copied from memory pins nothing, and `geometry_teachers.pinned` refuses anything but a
+   full 40-character id -- the first run records the one it used, and promotion to a
+   constant takes it from that run.
+
+   **The predictions, written before the runs so the runs can be wrong about them:**
+
+   * *vfov on Taichung-cam01 (tile grid 70.4°).* Both disagree the way MapAnything did
+     (38.26°, a 2.03x focal ratio). Single-image focal estimation resolves the focal/scale
+     ambiguity from learned object-size priors, and a phone shop seen from a ceiling
+     corner is not what those were fitted on. A backend inside 5° of 70.4 would be the
+     first independent confirmation of the fleet's assumed vfov on 21 cameras; anything
+     else is a third estimate beside two others and changes nothing.
+   * *Depth, eight commissioned cameras.* DA3 holds the floor within DA-V2's 0.06 m and
+     improves the relief half on the two white-fixture cameras (Tao-Hsin-cam03/-cam04),
+     because the collapse on textureless surfaces is a prior-strength failure and the
+     model is three times the size. VGGT's relief is not better than DA-V2's: single view
+     is the case its README says it was never trained for, and its floor columns are the
+     fit rather than a measurement, which the `floorfit` in its label says.
+   * *What neither moves.* The far edge of a fixture the camera cannot see, and nothing
+     that gates stage 2 -- foot-point occlusion at the counter and the detector's recall
+     are §6 step 4's, and a depth teacher does not touch them.
+
+   **What each outcome costs.** DA3 winning both halves means replacing the depth teacher
+   in `plate_calibration.run_depth` and re-cutting every `camera.json`, mask completion
+   and published figure; the 0.847 NYU scale constant in `data/nyu_depth.py` goes with V2,
+   since DA3's metres are tied to the vfov explicitly rather than to NYU's cameras. VGGT
+   winning the lens question means running it on the other 21 selling-floor cameras and
+   retiring `fleet_hardware_assumed`. Neither winning means closing this item with the
+   numbers and leaving the 4-point ground-calibration tool (§2.1b) as the only route to a
+   measured vfov -- which is where the risk sits regardless of how this comes out.
+
 5. **Retail dashboard surface unscoped** — the numbers fall out of L1 free; what a store
    manager opens, at what cadence, is a product question. Blocks nothing before step 6.
    One modelling gap hides inside it: **store-level footfall needs cross-camera dedup**
