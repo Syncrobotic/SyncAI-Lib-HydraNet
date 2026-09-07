@@ -69,6 +69,7 @@ from syncai_hydranet.geometry.ground import (  # noqa: E402
     pixel_to_ground,
     undistort_points,
 )
+from syncai_hydranet.shipped import load_model  # noqa: E402
 from syncai_hydranet.utils.visualize import (  # noqa: E402
     crop_box,
     overlay,
@@ -112,21 +113,6 @@ ENTRANCE_MARGIN = 0.5  # units; padding around a cluster's bounding box
 
 # ---------------------------------------------------------------------------
 # model
-
-
-def load_model(config: str, checkpoint: str, weights: str):
-    import torch  # noqa: F401  (device move below needs torch initialised)
-
-    from syncai_hydranet.config import load_config
-    from syncai_hydranet.models.hydranet import build_model
-    from syncai_hydranet.utils.checkpoint import load_checkpoint, select_weights
-    from syncai_hydranet.utils.device import pick_device
-
-    cfg = load_config(config, [])
-    device = pick_device(cfg.get("device"))
-    model = build_model(cfg).to(device).eval()
-    model.load_state_dict(select_weights(load_checkpoint(checkpoint), weights))
-    return model, cfg, device
 
 
 def run_terrain(model, cfg: dict, device, img: Image.Image) -> np.ndarray:
@@ -661,7 +647,7 @@ def main(argv: list[str] | None = None) -> int:
     if missing:
         raise SystemExit(f"no calib json under {args.calib_dir} for: {', '.join(missing)}")
 
-    model, cfg, device = load_model(args.config, args.checkpoint, args.weights)
+    model, cfg, device = load_model(args.config, args.checkpoint, weights=args.weights)
     rows = []
     for camera in cameras:
         row = propose_for_camera(camera, calibs[camera], model, cfg, device, args)
