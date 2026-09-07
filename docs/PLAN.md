@@ -1001,6 +1001,56 @@ something it does not support.
    Adopting two-stage tracking therefore trades fragmentation against dwell accuracy and
    is a decision, not a patch. **Not adopted; nothing in the serving path changed.**
 
+   **The dwell half of that trade was measured on 2026-09-07 and it does not exist.**
+   `dwell_table` has recorded `coasted` (span minus observed) per track since it was
+   written -- "a high share means the dwell is held together by prediction" -- so the
+   sentence above had a number available and nobody had read it. Same eight clips, same
+   weights, both arms, every track including the truncated ones (the two-stage arm's
+   tracks are longer and so more often still alive at the last frame; filtering to
+   completed visits drops more of them and understates its total):
+
+   | | shipped `tracker.py` | `bytetrack` two-stage |
+   |---|---|---|
+   | tracks | 202 | 100 |
+   | **coasted frame fraction, mean over cameras** | **0.0643** | **0.0159** |
+   | total dwell, 8 clips | 2,399 s | 3,304 s (+38%) |
+   | median dwell, Kaohsiung-cam04 | 3.4 s | 17.8 s |
+   | truncated (alive at the last frame) | 9 | 16 |
+
+   **Coasting falls four-fold; it does not rise.** Seven of eight cameras coast less
+   under two-stage and Taichung-cam07 stops coasting entirely. In hindsight that is the
+   only thing it could do: the low band hands the tracker a *real detection* exactly
+   where the single-stage arm had nothing and had to predict. Coasting is the
+   single-stage arm's disease, and 7.11's own witness pass had already said so -- 86% of
+   its mid-view deaths had a person box on the spot, below the cut.
+
+   So the +38% dwell is recovery, not inflation, on the evidence available: if it were
+   fabricated by prediction the coasted fraction would have risen with it. **What that
+   evidence cannot see is an ID switch** -- a track that swaps onto a neighbour is fully
+   observed and coasts zero -- and the eyeball above found exactly that in one of three
+   sampled tails. The only instrument that sees it is IDF1 on a labelled clip, and the
+   one that exists reads **two-stage 0.742 with 3 switches against single-stage 0.739
+   with 6**: half the switches, on 900 frames and five identities, which is one clip.
+
+   **And the project already disagrees with itself about this.** `serve_pilot.py` -- the
+   only thing that runs the serving path end to end -- injects `ScipyAssocForward`, which
+   subclasses `bytetrack.OfflineForward`, so **serving already tracks two-stage** at
+   BIRTH_REF/KEEP_REF. `serving/camera.py` itself has no default at all
+   (`tracker_factory=None` means no tracking). The twelve offline consumers --
+   `retail_flow.py`, `site_events.py`, `site_journeys.py` and `demo_video.py` among them
+   -- are single-stage. A dwell figure from the pilot and one from `retail_flow.py` are
+   not the same measurement and nothing in the tree says which the retail numbers came
+   from. That is the decision to take, and it is no longer "adopt or not"; it is "these
+   two paths must agree, and one of them is already two-stage".
+
+   **The experiment that should come first is still untried**: `bytetrack` moves the band
+   *and* the Kalman together, and `tracker.py` refuses the Kalman on grounds that still
+   hold -- no measured noise model exists for this footage. Adding only the survival band
+   to `tracker.py` separates the two, and if the band alone carries the gain then the
+   Kalman never has to be argued about. Note also that `demo_video.py` is in
+   `SCENE_PATHS`, so whichever way this goes the README figures are re-rendered and
+   looked at.
+
 12. **The seven blocked Kaohsiung cameras split, and the block was never a group
    property.** §7.11 answered what the person-score investigation was; this answers what
    it *blocks*, which is `runs/commission01/REVIEW.md`'s "the Kaohsiung person-score
