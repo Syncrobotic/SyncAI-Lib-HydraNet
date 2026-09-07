@@ -14,15 +14,25 @@ proposals; policy is proposed-never-decided.** `zones_apply.py --import-zones` t
 the walkable outline into `camera.json` and stopped there, because the walkable outline
 "mirrors the already-reviewed mask" and the fixtures do not.
 
-So the fixtures have sat in `runs/zones01/` ever since, and every camera.json carries
-exactly one zone. `analytics/journey.py` reads zones to answer "stood at C for how long",
-and with one walkable polygon per camera the only answer available is "inside the shop".
+That state is over: the accept pass below has since been run, and the eight commissioned
+cameras carry **79 zones between them** -- one `walkable` each and 71 fixtures accepted as
+`display`. `analytics/journey.py` can name a fixture now, where with one walkable polygon
+per camera the only answer available had been "inside the shop".
+
+**What has *not* happened is the naming that made this a human pass.** Every accepted
+fixture took the generic `display`, and across the fleet there is not one `till`, one
+`entrance_line`, one `premium_shelf` or one `stockroom_door`. So the rules that read those
+kinds -- footfall over a counting line, queue occupancy at a checkout -- have no subject,
+and the store knowledge this tool exists to capture has been captured as "there is a
+fixture here" and no further.
 
 ---------------------------------------------------------------------------
 WHY THIS IS NOT AN IMPORTER
 
-`camera_json.ZONE_KINDS` is `{entrance_line, till, premium_shelf, stockroom_door,
-forbidden, walkable}`. There is no `fixture`, and that absence is the design: a footprint
+`camera_json.ZONE_KINDS` is `{entrance_line, till, display, premium_shelf, stockroom_door,
+forbidden, walkable}` -- `display` was added for the fixtures this pass accepts, and the
+sentence below was written when it was not there yet. There is no `fixture`, and that
+absence is the design: a footprint
 is a shape, and *which fixture it is* is a fact about the store that no segmentation head
 can supply. An importer would have to invent a kind, and a zone whose kind was invented
 fires the wrong rule for the rest of its life. `camera_json.validate` already refuses an

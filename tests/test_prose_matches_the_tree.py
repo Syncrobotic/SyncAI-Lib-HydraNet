@@ -74,3 +74,47 @@ def test_the_idf1_measurement_the_docstrings_quote_is_still_on_disk():
     assert single["switches"] == 6
     assert round(two["idf1"], 4) == 0.7418, "the quoted two-stage IDF1 moved"
     assert two["switches"] == 3
+
+
+def test_zones_confirm_describes_the_zones_that_exist():
+    """Its docstring counts the fleet's zones and quotes `ZONE_KINDS`; both had rotted.
+
+    It said "every camera.json carries exactly one zone" and quoted a `ZONE_KINDS`
+    without `display` -- the set its own argument rests on, and the kind the 71 accepted
+    fixtures were given. The accept pass it describes had been run in between and the
+    prose never caught up, which is the failure this file exists for: prose that reads as
+    sensible and is false about the tree beneath it.
+    """
+    import json
+
+    from syncai_hydranet.geometry.camera_json import ZONE_KINDS
+
+    text = (ROOT / "tools/commissioning/zones_confirm.py").read_text()
+    assert "carries\nexactly one zone" not in text and "exactly one zone" not in text, (
+        "the fleet carries 79 zones; this sentence described the state before the "
+        "accept pass ran"
+    )
+    for kind in sorted(ZONE_KINDS):
+        assert kind in text, (
+            f"the docstring quotes ZONE_KINDS and omits {kind!r}; a quoted set that has "
+            "since grown makes the argument built on it read as settled when it is not"
+        )
+
+    commissioned = sorted((ROOT / "runs/commission01").glob("*.camera.json"))
+    if not commissioned:
+        pytest.skip("runs/commission01 is not on this box")
+    kinds: dict[str, int] = {}
+    for f in commissioned:
+        for z in json.loads(f.read_text()).get("zones", ()):
+            kinds[z["kind"]] = kinds.get(z["kind"], 0) + 1
+    assert kinds.get("display", 0) > 1, (
+        "the docstring says the fleet carries 71 accepted fixtures; it carries "
+        f"{kinds.get('display', 0)}"
+    )
+    # The half the docstring now states as still missing. If a `till` or an
+    # `entrance_line` is ever drawn, this fails and the paragraph gets rewritten
+    # rather than quietly becoming false in the other direction.
+    assert not (set(kinds) & {"till", "entrance_line", "premium_shelf", "stockroom_door"}), (
+        "a named policy zone exists now; zones_confirm.py's docstring still says none "
+        f"does. Kinds on disk: {sorted(kinds)}"
+    )
