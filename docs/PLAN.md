@@ -1051,34 +1051,6 @@ something it does not support.
    `SCENE_PATHS`, so whichever way this goes the README figures are re-rendered and
    looked at.
 
-13. **The counting-line escape from fragmentation was tried on Kaohsiung-cam04 and the
-   camera cannot supply it, 2026-09-07.** `line_events` needs identity across ONE frame
-   step -- 0.2 s at 5 fps -- not across a visit, so a crossing count should survive
-   fragmentation that halves the track count. That reasoning is sound and this camera is
-   the wrong subject for it: re-derived from 900 frames (87 tracks, against the
-   `runs/zones01` proposal's 5 events from 300 frames, which says of itself "weak
-   evidence, confirm against the plate"), **all 87 births and deaths cluster at the right
-   frame edge and at the counter's near end. There is no door in this view.** A line at
-   the frame edge counts "entered the field of view", and a track born inside it never
-   crosses it. The birth/death map is a cheap per-camera test of "does this camera see an
-   entrance", and it is worth running before any footfall line is drawn.
-
-   **What the clip does show is the strongest confirmation yet of the two-stage case.**
-   The sweep clip is 19:28, not the 11:0x daytime plate every earlier look at this camera
-   used: eight to twelve real people crowded at the counter, staff in blue polos and a
-   queue of masked customers. Detections are on real people, no clutter. And **only four
-   of nine to sixteen are at or above 0.35** -- the rest sit in the 0.20-0.35 band the
-   shipped single-stage cut throws away. That is the 87 fragments, in one picture:
-   shoppers flickering across the cut as they occlude each other.
-
-   **A smaller defect found on the way.** `dwell.track_ground_path` takes the foot point
-   as `boxes[:, 3]` unconditionally, so a box clipped by the frame's bottom edge is
-   projected from the edge rather than from feet, landing the person metres nearer than
-   they are with nothing marking it. Measured share of person boxes touching the bottom
-   edge: Taichung-cam01 6.5%, Kaohsiung-cam04 4.0%, Tao-Hsin-cam03 1.4%,
-   Taichung-cam10 0.6%. Real, and not the dominant term. The project has form here --
-   §7c records the person-box edge gate that ran in the wrong coordinate space.
-
 12. **The seven blocked Kaohsiung cameras split, and the block was never a group
    property.** §7.11 answered what the person-score investigation was; this answers what
    it *blocks*, which is `runs/commission01/REVIEW.md`'s "the Kaohsiung person-score
@@ -2598,6 +2570,34 @@ something it does not support.
      confidence cannot be checked from here.
 
 ---
+
+32. **The counting-line escape from fragmentation was tried on Kaohsiung-cam04 and the
+   camera cannot supply it, 2026-09-07.** `line_events` needs identity across ONE frame
+   step -- 0.2 s at 5 fps -- not across a visit, so a crossing count should survive
+   fragmentation that halves the track count. That reasoning is sound and this camera is
+   the wrong subject for it: re-derived from 900 frames (87 tracks, against the
+   `runs/zones01` proposal's 5 events from 300 frames, which says of itself "weak
+   evidence, confirm against the plate"), **all 87 births and deaths cluster at the right
+   frame edge and at the counter's near end. There is no door in this view.** A line at
+   the frame edge counts "entered the field of view", and a track born inside it never
+   crosses it. The birth/death map is a cheap per-camera test of "does this camera see an
+   entrance", and it is worth running before any footfall line is drawn.
+
+   **What the clip does show is the strongest confirmation yet of the two-stage case.**
+   The sweep clip is 19:28, not the 11:0x daytime plate every earlier look at this camera
+   used: eight to twelve real people crowded at the counter, staff in blue polos and a
+   queue of masked customers. Detections are on real people, no clutter. And **only four
+   of nine to sixteen are at or above 0.35** -- the rest sit in the 0.20-0.35 band the
+   shipped single-stage cut throws away. That is the 87 fragments, in one picture:
+   shoppers flickering across the cut as they occlude each other.
+
+   **A smaller defect found on the way.** `dwell.track_ground_path` takes the foot point
+   as `boxes[:, 3]` unconditionally, so a box clipped by the frame's bottom edge is
+   projected from the edge rather than from feet, landing the person metres nearer than
+   they are with nothing marking it. Measured share of person boxes touching the bottom
+   edge: Taichung-cam01 6.5%, Kaohsiung-cam04 4.0%, Tao-Hsin-cam03 1.4%,
+   Taichung-cam10 0.6%. Real, and not the dominant term. The project has form here --
+   §7c records the person-box edge gate that ran in the wrong coordinate space.
 
 ## 8. What the health audit changed, and what it taught
 
