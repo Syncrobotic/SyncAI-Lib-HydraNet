@@ -1,0 +1,30 @@
+{
+  "person": [
+    "a shopper standing on a shop floor",
+    "a customer browsing a retail store, seen from a ceiling camera",
+    "a person walking between shop display tables",
+    "a security camera view of a customer in a phone shop",
+    "a standing adult seen from above in a store"
+  ],
+  "bag": [
+    "a shopping bag carried by a customer",
+    "a handbag hanging from a shopper's shoulder",
+    "a paper carrier bag on a shop floor",
+    "a security camera view of a bag held by a shopper",
+    "a rucksack worn by a customer in a store"
+  ],
+  "boxed_stock": [
+    "a cardboard product box on a retail shelf",
+    "a boxed smartphone in its retail packaging on a shelf",
+    "stacked product cartons on a shop display shelf",
+    "a sealed accessory packet hanging on a shop rack",
+    "small boxed merchandise seen from above on a shelf"
+  ],
+  "device": [
+    "a smartphone lying on a shop display table",
+    "a laptop open on a retail display table",
+    "a tablet on a demo stand in a phone shop",
+    "an unboxed handset on a display podium",
+    "a small electronic device seen from above on a table"
+  ]
+}
