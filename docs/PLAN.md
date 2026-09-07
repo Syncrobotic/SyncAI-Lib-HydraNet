@@ -2584,8 +2584,13 @@ something it does not support.
    entrance", and it is worth running before any footfall line is drawn.
 
    **What the clip does show is the strongest confirmation yet of the two-stage case.**
-   The sweep clip is 19:28, not the 11:0x daytime plate every earlier look at this camera
-   used: eight to twelve real people crowded at the counter, staff in blue polos and a
+   The sweep clip is **19:28 store-local**, not the 11:0x plate every earlier look at this
+   camera used. The two do not look like they differ by eight hours because the clip's
+   *name* says 11:27 and its burnt-in stamp says 19:28: `events.clip_start_from_name`
+   states the rule -- "the stamp in the name is UTC and the stores are UTC+8" -- and the
+   incident behind it is `pull_studioa.py` asking for "16:00, the busy hour" and receiving
+   a greyscale IR clip of a closed shop. Anyone comparing a plate to a clip on this corpus
+   is comparing one local stamp to one UTC filename. The clip shows: eight to twelve real people crowded at the counter, staff in blue polos and a
    queue of masked customers. Detections are on real people, no clutter. And **only four
    of nine to sixteen are at or above 0.35** -- the rest sit in the 0.20-0.35 band the
    shipped single-stage cut throws away. That is the 87 fragments, in one picture:
