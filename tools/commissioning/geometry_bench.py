@@ -14,6 +14,15 @@ plane put the floor 0.245 m underground against DA-V2's 0.057 m -- the whole ris
 scale offset, and refitting the scale on the floor left it worse on the table (1.06 m
 against DA-V2's 0.82 m) while better on the shelf. A systematic bias, not a measurement.
 
+**Depth Anything 3 was scored the same way on 2026-09-07 and rejected** (PLAN 7c.31,
+`runs/geometry_bench/da3_fitted/`). Same eight cameras, same undistorted plates, scale
+refitted on the floor: median floor spread 47.4 cm against DA-V2's 28.6, and relief
+statistically identical -- wall 2.02 m against 2.06 -- so the white-surface collapse the
+probe was run for is untouched. The half of that reading no single number would have
+survived: DA3Metric's *absolute* output moves ~2.3x when `process_res` goes 504 -> 960,
+on the same image. A processing argument is not a property of the room, and a bench that
+summed its two halves would have averaged that away.
+
 **Two halves that no degenerate source can pass at once.** Flatness alone is won by a
 model that returns the ground plane and nothing else, which is why `--control flat` is
 run on every invocation rather than offered as an option: it scores perfectly on the

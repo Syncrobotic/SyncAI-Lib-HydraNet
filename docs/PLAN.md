@@ -2442,6 +2442,39 @@ something it does not support.
      fixed CCTV does not have, so this is a verdict on single-fixed-frame input; a
      walkthrough-scan variant is untested and plausible. What survives as an import is
      the layout DSL as the fixture head's output format, not the weights.
+   * **Depth Anything 3 is rejected for Stage 0, measured 2026-09-07** (`runs/geometry_
+     bench/da3_fitted/`, `da3_960_fitted/`; `DA3METRIC-LARGE` on the same undistorted
+     plates the shipped DA-V2 sees, scored by `geometry_bench.py` on the 8 commissioned
+     cameras, scale refitted on the floor exactly as MapAnything's was).
+
+     | | DA-V2 (shipped) | DA3 @504 | DA3 @960 |
+     |---|---|---|---|
+     | floor spread, median | **28.6 cm** | 47.4 cm | 42.7 cm |
+     | wall relief, median (n=8) | 2.06 m | 2.02 m | 2.02 m |
+     | display_shelf, median (n=6) | 1.92 m | 1.99 m | 2.00 m |
+     | over-read vs this footage | 1.45-1.78x | 1.15-1.36x | 0.59-0.68x |
+
+     **It buys nothing on the failure that would have justified it and costs floor
+     flatness.** Relief is statistically the same source: the white-surface collapse is
+     untouched, and Kaohsiung-cam04's wall -- the collapse case, a 2.4 m wall DA-V2 reads
+     at 1.68 -- reads 1.54 on DA3, slightly *worse*. Floor spread is worse on 7 of 8
+     cameras and 2.5x worse on Taichung-cam10, the cleanest camera in the fleet.
+
+     **The scale row is the finding worth keeping.** DA3Metric is closer to metric than
+     DA-V2 at its own default, so the person-prior step is still required either way --
+     but the same model on the same image moves its absolute output by ~2.3x when
+     `process_res` goes 504 -> 960, from over-reading 1.2x to under-reading 1.5x. A
+     resolution argument is not a property of the room. Whatever DA3Metric's absolute
+     metres are, they are not the scene's, and `geometry_bench`'s refusal to sum its two
+     halves is what makes that visible rather than averaged away.
+
+     **What DA3 is actually for does not exist here.** Its headline is camera pose --
+     44.3% over VGGT -- recovered by RQ decomposition of a multi-view homography. At N=1
+     it "reduces to monocular depth estimation" and camera parameters stay ambiguous, so
+     it cannot touch the open vfov problem (§7.19): a fixed CCTV has no baseline. Two
+     multi-view routes remain untried and are the only ones worth revisiting -- two fleet
+     cameras that overlap the same floor (whether any do is **unmeasured**), or a
+     one-time per-store phone walkthrough that fixed cameras register into.
    * **Cosmos Transfer works as a licence-clean night engine.** The fleet already had
      the ruler: the 23:58 archive is genuine IR (saturation 0.000, luma 129.6) and its
      empty-store detector profile is the target — person ghosts 0.73/frame (one
