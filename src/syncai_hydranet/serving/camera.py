@@ -36,6 +36,7 @@ Design notes, each tied to a measurement:
 from __future__ import annotations
 
 import json
+import warnings
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -216,7 +217,22 @@ class CameraState:
     @staticmethod
     def _load_calib(path: str | Path | None) -> dict | None:
         """runs/onboard01/<camera>.calib.json, or None -- a camera without geometry
-        still serves detection and segmentation; only metric events need this."""
+        still serves detection and segmentation; only metric events need this.
+
+        **A calib whose scale is unmeasured is None here, and that is the same refusal
+        `syncai_bev3d.commissioning` makes one step downstream.** That converter declines
+        to write a `camera.json` from such a scan and says why: the scan has a *shape*
+        (DA-V2's relative plane) but no metres, and a file written from it "would put
+        confident wrong metres under every downstream event". Twelve of the fleet's
+        twenty-three scans are in that state.
+
+        This path read the *upstream* artefact and checked only the schema string, so the
+        refusal did not reach it: `serve_pilot.py` reports `calibrated: true` for a camera
+        whose `scale` is `null`, and prints it in the readiness line an operator reads.
+        The word now means what it says -- this camera has metres -- and the warning names
+        the camera rather than letting it drop out silently, because "not calibrated" and
+        "calibrated, unmeasured, quietly demoted" are different things to an operator.
+        """
         if path is None:
             return None
         p = Path(path)
@@ -225,6 +241,17 @@ class CameraState:
         calib = json.loads(p.read_text())
         if calib.get("schema") != "hydranet-onboard-calib/v1":
             raise ValueError(f"{p}: unexpected calib schema {calib.get('schema')!r}")
+        if calib.get("scale") is None:
+            warnings.warn(
+                f"{p}: scale_source is {calib.get('scale_source')!r} and scale is null, so "
+                "this scan carries orientation but no metres. Treated as uncalibrated -- "
+                "the same refusal syncai_bev3d.commissioning makes before writing a "
+                "camera.json. Detection and segmentation are unaffected; metric events "
+                "for this camera are not available until it has a visual reference.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return None
         return calib
 
     # -- terrain -----------------------------------------------------------------

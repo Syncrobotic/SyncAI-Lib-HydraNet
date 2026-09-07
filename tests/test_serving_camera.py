@@ -161,8 +161,63 @@ def test_missing_calib_is_none_and_wrong_schema_raises(tmp_path):
     with pytest.raises(ValueError, match="schema"):
         make_state(calib_path=bad)
     good = tmp_path / "good.json"
-    good.write_text(json.dumps({"schema": "hydranet-onboard-calib/v1", "height_m": 2.5}))
+    good.write_text(
+        json.dumps(
+            {
+                "schema": "hydranet-onboard-calib/v1",
+                "height_m": 2.5,
+                "scale": 0.64,
+                "scale_source": "person_height_median_vs_1.7m_prior_n30",
+            }
+        )
+    )
     assert make_state(calib_path=good).calib["height_m"] == 2.5
+
+
+def test_a_scan_with_no_measured_scale_is_not_calibrated(tmp_path):
+    """The refusal `syncai_bev3d.commissioning` makes, arriving one step earlier.
+
+    That converter declines to write a `camera.json` from a scan whose scale is
+    unmeasured, because the scan has a shape and no metres and a file written from it
+    "would put confident wrong metres under every downstream event". This path read the
+    *upstream* artefact and checked only the schema string, so twelve of the fleet's
+    twenty-three scans loaded here and `serve_pilot.py` counted them in its
+    "N with calibration" readiness line.
+    """
+    import warnings
+
+    scan = tmp_path / "unmeasured.json"
+    scan.write_text(
+        json.dumps(
+            {
+                "schema": "hydranet-onboard-calib/v1",
+                "height_m": 2.5,
+                "pitch_deg": 42.0,
+                "scale": None,
+                "scale_source": "unmeasured",
+            }
+        )
+    )
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        state = make_state(calib_path=scan)
+    assert state.calib is None, "a scan with no metres must not read as calibrated"
+    said = [str(w.message) for w in caught if issubclass(w.category, RuntimeWarning)]
+    assert said and "no metres" in said[0], f"demoted in silence: {caught}"
+    # The orientation it does carry is real; the refusal is about scale alone, so a
+    # scan that gains a measured scale later loads unchanged.
+    scan.write_text(
+        json.dumps(
+            {
+                "schema": "hydranet-onboard-calib/v1",
+                "height_m": 2.5,
+                "pitch_deg": 42.0,
+                "scale": 0.61,
+                "scale_source": "person_height_median_vs_1.7m_prior_n28",
+            }
+        )
+    )
+    assert make_state(calib_path=scan).calib["scale"] == 0.61
 
 
 # -- track-box consumption ---------------------------------------------------
