@@ -2468,13 +2468,42 @@ something it does not support.
      metres are, they are not the scene's, and `geometry_bench`'s refusal to sum its two
      halves is what makes that visible rather than averaged away.
 
-     **What DA3 is actually for does not exist here.** Its headline is camera pose --
-     44.3% over VGGT -- recovered by RQ decomposition of a multi-view homography. At N=1
-     it "reduces to monocular depth estimation" and camera parameters stay ambiguous, so
-     it cannot touch the open vfov problem (§7.19): a fixed CCTV has no baseline. Two
-     multi-view routes remain untried and are the only ones worth revisiting -- two fleet
-     cameras that overlap the same floor (whether any do is **unmeasured**), or a
-     one-time per-store phone walkthrough that fixed cameras register into.
+     **The multi-view route was then opened and closed in the same sitting, and the
+     second half is the more useful half.** DA3's headline is camera pose -- 44.3% over
+     VGGT -- recovered by RQ decomposition of a multi-view homography, which a single
+     fixed CCTV cannot supply. So the first question was whether the fleet supplies it:
+     SIFT + RANSAC over every same-store plate pair flagged 14, and **the eye cut that to
+     one**. `Taichung-cam04 x cam05` share two round display tables with cross-shaped
+     wooden legs, unmistakably the same objects from two viewpoints -- a real baseline,
+     and the input condition DA3 wants. The other thirteen were 30-55 inliers out of
+     1,700-2,400 features, which is what repetitive shop shelving produces; cam01's four
+     "overlaps" are all of that kind, so **the one camera with a tile-grid vfov has no
+     confirmed partner**.
+
+     On the confirmed pair DA3 answers **vfov 41.06 / 40.85 deg** against the fleet's
+     70.4 -- MapAnything's 38.27 on cam01 again, from a different model. But the reading
+     that matters is not "wrong", it is **"not an estimate"**:
+
+     | input | returned vfov |
+     |---|---|
+     | cam04 + cam05 (confirmed overlap) | 41.06 / 40.85 |
+     | cam07 + cam11 (matcher signature) | 40.30 / 41.24 |
+     | Tao-Hsin cam03 + cam04 (other store) | 39.83 / 40.13 |
+     | **Kaohsiung + Taichung (different cities, cannot overlap)** | 41.87 / 41.98 |
+     | **cam04 + the same image again (zero baseline)** | 41.63 / 41.58 |
+
+     A 2.2 deg spread across a real baseline, no baseline, and the same photograph twice.
+     `use_ray_pose=True`, the flag named for exactly this, moves nothing. `cx`/`cy` come
+     back as exactly the centre of the 504x280 processed frame. This is a prior on the
+     processing resolution wearing an intrinsics matrix, and **the zero-baseline row is
+     what proves it** -- the same trick as this bench's `--control flat`, which is why it
+     was run.
+
+     So the vfov problem (7.19) is untouched from both directions, and the overlap
+     finding survives the verdict: `cam04 x cam05` is a real two-view baseline that any
+     *future* method can be tested on, and the test to give it is the zero-baseline
+     control, not a plausible-looking number. The remaining untried route is a one-time
+     per-store phone walkthrough that fixed cameras register into.
    * **Cosmos Transfer works as a licence-clean night engine.** The fleet already had
      the ruler: the 23:58 archive is genuine IR (saturation 0.000, luma 129.6) and its
      empty-store detector profile is the target — person ghosts 0.73/frame (one
