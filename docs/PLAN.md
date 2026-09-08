@@ -2604,6 +2604,54 @@ something it does not support.
    Taichung-cam10 0.6%. Real, and not the dominant term. The project has form here --
    §7c records the person-box edge gate that ran in the wrong coordinate space.
 
+33. **The text-embedding head, tested with a vocabulary it was built for, trains to
+   parity and does not win. 2026-09-08.** `heads/text_classifier.py` was built 2026-08-17
+   against a measured failure -- the detection head over Kaohsiung-cam08 returns 1,683
+   `book` at score 0.05 and no `laptop` at any threshold -- and then never revisited, with
+   no decision on record. The reason it stalled is now measured: **the only matrix ever
+   built for it embedded the two internal alarm names** in generic templates ("a photo of
+   boxed stock"). Those are not English phrases, and CLIP reads `device` loosely enough to
+   collide with `person` at excess **0.79**, above `make_text_embeddings.EXCESS_SIMILARITY`
+   -- which is why `runs/hydranet_retail_openvocab` could only carry two classes.
+
+   `make_text_embeddings.py`'s header said this was the untested part: "Not measured: the
+   prompt templates ... a shelf-level phrase beats a bare noun for CCTV-scale merchandise,
+   and that reasoning has never been checked for *text* prompts in this project." Checked
+   now, and the templates were the problem:
+
+   | pair | bare noun | shelf-level phrase |
+   |---|---|---|
+   | `device` / `person` | 0.79 **refused** | **0.37** |
+   | `boxed_stock` / `device` | 0.60 | 0.48 |
+
+   `openvocab02` then trained 120 epochs on a config differing from person01 in three
+   lines (`weights/text/retail4_shelf.pt` installed while the gradient flowed, which
+   `make_text_embeddings.py` argues cannot be faked by swapping a matrix into a trained
+   checkpoint):
+
+   | metric | person01 linear | openvocab02 text | delta |
+   |---|---|---|---|
+   | detection_mAP/site_boxes | 0.1446 | 0.1482 | +0.0037 |
+   | detection_mAP/site_boxes03 | 0.1519 | 0.1683 | +0.0164 |
+   | detection_mAP/site_person | 0.7387 | 0.7388 | +0.0001 |
+   | terrain_mIoU | 0.6975 | 0.6708 | **-0.0267** |
+   | terrain_mIoU/site_seg03 | 0.6716 | 0.6261 | -0.0455 |
+
+   **Read against the seed floor, none of the detection gains exists.** Three seeds of
+   `b03_gdino` spread 0.0217 on `terrain_mIoU`, so a +0.0037 on site_boxes is noise and
+   the -0.0267 on terrain sits at the edge of that spread rather than outside it -- a
+   suggestion of multi-task interference through the shared trunk, not a finding.
+
+   **And the experiment tested the mechanism, not the capability.** The head exists for
+   words COCO does not have; it was trained on the same four classes, because those are
+   the classes the labels have. What is settled: the collision is a prompt defect and it
+   is fixed, and the mechanism reaches parity rather than costing anything. What is not:
+   whether a *wider* vocabulary pays, which needs labels and not another run.
+
+   **Recommendation: do not spend a seed replicate on the -0.0267.** The head did not win,
+   so there is nothing to protect; the next spend on this belongs on labels for classes
+   the linear head cannot name at all.
+
 ## 8. What the health audit changed, and what it taught
 
 A best-practice audit ran on 2026-09-04 over the whole tree (8 sweeps: packaging,
