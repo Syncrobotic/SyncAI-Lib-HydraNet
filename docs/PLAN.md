@@ -2793,6 +2793,46 @@ something it does not support.
    Taichung-cam10 0.6%. Real, and not the dominant term. The project has form here --
    §7c records the person-box edge gate that ran in the wrong coordinate space.
 
+37. **The backbone carries no novelty signal, and the control is what says so.
+   2026-09-08.** The tree has no anomaly capability -- "anomaly" appears nowhere in
+   `src/` -- so every intrusion alarm raised on the UCF-Crime probe was a rule written
+   outside the model: person, after hours, survived `night_person`'s static veto. The
+   model detected the burglar because a burglar is a person; it did not detect the
+   burglary, and would have raised the same alarm for a cleaner. Option A of the
+   redesign was the cheap one: expose the neck feature, fit a per-camera "normal" at
+   commissioning, score the distance -- Avigilon UMD's shape, which learns a scene for
+   two weeks and flags what departs from it.
+
+   **Measured, it looks like a triumph and is an artefact.** Mahalanobis distance from
+   the person-free half of each untrimmed clip to the rest separates at AUROC 0.979,
+   0.993 and 1.000 -- same camera, same night, same encoder, so the domain confound is
+   controlled. Then the controls:
+
+   | control | what it should show | AUROC |
+   |---|---|---|
+   | normal vs normal, one clip split in half by time | ~0.5 | **0.932-1.000** |
+   | STUDIO A cam04, three slots fit, fourth held out, no intrusion anywhere | ~0.5 | **1.000, all four** |
+
+   **The score is equally certain about footage containing nothing.** It is not measuring
+   novelty, it is measuring "not in the fit set" -- time of day, gain, compression, the
+   camera's own drift. Mahalanobis in 480 dimensions on a few hundred samples will find a
+   direction for anything, and the shrunk covariance did not save it.
+
+   So option A is refuted for this feature and this estimator, and the refutation cost one
+   evaluation rather than eight hours of training -- which is what it was run for.
+   Option B, a head trained on normal footage only, is untouched by this: what failed is
+   a *distance in a classification feature space*, not the idea of learning normal. The
+   data shape suits it -- 48 cameras of ordinary footage, almost no anomalies -- and it is
+   the one that would give a spatial `anomaly_map` rather than a per-frame number.
+
+   **Two things to keep from this.** A per-camera normal is not enough on its own: control
+   2 says the four times of day are four different distributions on one camera, which is
+   exactly what Avigilon's two-week learning period absorbs and what a commissioning-time
+   fit would not. And whatever is built, the literature's own warning applies -- published
+   UCF-Crime AUC drops 5-15 points on a fresh venue, RTFM's 84.3% becoming high-70s -- so
+   this belongs where UMD is positioned, as a retrieval aid that turns hours of review into
+   minutes, not as grounds for a dispatch.
+
 ## 8. What the health audit changed, and what it taught
 
 A best-practice audit ran on 2026-09-04 over the whole tree (8 sweeps: packaging,
