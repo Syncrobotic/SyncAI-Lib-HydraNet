@@ -1,5 +1,72 @@
 # Changelog
 
+## [0.5.0](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/compare/v0.4.0...v0.5.0) (2026-09-04)
+
+
+### Features
+
+* **checkpoint:** the weight fallback says which set it handed back ([7c599fc](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/7c599fcde6327cf911b2130b21c9970a4a398d25))
+
+
+### Fixes
+
+* **bev3d:** the render's frame scale comes from camera.json, not a literal ([fc4f06a](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/fc4f06a1b68511eec66746f67426588f8651f9cb))
+* **data:** the leakage check covers every dataset, not seg_folder alone ([fdb885a](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/fdb885aaf1931c51e48c803dd5bf2423a320ff57))
+* **engine:** apply the schedule at construction, not one step late ([302a9f5](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/302a9f53db7185ff0055ed08d26f30f7d18272c8))
+* **engine:** skip an optimizer step whose gradients are not finite ([c7c2de9](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/c7c2de97de6d0596348f9af9a8b7065785bc00b5))
+* **scripts:** one crop-encoder loader; the three copies had each drifted ([a72c70b](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/a72c70b5ae8c22097db39698daaa8ebd8b67adb7))
+* **tools:** no absolute path on sys.path, and a guard that says so ([b730c0f](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/b730c0ffb487676421993dcc1062dc33e2bf8e61))
+* **tools:** the repo root is derived, not this machine's home directory ([5883992](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/58839923e8ac51ce09c85e1608923efb3f789ea6))
+
+
+### Refactoring
+
+* **bev3d:** two grids, two names -- floorplan.BevGrid is FloorRaster ([4678d47](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/4678d4726719ec823d54b95a1d9cd46e6902d13e))
+* drop the sys.path bootstrap, and 129 lint suppressions with it ([597e25e](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/597e25ea86ab4f7c3f6840cd7d2b55e60008cbfe))
+* every score threshold names the operating point it means ([84a8392](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/84a8392d005141d09012b8286ec700fcd0d0170d))
+* **geometry:** one pixels-to-floor projector, with the horizon policy as an argument ([c6258a5](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/c6258a5486233dc6354842cb6e718e2d10e58d2c))
+* one loader for config plus checkpoint, replacing eleven copies ([2428887](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/24288876795b562b9f92d6223ce99416c94a1df5))
+* retire the off-road taxonomy with the line that wanted it ([9bebe40](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/9bebe40af0f2eaab35158db21021a9554155e501))
+* the adult prior and the person threshold each have one source ([a6d4e64](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/a6d4e64737c6f6b46c5f62453e9c6ae5dd995a6e))
+* the fleet lens and the ImageNet arrays each have one source ([870ebcd](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/870ebcd8368a34139949e962a0cf5be78051de3b))
+
+
+### Documentation
+
+* a health remediation section, from a verified audit ([c48488e](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/c48488ed6228f5ffaa6bb7c231dd81313755ef2d))
+* **analytics:** four files said no labelled clip exists; seven do ([745a2f9](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/745a2f9b5dd5a5e85b1250b7005adc06bc40f722))
+* **analytics:** state the undistortion contract the signatures cannot ([6626821](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/66268219821561f3e8ccead222d49356c182f009))
+* **ci:** the dev coverage floor is the runner's number, not headroom ([16db806](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/16db8063e71fc31324faa55702b321e0c3e62293))
+* five docstrings stop narrating their own edits ([33f673e](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/33f673e6a962a02f2b3a62e4eaf4b53f03f1b4f8))
+* item 33 was wrong on both counts, and the real question is different ([9215a67](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/9215a674df3aecdda47ff7c051b0ec06aecf3574))
+* **plan:** the health list is spent, and section 8 keeps only what generalises ([8ea0087](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/8ea00878b42cbe4185d1fd17720577c1eec7027a))
+* six comments that were false about the code beneath them ([7a7d814](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/7a7d814874312a3c34fbb06943989c275d80c143))
+* strike the four P0 items that landed ([af3c3a7](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/af3c3a71c6a7711201ef519d776a4c23903c3c03))
+* strike the four P4 config items that landed ([2dfbbe9](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/2dfbbe9b5735b4148d871371f5fae53fa16a31bd))
+* strike the P1 items that landed ([70ef271](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/70ef2710a864d58f85286506c3685a4fc636fa23))
+* strike the P2 items that landed, and one that was not a bug ([77b4cab](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/77b4cab71dd86de45cd3440543ff7c974a40b2f8))
+* strike the P3 items that landed ([94e0c0c](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/94e0c0c3a5c699960f04f0f0716cf254bc2b4c1a))
+* the P4 remainder is four decisions, not four defects ([501146e](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/501146e5f38b9bfe4232fffc6ef951054ec5320c))
+* the venue investigation is one entry, not six addenda ([8d26e51](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/8d26e511ffdecac64c9956ab6a670ed163711578))
+
+
+### Build & packaging
+
+* Bump https://github.com/astral-sh/uv-pre-commit ([b6a165d](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/b6a165d3a5d8f3bd3c4fa628b44c8a7e2cc816bc))
+* Bump https://github.com/astral-sh/uv-pre-commit from 0.12.7 to 0.12.8 in the hooks group ([b86e581](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/b86e5819ac72d1d2195b73725112f4e2f14f738b))
+* Bump trimesh from 5.0.0 to 5.1.0 ([2c73004](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/2c730040a0dad14557239a00369fcbfff4bd16a6))
+* Bump trimesh from 5.0.0 to 5.1.0 ([3a4474c](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/3a4474c35312d6a3f20ef8c562dbb6cdeba4db43))
+* Bump ty from 0.0.75 to 0.0.77 in the dev-tooling group ([be5db68](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/be5db6834cefb5ddeda16777caf7fe6e526d2cb0))
+* Bump ty from 0.0.75 to 0.0.77 in the dev-tooling group ([3ab6cee](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/3ab6cee318e6b7270e4511dc1221c16b807a474f))
+* ruff targets the interpreter this project actually requires ([9cbb3df](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/9cbb3dfca083446ddb56fa232d0c8ea6038349fb))
+
+
+### CI
+
+* a coverage floor for the dev-side trees, and no figures in pyproject ([764961b](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/764961b1a8cee141056a1dfe94b8cb4ed9969c37))
+* install ffmpeg, so the video path is actually gated ([671c392](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/671c392a15ba28fd556499b235eda1020121b891))
+* tighten the dev-tree coverage floor to what CI measured ([27464bd](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/commit/27464bd7d6025358803367d3f59ac616e32ca43d))
+
 ## [0.4.0](https://github.com/Syncrobotic/SyncAI-Lib-HydraNet/compare/v0.3.0...v0.4.0) (2026-09-03)
 
 
