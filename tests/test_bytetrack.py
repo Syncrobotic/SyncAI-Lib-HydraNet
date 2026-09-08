@@ -302,3 +302,60 @@ def test_the_two_ious_agree_on_the_degenerate_boxes_too(a, b):
     """Random boxes never produce these, and they are where two formulas usually part."""
     pair = np.array([a], dtype=float), np.array([b], dtype=float)
     assert tracker.iou_pair(a, b) == pytest.approx(tracker.iou(*pair)[0, 0], abs=1e-12)
+
+
+# -- the same band, without the Kalman ---------------------------------------
+#
+# 7.11 measured `bytetrack` against the shipped `tracker.Tracker` and could not say which
+# half carried the result, because this file brings a high/low band *and* a Kalman filter
+# and `tracker.py` refuses the filter on stated grounds. `Tracker(birth_thr=...)` is the
+# band alone, so the two can finally be separated.
+
+
+def test_tracker_birth_thr_admits_a_low_box_to_a_track_and_not_to_a_new_one():
+    tr = tracker.Tracker(iou_threshold=0.3, max_age=5, min_hits=1, birth_thr=0.35)
+    box = np.array([[10.0, 10.0, 50.0, 90.0]])
+
+    tr.update(box, 0, scores=np.array([0.9]))
+    assert len(tr.tracks) == 1
+
+    tr.update(box, 1, scores=np.array([0.22]))
+    assert len(tr.tracks) == 1, "a low box on the track must continue it"
+    assert tr.tracks[0].frames == [0, 1]
+    assert tr.tracks[0].scores == [0.9, 0.22]
+
+    far = np.array([[500.0, 300.0, 540.0, 380.0]])
+    tr.update(np.vstack([box, far]), 2, scores=np.array([0.22, 0.22]))
+    assert len(tr.tracks) == 1, "a box below the birth edge must not open a track"
+
+
+def test_tracker_without_birth_thr_is_unchanged():
+    """The default is None and every number this project has published was measured under
+    it, so the band has to be invisible until a caller asks for it."""
+    a = tracker.Tracker(iou_threshold=0.3, max_age=5, min_hits=1)
+    b = tracker.Tracker(iou_threshold=0.3, max_age=5, min_hits=1, birth_thr=None)
+    rng = np.random.default_rng(20260908)
+    for frame in range(12):
+        n = int(rng.integers(0, 5))
+        boxes = rng.uniform(0, 400, (n, 4))
+        boxes[:, 2:] += boxes[:, :2] + 20
+        sc = rng.uniform(0.05, 0.99, n)
+        a.update(boxes, frame, scores=sc)
+        b.update(boxes, frame, scores=sc)
+    assert [t.track_id for t in a.tracks] == [t.track_id for t in b.tracks]
+    assert [t.frames for t in a.tracks] == [t.frames for t in b.tracks]
+
+
+def test_tracker_birth_thr_refuses_a_frame_with_no_scores():
+    """Defaulting to "let it birth" would disable the band silently, on the frames where
+    a caller forgot -- the failure mode this repository keeps paying for."""
+    tr = tracker.Tracker(min_hits=1, birth_thr=0.35)
+    with pytest.raises(ValueError, match="no scores"):
+        tr.update(np.array([[0.0, 0.0, 20.0, 40.0]]), 0)
+
+
+def test_tracker_birth_thr_refuses_a_value_that_is_not_a_score():
+    assert tracker.Tracker(birth_thr=0.0).birth_thr == 0.0
+    for bad in (1.5, -0.1):
+        with pytest.raises(ValueError, match="birth_thr"):
+            tracker.Tracker(birth_thr=bad)

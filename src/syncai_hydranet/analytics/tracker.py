@@ -184,10 +184,32 @@ class Tracker:
         match_against: str = "both",
         staff_memory_gap: int = 0,
         staff_memory_iou: float = 0.3,
+        birth_thr: float | None = None,
     ) -> None:
         self.iou_threshold = iou_threshold
         self.max_age = max_age
         self.min_hits = min_hits
+        # **A survival band, and deliberately nothing else.** With `birth_thr` set, a box
+        # below it may continue a track it matches and may not start one; the caller
+        # decodes at the lower edge so those boxes reach here at all. `None` keeps the
+        # single-threshold behaviour every number this project has published was measured
+        # under.
+        #
+        # This exists to separate two things `bytetrack` moves together. That file brings
+        # the high/low band *and* a Kalman filter, and this tracker refuses the filter on
+        # stated grounds -- no measured noise model exists for this footage, and tuned-
+        # looking constants that were guessed are worse than an honest constant velocity
+        # step. 7.11 measured the pair against the single-threshold arm (202 tracks -> 100,
+        # coasted fraction 0.0643 -> 0.0159) and could not say which half carried it. If
+        # the band alone carries the gain, the filter never has to be argued about.
+        #
+        # Association itself is untouched: one round, greedy IoU, all boxes eligible.
+        # ByteTrack associates the high band first and the low band second against what is
+        # left, which is a *matching* change on top of the band -- a third variable, and
+        # the point here is to move one.
+        if birth_thr is not None and not 0.0 <= birth_thr <= 1.0:
+            raise ValueError(f"birth_thr must be a score in [0, 1], got {birth_thr!r}")
+        self.birth_thr = birth_thr
         if assignment not in ("hungarian", "greedy"):
             raise ValueError(f"assignment must be hungarian or greedy, got {assignment!r}")
         # Default unchanged: optimal assignment was measured at 76 -> 78 tracks on the
@@ -308,7 +330,16 @@ class Tracker:
             if t.hits >= self.min_hits:
                 t.confirmed = True
 
-        for di in set(range(len(boxes))) - set(matched.values()):
+        unmatched = set(range(len(boxes))) - set(matched.values())
+        if self.birth_thr is not None:
+            if scores is None:
+                raise ValueError(
+                    "birth_thr is set and this frame carried no scores. The band decides "
+                    "which boxes may start a track, so a scoreless frame has no safe "
+                    "reading -- `clip_tracks.track_clip` supplies them on every call."
+                )
+            unmatched = {di for di in unmatched if float(scores[di]) >= self.birth_thr}
+        for di in unmatched:
             inherited: list[float] = []
             if self.staff_memory_gap > 0 and staff_scores is not None:
                 donor, best = None, self.staff_memory_iou
