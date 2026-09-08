@@ -1084,11 +1084,38 @@ something it does not support.
    from. That is the decision to take, and it is no longer "adopt or not"; it is "these
    two paths must agree, and one of them is already two-stage".
 
-   **The experiment that should come first is still untried**: `bytetrack` moves the band
-   *and* the Kalman together, and `tracker.py` refuses the Kalman on grounds that still
-   hold -- no measured noise model exists for this footage. Adding only the survival band
-   to `tracker.py` separates the two, and if the band alone carries the gain then the
-   Kalman never has to be argued about. Note also that `demo_video.py` is in
+   **That experiment has now been run, and the band carries it.** `Tracker(birth_thr=...)`
+   is the survival band with no Kalman and no change to association -- one round, greedy
+   IoU, every box eligible to match, and only the birth of a *new* track gated on the high
+   edge. Three arms, same eight clips, same weights (`runs/band_probe01/`):
+
+   | | single | **band only** | bytetrack (band + Kalman) |
+   |---|---|---|---|
+   | tracks | 202 | **109** | 100 |
+   | total dwell | 2,399 s | **3,509 s** | 3,304 s |
+   | mean coasted fraction | 0.0643 | **0.0167** | 0.0159 |
+
+   **The band alone recovers 91% of the track reduction and 97% of the coasting
+   improvement.** The nine remaining tracks are what a Kalman filter buys, and
+   `tracker.py`'s refusal of that filter -- no measured noise model exists for this
+   footage, and tuned-looking constants that were guessed are worse than an honest
+   constant-velocity step -- now costs almost nothing to keep.
+
+   Kaohsiung-cam04 is where the band does its work, 87 -> 34, and it is the camera whose
+   19:28 clip shows eight to twelve real people at the counter with only four at or above
+   0.35. Taichung-cam11 and Tao-Hsin-cam04 gain a track or two (6 -> 9, 4 -> 5) on
+   single-digit populations, which is noise rather than a trend.
+
+   **What this does not say.** The band's dwell total is 6.2% above the full arm's while
+   its coasted fraction is also slightly higher, so the extra 205 s cannot be claimed as
+   recovery -- the two are the same measurement inside their own noise. And no arm here
+   can see an ID switch: a track that swaps onto a neighbour is fully observed and coasts
+   zero. Halving fragmentation is not fixing it either; a shopper at a counter for 110 s
+   may still be two or three tracks, and joining them needs association.
+
+   **So the decision has a third option that satisfies both arguments**: put the band on
+   both paths. It is 91% of the gain, it does not overturn a recorded refusal, and on the
+   serving side it *removes* an unmodelled filter rather than adding anything. Note also that `demo_video.py` is in
    `SCENE_PATHS`, so whichever way this goes the README figures are re-rendered and
    looked at.
 
