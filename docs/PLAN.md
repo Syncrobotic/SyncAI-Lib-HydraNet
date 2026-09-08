@@ -2652,6 +2652,38 @@ something it does not support.
    so there is nothing to protect; the next spend on this belongs on labels for classes
    the linear head cannot name at all.
 
+34. **person01's throughput on the pro6000, measured on an idle card 2026-09-08**
+   (`runs/bench_person01/`, `runs/bench_person01_argmax/`; `scripts/bench_trt.py`, 15 s per
+   engine, H2D **and** D2H in the end-to-end figure). The target is 96 streams x 5 fps =
+   480 f/s.
+
+   | engine | compute f/s | end-to-end f/s | vs target |
+   |---|---|---|---|
+   | fp16 b=1 | 802.0 | 460.8 | **0.96x -- misses** |
+   | fp16 b=16 | 1498.0 | 727.0 | 1.51x |
+   | fp16 b=16 `--argmax-seg` | 1392.9 | **1031.6** | **2.15x** |
+
+   **Half the batch-16 throughput was going into the PCIe copy**, and the lever for it was
+   already documented and already argued: folding the segmentation argmax into the graph
+   turns 296 MB of fp32 `terrain` logits into 32 MB of uint8 class ids. The measurement
+   reproduces the shape `export_onnx.ExportWrapper`'s docstring warns about --
+   **compute falls 1498 -> 1393 while end-to-end rises 727 -> 1032**. Anyone benchmarking
+   the engine alone sees a 7% regression and reverts the flag, correctly by their
+   measurement and wrongly by 40% of the frame rate.
+
+   **And the serving path already wants the uint8 map.** `serving/camera.py` opens by
+   saying so, and `ema_labels` takes "one uint8 class map"; an engine emitting logits
+   makes the host argmax them and throws the logits away. So the argmax engine is not a
+   trade for this consumer -- it is the one that matches it. What it costs is what that
+   docstring states: no confidence, no soft blend, no per-class probability, which is why
+   it stays a flag for consumers that need them.
+
+   Artefacts on disk (gitignored): `runs/export_person01/` holds the b1 and b16 ONNX, the
+   fp16 conversions and the built plans. Input is `image_rgb_255_u8` `[B,3,640,1120]` --
+   raw 0-255, the normalisation is inside the graph and doing it twice is the failure that
+   export prevents. Note the one asymmetry the fp16 conversion leaves: `terrain` comes back
+   float16 while the sixteen detection and pose outputs stay float32.
+
 ## 8. What the health audit changed, and what it taught
 
 A best-practice audit ran on 2026-09-04 over the whole tree (8 sweeps: packaging,
