@@ -77,6 +77,15 @@ def build_parser() -> argparse.ArgumentParser:
         "associate what was never detected, and `models/heads/detection.py` carries "
         "the two-camera table this was chosen from",
     )
+    ap.add_argument(
+        "--birth-thr",
+        type=float,
+        default=None,
+        help="survival band: a box under this may continue a track and may not start "
+        "one, while --score-thr stays the decode floor. Off by default, because every "
+        "figure this script has produced was measured without it. PLAN 7.11: the band "
+        "alone recovers 91% of what bytetrack's band-plus-Kalman does",
+    )
     ap.add_argument("--min-hits", type=int, default=3)
     ap.add_argument("--max-age", type=int, default=5)
     ap.add_argument("--iou", type=float, default=0.3)
@@ -121,7 +130,12 @@ def main(argv: list[str] | None = None) -> int:
         cam = Camera.from_vfov(src_h, src_w, args.vfov)
         plane = GroundPlane(height=args.camera_height, pitch=np.deg2rad(args.pitch))
 
-        tracker = Tracker(iou_threshold=args.iou, max_age=args.max_age, min_hits=args.min_hits)
+        tracker = Tracker(
+            iou_threshold=args.iou,
+            max_age=args.max_age,
+            min_hits=args.min_hits,
+            birth_thr=args.birth_thr,
+        )
         # k1=None states the choice rather than leaving it implicit: this script reports
         # dwell and a floor heatmap at 0.25 m cells, where a one-or-two-pixel lens
         # correction is far below the cell. `site_events.py` passes its camera's k1
