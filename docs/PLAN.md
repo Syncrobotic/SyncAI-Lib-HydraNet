@@ -690,6 +690,47 @@ order. A component with no step is not scheduled, it is assumed.
    unaffected; what changes is that promoting the dated run and then reading its `best.pt`
    for anything person-shaped costs more than the table shows.
 
+32. **Two any-view geometry models are wired up as commissioning witnesses, and neither
+   has run.** Opened 2026-09-06. Depth Anything 3 (`DA3NESTED-GIANT-LARGE`, 1.15B, metres
+   as it claims them) and VGGT-1B (relative depth, intrinsics) are asked the two
+   questions the fleet cannot answer from inside: **what is the lens** and **how tall is
+   the furniture**. `syncai_bev3d/geometry_teachers.py` runs either on one undistorted
+   plate; `tools/commissioning/map_anything_eval.py intrinsics --backend da3|vggt` puts
+   the vfov beside the anchor the way MapAnything's was, and
+   `tools/commissioning/geometry_bench.py --source da3|vggt-floorfit` scores the depth
+   against the floor with `flat(ctl)` beside it. **The commit ids are arguments, not
+   constants**: the machine that built the instruments could not reach the Hub, a pin
+   copied from memory pins nothing, and `geometry_teachers.pinned` refuses anything but a
+   full 40-character id -- the first run records the one it used, and promotion to a
+   constant takes it from that run.
+
+   **The predictions, written before the runs so the runs can be wrong about them:**
+
+   * *vfov on Taichung-cam01 (tile grid 70.4°).* Both disagree the way MapAnything did
+     (38.26°, a 2.03x focal ratio). Single-image focal estimation resolves the focal/scale
+     ambiguity from learned object-size priors, and a phone shop seen from a ceiling
+     corner is not what those were fitted on. A backend inside 5° of 70.4 would be the
+     first independent confirmation of the fleet's assumed vfov on 21 cameras; anything
+     else is a third estimate beside two others and changes nothing.
+   * *Depth, eight commissioned cameras.* DA3 holds the floor within DA-V2's 0.06 m and
+     improves the relief half on the two white-fixture cameras (Tao-Hsin-cam03/-cam04),
+     because the collapse on textureless surfaces is a prior-strength failure and the
+     model is three times the size. VGGT's relief is not better than DA-V2's: single view
+     is the case its README says it was never trained for, and its floor columns are the
+     fit rather than a measurement, which the `floorfit` in its label says.
+   * *What neither moves.* The far edge of a fixture the camera cannot see, and nothing
+     that gates stage 2 -- foot-point occlusion at the counter and the detector's recall
+     are §6 step 4's, and a depth teacher does not touch them.
+
+   **What each outcome costs.** DA3 winning both halves means replacing the depth teacher
+   in `plate_calibration.run_depth` and re-cutting every `camera.json`, mask completion
+   and published figure; the 0.847 NYU scale constant in `data/nyu_depth.py` goes with V2,
+   since DA3's metres are tied to the vfov explicitly rather than to NYU's cameras. VGGT
+   winning the lens question means running it on the other 21 selling-floor cameras and
+   retiring `fleet_hardware_assumed`. Neither winning means closing this item with the
+   numbers and leaving the 4-point ground-calibration tool (§2.1b) as the only route to a
+   measured vfov -- which is where the risk sits regardless of how this comes out.
+
 5. **Retail dashboard surface unscoped** — the numbers fall out of L1 free; what a store
    manager opens, at what cadence, is a product question. Blocks nothing before step 6.
    One modelling gap hides inside it: **store-level footfall needs cross-camera dedup**
@@ -2571,39 +2612,6 @@ something it does not support.
 
 ---
 
-32. **The counting-line escape from fragmentation was tried on Kaohsiung-cam04 and the
-   camera cannot supply it, 2026-09-07.** `line_events` needs identity across ONE frame
-   step -- 0.2 s at 5 fps -- not across a visit, so a crossing count should survive
-   fragmentation that halves the track count. That reasoning is sound and this camera is
-   the wrong subject for it: re-derived from 900 frames (87 tracks, against the
-   `runs/zones01` proposal's 5 events from 300 frames, which says of itself "weak
-   evidence, confirm against the plate"), **all 87 births and deaths cluster at the right
-   frame edge and at the counter's near end. There is no door in this view.** A line at
-   the frame edge counts "entered the field of view", and a track born inside it never
-   crosses it. The birth/death map is a cheap per-camera test of "does this camera see an
-   entrance", and it is worth running before any footfall line is drawn.
-
-   **What the clip does show is the strongest confirmation yet of the two-stage case.**
-   The sweep clip is **19:28 store-local**, not the 11:0x plate every earlier look at this
-   camera used. The two do not look like they differ by eight hours because the clip's
-   *name* says 11:27 and its burnt-in stamp says 19:28: `events.clip_start_from_name`
-   states the rule -- "the stamp in the name is UTC and the stores are UTC+8" -- and the
-   incident behind it is `pull_studioa.py` asking for "16:00, the busy hour" and receiving
-   a greyscale IR clip of a closed shop. Anyone comparing a plate to a clip on this corpus
-   is comparing one local stamp to one UTC filename. The clip shows: eight to twelve real people crowded at the counter, staff in blue polos and a
-   queue of masked customers. Detections are on real people, no clutter. And **only four
-   of nine to sixteen are at or above 0.35** -- the rest sit in the 0.20-0.35 band the
-   shipped single-stage cut throws away. That is the 87 fragments, in one picture:
-   shoppers flickering across the cut as they occlude each other.
-
-   **A smaller defect found on the way.** `dwell.track_ground_path` takes the foot point
-   as `boxes[:, 3]` unconditionally, so a box clipped by the frame's bottom edge is
-   projected from the edge rather than from feet, landing the person metres nearer than
-   they are with nothing marking it. Measured share of person boxes touching the bottom
-   edge: Taichung-cam01 6.5%, Kaohsiung-cam04 4.0%, Tao-Hsin-cam03 1.4%,
-   Taichung-cam10 0.6%. Real, and not the dominant term. The project has form here --
-   §7c records the person-box edge gate that ran in the wrong coordinate space.
-
 33. **The text-embedding head, tested with a vocabulary it was built for, trains to
    parity and does not win. 2026-09-08.** `heads/text_classifier.py` was built 2026-08-17
    against a measured failure -- the detection head over Kaohsiung-cam08 returns 1,683
@@ -2683,6 +2691,80 @@ something it does not support.
    raw 0-255, the normalisation is inside the graph and doing it twice is the failure that
    export prevents. Note the one asymmetry the fp16 conversion leaves: `terrain` comes back
    float16 while the sixteen detection and pose outputs stay float32.
+
+35. **70.4 is not the wrong number, and this is the first independent check of it.
+   2026-09-08.** Three any-view models now answer the lens with one voice -- MapAnything
+   38.27, DA3 Metric-Large 39.8-42.0, DA3 nested Giant-Large 37.7-40.6 -- against a tile
+   grid measured on Taichung-cam01 at 70.4. Two witnesses agreeing is 7.19's own warning
+   (GeoCalib and HumanFoV matched to 0.16 deg and were both wrong), and 7c.32 showed DA3's
+   number does not move for a zero baseline, so it is a resolution prior rather than a
+   reading. But "the models are not measuring" does not establish that the tile grid is.
+
+   `onboard_camera.py` stores a three-point sensitivity at 55 / 70.4 / 85 whose depth-free
+   `people_fit` residual has a *minimum* at 70.4 -- 0.0295, 0.0232, 0.0261 -- and a minimum
+   is the only shape in that file that could arbitrate a vfov at all, since plane fitting
+   is monotone in it every time it has been tried. **That scan had never been run below
+   55**, so the minimum had never been asked to survive the range the models propose.
+   Scanned now, 30 to 85 on cam01's 47 person boxes
+   (`runs/geometry_bench/vfov_people_scan.json`):
+
+   | vfov | 30-52.5 | 55-65 | **67.5** | 70.4 | 75 | 85 |
+   |---|---|---|---|---|---|---|
+   | residual | 0.033-0.035 | 0.028-0.030 | **0.0229** | 0.0304 | 0.0382 | 0.0879 |
+
+   **The minimum is at 67.5, three degrees from the tile grid. The models' 38-41 sits on a
+   flat plateau 45% worse than it, with no local structure at all.**
+
+   `fit_pose_from_people` warns that a free vfov absorbs lens distortion, so the minimum
+   was walked against k1, which is itself a fleet assumption:
+
+   | k1 | 0.000 | -0.100 | -0.175 | **-0.225** | -0.300 |
+   |---|---|---|---|---|---|
+   | argmin vfov | **70.0** | 65.0 | 62.5 | 67.5 | 67.5 |
+   | residual | **0.0194** | 0.0201 | 0.0251 | 0.0229 | 0.0273 |
+
+   It does walk, by up to 7.5 deg, so **this instrument bounds the vfov to a band rather
+   than pinning it** -- and the band is 62.5-70.0 under every lens tried. Nothing near 40.
+   With no undistortion at all the argmin is 70.0 at the lowest residual in the whole
+   experiment, 0.4 deg from the tile grid.
+
+   So the answer to "what if 70.4 is the wrong one" is no, on a check the models cannot
+   answer back: a depth-free fit over real person boxes, which has a minimum where the
+   plane fit has none. What it does not settle is 67.5 against 70.4 -- about 1% of scale
+   by 7.19's own coupling figure -- and it rests on one camera and 47 boxes.
+
+36. **The counting-line escape from fragmentation was tried on Kaohsiung-cam04 and the
+   camera cannot supply it, 2026-09-07.** `line_events` needs identity across ONE frame
+   step -- 0.2 s at 5 fps -- not across a visit, so a crossing count should survive
+   fragmentation that halves the track count. That reasoning is sound and this camera is
+   the wrong subject for it: re-derived from 900 frames (87 tracks, against the
+   `runs/zones01` proposal's 5 events from 300 frames, which says of itself "weak
+   evidence, confirm against the plate"), **all 87 births and deaths cluster at the right
+   frame edge and at the counter's near end. There is no door in this view.** A line at
+   the frame edge counts "entered the field of view", and a track born inside it never
+   crosses it. The birth/death map is a cheap per-camera test of "does this camera see an
+   entrance", and it is worth running before any footfall line is drawn.
+
+   **What the clip does show is the strongest confirmation yet of the two-stage case.**
+   The sweep clip is **19:28 store-local**, not the 11:0x plate every earlier look at this
+   camera used. The two do not look like they differ by eight hours because the clip's
+   *name* says 11:27 and its burnt-in stamp says 19:28: `events.clip_start_from_name`
+   states the rule -- "the stamp in the name is UTC and the stores are UTC+8" -- and the
+   incident behind it is `pull_studioa.py` asking for "16:00, the busy hour" and receiving
+   a greyscale IR clip of a closed shop. Anyone comparing a plate to a clip on this corpus
+   is comparing one local stamp to one UTC filename. The clip shows: eight to twelve real people crowded at the counter, staff in blue polos and a
+   queue of masked customers. Detections are on real people, no clutter. And **only four
+   of nine to sixteen are at or above 0.35** -- the rest sit in the 0.20-0.35 band the
+   shipped single-stage cut throws away. That is the 87 fragments, in one picture:
+   shoppers flickering across the cut as they occlude each other.
+
+   **A smaller defect found on the way.** `dwell.track_ground_path` takes the foot point
+   as `boxes[:, 3]` unconditionally, so a box clipped by the frame's bottom edge is
+   projected from the edge rather than from feet, landing the person metres nearer than
+   they are with nothing marking it. Measured share of person boxes touching the bottom
+   edge: Taichung-cam01 6.5%, Kaohsiung-cam04 4.0%, Tao-Hsin-cam03 1.4%,
+   Taichung-cam10 0.6%. Real, and not the dominant term. The project has form here --
+   §7c records the person-box edge gate that ran in the wrong coordinate space.
 
 ## 8. What the health audit changed, and what it taught
 

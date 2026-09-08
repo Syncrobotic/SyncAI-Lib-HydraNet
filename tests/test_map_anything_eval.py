@@ -177,3 +177,25 @@ def test_the_commissioned_baseline_is_readable_and_plausible():
     for cam, m in base.items():
         assert 2.0 <= m["height_m"] <= 3.6, f"{cam} outside any shop ceiling"
         assert m["k1"] is not None, f"{cam} has no lens; the plate cannot be undistorted"
+
+
+# ---------------------------------------------------------------------------
+# the backends the intrinsics question can now be put to
+
+
+def test_an_external_backend_without_a_revision_is_refused_before_anything_loads():
+    """`--backend da3` names a model this repository does not depend on; without a commit
+    id the run would measure whatever upstream `main` is today, which is not a reading."""
+    for backend in ("da3", "vggt"):
+        with pytest.raises(ValueError, match="--revision"):
+            mae.intrinsics_backend(backend, None)
+        assert callable(mae.intrinsics_backend(backend, "0" * 40))
+    assert mae.intrinsics_backend("mapanything", None) is mae._vfov_mapanything
+    with pytest.raises(ValueError, match="unknown backend"):
+        mae.intrinsics_backend("moge", "0" * 40)
+
+
+def test_register_refuses_a_backend_it_does_not_have(tmp_path):
+    """Only MapAnything registers here. A silently ignored `--backend` would let a reader
+    file a VGGT registration that MapAnything actually produced."""
+    assert mae.main(["register", "--out", str(tmp_path), "--backend", "vggt"]) == 2
