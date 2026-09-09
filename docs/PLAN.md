@@ -2953,6 +2953,49 @@ once in this pass.
    used a coarse HSV histogram of the upper 45% of the box, which costs nothing.
 
 
+39. **The fixture zones tile the floor, so "dwell at a fixture" has meant "in that
+   quarter of the room".** Measured 2026-09-08, fixed in kind 2026-09-09.
+
+   Taichung-cam04's twelve fixture zones sum to **38.9 m2 against a 26.2 m2 walkable
+   polygon**, and **95.6%** of that polygon is claimed by some fixture with only 0.2%
+   claimed twice (Kaohsiung-cam04: 81.3%). It is a seamless partition, so every point on
+   the floor belongs to whichever display is nearest with no upper bound on the distance.
+   Merging the fragments — 71 zones across 8 cameras collapse to 32 by adjacency — makes
+   the labels coarse enough to be true at the resolution they claim, and does not touch
+   this.
+
+   `geometry/bands.py` is the fix: floor within `width_m` of where a furniture mask meets
+   the floor. It is a **predicate, not a polygon**, because "within a metre of a display"
+   is a distance query; a polygon would need boolean geometry this project does not depend
+   on and would quantise the answer on the way. Callers compose:
+   `zone.contains(path) & band.contains(path)`.
+
+   At the 14:31 peak, with `width_m = 1.0` and the four merged zones:
+
+   | zone | all dwell | beside furniture | share |
+   |---|---|---|---|
+   | far-right | 751 s | 465 s | 62% |
+   | near-right | 198 s | 168 s | 85% |
+   | **far-left** | **126 s** | **10 s** | **8%** |
+   | **near-left** | **126 s** | **125 s** | **99%** |
+
+   **far-left and near-left are the same number under the tiling and are not the same
+   thing.** One is a shopper at the accessory wall; the other is open floor the partition
+   handed to the back display table. 64% of the peak's dwell is beside furniture; the
+   other 36% is floor a fixture was credited with.
+
+   **Two limits, both stated on the page.** `contact_line` reads a furniture mask and
+   cannot tell a display from a blank wall, so the band is an UPPER bound on engagement;
+   `tools/commissioning/footprints_from_masks.py` is the tool that would separate them and
+   its own header records that it does not yet produce usable footprints. And `width_m` is
+   the caller's claim about what counts as being at a display — 1.0 m puts 42% of the
+   peak's floor-time inside, 1.5 m puts 55% — so it is printed beside the number.
+
+   `camera.json` is untouched. The band is recorded ALONGSIDE the tiling rather than
+   replacing it, so the two can be read against each other and the change is reversible;
+   baking it into commissioning would move all eight cameras at once.
+
+
 ## 9. The distance to the product, read across the steps
 
 Written 2026-09-09. **This section measures nothing new.** Every figure in it is cited
