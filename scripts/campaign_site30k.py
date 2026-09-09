@@ -1116,6 +1116,10 @@ def cmd_pet_census(args) -> int:
     clips = args.clips
     per_clip = max(1, args.sample // max(len(clips), 1))
     rows = []
+    # Collected as the rows are built rather than re-derived from them: a row is a
+    # JSON dict, so `r["score"]` carries the whole value union and `np.quantile`
+    # below has no overload to match it. One expression, two consumers.
+    scores: list[float] = []
     n_frames = 0
     for clip in clips:
         camera = Path(clip).parent.name
@@ -1135,12 +1139,14 @@ def cmd_pet_census(args) -> int:
                     gd_proc, gd_model, img, args.pet_prompt, args.floor, device
                 )
                 for b in boxes:
+                    score = round(float(b[4]), 4)
+                    scores.append(score)
                     rows.append(
                         {
                             "camera": camera,
                             "clip": Path(clip).stem,
                             "frame": i,
-                            "score": round(float(b[4]), 4),
+                            "score": score,
                             "bbox": [round(float(x), 1) for x in b[:4]],
                             "luma": round(lu, 1),
                             "chroma": round(ch, 1),
@@ -1152,9 +1158,7 @@ def cmd_pet_census(args) -> int:
             print(f"{clip}: decode stopped ({exc}); kept {got} frames")
         if n_frames >= args.sample:
             break
-    # `float(...)` so the list has a concrete element type: `rows` are JSON dicts, so
-    # without it `np.quantile` below has nothing to match an overload against.
-    scores = sorted(float(r["score"]) for r in rows)
+    scores.sort()
     out = {
         "prompt": args.pet_prompt,
         "floor": args.floor,
