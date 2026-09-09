@@ -461,6 +461,10 @@ repository has the most notes about.
 
 ## 6. Build order — one artefact, one gate per step
 
+**Section 9 reads this table as a whole** — how far the statuses below, taken
+together, leave the project from section 1's definition of success. It cites rather
+than restates, so this table stays the thing a reader consults for status.
+
 **When §7 answers a step, edit the step's row in the same commit.** §7 is where the work
 lands and this table is what a reader consults, and nothing holds the two together. Twice
 on 2026-08-29 a row still stated as current something §7c had already superseded — step 8
@@ -2894,3 +2898,161 @@ sat unnoticed through two commits. Edit prose through a file-based script, not a
 one-liner. And a figure's audit must be re-cut *after* the code commit lands, not before,
 or it records a version the tree has already left -- which put a red `dev` on the board
 once in this pass.
+
+
+## 9. The distance to the product, read across the steps
+
+Written 2026-09-09. **This section measures nothing new.** Every figure in it is cited
+from the section that took it, and where a status here and a row in section 6 disagree,
+section 6 is right and this is stale -- it is a reading of the table, not a second copy of
+it. What is mine and not the evidence's is the **ranking**; the ordering below is a
+planner's judgement about which gap makes the others unreadable, and it is arguable.
+
+It exists because sections 6 and 7 answer "what is the state of each piece" and nothing
+answered "how far is this from the thing section 1 says success is" -- which is
+*actionable alerts per camera per day, and the incidents missed*.
+
+### 9.1 What is solid
+
+Named first because the list below is long and it would otherwise read as a verdict on
+the whole system, which it is not.
+
+* **The geometry is validated independently of this fleet.** 7.3 cm median floor error
+  over 19,824 WILDTRACK observations, yaw under 0.2 deg, and it did not need the images
+  (section 7.13).
+* **The two-head architecture's bet paid.** Distilled pose reads PCK@0.2h 0.915 /
+  L2 p50 7.7 px with a flat end-of-run curve (step 3).
+* **Throughput is not a constraint.** 1,494 f/s against the 480 f/s requirement, 3.1x
+  (step 3, section 7.4).
+* **The night false-positive rate is measured and is zero.** 2,250 frames of an empty shop
+  at 23:58 across 15 cameras, zero `person` boxes at the shipped 0.35 (step 4). The ghosts
+  were the teachers' and the student did not inherit them.
+
+### 9.2 Nothing has been graded, so no number here is an accuracy
+
+Section 1 states the rule: *no site figure is an accuracy until a human has graded it --
+until then it is an agreement with the teacher models.* Section 4.5 names the instrument
+that would fix it (shadow grading) and calls it the human test set, free and accumulating.
+
+**Verified 2026-09-09: that instrument has never been switched on.**
+`serving/dispositions.py` is a complete schema -- append-only JSONL by UTC day, alert row
+plus operator verdict joined by `alert_id`, calibration hash, checkpoint and commit -- and
+there is **no store on disk**. And the one ground-truth artefact in the tree,
+`runs/gt_cam01/provenance.json`, declares in its own text that it was
+`"labelled_by": "Claude (Opus 5) ... by eye from the clip"` and is
+`"not_a_human_label_set"`; the tracking IDF1 0.739 rests on it (step 5).
+
+So `detection_mAP/site_person` 0.7387 means *agrees closely with Grounding DINO*. The
+same teacher is measured returning people on an empty store on 13 of 42 cameras, and
+SAM 3's `person` prompt returned 14 hanging accessory packets as people (step 4).
+
+**The cost is not that the figures are uncertain. It is that improvement has no
+verifiable direction.** Raising site mAP and raising agreement-with-the-teacher are the
+same movement under every instrument this project currently owns, and they are not the
+same thing. Every gain booked since the teachers became the label source carries that
+ambiguity, and no amount of further training resolves it.
+
+### 9.3 The known recall failure sits exactly where the product sells
+
+Measured 2026-08-26 over four commissioned cameras, 40 frames each, and recorded in
+`serving/decode.py`: at the shipped 0.35 threshold the dense head marks **73 person
+regions with no box at all -- 20% more people than the box head returned** -- and every
+one, cropped and looked at, is a shopper whose lower body is behind a counter or a display
+table. Dense `person` IoU is 0.885 against detection mAP@50 0.302.
+
+Table-edge dwell, shelf reach and queue position are the readings section 1 sells, and
+they are the same geometry. `confirm_with_dense` recovers part of it, and the same sweep
+found the boxes it admits **were never the ones firing events** (step 4) -- so the
+recovery is real for positions and has not been shown to reach the event layer.
+
+### 9.4 Tracks do not survive long enough to measure a duration
+
+Section 7.11: 202 tracks over 24 minutes, 43% ever enter a zone, **median visit 3.2 s**,
+and 58% of endings are mid-view deaths -- of which **86% still have a box on the person**,
+at a median score 0.338 against a 0.35 threshold.
+
+Dwell, loiter, queue and path are durations. An instrument whose median observation is
+3.2 s cannot measure a 4-minute loiter, and section 7.11 also records that the
+tracker-lost / detector-gone split is not established and will not be until an appearance
+model can tell two shoppers apart. This is a threshold problem before it is a tracker one,
+which is the cheap half and is not done.
+
+### 9.5 The metres are a population prior, fleet-wide
+
+Every commissioned camera's `scale_source` reads
+`person_height_median_vs_1.7m_prior_nNN`, **on 15-37 boxes** (step 2, section 7.19), and
+vfov is `fleet_hardware_assumed` on **22 of the 23** onboarded cameras -- Taichung-cam01's
+tile-grid pin is the exception, and §7c.31 refused the same pin at two other venues
+on a flat k1 sweep. Taichung-cam05 was withdrawn when two furniture checks disagreed.
+
+Section 9.1's 7.3 cm validates the **arithmetic**. It says nothing about this fleet's
+**parameters**, and every speed threshold, zone verdict and dwell figure is denominated in
+them. Coverage compounds it: 8 of 48 cameras commissioned, 15 selling-floor cameras still
+in the stage-0 backlog.
+
+### 9.6 The chain has never run end to end
+
+Verified 2026-09-09: `world_frame`, `pixel_to_ground`, `SecurityEvent` and `dispositions`
+appear **zero times** in `serving/` and in `scripts/serve_pilot.py`. The serving path stops
+at L0 plus a tracker, with boxes still on the letterboxed network canvas -- the pixel frame
+`analytics/world.py` gained `canvas_region` for on 2026-09-09, and whose two wrong readings
+cost 2.4-3.4 m in metres that carry no NaN and raise nothing.
+
+L1 through L3 exist only in offline scripts over clips. **Step 6 (L3 end to end, one
+camera) has not started and step 7 (shadow mode) is behind it** -- and step 7 is the step
+that produces the number section 1 defines success as.
+
+### 9.7 Two components have no consumer on the serving path
+
+* **`staff/customer`** (step 9) is half done: 0.893 balanced accuracy held out by camera,
+  and **refused on Tao-Hsin-cam04 at 0.417** against a 0.90 floor. Its own gate is stated
+  by its consumer, and the consumer's number is that `reach_to_shelf` fires **11.7 alerts
+  a minute** on a clip where every person is staff.
+* **The behaviour head** (step 8) has passed its numeric half -- 32,933 parameters,
+  fall vs pick_up 0.963 against a 0.944 linear floor -- and has **no consumer on the
+  serving path**, so `fall`, `crouch` and `sit` are still the geometric rules section 7.14
+  measured as marginal. The crowd failure is grouping, not classification: three people
+  found in a frame holding about ten, and **one false alarm per eight minutes on a safety
+  alert does not ship** (step 3).
+
+Both are prerequisites for steps 6 and 7, as section 6 already states.
+
+### 9.8 Out of domain it is measured to fail, and that is a scope statement
+
+§7c.31: out of domain the person-score distribution slides into the threshold band
+(a 0.15 to 0.30 cut costs 36-67% against 11% at home), ad posters detect as people every
+frame, night OSD text mints phantom devices, and `fixture` is approximately zero outside
+retail so zones cannot be drawn at all.
+
+This is consistent with section 1 -- the first vertical is an Apple-reseller chain -- and
+is recorded here as the boundary rather than as a defect. What follows from it is that
+**self-calibration is the product** (ruled 2026-09-03), and that ruling is not yet built.
+
+### 9.9 The read
+
+**The gap is instruments, not model capability.** The model may already be good enough for
+step 6; nothing in this tree can currently answer that, because every site number is
+agreement with a teacher or with a model-labelled set, and the one instrument that would
+break the circle is a schema with no rows in it.
+
+The counterweight, stated because it is unusual and is this repository's strongest asset:
+**every failure above is one this project recorded about itself, with a number.**
+`provenance.json` volunteers that its labeller was a model; `dispositions.py` volunteers
+that it cannot measure recall; section 2 volunteers that one leg of its own boundary
+argument no longer carries weight. The problem is not blindness. It is that steps 1-5
+build instruments and steps 6-7 use them, and 6 has not started.
+
+### 9.10 What this ordering implies for the next steps
+
+Not a build order -- section 6 is the build order -- but the sequence this reading argues
+for inside it:
+
+1. **Step 6, one camera, one clip, an event log a person can read against the video.**
+   Needs the serving-side L1 producer (`canvas_region` landed its first piece on
+   2026-09-09) and `record_alert` wired to the disposition store. This is the shortest
+   path from instrument to measurement.
+2. **Then shadow mode, even at one camera for one week.** The first operator verdicts are
+   worth more than any retrain, because they are the first signal that is not the
+   teachers' opinion.
+3. **Fragmentation (the 0.338-against-0.35 half) and the per-store uniform reference**
+   are what make 1 and 2 readable rather than noisy.
