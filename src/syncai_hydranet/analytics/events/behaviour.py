@@ -16,7 +16,7 @@ from itertools import pairwise
 
 import numpy as np
 
-from ...geometry.ground import Camera, GroundPlane
+from ...geometry.ground import Camera, FrameBounds, GroundPlane
 from ..dwell import track_ground_path
 from ..tracker import Track
 from ._geometry import _runs
@@ -47,6 +47,7 @@ def speed_events(
     max_speed_mps: float = 2.5,
     window_seconds: float = 1.0,
     min_seconds: float = 0.6,
+    bounds: FrameBounds | None = None,
 ) -> list[SecurityEvent]:
     """`running`: floor speed over a sliding window exceeded ``max_speed_mps``.
 
@@ -68,7 +69,7 @@ def speed_events(
     for track in tracks:
         if len(track.frames) < 2:
             continue
-        path = track_ground_path(track, cam, plane)
+        path = track_ground_path(track, cam, plane, bounds)
         frames = np.asarray(track.frames)
         span = max(round(window_seconds * fps), 1)
         speed = np.full(len(frames), np.nan)
@@ -160,6 +161,7 @@ def crowd_events(
     radius_m: float = 1.5,
     min_people: int = 4,
     min_seconds: float = 5.0,
+    bounds: FrameBounds | None = None,
 ) -> list[SecurityEvent]:
     """`crowd_forming`: ``min_people`` floor positions within ``radius_m`` of one another.
 
@@ -177,7 +179,7 @@ def crowd_events(
     for track in tracks:
         if not track.frames:
             continue
-        path = track_ground_path(track, cam, plane)
+        path = track_ground_path(track, cam, plane, bounds)
         for frame, point in zip(track.frames, path, strict=True):
             if np.isfinite(point).all():
                 per_frame.setdefault(int(frame), []).append(point)

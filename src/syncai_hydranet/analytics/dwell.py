@@ -31,11 +31,16 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..geometry.ground import Camera, GroundPlane, pixel_to_ground
+from ..geometry.ground import Camera, FrameBounds, GroundPlane, pixel_to_ground
 from .tracker import Track
 
 
-def track_ground_path(track: Track, cam: Camera, plane: GroundPlane) -> np.ndarray:
+def track_ground_path(
+    track: Track,
+    cam: Camera,
+    plane: GroundPlane,
+    bounds: FrameBounds | None = None,
+) -> np.ndarray:
     """(N,2) floor positions in metres for one track's observed frames.
 
     **The boxes must already be undistorted, and every production path does it upstream.**
@@ -52,6 +57,15 @@ def track_ground_path(track: Track, cam: Camera, plane: GroundPlane) -> np.ndarr
     `pixel_to_ground` refuses to turn into a very large distance. Keep them as NaN:
     dropping them silently would shorten a path without shortening its duration and
     inflate every speed derived from it.
+
+    ``bounds`` adds the second refusal, on the same terms: a box clipped by the frame
+    bottom has its bottom edge at the frame bottom whatever the person is doing, so its
+    foot point measures the frame rather than the feet. Those rows come back NaN too.
+    **Optional, and off by default**, because switching it on moves every dwell, path and
+    heatmap figure already reported -- a re-baseline that belongs next to a measurement of
+    what moved, which is the same reason this function's undistort was left alone
+    (docs/PLAN.md section 2.3.1). `geometry.ground.FrameBounds` carries the measurement it
+    was written after, and states why the space its points are in has to be declared.
     """
     if not track.boxes:
         return np.zeros((0, 2))
@@ -59,7 +73,10 @@ def track_ground_path(track: Track, cam: Camera, plane: GroundPlane) -> np.ndarr
     u = (boxes[:, 0] + boxes[:, 2]) / 2
     v = boxes[:, 3]
     x, z = pixel_to_ground(u, v, cam, plane)
-    return np.stack([x, z], axis=-1)
+    out = np.stack([x, z], axis=-1)
+    if bounds is not None:
+        out[bounds.foot_truncated(np.stack([u, v], axis=-1))] = np.nan
+    return out
 
 
 @dataclass

@@ -12,7 +12,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from ...geometry.ground import Camera, GroundPlane, pixel_to_ground
+from ...geometry.ground import Camera, FrameBounds, GroundPlane, pixel_to_ground
 from ..dwell import track_ground_path
 from ..stage import BoxFrame
 from ..tracker import Track
@@ -30,6 +30,7 @@ def zone_events(
     fps: float,
     camera: str,
     min_seconds: float = 1.0,
+    bounds: FrameBounds | None = None,
 ) -> list[SecurityEvent]:
     """`zone_intrusion` for restricted zones, `loitering` for zones with a dwell limit.
 
@@ -40,12 +41,18 @@ def zone_events(
     *duration*, not a smoothing constant: at 5 fps a shopper walking past a zone edge is
     inside for one or two frames, and a rule that fires on those reports the boundary
     rather than the behaviour.
+
+    ``bounds`` refuses a foot point the frame bottom decided rather than the floor
+    (`geometry.ground.FrameBounds`). Refused rows are NaN and `Zone.contains` already
+    reads NaN as outside, deliberately -- so the refusal reaches every rule here without
+    any of them learning a second thing. Off by default: switching it on moves numbers
+    already reported, which is the caller's decision. See `dwell.track_ground_path`.
     """
     events: list[SecurityEvent] = []
     for track in tracks:
         if not track.frames:
             continue
-        path = track_ground_path(track, cam, plane)
+        path = track_ground_path(track, cam, plane, bounds)
         frames = np.asarray(track.frames)
         for zone in zones:
             inside = zone.contains(path)
@@ -99,6 +106,7 @@ def occupancy_events(
     fps: float,
     camera: str,
     min_seconds: float = 2.0,
+    bounds: FrameBounds | None = None,
 ) -> list[SecurityEvent]:
     """One event per span where the count inside ``zone`` exceeded its limit.
 
@@ -114,7 +122,7 @@ def occupancy_events(
     for track in tracks:
         if not track.frames:
             continue
-        inside = zone.contains(track_ground_path(track, cam, plane))
+        inside = zone.contains(track_ground_path(track, cam, plane, bounds))
         for frame, is_in in zip(track.frames, inside, strict=True):
             if is_in:
                 per_frame[frame] = per_frame.get(frame, 0) + 1
@@ -149,6 +157,7 @@ def line_events(
     plane: GroundPlane,
     fps: float,
     camera: str,
+    bounds: FrameBounds | None = None,
 ) -> list[SecurityEvent]:
     """One event per crossing of ``line``, with the direction it was crossed in.
 
@@ -161,7 +170,7 @@ def line_events(
     d = b - a
     events = []
     for track in tracks:
-        path = track_ground_path(track, cam, plane)
+        path = track_ground_path(track, cam, plane, bounds)
         if len(path) < 2:
             continue
         frames = np.asarray(track.frames)
@@ -201,6 +210,7 @@ def object_left_events(
     still_seconds: float = 30.0,
     still_radius_m: float = 0.5,
     owner_radius_m: float = 2.0,
+    bounds: FrameBounds | None = None,
 ) -> list[SecurityEvent]:
     """A bag that stopped moving and had nobody near it for ``still_seconds``.
 
@@ -216,7 +226,7 @@ def object_left_events(
     """
     events = []
     for bag in bag_tracks:
-        path = track_ground_path(bag, cam, plane)
+        path = track_ground_path(bag, cam, plane, bounds)
         frames = np.asarray(bag.frames)
         if len(frames) < 2:
             continue
@@ -230,7 +240,7 @@ def object_left_events(
             if spread > still_radius_m:
                 continue
             nearest = _nearest_person_distance(
-                span.mean(axis=0), person_tracks, frames[i0], frames[i1], cam, plane
+                span.mean(axis=0), person_tracks, frames[i0], frames[i1], cam, plane, bounds
             )
             if nearest <= owner_radius_m:
                 continue
@@ -266,13 +276,14 @@ def _nearest_person_distance(
     frame_end: int,
     cam: Camera,
     plane: GroundPlane,
+    bounds: FrameBounds | None = None,
 ) -> float:
     """Closest any person's floor position came to ``point`` in the frame span. inf if none."""
     best = np.inf
     for person in person_tracks:
         if not person.frames:
             continue
-        path = track_ground_path(person, cam, plane)
+        path = track_ground_path(person, cam, plane, bounds)
         frames = np.asarray(person.frames)
         window = (frames >= frame_start) & (frames <= frame_end)
         if not window.any():

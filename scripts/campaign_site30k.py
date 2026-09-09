@@ -1152,7 +1152,9 @@ def cmd_pet_census(args) -> int:
             print(f"{clip}: decode stopped ({exc}); kept {got} frames")
         if n_frames >= args.sample:
             break
-    scores = sorted(r["score"] for r in rows)
+    # `float(...)` so the list has a concrete element type: `rows` are JSON dicts, so
+    # without it `np.quantile` below has nothing to match an overload against.
+    scores = sorted(float(r["score"]) for r in rows)
     out = {
         "prompt": args.pet_prompt,
         "floor": args.floor,

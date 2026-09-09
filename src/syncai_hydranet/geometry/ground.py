@@ -287,6 +287,79 @@ def distort_points(xy: np.ndarray, k1: float, centre, radius: float) -> np.ndarr
     return centred * scale[:, None] + centre_a
 
 
+@dataclass(frozen=True)
+class FrameBounds:
+    """The frame a detector saw, for asking whether it cut a person's feet off.
+
+    **Why a foot point on the bottom edge is not a measurement.** A box clipped by the
+    frame bottom has its bottom edge *at* the frame bottom whatever the person is doing,
+    so the foot point stops tracking the feet and starts tracking the frame -- and
+    `pixel_to_ground` turns a row near the bottom into a very small range, because that is
+    what a row near the bottom means. Measured 2026-09-09 on Taichung-cam01: a shopper in
+    the near-left foreground, cut off below the knee, projected to **z = 0.08 m** -- 8 cm
+    from the camera -- landed in the nearest service zone and raised a 12.2 s `loitering`
+    alert. No NaN, no refusal, an alert an operator would have graded.
+
+    docs/PLAN.md section 7.13 measured the general form against WILDTRACK ground truth:
+    edge-touching boxes are **9% of the population and carry double the error, 13.4 cm
+    against 6.9 cm**, and it names this as a rule "nothing in the serving path does yet".
+
+    **Only the bottom edge, and that is a decision.** A person cut off at the left or
+    right still has their feet on the floor and their foot point is biased laterally by at
+    most half the visible width -- the 13.4 cm population above. Refusing those too would
+    discard 9% of all observations to avoid a centimetre-scale bias, which is a bad trade
+    for dwell. The bottom edge is the one that is not a bias but a different measurement.
+
+    ---------------------------------------------------------------------------
+    THE SPACE HAS TO BE STATED, BECAUSE THE TEST IS FLAT AND THE FRAME EDGE IS NOT
+
+    `k1` is **the lens already undone on the points this is asked about**, or `None` when
+    they are raw. It is not optional decoration: measured on this camera's `k1 = -0.225`,
+    the raw bottom row `y = 540` maps under undistortion to a **curve from y = 555 at the
+    centre column to y = 618 at the corners**, so a flat comparison against 540 applied to
+    undistorted coordinates is wrong by up to 78 px. `syncai_bev3d.plate_calibration`
+    records the same mistake costing it whole people -- "the edge gate runs before the
+    undistortion, and that ordering is the whole point", 269 boxes before and 332 after --
+    and this type exists so the ordering is a field rather than a convention. Given `k1`,
+    the points are put back through `distort_points` (the exact inverse, round-trip
+    3e-13 px) and the flat test runs where it is valid.
+
+    The margin follows the same source: 6 px at 1080 rows, scaled with the frame.
+    """
+
+    width_px: int
+    height_px: int
+    #: The lens already applied to the points, or None if they are raw frame pixels.
+    k1: float | None = None
+    centre_px: tuple[float, float] | None = None
+    radius_px: float | None = None
+    margin_px: float | None = None
+
+    @property
+    def margin(self) -> float:
+        if self.margin_px is not None:
+            return float(self.margin_px)
+        return 6.0 * self.height_px / 1080.0
+
+    def foot_truncated(self, feet_px: np.ndarray) -> np.ndarray:
+        """True per row where the frame, not the floor, decided the foot point.
+
+        A NaN row counts as truncated: `distort_points` returns NaN for a point with no
+        pre-image under the lens, and a point the lens cannot map from was never on this
+        frame at all.
+        """
+        pts = np.asarray(feet_px, float).reshape(-1, 2)
+        if self.k1 is not None and abs(self.k1) > 1e-12:
+            if self.centre_px is None or self.radius_px is None:
+                raise ValueError(
+                    "FrameBounds was given a k1 without a centre_px/radius_px, so the "
+                    "points cannot be put back on the frame the flat test is valid on."
+                )
+            pts = distort_points(pts, self.k1, self.centre_px, self.radius_px)
+        # `not (v < limit)` rather than `v >= limit`, so NaN comes back True.
+        return ~(pts[:, 1] < self.height_px - self.margin)
+
+
 def height_above_floor_m(
     x_m: float, z_m: float, v_px: float, camera: Camera, plane: GroundPlane
 ) -> float:
