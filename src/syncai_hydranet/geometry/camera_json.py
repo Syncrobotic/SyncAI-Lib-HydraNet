@@ -126,6 +126,31 @@ class CameraFile:
     # different geometry. `None` means "not recorded" -- a v2 file, or a writer that did
     # not know -- and is deliberately not `{}`, which would claim no teacher was used.
     teachers: dict[str, str] | None = None
+    # The appearance distance above which `Tracker` refuses to re-associate a track
+    # through a gap on THIS camera, or None for "do not gate here".
+    #
+    # **It is per camera because a fleet scan showed no single number can serve them
+    # all** (2026-09-09, eight commissioned cameras, the evening window). The gate is safe
+    # only above a camera's own p99 of same-person distances -- below it, the gate splits
+    # one shopper into two and inflates the visit count -- and useful only below its p10
+    # of different-people distances. Those two bounds are camera properties:
+    #
+    #     Taichung-cam10   safe > 0.147   useful < 0.314
+    #     Tao-Hsin-cam03   safe > 0.181   useful < 0.252
+    #     Tao-Hsin-cam04   safe > 0.323   useful < 0.175   <- inverted; no value works
+    #
+    # Fleet-wide the two constraints are "> 0.323" and "< 0.175", which is empty. A single
+    # constant would therefore have been safe on some cameras and a visit-inflating defect
+    # on others, and the number that looked robust on the camera it was measured on (0.30
+    # on Taichung-cam04) is below Tao-Hsin-cam04's floor and above Tao-Hsin-cam03's
+    # ceiling.
+    #
+    # `None` is the honest value where the two distributions overlap or where there was
+    # too little footage to compare, and it is what `tools/commissioning/
+    # appearance_calibrate.py` writes in both cases: not gating reverts to the behaviour
+    # every published number was measured under, which is the safe half of an asymmetric
+    # choice.
+    appearance_thr: float | None = None
 
     def save(self, path: str | Path) -> None:
         payload = {
@@ -170,6 +195,7 @@ class CameraFile:
             plate_sha256=raw.get("plate_sha256"),
             commissioned_at=raw.get("commissioned_at"),
             teachers=raw.get("teachers"),
+            appearance_thr=raw.get("appearance_thr"),
         )
         out.validate()
         return out
@@ -229,6 +255,13 @@ class CameraFile:
         w, h = self.image_size_px
         if w <= 0 or h <= 0:
             problems.append(f"image_size_px {self.image_size_px} is not a size")
+        if self.appearance_thr is not None and not self.appearance_thr > 0:
+            problems.append(
+                f"appearance_thr {self.appearance_thr!r} is not a positive distance. "
+                "Zero or negative would refuse every re-association on this camera, "
+                "splitting every track that passes behind a fixture; 'do not gate here' "
+                "is spelled None."
+            )
         for name, value in (
             ("fx", self.camera.fx),
             ("fy", self.camera.fy),

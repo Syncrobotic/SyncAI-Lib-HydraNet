@@ -2996,6 +2996,63 @@ once in this pass.
    baking it into commissioning would move all eight cameras at once.
 
 
+40. **No single `appearance_thr` serves the fleet, so it is a commissioning output.**
+   Scanned across the eight commissioned cameras on the shared evening window,
+   2026-09-09.
+
+   7a.38's gate was measured on one clip on one camera, and the two thresholds tried there
+   agreed, which read as robustness. It was not: it was one camera. The gate's two errors
+   are asymmetric and both bounds are properties of the camera —
+
+   * below its **p99 of same-person** distances the gate splits one shopper into two and
+     the visit count, a headline, rises for nothing;
+   * above its **p10 of different-people** distances it catches nothing and behaviour
+     reverts to what every published figure was measured under.
+
+   | camera | pairs (within/between) | safe floor | useful ceiling | written |
+   |---|---|---|---|---|
+   | Kaohsiung-cam04 | 8471 / 4488 | 0.377 | 0.402 | **0.3897** |
+   | Taichung-cam01 | 2079 / 2088 | 0.289 | 0.381 | **0.3351** |
+   | Taichung-cam04 | 2213 / 2224 | 0.308 | 0.409 | **0.3584** |
+   | Taichung-cam07 | 246 / **0** | — | — | `None` |
+   | Taichung-cam10 | 2126 / 2145 | 0.249 | 0.267 | **0.2578** |
+   | Taichung-cam11 | 517 / 132 | 0.340 | 0.923 | **0.6311** |
+   | Tao-Hsin-cam03 | 1015 / 681 | 0.289 | **0.270** | `None` — inverted |
+   | Tao-Hsin-cam04 | 95 / 49 | — | — | `None` |
+
+   Fleet-wide the constraints are **"> 0.377" and "< 0.267" — empty**. The written values
+   span 0.258 to 0.631, a factor of 2.4, and `test_the_fleet_calibration_is_not_one_number` pins that: if they ever collapse the per-camera machinery is
+   unnecessary, and while they do not a constant is a defect on some camera whichever
+   value is chosen.
+
+   **`None` is a real answer and is written three times.** Taichung-cam07's clip never had
+   two people in frame at once, so there was no control; Tao-Hsin-cam04's 49 between-pairs
+   are too few to conclude either way; **Tao-Hsin-cam03's two distributions overlap on a
+   healthy 1015/681 sample** — same-person distances run *larger* there than
+   different-people ones, so no value both splits nobody real and catches anything. Not
+   gating reverts to today's behaviour, which is the safe half of the asymmetry.
+
+   **The descriptor is `analytics/appearance.py`'s, and that matters more than the
+   numbers.** The first cut of this work invented its own "upper 45% of the box" band and
+   measured the fleet on it, which put a usable-looking 0.2167 on Tao-Hsin-cam03. Read
+   over the module's existing `TORSO_BAND` — the chest and upper arms, excluding head,
+   legs and edges, the band `staff_probe.py` measured 0.893 balanced accuracy on — that
+   camera does not separate at all. **A sloppier descriptor did not shift a digit, it
+   inverted a verdict**, and the tidier one would have shipped a threshold that was a
+   defect on that camera. The threshold is a distance in the descriptor's space, so the
+   calibrator and the serving path must share one function; two copies would each stay
+   internally consistent while measuring different things, which is 7a's 1920x1080-through-
+   960x540 failure in a different costume.
+
+   **The gate is licensed by the asymmetry that module's header already states**: a colour
+   is not an identity, so a *match* is not evidence two boxes are one shopper, and a large
+   *difference* is evidence they are two. The gate uses only the second direction.
+
+   Not measured: the night. The fourth sample is 23:58-00:00 with the shops shut (0 tracks
+   on Taichung-cam04, 1 on Kaohsiung-cam04). A monochrome IR frame should collapse the
+   descriptor and silence the gate — benign by argument, not by measurement. A camera that
+   will run at night needs re-scanning on night footage before its number is trusted there.
+
 ## 9. The distance to the product, read across the steps
 
 Written 2026-09-09. **This section measures nothing new.** Every figure in it is cited

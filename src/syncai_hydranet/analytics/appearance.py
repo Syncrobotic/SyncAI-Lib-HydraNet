@@ -22,6 +22,7 @@ asymmetry any caller using this to tell two people apart has to be built around.
 from __future__ import annotations
 
 import numpy as np
+from PIL import Image
 
 # The chest and upper arms of a standing person, as fractions of the crop: excluding the
 # head (hair and skin), the legs (trousers vary per person) and the edges (background).
@@ -124,3 +125,52 @@ def torso_region(kps: np.ndarray, min_conf: float = KP_MIN_CONF):
     if x1 <= x0 or y1 <= y0:
         return None
     return x0, y0, x1, y1
+
+
+# ------------------------------------------------------------------ the tracker's gate
+
+# Hue x saturation, coarse, over the same band. Value is left almost unbinned: it is the
+# channel a shadow moves, and a shopper stepping out of a spotlight must not read as a
+# different shopper.
+HIST_BINS = (8, 8, 4)
+HIST_MIN_W_PX, HIST_MIN_H_PX = 8, 24
+
+
+def torso_histogram(frame: np.ndarray, box_px, *, bins=HIST_BINS) -> np.ndarray | None:
+    """Normalised HSV histogram of one person's torso, for `Tracker`'s appearance gate.
+
+    Over `TORSO_BAND`, so this is the same body region as `torso_stats` and inherits the
+    reason that band excludes the head, the legs and the crop's edges.
+
+    **The asymmetry this module's header states is the whole basis of the gate.** A colour
+    is not an identity, so a *match* here is not evidence that two boxes are one shopper --
+    and the gate never uses it as such. It uses only the other half: a large *difference*
+    is evidence they are two, and that is the one direction this is licensed for.
+
+    ``box_px`` is xyxy in **the frame's own pixels** -- the raw decoded frame if that is
+    what ``frame`` is. Undistorted coordinates against a raw frame displace the crop by
+    1.7x a person's height at the frame edge (measured 2026-09-08), which is a picture of
+    the shelf behind them.
+
+    Returns None for a box too small to carry one, rather than a zero vector: a zero vector
+    is far from every real histogram and would read as "a different person" at every
+    comparison, turning small boxes into false identity changes.
+    """
+    x0, y0, x1, y1 = (int(v) for v in box_px)
+    h, w = frame.shape[:2]
+    x0, y0 = max(x0, 0), max(y0, 0)
+    x1, y1 = min(x1, w), min(y1, h)
+    if x1 - x0 < HIST_MIN_W_PX or y1 - y0 < HIST_MIN_H_PX:
+        return None
+    bh, bw = y1 - y0, x1 - x0
+    r0, r1, c0, c1 = TORSO_BAND
+    band = frame[y0 + int(r0 * bh) : y0 + int(r1 * bh), x0 + int(c0 * bw) : x0 + int(c1 * bw)]
+    if band.size == 0:
+        return None
+    hsv = np.asarray(Image.fromarray(band).convert("HSV").resize((32, 32)), dtype=float)
+    hist, _ = np.histogramdd(
+        hsv.reshape(-1, 3), bins=bins, range=((0, 255), (0, 255), (0, 255))
+    )
+    hist = hist.ravel()
+    total = hist.sum()
+    return hist / total if total else None
