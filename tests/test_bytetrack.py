@@ -429,3 +429,106 @@ def test_a_coasting_fragment_converts_to_its_prediction_not_its_last_sighting():
         "a prediction that equals the last "
         "sighting would make this test blind to the rule it is checking"
     )
+
+
+# -- an appearance gate on re-association ------------------------------------
+#
+# `SIMPLIFICATIONS` has always said this tracker has no appearance model and that two
+# shoppers who swap while overlapping swap ids. Measured on Taichung-cam04's 14:31 clip
+# (2026-09-08): appearance distance between consecutive observations of one track sits at
+# p50 0.021 / p99 0.225, and between two different shoppers in the same frame at p10
+# 0.376 -- disjoint, which is what lets a threshold between them mean something. 17 of
+# 108 tracks carried at least one change of person, corroborated by an impossible floor
+# speed or a doubled box. `appearance_thr` gates the step where 48% of them happen: the
+# re-association after a gap.
+
+RED = np.array([0.9, 0.05, 0.05])
+BLUE = np.array([0.05, 0.05, 0.9])
+
+
+def test_appearance_distance_separates_two_histograms_and_refuses_a_shape_mismatch():
+    assert tracker.appearance_distance(RED, RED) == pytest.approx(0.0)
+    assert tracker.appearance_distance(RED, BLUE) > 0.5
+    with pytest.raises(ValueError, match="differ in length"):
+        tracker.appearance_distance(RED, np.array([0.5, 0.5]))
+
+
+def _coast_then_return(thr, second_look):
+    """One track, a two-frame gap, then a box back where it was wearing `second_look`."""
+    tr = tracker.Tracker(iou_threshold=0.3, max_age=5, min_hits=1, appearance_thr=thr)
+    box = np.array([[10.0, 10.0, 50.0, 90.0]])
+    tr.update(box, 0, appearance=RED[None, :])
+    tr.update(np.zeros((0, 4)), 1, appearance=np.zeros((0, 3)))
+    tr.update(np.zeros((0, 4)), 2, appearance=np.zeros((0, 3)))
+    tr.update(box, 3, appearance=second_look[None, :])
+    return tr
+
+
+def test_a_returning_box_that_looks_like_someone_else_starts_its_own_track():
+    tr = _coast_then_return(0.3, BLUE)
+    assert len(tr.tracks) == 2, "the gate must refuse the match, not reassign it"
+    assert [t.frames for t in tr.tracks] == [[0], [3]]
+
+
+def test_a_returning_box_that_still_looks_like_itself_is_re_associated():
+    """The gate has to be a gate and not a ban: same clothes, same person, one track."""
+    tr = _coast_then_return(0.3, RED)
+    assert len(tr.tracks) == 1
+    assert tr.tracks[0].frames == [0, 3]
+
+
+def test_the_gate_does_not_fire_on_consecutive_frames():
+    """Only the step after a gap is checked. A shopper who turns round between two frames
+    changes colour and must keep their id -- gating that would cost tracks to buy nothing,
+    because 48% of the measured identity changes are re-associations and 1% of all steps
+    are."""
+    tr = tracker.Tracker(iou_threshold=0.3, max_age=5, min_hits=1, appearance_thr=0.3)
+    box = np.array([[10.0, 10.0, 50.0, 90.0]])
+    tr.update(box, 0, appearance=RED[None, :])
+    tr.update(box, 1, appearance=BLUE[None, :])
+    assert len(tr.tracks) == 1
+    assert tr.tracks[0].frames == [0, 1]
+
+
+def test_appearance_is_recorded_even_when_the_gate_is_off():
+    """Recorded-but-unused, like `scores`: a consumer asking "did this track change
+    person" needs the series, and it cannot be recovered afterwards."""
+    tr = tracker.Tracker(iou_threshold=0.3, max_age=5, min_hits=1)
+    box = np.array([[10.0, 10.0, 50.0, 90.0]])
+    tr.update(box, 0, appearance=RED[None, :])
+    tr.update(box, 1, appearance=BLUE[None, :])
+    assert len(tr.tracks[0].appearance) == 2
+    assert tr.tracks[0].appearance[1] == pytest.approx(BLUE)
+
+
+def test_tracker_without_appearance_thr_is_unchanged():
+    a = tracker.Tracker(iou_threshold=0.3, max_age=5, min_hits=1)
+    b = tracker.Tracker(iou_threshold=0.3, max_age=5, min_hits=1, appearance_thr=None)
+    rng = np.random.default_rng(20260909)
+    for frame in range(12):
+        n = int(rng.integers(0, 5))
+        boxes = rng.uniform(0, 400, (n, 4))
+        boxes[:, 2:] += boxes[:, :2] + 20
+        a.update(boxes, frame)
+        b.update(boxes, frame)
+    assert [t.frames for t in a.tracks] == [t.frames for t in b.tracks]
+
+
+def test_appearance_thr_refuses_a_frame_with_no_appearance():
+    """Otherwise the gate silently passes exactly the matches it exists to check."""
+    tr = tracker.Tracker(iou_threshold=0.3, max_age=5, min_hits=1, appearance_thr=0.3)
+    with pytest.raises(ValueError, match="carried no appearance"):
+        tr.update(np.array([[10.0, 10.0, 50.0, 90.0]]), 0)
+
+
+def test_a_negative_threshold_is_refused():
+    with pytest.raises(ValueError, match="distance >= 0"):
+        tracker.Tracker(appearance_thr=-0.1)
+
+
+def test_appearance_is_all_frames_or_none():
+    tr = tracker.Tracker(iou_threshold=0.3, max_age=5, min_hits=1)
+    box = np.array([[10.0, 10.0, 50.0, 90.0]])
+    tr.update(box, 0, appearance=RED[None, :])
+    with pytest.raises(ValueError, match="appearance"):
+        tr.update(box, 1)

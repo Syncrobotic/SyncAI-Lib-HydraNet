@@ -28,7 +28,9 @@ SIMPLIFICATIONS = (
     "greedy IoU association by default; optimal assignment is available and measured at "
     "no difference on the clip that motivated looking",
     "constant velocity, no Kalman: no measured noise model exists to fit one to",
-    "no appearance model: two shoppers who swap places while overlapping will swap ids",
+    "no appearance model BY DEFAULT: two shoppers who swap places while overlapping will "
+    "swap ids. `appearance_thr` gates re-association after a gap and is off unless a "
+    "caller sets it",
 )
 
 
@@ -46,6 +48,25 @@ def iou(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     union = area_a[:, None] + area_b[None, :] - inter
     with np.errstate(divide="ignore", invalid="ignore"):
         return np.where(union > 0, inter / union, 0.0)
+
+
+def appearance_distance(a: np.ndarray, b: np.ndarray) -> float:
+    """Chi-squared distance between two normalised appearance histograms.
+
+    Chi-squared rather than L2 because these are histograms: it weights a difference by
+    how much mass is there, so two crops that disagree about a rare colour are not scored
+    like two that disagree about the dominant one.
+
+    The tracker does not say what the descriptor is -- only that it is a non-negative
+    vector that sums to about one and that the caller builds the same way every frame.
+    The measurement this was written for used a coarse HSV histogram of the upper 45% of
+    the box, where the clothing is.
+    """
+    a = np.asarray(a, dtype=float).ravel()
+    b = np.asarray(b, dtype=float).ravel()
+    if a.shape != b.shape:
+        raise ValueError(f"appearance vectors differ in length: {a.shape} vs {b.shape}")
+    return float(0.5 * np.sum((a - b) ** 2 / (a + b + 1e-9)))
 
 
 def iou_pair(a: Sequence[float] | np.ndarray, b: Sequence[float] | np.ndarray) -> float:
@@ -133,6 +154,14 @@ class Track:
     # every track produced before 2026-08-26. A consumer that needs it says so; see
     # `events.support_for`.
     scores: list[float] = field(default_factory=list)
+    # The caller's appearance descriptor for each observed box, index-aligned with
+    # `frames` and `boxes` for the same reason the three fields above are.
+    #
+    # Written whenever the caller supplies it, and *used* only when `appearance_thr` is
+    # set. Recorded-but-unused is the same choice `scores` made: a consumer that wants to
+    # ask "did this track change person" needs the series, and nothing downstream could
+    # ask before the field existed.
+    appearance: list[np.ndarray] = field(default_factory=list)
     # P(staff) for the crop of each observed box, index-aligned with `frames` and `boxes`
     # for the third time and the same reason.
     #
@@ -185,6 +214,7 @@ class Tracker:
         staff_memory_gap: int = 0,
         staff_memory_iou: float = 0.3,
         birth_thr: float | None = None,
+        appearance_thr: float | None = None,
     ) -> None:
         self.iou_threshold = iou_threshold
         self.max_age = max_age
@@ -210,6 +240,28 @@ class Tracker:
         if birth_thr is not None and not 0.0 <= birth_thr <= 1.0:
             raise ValueError(f"birth_thr must be a score in [0, 1], got {birth_thr!r}")
         self.birth_thr = birth_thr
+        # **An appearance gate on RE-association only, and deliberately nothing else.**
+        # When a track has coasted through a gap, a match whose appearance distance from
+        # the track's last observed descriptor exceeds this is refused: the track is left
+        # unmatched and the detection is free to start its own. Matches on consecutive
+        # frames are never gated -- the tracker still has no appearance model for the
+        # ordinary case, which is what `SIMPLIFICATIONS` says.
+        #
+        # Measured on Taichung-cam04's 14:31 clip, 2026-09-08. Appearance distance between
+        # consecutive observations of one track: p50 0.021, p99 0.225. Between two
+        # different shoppers in the same frame: p10 0.376. The two do not overlap, which
+        # is what makes a threshold between them meaningful rather than tuned. 29 of
+        # 13,066 steps sit in the between-people range and 48% of those are the step right
+        # after a gap, against 1% of steps overall; 19 are corroborated by an impossible
+        # floor speed or a doubled box as well. That is 17 of 108 tracks carrying at least
+        # one identity change -- a track whose attribute vote is then two people's.
+        #
+        # `None` keeps the behaviour every number this project has published was measured
+        # under. Turning it on SPLITS tracks, so track counts rise; that is two shoppers
+        # being counted as two rather than as one, not a regression.
+        if appearance_thr is not None and appearance_thr < 0:
+            raise ValueError(f"appearance_thr must be a distance >= 0, got {appearance_thr!r}")
+        self.appearance_thr = appearance_thr
         if assignment not in ("hungarian", "greedy"):
             raise ValueError(f"assignment must be hungarian or greedy, got {assignment!r}")
         # Default unchanged: optimal assignment was measured at 76 -> 78 tracks on the
@@ -243,6 +295,7 @@ class Tracker:
         self._keypoints_seen: bool | None = None
         self._scores_seen: bool | None = None
         self._staff_seen: bool | None = None
+        self._appearance_seen: bool | None = None
 
     def update(
         self,
@@ -251,6 +304,7 @@ class Tracker:
         keypoints: np.ndarray | None = None,
         scores: np.ndarray | None = None,
         staff_scores: np.ndarray | None = None,
+        appearance: np.ndarray | None = None,
     ) -> list[Track]:
         """Advance one frame. ``boxes`` is (N,4) xyxy for one class. Returns live tracks.
 
@@ -271,8 +325,13 @@ class Tracker:
         associates on appearance, and the reduction to one verdict per person is
         `staff.track_staff`.
 
-        **All frames or none, per tracker**, for keypoints, scores and staff scores
-        independently.
+        ``appearance`` is (N, D) descriptors, one row per box in the same order. It is
+        recorded like the three above, and additionally *used* when `appearance_thr` is
+        set: a track re-associating after a gap must look like itself. See the constructor
+        for the measurement that fixed the threshold's meaning.
+
+        **All frames or none, per tracker**, for keypoints, scores, staff scores and
+        appearance independently.
         Passing either on some calls and not others silently misaligns its list against
         `frames`, which is exactly the drift `Track.keypoints` documents as its reason for
         being a field. A tracker that has seen keypoints refuses a later call without
@@ -301,9 +360,29 @@ class Tracker:
                     f"{len(staff_scores)} staff scores for {len(boxes)} boxes: they are "
                     "matched by position, so a mismatch has no safe interpretation"
                 )
+        if appearance is not None:
+            appearance = (
+                np.asarray(appearance, dtype=float).reshape(len(boxes), -1)
+                if len(boxes)
+                else np.zeros((0, 0))
+            )
+            if len(appearance) != len(boxes):
+                raise ValueError(
+                    f"{len(appearance)} appearance vectors for {len(boxes)} boxes: they "
+                    "are matched by position, so a mismatch has no safe interpretation"
+                )
+        if self.appearance_thr is not None and appearance is None:
+            raise ValueError(
+                "appearance_thr is set and this frame carried no appearance vectors. The "
+                "gate can only refuse a re-association it can measure, so a frame without "
+                "them would silently let through exactly the matches it exists to check."
+            )
         self._keypoints_seen = _latch(self._keypoints_seen, keypoints is not None, "keypoints")
         self._scores_seen = _latch(self._scores_seen, scores is not None, "scores")
         self._staff_seen = _latch(self._staff_seen, staff_scores is not None, "staff scores")
+        self._appearance_seen = _latch(
+            self._appearance_seen, appearance is not None, "appearance"
+        )
 
         # Predict: constant velocity on the box centre, size held.
         for t in self.tracks:
@@ -311,6 +390,25 @@ class Tracker:
             t.age += 1
 
         matched = self._match(boxes)
+        # The gate. `age` was incremented by the predict step above, so a track observed
+        # on the immediately preceding frame arrives here at age 1 and one that coasted
+        # through a gap at 2 or more. Only the second kind is checked: consecutive-frame
+        # association is where IoU is trustworthy and where gating would cost tracks for
+        # a person who merely turned round.
+        # `appearance is not None` is already guaranteed by the refusal above; it is
+        # restated so the type checker can see it, rather than asserted away.
+        if self.appearance_thr is not None and appearance is not None:
+            for ti in [ti for ti in matched if self.tracks[ti].age > 1]:
+                t = self.tracks[ti]
+                if not t.appearance:
+                    continue
+                if appearance_distance(t.appearance[-1], appearance[matched[ti]]) > (
+                    self.appearance_thr
+                ):
+                    # Refuse the pair rather than reassign it: the track is left to coast
+                    # or die, and the detection falls through to `unmatched` below, where
+                    # it starts its own track. Two shoppers then read as two.
+                    del matched[ti]
         for ti, di in matched.items():
             t = self.tracks[ti]
             new = boxes[di]
@@ -327,6 +425,8 @@ class Tracker:
                 t.scores.append(float(scores[di]))
             if staff_scores is not None:
                 t.staff_scores.append(float(staff_scores[di]))
+            if appearance is not None:
+                t.appearance.append(np.asarray(appearance[di], dtype=float).copy())
             if t.hits >= self.min_hits:
                 t.confirmed = True
 
@@ -361,6 +461,9 @@ class Tracker:
                 boxes=[boxes[di].copy()],
                 keypoints=[] if keypoints is None else [keypoints[di].copy()],
                 scores=[] if scores is None else [float(scores[di])],
+                appearance=[]
+                if appearance is None
+                else [np.asarray(appearance[di], dtype=float).copy()],
                 staff_scores=inherited
                 + ([] if staff_scores is None else [float(staff_scores[di])]),
             )

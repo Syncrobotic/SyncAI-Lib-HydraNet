@@ -2900,6 +2900,59 @@ or it records a version the tree has already left -- which put a red `dev` on th
 once in this pass.
 
 
+38. **One track in five contains more than one person, and the tracker can now refuse
+   the step where half of them happen.** Measured on Taichung-cam04's 14:31 clip
+   (108 tracks, 13,174 observations), 2026-09-09.
+
+   `SIMPLIFICATIONS` has always said this tracker has no appearance model and that two
+   shoppers who swap while overlapping swap ids. What it did not say is how often that
+   costs a number, because nothing measured it.
+
+   The measurement carries its own control, so it needs no labels: compare the appearance
+   distance between consecutive observations of ONE track against the distance between
+   two DIFFERENT tracks in the same frame -- the second pair are definitely two people.
+   The distributions are disjoint, which is what makes a threshold between them mean
+   something rather than be tuned:
+
+   | | p50 | p90 | p99 |
+   |---|---|---|---|
+   | within one track, consecutive | 0.021 | 0.082 | 0.225 |
+   | between two tracks, same frame | 0.593 | — | (p10 **0.376**) |
+
+   29 of 13,066 steps sit in the between-people range, and they are not spread evenly:
+   **48% are the step right after a gap, against 1% of steps overall**, with a median floor
+   speed of 2.03 m/s against 0.16. 19 of the 29 are corroborated by an impossible speed or
+   a doubled box as well. That is 23 of 108 tracks -- **21%** -- carrying at least one
+   change of person, and a track whose attribute vote is then two people's.
+
+   `Tracker(appearance_thr=...)` gates exactly that step, refusing a re-association whose
+   appearance disagrees with the track's last observed descriptor. Consecutive-frame
+   matches are never gated: that is where IoU is trustworthy, and gating a shopper who
+   merely turned round would cost tracks to buy nothing. Detection was run once and shared
+   by both arms, so only the gate differs:
+
+   | | tracks | median life | observations | switch steps | tracks affected |
+   |---|---|---|---|---|---|
+   | off | 108 | 48 | 13,174 | 29 | 23 (**21%**) |
+   | **0.30** | 117 | 45 | 13,178 | **12** | **9 (8%)** |
+   | 0.376 | 115 | 42 | 13,195 | 14 | 10 (9%) |
+
+   **Identity changes fall 59%; the affected share goes 21% -> 8%.** The two thresholds
+   agree, which is the point of a disjoint pair -- the answer does not depend on where in
+   the gap it is put. Observations are unchanged (13,174 -> 13,178), so the gate is not
+   discarding data; it is splitting two people who were being counted as one. That is why
+   track counts RISE, and why turning this on raises "total visits" rather than lowering
+   it.
+
+   **It fixes the half it targets and not the other.** 8% of tracks still carry a change:
+   those are the consecutive-frame swaps -- two people overlapping and exchanging boxes --
+   which this gate deliberately does not touch and which `SIMPLIFICATIONS` still describes.
+
+   Default `None`, so every number this project has published is still reproducible, and
+   no caller passes it yet. What it needs from a caller is a descriptor; the measurement
+   used a coarse HSV histogram of the upper 45% of the box, which costs nothing.
+
+
 ## 9. The distance to the product, read across the steps
 
 Written 2026-09-09. **This section measures nothing new.** Every figure in it is cited
