@@ -37,13 +37,18 @@ from __future__ import annotations
 
 import json
 import warnings
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
+
+from ..analytics.tracker import Track
+from ..analytics.world import WorldFrame, world_frame
+from ..geometry.camera_json import CameraFile
+from ..preprocessing import letterbox_region
 
 
 @dataclass(frozen=True)
@@ -179,6 +184,11 @@ def load_thresholds(path: str | Path) -> ThresholdBook:
 BIRTH_REF = 0.35
 KEEP_REF = 0.20
 
+#: How many frames of PTS a camera keeps. Velocity reads the last two *observed*
+#: frames of a track, which can straddle a coasting gap, so this is above the
+#: tracker's max_age rather than 2.
+TIME_BASE_FRAMES = 64
+
 
 class CameraState:
     """Everything one stream accumulates across ticks. One instance per camera."""
@@ -193,6 +203,8 @@ class CameraState:
         calib_path: str | Path | None = None,
         tracker_factory: Callable[[], Any] | None = None,
         ema_alpha: float = 0.35,
+        camera_file: CameraFile | None = None,
+        source_size_px: tuple[int, int] | None = None,
     ):
         self.camera = camera
         self.num_terrain_classes = int(num_terrain_classes)
@@ -211,8 +223,39 @@ class CameraState:
         self._best_val: torch.Tensor | None = None
         self.tracker = tracker_factory() if tracker_factory is not None else None
         self.calib = self._load_calib(calib_path)
+        # `calib` above is the *onboard* artefact (`hydranet-onboard-calib/v1`, the
+        # stage-0 estimate). `camera_file` is the commissioned `camera.json`, which
+        # docs/PLAN.md section 2 names as the only crossing between the two packages at
+        # runtime, and it is the one L1 needs: the onboard calib has no zones, no lens
+        # entry in that shape and a null `scale` on most of the fleet.
+        self.camera_file = camera_file
+        self.source_size_px: tuple[int, int] | None = None
+        if source_size_px is not None:
+            self.source_size_px = (int(source_size_px[0]), int(source_size_px[1]))
+        if camera_file is not None and self.source_size_px is None:
+            raise ValueError(
+                f"{camera}: a camera_file was given without source_size_px. Boxes here "
+                "are on the letterboxed network canvas, and a canvas cannot be scaled "
+                "onto the calibrated frame without knowing which frame was letterboxed "
+                "into it. Refused rather than defaulted, because the guard downstream "
+                "cannot catch this one: canvas coordinates against a 960x540 "
+                "calibration are only 1.17x outside it, under `_to_calibrated_pixels`'s "
+                "1.5x refusal, so the metres would come back wrong and finite."
+            )
+        # The canvas the frames arrive on is built by `preprocessing.letterbox_region`,
+        # so the inverse is that same region and the two agree by construction rather
+        # than by two modules computing the same geometry.
+        self.canvas_region = (
+            None
+            if self.source_size_px is None
+            else letterbox_region(*self.source_size_px, self.canvas_hw)
+        )
         self.frames_seen = 0
         self.last_seq = -1
+        # frame_index -> PTS seconds, bounded. Velocity needs the *previous* observed
+        # frame's time as well as this one's, so a live producer cannot work from a
+        # single value; TIME_BASE_FRAMES is comfortably above the tracker's max_age.
+        self._times_s: dict[int, float] = {}
 
     @staticmethod
     def _load_calib(path: str | Path | None) -> dict | None:
@@ -342,14 +385,33 @@ class CameraState:
         boxes: np.ndarray,
         scores: np.ndarray,
         labels: np.ndarray,
+        time_s: float | None = None,
     ) -> dict[str, Any]:
-        """One consumed frame: smooth terrain, feed the tracker, return the stable view."""
+        """One consumed frame: smooth terrain, feed the tracker, return the stable view.
+
+        ``time_s`` is this frame's PTS in seconds and is recorded under the same frame
+        index the tracker is given, which is what lets :meth:`world_frame` report a
+        velocity. Omitting it is legal and costs only that -- docs/PLAN.md section 2.3
+        rules that a speed over a nominal frame rate is how a walk becomes a run alert
+        nobody can explain, so no time base means `None`, never a number.
+
+        **It is not derivable from `seq` here, and that is the trap worth stating.**
+        `seq` is PTS on a monotonic timeline (`ingest.CameraSession.on_frame`), and a
+        reconnect rebases it -- the offset guarantees monotonicity, not duration. A
+        difference spanning a reconnect is not an elapsed time, so only the caller, which
+        knows whether the session is continuous, may turn a seq into a clock.
+        """
         stable = self.ema_labels(terrain_labels)
         boxes, scaled, labels = self.filter_and_scale(boxes, scores, labels)
         tracked = None
         if self.tracker is not None:
             self.tracker.update(boxes, scaled, self.frames_seen)
             tracked = confirmed_track_boxes(self.tracker, labels, boxes, self.canvas_hw)
+        if time_s is not None:
+            self._times_s[self.frames_seen] = float(time_s)
+            if len(self._times_s) > TIME_BASE_FRAMES:
+                for k in sorted(self._times_s)[:-TIME_BASE_FRAMES]:
+                    del self._times_s[k]
         self.frames_seen += 1
         self.last_seq = int(seq)
         return {
@@ -359,6 +421,47 @@ class CameraState:
             "labels": labels,
             "tracks": tracked,
         }
+
+    # -- L1: the vector space, in metres ------------------------------------------
+    @property
+    def measures_metres(self) -> bool:
+        """True when this camera can answer where a shopper is standing, in metres."""
+        return self.camera_file is not None and self.canvas_region is not None
+
+    def world_frame(
+        self, tracks: Sequence[Track], *, name: str, confirmed_only: bool = True
+    ) -> WorldFrame | None:
+        """The last consumed frame's tracks as floor positions, or `None` without geometry.
+
+        `None` rather than an exception, and it is the same refusal `_load_calib` makes
+        one field up: a camera with no commissioned `camera.json` still serves detection
+        and segmentation, and only metric events need this. A caller that must know asks
+        :attr:`measures_metres` rather than reading the absence of objects as an empty
+        floor.
+
+        **There is no `frame_index` parameter and that is load-bearing.** `update` feeds
+        the tracker `self.frames_seen`, so a track's `frames` are indices on that
+        counter; a caller passing its own number would misalign the velocity's two
+        observations against the times recorded for them, and the result would be a
+        wrong speed rather than an error. The index is the one this state issued.
+
+        ``tracks`` is passed in rather than read off `self.tracker` because the tracker
+        is injected (see the module docstring) -- the serving path's is
+        `analytics.bytetrack.OfflineForward`, whose `Fragment` is converted by
+        `bytetrack.as_track`, and a deployment that swaps it converts its own.
+        """
+        if self.camera_file is None or self.canvas_region is None:
+            return None
+        return world_frame(  # the module-level producer; a method body sees no class scope
+            tracks,
+            self.camera_file,
+            self.frames_seen - 1,
+            name=name,
+            times_s=self._times_s,
+            confirmed_only=confirmed_only,
+            source_size_px=self.source_size_px,
+            canvas_region=self.canvas_region,
+        )
 
 
 def confirmed_track_boxes(
