@@ -51,4 +51,80 @@ PAD_COLOR = (114, 114, 114)
 # `labels.py` was written to end, and this was the copy it did not reach.
 PAD_LABEL = IGNORE
 
-__all__ = ["IMAGENET_MEAN", "IMAGENET_STD", "PAD_COLOR", "PAD_LABEL"]
+
+def letterbox_region(
+    src_w: int, src_h: int, canvas_hw: tuple[int, int]
+) -> tuple[int, int, int, int]:
+    """Where a source frame's real content sits inside a letterboxed canvas.
+
+    Returns ``(x0, y0, content_w, content_h)`` -- the spelling `visualize.letterbox`
+    already returns and `clip_tracks.to_source_pixels` already consumes, so this is not a
+    new description of the letterbox, it is the one those two agreed on written down once.
+
+    **It was written three times before this.** `visualize.letterbox` computed it from PIL
+    sizes, `serve_pilot.letterbox_filter` recomputed it as an ffmpeg filter string, and
+    `track_review` open-codes the inverse against a fourth spelling. A GPU letterbox in a
+    streaming transport would have been the fifth. Copies of a geometry are not checkable
+    against each other: a disagreement of one pixel moves every box by one pixel and
+    nothing raises -- the argument this module's header already makes about `PAD_COLOR`,
+    one function later.
+
+    Same units as the callers it serves: `src_w`/`src_h` in the source frame's pixels,
+    `canvas_hw` as ``(H, W)`` because that is how the project spells a network canvas
+    (`CameraState.canvas_hw`, `preprocess`'s `size`).
+    """
+    s = min(canvas_hw[1] / src_w, canvas_hw[0] / src_h)
+    nw, nh = max(round(src_w * s), 1), max(round(src_h * s), 1)
+    return (canvas_hw[1] - nw) // 2, (canvas_hw[0] - nh) // 2, nw, nh
+
+
+def undo_letterbox(
+    coords: np.ndarray, region: tuple[int, int, int, int], src_w: int, src_h: int
+) -> np.ndarray:
+    """Canvas coordinates -> pixels of the frame that was actually filmed.
+
+    Accepts ``(N, 2)`` points and ``(N, 4)`` xyxy boxes, because the two consumers need
+    different ones: `clip_tracks.to_source_pixels` maps boxes, and the serving path's
+    `WorldFrame` producer maps foot points.
+
+    **Why this lives here and not next to `invert_geom`.** The arithmetic is the same --
+    `to_source_pixels` delegates to this and says so -- but `data.transforms` imports
+    torch and PIL, and `analytics.world` deliberately imports neither: it is produced
+    every frame on the serving path, which is the reason its own module docstring gives
+    for not living in `syncai_bev3d`. A pure-numpy geometry behind a torch import is a
+    geometry the serving path cannot reuse, and "cannot reuse" is how the fourth copy
+    gets written.
+
+    **What getting this wrong looks like, measured 2026-09-09 on
+    `Taichung-cam01.camera.json` (960x540 intrinsics, 1920x1080 stream, 640x1120
+    canvas).** Handing canvas pixels to `world.world_frame` and naming the *stream* as
+    their frame -- the honest-looking mistake, since the stream is what the camera sent --
+    puts shoppers **2.4-2.7 m** from where they stand, with no NaN and no refusal, because
+    the scaled points still land inside the calibrated canvas. Naming the *canvas* instead
+    is off by 1-2 cm on a 16:9 source, which is inside this project's own floor spread, and
+    by **1.37 m on the fleet's sideways-mounted camera** -- where the pad is 380 px wide
+    instead of 5 px tall. That error is exactly zero on the frame's centre column and grows
+    with lateral offset, so a spot check taken in the middle of the picture passes.
+    A size cannot describe a letterboxed canvas; this region can.
+    """
+    arr = np.asarray(coords, dtype=np.float64)
+    if arr.ndim != 2 or arr.shape[1] not in (2, 4):
+        raise ValueError(
+            f"undo_letterbox takes (N,2) points or (N,4) xyxy boxes, got {arr.shape}"
+        )
+    x0, y0, content_w, content_h = region
+    out = arr.copy()
+    # 0::2 selects x on both shapes (col 0, or cols 0 and 2); 1::2 selects y.
+    out[:, 0::2] = (out[:, 0::2] - x0) / (content_w / src_w)
+    out[:, 1::2] = (out[:, 1::2] - y0) / (content_h / src_h)
+    return out
+
+
+__all__ = [
+    "IMAGENET_MEAN",
+    "IMAGENET_STD",
+    "PAD_COLOR",
+    "PAD_LABEL",
+    "letterbox_region",
+    "undo_letterbox",
+]

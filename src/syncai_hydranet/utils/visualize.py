@@ -15,7 +15,7 @@ import numpy as np
 from PIL import Image
 
 from ..labels import IGNORE
-from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD, PAD_COLOR
+from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD, PAD_COLOR, letterbox_region
 
 # Traversability: blocked / caution / go. The one taxonomy that does not change between
 # deployments, so it needs no selection.
@@ -235,10 +235,8 @@ def letterbox(img: Image.Image, size, fill=PAD_COLOR):
     """
     h, w = size
     ow, oh = img.size
-    s = min(w / ow, h / oh)
-    nw, nh = max(round(ow * s), 1), max(round(oh * s), 1)
+    x0, y0, nw, nh = letterbox_region(ow, oh, (h, w))
     canvas = Image.new("RGB", (w, h), fill)
-    x0, y0 = (w - nw) // 2, (h - nh) // 2
     canvas.paste(img.resize((nw, nh), Image.Resampling.BILINEAR), (x0, y0))
     return canvas, (x0, y0, nw, nh)
 

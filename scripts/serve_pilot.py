@@ -38,6 +38,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from syncai_hydranet.data.label_maps_retail_security import get_det_vocab  # noqa: E402
+from syncai_hydranet.preprocessing import letterbox_region  # noqa: E402
 from syncai_hydranet.serving.camera import CameraState, load_thresholds  # noqa: E402
 from syncai_hydranet.serving.decode import FcosDecoder  # noqa: E402
 from syncai_hydranet.serving.engine import (  # noqa: E402
@@ -177,10 +178,13 @@ def probe_wh(clip: Path) -> tuple[int, int]:
 
 
 def letterbox_filter(src_w: int, src_h: int) -> str:
-    """The same geometry as utils.visualize.letterbox, as an ffmpeg filter chain."""
-    s = min(CANVAS_W / src_w, CANVAS_H / src_h)
-    nw, nh = max(round(src_w * s), 1), max(round(src_h * s), 1)
-    x0, y0 = (CANVAS_W - nw) // 2, (CANVAS_H - nh) // 2
+    """`preprocessing.letterbox_region`, spelled as an ffmpeg filter chain.
+
+    It used to recompute the geometry here. That was the third copy of it and the copies
+    could not be checked against each other -- a one-pixel disagreement with the region
+    the consumer inverts moves every box by one pixel, silently.
+    """
+    x0, y0, nw, nh = letterbox_region(src_w, src_h, (CANVAS_H, CANVAS_W))
     # 0x72 = 114 = preprocessing.PAD_COLOR
     return f"scale={nw}:{nh},pad={CANVAS_W}:{CANVAS_H}:{x0}:{y0}:color=0x727272"
 

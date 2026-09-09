@@ -79,9 +79,9 @@ import torch
 from PIL import Image, ImageDraw
 
 from syncai_hydranet.analytics import Tracker, person_head
+from syncai_hydranet.analytics.clip_tracks import to_source_pixels
 from syncai_hydranet.analytics.tracker import iou_pair
 from syncai_hydranet.config import load_config
-from syncai_hydranet.data.transforms import invert_geom
 from syncai_hydranet.data.video import frames, probe
 from syncai_hydranet.models.heads.detection import SCORE_THR_RETAIL
 from syncai_hydranet.models.hydranet import build_model
@@ -357,8 +357,7 @@ def cmd_propose(args) -> int:
         if len(det.get("labels", [])):
             lab = det["labels"].cpu().numpy()
             box = det["boxes"].cpu().numpy()[lab == PERSON]
-            x0, y0, cw, ch = region
-            box = invert_geom(box.astype(float), (cw / src_w, ch / src_h, x0, y0))
+            box = to_source_pixels(box.astype(float), region, src_w, src_h)
         else:
             box = np.zeros((0, 4))
         tracker.update(box, n)

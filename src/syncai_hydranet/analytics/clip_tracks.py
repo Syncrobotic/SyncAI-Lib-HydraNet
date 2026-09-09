@@ -47,8 +47,8 @@ import torch
 from PIL import Image
 
 from ..data.coco_subsets import COCO_NAMES
-from ..data.transforms import invert_geom
 from ..geometry.ground import undistort_points
+from ..preprocessing import undo_letterbox
 
 # COCO's index for `person`, resolved from the name rather than written as an integer:
 # the head is trained on COCO's 80 and the number is a property of that list, not of this
@@ -93,17 +93,17 @@ def to_source_pixels(boxes: np.ndarray, region, src_w: int, src_h: int) -> np.nd
     every box lands somewhere plausible, shifted by the bar width, and the ground
     projection then reports a floor position that is confidently a metre off.
 
-    The arithmetic already exists as `invert_geom`, which the evaluator uses to put COCO
-    boxes back on the original image; this only translates between the two ways the project
-    describes the same letterbox. `region` is `(x0, y0, content_w, content_h)` from
-    `preprocess`; `geom` is `(sx, sy, px, py)` with `out = (box - p) / s`. **A second copy
-    of the arithmetic would be a second chance to get a sign wrong**, which is the whole
-    argument this module is an instance of.
+    The arithmetic lives in `preprocessing.undo_letterbox` and this is the box-shaped name
+    for it that four callers already import. It used to be spelled here as `invert_geom`
+    with the region translated into a `geom` tuple; it moved down a layer when the serving
+    path needed the same inverse for foot points and could not reach it, because
+    `data.transforms` imports torch and `analytics.world` deliberately does not. **A second
+    copy of the arithmetic would be a second chance to get a sign wrong**, which is the
+    whole argument this module is an instance of, so there is still exactly one.
     """
     if not len(boxes):
         return np.zeros((0, 4))
-    x0, y0, cw, ch = region
-    return invert_geom(np.asarray(boxes, dtype=float), (cw / src_w, ch / src_h, x0, y0))
+    return undo_letterbox(np.asarray(boxes, dtype=float), region, src_w, src_h)
 
 
 def undistort_boxes(boxes: np.ndarray, k1: float, w: int, h: int) -> np.ndarray:
