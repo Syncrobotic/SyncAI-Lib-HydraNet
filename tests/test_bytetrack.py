@@ -24,6 +24,7 @@ from syncai_hydranet.analytics.bytetrack import (
     Fragment,
     Kalman,
     OfflineForward,
+    as_track,
     to_cwh,
     to_xyxy,
 )
@@ -359,3 +360,72 @@ def test_tracker_birth_thr_refuses_a_value_that_is_not_a_score():
     for bad in (1.5, -0.1):
         with pytest.raises(ValueError, match="birth_thr"):
             tracker.Tracker(birth_thr=bad)
+
+
+# ------------------------------------------------- what a fragment carries out of here
+
+
+def test_a_fragment_records_one_score_per_observed_frame():
+    """The contract `tracker.Track` already states for its own `scores`, and which this
+    tracker did not keep -- it took `scores` on every `update` and stored none of them.
+
+    docs/PLAN.md step 4 is why it has to: the measured conclusion there is that the next
+    mechanism is not another box filter, it is that *the event layer has to see the
+    detection confidence a track was built from*. `world.WorldObject.score` carries that
+    and could not be filled from here.
+    """
+    fwd = _fwd(min_hits=1)
+    fwd.update(np.stack([_box(100.0, 200.0)]), np.array([0.90]), 0)
+    fwd.update(np.stack([_box(102.0, 200.0)]), np.array([0.42]), 1)  # high band
+    fwd.update(np.stack([_box(104.0, 200.0)]), np.array([0.25]), 2)  # low band
+    (t,) = fwd.tracks
+    assert t.scores == pytest.approx([0.90, 0.42, 0.25])
+    assert len(t.scores) == len(t.frames) == len(t.boxes)
+
+
+def test_a_coasting_frame_adds_no_score_because_it_is_not_an_observation():
+    """`scores` is index-aligned with `frames`, and `frames` records only observations --
+    so a coasted frame must not push a value in, or every later index is off by one."""
+    fwd = _fwd(min_hits=1)
+    fwd.update(np.stack([_box(100.0, 200.0)]), np.array([0.90]), 0)
+    fwd.update(np.zeros((0, 4)), np.zeros(0), 1)  # nothing seen
+    fwd.update(np.stack([_box(104.0, 200.0)]), np.array([0.55]), 2)
+    (t,) = fwd.tracks
+    assert t.frames == [0, 2]
+    assert t.scores == pytest.approx([0.90, 0.55])
+
+
+def test_as_track_hands_the_producer_what_it_asks_for():
+    """`world.world_frame` takes `tracker.Track`; this tracker makes `Fragment`."""
+    fwd = _fwd(min_hits=1)
+    fwd.update(np.stack([_box(100.0, 200.0)]), np.array([0.90]), 0)
+    fwd.update(np.stack([_box(110.0, 200.0)]), np.array([0.70]), 1)
+    (frag,) = fwd.tracks
+
+    t = as_track(frag)
+    assert isinstance(t, tracker.Track)
+    assert t.track_id == frag.frag_id
+    assert t.frames == frag.frames and t.scores == pytest.approx(frag.scores)
+    assert t.age == 0
+    # Observed: the current box is the observation, and `foot` reads it.
+    assert t.box == pytest.approx(frag.boxes[-1])
+    assert t.foot == pytest.approx([110.0, 250.0])
+
+
+def test_a_coasting_fragment_converts_to_its_prediction_not_its_last_sighting():
+    """`serving.camera.confirmed_track_boxes`'s rule, so a missed detection does not
+    blink the position off -- and `world_frame` reads `age` to report `observed=False`
+    for the same frame, so the two agree by construction."""
+    fwd = _fwd(min_hits=1)
+    fwd.update(np.stack([_box(100.0, 200.0)]), np.array([0.90]), 0)
+    fwd.update(np.stack([_box(110.0, 200.0)]), np.array([0.90]), 1)
+    fwd.update(np.zeros((0, 4)), np.zeros(0), 2)
+    (frag,) = fwd.tracks
+
+    t = as_track(frag)
+    assert t.age == 1
+    assert t.box == pytest.approx(frag.kalman.box)
+    assert t.box != pytest.approx(frag.boxes[-1]), (
+        "a prediction that equals the last "
+        "sighting would make this test blind to the rule it is checking"
+    )

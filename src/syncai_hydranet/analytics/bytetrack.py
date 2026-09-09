@@ -52,7 +52,7 @@ import numpy as np
 from PIL import Image
 
 from .reid_metrics import _hungarian
-from .tracker import iou
+from .tracker import Track, iou
 
 # ByteTrack's published noise weights (its kalman_filter.py), tuned on MOT17 at 25-30
 # fps. The velocity prior is rescaled at construction by (25 / effective_fps): at the
@@ -124,6 +124,18 @@ class Fragment:
     confirmed: bool = False
     frames: list[int] = field(default_factory=list)
     boxes: list[np.ndarray] = field(default_factory=list)
+    # One detector score per observed frame, index-aligned with `frames` and `boxes` --
+    # the contract `tracker.Track` already states for its own `scores`, and which
+    # `test_track_support.py` pins there.
+    #
+    # **Why a forward tracker has to keep them.** docs/PLAN.md step 4 measured that
+    # admitting low-scoring boxes produces real extra events, and concluded that the next
+    # mechanism is not another box filter: *the event layer has to see the detection
+    # confidence a track was built from*, because a track of 0.15 boxes is not the claim
+    # a 0.6 track is. `analytics.world.WorldObject.score` exists to carry exactly that and
+    # `events.TrackSupport` to summarise it -- and neither could be filled from this
+    # tracker, which took `scores` on every `update` and kept none of them.
+    scores: list[float] = field(default_factory=list)
     review_crops: list[Image.Image] = field(default_factory=list)
     embed_crops: list[np.ndarray] = field(default_factory=list)
     obs_count: int = 0  # observations seen, for the embed-crop stride
@@ -173,7 +185,9 @@ class OfflineForward:
         pairs, un_hi = self._associate(self.tracks, boxes[hi_idx], self.iou_thr)
         matched_tracks = set()
         for ti, di in pairs.items():
-            self._observe(self.tracks[ti], boxes[hi_idx[di]], frame_idx)
+            self._observe(
+                self.tracks[ti], boxes[hi_idx[di]], frame_idx, float(scores[hi_idx[di]])
+            )
             matched_tracks.add(ti)
 
         # Stage 2: still-unmatched tracks against the low band. Stricter IoU: a
@@ -184,7 +198,9 @@ class OfflineForward:
             [self.tracks[i] for i in rest], boxes[lo_idx], self.iou_thr_low
         )
         for ti, di in pairs2.items():
-            self._observe(self.tracks[rest[ti]], boxes[lo_idx[di]], frame_idx)
+            self._observe(
+                self.tracks[rest[ti]], boxes[lo_idx[di]], frame_idx, float(scores[lo_idx[di]])
+            )
 
         # Births: unmatched high-band detections only.
         for di in sorted(un_hi):
@@ -192,6 +208,7 @@ class OfflineForward:
             t = Fragment(self._next, Kalman(box, self.vel_scale))
             t.frames.append(frame_idx)
             t.boxes.append(box)
+            t.scores.append(float(scores[hi_idx[di]]))
             t.confirmed = self.min_hits <= 1
             self.tracks.append(t)
             self._next += 1
@@ -202,15 +219,50 @@ class OfflineForward:
         self.tracks = live
         self.retired.extend(t for t in gone if t.confirmed)
 
-    def _observe(self, t: Fragment, box: np.ndarray, frame_idx: int) -> None:
+    def _observe(self, t: Fragment, box: np.ndarray, frame_idx: int, score: float) -> None:
         t.kalman.update(box)
         t.hits += 1
         t.age = 0
         t.obs_count += 1
         t.frames.append(frame_idx)
         t.boxes.append(box.copy())
+        t.scores.append(float(score))
         if t.hits >= self.min_hits:
             t.confirmed = True
 
     def finished(self) -> list[Fragment]:
         return self.retired + [t for t in self.tracks if t.confirmed]
+
+
+def as_track(fragment: Fragment) -> Track:
+    """A forward tracker's `Fragment`, in the shape the L1 producer consumes.
+
+    `analytics.world.world_frame` takes `tracker.Track`, and the serving path's tracker
+    is this one, which produces `Fragment`. The two carry the same observations under
+    different names -- `frag_id` against `track_id`, and a current box that a `Fragment`
+    keeps in two places rather than one.
+
+    **An adapter rather than one shared type**, because the difference is not accidental:
+    a `Fragment` owns a Kalman filter, review crops and embedding crops, which are the
+    offline re-identification pass's working state and have no business in a payload
+    every consumer of the vector space reads. Merging them would put that state on the
+    type `events`, `journey` and `dwell` all consume.
+
+    **The current box follows `serving.camera.confirmed_track_boxes`'s rule**: an observed
+    track contributes its observation, a coasting one its Kalman prediction, so a missed
+    detection does not blink the position off. `world_frame` reads `age` for the same
+    distinction and reports it as `WorldObject.observed`, so the two agree by
+    construction rather than by coincidence.
+    """
+    observed = fragment.age == 0 and bool(fragment.boxes)
+    box = np.asarray(fragment.boxes[-1] if observed else fragment.kalman.box, float)
+    return Track(
+        track_id=fragment.frag_id,
+        box=box.copy(),
+        hits=fragment.hits,
+        age=fragment.age,
+        frames=list(fragment.frames),
+        boxes=[np.asarray(b, float).copy() for b in fragment.boxes],
+        scores=list(fragment.scores),
+        confirmed=fragment.confirmed,
+    )
