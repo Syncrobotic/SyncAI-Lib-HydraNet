@@ -2992,15 +2992,27 @@ in the stage-0 backlog.
 
 ### 9.6 The chain has never run end to end
 
-Verified 2026-09-09: `world_frame`, `pixel_to_ground`, `SecurityEvent` and `dispositions`
-appear **zero times** in `serving/` and in `scripts/serve_pilot.py`. The serving path stops
-at L0 plus a tracker, with boxes still on the letterboxed network canvas -- the pixel frame
-`analytics/world.py` gained `canvas_region` for on 2026-09-09, and whose two wrong readings
-cost 2.4-3.4 m in metres that carry no NaN and raise nothing.
+Verified 2026-09-09, before the commits below: `world_frame`, `pixel_to_ground`,
+`SecurityEvent` and `dispositions` appeared **zero times** in `serving/` and in
+`scripts/serve_pilot.py`. The serving path stopped at L0 plus a tracker, with boxes still
+on the letterboxed network canvas -- the pixel frame `analytics/world.py` gained
+`canvas_region` for the same day, and whose two wrong readings cost 2.4-3.4 m in metres
+that carry no NaN and raise nothing.
 
-L1 through L3 exist only in offline scripts over clips. **Step 6 (L3 end to end, one
-camera) has not started and step 7 (shadow mode) is behind it** -- and step 7 is the step
-that produces the number section 1 defines success as.
+**Amended the same day, and the amendment is the smaller half.** `CameraState` now holds
+the commissioned `camera.json` and the canvas region and produces a `WorldFrame`
+(`serving/camera.py`), and the tracker it runs records the score each track was built
+from and converts to the producer's type (`bytetrack.Fragment.scores`, `as_track`) --
+that second gap is the one docs/PLAN.md step 4 named as its next mechanism and had no
+owner. `tests/test_serving_world.py` runs the chain in metres.
+
+**What that changed is the *capability*, not the status of the step.** Nothing on the
+serving path calls it yet: `scripts/serve_pilot.py` still emits no positions, no events
+and no alert rows, and L2 through L4 remain offline scripts over clips. **Step 6 (L3 end
+to end, one camera) has not started and step 7 (shadow mode) is behind it** -- and step 7
+is the step that produces the number section 1 defines success as. What is left of step
+6's first item is a runner: a commissioned camera, its clip, the event layer over these
+`WorldFrame`s, and `record_alert` writing to the store section 9.2 found empty.
 
 ### 9.7 Two components have no consumer on the serving path
 
@@ -3048,9 +3060,10 @@ Not a build order -- section 6 is the build order -- but the sequence this readi
 for inside it:
 
 1. **Step 6, one camera, one clip, an event log a person can read against the video.**
-   Needs the serving-side L1 producer (`canvas_region` landed its first piece on
-   2026-09-09) and `record_alert` wired to the disposition store. This is the shortest
-   path from instrument to measurement.
+   The serving-side L1 producer landed 2026-09-09 (section 9.6); what remains is the
+   runner that calls it on a commissioned camera, the event layer over its `WorldFrame`s,
+   and `record_alert` writing to the disposition store. This is the shortest path from
+   instrument to measurement.
 2. **Then shadow mode, even at one camera for one week.** The first operator verdicts are
    worth more than any retrain, because they are the first signal that is not the
    teachers' opinion.
