@@ -90,6 +90,7 @@ import numpy as np
 
 from ..geometry.camera_json import CameraFile
 from ..geometry.ground import pixel_to_ground, undistort_points
+from ..preprocessing import undo_letterbox
 from .tracker import Track
 
 # How a floor position was arrived at. Grouped by what could be wrong with it, which is
@@ -176,6 +177,7 @@ def world_frame(
     fps: float | None = None,
     confirmed_only: bool = True,
     source_size_px: tuple[int, int] | None = None,
+    canvas_region: tuple[int, int, int, int] | None = None,
 ) -> WorldFrame:
     """Live tracks -> the vector space, in metres on this camera's floor.
 
@@ -197,6 +199,13 @@ def world_frame(
     See `_to_calibrated_pixels`: stating it scales the points, and omitting it is checked
     rather than trusted.
 
+    ``canvas_region`` is ``(x0, y0, content_w, content_h)`` from
+    `preprocessing.letterbox_region`, for the caller whose boxes are on a **letterboxed
+    network canvas** rather than on a frame -- which is what the serving path's
+    `CameraState.update` returns. A canvas is not describable by a size, so it is stated
+    as a region and `source_size_px` becomes required alongside it; `_to_calibrated_pixels`
+    records what the two ways of getting this wrong cost in metres.
+
     ``confirmed_only`` keeps the tracker's own gate: `Tracker.min_hits` defaults high
     because "a track confirmed on its first detection turns every one-frame false
     positive into a shopper", and a vector space that shows them has undone that.
@@ -205,9 +214,9 @@ def world_frame(
     live = [t for t in tracks if t.confirmed or not confirmed_only]
     if live:
         feet = np.stack([t.foot for t in live])
-        x, z = _to_ground(feet, cam_file, source_size_px)
+        x, z = _to_ground(feet, cam_file, source_size_px, canvas_region)
         for i, t in enumerate(live):
-            vx, vz = _velocity_ms(t, cam_file, times_s, fps, source_size_px)
+            vx, vz = _velocity_ms(t, cam_file, times_s, fps, source_size_px, canvas_region)
             objects.append(
                 WorldObject(
                     track_id=t.track_id,
@@ -240,6 +249,7 @@ def world_frames(
     times_s: Mapping[int, float] | None = None,
     fps: float | None = None,
     source_size_px: tuple[int, int] | None = None,
+    canvas_region: tuple[int, int, int, int] | None = None,
     confirmed_only: bool = True,
 ) -> list[WorldFrame]:
     """Finished tracks -> one `WorldFrame` per frame they cover, in frame order.
@@ -304,6 +314,7 @@ def world_frames(
                 times_s=times_s,
                 fps=fps,
                 source_size_px=source_size_px,
+                canvas_region=canvas_region,
                 confirmed_only=confirmed_only,
             )
         )
@@ -350,7 +361,10 @@ def _finite(value: float | None) -> float | None:
 
 
 def _to_calibrated_pixels(
-    points_px: np.ndarray, cam_file: CameraFile, source_size_px: tuple[int, int] | None
+    points_px: np.ndarray,
+    cam_file: CameraFile,
+    source_size_px: tuple[int, int] | None,
+    canvas_region: tuple[int, int, int, int] | None = None,
 ) -> np.ndarray:
     """Put pixels into the frame `camera.json`'s intrinsics were fitted on.
 
@@ -368,9 +382,35 @@ def _to_calibrated_pixels(
     who states nothing is checked: points far outside the calibrated canvas cannot be a
     lens correction or a clipped box, and are refused with the resolution mismatch named
     rather than projected into confident nonsense.
+
+    **A third pixel space, which a size cannot describe -- `canvas_region`.** The serving
+    path runs the network on a *letterboxed* canvas (640x1120 for the shipped engine), so
+    `CameraState.update` returns boxes in content-plus-grey-bars coordinates, and the
+    scale above cannot undo a pad. Measured 2026-09-09 on this camera: handing those
+    pixels in and naming the 1920x1080 stream as their frame -- the honest-looking
+    mistake, since the stream is what the camera sent -- moves shoppers **2.4-2.7 m**,
+    with no NaN and no refusal, because the scaled points still land inside the calibrated
+    canvas. Naming the canvas instead is 1-2 cm on a 16:9 source and **1.37 m on the
+    fleet's sideways-mounted camera**, where the pad is 380 px wide rather than 5 px tall
+    -- and that error is exactly zero on the frame's centre column, so a spot check taken
+    in the middle of the picture passes.
+
+    So the canvas is stated as a region and not as a size, the pad is undone before the
+    scale (the order the letterbox itself composes in), and `source_size_px` is then
+    required rather than optional: without it there is no scale to undo the region with,
+    and guessing one is how the 2.7 m happened.
     """
     pts = np.asarray(points_px, dtype=float).reshape(-1, 2)
     w, h = cam_file.image_size_px
+    if canvas_region is not None:
+        if source_size_px is None:
+            raise ValueError(
+                f"{cam_file.camera_id}: canvas_region was given without source_size_px. "
+                "A region locates the content inside the canvas but carries no scale, so "
+                "the frame the content came from has to be named. Pass the decoded "
+                "stream's (width, height)."
+            )
+        pts = undo_letterbox(pts, canvas_region, *source_size_px)
     if source_size_px is not None:
         sw, sh = source_size_px
         if (sw, sh) != (w, h):
@@ -399,6 +439,7 @@ def _to_ground(
     points_px: np.ndarray,
     cam_file: CameraFile,
     source_size_px: tuple[int, int] | None = None,
+    canvas_region: tuple[int, int, int, int] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """(N,2) raw-frame pixels -> floor metres, undoing the lens first if there is one.
 
@@ -406,7 +447,7 @@ def _to_ground(
     lens model is defined on raw pixels, so undistorting after projecting corrects the
     wrong quantity.
     """
-    pts = _to_calibrated_pixels(points_px, cam_file, source_size_px)
+    pts = _to_calibrated_pixels(points_px, cam_file, source_size_px, canvas_region)
     lens = cam_file.lens
     if lens is not None:
         pts = undistort_points(pts, lens.k1, lens.centre_px, lens.radius_px)
@@ -419,6 +460,7 @@ def _velocity_ms(
     times_s: Mapping[int, float] | None,
     fps: float | None,
     source_size_px: tuple[int, int] | None = None,
+    canvas_region: tuple[int, int, int, int] | None = None,
 ) -> tuple[float | None, float | None]:
     """Floor velocity from the last two **observed** boxes, or (None, None).
 
@@ -433,7 +475,7 @@ def _velocity_ms(
     if dt is None or dt <= 0:
         return None, None
     feet = np.stack([[(b[0] + b[2]) / 2, b[3]] for b in (track.boxes[-2], track.boxes[-1])])
-    x, z = _to_ground(feet, cam_file, source_size_px)
+    x, z = _to_ground(feet, cam_file, source_size_px, canvas_region)
     if not (math.isfinite(x[0]) and math.isfinite(x[1])):
         return None, None
     return float((x[1] - x[0]) / dt), float((z[1] - z[0]) / dt)

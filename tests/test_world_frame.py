@@ -49,6 +49,7 @@ from syncai_hydranet.geometry.ground import (
     pixel_to_ground,
     undistort_points,
 )
+from syncai_hydranet.preprocessing import letterbox_region
 
 # The measured store mount and the half-res commissioning shape both live in _cameras.
 CAM = FULL_RES_CAM
@@ -416,3 +417,90 @@ def test_the_gate_can_be_opened_and_then_the_frames_appear():
     opened = world_frames([unconfirmed], cam_file, name="person", confirmed_only=False)
     assert [f["frame_index"] for f in opened] == [0, 1]
     assert all(len(f["objects"]) == 1 for f in opened)
+
+
+# --------------------------------------------- the third pixel frame: the network canvas
+
+
+def _canvas_track(*positions: tuple[float, float]) -> tuple[Track, tuple[int, int, int, int]]:
+    """A track whose boxes are where the serving path actually has them.
+
+    `CameraState.update` returns boxes on the **letterboxed network canvas**, not on the
+    stream: `serve_pilot` letterboxes into it and nothing converts back. So a serving-side
+    `WorldFrame` producer starts here, and this builds that starting point honestly --
+    metres -> calibrated px -> stream px -> canvas px -- rather than asserting against a
+    canvas invented for the test.
+    """
+    x0, y0, cw, ch = letterbox_region(*_STREAM_SIZE, _CANVAS_HW)
+    boxes = []
+    for x_m, z_m in positions:
+        u, v, _ = ground_to_pixel(
+            np.array([x_m]), np.array([z_m]), HALF_RES_CAM, HALF_RES_PLANE
+        )
+        stream = np.array([u[0], v[0]]) * 2.0  # 960x540 intrinsics, 1920x1080 stream
+        cu, cv = stream * (cw / _STREAM_SIZE[0], ch / _STREAM_SIZE[1]) + (x0, y0)
+        boxes.append(_foot_box(cu, cv))
+    track = Track(
+        track_id=1,
+        box=boxes[-1].copy(),
+        hits=len(boxes),
+        age=0,
+        frames=list(range(len(boxes))),
+        boxes=boxes,
+        confirmed=True,
+    )
+    return track, (x0, y0, cw, ch)
+
+
+_STREAM_SIZE = (1920, 1080)
+_CANVAS_HW = (640, 1120)  # the shipped engine's canvas, exports/pro6000_1120
+
+
+def test_canvas_boxes_reach_the_metres_they_were_projected_from():
+    """The whole point of `canvas_region`: state the canvas and the round trip closes."""
+    track, region = _canvas_track((0.5, 3.0))
+    frame = world_frame(
+        [track],
+        _half_res_camera_file(),
+        0,
+        name="person",
+        source_size_px=_STREAM_SIZE,
+        canvas_region=region,
+    )
+    (obj,) = frame["objects"]
+    assert obj["x_m"] == pytest.approx(0.5, abs=0.02)
+    assert obj["z_m"] == pytest.approx(3.0, abs=0.02)
+    assert obj["basis"] == "foot_point"
+
+
+def test_forgetting_the_canvas_puts_a_shopper_metres_away_without_a_refusal():
+    """The failure `canvas_region` exists for, and the reason it cannot be caught later.
+
+    Naming the *stream* as the frame canvas pixels are in is the honest-looking mistake --
+    the stream is what the camera sent -- and the guard above cannot fire, because the
+    canvas is smaller than the stream so every scaled point lands inside the calibrated
+    frame. Measured here at **2.4-3.4 m**, matching what
+    `_to_calibrated_pixels` records against the real `Taichung-cam01.camera.json`.
+
+    No NaN, no `above_horizon`, no exception: a wrong answer wearing a right answer's
+    shape, which is the failure mode this module was written after.
+    """
+    cam_file = _half_res_camera_file()
+    for truth in ((0.5, 3.0), (-1.8, 2.0), (0.0, 4.5)):
+        track, region = _canvas_track(truth)
+        kw = {"name": "person", "source_size_px": _STREAM_SIZE}
+        (good,) = world_frame([track], cam_file, 0, canvas_region=region, **kw)["objects"]
+        (bad,) = world_frame([track], cam_file, 0, **kw)["objects"]
+
+        assert bad["basis"] == "foot_point"  # it claims to have measured a foot point
+        assert math.isfinite(bad["x_m"]) and math.isfinite(bad["z_m"])
+        off = math.hypot(bad["x_m"] - good["x_m"], bad["z_m"] - good["z_m"])
+        assert off > 2.0, f"{truth}: the confusion has stopped costing metres ({off:.2f} m)"
+
+
+def test_a_canvas_region_without_a_source_size_is_refused():
+    """A region locates content inside the canvas but carries no scale. Guessing one is
+    exactly how the metres above went wrong, so it is named rather than assumed."""
+    track, region = _canvas_track((0.5, 3.0))
+    with pytest.raises(ValueError, match="without source_size_px"):
+        world_frame([track], _half_res_camera_file(), 0, name="person", canvas_region=region)
