@@ -263,3 +263,40 @@ def test_attributes_with_no_positives_do_not_dilute_the_macro():
     out = ta.attribute_metrics(p, y)
     assert out["_macro_recall"] == 1.0
     assert out["_worst_attribute"] == ta.ATTRIBUTES[0]
+
+
+def test_mean_accuracy_and_macro_recall_disagree_on_the_shipped_run():
+    """The regression this pins is a finding, not an arithmetic bug.
+
+    On `crop_encoder01` the two numbers move in opposite directions across the whole run,
+    and selecting on the wrong one keeps the worse model on every attribute checked --
+    including `Female`, the one it is actually used for: epoch 2 reads 0.884 against the
+    kept epoch 8's 0.839. If a future run makes them agree the per-epoch macro recall has
+    stopped earning its place and this test should be re-read, not deleted.
+
+    Skipped on a clean checkout: `runs/` is gitignored.
+    """
+    import json
+    from pathlib import Path
+
+    import numpy as np
+    import pytest as _pytest
+
+    path = Path("runs/crop_encoder01/metrics.json")
+    if not path.exists():
+        _pytest.skip("crop_encoder01 is not in this checkout")
+    hist = json.loads(path.read_text())
+
+    def macro(row):
+        rec = [
+            v["recall"]
+            for v in row["attributes"].values()
+            if v["val_positives"] > 0 and v["recall"] is not None
+        ]
+        return float(np.mean(rec))
+
+    acc = [r["val_mean_accuracy"] for r in hist]
+    mac = [macro(r) for r in hist]
+    assert acc == sorted(acc), "mean accuracy rose every epoch on this run"
+    assert mac[-1] < mac[0], "macro recall ended below where it started"
+    assert int(np.argmax(mac)) != len(mac) - 1, "the best epoch by macro recall is not the last"

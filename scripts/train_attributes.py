@@ -144,6 +144,7 @@ def main(argv: list[str] | None = None) -> int:
     vl = DataLoader(val, batch_size=args.batch_size, num_workers=args.workers)
 
     history = []
+    best: dict = {"val_macro_recall": -1.0}
     for epoch in range(1, args.epochs + 1):
         model.train()
         t0, total, n = time.time(), 0.0, 0
@@ -173,6 +174,45 @@ def main(argv: list[str] | None = None) -> int:
         # truncated file where the run's only resume point was.
         save_checkpoint(
             {"model": model.state_dict(), "attributes": ATTRIBUTES}, out_root / "last.pt"
+        )
+        # **And keep the best epoch, because this run has already proved it is not the
+        # last one.** crop_encoder01 rose on mean accuracy every epoch, 0.8964 -> 0.9276,
+        # while 18 of its 26 attributes ended worse than epoch 1 -- `AgeOver60` 0.381 ->
+        # 0.119. `last.pt` overwrote every epoch, so the better weights no longer exist and
+        # the finding cost a retrain to act on. Selecting on macro recall is what makes the
+        # per-epoch number above actionable rather than merely reported.
+        #
+        # `last.pt` is untouched, so every figure taken from a previous run stays
+        # reproducible and the two can be compared.
+        if row["val_macro_recall"] >= best["val_macro_recall"]:
+            best = row
+            save_checkpoint(
+                {"model": model.state_dict(), "attributes": ATTRIBUTES}, out_root / "best.pt"
+            )
+        # Same shape as `utils/runmeta.selection_report`: what the chosen checkpoint gave
+        # up on the numbers nobody selected on. That helper reads the multi-head model's
+        # metric vocabulary and does not see these, so the record is written here.
+        (out_root / "selection.json").write_text(
+            json.dumps(
+                {
+                    "primary_metric": "val_macro_recall",
+                    "why": "mean accuracy over 26 multi-label attributes is carried by "
+                    "true negatives and cannot fall when a head is abandoned",
+                    "selected_epoch": best["epoch"],
+                    "at_selected": {
+                        k: best[k]
+                        for k in ("val_macro_recall", "val_mean_accuracy", "val_worst_recall")
+                    },
+                    "worst_attribute_at_selected": best["val_worst_attribute"],
+                    "last_epoch": row["epoch"],
+                    "at_last": {
+                        k: row[k]
+                        for k in ("val_macro_recall", "val_mean_accuracy", "val_worst_recall")
+                    },
+                },
+                indent=2,
+            )
+            + "\n"
         )
         ask = {k: metrics[k] for k in ("Female", "AgeLess18", "AgeOver60")}
         print(

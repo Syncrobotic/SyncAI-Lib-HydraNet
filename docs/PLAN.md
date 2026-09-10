@@ -3086,10 +3086,34 @@ once in this pass.
    published figure stays readable, and `attribute_metrics` is split out so
    `tests/test_metric_honesty.py` can hold it without a model or a loader.
 
-   **The cheapest fix is not a retrain.** Epoch 1 was a better model than epoch 8 for most
-   attributes, so the first thing to try is a selection criterion that is not mean
-   accuracy. After that, class-balanced loss on data already on disk — plus `MSP60K`,
-   extracted 2026-09-10 — and no site labels are needed for either.
+   **The cheapest fix was not available, and that is the second finding.** Epoch 1 beat
+   epoch 8 on most attributes, so the obvious move was to keep an earlier checkpoint — but
+   `last.pt` is overwritten every epoch and its own comment calls it "the run's only
+   resume point". The better weights no longer exist. A loop that computes a per-epoch
+   metric and keeps only the final weights cannot act on what it measures.
+
+   So `train_attributes.py` now also writes **`best.pt` selected on macro recall** and a
+   `selection.json` in the shape of `utils/runmeta.selection_report` — that helper reads
+   the multi-head model's metric vocabulary and does not see these, so the record is
+   written locally. `last.pt` is untouched, so every figure from a previous run stays
+   reproducible and the two can be compared.
+
+   Replayed over the real history, the rule keeps **epoch 2**, which is better on every
+   attribute checked — **including the one the model is actually used for**:
+
+   | | epoch 2 | epoch 8 (shipped) |
+   |---|---|---|
+   | macro recall | **0.7185** | 0.6457 |
+   | `AgeOver60` | **0.262** | 0.119 |
+   | `boots` | **0.600** | 0.133 |
+   | `Female` | **0.884** | 0.839 |
+   | mean accuracy | 0.9058 | **0.9276** |
+
+   Epoch 8 wins only on the number that cannot see the loss. **The shipped attribute model
+   is worse than an epoch-2 checkpoint at gender, the attribute every retail page quotes.**
+
+   After the re-run, class-balanced loss on data already on disk — plus `MSP60K`,
+   extracted 2026-09-10 — and no site labels are needed for either step.
 
 
 ## 9. The distance to the product, read across the steps
