@@ -54,6 +54,7 @@ from syncai_bev3d.meshes import (
     wall,
 )
 from syncai_bev3d.shading import View, contact_shadows, draw_scene, occlusion_alpha
+from syncai_hydranet.geometry.bands import Band
 from syncai_hydranet.geometry.camera_json import CameraFile
 
 # The checkout this package sits in -- `src/syncai_bev3d/scene.py` -> the repo root --
@@ -215,6 +216,49 @@ def product_units(name: str, w_m: float, d_m: float):
 # pixel would set the height of the fixture.
 HEIGHT_PCT = {2: 99, 3: 99, 4: 85, 5: 99}
 
+# The classes whose footprint is gated by their own floor contact (see `cell_grids`).
+# `display_table` is not one: a table is mostly top, and its top lowered by its own height
+# is the footprint. A wall, column or cabinet is mostly *face*, and a face pixel lowered
+# by a wrong height lands on open floor.
+CONTACT_GATED = frozenset({"wall", "column", "display_shelf"})
+# How far (m) from the class's contact line a lowered pixel may land and still count.
+# Measured 2026-09-10 on the four cameras with a reported ghost: 0.45 m keeps
+# Taichung-cam11's ghost cabinet (a 0.86x0.53 m "column" on open floor), 0.30 m removes
+# it and every other ghost, and the real walls and shelf runs fit at the same size
+# either way. A cabinet's merchandise face stands SHELF_MAX_DEPTH_M off the wall behind
+# it; this is the same distance with the tolerance a contact line's raggedness needs.
+CONTACT_BAND_M = 0.30
+
+
+def contact_cells(
+    mask: np.ndarray, gx: np.ndarray, gz: np.ndarray, *, min_component_px: int = 200
+) -> np.ndarray:
+    """Floor metres of where a mask meets the floor, read from the cache's own ray hits.
+
+    The lowest pixel of each column of each connected component, as `geometry.bands.
+    contact_line` takes it -- but placed with the cache's `gx/gz` (the ray's ground hit at
+    that pixel) rather than re-projected through the camera, so the points are in exactly
+    the frame the lowered pixels are in, at the cache's own resolution, with no second
+    path through the lens model to disagree with the first.
+
+    Components under ``min_component_px`` are mask speckle and place nothing.
+    Returns (N, 2); empty when the mask is.
+    """
+    lab, n = ndimage.label(mask, structure=np.ones((3, 3)))
+    if n == 0:
+        return np.zeros((0, 2))
+    counts = np.bincount(lab.ravel(), minlength=n + 1)
+    rows, cols = np.nonzero(mask & (counts[lab] >= min_component_px))
+    if not len(rows):
+        return np.zeros((0, 2))
+    # the last row in (component, column) order is the lowest pixel of that column
+    key = lab[rows, cols].astype(np.int64) * mask.shape[1] + cols
+    order = np.lexsort((rows, key))
+    last = np.r_[key[order][1:] != key[order][:-1], True]
+    r, c = rows[order][last], cols[order][last]
+    pts = np.stack([gx[r, c], gz[r, c]], axis=1)
+    return pts[np.isfinite(pts).all(axis=1)]
+
 
 def cell_grids(camera, root: Path | None = None):
     """Per-class occupancy in floor metres, and per-class measured heights (p85).
@@ -257,6 +301,23 @@ def cell_grids(camera, root: Path | None = None):
     hts = {}
     for cid in CLASS_NAMES:
         sel = (static == cid) & z["geom_ok"]
+        if CLASS_NAMES[cid] in CONTACT_GATED:
+            # A tall class's footprint is built from its mask pixels *lowered* to the
+            # floor by their measured height (`lx/lz`). For a pixel high on a wall that
+            # lowering moves the point metres along the camera ray, and it is right only
+            # if DA-V2's height is -- which on white and grey surfaces it is not: the
+            # upper left wall of Tao-Hsin-cam15 lowered 3-18 m into the aisle and was
+            # fitted as a 1.2 m wall standing on open floor; Taichung-cam10's pillar
+            # base lowered 1.05 m forward did the same. Where the fixture actually stands
+            # is where its mask meets the floor, and that needs no height at all. So a
+            # lowered pixel counts only if it lands beside the class's own contact line.
+            # (Capping the lowering distance instead was measured first, 2026-09-10: at
+            # 0.6 m it removed both ghosts and most of the real furniture with them --
+            # every pixel of a 2.4 m wall is lowered a long way, correctly.)
+            band = Band(contact_cells(static == cid, z["gx"], z["gz"]), CONTACT_BAND_M)
+            near = band.contains(np.stack([z["lx"][sel], z["lz"][sel]], axis=1))
+            sel = sel.copy()
+            sel[sel] = near
         xs[cid], zs[cid] = z["lx"][sel], z["lz"][sel]
         hts[cid] = z["height"][sel]  # per cell, so a component can be measured too
         hs = z["height"][sel]

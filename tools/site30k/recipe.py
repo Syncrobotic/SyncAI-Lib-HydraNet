@@ -461,6 +461,19 @@ def decide_structure(cl_masks, cl_votes, b03_maps, geo, lx, lz):
                     "wall" if b03_wall >= B03_WALL_MIN else next(f for f in pair if f != "wall")
                 )
                 note = f"tiebreak by b03 (wall {b03_wall:.2f} / fixture {b03_fix:.2f})"
+            elif "column" in pair and b03_wall >= B03_WALL_MIN and b03_fix < B03_FIXTURE_MIN:
+                # b03 cannot tell a column from a wall, but it can tell either from a
+                # fixture, and that is the only question this pair asks. Kaohsiung-cam04's
+                # pillar (63k px) scored column 0.887 against shelf 0.762 and was refused
+                # here as "b03 supports neither" with b03 reading wall 1.00 / fixture 0.02
+                # -- b03 had refuted the shelf outright. Measured 2026-09-10 over the eight
+                # cameras with a decisions record: this branch changes two clusters, both
+                # on that camera (the pillar, and a 1k px speck).
+                win = "column"
+                note = (
+                    "tiebreak by b03: structure, not fixture "
+                    f"(wall {b03_wall:.2f} / fixture {b03_fix:.2f})"
+                )
             else:
                 win, note = None, f"contested, margin {margin:.3f}, b03 supports neither"
         reject = None
