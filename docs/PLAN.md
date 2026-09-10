@@ -863,3 +863,137 @@ memory in the network, or a VLM distilled into it -- and the answer is neither, 
 What it is not: memory inside the per-frame network, or a VLM inside it. §5 rule 6 and
 §7.4's budget both refuse that, and RegNetX-800MF would carry a VLM's semantics no
 better than it carries its weight.
+
+
+## 10. The next plan — three gates over section 6's steps
+
+Written 2026-09-10 at the user's request for a CTO / architect's plan. It adds no steps:
+section 6 is the build order and section 9 the ranking of gaps. What this adds is
+**three gates in calendar order, each defined by the one artefact that makes the next
+gate readable**, the architecture decisions the gates rest on, what is deliberately not
+done, and the decisions only the user can take. Dates are targets from 2026-09-10 with
+one person plus AI sessions and one shared GPU; every "done" below still means section
+6's gate, not this section's summary of it.
+
+### 10.1 The principle every gate follows
+
+**A number nobody has graded is not a result, and the model is not what is blocking the
+grading.** Section 9.9's read stands: the gap is instruments. So the order is (1) make
+the chain run live and put its alerts in front of a person, (2) fix the three measured
+failures against that person's verdicts, (3) scale from one store to the fleet. Capability
+work that does not have a graded consumer waits — that is what section 1.1 says about
+memory and the VLM, and it is the rule here, not an exception for those two.
+
+### 10.2 Gate A — one store, live, graded. Target 2026-10-03.
+
+The artefact: **two weeks of operator dispositions from one store**, filed by the
+serving path rather than by an offline script, and the first precision number this
+project has ever had.
+
+| # | work | closes | done when |
+|---|---|---|---|
+| A1 | the serving path carries L1 → L3 → dispositions: `world_frame`, `zone_events`, `record_alert` called from `serving/`, not only from `scripts/step6_events.py` | §9.6 | `serve_pilot.py` on one live stream files the same rows step 6 files offline, byte-comparable on a recorded clip |
+| A2 | tracker in serving = the measured band **plus the appearance gate** (`appearance_thr` per camera; a descriptor hook in `clip_tracks.track_clip`) | §9.4 | median track life on the eight sweep clips, single-threshold vs band vs band+gate, by `scripts/track_endings.py`; identity checked by eye on the ten longest |
+| A3 | **plate drift / tamper check** (§2.1h): nightly static plate diffed against the commissioned one; a moved camera stops filing metres and says so | §9.5's silent failure | a deliberately nudged camera is refused within one night |
+| A4 | **the grading surface**: a daily review sheet generated from the disposition store — frame crop (blurred), the event row, accept / reject / "staff" — writing disposition rows back. HTML from a script, no server | §4.5 | an operator grades a day in under fifteen minutes |
+| A5 | **per-store policy as a file**: loiter seconds, occupancy, open hours, after-hours rule; the demonstration values in step 6 leave the code | §3's placement rule | `step6_events.py` and serving read the same file |
+| A6 | commission **every camera of the pilot store**, not eight of the fleet; the floor bench scores each; k1 / vfov attributed per camera as now | step 2 | one real frame per camera with the 1 m grid, seen by eye |
+
+Exit: alerts per camera per day at the store's thresholds is single-digit **after**
+`staff` rows are excluded, and the reject log is readable as a pattern (which camera,
+which zone, which kind). If the rate is not single-digit the thresholds move, not the
+model — that is what section 1.1 measured.
+
+### 10.3 Gate B — the three measured failures, scored on graded rows. Target 2026-11-07.
+
+The artefact: **precision on the graded set moves, and the operator's list of missed
+incidents shrinks**. Nothing in this gate ships without a before/after on Gate A's rows.
+
+| # | work | evidence it rests on | done when |
+|---|---|---|---|
+| B1 | **occluded-person recall**: the dense head's 20% of shoppers behind counters become boxes — the crop-stage fallback `models/heads/pose.py` reserved, or a dense-to-box proposal at the counter zones only | §9.3 | detection mAP unchanged elsewhere, counter-zone recall up on the graded misses |
+| B2 | **`staff/customer` licensed on every pilot camera**: the three uniform photos per store, and a VLM at L2 as the teacher for the cameras the colour statistics refuse | step 9, §7.15 | balanced accuracy ≥ 0.90 held out by camera on all pilot cameras; `reach_to_shelf` no longer fires on staff at their workstation |
+| B3 | **the VLM at L4, on trigger**, on the card's reserved budget: reads the frames of an alert already filed and writes its verdict as a disposition row beside the operator's | §1.1, §7.4 | agreement between VLM and operator measured per event kind; the disagreements are the next training set |
+| B4 | **per-camera, per-hour baseline** from L1 output: counts, dwell, speed on the world frame, kept beside `camera.json`, no network; each event gains a `rarity` field against its own camera's history | §1.1's survey; §7.37 | rarity separates accepted from rejected rows better than the fleet constant does — or it is dropped |
+| B5 | the behaviour head gets a serving consumer, or is shelved: `fall` / `crouch` from the trained sequence model instead of the geometric rules | step 8, §9.7 | one false alarm per eight minutes becomes one per shift on the crowded camera, else it stays off |
+| B6 | **crowd-aware assigner retrain** (ATSS / OTA) — only if Gate A's misses concentrate in crowds | §7.11 | a re-baseline, run as one systemd unit, compared on the graded set |
+
+Exit: precision on the graded rows reported per camera and per event kind; the missed
+list carries a cause per item (recall, tracking, staff, policy).
+
+### 10.4 Gate C — from one store to a chain. Target 2026-12-19.
+
+The artefact: **the fleet under the 20-minute commissioning budget, serving at the
+measured 96 streams, and the data engine closing**.
+
+| # | work | done when |
+|---|---|---|
+| C1 | all 48 cameras commissioned; the 4-click tool exists (step 2b) and a human's part is under five minutes a camera | `runs/commission01` holds 48 files, each with a grid seen by eye, each with a floor-bench score |
+| C2 | serving end to end at 96 × 5 fps: NVDEC decode, engine, NMS, tracker, events, dispositions, on one card, measured not engine-only | the §7.4 number re-taken with L1–L3 in the loop |
+| C3 | the retail reading scoped (§7a.5): footfall, dwell, paths, queue length from the same L1 tracks, as a daily table per store; no new model | a store manager reads it beside their till data |
+| C4 | **distillation, now with a test set**: VLM and operator verdicts from B3 into L2 crop heads (`staff`, printed-person false positives, zone kind) | the small head matches the VLM's agreement with the operator on held-out cameras |
+| C5 | the data engine closes: dispositions → training set with provenance (checkpoint, commit, calibration hash already on every row) → the next model, scored on rows it never saw | one retrain whose test set is graded rows, and whose gain is stated in alerts, not mAP |
+
+### 10.5 Architecture decisions this plan fixes
+
+* **The world frame is the contract** (§2.3.1). Every layer above L1 reads metres and
+  seconds from `WorldFrame`; nothing above L1 sees pixels. Pixel-frame bugs have cost
+  2.4–3.4 m silently twice (§9.6); this is the boundary that stops the third.
+* **The disposition store is the spine of the data engine.** Every training set, every
+  precision figure and every distillation cites rows in it; a model that cannot say which
+  graded rows it was scored on is not compared.
+* **The VLM is a teacher and an adjudicator, never a student's target.** It labels at
+  commissioning, judges at L2 every few seconds per track, and adjudicates at L4 on
+  trigger, on the reserved 68% of the card. Nothing distils *into* the per-frame network
+  from it; what distils is verdicts into crop heads (C4).
+* **Memory is statistics on L1 output, per camera, per hour, with no learned weights**
+  (B4). It is the mechanism the market ships under that name (§1.1), it is auditable by
+  hand, and it produces a `rarity` field, not a new alert type. A learned model of normal
+  waits for enough graded anomalies to score it.
+* **One network, frozen by measurement.** RegNetX-800MF + BiFPN at 640 × 1120 stays until
+  a graded miss names a failure the heads cannot fix. No fifth class, no COCO share
+  changes, no resolution change.
+* **Self-calibration stays the product** (2026-09-03). vfov and k1 are estimated and
+  scored by the floor bench; the plate drift check (A3) is what makes a metre trustworthy
+  over time rather than only on commissioning day.
+* **Identity stays out** (§5 rule 5): no face, no re-ID, no cross-store tracking; the
+  appearance gate is within-camera, within-gap, and splits tracks rather than joining
+  people.
+
+### 10.6 Not done, on purpose
+
+Memory inside the network. A VLM inside the per-frame network. Re-identification. A
+`stack` class before a graded miss asks for it. Any figure re-cut outside a batched scene
+commit (the figure tax). The robot line (secondary since 2026-08-19; frozen until Gate C).
+Buying coverage with more frames from already-annotated cameras (§5 rule 4). Any
+per-frame dense scene understanding (§5 rule 6).
+
+### 10.7 Risks, ranked
+
+1. **No graded data arrives** — the store, the operator, or the fifteen minutes a day do
+   not materialise. Then every number stays an agreement. Mitigation: Gate A is scoped so
+   that one person grading one store's sheet is the whole ask.
+2. **The metres are wrong on cameras where the prior is thin** (vfov guessed on 22 of 23,
+   15–37 boxes). A loiter threshold in seconds does not care; an occupancy zone in metres
+   does. Mitigation: every alert row carries the calibration hash and `scale_source`; the
+   floor bench scores every commissioned file; A3 catches the drift.
+3. **The crowded counter is where the product sells and where recall is worst** (§9.3,
+   §7.11). Mitigation: B1 first among the model items; B6 only if the graded misses say so.
+4. **Privacy in shadow mode**: customers of a Taiwanese store, PDPA. Mitigation: §4.6's
+   retention tiers, blurred crops on the review sheet, no identity anywhere, and the
+   disposition row is a pointer that expires with the clip.
+5. **One shared GPU and one shared checkout across sessions**: a training unit killed by
+   an edit, a run started under a stale tree. Mitigation: every long job is a systemd
+   user unit; commits are atomic; nothing edits `src/` under a running job.
+
+### 10.8 Decisions only the user can take
+
+1. Which store is the pilot, and who at it grades (a named person, fifteen minutes a
+   day).
+2. The store's policy values: loiter seconds by zone kind, occupancy per zone, opening
+   hours, the after-hours rule.
+3. Three uniform reference photographs per store (waiting since 2026-08-27).
+4. Footage for the remaining 40 cameras, and whether the fleet is 48 (§2's count) or
+   what the corpus actually holds.
+5. Whether the retail reading (C3) is in scope by December, or the chain buys the
+   security reading alone first.
