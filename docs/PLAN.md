@@ -654,6 +654,18 @@ order. A component with no step is not scheduled, it is assumed.
    stabilises a partial box, and it is the next thing measured (a three-frame probe
    before a build — does the ×2 crop return the back row in the high band at all).
 
+   **The ×2 probe, same three frames, the counter ROI (960×600 of 1920×1080, ×1.83 on
+   the canvas).** High-band boxes inside the ROI, full frame → crop: **7 → 8, 4 → 8,
+   6 → 9** for 12–14 people present; low-band boxes 6 → 12, 7 → 13, 6 → 12; median
+   score 0.35 → 0.30, 0.29 → 0.29, 0.34 → 0.27; one high box lost per frame. So the
+   crop buys **one to four more high-band people per frame at the counter, a third
+   more**, and doubles the partial boxes underneath them — the back row is *seen* at
+   ×1.83 and still not *boxed* cleanly. That is the same fact as the birth rule's, one
+   scale up: the detector has not learned what a huddle looks like at any scale, which
+   is mechanism 3's claim. Mechanism 2 is worth its second engine pass only for the third;
+   whether those boxes then track is what a build would measure, and the ceiling probe
+   for 3 is cheaper and decides more.
+
 ### 7b. Decided — the answer, and what it cost
 
 2. ~~Night is unscoped~~ — **decided 2026-08-25: night is in v1, gated on a measurement.**
