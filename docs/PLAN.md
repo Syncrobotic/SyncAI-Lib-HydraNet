@@ -811,6 +811,17 @@ on the letterboxed network canvas -- the pixel frame `analytics/world.py` gained
 `canvas_region` for the same day, and whose two wrong readings cost 2.4-3.4 m in metres
 that carry no NaN and raise nothing.
 
+**Closed on the pilot, 2026-09-10** (§10.2 A1, A4, A5): `serving/alerts.py` calls
+`CameraState.world_frame` → `events/live.py`'s `ZoneMonitor` → `record_alert` after every
+`CameraState.update` on a commissioned camera, `scripts/serve_pilot.py` builds one per
+commissioned stream, and the first row the serving path ever filed was a loitering alert
+on Kaohsiung-cam04's 00:00 clip — an empty shop, a phantom person on an IR frame, and the
+first alert graded through `deploy/retail-security/review_server.py`: rejected. The live
+rules are held to the offline ones by `tests/test_live_events.py` (same events; `value`
+and `frame_end` at the crossing). What remains of this section: the pilot's tracker is
+bytetrack (band + Kalman), the offline log's is the band alone, so the two logs are not
+yet byte-comparable — a tracker adapter or one shared tracker decides it.
+
 ### 9.7 Two components have no consumer on the serving path
 
 * **`staff/customer`** (step 9) is half done: 0.893 balanced accuracy held out by camera,
@@ -892,11 +903,11 @@ project has ever had.
 
 | # | work | closes | done when |
 |---|---|---|---|
-| A1 | the serving path carries L1 → L3 → dispositions: `world_frame`, `zone_events`, `record_alert` called from `serving/`, not only from `scripts/step6_events.py` | §9.6 | `serve_pilot.py` on one live stream files the same rows step 6 files offline, byte-comparable on a recorded clip |
+| A1 | the serving path carries L1 → L3 → dispositions: `world_frame`, `zone_events`, `record_alert` called from `serving/`, not only from `scripts/step6_events.py` | §9.6 | `serve_pilot.py` on one live stream files the same rows step 6 files offline, byte-comparable on a recorded clip. **Wired 2026-09-10** (`serving/alerts.py`, `events/live.py`); byte-comparability blocked on the two trackers differing, see §9.6 |
 | A2 | tracker in serving = the measured band **plus the appearance gate** (`appearance_thr` per camera; a descriptor hook in `clip_tracks.track_clip`) | §9.4 | median track life on the eight sweep clips, single-threshold vs band vs band+gate, by `scripts/track_endings.py`; identity checked by eye on the ten longest |
 | A3 | **plate drift / tamper check** (§2.1h): nightly static plate diffed against the commissioned one; a moved camera stops filing metres and says so | §9.5's silent failure | a deliberately nudged camera is refused within one night |
-| A4 | **the grading surface**: a daily review sheet generated from the disposition store — frame crop (blurred), the event row, accept / reject / "staff" — writing disposition rows back. HTML from a script, no server | §4.5 | an operator grades a day in under fifteen minutes |
-| A5 | **per-store policy as a file**: loiter seconds, occupancy, open hours, after-hours rule; the demonstration values in step 6 leave the code | §3's placement rule | `step6_events.py` and serving read the same file |
+| A4 | **the grading surface**: a daily review sheet generated from the disposition store — frame crop (blurred), the event row, accept / reject / "staff" — writing disposition rows back. HTML from a script, no server | §4.5 | an operator grades a day in under fifteen minutes. **Built 2026-09-10** as `deploy/retail-security/review_server.py` (a localhost stdlib server rather than a static sheet, so a verdict is one click); the frame is drawn from the calibration alone, and the fifteen-minute gate is unmeasured until a store grades a day |
+| A5 | **per-store policy as a file**: loiter seconds, occupancy, open hours, after-hours rule; the demonstration values in step 6 leave the code | §3's placement rule | `step6_events.py` and serving read the same file. **Done 2026-09-10**: `configs/policy/demo.yaml` via `analytics/policy.py`, read by step 6, the re-read and the pilot; the after-hours rule is deliberately not a field yet because no producer reads it |
 | A6 | commission **every camera of the pilot store**, not eight of the fleet; the floor bench scores each; k1 / vfov attributed per camera as now | step 2 | one real frame per camera with the 1 m grid, seen by eye |
 
 Exit: alerts per camera per day at the store's thresholds is single-digit **after**
