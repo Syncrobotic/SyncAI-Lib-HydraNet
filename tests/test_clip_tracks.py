@@ -297,3 +297,42 @@ def test_without_describe_the_tracker_is_called_exactly_as_before():
     tr = _LookingTracker()
     _run([[[10, 10, 50, 100]]], k1=None, tracker=tr)
     assert tr.looks == [None]
+
+
+# -- the dense vouch hook (PLAN 7a.41) ---------------------------------------------------
+
+
+class _VouchTracker(_Tracker):
+    def __init__(self):
+        super().__init__()
+        self.vouched: list = []
+
+    def update(self, boxes, _frame_index, scores=None, confirmed=None):
+        super().update(boxes, _frame_index, scores=scores)
+        self.vouched.append(confirmed)
+
+
+class _ModelWithTerrain(_Model):
+    def predict(self, x, score_thr):
+        out = super().predict(x, score_thr)
+        out["terrain"] = [_Det(np.full((512, 640), 5, dtype=np.int64))]  # all `person`
+        return out
+
+
+def test_confirm_sees_the_canvas_map_and_canvas_boxes_and_its_flags_reach_the_tracker():
+    seen = []
+
+    def confirm(class_map, boxes):
+        seen.append((class_map.shape, np.asarray(boxes, float).copy()))
+        return np.ones(len(boxes), dtype=bool)
+
+    per_frame = [[[10, 10, 50, 100]], [], [[12, 10, 52, 100], [200, 10, 240, 100]]]
+    tr = _VouchTracker()
+    frames, preprocess, probe = _harness(per_frame)
+    track_clip("c.mp4", _ModelWithTerrain(per_frame), (512, 640), "cpu", tr, frames=frames,
+               preprocess=preprocess, probe=probe, fps=5.0, score_thr=0.15, k1=None,
+               confirm=confirm)  # fmt: skip
+    assert [None if v is None else len(v) for v in tr.vouched] == [1, 0, 2]
+    assert seen[0][0] == (512, 640)
+    assert np.allclose(seen[0][1], [[10, 10, 50, 100]]), "canvas boxes, not source pixels"
+    assert not np.allclose(tr.seen[0], [[10, 10, 50, 100]]), "the tracker got source pixels"

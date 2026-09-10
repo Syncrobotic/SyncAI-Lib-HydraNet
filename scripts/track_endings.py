@@ -96,6 +96,7 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -117,6 +118,7 @@ from syncai_hydranet.data.video import frames, probe
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 from syncai_hydranet.serving.camera import BIRTH_REF
+from syncai_hydranet.serving.decode import confirm_mask
 from syncai_hydranet.shipped import load_model
 from syncai_hydranet.utils.device import pick_device
 from syncai_hydranet.utils.visualize import preprocess
@@ -217,24 +219,34 @@ class RecordingByteTrack:
     """
 
     def __init__(
-        self, *, high_thr, low_thr, iou_thr, iou_thr_low, max_age, min_hits, vel_scale
+        self,
+        *,
+        high_thr,
+        low_thr,
+        iou_thr,
+        iou_thr_low,
+        max_age,
+        min_hits,
+        vel_scale,
+        dense_birth_thr=None,
     ):
         self.inner = OfflineForward(
             high_thr=high_thr, low_thr=low_thr, iou_thr=iou_thr, iou_thr_low=iou_thr_low,
             max_age=max_age, min_hits=min_hits, vel_scale=vel_scale,
+            dense_birth_thr=dense_birth_thr,
         )  # fmt: skip
         self.high_thr = high_thr
         self.seen: dict[int, np.ndarray] = {}
         self.taken: dict[int, list[tuple[int, np.ndarray]]] = {}
 
-    def update(self, boxes, frame_idx, keypoints=None, scores=None):  # noqa: ARG002
+    def update(self, boxes, frame_idx, keypoints=None, scores=None, confirmed=None):  # noqa: ARG002
         # `keypoints` is part of the interface `track_clip` may call with and this
         # tracker has nothing to do with them; naming it is what keeps the two
         # implementations substitutable.
         b = np.asarray(boxes, dtype=float).reshape(-1, 4)
         s = np.zeros(len(b)) if scores is None else np.asarray(scores, dtype=float).reshape(-1)
         self.seen[int(frame_idx)] = b[s >= self.high_thr].copy()
-        self.inner.update(b, s, int(frame_idx))
+        self.inner.update(b, s, int(frame_idx), confirmed=confirmed)
         self.taken[int(frame_idx)] = [
             (t.frag_id, np.asarray(t.boxes[-1], float).copy())
             for t in self.inner.tracks
@@ -460,6 +472,7 @@ def witness(
 
 def run_camera(camera: str, model, cfg, device, args) -> dict:
     cam_file = CameraFile.load(COMMISSIONED / f"{camera}.camera.json")
+    seg_person = list(cfg["data"]["terrain_classes"]).index("person")
     if args.two_stage:
         tracker: Recording | RecordingByteTrack = RecordingByteTrack(
             high_thr=args.score_thr,
@@ -470,12 +483,14 @@ def run_camera(camera: str, model, cfg, device, args) -> dict:
             min_hits=args.min_hits,
             # MOT17's velocity prior is for 25 fps; these clips sample at args.fps.
             vel_scale=25.0 / args.fps,
+            dense_birth_thr=args.dense_birth_thr if args.dense_birth else None,
         )
         # The low band has to reach the tracker, so the decode floor drops to it. Births
         # still happen at `--score-thr` inside the tracker, which is the whole point: a
         # looser decode alone would also invent tracks, and that arm was measured on
-        # 2026-08-26 and made the event layer worse.
-        decode_thr = args.low_thr
+        # 2026-08-26 and made the event layer worse. `--dense-birth` is the arm where a
+        # lower box may be born after all, on the dense head's word (PLAN 7a.41).
+        decode_thr = args.dense_birth_thr if args.dense_birth else args.low_thr
     else:
         # `--band` is the survival band alone -- birth at --score-thr, survival to
         # --low-thr, no Kalman, association untouched -- the arm runs/band_probe01
@@ -508,6 +523,7 @@ def run_camera(camera: str, model, cfg, device, args) -> dict:
         k1=cam_file.lens.k1 if cam_file.lens else None,
         max_frames=args.frames,
         describe=torso_histograms if args.appearance else None,
+        confirm=partial(confirm_mask, person_id=seg_person) if args.dense_birth else None,
     )
     src = (out.src_w, out.src_h)
     counts = {"exit": 0, "lost": 0, "gone": 0}
@@ -583,6 +599,7 @@ def run_camera(camera: str, model, cfg, device, args) -> dict:
             else "single"
         ),
         "appearance_thr": (cam_file.appearance_thr if args.appearance else None),
+        "dense_births": getattr(getattr(tracker, "inner", None), "dense_births", 0),
     }
 
 
@@ -628,6 +645,13 @@ def main() -> int:
         "RecordingByteTrack",
     )
     ap.add_argument("--low-thr", type=float, default=0.20, help="two-stage survival band")
+    ap.add_argument(
+        "--dense-birth",
+        action="store_true",
+        help="two-stage only: an unmatched box in [--dense-birth-thr, --score-thr) is "
+        "born when the dense head puts person pixels under it (PLAN 7a.41)",
+    )
+    ap.add_argument("--dense-birth-thr", type=float, default=0.15)
     ap.add_argument(
         "--band",
         action="store_true",

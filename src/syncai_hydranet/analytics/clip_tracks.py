@@ -141,6 +141,7 @@ def track_clip(
     max_frames: int = 0,
     person_label: int = PERSON,
     describe: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = None,
+    confirm: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = None,
 ) -> ClipTracks:
     """Run the detector over a clip and associate its person boxes into tracks.
 
@@ -162,6 +163,12 @@ def track_clip(
     ``appearance=`` on every frame, empty frames included, which is what lets a
     `Tracker(appearance_thr=...)` gate re-association; `None` passes nothing and is the
     state every number published before 2026-09-10 was measured under.
+
+    ``confirm`` is the dense head's vouch, ``(class_map, canvas_boxes) -> (N,) bool``,
+    called with the model's terrain argmax and the boxes **on the network canvas**, the
+    one space both are produced in (`serving.decode.confirm_mask`). Its flags reach the
+    tracker as ``confirmed=`` on every frame, for a tracker with a dense-confirmed birth
+    (`bytetrack.OfflineForward(dense_birth_thr=...)`, PLAN 7a.41).
     """
     src_w, src_h, _ = probe(clip)
     n = detections = 0
@@ -170,6 +177,7 @@ def track_clip(
         with torch.no_grad():
             res = model.predict(x.to(device), score_thr=score_thr)
         det = res["detection"][0]
+        vouched = None
         if len(det.get("labels", [])):
             lab = det["labels"].cpu().numpy()
             keep = lab == person_label
@@ -177,6 +185,9 @@ def track_clip(
             # The same mask on both, or a box gets another box's score from the first
             # non-person detection onwards.
             sc = det["scores"].cpu().numpy()[keep]
+            if confirm is not None:
+                # On the canvas, before the boxes leave it.
+                vouched = confirm(res["terrain"][0].cpu().numpy(), box)
             box = to_source_pixels(box, region, src_w, src_h)
             # Described in raw pixels, before the lens moves the box off the person.
             look = None if describe is None else describe(frame, box)
@@ -186,16 +197,19 @@ def track_clip(
             box = np.zeros((0, 4))
             sc = np.zeros(0)
             look = None if describe is None else describe(frame, box)
+            vouched = None if confirm is None else np.zeros(0, dtype=bool)
         detections += len(box)
         # Scores on every call including the empty ones: `Tracker.update` latches on the
         # first frame and refuses a later one that disagrees, because a list that skipped
         # a frame still zips against `frames` while describing different frames. Feeding
         # them here is what puts confidence on every track the four callers of this loop
         # produce -- see `events.TrackSupport` for the measurement that made it necessary.
-        if describe is None:
-            tracker.update(box, n, scores=sc)
-        else:
-            tracker.update(box, n, scores=sc, appearance=look)
+        extra: dict = {}
+        if describe is not None:
+            extra["appearance"] = look
+        if confirm is not None:
+            extra["confirmed"] = vouched
+        tracker.update(box, n, scores=sc, **extra)
         n += 1
         if max_frames and n >= max_frames:
             break

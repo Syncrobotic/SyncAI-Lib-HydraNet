@@ -97,6 +97,7 @@ import json
 import sys
 import time
 from dataclasses import replace
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -122,10 +123,14 @@ from syncai_hydranet.geometry.ground import (  # noqa: E402
 )
 from syncai_hydranet.serving import dispositions as dp  # noqa: E402
 from syncai_hydranet.serving.camera import BIRTH_REF, KEEP_REF  # noqa: E402
+from syncai_hydranet.serving.decode import confirm_mask  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
 DEFAULT_COMMISSION = ROOT / "runs/commission01"
 DEFAULT_POLICY = ROOT / "configs/policy/demo.yaml"
+# The dense-birth floor (PLAN 7a.41): where the density probe found the demoted
+# shoppers -- between 0.15 and 0.35 -- and where step 4's arm B decoded.
+DENSE_BIRTH_THR = 0.15
 
 
 def to_calibrated(tracks: list[Track], src_w: int, src_h: int, cam_file: CameraFile):
@@ -207,7 +212,7 @@ def observations(tracks, cam_file: CameraFile, camera: str, clip: str) -> dict:
     return out
 
 
-def run_clip(camera, cam_file, clip, model, size, device, args, policy) -> dict:
+def run_clip(camera, cam_file, clip, model, size, device, args, policy, person_id) -> dict:
     """One camera, one clip: tracks, events, alert rows, and the observation table."""
     # The band: boxes down to `keep_thr` reach the tracker and may continue a track; only
     # a box at `score_thr` may start one. `single_threshold` is the first fleet run's
@@ -217,12 +222,20 @@ def run_clip(camera, cam_file, clip, model, size, device, args, policy) -> dict:
     # camera without one runs ungated, which the clip report says.
     gate = cam_file.appearance_thr if args.appearance_gate else None
     tracker: Tracker | TwoStageForClip
+    confirm = None
     if args.tracker == "two_stage":
         # The tracker that ships, built the way serving builds it (bytetrack.SHIPPED_*),
         # so this log and the live one are produced by one tracker. Decode at the keep
-        # edge: the low band has to reach it.
-        tracker = TwoStageForClip(shipped_forward(args.fps, appearance_thr=gate))
+        # edge: the low band has to reach it -- or at the dense-birth floor, when the
+        # dense head is allowed to vouch a lower box into a birth (PLAN 7a.41).
+        dense_thr = DENSE_BIRTH_THR if args.dense_birth else None
+        tracker = TwoStageForClip(
+            shipped_forward(args.fps, appearance_thr=gate, dense_birth_thr=dense_thr)
+        )
         decode_thr = args.keep_thr
+        if args.dense_birth:
+            decode_thr = DENSE_BIRTH_THR
+            confirm = partial(confirm_mask, person_id=person_id)
     else:
         band = args.tracker == "band"
         tracker = Tracker(
@@ -239,6 +252,7 @@ def run_clip(camera, cam_file, clip, model, size, device, args, policy) -> dict:
         fps=args.fps, score_thr=decode_thr,
         max_frames=args.max_frames, k1=cam_file.lens.k1,
         describe=torso_histograms if args.appearance_gate else None,
+        confirm=confirm,
     )  # fmt: skip
     tracks = to_calibrated(out.tracks, out.src_w, out.src_h, cam_file)
     zones = policy.zones_for(cam_file)
@@ -266,6 +280,7 @@ def run_clip(camera, cam_file, clip, model, size, device, args, policy) -> dict:
         "clip": Path(clip).name,
         "appearance_thr": gate,
         "refusals": len(getattr(tracker, "refusals", [])),
+        "dense_births": getattr(tracker, "dense_births", 0),
         "frames_read": out.frames,
         "detections": out.detections,
         "tracks": len(tracks),
@@ -303,6 +318,12 @@ def main() -> int:
         action="store_true",
         help="refuse a re-association after a gap that does not look like the same "
         "shopper, at the camera's own appearance_thr; cameras without one run ungated",
+    )
+    ap.add_argument(
+        "--dense-birth",
+        action="store_true",
+        help="let an unmatched person box in [0.15, 0.35) be born when the dense head "
+        "puts person pixels under it (PLAN 7a.41 mechanism 1); two_stage only",
     )
     ap.add_argument("--iou", type=float, default=0.3)
     ap.add_argument("--max-age", type=int, default=5)
@@ -367,6 +388,7 @@ def main() -> int:
     checkpoint = shipped.for_detection()
     model, cfg, device = shipped.load_model(shipped.SHIPPED_CONFIG, checkpoint, validate=False)
     size = cfg["data"]["input_size"]
+    person_id = list(cfg["data"]["terrain_classes"]).index("person")
     # `model_identity` takes the CHECKPOINT first and the config second. Reversed, it
     # records the config path as the checkpoint and hashes the checkpoint as the config,
     # and the row reads as a perfectly ordinary one -- caught here only by reading the
@@ -380,7 +402,7 @@ def main() -> int:
     t0 = time.perf_counter()
     for n, (cam, cam_path, cam_file, clip) in enumerate(jobs, 1):
         print(f"[{n}/{len(jobs)}] {cam}  {Path(clip).name}", flush=True)
-        r = run_clip(cam, cam_file, clip, model, size, device, args, policy)
+        r = run_clip(cam, cam_file, clip, model, size, device, args, policy, person_id)
         records = [
             dp.record_alert(args.out / "dispositions", e, model=model_id,
                             calib=cam_path, clip=Path(clip).resolve().relative_to(ROOT))

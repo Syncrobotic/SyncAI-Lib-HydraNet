@@ -142,6 +142,10 @@ class Fragment:
     # The caller's appearance descriptor per observed frame, index-aligned with `frames`
     # and `boxes` -- the same field `tracker.Track.appearance` carries, for the same gate.
     appearance: list[np.ndarray] = field(default_factory=list)
+    # True when this track was born from a box UNDER the birth edge that the dense head
+    # vouched for (PLAN 7a.41, mechanism 1). Kept on the track so a log can say how many
+    # of its shoppers the box head alone would never have started.
+    born_confirmed: bool = False
 
 
 @dataclass(frozen=True)
@@ -183,6 +187,16 @@ class OfflineForward:
     set (`camera.json`'s `appearance_thr`). Consecutive-frame matches are never gated;
     a refused pair is recorded in `refusals` and the detection falls through -- to a
     birth if it was in the high band, to nothing if it was in the low one.
+
+    ``dense_birth_thr`` is PLAN 7a.41's first mechanism. A birth needs a high-band box;
+    at a counter huddle the demoted shopper never gets one (0.20-0.30 for the whole
+    visit, endings09) and so is never born. With this set, an unmatched box scoring in
+    ``[dense_birth_thr, high_thr)`` is born too **when the caller's ``confirmed`` says the
+    dense head puts person pixels under it** -- the vouching `serving/decode.
+    confirm_with_dense` measured on 2026-08-26 and nothing consumed. The caller decodes
+    down to ``dense_birth_thr`` so those boxes reach here; unconfirmed ones below
+    ``low_thr`` are ignored, between ``low_thr`` and ``high_thr`` they may still continue
+    a track as before.
     """
 
     def __init__(
@@ -195,6 +209,7 @@ class OfflineForward:
         min_hits,
         vel_scale,
         appearance_thr: float | None = None,
+        dense_birth_thr: float | None = None,
     ):
         self.high_thr = high_thr
         self.low_thr = low_thr
@@ -206,6 +221,12 @@ class OfflineForward:
         if appearance_thr is not None and appearance_thr < 0:
             raise ValueError(f"appearance_thr must be a distance >= 0, got {appearance_thr!r}")
         self.appearance_thr = appearance_thr
+        if dense_birth_thr is not None and not 0.0 < dense_birth_thr <= high_thr:
+            raise ValueError(
+                f"dense_birth_thr must be in (0, high_thr={high_thr}], got {dense_birth_thr!r}"
+            )
+        self.dense_birth_thr = dense_birth_thr
+        self.dense_births = 0
         self.tracks: list[Fragment] = []
         self.retired: list[Fragment] = []
         self.refusals: list[Refusal] = []
@@ -258,9 +279,17 @@ class OfflineForward:
         scores: np.ndarray,
         frame_idx: int,
         appearance: np.ndarray | None = None,
+        confirmed: np.ndarray | None = None,
     ) -> None:
         boxes = np.asarray(boxes, float).reshape(-1, 4)
         scores = np.asarray(scores, float).reshape(-1)
+        if self.dense_birth_thr is not None and confirmed is None:
+            raise ValueError(
+                "dense_birth_thr is set and this frame carried no `confirmed` mask; a "
+                "confirmed birth needs the dense head's word on every box"
+            )
+        if confirmed is not None and len(np.asarray(confirmed).reshape(-1)) != len(boxes):
+            raise ValueError("`confirmed` must carry one flag per box")
         if self.appearance_thr is not None and appearance is None:
             raise ValueError(
                 "appearance_thr is set and this frame carried no appearance vectors; the "
@@ -318,18 +347,29 @@ class OfflineForward:
                 None if lo_looks is None else lo_looks[di],
             )
 
-        # Births: unmatched high-band detections only.
-        for di in sorted(un_hi):
-            box = boxes[hi_idx[di]].copy()
-            t = Fragment(self._next, Kalman(box, self.vel_scale))
+        # Births: unmatched high-band detections, plus -- under `dense_birth_thr` -- the
+        # unmatched boxes below the edge that the dense head vouches for.
+        births = [(int(hi_idx[di]), False) for di in sorted(un_hi)]
+        if self.dense_birth_thr is not None:
+            conf = np.asarray(confirmed, bool).reshape(-1)
+            taken_lo = {int(lo_idx[di]) for di in pairs2.values()}
+            for i in np.where((scores >= self.dense_birth_thr) & (scores < self.high_thr))[0]:
+                i = int(i)
+                if conf[i] and i not in taken_lo:
+                    births.append((i, True))
+        for i, vouched in births:
+            box = boxes[i].copy()
+            t = Fragment(self._next, Kalman(box, self.vel_scale), born_confirmed=vouched)
             t.frames.append(frame_idx)
             t.boxes.append(box)
-            t.scores.append(float(scores[hi_idx[di]]))
-            if hi_looks is not None:
-                t.appearance.append(np.asarray(hi_looks[di], float).copy())
+            t.scores.append(float(scores[i]))
+            if looks is not None:
+                t.appearance.append(np.asarray(looks[i], float).copy())
             t.confirmed = self.min_hits <= 1
             self.tracks.append(t)
             self._next += 1
+            if vouched:
+                self.dense_births += 1
 
         live, gone = [], []
         for t in self.tracks:
@@ -391,7 +431,9 @@ def as_track(fragment: Fragment) -> Track:
     )
 
 
-def shipped_forward(fps: float, appearance_thr: float | None = None) -> OfflineForward:
+def shipped_forward(
+    fps: float, appearance_thr: float | None = None, dense_birth_thr: float | None = None
+) -> OfflineForward:
     """The tracker that ships, at the rate the caller consumes frames.
 
     The score edges are `serving/camera.py`'s; the rest are `SHIPPED_*` above. ``fps`` is
@@ -412,6 +454,7 @@ def shipped_forward(fps: float, appearance_thr: float | None = None) -> OfflineF
         SHIPPED_MIN_HITS,
         MOT17_FPS / fps,
         appearance_thr=appearance_thr,
+        dense_birth_thr=dense_birth_thr,
     )
 
 
@@ -437,11 +480,19 @@ class TwoStageForClip:
     def refusals(self) -> list[Refusal]:
         return self.inner.refusals
 
-    def update(self, boxes, frame_idx, scores=None, appearance=None, **_ignored) -> None:
+    @property
+    def dense_births(self) -> int:
+        return self.inner.dense_births
+
+    def update(
+        self, boxes, frame_idx, scores=None, appearance=None, confirmed=None, **_ignored
+    ) -> None:
         b = np.asarray(boxes, float).reshape(-1, 4)
         if scores is None:
             raise ValueError("the two-stage tracker associates on score; pass scores=")
-        self.inner.update(b, np.asarray(scores, float).reshape(-1), int(frame_idx), appearance)
+        self.inner.update(
+            b, np.asarray(scores, float).reshape(-1), int(frame_idx), appearance, confirmed
+        )
 
     def finished(self) -> list[Track]:
         return [as_track(f) for f in self.inner.finished()]

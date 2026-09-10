@@ -402,3 +402,34 @@ def test_a_threshold_lands_on_a_tracker_that_has_a_gate_and_is_refused_on_one_th
     assert s.tracker.appearance_thr == 0.39 and s.appearance_thr == 0.39
     with pytest.raises(ValueError, match="no appearance gate"):
         make_state(tracker_factory=StubTracker, appearance_thr=0.39)
+
+
+def test_the_dense_vouch_is_computed_on_the_frame_map_and_filtered_like_the_boxes():
+    import numpy as np
+
+    from syncai_hydranet.analytics.bytetrack import OfflineForward
+
+    class Vouched(OfflineForward):
+        def update(self, boxes, scores, frame_idx, appearance=None, confirmed=None):
+            self.last_confirmed = confirmed
+            super().update(boxes, scores, frame_idx, appearance, confirmed)
+
+    s = make_state(
+        tracker_factory=lambda: Vouched(0.35, 0.2, 0.3, 0.4, 5, 1, 5.0, dense_birth_thr=0.15),
+        dense_person_id=5,
+    )
+    terrain = np.zeros(HW, dtype=np.uint8)
+    terrain[0:20, 0:10] = 5  # person pixels under the first box only
+    boxes = np.array([[0, 0, 10, 20], [20, 0, 30, 20], [40, 0, 50, 20]], float)
+    scores = np.array([0.25, 0.05, 0.25])  # the middle box is under every keep threshold
+    labels = np.zeros(3, dtype=np.int64)
+    s.update(0, terrain, boxes, scores, labels)
+    assert list(s.tracker.last_confirmed) == [True, False]
+    assert s.tracker.dense_births == 1 and s.tracker.tracks[0].born_confirmed
+
+
+def test_a_person_id_on_a_tracker_without_the_birth_is_refused():
+    import pytest
+
+    with pytest.raises(ValueError, match="dense-confirmed"):
+        make_state(tracker_factory=StubTracker, dense_person_id=5)

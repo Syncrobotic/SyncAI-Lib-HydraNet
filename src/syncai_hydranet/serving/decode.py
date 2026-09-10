@@ -149,6 +149,25 @@ class FcosDecoder:
 MIN_PERSON_FRACTION = 0.40
 
 
+def confirm_mask(
+    boxes: np.ndarray,
+    class_map: np.ndarray,
+    person_id: int,
+    min_fraction: float = MIN_PERSON_FRACTION,
+) -> np.ndarray:
+    """One flag per box: does the dense head put person pixels under it? (PLAN 7a.41)
+
+    `confirm_with_dense` above filters a decoded frame; the tracker's dense-confirmed
+    birth needs the same judgement as a mask it can index by box, over boxes and the map
+    **in the same pixel space** -- the network canvas, where both are produced.
+    """
+    b = np.asarray(boxes, float).reshape(-1, 4)
+    return np.array(
+        [person_pixel_fraction(bx, class_map, person_id) >= min_fraction for bx in b],
+        dtype=bool,
+    )
+
+
 def person_pixel_fraction(box, class_map: np.ndarray, person_id: int) -> float:
     """Fraction of a box's pixels the dense head calls `person`. 0.0 for an empty box.
 

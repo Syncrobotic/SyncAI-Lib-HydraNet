@@ -206,6 +206,7 @@ class CameraState:
         camera_file: CameraFile | None = None,
         source_size_px: tuple[int, int] | None = None,
         appearance_thr: float | None = None,
+        dense_person_id: int | None = None,
     ):
         self.camera = camera
         self.num_terrain_classes = int(num_terrain_classes)
@@ -235,6 +236,18 @@ class CameraState:
                 )
             self.tracker.appearance_thr = float(appearance_thr)
         self.appearance_thr = appearance_thr
+        # The terrain class index of `person`, for the dense-confirmed birth (PLAN
+        # 7a.41): with it set, every update hands the tracker one flag per box saying
+        # whether the frame's dense map puts person pixels under it. Refused when the
+        # tracker has no such birth, for the same reason as `appearance_thr` above.
+        if dense_person_id is not None and (
+            self.tracker is None or getattr(self.tracker, "dense_birth_thr", None) is None
+        ):
+            raise ValueError(
+                f"{camera}: dense_person_id given but the tracker has no dense-confirmed "
+                "birth (dense_birth_thr); a vouch nothing reads would look like coverage"
+            )
+        self.dense_person_id = dense_person_id
         self.calib = self._load_calib(calib_path)
         # `calib` above is the *onboard* artefact (`hydranet-onboard-calib/v1`, the
         # stage-0 estimate). `camera_file` is the commissioned `camera.json`, which
@@ -422,19 +435,31 @@ class CameraState:
         """
         stable = self.ema_labels(terrain_labels)
         # ``appearance`` is one descriptor row per incoming box, and it has to be
-        # filtered by the same mask the boxes are, or row i describes box j.
+        # filtered by the same mask the boxes are, or row i describes box j. The dense
+        # vouch is computed here on THIS frame's map and the canvas boxes, then filtered
+        # the same way.
+        keep = self.keep_mask(scores, labels) if len(boxes) else np.zeros(0, dtype=bool)
         looks = None
         if appearance is not None:
             looks = np.asarray(appearance, float)
             if len(boxes):
-                looks = looks[self.keep_mask(scores, labels)]
+                looks = looks[keep]
+        vouched = None
+        if self.dense_person_id is not None:
+            from .decode import confirm_mask  # serving-side helper; no torch at import
+
+            vouched = confirm_mask(np.asarray(boxes), terrain_labels, self.dense_person_id)
+            if len(boxes):
+                vouched = vouched[keep]
         boxes, scaled, labels = self.filter_and_scale(boxes, scores, labels)
         tracked = None
         if self.tracker is not None:
-            if looks is None:
-                self.tracker.update(boxes, scaled, self.frames_seen)
-            else:
-                self.tracker.update(boxes, scaled, self.frames_seen, appearance=looks)
+            extra: dict[str, Any] = {}
+            if looks is not None:
+                extra["appearance"] = looks
+            if vouched is not None:
+                extra["confirmed"] = vouched
+            self.tracker.update(boxes, scaled, self.frames_seen, **extra)
             tracked = confirmed_track_boxes(self.tracker, labels, boxes, self.canvas_hw)
         if time_s is not None:
             self._times_s[self.frames_seen] = float(time_s)
