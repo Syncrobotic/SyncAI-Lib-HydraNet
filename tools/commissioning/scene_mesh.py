@@ -17,9 +17,9 @@ from PIL import Image
 
 from syncai_bev3d.meshes import _merge, to_obj
 from syncai_bev3d.scene_mesh import (
-    PALETTE,
     build_scene,
     build_scene_regular,
+    colour_of,
     implausible,
     render,
 )
@@ -37,7 +37,7 @@ def export_glb(camera, items):
         if len(faces) == 0:
             continue
         tm = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
-        rgba = [*PALETTE[key], alpha]
+        rgba = [*colour_of(key), alpha]
         tm.visual = trimesh.visual.TextureVisuals(
             material=trimesh.visual.material.PBRMaterial(
                 baseColorFactor=[c / 255 for c in rgba],

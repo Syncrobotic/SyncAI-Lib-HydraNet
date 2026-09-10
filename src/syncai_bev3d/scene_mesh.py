@@ -27,6 +27,7 @@ figures moved to this panel, which makes the other look superseded; it is not, a
 """
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -50,7 +51,6 @@ from syncai_bev3d.meshes import (
     place,
     shelf_levels,
     shelving,
-    table,
     wall,
 )
 from syncai_bev3d.shading import View, contact_shadows, draw_scene, occlusion_alpha
@@ -90,6 +90,30 @@ PALETTE = {
     "product_ipad": (255, 150, 0),
     "product_iphone": (255, 70, 70),
 }
+
+
+class Painted(str):
+    """A palette key that also carries the colour measured for this one item.
+
+    Items are `(mesh, key, alpha, shadow)` and a dozen consumers read `key` as the class
+    name -- the overlay's `--classes` filter, the support test, the GLB export. So the
+    measured colour rides on the key rather than widening the tuple: a `Painted` *is* the
+    class-name string, and `colour_of` prefers its `rgb` to the palette's.
+    """
+
+    rgb: tuple[int, int, int]
+
+    def __new__(cls, key: str, rgb):
+        self = super().__new__(cls, key)
+        self.rgb = (int(rgb[0]), int(rgb[1]), int(rgb[2]))
+        return self
+
+
+def colour_of(key) -> tuple[int, int, int]:
+    """The colour an item is painted: measured if the key carries one, else the palette."""
+    return getattr(key, "rgb", None) or PALETTE[key]
+
+
 CLASS_NAMES = {2: "wall", 3: "column", 4: "display_table", 5: "display_shelf"}
 WALL_CID = 2  # named because the wall runs read the class mask directly, not by name
 # **Measured and rejected 2026-08-29: cutting a fixture mask at its class's plausible
@@ -260,13 +284,22 @@ def contact_cells(
     return pts[np.isfinite(pts).all(axis=1)]
 
 
-def cell_grids(camera, root: Path | None = None):
-    """Per-class occupancy in floor metres, and per-class measured heights (p85).
+@dataclass
+class Evidence:
+    """Everything `cell_grids` reads from disk for one camera, loaded once.
 
-    `root` is the checkout holding `runs/`; the default is this package's own. It is an
-    argument rather than a module global because it is the only thing between this
-    function and a test -- everything else it needs is a numpy array on disk.
+    `plate` is the raw static plate at the cache's resolution, or None when the camera
+    file names none -- the colour of a fixture is read off it, nothing else is.
     """
+
+    cf: CameraFile
+    z: dict
+    static: np.ndarray  # class id per pixel, 255 where none
+    walk: np.ndarray  # walkable floor per pixel
+    plate: np.ndarray | None
+
+
+def load_evidence(camera, root: Path | None = None) -> Evidence:
     root = Path(root) if root is not None else ROOT
     cf = CameraFile.load(root / f"runs/commission01/{camera}.camera.json")
     z = np.load(root / f"runs/site30k_qa/geometry_cache/{camera}.npz")
@@ -274,9 +307,8 @@ def cell_grids(camera, root: Path | None = None):
     # The mask PNGs are the artefact of record -- depth completion and the human zone
     # stamps land there, not in the intermediate cache. Rebuild the class map from them.
     static = np.full((fh, fw), 255, np.uint8)
-    cf_early = CameraFile.load(root / f"runs/commission01/{camera}.camera.json")
     for cid, cname in ((2, "wall"), (3, "column"), (4, "display_table"), (5, "display_shelf")):
-        f = cf_early.mask_files.get(cname)
+        f = cf.mask_files.get(cname)
         if f and (root / "runs/commission01" / f).exists():
             m = (
                 np.asarray(
@@ -295,13 +327,36 @@ def cell_grids(camera, root: Path | None = None):
         )
         > 127
     )
+    plate = None
+    if cf.plate_file and (root / cf.plate_file).exists():
+        with Image.open(root / cf.plate_file) as im:
+            plate = np.asarray(im.convert("RGB").resize((fw, fh), Image.Resampling.BILINEAR))
+    return Evidence(cf, z, static, walk, plate)
+
+
+def cell_grids(camera, root: Path | None = None, *, gated: bool = True, evidence=None):
+    """Per-class occupancy in floor metres, and per-class measured heights (p85).
+
+    `root` is the checkout holding `runs/`; the default is this package's own. It is an
+    argument rather than a module global because it is the only thing between this
+    function and a test -- everything else it needs is a numpy array on disk.
+
+    `gated=False` skips the contact-line gate (see below) and returns every lowered
+    pixel: the evidence the store axis is fitted to, not a footprint anything is built
+    from. `evidence` is a loaded `Evidence`, so a caller needing both passes need not
+    read the masks twice.
+    """
+    root = Path(root) if root is not None else ROOT
+    ev = evidence if evidence is not None else load_evidence(camera, root)
+    cf, z, static, walk = ev.cf, ev.z, ev.static, ev.walk
+    fh, fw = z["gx"].shape
     xs = {1: z["gx"][walk]}
     zs = {1: z["gz"][walk]}
     heights = {}
     hts = {}
     for cid in CLASS_NAMES:
         sel = (static == cid) & z["geom_ok"]
-        if CLASS_NAMES[cid] in CONTACT_GATED:
+        if gated and CLASS_NAMES[cid] in CONTACT_GATED:
             # A tall class's footprint is built from its mask pixels *lowered* to the
             # floor by their measured height (`lx/lz`). For a pixel high on a wall that
             # lowering moves the point metres along the camera ray, and it is right only
@@ -510,8 +565,9 @@ def render(camera, items, heights, out_path, *, eye=None, target=None, shapes=()
     # Fade whatever stands between the eye and the room. PLAN 7.22 left this open, and
     # the alternative -- picking a different corner -- was tried and reverted because it
     # fixes one camera and breaks another. `occlusion_alpha` leaves the composition alone.
-    painted = [(m, PALETTE[k], a) for m, k, a, _ in items]
-    faded = occlusion_alpha(view, painted, keep=(PALETTE["floor"],))
+    painted = [(m, colour_of(k), a) for m, k, a, _ in items]
+    keep = tuple(colour_of(k) for _m, k, _a, _s in items if k == "floor") or (PALETTE["floor"],)
+    faded = occlusion_alpha(view, painted, keep=keep)
     draw_scene(
         draw, view, [(m, c, a) for (m, c, _), a in zip(painted, faded, strict=True)], bg=BG
     )
@@ -712,18 +768,101 @@ def implausible_caption(shapes) -> str:
 # half-finished function.
 
 
+# Fewer plate pixels than this under a fixture and its colour is not measured: a sliver
+# of mask at the frame edge reads the colour of whatever it clipped.
+COLOUR_MIN_PX = 200
+
+
+class Painter:
+    """The colour of each built item, read off the plate under the pixels it was built from.
+
+    Until 2026-09-10 every fixture was drawn in its class's palette colour -- grey walls,
+    khaki tables -- and the user's verdict on the result was that the model does not
+    look like the real objects. The form is still drawn to convention (a shelf unit is a
+    carcass with slabs whatever the real one is); what this measures is the one thing the
+    plate says outright, the colour. Median RGB over the class's pixels whose lowered
+    floor position falls inside the item's box (or beside the wall's run), in the store
+    frame the boxes were fitted in.
+    """
+
+    def __init__(self, ev: Evidence, yaw: float):
+        self.ev = ev
+        cy, sy = np.cos(yaw), np.sin(yaw)
+        self.uv: dict[int, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+        if ev.plate is None:
+            return
+        for cid in CLASS_NAMES:
+            sel = (ev.static == cid) & ev.z["geom_ok"]
+            lx, lz = ev.z["lx"][sel], ev.z["lz"][sel]
+            ok = np.isfinite(lx) & np.isfinite(lz)
+            rgb = ev.plate[sel][ok]
+            lx, lz = lx[ok], lz[ok]
+            self.uv[cid] = (lx * cy + lz * sy, -lx * sy + lz * cy, rgb)
+
+    @staticmethod
+    def _key(name: str, rgb: np.ndarray):
+        if len(rgb) < COLOUR_MIN_PX:
+            return name
+        # The median of the lit half, not of every pixel. A counter's pixels are half
+        # its white top and half the shadowed front and underside, and the plain median
+        # lands between: Tao-Hsin-cam15's island read (168, 173, 168) -- a mid grey the
+        # shop does not contain -- against (218, 226, 231) from its brighter half, which
+        # is the white it is (measured 2026-09-10 on eleven fixtures; the lit half was
+        # the recognisable colour on every one).
+        lum = rgb.astype(float).mean(axis=1)
+        lit = rgb[lum >= np.median(lum)]
+        return Painted(name, np.median(lit, axis=0))
+
+    def floor(self):
+        if self.ev.plate is None:
+            return "floor"
+        return self._key("floor", self.ev.plate[self.ev.walk])
+
+    def box(self, name: str, u0: float, u1: float, v0: float, v1: float, *, margin_m=0.1):
+        cid = next(c for c, n in CLASS_NAMES.items() if n == name)
+        if cid not in self.uv:
+            return name
+        u, v, rgb = self.uv[cid]
+        inside = (
+            (u >= u0 - margin_m)
+            & (u <= u1 + margin_m)
+            & (v >= v0 - margin_m)
+            & (v <= v1 + margin_m)
+        )
+        return self._key(name, rgb[inside])
+
+    def run(self, axis: str, perp: float, lo: float, hi: float, *, band_m=0.3):
+        if WALL_CID not in self.uv:
+            return "wall"
+        u, v, rgb = self.uv[WALL_CID]
+        along, across = (u, v) if axis == "u" else (v, u)
+        near = (
+            (np.abs(across - perp) <= band_m) & (along >= lo - band_m) & (along <= hi + band_m)
+        )
+        return self._key("wall", rgb[near])
+
+
 def build_scene_regular(camera, root: Path | None = None):
     """B-path: every fixture becomes a store-axis-aligned parametric mesh.
 
     The depth-derived footprints are ragged; the furniture is not. Each component is
     fitted with a robust axis-aligned box in the STORE frame (p3-p97 extents, snapped to
     5 cm) and rendered as the parametric mesh its class names: cabinets with shelf
-    slabs, tables with legs, thin walls, columns.
+    slabs, counters, thin walls, columns.
     """
-    cf, grids, heights, grid_h = cell_grids(camera, root)
-    yaw = store_yaw(grids)
+    ev = load_evidence(camera, root)
+    cf, grids, heights, grid_h = cell_grids(camera, root, evidence=ev)
+    # The store axis is fitted to the UNGATED evidence. The contact-line gate halves the
+    # wall point set, and the axis is a vote over the elongated blobs in that set: with
+    # the gate applied before the vote, Tao-Hsin-cam15's axis moved from 84 to 22 deg,
+    # Taichung-cam11's from 82 to 0.5 and Kaohsiung-cam04's from 45 to 58 (2026-09-10),
+    # and since every box is fitted in the store frame, every fixture turned with it.
+    # The gate decides where a fixture stands; it has nothing to say about which way
+    # the shop faces.
+    yaw = store_yaw(cell_grids(camera, root, gated=False, evidence=ev)[1])
     cy, sy = np.cos(yaw), np.sin(yaw)
-    items = [(floor_mesh(grids[1]), "floor", 150, False)]
+    paint = Painter(ev, yaw)
+    items = [(floor_mesh(grids[1]), paint.floor(), 150, False)]
     # The room's own centre, for deciding which way a fixture faces. Taken from the floor
     # rather than from the furniture: the furniture is what is being oriented.
     _fv = items[0][0][0]
@@ -803,7 +942,8 @@ def build_scene_regular(camera, root: Path | None = None):
             [b[0] * cy - b[1] * sy, b[0] * sy + b[1] * cy],
         ]
         shapes.append(("wall", hi - lo, 0.15, DRAWN_H["wall"]))
-        items.append((wall(pts, DRAWN_H["wall"], thickness_m=0.15), "wall", 105, False))
+        key = paint.run(axis, perp, lo, hi)
+        items.append((wall(pts, DRAWN_H["wall"], thickness_m=0.15), key, 105, False))
 
     # ---- 3. REGULARISE. The step every scan-to-BIM and structured-modelling pipeline
     # has between fitting and meshing, and the one this file did not: two fixtures cannot
@@ -824,9 +964,10 @@ def build_scene_regular(camera, root: Path | None = None):
         um, vm = (u0 + u1) / 2, (v0 + v1) / 2
         px, pz = um * cy - vm * sy, um * sy + vm * cy
         at = Placement(px, pz, heading_rad=-yaw)
+        key = paint.box(name, u0, u1, v0, v1)
         if name == "column":
             shapes.append((name, w, d, h))
-            items.append((place(column(w, d, h), at), name, 255, True))
+            items.append((place(column(w, d, h), at), key, 255, True))
         elif name == "display_shelf":
             # **The cap is on the depth, and the depth is the SHORTER side -- which is
             # not always `d`.** `min(d, SHELF_MAX_DEPTH_M)` assumed a merchandise wall
@@ -847,13 +988,18 @@ def build_scene_regular(camera, root: Path | None = None):
                 head += np.pi
             shapes.append((name, run_m, depth_m, h))
             mesh = shelving(run_m, depth_m, h)
-            items.append((place(mesh, Placement(px, pz, heading_rad=head)), name, 255, True))
+            items.append((place(mesh, Placement(px, pz, heading_rad=head)), key, 255, True))
         else:  # display_table
-            # a footprint too long for four legs is a counter, not a solid prism: a slab
-            # on a recessed body, so the surface merchandise sits on exists
+            # Every display table is a counter: a slab on a recessed solid body. Until
+            # 2026-09-10 a footprint under 2.2 m was drawn as a four-leg table, and on
+            # Taichung-cam11 that put wooden legged tables where the plate shows white
+            # solid cabinets. Whether the floor shows through a table's own mask was
+            # measured on the eleven fitted tables of four cameras: 0.000-0.047 on every
+            # real one (the two above 0.1 are pairs welded by a mask bridge, whose hull
+            # spans the aisle between them). No camera in the fleet has a legged table
+            # to measure the other case on, so nothing draws legs until one does.
             shapes.append((name, w, d, h))
-            mesh = table(w, d, h) if max(w, d) < 2.2 else counter(w, d, h)
-            items.append((place(mesh, at), name, 255, True))
+            items.append((place(counter(w, d, h), at), key, 255, True))
 
     # Every fixture that can hold merchandise, as a world AABB plus its top.
     # Each support carries the heights merchandise may actually rest at: a table's top,
