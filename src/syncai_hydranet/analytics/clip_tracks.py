@@ -40,6 +40,7 @@ makes about the ROS view it absorbed.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from typing import NamedTuple, Protocol
 
 import numpy as np
@@ -139,6 +140,7 @@ def track_clip(
     k1: float | None,
     max_frames: int = 0,
     person_label: int = PERSON,
+    describe: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = None,
 ) -> ClipTracks:
     """Run the detector over a clip and associate its person boxes into tracks.
 
@@ -152,6 +154,14 @@ def track_clip(
     `frames`, `preprocess` and `probe` are passed in rather than imported: the video reader
     and the letterbox live on the CLI side of the package, and importing them here would
     make `analytics` depend on `cli`, which is the one edge the layering forbids.
+
+    ``describe`` is an appearance descriptor, ``(frame, boxes) -> (N, D)``, called on the
+    **raw decoded frame with the boxes in its own pixels** -- before the lens correction,
+    because `appearance.torso_histogram` records what an undistorted box against a raw
+    frame crops (the shelf behind the shopper). Its rows reach `Tracker.update` as
+    ``appearance=`` on every frame, empty frames included, which is what lets a
+    `Tracker(appearance_thr=...)` gate re-association; `None` passes nothing and is the
+    state every number published before 2026-09-10 was measured under.
     """
     src_w, src_h, _ = probe(clip)
     n = detections = 0
@@ -168,18 +178,24 @@ def track_clip(
             # non-person detection onwards.
             sc = det["scores"].cpu().numpy()[keep]
             box = to_source_pixels(box, region, src_w, src_h)
+            # Described in raw pixels, before the lens moves the box off the person.
+            look = None if describe is None else describe(frame, box)
             if k1 is not None:
                 box = undistort_boxes(box, k1, src_w, src_h)
         else:
             box = np.zeros((0, 4))
             sc = np.zeros(0)
+            look = None if describe is None else describe(frame, box)
         detections += len(box)
         # Scores on every call including the empty ones: `Tracker.update` latches on the
         # first frame and refuses a later one that disagrees, because a list that skipped
         # a frame still zips against `frames` while describing different frames. Feeding
         # them here is what puts confidence on every track the four callers of this loop
         # produce -- see `events.TrackSupport` for the measurement that made it necessary.
-        tracker.update(box, n, scores=sc)
+        if describe is None:
+            tracker.update(box, n, scores=sc)
+        else:
+            tracker.update(box, n, scores=sc, appearance=look)
         n += 1
         if max_frames and n >= max_frames:
             break

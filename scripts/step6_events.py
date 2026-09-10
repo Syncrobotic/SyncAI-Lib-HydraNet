@@ -97,6 +97,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from syncai_hydranet import shipped  # noqa: E402
 from syncai_hydranet.analytics import events as ev  # noqa: E402
+from syncai_hydranet.analytics.appearance import torso_histograms  # noqa: E402
 from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
 from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
 from syncai_hydranet.analytics.policy import load_policy  # noqa: E402
@@ -202,17 +203,23 @@ def run_clip(camera, cam_file, clip, model, size, device, args, policy) -> dict:
     # a box at `score_thr` may start one. `single_threshold` is the first fleet run's
     # tracker, kept for reading the two logs against each other -- see the header.
     band = not args.single_threshold
+    # The appearance gate is per camera and off by default: `appearance_thr` is a
+    # measured distance in camera.json (licensed on five cameras as of 2026-09-10) and a
+    # camera without one runs ungated, which the clip report says.
+    gate = cam_file.appearance_thr if args.appearance_gate else None
     tracker = Tracker(
         iou_threshold=args.iou,
         max_age=args.max_age,
         min_hits=args.min_hits,
         birth_thr=args.score_thr if band else None,
+        appearance_thr=gate,
     )
     out = track_clip(
         clip, model, size, device, tracker,
         frames=frames, preprocess=preprocess, probe=probe,
         fps=args.fps, score_thr=args.keep_thr if band else args.score_thr,
         max_frames=args.max_frames, k1=cam_file.lens.k1,
+        describe=torso_histograms if args.appearance_gate else None,
     )  # fmt: skip
     tracks = to_calibrated(out.tracks, out.src_w, out.src_h, cam_file)
     zones = policy.zones_for(cam_file)
@@ -238,6 +245,7 @@ def run_clip(camera, cam_file, clip, model, size, device, args, policy) -> dict:
     return {
         "camera": camera,
         "clip": Path(clip).name,
+        "appearance_thr": gate,
         "frames_read": out.frames,
         "detections": out.detections,
         "tracks": len(tracks),
@@ -266,6 +274,12 @@ def main() -> int:
         action="store_true",
         help="decode and birth both at --score-thr, no survival band: the tracker "
         "`runs/step6_fleet01` was written with, for comparison and not for use",
+    )
+    ap.add_argument(
+        "--appearance-gate",
+        action="store_true",
+        help="refuse a re-association after a gap that does not look like the same "
+        "shopper, at the camera's own appearance_thr; cameras without one run ungated",
     )
     ap.add_argument("--iou", type=float, default=0.3)
     ap.add_argument("--max-age", type=int, default=5)

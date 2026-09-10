@@ -21,14 +21,12 @@ Usage:
 """
 
 import argparse
-import dataclasses
-import json
 from pathlib import Path
 
 import numpy as np
 
 from syncai_bev3d import floor_axis, scene_mesh
-from syncai_hydranet.geometry.camera_json import Zone
+from syncai_bev3d.rulers import write_scaled_root
 from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -63,51 +61,6 @@ def read(camera):
     return ev, axis, source, period, strength
 
 
-def write_root(camera, ev, factor, out_root: Path, source_note: str):
-    """A checkout-shaped review root holding the rescaled camera and links to its masks."""
-    cf = ev.cf
-    commission = out_root / "runs/commission01"
-    commission.mkdir(parents=True, exist_ok=True)
-    (out_root / "runs/site30k_qa/geometry_cache").mkdir(parents=True, exist_ok=True)
-    scaled = dataclasses.replace(
-        cf,
-        plane=dataclasses.replace(cf.plane, height=cf.plane.height * factor),
-        zones=tuple(
-            Zone(z.name, z.kind, tuple((x * factor, y * factor) for x, y in z.points_m))
-            for z in cf.zones
-        ),
-    )
-    scaled.save(commission / f"{camera}.camera.json")
-    for rel in set(cf.mask_files.values()):
-        src = ROOT / "runs/commission01" / rel
-        dst = commission / rel
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        if not dst.exists():
-            dst.symlink_to(src)
-    extras = ROOT / "runs/commission01" / camera / "masks"
-    if extras.exists() and not (commission / camera / "masks").exists():
-        (commission / camera).mkdir(parents=True, exist_ok=True)
-        (commission / camera / "masks").symlink_to(extras)
-    if cf.plate_file:
-        dst = out_root / cf.plate_file
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        if not dst.exists():
-            dst.symlink_to(ROOT / cf.plate_file)
-    (out_root / f"{camera}.tile_ruler.json").write_text(
-        json.dumps(
-            {
-                "camera": camera,
-                "factor": factor,
-                "height_m_before": cf.plane.height,
-                "height_m_after": scaled.plane.height,
-                "source": source_note,
-            },
-            indent=1,
-        )
-    )
-    return out_root
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("cameras", nargs="+")
@@ -135,10 +88,11 @@ def main() -> int:
             cache = ROOT / f"runs/site30k_qa/geometry_cache/{camera}.npz"
             with np.load(cache) as z:
                 old_scale = float(z["depth_scale"]) if "depth_scale" in z.files else None
-            root = write_root(
+            root = write_scaled_root(
                 camera,
-                ev,
+                ev.cf,
                 factor,
+                ROOT,
                 a.write_root,
                 f"tile pitch {period:.2f} m measured vs {a.tile_m:.2f} m real",
             )

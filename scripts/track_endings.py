@@ -100,6 +100,7 @@ import torch
 from PIL import Image
 from scipy import ndimage
 
+from syncai_hydranet.analytics.appearance import torso_histograms
 from syncai_hydranet.analytics.bytetrack import OfflineForward
 from syncai_hydranet.analytics.clip_tracks import (
     PERSON,
@@ -426,10 +427,23 @@ def run_camera(camera: str, model, cfg, device, args) -> dict:
         # 2026-08-26 and made the event layer worse.
         decode_thr = args.low_thr
     else:
+        # `--band` is the survival band alone -- birth at --score-thr, survival to
+        # --low-thr, no Kalman, association untouched -- the arm runs/band_probe01
+        # measured at 91% of two-stage's gain (PLAN 7.11) and the tracker step 6 and
+        # serving run. `--appearance` adds the re-association gate on top, at the
+        # camera's own calibrated distance; a camera with none runs ungated and is
+        # named in the row, so a fleet total is never read as a gated one.
+        gate = None
+        if args.appearance:
+            gate = cam_file.appearance_thr
         tracker = Recording(
-            iou_threshold=args.iou, max_age=args.max_age, min_hits=args.min_hits
+            iou_threshold=args.iou,
+            max_age=args.max_age,
+            min_hits=args.min_hits,
+            birth_thr=args.score_thr if args.band else None,
+            appearance_thr=gate,
         )
-        decode_thr = args.score_thr
+        decode_thr = args.low_thr if args.band else args.score_thr
     out = track_clip(
         str(CLIPS / camera / SWEEP_CLIPS[camera]),
         model,
@@ -443,6 +457,7 @@ def run_camera(camera: str, model, cfg, device, args) -> dict:
         score_thr=decode_thr,
         k1=cam_file.lens.k1 if cam_file.lens else None,
         max_frames=args.frames,
+        describe=torso_histograms if args.appearance else None,
     )
     src = (out.src_w, out.src_h)
     counts = {"exit": 0, "lost": 0, "gone": 0}
@@ -494,6 +509,18 @@ def run_camera(camera: str, model, cfg, device, args) -> dict:
         "witness": verdicts,
         "witness_detail": {str(tid): seen[tid] for tid in seen},
         "max_age": args.max_age,
+        # Which tracker this row was measured under, so a fleet.json cannot be read as
+        # one arm when it was three, and an ungated camera in a gated run is visible.
+        "arm": (
+            "two_stage"
+            if args.two_stage
+            else "band+appearance"
+            if args.band and args.appearance
+            else "band"
+            if args.band
+            else "single"
+        ),
+        "appearance_thr": (cam_file.appearance_thr if args.appearance else None),
     }
 
 
@@ -539,6 +566,18 @@ def main() -> int:
         "RecordingByteTrack",
     )
     ap.add_argument("--low-thr", type=float, default=0.20, help="two-stage survival band")
+    ap.add_argument(
+        "--band",
+        action="store_true",
+        help="the survival band alone on the shipped tracker: births at --score-thr, "
+        "survival to --low-thr, no Kalman -- the arm step 6 and serving run",
+    )
+    ap.add_argument(
+        "--appearance",
+        action="store_true",
+        help="gate re-association on the camera's calibrated appearance_thr "
+        "(camera.json); a camera with none runs ungated and says so in its row",
+    )
     ap.add_argument("--iou-low", type=float, default=0.5, help="two-stage low-band IoU")
     args = ap.parse_args()
 

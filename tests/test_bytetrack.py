@@ -532,3 +532,15 @@ def test_appearance_is_all_frames_or_none():
     tr.update(box, 0, appearance=RED[None, :])
     with pytest.raises(ValueError, match="appearance"):
         tr.update(box, 1)
+
+
+def test_a_nan_descriptor_is_carried_and_never_splits_a_track():
+    """`appearance.torso_histograms` writes NaN for a box too small to describe; at the
+    gate NaN exceeds no threshold, so the box continues its track across a gap."""
+    box = np.array([[10.0, 10.0, 50.0, 100.0]])
+    tr = tracker.Tracker(iou_threshold=0.3, max_age=5, min_hits=1, appearance_thr=0.1)
+    tr.update(box, 0, appearance=RED[None, :])
+    tr.update(np.zeros((0, 4)), 1, appearance=np.zeros((0, 3)))
+    tr.update(box, 2, appearance=np.full((1, 3), np.nan))
+    assert len(tr.tracks) == 1 and tr.tracks[0].frames == [0, 2]
+    assert np.isnan(tracker.appearance_distance(RED, np.full(3, np.nan)))

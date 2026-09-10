@@ -174,3 +174,23 @@ def torso_histogram(frame: np.ndarray, box_px, *, bins=HIST_BINS) -> np.ndarray 
     hist = hist.ravel()
     total = hist.sum()
     return hist / total if total else None
+
+
+def torso_histograms(frame: np.ndarray, boxes_px: np.ndarray) -> np.ndarray:
+    """`torso_histogram` over every box of one frame, as the (N, D) array a tracker takes.
+
+    A box too small to carry a histogram gets a row of NaN rather than being dropped:
+    `Tracker.update` needs one descriptor per box, index-aligned, and
+    `tracker.appearance_distance` against a NaN row is NaN, which no threshold exceeds --
+    so a small box can never be *split* from its track on appearance, only carried. That
+    is the same asymmetry the gate is licensed on: absence of evidence is not evidence of
+    a different shopper.
+    """
+    boxes = np.asarray(boxes_px, dtype=float).reshape(-1, 4)
+    dim = int(np.prod(HIST_BINS))
+    out = np.full((len(boxes), dim), np.nan)
+    for i, b in enumerate(boxes):
+        h = torso_histogram(frame, b)
+        if h is not None:
+            out[i] = h
+    return out

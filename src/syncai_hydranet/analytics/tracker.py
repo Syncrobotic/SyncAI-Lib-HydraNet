@@ -66,6 +66,9 @@ def appearance_distance(a: np.ndarray, b: np.ndarray) -> float:
     b = np.asarray(b, dtype=float).ravel()
     if a.shape != b.shape:
         raise ValueError(f"appearance vectors differ in length: {a.shape} vs {b.shape}")
+    # A NaN row -- `appearance.torso_histograms` for a box too small to describe -- gives
+    # NaN here, and `NaN > thr` is False at the gate: an undescribed box is never split
+    # from its track, only carried. Absence of evidence is not a different shopper.
     return float(0.5 * np.sum((a - b) ** 2 / (a + b + 1e-9)))
 
 

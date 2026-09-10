@@ -252,3 +252,48 @@ def test_a_frame_with_no_person_still_passes_scores_so_the_latch_holds():
     """
     out, _ = _run([[[100.0, 100.0, 160.0, 300.0]], []], k1=None, tracker=Tracker(min_hits=1))
     assert out.frames == 2
+
+
+# -- the appearance descriptor hook (2026-09-10) ---------------------------------------
+
+
+class _LookingTracker(_Tracker):
+    """Records the appearance rows too, index-aligned with the boxes it was fed."""
+
+    def __init__(self):
+        super().__init__()
+        self.looks: list[np.ndarray | None] = []
+
+    def update(self, boxes, _frame_index, scores=None, appearance=None):
+        super().update(boxes, _frame_index, scores=scores)
+        self.looks.append(None if appearance is None else np.asarray(appearance, float))
+
+
+def test_describe_sees_raw_pixels_before_the_lens_and_its_rows_reach_the_tracker():
+    """The descriptor is cut from the raw frame at raw coordinates; the tracker gets one
+    row per box, on every frame, including an empty one."""
+    seen_boxes = []
+
+    def describe(frame, boxes):
+        assert frame.shape == (1, 1, 3)  # the raw decoded frame, not the canvas
+        seen_boxes.append(np.asarray(boxes, float).copy())
+        return np.tile(np.asarray(boxes, float)[:, :1], (1, 3))  # a 3-vector per box
+
+    per_frame = [[[10, 10, 50, 100]], [], [[12, 10, 52, 100], [200, 10, 240, 100]]]
+    tr = _LookingTracker()
+    frames, preprocess, probe = _harness(per_frame)
+    track_clip("c.mp4", _Model(per_frame), (512, 640), "cpu", tr, frames=frames,
+               preprocess=preprocess, probe=probe, fps=5.0, score_thr=0.2, k1=-0.05,
+               describe=describe)  # fmt: skip
+    assert [len(x) for x in tr.looks] == [1, 0, 2]
+    # Raw: what the model emitted, in source pixels, not the undistorted box the tracker got.
+    raw = to_source_pixels(np.array([[10, 10, 50, 100.0]]), (0, 0, 640, 512), 1920, 1080)
+    assert np.allclose(seen_boxes[0], raw)
+    assert not np.allclose(tr.seen[0], raw), "the tracker's box went through the lens"
+    assert tr.looks[0].shape == (1, 3) and tr.looks[2].shape == (2, 3)
+
+
+def test_without_describe_the_tracker_is_called_exactly_as_before():
+    tr = _LookingTracker()
+    _run([[[10, 10, 50, 100]]], k1=None, tracker=tr)
+    assert tr.looks == [None]
