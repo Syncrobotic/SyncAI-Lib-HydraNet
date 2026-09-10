@@ -210,3 +210,12 @@ def test_a_clip_is_read_at_its_own_resolution(tmp_path, size):
     assert got, "no frames decoded"
     for frame in got:
         assert np.asarray(frame).shape == (h, w, 3)
+
+
+def test_a_box_another_live_track_observed_reads_taken_not_available():
+    """2026-09-10: thirteen 'available' deaths in a row were a neighbour's box (endings08)."""
+    common = {"best_score": 0.5, "dense": True, "score_thr": 0.35, "witness_thr": 0.03}
+    assert endings.witness_verdict(best_assoc=0.45, taken_by=None, **common) == "available"
+    assert endings.witness_verdict(best_assoc=0.45, taken_by=7, **common) == "taken"
+    # Below the shipped threshold the question of whose box it was does not arise.
+    assert endings.witness_verdict(best_assoc=0.2, taken_by=7, **common) == "demoted"
