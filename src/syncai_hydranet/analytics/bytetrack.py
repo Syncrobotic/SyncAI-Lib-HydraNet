@@ -176,6 +176,9 @@ SHIPPED_IOU_LOW = 0.4
 SHIPPED_MAX_AGE = 5
 SHIPPED_MIN_HITS = 2
 MOT17_FPS = 25.0  # the frame rate the Kalman noise weights were tuned at
+#: Overlap at which a dense-birth candidate is a duplicate: of a live track, of a
+#: higher-scoring candidate, or of itself one frame earlier (persistence).
+DENSE_BIRTH_MAX_IOU = 0.5
 
 
 class OfflineForward:
@@ -197,6 +200,17 @@ class OfflineForward:
     down to ``dense_birth_thr`` so those boxes reach here; unconfirmed ones below
     ``low_thr`` are ignored, between ``low_thr`` and ``high_thr`` they may still continue
     a track as before.
+
+    **Three guards, because the first version had none and multiplied tracks by nine**
+    (`runs/endings10`, 2026-09-10: 5,528 births over 7,200 frames, 105 → 936 tracks). In
+    a huddle every low box is vouched -- the dense map is one blob -- and the partial
+    boxes on the back row jitter from frame to frame, so each frame's unmatched ones were
+    born again and died two frames later. So a candidate is (1) suppressed where it
+    overlaps any live track's box at ``DENSE_BIRTH_MAX_IOU`` -- a duplicate of somebody
+    already tracked; (2) suppressed by its own higher-scoring neighbour at the same IoU
+    -- one birth per person, not one per partial box; and (3) born only when it was also
+    a surviving candidate on the previous frame, at that IoU with itself -- a shopper,
+    not a flicker. Two frames of persistence is `min_hits` applied before birth.
     """
 
     def __init__(
@@ -227,6 +241,7 @@ class OfflineForward:
             )
         self.dense_birth_thr = dense_birth_thr
         self.dense_births = 0
+        self._pending = np.zeros((0, 4))  # last frame's surviving candidates, not born
         self.tracks: list[Fragment] = []
         self.retired: list[Fragment] = []
         self.refusals: list[Refusal] = []
@@ -353,10 +368,47 @@ class OfflineForward:
         if self.dense_birth_thr is not None:
             conf = np.asarray(confirmed, bool).reshape(-1)
             taken_lo = {int(lo_idx[di]) for di in pairs2.values()}
-            for i in np.where((scores >= self.dense_birth_thr) & (scores < self.high_thr))[0]:
-                i = int(i)
-                if conf[i] and i not in taken_lo:
-                    births.append((i, True))
+            cand = [
+                int(i)
+                for i in np.where((scores >= self.dense_birth_thr) & (scores < self.high_thr))[
+                    0
+                ]
+                if conf[int(i)] and int(i) not in taken_lo
+            ]
+            # Guard 1: not a duplicate of anybody already tracked (observed or coasting).
+            live_boxes = [
+                np.asarray(t.boxes[-1] if t.age == 0 else t.kalman.box) for t in self.tracks
+            ]
+            if live_boxes and cand:
+                ov = iou(boxes[cand], np.stack(live_boxes))
+                cand = [
+                    c
+                    for c, row in zip(cand, ov, strict=True)
+                    if row.max() < DENSE_BIRTH_MAX_IOU
+                ]
+            # Guard 2: one candidate per person -- the higher score wins its overlaps.
+            kept: list[int] = []
+            for c in sorted(cand, key=lambda i: -scores[i]):
+                if all(
+                    iou(boxes[c][None], boxes[k][None])[0, 0] < DENSE_BIRTH_MAX_IOU
+                    for k in kept
+                ):
+                    kept.append(c)
+            # Guard 3: persistence -- born only if it was a surviving candidate last frame.
+            born_now: list[int] = []
+            if len(self._pending) and kept:
+                ov = iou(boxes[kept], self._pending)
+                born_now = [
+                    c
+                    for c, row in zip(kept, ov, strict=True)
+                    if row.max() >= DENSE_BIRTH_MAX_IOU
+                ]
+            self._pending = (
+                boxes[[c for c in kept if c not in born_now]].copy()
+                if kept
+                else np.zeros((0, 4))
+            )
+            births += [(c, True) for c in born_now]
         for i, vouched in births:
             box = boxes[i].copy()
             t = Fragment(self._next, Kalman(box, self.vel_scale), born_confirmed=vouched)

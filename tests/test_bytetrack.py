@@ -666,37 +666,72 @@ def vouching(min_hits=1):
     return OfflineForward(0.35, 0.20, 0.3, 0.4, 5, min_hits, 5.0, dense_birth_thr=0.15)
 
 
-def test_a_low_box_the_dense_head_vouches_for_is_born_and_says_so():
+YES = np.array([True])
+
+
+def test_a_low_box_the_dense_head_vouches_for_twice_running_is_born_and_says_so():
     tr = vouching()
-    tr.update(LOW, np.array([0.22]), 0, confirmed=np.array([True]))
+    tr.update(LOW, np.array([0.22]), 0, confirmed=YES)  # a candidate: pending
+    assert tr.tracks == [] and tr.dense_births == 0
+    tr.update(LOW + 3.0, np.array([0.24]), 1, confirmed=YES)  # still there: born
     (t,) = tr.tracks
-    assert t.born_confirmed and t.scores == [0.22] and tr.dense_births == 1
+    assert t.born_confirmed and t.scores == [0.24] and tr.dense_births == 1
+
+
+def test_a_flicker_is_not_born():
+    tr = vouching()
+    tr.update(LOW, np.array([0.22]), 0, confirmed=YES)
+    tr.update(np.zeros((0, 4)), np.zeros(0), 1, confirmed=np.zeros(0, bool))
+    tr.update(LOW, np.array([0.22]), 2, confirmed=YES)  # pending again, not born
+    assert tr.tracks == [] and tr.dense_births == 0
 
 
 def test_a_low_box_the_dense_head_does_not_vouch_for_is_not_born():
     tr = vouching()
-    tr.update(LOW, np.array([0.22]), 0, confirmed=np.array([False]))
+    for f in range(3):
+        tr.update(LOW, np.array([0.22]), f, confirmed=np.array([False]))
     assert tr.tracks == [] and tr.dense_births == 0
+
+
+def test_a_duplicate_of_a_tracked_person_is_not_born():
+    tr = vouching()
+    tr.update(LOW, np.array([0.9]), 0, confirmed=np.array([False]))  # tracked, high band
+    near = LOW + 4.0  # a partial box on the same person, unmatched at stage 2's 0.4? no:
+    # make it overlap the live box above DENSE_BIRTH_MAX_IOU but fail stage 2 by score
+    tr.update(near, np.array([0.16]), 1, confirmed=YES)  # under low_thr: not stage 2
+    tr.update(near, np.array([0.16]), 2, confirmed=YES)
+    assert len(tr.tracks) == 1 and tr.dense_births == 0
+
+
+def test_two_overlapping_candidates_are_one_birth_the_higher_score():
+    tr = vouching()
+    two = np.vstack([LOW, LOW + 5.0])
+    tr.update(two, np.array([0.22, 0.30]), 0, confirmed=np.array([True, True]))
+    tr.update(two, np.array([0.22, 0.30]), 1, confirmed=np.array([True, True]))
+    assert tr.dense_births == 1 and tr.tracks[0].scores == [0.30]
 
 
 def test_the_birth_floor_and_the_high_band_are_respected():
     tr = vouching()
-    tr.update(LOW, np.array([0.10]), 0, confirmed=np.array([True]))  # under the floor
+    tr.update(LOW, np.array([0.10]), 0, confirmed=YES)  # under the floor
+    tr.update(LOW, np.array([0.10]), 1, confirmed=YES)
     assert tr.tracks == []
-    tr.update(LOW, np.array([0.9]), 1, confirmed=np.array([False]))  # high band: as before
+    tr.update(LOW, np.array([0.9]), 2, confirmed=np.array([False]))  # high band: as before
     assert len(tr.tracks) == 1 and not tr.tracks[0].born_confirmed
 
 
 def test_a_vouched_low_box_that_continues_a_track_is_not_also_born():
     tr = vouching()
     tr.update(LOW, np.array([0.9]), 0, confirmed=np.array([False]))
-    tr.update(LOW, np.array([0.25]), 1, confirmed=np.array([True]))  # matched in stage 2
-    assert len(tr.tracks) == 1 and tr.tracks[0].frames == [0, 1] and tr.dense_births == 0
+    tr.update(LOW, np.array([0.25]), 1, confirmed=YES)  # matched in stage 2
+    tr.update(LOW, np.array([0.25]), 2, confirmed=YES)
+    assert len(tr.tracks) == 1 and tr.tracks[0].frames == [0, 1, 2] and tr.dense_births == 0
 
 
 def test_without_dense_birth_thr_the_vouch_is_ignored_and_a_flag_per_box_is_required():
     tr = OfflineForward(0.35, 0.20, 0.3, 0.4, 5, 1, 5.0)
-    tr.update(LOW, np.array([0.22]), 0, confirmed=np.array([True]))
+    tr.update(LOW, np.array([0.22]), 0, confirmed=YES)
+    tr.update(LOW, np.array([0.22]), 1, confirmed=YES)
     assert tr.tracks == []
     v = vouching()
     with pytest.raises(ValueError, match="confirmed"):

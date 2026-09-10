@@ -425,6 +425,7 @@ def test_the_dense_vouch_is_computed_on_the_frame_map_and_filtered_like_the_boxe
     labels = np.zeros(3, dtype=np.int64)
     s.update(0, terrain, boxes, scores, labels)
     assert list(s.tracker.last_confirmed) == [True, False]
+    s.update(1, terrain, boxes, scores, labels)  # persistence: the second frame births
     assert s.tracker.dense_births == 1 and s.tracker.tracks[0].born_confirmed
 
 
