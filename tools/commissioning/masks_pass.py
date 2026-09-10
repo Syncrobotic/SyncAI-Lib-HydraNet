@@ -146,7 +146,8 @@ def run_camera(camera, third, proc, model, static_concepts, plates_root=None, ou
     # objects, not thousands, but 255 is a class-map convention here and is not reused.
     objects = np.zeros((R.H, R.W), np.uint16)
     for d in sorted(
-        [d for d in decisions if d["win"] and not d["reject"]], key=lambda d: -d["score"]
+        [d for d in decisions if d["win"] and not d["reject"]],
+        key=lambda d: (R.PAINT_ORDER[d["win"]], -d["score"]),
     ):
         sel = cl_masks[d["k"]] & (objects == 0) & (static_map != R.IGNORE)
         objects[sel] = d["k"] + 1

@@ -168,3 +168,30 @@ def test_a_floor_without_joints_reports_no_period():
     plate = np.random.default_rng(2).integers(60, 200, (H, W, 3)).astype(np.uint8)
     period, strength = floor_axis.floor_period(plate, walk, gz, ok, ground, 0.0)
     assert period is None or strength < 0.2
+
+
+# ------------------------------------------------------- two families, not one folded
+
+
+def test_two_families_ninety_degrees_apart_fold_to_one_axis():
+    rng = np.random.default_rng(3)
+    ang = np.concatenate([rng.normal(7.0, 1.5, 4000), rng.normal(97.0, 1.5, 3000)]) % 180
+    a1, a2, second = floor_axis._two_families(ang, np.ones(len(ang)))
+    assert abs(a1 - 7.0) < 0.5 and abs(a2 - 97.0) < 0.5 and second < 0.1
+
+
+def test_families_ten_degrees_off_square_still_give_the_stronger_one():
+    """Tao-Hsin-cam15, 2026-09-10: planks at 7 and 107 deg in the assumed calibration.
+    Folded mod 90 they were two peaks 10 deg apart and no axis; over 180 they are two
+    families, the stronger is the axis, and the 10 deg is a reading on the calibration."""
+    rng = np.random.default_rng(4)
+    ang = np.concatenate([rng.normal(7.0, 1.5, 4000), rng.normal(107.0, 1.5, 3000)]) % 180
+    a1, a2, second = floor_axis._two_families(ang, np.ones(len(ang)))
+    assert abs(a1 - 7.0) < 0.5 and abs(a2 - 107.0) < 0.5 and second < 0.1
+
+
+def test_a_lone_family_reports_no_partner():
+    rng = np.random.default_rng(5)
+    ang = rng.normal(30.0, 1.5, 4000) % 180
+    a1, a2, _second = floor_axis._two_families(ang, np.ones(len(ang)))
+    assert abs(a1 - 30.0) < 0.5 and a2 is None

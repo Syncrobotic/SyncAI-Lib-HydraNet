@@ -67,27 +67,75 @@ def floor_line_axis(plate, walk, gz, geom_ok, ground_points) -> tuple[float | No
     g1 = ground_points(p0 + 0.5 * t)
     ok = np.isfinite(g0).all(axis=1) & np.isfinite(g1).all(axis=1)
     d = g1[ok] - g0[ok]
-    ang = np.degrees(np.arctan2(d[:, 1], d[:, 0])) % 90
-    hist, edges = np.histogram(ang, bins=_BINS, range=(0, 90), weights=mag[ys, xs][ok])
-    hist = ndimage.gaussian_filter1d(hist, 1.5, mode="wrap")
-    k = int(np.argmax(hist))
-    if hist[k] <= 0:
-        return None, 1.0
-    idx = np.arange(_BINS)
-    near = np.minimum((idx - k) % _BINS, (k - idx) % _BINS) <= 20
-    second = float(hist[~near].max() / hist[k]) if (~near).any() else 1.0
-    if second > SHARPNESS_MAX:
+    wts = mag[ys, xs][ok]
+    ang180 = np.degrees(np.arctan2(d[:, 1], d[:, 0])) % 180
+    # Over 180 deg, not 90: a floor has two line families, and folding them mod 90 only
+    # works if the projection keeps them 90 deg apart. On Tao-Hsin-cam15 (2026-09-10)
+    # they came out 100 deg apart -- the assumed vfov skews the ground -- and folded
+    # they were two peaks 10 deg apart that failed the sharpness gate. The families are
+    # found separately; the axis is the stronger one; their departure from 90 deg is a
+    # calibration reading the caller may want (`floor_line_axes`).
+    a1, _a2, second = _two_families(ang180, wts)
+    if a1 is None or second > SHARPNESS_MAX:
         return None, second
-    # The peak bin is a degree wide; the answer is the weighted circular mean of the
-    # edges within a few degrees of it, which is where the sub-degree precision is.
-    centre = (edges[k] + edges[k + 1]) / 2
-    off = (ang - centre + 45) % 90 - 45
-    near_peak = np.abs(off) <= REFINE_DEG
-    wts = mag[ys, xs][ok][near_peak]
-    refined = (
-        centre + float(np.average(off[near_peak], weights=wts)) if wts.sum() > 0 else centre
+    return float(np.radians(a1 % 90)), second
+
+
+def floor_line_axes(plate, walk, gz, geom_ok, ground_points):
+    """(stronger family deg, other family deg or None, second-peak share) over 180 deg.
+    The two should be 90 deg apart on a calibrated floor; how far they are not is how
+    far the calibration is off."""
+    lum = ndimage.gaussian_filter(np.asarray(plate, float).mean(axis=2), 1.2)
+    gy, gx = np.gradient(lum)
+    mag = np.hypot(gx, gy)
+    floor = (
+        ndimage.binary_erosion(walk, iterations=EDGE_ERODE_PX) & geom_ok & (gz < EDGE_MAX_Z_M)
     )
-    return float(np.radians(refined % 90)), second
+    if floor.sum() < EDGE_MIN_PX:
+        return None, None, 1.0
+    thr = np.percentile(mag[floor], EDGE_PCT)
+    ys, xs = np.nonzero(floor & (mag > thr))
+    if len(ys) < EDGE_MIN_PX:
+        return None, None, 1.0
+    t = np.stack([-gy[ys, xs], gx[ys, xs]], axis=1)
+    t /= np.linalg.norm(t, axis=1, keepdims=True) + 1e-9
+    p0 = np.stack([xs + 0.5, ys + 0.5], axis=1).astype(float)
+    g0 = ground_points(p0)
+    g1 = ground_points(p0 + 0.5 * t)
+    ok = np.isfinite(g0).all(axis=1) & np.isfinite(g1).all(axis=1)
+    d = g1[ok] - g0[ok]
+    return _two_families(np.degrees(np.arctan2(d[:, 1], d[:, 0])) % 180, mag[ys, xs][ok])
+
+
+def _two_families(ang180, wts):
+    bins = 2 * _BINS
+    hist, edges = np.histogram(ang180, bins=bins, range=(0, 180), weights=wts)
+    hist = ndimage.gaussian_filter1d(hist, 1.5, mode="wrap")
+    k1 = int(np.argmax(hist))
+    if hist[k1] <= 0:
+        return None, None, 1.0
+    idx = np.arange(bins)
+    dist1 = np.minimum((idx - k1) % bins, (k1 - idx) % bins)
+    # the other family: the best bin 70-110 deg from the first
+    window = (dist1 >= 70) & (dist1 <= 110)
+    k2 = int(np.argmax(np.where(window, hist, -1)))
+    dist2 = np.minimum((idx - k2) % bins, (k2 - idx) % bins)
+    rest = (dist1 > 20) & (dist2 > 20)
+    second = float(hist[rest].max() / hist[k1]) if rest.any() else 1.0
+
+    def refine(k):
+        centre = (edges[k] + edges[k + 1]) / 2
+        off = (ang180 - centre + 90) % 180 - 90
+        near = np.abs(off) <= REFINE_DEG
+        return (
+            centre + float(np.average(off[near], weights=wts[near]))
+            if wts[near].sum()
+            else centre
+        )
+
+    a1 = refine(k1) % 180
+    a2 = refine(k2) % 180 if hist[k2] > 0.2 * hist[k1] else None
+    return a1, a2, second
 
 
 # Joint periods are searched between these; below is texture, above is not a tile.

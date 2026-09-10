@@ -208,6 +208,9 @@ B03_WALL_MIN, B03_FIXTURE_MIN = 0.60, 0.50
 COLUMN_SCORE_MIN, COLUMN_B03_FIX_MAX = 0.50, 0.50
 COLUMN_GEOM_MIN = 0.50
 TIE_MARGIN, TABLE_FLAT_MIN = 0.15, 0.30
+# The nearer thing owns a pixel two accepted objects share: fixtures, then columns, then
+# walls (see `decide_structure`). `masks_pass` paints its object ids in the same order.
+PAINT_ORDER = {"table": 0, "shelf": 0, "column": 1, "wall": 2}
 FIXTURE_SCORE_MIN = 0.65
 PART_CONTAINMENT, FOOTPRINT_TOL = 0.80, 0.15
 CHANGE_WITHDRAW = 0.50
@@ -388,7 +391,7 @@ class CameraGeometry:
 
     def save_cache(self):
         """Written only once lx/lz exist, so the cache is never a partial one."""
-        if self.lx is None or (self.CACHE / f"{self.camera}.npz").exists():
+        if self.lx is None:
             return
         self.CACHE.mkdir(parents=True, exist_ok=True)
         # np.savez appends .npz unless the name already ends in it, so the temporary
@@ -444,6 +447,7 @@ def decide_structure(cl_masks, cl_votes, b03_maps, geo, lx, lz):
         b03_wall = max(float((b[m] == 2).mean()) for b in b03_maps)
         b03_fix = max(float((b[m] == 4).mean()) for b in b03_maps)
         gshare = float(good.sum() / max(m.sum(), 1))
+        h85 = float(np.percentile(geo.height[good], 85)) if good.sum() > 200 else float("nan")
         note = ""
         if margin < TIE_MARGIN:
             pair = {win, ranked[1][0]}
@@ -456,6 +460,9 @@ def decide_structure(cl_masks, cl_votes, b03_maps, geo, lx, lz):
                         f"low margin {margin:.3f}, geometry abstains ({gshare:.2f}) "
                         "-- prompt winner kept, FLAGGED"
                     )
+            elif "wall" in pair and "column" in pair:
+                # b03 cannot tell a column from a wall; the prompt is the only witness.
+                note = f"column vs wall: b03 cannot tell them apart, prompt {win} stands"
             elif "wall" in pair and (b03_fix >= B03_FIXTURE_MIN or b03_wall >= B03_WALL_MIN):
                 win = (
                     "wall" if b03_wall >= B03_WALL_MIN else next(f for f in pair if f != "wall")
@@ -509,6 +516,7 @@ def decide_structure(cl_masks, cl_votes, b03_maps, geo, lx, lz):
                 "b03_fix": round(b03_fix, 3),
                 "flat": round(flat, 3),
                 "gshare": round(gshare, 3),
+                "h85": None if not np.isfinite(h85) else round(h85, 3),
             }
         )
 
@@ -561,27 +569,59 @@ def decide_structure(cl_masks, cl_votes, b03_maps, geo, lx, lz):
 
     class_id = {"wall": 2, "column": 3, "table": 4, "shelf": 5}
     static = np.full((H, W), IGNORE, np.uint8)
+    # Fixtures paint first, then columns, then walls, best score first within each: a
+    # wall mask reaches behind the counter standing in front of it, and whichever painted
+    # first owned the overlap. Before 2026-09-10 that was the higher score, and a 0.97
+    # wall took the pixels of a 0.94 counter on Tao-Hsin-cam03.
     for d in sorted(
-        [d for d in decisions if d["win"] and not d["reject"]], key=lambda d: -d["score"]
+        [d for d in decisions if d["win"] and not d["reject"]],
+        key=lambda d: (PAINT_ORDER[d["win"]], -d["score"]),
     ):
         sel = cl_masks[d["k"]] & (static == IGNORE)
         static[sel] = class_id[d["win"]]
     return static, decisions
 
 
+def family_group(concept: str, prompt: str) -> str | None:
+    """'structure' (wall, column), 'fixture' (table, shelf), or None if unfamilied."""
+    if concept in ("wall", "column"):
+        return "structure"
+    if prompt in TABLE_FAMILY or prompt in SHELF_FAMILY:
+        return "fixture"
+    return None
+
+
 def cluster(masks, meta):
+    """One object per cluster: masks that are the same thing (IoU >= 0.6), or that sit
+    inside an earlier, larger mask of the SAME group (containment >= 0.85).
+
+    **Containment across groups is not the same object.** A wall instance covers the
+    counter standing in front of it, and the old rule folded the counter's mask into the
+    wall's cluster on containment alone -- on Tao-Hsin-cam15 (2026-09-10) the bar
+    counter, the shelving and the pillar all went into wall clusters of 443k and 166k px
+    and the right half of the shop was built as wall. A fixture inside a structure mask
+    is the thing in front of it; it keeps its own cluster and its own vote.
+    """
     order = np.argsort([-m["px"] for m in meta])
-    cl_masks, cl_votes = [], []
+    cl_masks, cl_votes, cl_group = [], [], []
     for i in order:
         m = masks[i]
+        group = family_group(meta[i]["concept"], meta[i]["prompt"])
         for j, cm in enumerate(cl_masks):
             inter = (m & cm).sum()
-            if inter / max((m | cm).sum(), 1) >= 0.6 or inter / max(m.sum(), 1) >= 0.85:
+            same = inter / max((m | cm).sum(), 1) >= 0.6
+            inside = inter / max(m.sum(), 1) >= 0.85 and (
+                group is None or cl_group[j] is None or group == cl_group[j]
+            )
+            if same or inside:
                 cl_votes[j].append((meta[i]["concept"], meta[i]["prompt"], meta[i]["score"]))
+                if cl_group[j] is None:
+                    cl_group[j] = group
                 break
         else:
             cl_masks.append(m)
             cl_votes.append([(meta[i]["concept"], meta[i]["prompt"], meta[i]["score"])])
+            cl_group.append(group)
     return cl_masks, cl_votes
 
 
