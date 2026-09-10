@@ -138,3 +138,51 @@ def test_a_table_is_not_gated():
     """A table is mostly top, and its top lowered by its own height IS the footprint."""
     assert "display_table" not in scene_mesh.CONTACT_GATED
     assert {"wall", "column", "display_shelf"} <= scene_mesh.CONTACT_GATED
+
+
+def test_a_pillar_whose_face_was_lowered_away_still_stands_at_its_foot(tmp_path, monkeypatch):
+    """A column's lowered pixels all land far from it (a white pillar, DA-V2's height
+    wrong on every pixel); its foot -- the mask's contact with the floor -- says where it
+    is, and that is enough to build it."""
+    root = tmp_path / "checkout"
+    commission = root / "runs/commission01"
+    commission.mkdir(parents=True)
+    (root / "runs/site30k_qa/geometry_cache").mkdir(parents=True)
+    gx, gz = _lattice()
+    lx, lz = gx.copy(), gz.copy()
+    column = np.zeros((H, W), bool)
+    column[60:120, 150:182] = True  # a 32-px-wide (0.6 m) pillar, 60 px tall
+    lz[column] = gz[119, 0] + 1.5  # every lowered pixel lands 1.5 m past the foot
+    floor = np.zeros((H, W), bool)
+    floor[125:230, 40:280] = True
+    for name, m in (("column", column), ("walkable", floor)):
+        Image.fromarray(np.where(m, 255, 0).astype(np.uint8)).save(commission / f"{name}.png")
+    np.savez(
+        root / f"runs/site30k_qa/geometry_cache/{CAMERA}.npz",
+        gx=gx, gz=gz, lx=lx, lz=lz,
+        height=np.where(column, 2.4, 0.0).astype(np.float32),
+        geom_ok=np.ones((H, W), bool),
+    )  # fmt: skip
+    CameraFile(
+        camera_id=CAMERA,
+        image_size_px=(W, H),
+        camera=Camera(fx=380.0, fy=380.0, cx=W / 2, cy=H / 2),
+        plane=GroundPlane(height=2.5, pitch=math.radians(50.0)),
+        mask_files={"column": "column.png", "walkable": "walkable.png"},
+    ).save(commission / f"{CAMERA}.camera.json")
+
+    def load(path, _cf):
+        with np.load(path) as cache:
+            return {key: cache[key] for key in cache.files}
+
+    monkeypatch.setattr(scene_mesh, "load_geometry_cache", load, raising=False)
+    _cf, items, _h, shapes = scene_mesh.build_scene_regular(CAMERA, root)
+    columns = [(m, k) for m, k, _a, _s in items if k == "column"]
+    assert len(columns) == 1, shapes
+    v = columns[0][0][0]
+    foot_z = gz[119, 0]
+    assert abs((v[:, 2].min() + v[:, 2].max()) / 2 - foot_z) < 0.5, (
+        v[:, 2].min(),
+        v[:, 2].max(),
+        foot_z,
+    )

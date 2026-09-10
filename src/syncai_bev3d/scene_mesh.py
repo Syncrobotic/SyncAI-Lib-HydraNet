@@ -133,6 +133,8 @@ DRAWN_H = {"wall": 2.4, "column": 2.4, "display_table": 0.75, "display_shelf": 2
 # A column runs floor to ceiling. The depth model reads 1.07-1.65 m for one (see the
 # block below), so the drawn height is floored here rather than taken from the depth.
 COLUMN_MIN_H = 2.2
+# A pillar's foot is a line of contact cells, 8-12 of them for a 0.6 m pillar at CELL.
+COLUMN_MIN_CELLS = 8
 # The SAM3 vote puts real furniture in the wall mask -- on Taichung-cam10 the back
 # service counter and a stock trolley are both `wall`. Height looked like the way to
 # separate them and IS NOT: measured per component, all six wall components on this
@@ -273,6 +275,21 @@ def _majority_id(ids, rows, cols, shape) -> np.ndarray:
     return out
 
 
+def _contact_pixels(mask: np.ndarray, *, min_component_px: int = 200):
+    """(rows, cols) of the lowest mask pixel per column per component."""
+    lab, n = ndimage.label(mask, structure=np.ones((3, 3)))
+    if n == 0:
+        return np.zeros(0, int), np.zeros(0, int)
+    counts = np.bincount(lab.ravel(), minlength=n + 1)
+    rows, cols = np.nonzero(mask & (counts[lab] >= min_component_px))
+    if not len(rows):
+        return rows, cols
+    key = lab[rows, cols].astype(np.int64) * mask.shape[1] + cols
+    order = np.lexsort((rows, key))
+    last = np.r_[key[order][1:] != key[order][:-1], True]
+    return rows[order][last], cols[order][last]
+
+
 def contact_cells(
     mask: np.ndarray, gx: np.ndarray, gz: np.ndarray, *, min_component_px: int = 200
 ) -> np.ndarray:
@@ -387,6 +404,7 @@ def cell_grids(
     heights = {}
     hts = {}
     oids = {}  # per class, the object id of every selected pixel
+    feet = {}  # per gated class, its contact points: cells in their own right
     for cid in CLASS_NAMES:
         sel = (static == cid) & z["geom_ok"]
         if gated and CLASS_NAMES[cid] in CONTACT_GATED:
@@ -402,7 +420,11 @@ def cell_grids(
             # (Capping the lowering distance instead was measured first, 2026-09-10: at
             # 0.6 m it removed both ghosts and most of the real furniture with them --
             # every pixel of a 2.4 m wall is lowered a long way, correctly.)
-            band = Band(contact_cells(static == cid, z["gx"], z["gz"]), CONTACT_BAND_M)
+            crows, ccols = _contact_pixels(static == cid)
+            cpts = np.stack([z["gx"][crows, ccols], z["gz"][crows, ccols]], axis=1)
+            fin = np.isfinite(cpts).all(axis=1)
+            cpts, crows, ccols = cpts[fin], crows[fin], ccols[fin]
+            band = Band(cpts, CONTACT_BAND_M)
             near = band.contains(np.stack([z["lx"][sel], z["lz"][sel]], axis=1))
             sel = sel.copy()
             sel[sel] = near
@@ -410,6 +432,18 @@ def cell_grids(
         if ev.objects is not None:
             oids[cid] = ev.objects[sel]
         hts[cid] = z["height"][sel]  # per cell, so a component can be measured too
+        if gated and CLASS_NAMES[cid] in CONTACT_GATED and len(cpts):
+            # The contact points are cells too: they need no height and they are the one
+            # place the fixture certainly stands. A pillar is the case that needs them --
+            # Tao-Hsin-cam15's is 80k pixels lowered a median 4.4 m, 127 cells survive
+            # the band and the opening leaves two runs of 9; its foot is 200 columns wide
+            # and says where it is (2026-09-10).
+            xs[cid] = np.concatenate([xs[cid], cpts[:, 0]])
+            zs[cid] = np.concatenate([zs[cid], cpts[:, 1]])
+            hts[cid] = np.concatenate([hts[cid], np.full(len(cpts), np.nan)])
+            if ev.objects is not None:
+                oids[cid] = np.concatenate([oids[cid], ev.objects[crows, ccols]])
+            feet[cid] = cpts
         hs = z["height"][sel]
         hs = hs[np.isfinite(hs) & (hs > 0.05)]
         if len(hs) > 200:
@@ -448,6 +482,15 @@ def cell_grids(
         rows, cols = (zz / CELL).astype(int), ((x + 12) / CELL).astype(int)
         np.add.at(g, (rows, cols), 1)
         grids[cid] = g >= (2 if cid == 1 else 3)
+        if cid in feet:
+            # one contact point is enough for a cell: it is where the mask meets the floor
+            fx, fz = feet[cid][:, 0], feet[cid][:, 1]
+            fok = (np.abs(fx) < 12 - CELL) & (fz > 0) & (fz < 14 - CELL)
+            fg = np.zeros_like(g)
+            np.add.at(
+                fg, ((fz[fok] / CELL).astype(int), ((fx[fok] + 12) / CELL).astype(int)), 1
+            )
+            grids[cid] |= fg >= 1
         if cid in hts:
             hh = hts[cid][ok]  # heights follow the exact same filter as the coordinates
             hsum = np.zeros_like(g, float)
@@ -960,7 +1003,13 @@ def build_scene_regular(camera, root: Path | None = None):
         # 6.3 m shelf run whole. A 5-cell element fits the counter better still (1.20 m
         # deep) and shatters that shelf run into five pieces, which is worse than the
         # error it fixes: one box too big reads as one fixture, five read as five.
-        opened = ndimage.binary_opening(grids[cid], np.ones((3, 3)))
+        # The opening breaks mask bridges between fixtures; a pillar's foot is a line one
+        # cell thick and the opening would erase it, so columns are not opened.
+        opened = (
+            grids[cid]
+            if name == "column"
+            else ndimage.binary_opening(grids[cid], np.ones((3, 3)))
+        )
         lab, n = ndimage.label(opened, structure=np.ones((3, 3)))
         # **One box per object, where the object map says which is which.** Cell
         # connectivity welds every touching pair, and five of nine cameras built a
@@ -986,7 +1035,7 @@ def build_scene_regular(camera, root: Path | None = None):
             lab = np.where(obj > 0, obj + n, lab)
         for k in np.unique(lab[lab > 0]):
             r, c = np.nonzero(lab == k)
-            if len(r) < 60:
+            if len(r) < (COLUMN_MIN_CELLS if name == "column" else 60):
                 continue
             x = c * CELL - 12 + CELL / 2
             z = r * CELL + CELL / 2
@@ -998,7 +1047,10 @@ def build_scene_regular(camera, root: Path | None = None):
             w = max(round((u1 - u0) / 0.05) * 0.05, 0.3)
             d = max(round((v1 - v0) / 0.05) * 0.05, 0.3)
             if name == "column":
-                w, d, h = min(w, 0.8), min(d, 0.8), max(h, COLUMN_MIN_H)
+                # a pillar is square, and its foot -- a line of contact cells -- gives
+                # only one side of it
+                side = min(max(w, d), 0.8)
+                w, d, h = side, side, max(h, COLUMN_MIN_H)
             fixtures.append([name, um - w / 2, um + w / 2, vm - d / 2, vm + d / 2, h])
 
     # ---- 2. THE WALLS, fitted to the whole `wall` point set rather than to its
