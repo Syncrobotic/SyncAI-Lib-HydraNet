@@ -642,9 +642,17 @@ order. A component with no step is not scheduled, it is assumed.
    frame's unmatched ones were born again and died two frames on. Two facts survive:
    the back row is real, and the box head's boxes on it are not stable enough to track.
    Rebuilt with three guards (no birth over a live track at IoU 0.5, one birth per
-   overlapping group, two frames of persistence) as `runs/endings11`; and the second
-   fact is mechanism 2's argument made for it — twice the pixels on the counter is what
-   stabilises a partial box, and no birth rule can.
+   overlapping group, two frames of persistence) as `runs/endings11`: births **5,528 →
+   497**, tracks **105 → 302** against two-stage's 105, mid-view deaths **40 → 186**,
+   the crowd clip **100 → 251** tracks for 31 → 38 loiters. Better by ten times and
+   still three times the fragments for a fifth more visits: a back-row shopper is born,
+   the box head's partial boxes on them jitter past stage 2's overlap, the track dies,
+   and two frames later they are born again. **Mechanism 1 is rejected as a default and
+   kept as an arm** (`--dense-birth` on both scripts, off) — the vouch selects nothing
+   inside a huddle and a birth rule cannot make an unstable box stable. That second fact
+   is mechanism 2's argument made for it: twice the pixels on the counter is what
+   stabilises a partial box, and it is the next thing measured (a three-frame probe
+   before a build — does the ×2 crop return the back row in the high band at all).
 
 ### 7b. Decided — the answer, and what it cost
 
@@ -1022,7 +1030,7 @@ incidents shrinks**. Nothing in this gate ships without a before/after on Gate A
 
 | # | work | evidence it rests on | done when |
 |---|---|---|---|
-| B1 | **occluded-person recall**: the dense head's 20% of shoppers behind counters become boxes — the crop-stage fallback `models/heads/pose.py` reserved, or a dense-to-box proposal at the counter zones only. **Designed 2026-09-10 night as §7a.41**: dense-confirmed birth first, the ×2 counter pass second, crowd labels and person02 third, each gated by the endings instrument and step 6 | §9.3, §7a.41 | detection mAP unchanged elsewhere, counter-zone recall up on the graded misses; `demoted + taken` on the endings clips down from 37 |
+| B1 | **occluded-person recall**: the dense head's 20% of shoppers behind counters become boxes — the crop-stage fallback `models/heads/pose.py` reserved, or a dense-to-box proposal at the counter zones only. **Designed 2026-09-10 night as §7a.41**: dense-confirmed birth first, the ×2 counter pass second, crowd labels and person02 third, each gated by the endings instrument and step 6. **Dense-confirmed birth built and rejected the same night** (`runs/endings10`, `11`: 3× the fragments for a fifth more visits; kept as the `--dense-birth` arm); the ×2 counter pass is next | §9.3, §7a.41 | detection mAP unchanged elsewhere, counter-zone recall up on the graded misses; `demoted + taken` on the endings clips down from 37 |
 | B2 | **`staff/customer` licensed on every pilot camera**: the three uniform photos per store, and a VLM at L2 as the teacher for the cameras the colour statistics refuse | step 9, §7.15 | balanced accuracy ≥ 0.90 held out by camera on all pilot cameras; `reach_to_shelf` no longer fires on staff at their workstation |
 | B3 | **the VLM at L4, on trigger**, on the card's reserved budget: reads the frames of an alert already filed and writes its verdict as a disposition row beside the operator's | §1.1, §7.4 | agreement between VLM and operator measured per event kind; the disagreements are the next training set |
 | B4 | **per-camera, per-hour baseline** from L1 output: counts, dwell, speed on the world frame, kept beside `camera.json`, no network; each event gains a `rarity` field against its own camera's history | §1.1's survey; §7.37 | rarity separates accepted from rejected rows better than the fleet constant does — or it is dropped |
