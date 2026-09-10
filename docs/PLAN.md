@@ -78,6 +78,29 @@ thresholds** — the divergence is a config value, which is §3's placement rule
   Before it is built it needs the thing step 7 produces — graded alerts — or it will be
   learning the teachers' opinion again.
 
+  **What the market's "self-learning" is, read from the patents rather than the
+  datasheets (surveyed 2026-09-10).** Avigilon's Unusual Motion Detection
+  (US10878227B2) keeps a histogram per macroblock — direction in 30° bins, speed, and a
+  no-motion bin — over hourly intervals clustered into at most four day/week patterns,
+  with an exponential average whose window is about eight hours of frames; Unusual
+  Activity Detection (US11302117B2) is the same framework over detected-object counts on
+  a spatial grid. Two weeks and one week of learning respectively, events reported while
+  learning, no operator feedback into the model, and a rarity slider as the only control.
+  iCetana (server GPU, 400 cameras a server) begins alerting at 24 h and calls a week a
+  baseline. Lumana keeps per-camera speed / dwell / time-of-day statistics and puts them
+  in search, not alerts. Every camera-native vendor (Axis, Hanwha, Hikvision, Dahua,
+  Bosch, Verkada) ships pre-trained detectors plus hand-drawn rules; no edge SoC runs a
+  behaviour baseline. Operator feedback reaches a model in two places only — Hikvision's
+  Learn-by-Example (mark false alarms) and Irisity — and neither publishes what it
+  changes. Retail loss prevention is a different mechanism again: Everseen and StopLift
+  score the gap between video object events and the POS scan list; Veesion is supervised
+  gesture classification with staff accept/reject as the training feed, and the one
+  independent figure is a store manager's "three-quarters false". **Nobody publishes
+  alerts per camera per day.** So the memory this plan should build first is what the
+  market's learned-normal actually is — per-camera, per-hour statistics over L1 output
+  — and the part the market does not have is the graded disposition store, which is the
+  only route to the number nobody publishes. §9.10 orders the work.
+
 
 ## 2. The two packages
 
