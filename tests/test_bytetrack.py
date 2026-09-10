@@ -544,3 +544,114 @@ def test_a_nan_descriptor_is_carried_and_never_splits_a_track():
     tr.update(box, 2, appearance=np.full((1, 3), np.nan))
     assert len(tr.tracks) == 1 and tr.tracks[0].frames == [0, 2]
     assert np.isnan(tracker.appearance_distance(RED, np.full(3, np.nan)))
+
+
+# -- the appearance gate on the two-stage tracker (2026-09-10) --------------------------
+#
+# The gate `tracker.Tracker` gained on 2026-09-08 now lives here too, because this is the
+# tracker the serving path runs and the one step 6 runs from today. Same rule: only a
+# re-association after a gap is gated, a refusal is recorded with its frame, and the
+# refused detection falls through to a birth (high band) or nothing (low band).
+
+GAP_BOX = np.array([[10.0, 10.0, 50.0, 100.0]])
+
+
+def gated(thr=0.3, min_hits=1):
+    return OfflineForward(0.35, 0.20, 0.3, 0.4, 5, min_hits, 5.0, appearance_thr=thr)
+
+
+def test_a_consecutive_frame_is_never_gated_whatever_it_looks_like():
+    tr = gated()
+    tr.update(GAP_BOX, np.array([0.9]), 0, appearance=RED[None, :])
+    tr.update(GAP_BOX, np.array([0.9]), 1, appearance=BLUE[None, :])
+    assert len(tr.tracks) == 1 and tr.tracks[0].frames == [0, 1] and tr.refusals == []
+
+
+def test_after_a_gap_a_different_look_is_refused_recorded_and_starts_its_own_track():
+    tr = gated()
+    tr.update(GAP_BOX, np.array([0.9]), 0, appearance=RED[None, :])
+    tr.update(np.zeros((0, 4)), np.zeros(0), 1, appearance=np.zeros((0, 3)))
+    tr.update(GAP_BOX, np.array([0.9]), 2, appearance=BLUE[None, :])
+    ids = sorted(t.frag_id for t in tr.tracks)
+    assert ids == [1, 2], "the refused detection was a high-band box, so it was born"
+    (r,) = tr.refusals
+    assert (r.frame, r.frag_id, r.age, r.band) == (2, 1, 2, "high")
+    assert r.distance > 0.3 and np.allclose(r.box, GAP_BOX[0])
+
+
+def test_after_a_gap_the_same_look_is_taken_and_the_descriptor_is_kept_aligned():
+    tr = gated()
+    tr.update(GAP_BOX, np.array([0.9]), 0, appearance=RED[None, :])
+    tr.update(np.zeros((0, 4)), np.zeros(0), 1, appearance=np.zeros((0, 3)))
+    tr.update(GAP_BOX, np.array([0.9]), 2, appearance=RED[None, :])
+    (t,) = tr.tracks
+    assert t.frames == [0, 2] and len(t.appearance) == 2 and tr.refusals == []
+    assert len(as_track(t).appearance) == 2
+
+
+def test_a_low_band_refusal_starts_nothing():
+    tr = gated()
+    tr.update(GAP_BOX, np.array([0.9]), 0, appearance=RED[None, :])
+    tr.update(np.zeros((0, 4)), np.zeros(0), 1, appearance=np.zeros((0, 3)))
+    tr.update(GAP_BOX, np.array([0.25]), 2, appearance=BLUE[None, :])
+    assert [t.frag_id for t in tr.tracks] == [1] and tr.tracks[0].frames == [0]
+    assert tr.refusals[0].band == "low"
+
+
+def test_a_nan_descriptor_never_splits_on_the_two_stage_tracker_either():
+    tr = gated()
+    tr.update(GAP_BOX, np.array([0.9]), 0, appearance=RED[None, :])
+    tr.update(np.zeros((0, 4)), np.zeros(0), 1, appearance=np.zeros((0, 3)))
+    tr.update(GAP_BOX, np.array([0.9]), 2, appearance=np.full((1, 3), np.nan))
+    assert len(tr.tracks) == 1 and tr.tracks[0].frames == [0, 2]
+
+
+def test_the_gate_refuses_a_frame_without_descriptors_and_a_switch_midway():
+    tr = gated()
+    with pytest.raises(ValueError, match="no appearance vectors"):
+        tr.update(GAP_BOX, np.array([0.9]), 0)
+    tr2 = OfflineForward(0.35, 0.20, 0.3, 0.4, 5, 1, 5.0)
+    tr2.update(GAP_BOX, np.array([0.9]), 0, appearance=RED[None, :])
+    with pytest.raises(ValueError, match="index-aligned"):
+        tr2.update(GAP_BOX, np.array([0.9]), 1)
+
+
+def test_without_a_threshold_the_two_stage_tracker_is_unchanged_and_records_looks():
+    tr = OfflineForward(0.35, 0.20, 0.3, 0.4, 5, 1, 5.0)
+    tr.update(GAP_BOX, np.array([0.9]), 0, appearance=RED[None, :])
+    tr.update(np.zeros((0, 4)), np.zeros(0), 1, appearance=np.zeros((0, 3)))
+    tr.update(GAP_BOX, np.array([0.9]), 2, appearance=BLUE[None, :])
+    assert len(tr.tracks) == 1 and len(tr.tracks[0].appearance) == 2 and tr.refusals == []
+
+
+def test_shipped_forward_is_the_serving_operating_point_at_the_consumption_rate():
+    from syncai_hydranet.analytics.bytetrack import (
+        MOT17_FPS,
+        SHIPPED_IOU,
+        SHIPPED_IOU_LOW,
+        SHIPPED_MAX_AGE,
+        SHIPPED_MIN_HITS,
+        shipped_forward,
+    )
+    from syncai_hydranet.serving.camera import BIRTH_REF, KEEP_REF
+
+    tr = shipped_forward(5.0, appearance_thr=0.39)
+    assert (tr.high_thr, tr.low_thr) == (BIRTH_REF, KEEP_REF)
+    assert (tr.iou_thr, tr.iou_thr_low, tr.max_age, tr.min_hits) == (
+        SHIPPED_IOU, SHIPPED_IOU_LOW, SHIPPED_MAX_AGE, SHIPPED_MIN_HITS,
+    )  # fmt: skip
+    assert tr.vel_scale == MOT17_FPS / 5.0 and tr.appearance_thr == 0.39
+    with pytest.raises(ValueError):
+        shipped_forward(0.0)
+
+
+def test_the_clip_adapter_speaks_track_clip_and_returns_tracks():
+    from syncai_hydranet.analytics.bytetrack import TwoStageForClip, shipped_forward
+
+    tr = TwoStageForClip(shipped_forward(5.0))
+    for f in range(3):
+        tr.update(GAP_BOX, f, scores=np.array([0.9]))
+    (t,) = tr.finished()
+    assert type(t).__name__ == "Track" and t.frames == [0, 1, 2] and t.confirmed
+    with pytest.raises(ValueError, match="scores"):
+        tr.update(GAP_BOX, 3)
