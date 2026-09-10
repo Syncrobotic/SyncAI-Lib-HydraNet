@@ -48,11 +48,20 @@ host-side FCOS decode. `scripts/serve_pilot.py` drives them as a pilot. Training
 thresholds: `configs/serving/thresholds_retail_security.json`.
 
 **Not yet assembled here:** a *service*. What is missing is not the inference code any
-more — it is the packaging around it: per-site config (the floor-metre zones, the event
-thresholds), camera ingest, an output sink, and the ops to run it (compose/systemd). That
-is what belongs in this directory, added when it is built rather than invented before it
-exists. **Read that sentence rather than the layer table above it:** what ships today is
-still an ONNX, a hand-run engine build and a pilot script.
+more — it is the packaging around it: camera ingest, an output sink, and the ops to run it
+(compose/systemd). That is what belongs in this directory, added when it is built rather
+than invented before it exists. **Read that sentence rather than the layer table above
+it:** what ships today is still an ONNX, a hand-run engine build and a pilot script.
+
+Two of the missing pieces landed on 2026-09-10. **Per-site policy** is a file —
+`configs/policy/<store>.yaml`, read by `analytics/policy.py`, applied by
+`serving/alerts.py` on the pilot and by `scripts/step6_events.py` offline, so both fire on
+the same numbers. **The grading surface** is here: [`review_server.py`](review_server.py),
+a localhost HTTP server over the disposition store — one page per store, the crossing
+frame pulled from the clip with the zone drawn and the shopper blurred from the
+calibration alone, and a confirm / reject form per alert that writes through
+`dispositions.record_disposition`. It is the labelling tool the data engine starts from
+(PLAN §4.5), not the alarm UI, and it binds to localhost on purpose.
 
 The annotation that feeds this product's training is
 [`../../tools/annotation/`](../../tools/annotation/) — upstream of training, which is why
