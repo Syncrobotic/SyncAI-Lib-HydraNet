@@ -148,3 +148,23 @@ def test_the_build_falls_back_to_the_blobs_without_lines(tmp_path, monkeypatch):
         scene_mesh.cell_grids(CAMERA, root, gated=False, evidence=ev)[1]
     )
     assert scene_mesh.store_axis(ev, CAMERA, root) == blob
+
+
+# ------------------------------------------------------------------ the joint period
+
+
+def test_a_tile_grid_reports_its_own_pitch():
+    walk, gz, ok, ground = _floor_geometry()
+    for tile in (0.45, 0.60):
+        plate = _tiled_plate(20.0, tile_m=tile)
+        axis, _ = floor_axis.floor_line_axis(plate, walk, gz, ok, ground)
+        period, strength = floor_axis.floor_period(plate, walk, gz, ok, ground, axis)
+        assert period is not None and abs(period - tile) <= 0.02, (tile, period)
+        assert strength > 0.2
+
+
+def test_a_floor_without_joints_reports_no_period():
+    walk, gz, ok, ground = _floor_geometry()
+    plate = np.random.default_rng(2).integers(60, 200, (H, W, 3)).astype(np.uint8)
+    period, strength = floor_axis.floor_period(plate, walk, gz, ok, ground, 0.0)
+    assert period is None or strength < 0.2

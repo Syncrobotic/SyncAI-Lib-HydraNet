@@ -88,3 +88,96 @@ def floor_line_axis(plate, walk, gz, geom_ok, ground_points) -> tuple[float | No
         centre + float(np.average(off[near_peak], weights=wts)) if wts.sum() > 0 else centre
     )
     return float(np.radians(refined % 90)), second
+
+
+# Joint periods are searched between these; below is texture, above is not a tile.
+PERIOD_MIN_M, PERIOD_MAX_M = 0.25, 1.30
+_PERIOD_BIN_M = 0.01
+# Autocorrelation at twice the candidate pitch, below which the candidate is not periodic.
+HARMONIC_MIN = 0.15
+# Edges within this many degrees of an axis vote for the period across that axis.
+_ALONG_DEG = 12.0
+
+
+def floor_period(plate, walk, gz, geom_ok, ground_points, axis) -> tuple[float | None, float]:
+    """(joint period in metres across the floor's lines, autocorrelation at it), or (None, 0).
+
+    The same edges `floor_line_axis` reads, rotated into the store frame at `axis`: the
+    edges running along one axis are histogrammed by their coordinate across it at 1 cm,
+    and the histogram's autocorrelation has its first local maximum past PERIOD_MIN_M at
+    the joint pitch. Both axes are tried and the stronger answers. In the camera's own
+    metres -- which is the point: cameras over one floor must agree, and against a known
+    tile they give the scale outright, with no person in the frame.
+    """
+    lum = ndimage.gaussian_filter(np.asarray(plate, float).mean(axis=2), 1.2)
+    gy, gx = np.gradient(lum)
+    mag = np.hypot(gx, gy)
+    floor = (
+        ndimage.binary_erosion(walk, iterations=EDGE_ERODE_PX) & geom_ok & (gz < EDGE_MAX_Z_M)
+    )
+    if floor.sum() < EDGE_MIN_PX:
+        return None, 0.0
+    thr = np.percentile(mag[floor], EDGE_PCT)
+    ys, xs = np.nonzero(floor & (mag > thr))
+    if len(ys) < EDGE_MIN_PX:
+        return None, 0.0
+    t = np.stack([-gy[ys, xs], gx[ys, xs]], axis=1)
+    t /= np.linalg.norm(t, axis=1, keepdims=True) + 1e-9
+    p0 = np.stack([xs + 0.5, ys + 0.5], axis=1).astype(float)
+    g0 = ground_points(p0)
+    g1 = ground_points(p0 + 0.5 * t)
+    ok = np.isfinite(g0).all(axis=1) & np.isfinite(g1).all(axis=1)
+    g0, d = g0[ok], g1[ok] - g0[ok]
+    c, s = np.cos(axis), np.sin(axis)
+    u, v = g0[:, 0] * c + g0[:, 1] * s, -g0[:, 0] * s + g0[:, 1] * c
+    ang = (np.degrees(np.arctan2(d[:, 1], d[:, 0])) - np.degrees(axis)) % 90
+    along_u = np.minimum(ang, 90 - ang) <= _ALONG_DEG  # runs along u: votes across, on v
+    best: tuple[float | None, float] = (None, 0.0)
+    for coords in (v[along_u], u[~along_u]):
+        got = _period_of(coords)
+        if got is not None and got[1] > best[1]:
+            best = got
+    return best
+
+
+def _period_of(coords) -> tuple[float, float] | None:
+    if len(coords) < EDGE_MIN_PX:
+        return None
+    lo, hi = np.percentile(coords, [2, 98])
+    c = coords[(coords >= lo) & (coords <= hi)]
+    nbins = int((hi - lo) / _PERIOD_BIN_M) + 1
+    if nbins < 3 * int(PERIOD_MIN_M / _PERIOD_BIN_M):
+        return None
+    h, _ = np.histogram(c, bins=nbins, range=(lo, hi))
+    # Detrended: the edge density ramps with distance from the camera, and that ramp's
+    # autocorrelation is positive at every lag -- a noise plate then "repeats" at 0.3 m
+    # with a harmonic at 0.6. What is left after the ramp is the joints.
+    h = h - ndimage.gaussian_filter1d(h.astype(float), PERIOD_MAX_M / 2 / _PERIOD_BIN_M)
+    ac = np.correlate(h, h, "full")[len(h) - 1 :]
+    ac = ac / (ac[0] + 1e-9)
+    a = int(PERIOD_MIN_M / _PERIOD_BIN_M)
+    b = min(int(PERIOD_MAX_M / _PERIOD_BIN_M), len(ac) - 2)
+    seg = ac[a:b]
+    if len(seg) < 3:
+        return None
+    # A joint pitch repeats: the autocorrelation peaks at p AND at 2p. Random edges
+    # (the cache's aliasing, scuffs, a plank's grain) put a peak near PERIOD_MIN_M and
+    # nothing at its double -- measured on noise plates, 0.29-0.37 m at 0.43-0.52, with
+    # no second harmonic; a drawn 0.60 m grid gives 0.60 with its double at 1.20.
+    peaks = [
+        i
+        for i in range(1, len(seg) - 1)
+        if seg[i] > seg[i - 1] and seg[i] >= seg[i + 1] and seg[i] > 0.05
+    ]
+    best = None
+    for i in peaks:
+        k = i + a
+        if 2 * k + 2 >= len(ac):
+            continue
+        harmonic = float(ac[2 * k - 2 : 2 * k + 3].max())
+        if harmonic < HARMONIC_MIN:
+            continue
+        score = float(seg[i])
+        if best is None or score > best[1]:
+            best = (float(k * _PERIOD_BIN_M), score)
+    return best
