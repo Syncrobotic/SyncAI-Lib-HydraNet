@@ -97,7 +97,6 @@ import json
 import sys
 import time
 from dataclasses import replace
-from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -123,7 +122,7 @@ from syncai_hydranet.geometry.ground import (  # noqa: E402
 )
 from syncai_hydranet.serving import dispositions as dp  # noqa: E402
 from syncai_hydranet.serving.camera import BIRTH_REF, KEEP_REF  # noqa: E402
-from syncai_hydranet.serving.decode import confirm_mask  # noqa: E402
+from syncai_hydranet.serving.decode import confirm_hook  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
 DEFAULT_COMMISSION = ROOT / "runs/commission01"
@@ -235,7 +234,7 @@ def run_clip(camera, cam_file, clip, model, size, device, args, policy, person_i
         decode_thr = args.keep_thr
         if args.dense_birth:
             decode_thr = DENSE_BIRTH_THR
-            confirm = partial(confirm_mask, person_id=person_id)
+            confirm = confirm_hook(person_id)
     else:
         band = args.tracker == "band"
         tracker = Tracker(

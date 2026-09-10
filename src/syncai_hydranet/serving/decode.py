@@ -168,6 +168,22 @@ def confirm_mask(
     )
 
 
+def confirm_hook(person_id: int, min_fraction: float = MIN_PERSON_FRACTION):
+    """`confirm_mask` in the argument order `clip_tracks.track_clip`'s ``confirm`` takes.
+
+    The hook is ``(class_map, boxes)``; `confirm_mask` is ``(boxes, class_map, ...)``.
+    Both scripts wired the two with a `partial` on 2026-09-10 and the class map arrived
+    as the boxes -- an (H, W) array reshaped to (-1, 4) carries the wrong number of
+    flags, which the tracker refused on the first frame of the run that mattered. One
+    adapter, here, tested for the order.
+    """
+
+    def hook(class_map: np.ndarray, boxes: np.ndarray) -> np.ndarray:
+        return confirm_mask(boxes, class_map, person_id, min_fraction)
+
+    return hook
+
+
 def person_pixel_fraction(box, class_map: np.ndarray, person_id: int) -> float:
     """Fraction of a box's pixels the dense head calls `person`. 0.0 for an empty box.
 

@@ -103,3 +103,18 @@ def test_pre_nms_topk_leaves_the_kept_set_unchanged():
         )
         np.testing.assert_allclose(q["boxes"], f["boxes"])
         np.testing.assert_array_equal(q["labels"], f["labels"])
+
+
+def test_confirm_hook_takes_the_clip_loops_argument_order():
+    """(class_map, boxes), not (boxes, class_map): the swap that killed endings10."""
+    import numpy as np
+
+    from syncai_hydranet.serving.decode import confirm_hook, confirm_mask
+
+    cmap = np.zeros((64, 96), dtype=np.int64)
+    cmap[10:40, 10:30] = 5
+    boxes = np.array([[10, 10, 30, 40], [50, 10, 70, 40]], float)
+    hook = confirm_hook(5)
+    assert list(hook(cmap, boxes)) == [True, False]
+    assert list(hook(cmap, boxes)) == list(confirm_mask(boxes, cmap, 5))
+    assert len(hook(cmap, np.zeros((0, 4)))) == 0

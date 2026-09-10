@@ -96,7 +96,6 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import dataclass
-from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -118,7 +117,7 @@ from syncai_hydranet.data.video import frames, probe
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 from syncai_hydranet.serving.camera import BIRTH_REF
-from syncai_hydranet.serving.decode import confirm_mask
+from syncai_hydranet.serving.decode import confirm_hook
 from syncai_hydranet.shipped import load_model
 from syncai_hydranet.utils.device import pick_device
 from syncai_hydranet.utils.visualize import preprocess
@@ -523,7 +522,7 @@ def run_camera(camera: str, model, cfg, device, args) -> dict:
         k1=cam_file.lens.k1 if cam_file.lens else None,
         max_frames=args.frames,
         describe=torso_histograms if args.appearance else None,
-        confirm=partial(confirm_mask, person_id=seg_person) if args.dense_birth else None,
+        confirm=confirm_hook(seg_person) if args.dense_birth else None,
     )
     src = (out.src_w, out.src_h)
     counts = {"exit": 0, "lost": 0, "gone": 0}
