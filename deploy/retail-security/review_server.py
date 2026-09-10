@@ -35,6 +35,18 @@ front of `assets/`, which this does not touch.
 
 The pilot loops its clips, so a frame index past the clip's end wraps -- `frame_time`
 takes the modulus of the clip's duration, and says so on the page.
+
+---------------------------------------------------------------------------
+A ROW IS DRAWN AGAINST THE CALIBRATION IT WAS FILED UNDER, OR NOT AT ALL
+
+Every alert row carries `calib_version`, the hash of the camera.json the geometry ran
+under. On 2026-09-10 the first fleet re-read found a loitering event naming `fixture_04`
+whose floor points sat in today's `fixture_03` every frame: another session had rewritten
+the fleet's camera files that afternoon and the fixtures were renumbered, and the row's
+hash was the only thing that said so. So this page compares the hash on the row with the
+file it would draw from, and when they differ it draws **no zone and no marker**, says
+why, and still lets the reviewer grade the raw frame -- a polygon from a different
+calibration is not "roughly right", it is a different claim about the floor.
 """
 
 from __future__ import annotations
@@ -65,6 +77,7 @@ from syncai_hydranet.geometry.ground import (  # noqa: E402
 from syncai_hydranet.serving.dispositions import (  # noqa: E402
     AlertRecord,
     current_dispositions,
+    file_hash,
     iter_records,
     record_disposition,
 )
@@ -203,6 +216,13 @@ class Store:
             self._cams[camera] = CameraFile.load(p) if p.is_file() else None
         return self._cams[camera]
 
+    def calibration_matches(self, rec: AlertRecord) -> bool | None:
+        """True when the file on disk is the one the row was filed under; None if no file."""
+        p = self.commission / f"{rec.camera}.camera.json"
+        if not p.is_file() or rec.calib_version is None:
+            return None
+        return file_hash(p) == rec.calib_version
+
     def duration(self, clip: Path) -> float | None:
         key = str(clip)
         if key not in self._durations:
@@ -243,9 +263,8 @@ class Store:
             frame = extract_frame(clip, t)
         except subprocess.CalledProcessError:
             return None
-        img = (
-            draw_review_frame(frame, rec.event, cam_file) if cam_file else frame.convert("RGB")
-        )
+        draw = cam_file is not None and self.calibration_matches(rec) is True
+        img = draw_review_frame(frame, rec.event, cam_file) if draw else frame.convert("RGB")
         buf = io.BytesIO()
         img.save(buf, "JPEG", quality=80)
         return buf.getvalue()
@@ -306,6 +325,15 @@ def render_index(store: Store, show: str = "unreviewed") -> str:
         if rec.frame_ref.get("clip"):
             _, w = frame_time(ev, store.duration(ROOT / rec.frame_ref["clip"]))
             wrapped = " <small>(looped clip: frame index wrapped)</small>" if w else ""
+        match = store.calibration_matches(rec)
+        if match is False:
+            wrapped += (
+                " <b>calibration changed since this alert was filed:</b> "
+                "<small>zone and marker not drawn; the row's zone name may not be "
+                "today's</small>"
+            )
+        elif match is None:
+            wrapped += " <small>(no camera file: raw frame only)</small>"
         parts.append(
             ROW.format(
                 aid=e(rec.alert_id),

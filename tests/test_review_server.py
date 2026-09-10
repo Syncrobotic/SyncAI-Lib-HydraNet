@@ -98,6 +98,21 @@ def test_drawing_blurs_the_head_before_anything_is_drawn_on_top():
     assert abs(out[far].std() - before[far].std()) < 2.0
 
 
+def test_a_row_filed_under_another_calibration_is_flagged_and_not_drawn(tmp_path):
+    """The hash on the row is what caught a renumbered fixture on 2026-09-10."""
+    cam_json = tmp_path / "Taichung-cam01.camera.json"
+    CAM.save(cam_json)
+    root = tmp_path / "d"
+    rec = record_alert(root, an_event(), model=MODEL, calib=cam_json, clip="x.mp4")
+    store = rs.Store(root, tmp_path, by="t")
+    assert store.calibration_matches(rec) is True
+    cam_json.write_text(cam_json.read_text().replace("table_01", "table_02"))
+    assert store.calibration_matches(rec) is False
+    assert "calibration changed since this alert was filed" in rs.render_index(store, "all")
+    other = record_alert(root, an_event(camera="nowhere"), model=MODEL, clip="x.mp4")
+    assert store.calibration_matches(other) is None
+
+
 def test_a_verdict_lands_in_the_store_as_a_disposition_row(tmp_path):
     root = tmp_path / "d"
     rec = record_alert(root, an_event(), model=MODEL, clip="x.mp4")
