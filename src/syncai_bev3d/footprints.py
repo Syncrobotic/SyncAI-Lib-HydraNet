@@ -82,6 +82,7 @@ class Footprint:
     n_px: int
     source: str  # "top" or "foot"
     iou: float = 0.0  # reprojection score, filled by `object_footprints`
+    members: tuple[int, ...] = ()  # the objects a merged footprint is the union of
 
 
 def _ground(px_cache, cf: CameraFile, cache_shape) -> np.ndarray:
@@ -310,9 +311,9 @@ def _top_pixels(mask: np.ndarray):
     return rows[keep], cols[keep]
 
 
-def reprojection_iou(fp: Footprint, ev, yaw: float) -> float:
-    """The box projected through the camera against the object's own mask: IoU of the
-    box's silhouette with the mask, at the cache's resolution."""
+def _silhouette(fp: Footprint, ev, yaw: float) -> np.ndarray | None:
+    """The box projected through the camera, as a boolean image at the cache's
+    resolution; None when a corner is behind the camera."""
     cf, z = ev.cf, ev.z
     fh, fw = z["gx"].shape
     w, h = cf.image_size_px
@@ -328,7 +329,7 @@ def reprojection_iou(fp: Footprint, ev, yaw: float) -> float:
     cam = level @ cf.plane.rotation.T
     depth = cam[:, 2]
     if (depth <= 0.05).any():
-        return 0.0
+        return None
     px = np.stack(
         [
             cf.camera.fx * cam[:, 0] / depth + cf.camera.cx,
@@ -342,11 +343,255 @@ def reprojection_iou(fp: Footprint, ev, yaw: float) -> float:
     try:
         hull = px[ConvexHull(px).vertices]
     except Exception:
-        return 0.0
+        return None
     sil = Image.new("1", (fw, fh), 0)
     ImageDraw.Draw(sil).polygon([tuple(p) for p in hull], fill=1)
-    sil = np.asarray(sil, bool)
-    mask = ev.objects == fp.oid
+    return np.asarray(sil, bool)
+
+
+def reprojection_iou(fp: Footprint, ev, yaw: float, *, oids=None) -> float:
+    """The box projected through the camera against the object's own mask: IoU of the
+    box's silhouette with the mask, at the cache's resolution. `oids` names the objects
+    the mask is the union of (default: the footprint's own)."""
+    return reprojection_iou_union([fp], ev, yaw, oids=oids if oids is not None else (fp.oid,))
+
+
+def reprojection_iou_union(fps: list[Footprint], ev, yaw: float, *, oids) -> float:
+    """Several boxes together against the union of their objects' masks -- the score a
+    split is judged by, since each part alone covers only its share of the mask."""
+    sil = None
+    for fp in fps:
+        one = _silhouette(fp, ev, yaw)
+        if one is None:
+            return 0.0
+        sil = one if sil is None else (sil | one)
+    if sil is None:
+        return 0.0
+    mask = np.isin(ev.objects, list(oids))
     inter = (sil & mask).sum()
     union = (sil | mask).sum()
     return float(inter / union) if union else 0.0
+
+
+# --- Gate D3: the same object, by geometry ------------------------------------------
+# Two footprints are one fixture when they are one surface: the same class, tops at one
+# height, axes aligned, and touching end to end. A footprint is two fixtures when a box
+# cannot hold it: an L-shaped counter row fills little of its own rectangle, and its
+# points split into two rectangles that each fill theirs.
+MERGE_HEIGHT_M = 0.15
+MERGE_AXIS_DEG = 10.0
+MERGE_GAP_M = 0.30
+MERGE_OVERLAP_MIN = 0.5  # share of the shorter side the two boxes overlap across
+SPLIT_FILL_MAX = 0.65  # store-frame fill below which a footprint may be more than one box
+SPLIT_FILL_OWN_MAX = 0.70  # and its own-frame fill too (an L's is ~0.67, a rectangle's ~1)
+
+
+def _fill(pts_uv: np.ndarray) -> float:
+    """Share of the points' own minimum rectangle that they cover, on a 5 cm grid."""
+    if len(pts_uv) < 10:
+        return 1.0
+    ang, (long, short) = _min_area_rect(pts_uv)
+    if long <= 0 or short <= 0:
+        return 1.0
+    a = np.radians(ang)
+    c, s = np.cos(-a), np.sin(-a)
+    q = np.stack([pts_uv[:, 0] * c - pts_uv[:, 1] * s, pts_uv[:, 0] * s + pts_uv[:, 1] * c], 1)
+    lo = np.percentile(q, 3, axis=0)
+    cells = set(map(tuple, np.floor((q - lo) / 0.05).astype(int)))
+    return min(1.0, len(cells) / max((long / 0.05) * (short / 0.05), 1.0))
+
+
+def _fill_axis(pts_uv: np.ndarray) -> float:
+    """Share of the points' axis-aligned (store-frame) rectangle they cover, 5 cm grid."""
+    if len(pts_uv) < 10:
+        return 1.0
+    lo, hi = np.percentile(pts_uv, 3, axis=0), np.percentile(pts_uv, 97, axis=0)
+    ext = hi - lo
+    if (ext <= 0).any():
+        return 1.0
+    cells = set(map(tuple, np.floor((pts_uv - lo) / 0.05).astype(int)))
+    return min(1.0, len(cells) / max((ext[0] / 0.05) * (ext[1] / 0.05), 1.0))
+
+
+def _touching(a: Footprint, b: Footprint) -> bool:
+    """End to end along the shared long axis, overlapping across it."""
+    au, av = a.u1 - a.u0, a.v1 - a.v0
+    bu, bv = b.u1 - b.u0, b.v1 - b.v0
+    along_u = (au >= av) and (bu >= bv)
+    along_v = (av > au) and (bv > bu)
+    if not (along_u or along_v):
+        return False
+    if along_u:
+        gap = max(a.u0, b.u0) - min(a.u1, b.u1)
+        over = min(a.v1, b.v1) - max(a.v0, b.v0)
+        short = min(av, bv)
+    else:
+        gap = max(a.v0, b.v0) - min(a.v1, b.v1)
+        over = min(a.u1, b.u1) - max(a.u0, b.u0)
+        short = min(au, bu)
+    return gap <= MERGE_GAP_M and over >= MERGE_OVERLAP_MIN * short
+
+
+def _same_fixture(a: Footprint, b: Footprint) -> bool:
+    return (
+        a.name == b.name
+        and abs(a.h - b.h) <= MERGE_HEIGHT_M
+        and abs(((a.own_deg - b.own_deg) + 45) % 90 - 45) <= MERGE_AXIS_DEG
+        and _touching(a, b)
+    )
+
+
+def merge_footprints(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
+    """Footprints that are one surface become one box, kept only if the box reprojects
+    onto the union of their masks no worse than the parts did onto theirs."""
+    fps = list(fps)
+    merged = True
+    while merged:
+        merged = False
+        for i in range(len(fps)):
+            for j in range(i + 1, len(fps)):
+                a, b = fps[i], fps[j]
+                if not _same_fixture(a, b):
+                    continue
+                union = Footprint(
+                    name=a.name,
+                    oid=a.oid,
+                    u0=min(a.u0, b.u0),
+                    u1=max(a.u1, b.u1),
+                    v0=min(a.v0, b.v0),
+                    v1=max(a.v1, b.v1),
+                    h=(a.h * a.n_px + b.h * b.n_px) / (a.n_px + b.n_px),
+                    own_deg=a.own_deg if a.n_px >= b.n_px else b.own_deg,
+                    n_px=a.n_px + b.n_px,
+                    source=f"{a.source}+{b.source}",
+                )
+                union.iou = reprojection_iou(
+                    union, ev, yaw, oids=(*(a.members or (a.oid,)), *(b.members or (b.oid,)))
+                )
+                if union.iou >= min(a.iou, b.iou) - 0.05:
+                    union.members = (*(a.members or (a.oid,)), *(b.members or (b.oid,)))
+                    fps = [f for k, f in enumerate(fps) if k not in (i, j)] + [union]
+                    merged = True
+                    break
+            if merged:
+                break
+    return fps
+
+
+def _points_uv(fp: Footprint, ev, yaw: float):
+    """The floor-frame points a footprint was built from (its top or its foot), again."""
+    cf, z = ev.cf, ev.z
+    fh, fw = z["gx"].shape
+    cy, sy = np.cos(yaw), np.sin(yaw)
+    oids = fp.members or (fp.oid,)
+    obj = np.isin(ev.objects, list(oids))
+    obj = _body(obj) if len(oids) == 1 else obj
+    good = obj & z["geom_ok"]
+    if fp.source.startswith("top") and "horiz" in z:
+        sel = good & (z["horiz"] >= TOP_HORIZ_MIN)
+        r, c = np.nonzero(sel)
+        g = _ground(np.stack([c + 0.5, r + 0.5], axis=1).astype(float), cf, (fh, fw))
+        g = g[np.isfinite(g).all(axis=1)] * (cf.plane.height - fp.h) / cf.plane.height
+    else:
+        r, c = _foot_pixels(obj)
+        g = _ground(np.stack([c + 0.5, r + 0.5], axis=1).astype(float), cf, (fh, fw))
+        g = _near_edge(g[np.isfinite(g).all(axis=1)])
+    return np.stack([g[:, 0] * cy + g[:, 1] * sy, -g[:, 0] * sy + g[:, 1] * cy], axis=1)
+
+
+SPLIT_GRID_M = 0.05  # rect_decompose coarsens 5x: 0.25 m blocks
+SPLIT_MIN_CELLS = 12  # a part smaller than this (0.12 m2) is a mask edge, not a fixture
+SPLIT_MAX_PARTS = 3
+# A part narrower than this is the decomposition's residue along a ragged edge, not a
+# counter (Taichung-cam04's L came with a 0.25 x 1.75 m sliver beside its two legs).
+SPLIT_PART_SHORT_M = 0.4
+# The rectangles must cover this share of the occupied cells, or they are not the shape.
+SPLIT_COVER_MIN = 0.85
+
+
+def split_footprints(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
+    """A footprint that is not one box in the store's frame is more than one: its
+    points, rasterised along the store's axes, are decomposed into rectangles
+    (`scene_mesh.rect_decompose`, the store's boxy prior), each becomes a box, and the
+    set is kept when two or three rectangles cover the points and together reproject
+    onto the object no worse than the one box did. An L-shaped counter row is two legs;
+    a rectangle is one rectangle; a fixture standing off the store's axis decomposes
+    into a staircase of many small ones and is left alone.
+
+    The store frame, not the points' own: the minimum-area rectangle of an L is
+    diagonal (-36 deg on the synthetic one), which is why `own_deg` says nothing about
+    an L and why the cut is made along the axes the counters were laid on.
+    """
+    from syncai_bev3d.scene_mesh import rect_decompose
+
+    out: list[Footprint] = []
+    for fp in fps:
+        if (
+            fp.name != "display_table"
+            or not fp.source.startswith("top")
+            or fp.iou < REPROJECTION_MIN
+        ):
+            out.append(fp)  # a footprint not on its object is not worth cutting
+            continue
+        pts = _points_uv(fp, ev, yaw)
+        # not a box in any frame: a rotated rectangle fills its own frame and is left
+        # alone; an L fills neither (its own minimum rectangle is diagonal)
+        if (
+            len(pts) < 200
+            or _fill(pts) >= SPLIT_FILL_OWN_MAX
+            or _fill_axis(pts) >= SPLIT_FILL_MAX
+        ):
+            out.append(fp)
+            continue
+        lo = np.percentile(pts, 1, axis=0)
+        cells = np.floor((pts - lo) / SPLIT_GRID_M).astype(int)
+        cells = cells[(cells >= 0).all(axis=1)]
+        grid = np.zeros((cells[:, 1].max() + 2, cells[:, 0].max() + 2), bool)
+        grid[cells[:, 1], cells[:, 0]] = True
+        grid = ndimage.binary_closing(grid, np.ones((3, 3)))
+        rects = [r for group in rect_decompose(grid, SPLIT_MIN_CELLS) for r in group]
+        rects = [
+            r
+            for r in rects
+            if (r[1] - r[0] + 1) * (r[3] - r[2] + 1) >= SPLIT_MIN_CELLS
+            and min(r[1] - r[0] + 1, r[3] - r[2] + 1) * SPLIT_GRID_M >= SPLIT_PART_SHORT_M
+        ]
+        if not 2 <= len(rects) <= SPLIT_MAX_PARTS:
+            out.append(fp)
+            continue
+        covered = np.zeros_like(grid)
+        for r0, r1, c0, c1 in rects:
+            covered[r0 : r1 + 1, c0 : c1 + 1] = True
+        if (covered & grid).sum() < SPLIT_COVER_MIN * grid.sum():
+            out.append(fp)
+            continue
+        boxes = []
+        for r0, r1, c0, c1 in rects:
+            part = Footprint(
+                name=fp.name,
+                oid=fp.oid,
+                u0=float(lo[0] + c0 * SPLIT_GRID_M),
+                u1=float(lo[0] + (c1 + 1) * SPLIT_GRID_M),
+                v0=float(lo[1] + r0 * SPLIT_GRID_M),
+                v1=float(lo[1] + (r1 + 1) * SPLIT_GRID_M),
+                h=fp.h,
+                own_deg=0.0,
+                n_px=fp.n_px // len(rects),
+                source=fp.source + " (split)",
+                members=fp.members,
+            )
+            boxes.append(part)
+        oids = fp.members or (fp.oid,)
+        together = reprojection_iou_union(boxes, ev, yaw, oids=oids)
+        if together >= fp.iou - 0.02:
+            for b in boxes:
+                b.iou = together
+            out.extend(boxes)
+        else:
+            out.append(fp)
+    return out
+
+
+def regularise_footprints(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
+    """Gate D3 in one call: merge what is one surface, split what a box cannot hold."""
+    return split_footprints(merge_footprints(fps, ev, yaw), ev, yaw)

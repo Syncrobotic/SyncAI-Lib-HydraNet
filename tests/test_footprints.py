@@ -178,3 +178,131 @@ def test_the_build_uses_the_object_footprints(tmp_path, monkeypatch):
     assert (
         abs(max(w, d) - 2.2) < 0.25 and abs(min(w, d) - 1.0) < 0.2 and abs(h - 0.85) < 0.02
     ), tables
+
+
+# ------------------------------------------------------------ Gate D3: one surface, one box
+
+
+def _store_two_tables(tmp_path, monkeypatch, *, gap_m, dh=0.0):
+    """Two counters side by side along x, `gap_m` apart, the second `dh` higher."""
+    root = tmp_path / "checkout"
+    commission = root / "runs/commission01"
+    commission.mkdir(parents=True)
+    (root / "runs/site30k_qa/geometry_cache").mkdir(parents=True)
+    ys, xs = np.mgrid[0:H, 0:W]
+    gx, gz = pixel_to_ground(xs + 0.5, ys + 0.5, CAM, PLANE)
+    ok = np.isfinite(gz)
+    static = np.full((H, W), 255, np.uint8)
+    objects = np.zeros((H, W), np.uint16)
+    horiz = np.zeros((H, W), np.float32)
+    height = np.zeros((H, W), np.float32)
+    tables = (
+        (-1.6, -0.2 - gap_m / 2, 4.0, 5.0, 0.85),
+        (-0.2 + gap_m / 2, 1.2, 4.0, 5.0, 0.85 + dh),
+    )
+    for i, (x0, x1, z0, z1, th) in enumerate(tables, start=1):
+        top = _mask([_poly_px([(x0, th, z0), (x1, th, z0), (x1, th, z1), (x0, th, z1)])])
+        front = _mask([_poly_px([(x0, 0, z0), (x1, 0, z0), (x1, th, z0), (x0, th, z0)])])
+        tab = (top | front) & (objects == 0)
+        static[tab] = 4
+        objects[tab] = i
+        horiz[top & tab] = 1.0
+        height[tab] = th
+    table = static == 4
+    Image.fromarray(np.where(table, 255, 0).astype(np.uint8)).save(
+        commission / "display_table.png"
+    )
+    floor = ok & (gz > 0.5) & (gz < 12) & ~table
+    Image.fromarray(np.where(floor, 255, 0).astype(np.uint8)).save(commission / "walkable.png")
+    Image.fromarray(objects).save(commission / "objects.png")
+    np.savez(
+        root / f"runs/site30k_qa/geometry_cache/{CAMERA}.npz",
+        gx=np.nan_to_num(gx).astype(np.float32), gz=np.nan_to_num(gz, nan=99.0).astype(np.float32),
+        lx=np.nan_to_num(gx).astype(np.float32), lz=np.nan_to_num(gz, nan=99.0).astype(np.float32),
+        height=height, horiz=horiz, geom_ok=ok,
+    )  # fmt: skip
+    CameraFile(
+        camera_id=CAMERA, image_size_px=(W, H), camera=CAM, plane=PLANE,
+        mask_files={"display_table": "display_table.png", "walkable": "walkable.png", "objects": "objects.png"},
+    ).save(commission / f"{CAMERA}.camera.json")  # fmt: skip
+
+    def load(path, _cf):
+        with np.load(path) as cache:
+            return {key: cache[key] for key in cache.files}
+
+    monkeypatch.setattr(scene_mesh, "load_geometry_cache", load, raising=False)
+    return root
+
+
+def _tables_after_d3(root):
+    ev = scene_mesh.load_evidence(CAMERA, root)
+    fps = footprints.regularise_footprints(footprints.object_footprints(ev, 0.0), ev, 0.0)
+    return [fp for fp in fps if fp.name == "display_table"]
+
+
+def test_two_counters_end_to_end_at_one_height_are_one_box(tmp_path, monkeypatch):
+    tables = _tables_after_d3(_store_two_tables(tmp_path, monkeypatch, gap_m=0.05))
+    assert len(tables) == 1, [(t.u0, t.u1, t.source) for t in tables]
+    assert abs((tables[0].u1 - tables[0].u0) - 2.8) < 0.3 and tables[0].members == (1, 2)
+
+
+def test_two_counters_with_an_aisle_between_stay_two(tmp_path, monkeypatch):
+    tables = _tables_after_d3(_store_two_tables(tmp_path, monkeypatch, gap_m=0.8))
+    assert len(tables) == 2
+
+
+def test_two_counters_at_different_heights_stay_two(tmp_path, monkeypatch):
+    tables = _tables_after_d3(_store_two_tables(tmp_path, monkeypatch, gap_m=0.05, dh=0.3))
+    assert len(tables) == 2
+
+
+def test_an_l_shaped_counter_row_is_two_boxes(tmp_path, monkeypatch):
+    """One object whose top is an L: a box cannot hold it; two can."""
+    root = tmp_path / "checkout"
+    commission = root / "runs/commission01"
+    commission.mkdir(parents=True)
+    (root / "runs/site30k_qa/geometry_cache").mkdir(parents=True)
+    ys, xs = np.mgrid[0:H, 0:W]
+    gx, gz = pixel_to_ground(xs + 0.5, ys + 0.5, CAM, PLANE)
+    ok = np.isfinite(gz)
+    th = 0.85
+    legs = ((-1.5, 1.5, 4.0, 4.8), (0.7, 1.5, 2.4, 4.0))  # along x, and a leg toward the camera
+    top = np.zeros((H, W), bool)
+    front = np.zeros((H, W), bool)
+    for x0, x1, z0, z1 in legs:
+        top |= _mask([_poly_px([(x0, th, z0), (x1, th, z0), (x1, th, z1), (x0, th, z1)])])
+        front |= _mask([_poly_px([(x0, 0, z0), (x1, 0, z0), (x1, th, z0), (x0, th, z0)])])
+    tab = top | front
+    static = np.where(tab, 4, 255).astype(np.uint8)
+    objects = np.where(tab, 1, 0).astype(np.uint16)
+    Image.fromarray(np.where(tab, 255, 0).astype(np.uint8)).save(
+        commission / "display_table.png"
+    )
+    floor = ok & (gz > 0.5) & (gz < 12) & ~tab
+    Image.fromarray(np.where(floor, 255, 0).astype(np.uint8)).save(commission / "walkable.png")
+    Image.fromarray(objects).save(commission / "objects.png")
+    np.savez(
+        root / f"runs/site30k_qa/geometry_cache/{CAMERA}.npz",
+        gx=np.nan_to_num(gx).astype(np.float32), gz=np.nan_to_num(gz, nan=99.0).astype(np.float32),
+        lx=np.nan_to_num(gx).astype(np.float32), lz=np.nan_to_num(gz, nan=99.0).astype(np.float32),
+        height=np.where(tab, th, 0.0).astype(np.float32), horiz=top.astype(np.float32), geom_ok=ok,
+    )  # fmt: skip
+    CameraFile(
+        camera_id=CAMERA, image_size_px=(W, H), camera=CAM, plane=PLANE,
+        mask_files={"display_table": "display_table.png", "walkable": "walkable.png", "objects": "objects.png"},
+    ).save(commission / f"{CAMERA}.camera.json")  # fmt: skip
+
+    def load(path, _cf):
+        with np.load(path) as cache:
+            return {key: cache[key] for key in cache.files}
+
+    monkeypatch.setattr(scene_mesh, "load_geometry_cache", load, raising=False)
+    del static
+    tables = _tables_after_d3(root)
+    assert len(tables) == 2, [
+        (round(t.u1 - t.u0, 2), round(t.v1 - t.v0, 2), t.source) for t in tables
+    ]
+    spans = sorted(
+        (max(t.u1 - t.u0, t.v1 - t.v0), min(t.u1 - t.u0, t.v1 - t.v0)) for t in tables
+    )
+    assert all(short < 1.2 for _, short in spans), spans

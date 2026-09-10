@@ -42,7 +42,7 @@ from syncai_bev3d.floorplan import (
     snap_to_walls,
     wall_runs,
 )
-from syncai_bev3d.footprints import REPROJECTION_MIN, object_footprints
+from syncai_bev3d.footprints import REPROJECTION_MIN, object_footprints, regularise_footprints
 from syncai_bev3d.meshes import (
     Placement,
     _merge,
@@ -1007,7 +1007,9 @@ def build_scene_regular(camera, root: Path | None = None):
         # top cast onto its height plane, a shelf's or column's foot on the floor -- and
         # a reprojection score for each. The cell smear below is the path for cameras
         # commissioned before the object map.
-        for fp in object_footprints(ev, yaw, products=ev.products):
+        for fp in regularise_footprints(
+            object_footprints(ev, yaw, products=ev.products), ev, yaw
+        ):
             placed = fp.iou >= REPROJECTION_MIN
             print(
                 f"  {camera}: {fp.name} #{fp.oid} {fp.u1 - fp.u0:.2f}x{fp.v1 - fp.v0:.2f} m "
