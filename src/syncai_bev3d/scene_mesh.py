@@ -256,6 +256,23 @@ CONTACT_GATED = frozenset({"wall", "column", "display_shelf"})
 CONTACT_BAND_M = 0.30
 
 
+def _majority_id(ids, rows, cols, shape) -> np.ndarray:
+    """Per cell, the object id most of its pixels carry; 0 where no pixel has one."""
+    out = np.zeros(shape, np.int32)
+    present = np.unique(ids[ids > 0])
+    if not len(present):
+        return out
+    best = np.zeros(shape, np.int32)
+    for oid in present:
+        g = np.zeros(shape, np.int32)
+        m = ids == oid
+        np.add.at(g, (rows[m], cols[m]), 1)
+        take = g > best
+        out[take] = oid
+        best[take] = g[take]
+    return out
+
+
 def contact_cells(
     mask: np.ndarray, gx: np.ndarray, gz: np.ndarray, *, min_component_px: int = 200
 ) -> np.ndarray:
@@ -299,6 +316,10 @@ class Evidence:
     static: np.ndarray  # class id per pixel, 255 where none
     walk: np.ndarray  # walkable floor per pixel
     plate: np.ndarray | None
+    # `masks_pass`'s object id per pixel (0: none), or None for a camera commissioned
+    # before the map was written. Two counters that touch are two ids here and one blob
+    # in the class map, and that difference is the whole reason it exists.
+    objects: np.ndarray | None = None
 
 
 def load_evidence(camera, root: Path | None = None) -> Evidence:
@@ -333,10 +354,17 @@ def load_evidence(camera, root: Path | None = None) -> Evidence:
     if cf.plate_file and (root / cf.plate_file).exists():
         with Image.open(root / cf.plate_file) as im:
             plate = np.asarray(im.convert("RGB").resize((fw, fh), Image.Resampling.BILINEAR))
-    return Evidence(cf, z, static, walk, plate)
+    objects = None
+    f = cf.mask_files.get("objects")
+    if f and (root / "runs/commission01" / f).exists():
+        with Image.open(root / "runs/commission01" / f) as im:
+            objects = np.asarray(im.resize((fw, fh), Image.Resampling.NEAREST)).astype(np.int32)
+    return Evidence(cf, z, static, walk, plate, objects)
 
 
-def cell_grids(camera, root: Path | None = None, *, gated: bool = True, evidence=None):
+def cell_grids(
+    camera, root: Path | None = None, *, gated: bool = True, evidence=None, with_objects=False
+):
     """Per-class occupancy in floor metres, and per-class measured heights (p85).
 
     `root` is the checkout holding `runs/`; the default is this package's own. It is an
@@ -346,7 +374,9 @@ def cell_grids(camera, root: Path | None = None, *, gated: bool = True, evidence
     `gated=False` skips the contact-line gate (see below) and returns every lowered
     pixel: the evidence the store axis is fitted to, not a footprint anything is built
     from. `evidence` is a loaded `Evidence`, so a caller needing both passes need not
-    read the masks twice.
+    read the masks twice. `with_objects=True` appends a fifth value: per class, the
+    grid of the object id most of a cell's pixels carry (0 where none), or None when
+    the camera has no object map.
     """
     root = Path(root) if root is not None else ROOT
     ev = evidence if evidence is not None else load_evidence(camera, root)
@@ -356,6 +386,7 @@ def cell_grids(camera, root: Path | None = None, *, gated: bool = True, evidence
     zs = {1: z["gz"][walk]}
     heights = {}
     hts = {}
+    oids = {}  # per class, the object id of every selected pixel
     for cid in CLASS_NAMES:
         sel = (static == cid) & z["geom_ok"]
         if gated and CLASS_NAMES[cid] in CONTACT_GATED:
@@ -376,6 +407,8 @@ def cell_grids(camera, root: Path | None = None, *, gated: bool = True, evidence
             sel = sel.copy()
             sel[sel] = near
         xs[cid], zs[cid] = z["lx"][sel], z["lz"][sel]
+        if ev.objects is not None:
+            oids[cid] = ev.objects[sel]
         hts[cid] = z["height"][sel]  # per cell, so a component can be measured too
         hs = z["height"][sel]
         hs = hs[np.isfinite(hs) & (hs > 0.05)]
@@ -400,6 +433,7 @@ def cell_grids(camera, root: Path | None = None, *, gated: bool = True, evidence
             hts[cid] = z["height"][sel]
     grids = {}
     grid_h = {}
+    grid_obj = {}
     for cid in xs:
         x, zz = xs[cid], zs[cid]
         ok = (
@@ -419,6 +453,10 @@ def cell_grids(camera, root: Path | None = None, *, gated: bool = True, evidence
             hsum = np.zeros_like(g, float)
             np.add.at(hsum, (rows, cols), np.nan_to_num(hh))
             grid_h[cid] = hsum / np.maximum(g, 1)
+        if cid in oids:
+            grid_obj[cid] = _majority_id(oids[cid][ok], rows, cols, g.shape)
+    if with_objects:
+        return cf, grids, heights, grid_h, {cid: grid_obj.get(cid) for cid in CLASS_NAMES}
     return cf, grids, heights, grid_h
 
 
@@ -887,7 +925,9 @@ def build_scene_regular(camera, root: Path | None = None):
     slabs, counters, thin walls, columns.
     """
     ev = load_evidence(camera, root)
-    cf, grids, heights, grid_h = cell_grids(camera, root, evidence=ev)
+    cf, grids, heights, grid_h, grid_obj = cell_grids(
+        camera, root, evidence=ev, with_objects=True
+    )
     # The store axis is fitted to the UNGATED evidence. The contact-line gate halves the
     # wall point set, and the axis is a vote over the elongated blobs in that set: with
     # the gate applied before the vote, Tao-Hsin-cam15's axis moved from 84 to 22 deg,
@@ -920,10 +960,18 @@ def build_scene_regular(camera, root: Path | None = None):
         # 6.3 m shelf run whole. A 5-cell element fits the counter better still (1.20 m
         # deep) and shatters that shelf run into five pieces, which is worse than the
         # error it fixes: one box too big reads as one fixture, five read as five.
-        lab, n = ndimage.label(
-            ndimage.binary_opening(grids[cid], np.ones((3, 3))), structure=np.ones((3, 3))
-        )
-        for k in range(1, n + 1):
+        opened = ndimage.binary_opening(grids[cid], np.ones((3, 3)))
+        lab, n = ndimage.label(opened, structure=np.ones((3, 3)))
+        # **One box per object, where the object map says which is which.** Cell
+        # connectivity welds every touching pair, and five of nine cameras built a
+        # "table" outside its class interval that way (Tao-Hsin-cam15's 2.90x1.75 m
+        # island is two counters). A cell that carries an object id is that object's;
+        # a cell without one (depth completion, a camera commissioned before the map)
+        # keeps its connectivity label.
+        if grid_obj.get(cid) is not None:
+            obj = grid_obj[cid] * opened
+            lab = np.where(obj > 0, obj + n, lab)
+        for k in np.unique(lab[lab > 0]):
             r, c = np.nonzero(lab == k)
             if len(r) < 60:
                 continue

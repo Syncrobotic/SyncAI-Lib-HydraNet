@@ -137,6 +137,23 @@ def run_camera(camera, third, proc, model, static_concepts, plates_root=None, ou
         small = np.asarray(Image.fromarray(m).resize((w, h), Image.Resampling.NEAREST))
         Image.fromarray(small).save(out / "masks" / f"{name}.png")
         mask_files[name] = f"{camera}/masks/{name}.png"
+    # The object ids, which the class PNGs throw away. `scene_mesh` re-labelled the class
+    # map by cell connectivity and welded every touching pair -- five of nine cameras
+    # built a "table" outside its class interval on 2026-09-10, each two counters as
+    # one -- while this pass had them as separate objects all along. Painted in the same
+    # order as the class map (best score first, first painter keeps the pixel), so an
+    # object id and its class agree pixel for pixel. 16-bit: a camera has tens of
+    # objects, not thousands, but 255 is a class-map convention here and is not reused.
+    objects = np.zeros((R.H, R.W), np.uint16)
+    for d in sorted(
+        [d for d in decisions if d["win"] and not d["reject"]], key=lambda d: -d["score"]
+    ):
+        sel = cl_masks[d["k"]] & (objects == 0) & (static_map != R.IGNORE)
+        objects[sel] = d["k"] + 1
+    Image.fromarray(objects).resize((w, h), Image.Resampling.NEAREST).save(
+        out / "masks" / "objects.png"
+    )
+    mask_files["objects"] = f"{camera}/masks/objects.png"
     walk = (combined == 1).astype(np.uint8) * 255
     Image.fromarray(
         np.asarray(Image.fromarray(walk).resize((w, h), Image.Resampling.NEAREST))
