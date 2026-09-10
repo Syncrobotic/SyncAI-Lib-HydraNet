@@ -391,6 +391,11 @@ def witness(clip: str, model, cfg, device, args, targets: dict, k1: float | None
                     rec["best_iou"] = max(rec["best_iou"], float(ov[hit].max()))
                 assoc = ov >= args.iou
                 if assoc.any():
+                    j = int(np.flatnonzero(assoc)[np.argmax(low_sc[assoc])])
+                    if float(low_sc[j]) > rec["best_assoc"]:
+                        # The box the tracker could have taken, and the frame it was on.
+                        rec["best_assoc_box"] = [round(float(x), 1) for x in low[j]]
+                        rec["best_assoc_frame"] = n - 1
                     rec["best_assoc"] = max(rec["best_assoc"], float(low_sc[assoc].max()))
             if len(dense) and (iou(box[None], dense)[0] >= args.witness_iou).any():
                 rec["dense"] = True
@@ -466,6 +471,11 @@ def run_camera(camera: str, model, cfg, device, args) -> dict:
     # Every mid-view death, and the frames the witness pass has to look at for it.
     targets: dict[int, list] = {}
     mid_view: list[int] = []
+    # Where each mid-view death happened, so it can be looked at: the track's last
+    # observed frame and box (source pixels, undistorted). Until 2026-09-10 the
+    # instrument recorded verdicts and no frames, and the 21 "available" deaths of the
+    # band arm -- a box the tracker could have taken and did not -- could not be pulled.
+    deaths: dict[str, dict] = {}
     for t in out.tracks:
         if not t.frames:
             continue
@@ -480,6 +490,12 @@ def run_camera(camera: str, model, cfg, device, args) -> dict:
         if v["why"] != "exit":
             mid_view.append(t.track_id)
             box = np.asarray(t.boxes[-1], dtype=float)
+            deaths[str(t.track_id)] = {
+                "last_frame": int(t.frames[-1]),
+                "last_box": [round(float(x), 1) for x in box],
+                "length": len(t.frames),
+                "score_last": round(float(t.scores[-1]), 3) if t.scores else None,
+            }
             for f in range(t.frames[-1] + 1, t.frames[-1] + 1 + args.witness_frames):
                 targets.setdefault(f, []).append((t.track_id, box))
 
@@ -508,6 +524,7 @@ def run_camera(camera: str, model, cfg, device, args) -> dict:
         # needs no identity rule, so it does not move when the matching rule moves.
         "witness": verdicts,
         "witness_detail": {str(tid): seen[tid] for tid in seen},
+        "deaths": deaths,
         "max_age": args.max_age,
         # Which tracker this row was measured under, so a fleet.json cannot be read as
         # one arm when it was three, and an ungated camera in a gated run is visible.
