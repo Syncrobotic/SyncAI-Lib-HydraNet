@@ -42,7 +42,12 @@ from syncai_bev3d.floorplan import (
     snap_to_walls,
     wall_runs,
 )
-from syncai_bev3d.footprints import REPROJECTION_MIN, object_footprints, regularise_footprints
+from syncai_bev3d.footprints import (
+    REPROJECTION_MIN,
+    object_footprints,
+    regularise_footprints,
+    wall_runs_from_feet,
+)
 from syncai_bev3d.meshes import (
     Placement,
     _merge,
@@ -1090,8 +1095,25 @@ def build_scene_regular(camera, root: Path | None = None):
     _fx = _fc * CELL - 12 + CELL / 2
     _fz = _fr * CELL + CELL / 2
     floor_u, floor_v = _fx * cy + _fz * sy, -_fx * sy + _fz * cy
-    walls = []
-    for run in wall_runs(_wx * cy + _wz * sy, -_wx * sy + _wz * cy):
+    if by_object:
+        # Gate D4: a wall stands where its mask meets the floor; the cell smear below is
+        # the path for cameras commissioned before the object map.
+        feet = wall_runs_from_feet(ev, yaw)
+        runs: list[tuple[str, float, float, float, float]] = [
+            (w.axis, w.perp, w.lo, w.hi, 0.15) for w in feet
+        ]
+        for w in feet:
+            print(
+                f"  {camera}: wall {w.axis}={w.perp:.2f} {w.lo:.2f}..{w.hi:.2f} m from the "
+                f"feet of {w.members}, reprojection IoU {w.iou:.2f}"
+            )
+    else:
+        runs = [
+            (str(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[4]))
+            for r in wall_runs(_wx * cy + _wz * sy, -_wx * sy + _wz * cy)
+        ]
+    walls: list[tuple[str, float, float, float, float]] = []
+    for run in runs:
         axis, perp, lo, hi, _thick = run
         if floor_both_sides((axis, perp, lo, hi), floor_u, floor_v) > FLOOR_BOTH_SIDES:
             # **Dropped, not re-classified -- and the difference was measured.** A shopper

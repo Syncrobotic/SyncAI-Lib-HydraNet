@@ -306,3 +306,78 @@ def test_an_l_shaped_counter_row_is_two_boxes(tmp_path, monkeypatch):
         (max(t.u1 - t.u0, t.v1 - t.v0), min(t.u1 - t.u0, t.v1 - t.v0)) for t in tables
     )
     assert all(short < 1.2 for _, short in spans), spans
+
+
+# ------------------------------------------------------ Gate D4: walls from their feet
+
+
+def _store_with_wall(tmp_path, monkeypatch, *, z_wall=8.0, to_horizon=False):
+    """A wall across the room at `z_wall`, its face drawn through the camera; with
+    `to_horizon` the mask runs on up past the horizon, as a real wall mask does."""
+    root = tmp_path / "checkout"
+    commission = root / "runs/commission01"
+    commission.mkdir(parents=True)
+    (root / "runs/site30k_qa/geometry_cache").mkdir(parents=True)
+    ys, xs = np.mgrid[0:H, 0:W]
+    gx, gz = pixel_to_ground(xs + 0.5, ys + 0.5, CAM, PLANE)
+    ok = np.isfinite(gz)
+    face = _mask(
+        [
+            _poly_px(
+                [(-4.0, 0, z_wall), (4.0, 0, z_wall), (4.0, 2.4, z_wall), (-4.0, 2.4, z_wall)]
+            )
+        ]
+    ).copy()
+    if to_horizon:
+        top = int(np.nonzero(face.any(axis=1))[0].min())
+        face[: top + 1, :] = face[top, :]  # everything above the wall's top too
+        face[:top, :] |= face[top, :]
+    static = np.where(face, 2, 255).astype(np.uint8)
+    objects = np.where(face, 1, 0).astype(np.uint16)
+    Image.fromarray(np.where(face, 255, 0).astype(np.uint8)).save(commission / "wall.png")
+    floor = ok & (gz > 0.5) & (gz < z_wall - 0.1) & ~face
+    Image.fromarray(np.where(floor, 255, 0).astype(np.uint8)).save(commission / "walkable.png")
+    Image.fromarray(objects).save(commission / "objects.png")
+    np.savez(
+        root / f"runs/site30k_qa/geometry_cache/{CAMERA}.npz",
+        gx=np.nan_to_num(gx).astype(np.float32), gz=np.nan_to_num(gz, nan=99.0).astype(np.float32),
+        lx=np.nan_to_num(gx).astype(np.float32), lz=np.nan_to_num(gz, nan=99.0).astype(np.float32),
+        height=np.where(face, 1.2, 0.0).astype(np.float32), horiz=np.zeros((H, W), np.float32), geom_ok=ok,
+    )  # fmt: skip
+    CameraFile(
+        camera_id=CAMERA, image_size_px=(W, H), camera=CAM, plane=PLANE,
+        mask_files={"wall": "wall.png", "walkable": "walkable.png", "objects": "objects.png"},
+    ).save(commission / f"{CAMERA}.camera.json")  # fmt: skip
+
+    def load(path, _cf):
+        with np.load(path) as cache:
+            return {key: cache[key] for key in cache.files}
+
+    monkeypatch.setattr(scene_mesh, "load_geometry_cache", load, raising=False)
+    del static
+    return root
+
+
+def test_a_wall_stands_where_its_mask_meets_the_floor(tmp_path, monkeypatch):
+    root = _store_with_wall(tmp_path, monkeypatch, z_wall=8.0)
+    ev = scene_mesh.load_evidence(CAMERA, root)
+    runs = footprints.wall_runs_from_feet(ev, 0.0)
+    assert len(runs) == 1, runs
+    assert runs[0].axis == "u" and abs(runs[0].perp - 8.0) < 0.2, runs[0]
+    assert runs[0].hi - runs[0].lo > 5.0
+
+
+def test_a_wall_mask_reaching_the_horizon_still_stands_at_its_foot(tmp_path, monkeypatch):
+    root = _store_with_wall(tmp_path, monkeypatch, z_wall=8.0, to_horizon=True)
+    ev = scene_mesh.load_evidence(CAMERA, root)
+    runs = footprints.wall_runs_from_feet(ev, 0.0)
+    assert len(runs) == 1 and abs(runs[0].perp - 8.0) < 0.2, runs
+
+
+def test_the_build_draws_the_wall_from_its_feet(tmp_path, monkeypatch):
+    root = _store_with_wall(tmp_path, monkeypatch, z_wall=8.0)
+    _cf, items, _h, _shapes = scene_mesh.build_scene_regular(CAMERA, root)
+    walls = [m for m, k, _a, _s in items if k == "wall"]
+    assert len(walls) == 1
+    v = walls[0][0]
+    assert abs(v[:, 2].mean() - 8.0) < 0.25, v[:, 2].mean()

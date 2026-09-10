@@ -595,3 +595,118 @@ def split_footprints(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
 def regularise_footprints(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
     """Gate D3 in one call: merge what is one surface, split what a box cannot hold."""
     return split_footprints(merge_footprints(fps, ev, yaw), ev, yaw)
+
+
+# --- Gate D4: the walls, from where they meet the floor ---------------------------------
+# A wall object's foot -- the lowest mask pixel per column, on the floor -- is a line in
+# the store frame along one of its axes. Runs on one axis within WALL_PERP_M of each
+# other and within WALL_GAP_M end to end are one wall. The cell smear these replace put
+# walls a metre into the aisle wherever DA-V2 lowered a white face too far.
+WALL_PERP_M = 0.35
+WALL_GAP_M = 1.0
+WALL_MIN_RUN_M = 0.8
+WALL_MIN_PTS = 40
+# The scene's own extent (scene_mesh's 24 x 14 m grid); a foot beyond it is the horizon.
+WALL_RANGE_M = 12.0
+# A wall slab reprojecting below this is not on its mask: a foot read off a face's side.
+WALL_IOU_MIN = 0.20
+
+
+@dataclass
+class WallRun:
+    axis: str  # "u": runs along u at v = perp; "v": runs along v at u = perp
+    perp: float
+    lo: float
+    hi: float
+    members: tuple[int, ...]
+    iou: float = 0.0
+
+
+def wall_runs_from_feet(ev, yaw: float) -> list[WallRun]:
+    """One run per wall object's foot, merged where collinear and near."""
+    from syncai_bev3d.scene_mesh import WALL_CID
+
+    cf, z = ev.cf, ev.z
+    fh, fw = z["gx"].shape
+    cy, sy = np.cos(yaw), np.sin(yaw)
+    runs: list[WallRun] = []
+    for oid in np.unique(ev.objects[ev.objects > 0]):
+        obj = _body(ev.objects == oid)
+        cids, counts = np.unique(ev.static[obj], return_counts=True)
+        if int(cids[np.argmax(counts)]) != WALL_CID:
+            continue
+        r, c = _foot_pixels(obj)
+        g = _ground(np.stack([c + 0.5, r + 0.5], axis=1).astype(float), cf, (fh, fw))
+        g = g[np.isfinite(g).all(axis=1)]
+        # a wall mask reaches the horizon, and a pixel near it casts kilometres away
+        g = g[(np.abs(g[:, 0]) < WALL_RANGE_M) & (g[:, 1] > 0) & (g[:, 1] < WALL_RANGE_M)]
+        g = _near_edge(g, band_m=WALL_PERP_M)
+        if len(g) < WALL_MIN_PTS:
+            continue
+        u = g[:, 0] * cy + g[:, 1] * sy
+        v = -g[:, 0] * sy + g[:, 1] * cy
+        u0, u1 = np.percentile(u, [3, 97])
+        v0, v1 = np.percentile(v, [3, 97])
+        if (u1 - u0) >= (v1 - v0):
+            run = WallRun("u", float(np.median(v)), float(u0), float(u1), (int(oid),))
+        else:
+            run = WallRun("v", float(np.median(u)), float(v0), float(v1), (int(oid),))
+        if run.hi - run.lo >= WALL_MIN_RUN_M:
+            runs.append(run)
+    merged = True
+    while merged:
+        merged = False
+        for i in range(len(runs)):
+            for j in range(i + 1, len(runs)):
+                a, b = runs[i], runs[j]
+                if a.axis != b.axis or abs(a.perp - b.perp) > WALL_PERP_M:
+                    continue
+                if max(a.lo, b.lo) - min(a.hi, b.hi) > WALL_GAP_M:
+                    continue
+                n_a, n_b = a.hi - a.lo, b.hi - b.lo
+                union = WallRun(
+                    a.axis,
+                    (a.perp * n_a + b.perp * n_b) / (n_a + n_b),
+                    min(a.lo, b.lo),
+                    max(a.hi, b.hi),
+                    (*a.members, *b.members),
+                )
+                runs = [r for k, r in enumerate(runs) if k not in (i, j)] + [union]
+                merged = True
+                break
+            if merged:
+                break
+    for run in runs:
+        run.iou = _wall_iou(run, ev, yaw)
+    return [run for run in runs if run.iou >= WALL_IOU_MIN]
+
+
+def _wall_iou(run: WallRun, ev, yaw: float, *, height_m: float = 2.4) -> float:
+    """The wall slab reprojected against the union of its objects' masks."""
+    if run.axis == "u":
+        fp = Footprint(
+            "wall",
+            run.members[0],
+            run.lo,
+            run.hi,
+            run.perp - 0.075,
+            run.perp + 0.075,
+            height_m,
+            0.0,
+            0,
+            "foot",
+        )
+    else:
+        fp = Footprint(
+            "wall",
+            run.members[0],
+            run.perp - 0.075,
+            run.perp + 0.075,
+            run.lo,
+            run.hi,
+            height_m,
+            0.0,
+            0,
+            "foot",
+        )
+    return reprojection_iou(fp, ev, yaw, oids=run.members)
