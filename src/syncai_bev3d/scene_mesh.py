@@ -42,6 +42,7 @@ from syncai_bev3d.floorplan import (
     snap_to_walls,
     wall_runs,
 )
+from syncai_bev3d.footprints import REPROJECTION_MIN, object_footprints
 from syncai_bev3d.meshes import (
     Placement,
     _merge,
@@ -337,6 +338,8 @@ class Evidence:
     # before the map was written. Two counters that touch are two ids here and one blob
     # in the class map, and that difference is the whole reason it exists.
     objects: np.ndarray | None = None
+    # Every merchandise mask, as one boolean map: on a table it is the top it hides.
+    products: np.ndarray | None = None
 
 
 def load_evidence(camera, root: Path | None = None) -> Evidence:
@@ -376,7 +379,12 @@ def load_evidence(camera, root: Path | None = None) -> Evidence:
     if f and (root / "runs/commission01" / f).exists():
         with Image.open(root / "runs/commission01" / f) as im:
             objects = np.asarray(im.resize((fw, fh), Image.Resampling.NEAREST)).astype(np.int32)
-    return Evidence(cf, z, static, walk, plate, objects)
+    products = None
+    extras = root / "runs/commission01" / camera / "masks"
+    for f in sorted(extras.glob("product*.png")) if extras.exists() else []:
+        m = np.asarray(Image.open(f).resize((fw, fh), Image.Resampling.NEAREST)) > 127
+        products = m if products is None else (products | m)
+    return Evidence(cf, z, static, walk, plate, objects, products)
 
 
 def cell_grids(
@@ -992,8 +1000,26 @@ def build_scene_regular(camera, root: Path | None = None):
     # meshed here: a box's neighbours decide as much about it as its own evidence does, so
     # drawing one the moment it is fitted is what stops the scene ever comparing two.
     fixtures: list[list] = []  # [name, u0, u1, v0, v1, h]
+    unplaced: list[str] = []  # objects whose best box does not sit on their own mask
+    by_object = ev.objects is not None and "horiz" in ev.z
+    if by_object:
+        # Gate D2: one footprint per object from the image's own geometry -- a table's
+        # top cast onto its height plane, a shelf's or column's foot on the floor -- and
+        # a reprojection score for each. The cell smear below is the path for cameras
+        # commissioned before the object map.
+        for fp in object_footprints(ev, yaw, products=ev.products):
+            placed = fp.iou >= REPROJECTION_MIN
+            print(
+                f"  {camera}: {fp.name} #{fp.oid} {fp.u1 - fp.u0:.2f}x{fp.v1 - fp.v0:.2f} m "
+                f"h {fp.h:.2f} from its {fp.source}, own axis {fp.own_deg:+.1f} deg, "
+                f"reprojection IoU {fp.iou:.2f}{'' if placed else ' -- NOT PLACED'}"
+            )
+            if placed:
+                fixtures.append([fp.name, fp.u0, fp.u1, fp.v0, fp.v1, fp.h])
+            else:
+                unplaced.append(f"{fp.name} #{fp.oid} reprojects at IoU {fp.iou:.2f}")
     for cid, name in CLASS_NAMES.items():
-        if name == "wall":
+        if name == "wall" or by_object:
             continue  # walls are fitted to the whole point set below, not per blob
         h = heights.get(cid, DRAWN_H[name])
         # Open first: a mask bridge a few cells wide welds neighbouring fixtures into one
