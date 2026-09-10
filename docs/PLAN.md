@@ -1031,6 +1031,30 @@ measured 96 streams, and the data engine closing**.
 | C4 | **distillation, now with a test set**: VLM and operator verdicts from B3 into L2 crop heads (`staff`, printed-person false positives, zone kind) | the small head matches the VLM's agreement with the operator on held-out cameras |
 | C5 | the data engine closes: dispositions → training set with provenance (checkpoint, commit, calibration hash already on every row) → the next model, scored on rows it never saw | one retrain whose test set is graded rows, and whose gain is stated in alerts, not mAP |
 
+### 10.4b Gate D — Stage 0 geometry-first: precise and refined. Target 2026-09-24.
+
+Ruled 2026-09-10 after the Tao-Hsin-cam15 scene was rejected twice: every remaining gap
+in size and orientation traces to three structural decisions -- footprints from
+per-pixel depth that collapses on the surfaces that matter, objects cut by IoU
+thresholds rather than geometry, and a vfov assumed on 22 of 23 cameras. The gate
+replaces them. Every quantity gets a witness that needs no human, and every step ships
+with its picture beside the plate.
+
+The artefact: **a floor plan per camera in which every fixture reprojects onto its own
+mask, with the calibration, scale and object split each vouched for by a measurement**.
+
+| # | work | done when |
+|---|---|---|
+| D1 | **self-calibration from the floor**: vfov where the floor's two line families are 90 deg apart (`floor_axis.floor_line_axes`), roll from the fitted plane at that vfov, k1 from the straightness of floor lines; the person prior and the rulers rescale afterwards | orthogonality residual <= 2 deg on every camera with two families; cam15's +9.3 deg gone; `vfov_source` is a measurement on every such camera |
+| D2 | **footprints from image geometry, per object**: contact line for position (no depth), the top face projected onto the object's own height plane for tables, one height scalar per object from DA-V2; the per-pixel lowering path in `cell_grids` deleted for tall classes | per-fixture reprojection IoU >= 0.6 on 90% of fixtures; fixtures inside their class interval >= 95% |
+| D3 | **same object by geometry**: SAM 3 instances merged when contact lines are collinear, contiguous and at one height, split at a gap; IoU/containment thresholds and the b03 tie rules retired | cam15's island one box, Taichung-cam01/cam04's counter rows one box each; no welded table outside its interval on the nine |
+| D4 | **the room**: walls fitted as a polygon in the store frame from the contact lines, the program `scene_mesh.py`'s header describes | walls reproject onto the wall-floor line on every camera; no wall run across walkable floor |
+| D5 | door: a leaf from the shopfront glazing | the `door` class stops building 3-5 m slabs |
+
+Metrics, all automatic, reported per camera by the tools that produce them: reprojection
+IoU per fixture, orthogonality residual, same-store scale agreement, share of fixtures
+inside their interval. A fixture below the IoU floor is flagged and not drawn.
+
 ### 10.5 Architecture decisions this plan fixes
 
 * **The world frame is the contract** (§2.3.1). Every layer above L1 reads metres and
