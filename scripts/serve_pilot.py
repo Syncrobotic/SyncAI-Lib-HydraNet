@@ -37,10 +37,16 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from syncai_hydranet.analytics.bytetrack import as_track  # noqa: E402
+from syncai_hydranet.analytics.events import clip_start_from_name  # noqa: E402
+from syncai_hydranet.analytics.policy import load_policy  # noqa: E402
 from syncai_hydranet.data.label_maps_retail_security import get_det_vocab  # noqa: E402
+from syncai_hydranet.geometry.camera_json import CameraFile  # noqa: E402
 from syncai_hydranet.preprocessing import letterbox_region  # noqa: E402
+from syncai_hydranet.serving.alerts import CameraAlerts  # noqa: E402
 from syncai_hydranet.serving.camera import CameraState, load_thresholds  # noqa: E402
 from syncai_hydranet.serving.decode import FcosDecoder  # noqa: E402
+from syncai_hydranet.serving.dispositions import model_identity  # noqa: E402
 from syncai_hydranet.serving.engine import (  # noqa: E402
     TrtExecutor,
     bench_sync,
@@ -312,8 +318,17 @@ def cmd_run(args) -> int:
     overridden = sorted(book.cameras)
     streams = discover_streams(ROOT / "datasets/studioa_clips", args.streams)
     factory = make_tracker_factory(vel_scale=25.0 / args.assumed_fps)
+    policy = load_policy(args.policy)
     cameras = {}
-    for name, _clip in streams:
+    commissioned: dict[str, Path] = {}
+    for name, clip in streams:
+        # L3 needs the commissioned geometry (camera.json), which is a different file
+        # from the onboarding calib.json below: the first places a shopper on the floor
+        # in metres, the second is what the EMA and the box filter were tuned on.
+        cam_path = args.commission / f"{name}.camera.json"
+        camera_file = CameraFile.load(cam_path) if cam_path.is_file() else None
+        if camera_file is not None:
+            commissioned[name] = cam_path
         cameras[name] = CameraState(
             camera=name,
             num_terrain_classes=len(terrain_classes),
@@ -325,9 +340,36 @@ def cmd_run(args) -> int:
             thresholds=book.for_camera(name),
             calib_path=ROOT / f"runs/onboard01/{name}.calib.json",
             tracker_factory=factory,
+            camera_file=camera_file,
+            source_size_px=None if camera_file is None else probe_wh(clip),
         )
     calibrated = sorted(c for c, s in cameras.items() if s.calib is not None)
     print(f"{len(streams)} streams; {len(calibrated)} with calibration")
+    # L3, per commissioned camera: the store's policy on its zones, filing into one
+    # disposition store. The model identity is the engine plan, not a checkpoint --
+    # that is what ran. Cameras without geometry serve detection only and the report
+    # says which.
+    alerts: dict[str, CameraAlerts] = {}
+    if not args.no_alerts:
+        model_id = model_identity(plan.relative_to(ROOT), args.config)
+        for name, clip in streams:
+            if name not in commissioned:
+                continue
+            alerts[name] = CameraAlerts(
+                cameras[name],
+                policy,
+                fps=args.stream_fps if args.stream_fps > 0 else args.assumed_fps,
+                root=args.out / "dispositions",
+                model=model_id,
+                calib_path=commissioned[name],
+                clip=clip.resolve().relative_to(ROOT),
+                clip_start=clip_start_from_name(clip),
+            )
+        print(
+            f"L3 on {len(alerts)} commissioned cameras under policy {policy.store!r} "
+            f"({sum(a.zones for a in alerts.values())} zones), filing into "
+            f"{args.out / 'dispositions'}"
+        )
     for name in overridden:
         if name in cameras:
             print(f"  {name}: threshold override -- {book.basis_for(name)}")
@@ -377,6 +419,9 @@ def cmd_run(args) -> int:
     def post_one(item, terrain, det):
         state = cameras[item.camera]
         state.update(item.seq, terrain, det["boxes"], det["scores"], det["labels"])
+        l3, tracker = alerts.get(item.camera), state.tracker
+        if l3 is not None and tracker is not None:
+            l3.on_frame([as_track(f) for f in tracker.tracks])
 
     while time.perf_counter() - t0 < args.seconds:
         if tick_interval:
@@ -508,8 +553,17 @@ def cmd_run(args) -> int:
                 "decode_fps": round(s["last_seq"] / elapsed, 2),
                 "calibrated": cameras[name].calib is not None,
                 "live_tracks": live_tracks(cameras[name]),
+                "measures_metres": cameras[name].measures_metres,
+                "alerts_filed": len(alerts[name].filed) if name in alerts else None,
             }
             for name, s in stats.items()
+        },
+        "l3": {
+            "policy": None if not alerts else {"store": policy.store, "file": str(args.policy)},
+            "cameras": sorted(alerts),
+            "alerts_filed": sum(len(a.filed) for a in alerts.values()),
+            "dispositions": None if not alerts else str(args.out / "dispositions"),
+            "seconds_are": "consumed frames over --stream-fps; see serving/alerts.py",
         },
         "per_class_scores_at_floor_0.05": per_class_scores,
         "notes": [
@@ -529,6 +583,10 @@ def cmd_run(args) -> int:
         "ticks_per_s", "frames_per_s_end_to_end", "per_stream_fps_mean",
         "tick_ms", "gpu_ms_overlapped")}, indent=2))  # fmt: skip
     print(f"wrote {out}")
+    if alerts:
+        print(
+            f"L3: {result['l3']['alerts_filed']} alerts filed in {result['l3']['dispositions']}"
+        )
     ex.close()
     return 0
 
@@ -563,6 +621,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="the threshold book: fleet defaults plus per-camera overrides, "
                    "each of which states the measurement that produced it")  # fmt: skip
     r.add_argument("--post-workers", type=int, default=16)
+    r.add_argument("--policy", type=Path, default=Path("configs/policy/demo.yaml"),
+                   help="the store policy L3 fires under (analytics/policy.py)")  # fmt: skip
+    r.add_argument("--commission", type=Path, default=ROOT / "runs/commission01",
+                   help="where <camera>.camera.json files live; a camera without one "
+                   "serves detection only and the report says so")  # fmt: skip
+    r.add_argument("--no-alerts", action="store_true",
+                   help="L0-L1 only, the pilot as it was before L3 was wired in")  # fmt: skip
     r.add_argument("--torch-threads", type=int, default=2,
                    help="intra-op threads per torch op; post overlaps 16 camera "
                    "updates, so small keeps the pool from oversubscribing")  # fmt: skip
