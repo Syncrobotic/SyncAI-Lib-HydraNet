@@ -133,6 +133,130 @@ Entry points: `hydranet-train`, `hydranet-eval`, `hydranet-infer-image`,
 `hydranet-prepare-cocostuff` — ten, which is what `[project.scripts]` in `pyproject.toml`
 declares.
 
+Those are the *training and export* surface. Running the product over a store is the
+three stages below, and none of it goes through those entry points.
+
+## Running it over a store — the three stages
+
+**Read this first, because the shape of the system is not what the diagram suggests.**
+There is no service. [`deploy/`](deploy/) states it: the one deployment surface is
+`not assembled — README only, no runtime here yet`. `scripts/serve_pilot.py` runs L0 plus
+a tracker and emits **no positions, no events and no alert rows** (PLAN §9.6). What runs
+the whole chain today is an **offline batch** over stored clips. Stage 1 below is a
+scheduled batch job, not a daemon, and saying otherwise is the failure this repository
+has the most notes about.
+
+### Stage 0 — once per camera (commissioning)
+
+Turns one camera into a metric coordinate system, a set of zones, and a structure map,
+all cached. Every later stage reads the result for free.
+
+```bash
+# 0-1  footage: wide across cameras, thin within each one (the bucket is ~3 TB)
+python3 scripts/pull_studioa.py --date 2026-08-16 --times 11:30 16:00 --out datasets/studioa_clips
+# 0-2  the empty store: a temporal median removes every moving person by construction
+python3 scripts/static_plates.py --root datasets/studioa_clips --out datasets/studioa_static
+# 0-3  geometry: undistort -> DA-V2 once -> RANSAC ground plane -> person-height scale
+nice -n 10 .venv/bin/python scripts/onboard_camera.py --camera <camera> --out runs/onboard01
+# 0-4  calib.json -> camera.json                     <-- no CLI; see the gap below
+# 0-5  structure, then what the vote was too conservative to claim
+uv run python tools/commissioning/masks_pass.py --plates-root datasets/studioa_static --out-root runs/commission01
+uv run python tools/commissioning/extras_pass.py <camera>       # door, product subclasses
+uv run python tools/commissioning/depth_complete.py <camera>    # zero GPU, reads the caches
+# 0-6  zones: proposed automatically, then accepted or rejected by a person
+uv run python tools/commissioning/service_zones.py --all --apply
+uv run python tools/commissioning/zones_confirm.py <camera> --render --apply
+# 0-7  known-false-positive polygons: derived from the box population, never drawn
+uv run python tools/commissioning/fp_polygons.py <camera>
+# 0-8  look at what was built
+uv run python tools/commissioning/scene_overlay.py <camera>     # do the metres agree with the pixels
+uv run python tools/commissioning/scene_mesh.py <camera>        # solid 3D, GLB/OBJ
+```
+
+Produces `runs/commission01/<camera>.camera.json` (pose, lens, walkable polygon, zones,
+shelf ROIs, FP polygons), `<camera>/masks/`, `<camera>/scene.{glb,obj}`, and a verdict
+line in `REVIEW.md`.
+
+**The gate is a human eye and nothing else**: a 1 m floor grid on a real frame, per
+camera. Taichung-cam05 was withdrawn at this gate — two furniture checks agreed its cells
+were over-scaled. **8 of 23 selling-floor cameras are through it**; the backlog of 15
+needs the teacher passes and the two confirmations, no new calibration work.
+
+Two things the numbers do not say on their own, both in PLAN §9.5: `scale_source` reads
+`person_height_median_vs_1.7m_prior_nNN` on **15–37 boxes**, so "scale-measured" means a
+1.70 m prior rather than a tape measure; and vfov is `fleet_hardware_assumed` on **22 of
+23** cameras.
+
+**Two gaps in this stage, found 2026-09-10 while writing this section.** Step 0-4 has no
+command: `syncai_bev3d.commissioning.from_onboard_calib` is the converter and its only
+caller anywhere is a test. And `render_metre_grid`, which drew the picture the gate is
+judged on, was deleted in `5c209c7` as uncalled — correctly, since the scripts that drew
+it had already gone. So **the eight cameras passed a gate whose instrument is no longer in
+the tree**, and the 15-camera backlog cannot be judged until it is rebuilt.
+
+### Stage 1 — continuous analysis
+
+```bash
+python3 scripts/step6_events.py --camera all --all-clips \
+    --loiter-seconds 240 --max-occupancy 4 --min-seconds 1.0 --out runs/step6_fleet02
+```
+
+Reads a commissioned `camera.json`, tracks the clip, rescales the boxes into the
+calibrated frame, applies the event rules in metres and seconds, and files **every** event
+through `dispositions.record_alert`. `runs/step6_fleet01` is the reference run: 8 cameras
+× 162 minutes, 47 minutes of GPU, **263 alert rows**.
+
+**The threshold is the product, not the model.** The same 162 minutes, re-read:
+
+| `--loiter-seconds` | alerts per camera-day |
+|---|---|
+| 8 (the demonstration value) | 1,478 |
+| 30 | 427 |
+| 120 | 30 |
+| **240** (the archetype §5 itself uses) | **6** |
+
+Same geometry, same weights. Security wants the 6 and pays recall for it; retail wants the
+1,478 because it aggregates (PLAN §1.1). Get the store's own rules before touching a model.
+
+Output is `fleet.json` (per-camera counts) and `dispositions/YYYY-MM-DD.jsonl`, which is
+the file that matters: append-only, one row per alert and one per verdict joined by
+`alert_id`, each carrying `basis`/`value`/`threshold`, the checkpoint and commit that
+raised it, the calibration hash, and a `frame_ref` — **a pointer to footage, never an
+image**, which is what lets the 30-day clip tier expire without touching the log (§4.6).
+A row with no `frame_ref` is refused at write time.
+
+Scheduling this is a systemd user unit. Making it *live* is three separate things, and
+only the last is research: the serving path does not reach the event layer; `data/video.py`
+decodes 63–69 streams where NVDEC reaches ~520 and is not wired in; and there is no
+service shell. The engine is not the constraint — 990 f/s end to end against a 480 f/s
+target (§7a.29). **Decode is.**
+
+### Stage 2 — reports, and the algorithms above them
+
+```bash
+uv run python tools/commissioning/heatmap3d.py <camera> --mode dwell --cell 0.25
+uv run python tools/commissioning/demo_video.py <camera>      # 3 min, faces blurred by two instruments
+python3 scripts/retail_flow.py --out runs/flow02 --cell 0.25 <clips...>
+python3 scripts/site_journeys.py --cameras <camera> --min-seconds 1.0 --out runs/journeys01
+```
+
+`hydranet-report` is **not** one of these — it summarises training runs. And this hardware
+does not do footfall: an angled view merges two shoppers walking abreast, which is
+geometry rather than an algorithm, so `retail_flow.py` ships dwell and heatmaps and says
+so in its own header.
+
+Anything that leaves the building goes through `analytics.delivery.report_settings()`,
+which reduces every path-shaped value in the settings block to its last two components —
+`vars(args)` otherwise names an operator, a home directory and a dataset root in a file
+that looks like output.
+
+**Before adding an algorithm here, PLAN §3's rule applies**: walk down from "a config
+value" and stop at the first rung that answers the question — never start at a new head.
+And §9.2 bounds every number this stage can produce: nothing on site has been graded, so
+`site_person` 0.7387 means *agrees with Grounding DINO*, and 263 alert rows are not 263
+labels. The shortest path to the first real signal is one commissioned camera at
+`--loiter-seconds 240`, then a person reading the handful of rows against their video.
+
 ## Layout
 
 | path | what |
