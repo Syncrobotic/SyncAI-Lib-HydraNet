@@ -115,6 +115,31 @@ def verdicts(cameras: list[str]) -> dict[str, rulers.Verdict]:
     return out
 
 
+def update_calib(camera: str, factor: float, note: str) -> Path:
+    """The onboarding calibration carries the applied scale too, or the next pass undoes it.
+
+    `masks_pass` (through `recipe.CameraGeometry`) reads its geometry from
+    `runs/onboard01/<camera>.calib.json`, not from camera.json, and regenerates the cache
+    from it when the two disagree: the first time cam01 was rescaled in camera.json alone,
+    the re-commission that followed rebuilt its cache at the old scale and the scene
+    refused the pair (floor drift 9.3 m). The previous calibration is kept beside it.
+    """
+    stamp = dt.datetime.now().strftime("%Y%m%d")
+    path = ROOT / f"runs/onboard01/{camera}.calib.json"
+    calib = json.loads(path.read_text())
+    stale = ROOT / f"runs/onboard01/stale_{stamp}"
+    stale.mkdir(exist_ok=True)
+    (stale / path.name).write_text(json.dumps(calib, indent=1))
+    calib["scale"] = float(calib["scale"]) * factor
+    calib["height_m"] = float(calib["height_m"]) * factor
+    calib["scale_source"] = f"{calib.get('scale_source')} x{factor:.3f} by rulers ({note})"
+    calib.setdefault("rulers", []).append(
+        {"factor": factor, "note": note, "at": dt.datetime.now().isoformat(timespec="seconds")}
+    )
+    path.write_text(json.dumps(calib, indent=1))
+    return path
+
+
 def apply(camera: str, cf, factor: float, note: str) -> None:
     stamp = dt.datetime.now().strftime("%Y%m%d")
     cam_json = ROOT / f"runs/commission01/{camera}.camera.json"
@@ -130,6 +155,7 @@ def apply(camera: str, cf, factor: float, note: str) -> None:
     shutil.copy2(cam_json, stale_c / cam_json.name)
     shutil.move(cache, stale_g / cache.name)
     rulers.scaled_camera(cf, factor).save(cam_json)
+    update_calib(camera, factor, note)
     subprocess.run(
         [
             sys.executable,
