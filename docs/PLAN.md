@@ -752,6 +752,18 @@ something it does not support.
 
 37. **The backbone carries no novelty signal, and the control is what says so. 2026-09-08.**
 
+38. **The store's axis is read off the floor's joints, and the fixture-blob vote was 36 deg
+   off them on Taichung-cam01. 2026-09-10.** `floor_axis.floor_line_axis`, sharpness-gated,
+   blobs as fallback; five of nine cameras take the floor.
+
+39. **Cameras over one floor disagreed by 28% under the person prior, and the project now
+   picks its own rulers: the catalogue tile by store consensus, the store's counter height,
+   the prior -- two agreeing to move. 2026-09-10.** `rulers`, `scale_rulers.py`; first run
+   moved Taichung-cam01 x1.277 and nothing else.
+
+40. **Five of nine cameras' welded tables were `masks_pass` objects thrown away at the class
+   PNG. 2026-09-10.** `masks/objects.png`; one box per object.
+
 
 ## 8. What the health audit changed, and what it taught
 
@@ -801,6 +813,10 @@ Every commissioned camera's `scale_source` reads
 vfov is `fleet_hardware_assumed` on **22 of the 23** onboarded cameras -- Taichung-cam01's
 tile-grid pin is the exception, and §7c.31 refused the same pin at two other venues
 on a flat k1 sweep. Taichung-cam05 was withdrawn when two furniture checks disagreed.
+Since 2026-09-10 the prior is checked, not trusted: §7c.39's rulers read the floor's
+joints and the store's counters, and Taichung-cam01 is the first camera whose metres
+come from the tile (x1.277 over its prior; the counter ruler says x1.15 -- the truth is
+between, and one witness does not move it again).
 
 ### 9.6 The chain has never run end to end
 
