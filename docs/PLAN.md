@@ -90,16 +90,24 @@ thresholds** — the divergence is a config value, which is §3's placement rule
   baseline. Lumana keeps per-camera speed / dwell / time-of-day statistics and puts them
   in search, not alerts. Every camera-native vendor (Axis, Hanwha, Hikvision, Dahua,
   Bosch, Verkada) ships pre-trained detectors plus hand-drawn rules; no edge SoC runs a
-  behaviour baseline. Operator feedback reaches a model in two places only — Hikvision's
-  Learn-by-Example (mark false alarms) and Irisity — and neither publishes what it
-  changes. Retail loss prevention is a different mechanism again: Everseen and StopLift
-  score the gap between video object events and the POS scan list; Veesion is supervised
-  gesture classification with staff accept/reject as the training feed, and the one
-  independent figure is a store manager's "three-quarters false". **Nobody publishes
-  alerts per camera per day.** So the memory this plan should build first is what the
-  market's learned-normal actually is — per-camera, per-hour statistics over L1 output
-  — and the part the market does not have is the graded disposition store, which is the
-  only route to the number nobody publishes. §9.10 orders the work.
+  behaviour baseline. Operator feedback reaches a model in three places — the UAD patent
+  allows a false-alarm mark to alter the statistics, Hikvision's Learn-by-Example, and
+  Irisity — and none publishes what it changes. Retail loss prevention is a different
+  mechanism again: Everseen and StopLift score the gap between video object events and
+  the POS scan list; Veesion is supervised gesture classification with staff
+  accept/reject as the training feed, and the one independent figure is a store
+  manager's "three-quarters false". **No vendor publishes alerts per camera per day**;
+  the only published rates are IPVM's for perimeter analytics — under one false alert
+  per camera per month at best, one per camera per night in rain and glare. And the
+  academic route is measured not to travel: normality models score 0.70 AUC on the
+  camera they were fitted on and 0.50 on any other, which at 0.9 recall is about 26,000
+  false alarms an hour (Rashidi 2026, arXiv 2606.29506); Sultani 2018's reconstruction
+  baseline fires on 27% of normal video. That is *why* the market's normal is per
+  camera, per cell, per hour, and statistical. So the memory this plan should build
+  first is what the market's learned-normal actually is — per-camera, per-hour
+  statistics over L1 output — and the part the market does not have is the graded
+  disposition store, which is the only route to the number no vendor publishes. §9.10
+  orders the work.
 
 
 ## 2. The two packages
