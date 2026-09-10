@@ -92,6 +92,8 @@ def assert_same_events(tracks, zones):
         assert e.value >= e.threshold, "a crossing has cleared its threshold"
         assert e.value <= o.value, "the crossing's value never exceeds the run's total"
         assert e.extra["filed_at"] == "crossing"
+        if e.track_ids:  # a per-track event says where the shopper stood at the crossing
+            assert np.isfinite([e.extra["x_m"], e.extra["z_m"]]).all()
     return off, lv
 
 

@@ -19,6 +19,10 @@ deliberately:
 * `value` here is the duration (or the count) *at the crossing*; offline it is the run's
   total (or peak). A live loitering alert reads "8.0 s of 8.0" and the offline row for the
   same shopper reads "46.8 s of 8.0", and both are true when they were written.
+* A per-track event's `extra` carries the shopper's floor position at the crossing
+  (`x_m`, `z_m`), which the offline row does not have and a review sheet needs: the
+  alert row carries no box, and the position is what lets a reviewer's frame be drawn
+  -- and the person on it blurred -- from the calibration alone.
 
 `tests/test_live_events.py` holds the monitor to exactly that. The semantics that make it
 hold, copied from the offline code rather than re-derived:
@@ -152,7 +156,7 @@ class ZoneMonitor:
                             value=seconds,
                             threshold=self.min_seconds,
                             basis="seconds a tracked foot point stayed inside the polygon",
-                            extra={"filed_at": "crossing"},
+                            extra={"filed_at": "crossing", "x_m": o["x_m"], "z_m": o["z_m"]},
                         )
                     )
                 if (
@@ -173,7 +177,7 @@ class ZoneMonitor:
                             value=seconds,
                             threshold=zone.loiter_seconds,
                             basis="seconds a single track stayed inside the polygon",
-                            extra={"filed_at": "crossing"},
+                            extra={"filed_at": "crossing", "x_m": o["x_m"], "z_m": o["z_m"]},
                         )
                     )
 
