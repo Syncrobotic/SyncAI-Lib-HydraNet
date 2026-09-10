@@ -839,9 +839,15 @@ commissioned stream, and the first row the serving path ever filed was a loiteri
 on Kaohsiung-cam04's 00:00 clip — an empty shop, a phantom person on an IR frame, and the
 first alert graded through `deploy/retail-security/review_server.py`: rejected. The live
 rules are held to the offline ones by `tests/test_live_events.py` (same events; `value`
-and `frame_end` at the crossing). What remains of this section: the pilot's tracker is
-bytetrack (band + Kalman), the offline log's is the band alone, so the two logs are not
-yet byte-comparable — a tracker adapter or one shared tracker decides it.
+and `frame_end` at the crossing). **The two trackers became one the same evening**:
+step 6 defaults to the shipped two-stage tracker built by `bytetrack.shipped_forward`
+exactly as the pilot builds it (the four-arm measurement in §10.2 A2 put two-stage at
+38 mid-view deaths against the band's 48, and `band_probe01` had shown its dwell is not
+inflated by coasting), and the appearance gate runs on it in both places. What still
+keeps a row from being byte-comparable across the two paths is the **engine**: the pilot
+runs the uint8 TensorRT plan on a 512×640 canvas for throughput, the offline runner the
+checkpoint at 640×1120. Same tracker, different detector, until the pilot runs the
+1120 plan.
 
 ### 9.7 Two components have no consumer on the serving path
 
@@ -855,6 +861,9 @@ yet byte-comparable — a tracker adapter or one shared tracker decides it.
   measured as marginal. The crowd failure is grouping, not classification: three people
   found in a frame holding about ten, and **one false alarm per eight minutes on a safety
   alert does not ship** (step 3).
+* **The two trackers are one since 2026-09-10 evening.** §7.11 recorded two-stage as
+  measured and not adopted; it is adopted now, on the four-arm measurement (§10.2 A2),
+  and `scripts/step6_events.py --tracker band|single` is how the older logs are re-read.
 
 ### 9.8 Out of domain it is measured to fail, and that is a scope statement
 
@@ -924,8 +933,8 @@ project has ever had.
 
 | # | work | closes | done when |
 |---|---|---|---|
-| A1 | the serving path carries L1 → L3 → dispositions: `world_frame`, `zone_events`, `record_alert` called from `serving/`, not only from `scripts/step6_events.py` | §9.6 | `serve_pilot.py` on one live stream files the same rows step 6 files offline, byte-comparable on a recorded clip. **Wired 2026-09-10** (`serving/alerts.py`, `events/live.py`); byte-comparability blocked on the two trackers differing, see §9.6 |
-| A2 | tracker in serving = the measured band **plus the appearance gate** (`appearance_thr` per camera; a descriptor hook in `clip_tracks.track_clip`) | §9.4 | median track life on the eight sweep clips, single-threshold vs band vs band+gate, by `scripts/track_endings.py`; identity checked by eye on the ten longest. **Measured 2026-09-10** (`runs/endings04/05/06/07`, same eight 900-frame clips, same weights): tracks **202 / 100 / 109 / 115** and mid-view deaths **111 / 38 / 48 / 53** for single / two-stage / band / band+gate. The band alone reproduces `band_probe01`'s 109 exactly and takes **86% of two-stage's mid-view-death reduction** with no Kalman; what the filter still buys is ten deaths, eight of them on Kaohsiung-cam04. The gate moves only that camera: nine re-associations refused after a gap (the dead track's ending then reads as `lost` at gap 1, IoU 0.55–0.65 — the detection it refused started a new track), four fewer of the band's own, net +5 tracks, at the camera's calibrated 0.39. **Whether those nine are two shoppers or one is unverified**: the endings instrument records no frame for a refusal, so the eye check this row asks for needs `Tracker` to record the refused pair with its frame first. The hook and both arms are in; **the serving tracker is still bytetrack** (§9.6), so nothing in serving runs the gate yet |
+| A1 | the serving path carries L1 → L3 → dispositions: `world_frame`, `zone_events`, `record_alert` called from `serving/`, not only from `scripts/step6_events.py` | §9.6 | `serve_pilot.py` on one live stream files the same rows step 6 files offline, byte-comparable on a recorded clip. **Wired 2026-09-10** (`serving/alerts.py`, `events/live.py`); the two paths run one tracker since the same evening, and byte-comparability is now blocked only on the pilot's 512×640 uint8 engine against the offline 640×1120 checkpoint, see §9.6 |
+| A2 | tracker in serving = the measured band **plus the appearance gate** (`appearance_thr` per camera; a descriptor hook in `clip_tracks.track_clip`) | §9.4 | median track life on the eight sweep clips, single-threshold vs band vs band+gate, by `scripts/track_endings.py`; identity checked by eye on the ten longest. **Measured 2026-09-10** (`runs/endings04/05/06/07`, same eight 900-frame clips, same weights): tracks **202 / 100 / 109 / 115** and mid-view deaths **111 / 38 / 48 / 53** for single / two-stage / band / band+gate. The band alone reproduces `band_probe01`'s 109 exactly and takes **86% of two-stage's mid-view-death reduction** with no Kalman; what the filter still buys is ten deaths, eight of them on Kaohsiung-cam04. The gate moves only that camera: nine re-associations refused after a gap (the dead track's ending then reads as `lost` at gap 1, IoU 0.55–0.65 — the detection it refused started a new track), four fewer of the band's own, net +5 tracks, at the camera's calibrated 0.39. **Whether those nine are two shoppers or one is unverified**: the endings instrument records no frame for a refusal, so the eye check this row asks for needs `Tracker` to record the refused pair with its frame first. **Decided the same evening: two-stage is the tracker, on both paths**, with the gate on it (`bytetrack.OfflineForward(appearance_thr=...)`, every refusal recorded as a `Refusal` with its frame — the instrument the eye check needed); step 6 defaults to it and the pilot cuts descriptors from the canvas frame for the five licensed cameras. The band and single arms stay as flags for reading old logs. Smoke on Taichung-cam01's first clip with the gate at 0.335: 29 tracks, 3 events, 3 refusals; the two staff loiters (48.6 s, 49.4 s) unchanged from the band arm |
 | A3 | **plate drift / tamper check** (§2.1h): nightly static plate diffed against the commissioned one; a moved camera stops filing metres and says so | §9.5's silent failure | a deliberately nudged camera is refused within one night. **The same failure arrived from the other side on 2026-09-10**: the calibration files were rewritten under a running log and the rows' calibration hash was what caught it (§6 step 6); the serving path should refuse to file against a `camera.json` whose hash changed since it started, which is this row's check with the plate as the second witness |
 | A4 | **the grading surface**: a daily review sheet generated from the disposition store — frame crop (blurred), the event row, accept / reject / "staff" — writing disposition rows back. HTML from a script, no server | §4.5 | an operator grades a day in under fifteen minutes. **Built 2026-09-10** as `deploy/retail-security/review_server.py` (a localhost stdlib server rather than a static sheet, so a verdict is one click); the frame is drawn from the calibration alone, and the fifteen-minute gate is unmeasured until a store grades a day |
 | A5 | **per-store policy as a file**: loiter seconds, occupancy, open hours, after-hours rule; the demonstration values in step 6 leave the code | §3's placement rule | `step6_events.py` and serving read the same file. **Done 2026-09-10**: `configs/policy/demo.yaml` via `analytics/policy.py`, read by step 6, the re-read and the pilot; the after-hours rule is deliberately not a field yet because no producer reads it |
