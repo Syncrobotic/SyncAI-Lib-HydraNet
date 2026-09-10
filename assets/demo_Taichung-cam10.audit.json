@@ -1,7 +1,7 @@
 {
  "camera": "Taichung-cam10",
  "gif": "demo_Taichung-cam10.gif",
- "render": "demo_Taichung-cam10_20260903-102518.mp4",
+ "render": "demo_Taichung-cam10_20260910-171951.mp4",
  "source_clip": "archive_20260816-112916_20260816-113416.mp4",
  "render_args": {
   "camera": "Taichung-cam10",
@@ -16,7 +16,7 @@
   "staff_min_accuracy": 0.85,
   "posed_figures": false,
   "no_heatmap": false,
-  "workers": 6,
+  "workers": 1,
   "chunk": null,
   "chunk_out": null,
   "records": null,
@@ -30,7 +30,7 @@
   "held_out_n": 127,
   "min_accuracy_required": 0.85
  },
- "commit": "597e25ea86ab4f7c3f6840cd7d2b55e60008cbfe",
+ "commit": "416cb53a20ed6d7746a2edc6c0a550694ec61eb7",
  "start_frame": 83,
  "frames": 120,
  "stride": 1,
