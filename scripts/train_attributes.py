@@ -59,6 +59,50 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 @torch.no_grad()
+def attribute_metrics(p, y) -> dict:
+    """Per-attribute quality from probabilities and labels, plus two summaries a
+    majority class cannot carry.
+
+    Split out of `evaluate` so it can be tested without a model or a loader --
+    `tests/test_metric_honesty.py` is what holds it.
+    """
+    pred = (p >= 0.5).astype(np.float32)
+    out = {}
+    recalls: dict[str, float] = {}
+    for i, name in enumerate(ATTRIBUTES):
+        tp = float((pred[:, i] * y[:, i]).sum())
+        fp = float((pred[:, i] * (1 - y[:, i])).sum())
+        fn = float(((1 - pred[:, i]) * y[:, i]).sum())
+        recall = tp / max(tp + fn, 1.0)
+        out[name] = {
+            "recall": recall,
+            "precision": tp / max(tp + fp, 1.0),
+            "val_positives": int(y[:, i].sum()),
+            "train_support": SUPPORT.get(name),
+        }
+        # Collected here rather than read back out of `out`, whose values are
+        # heterogeneous: an attribute maps to a dict and `_mean_accuracy` to a float.
+        if y[:, i].sum() > 0:
+            recalls[name] = recall
+    out["_mean_accuracy"] = float((pred == y).mean())
+    # `_mean_accuracy` is dominated by true negatives and cannot fall when a rare
+    # attribute is abandoned. crop_encoder01 finished at 0.9276 while `AgeOver60` sat at
+    # **0.119 recall** on 1,127 train positives against `Age18-60`'s 74,721 -- and on site
+    # the head then answered `Age18-60` for 178 of 178 tracks at a median probability of
+    # 0.995, which is a constant rather than a measurement. A per-epoch line that could not
+    # show that is the reason it went unnoticed for eight epochs.
+    #
+    # So two numbers that a majority class cannot carry, logged beside it rather than
+    # instead of it -- the old one stays so every figure already published stays readable.
+    # `scripts/eval_attributes.py` remains the full report (per-attribute PR/F1/AUROC);
+    # these exist so the training loop itself cannot look healthy while a head is dead.
+    out["_macro_recall"] = float(np.mean(list(recalls.values()))) if recalls else 0.0
+    worst = min(recalls, key=recalls.get) if recalls else None
+    out["_worst_recall"] = float(recalls[worst]) if worst else 0.0
+    out["_worst_attribute"] = worst
+    return out
+
+
 def evaluate(model, loader, device) -> dict:
     model.eval()
     logits, targets = [], []
@@ -68,20 +112,7 @@ def evaluate(model, loader, device) -> dict:
         targets.append(batch["labels"])
     p = torch.sigmoid(torch.cat(logits)).numpy()
     y = torch.cat(targets).numpy()
-    pred = (p >= 0.5).astype(np.float32)
-    out = {}
-    for i, name in enumerate(ATTRIBUTES):
-        tp = float((pred[:, i] * y[:, i]).sum())
-        fp = float((pred[:, i] * (1 - y[:, i])).sum())
-        fn = float(((1 - pred[:, i]) * y[:, i]).sum())
-        out[name] = {
-            "recall": tp / max(tp + fn, 1.0),
-            "precision": tp / max(tp + fp, 1.0),
-            "val_positives": int(y[:, i].sum()),
-            "train_support": SUPPORT.get(name),
-        }
-    out["_mean_accuracy"] = float((pred == y).mean())
-    return out
+    return attribute_metrics(p, y)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -130,6 +161,9 @@ def main(argv: list[str] | None = None) -> int:
             "epoch": epoch,
             "train_loss": total / max(n, 1),
             "val_mean_accuracy": metrics["_mean_accuracy"],
+            "val_macro_recall": metrics["_macro_recall"],
+            "val_worst_recall": metrics["_worst_recall"],
+            "val_worst_attribute": metrics["_worst_attribute"],
             "seconds": round(time.time() - t0, 1),
             "attributes": {k: v for k, v in metrics.items() if not k.startswith("_")},
         }
@@ -143,7 +177,9 @@ def main(argv: list[str] | None = None) -> int:
         ask = {k: metrics[k] for k in ("Female", "AgeLess18", "AgeOver60")}
         print(
             f"epoch {epoch}: loss {row['train_loss']:.4f}  mean acc "
-            f"{row['val_mean_accuracy']:.4f}  ({row['seconds']:.0f}s)"
+            f"{row['val_mean_accuracy']:.4f}  macro-recall {row['val_macro_recall']:.4f}  "
+            f"worst {row['val_worst_recall']:.3f} ({row['val_worst_attribute']})  "
+            f"({row['seconds']:.0f}s)"
         )
         for k, v in ask.items():
             print(

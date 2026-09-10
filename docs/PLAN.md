@@ -3053,6 +3053,45 @@ once in this pass.
    descriptor and silence the gate — benign by argument, not by measurement. A camera that
    will run at night needs re-scanning on night footage before its number is trusted there.
 
+41. **`val_mean_accuracy` rose every epoch while 18 of 26 attributes got worse, and the
+   kept checkpoint is the run's worst by per-class recall.** Read off
+   `runs/crop_encoder01/metrics.json`, 2026-09-10 — no retraining, the evidence was
+   already on disk.
+
+   | epoch | `val_mean_accuracy` | macro recall | worst |
+   |---|---|---|---|
+   | 1 | 0.8964 | 0.7162 | 0.174 `HoldObjectsInFront` |
+   | 4 | 0.9148 | 0.6945 | 0.093 |
+   | **8** | **0.9276** | **0.6457** | **0.058** |
+
+   The headline number did not merely *hide* the collapse — **it moved the other way**,
+   monotonically, for eight epochs. `AgeOver60` 0.381 → **0.119**, `boots` 0.356 → 0.133,
+   `HandBag` 0.720 → 0.521, `Skirt&Dress` 0.901 → 0.711. Mean accuracy is over a 26-way
+   multi-label output at the positive rates these attributes have, so it is carried by
+   true negatives and cannot fall when a head is abandoned. `eval_attributes.py` has said
+   this in prose since it was written; nothing said it *per epoch*, which is where a
+   selection decision is made.
+
+   **What this costs downstream.** On site the age head answers `Age18-60` for **178 of
+   178** Taichung-cam04 tracks at a median probability of 0.995 — a constant, not a
+   measurement, so the age column of every retail page carries no information. And the
+   viewpoint hypothesis for it is refuted: the model reads these crops as ordinary
+   pedestrians, 83% getting exactly one of Front/Side/Back over 0.5 at a median max
+   probability of 0.888. The cause is the training distribution, not the camera: 1,127
+   `AgeOver60` positives against `Age18-60`'s 74,721, a ratio of 66:1.
+
+   Same shape as `best-pt-is-selected-by-one-heads-metric` (§7): a selection number that
+   cannot see the thing being lost. `evaluate` now also logs **macro recall** and the
+   **worst attribute by name**, beside the old number rather than instead of it so every
+   published figure stays readable, and `attribute_metrics` is split out so
+   `tests/test_metric_honesty.py` can hold it without a model or a loader.
+
+   **The cheapest fix is not a retrain.** Epoch 1 was a better model than epoch 8 for most
+   attributes, so the first thing to try is a selection criterion that is not mean
+   accuracy. After that, class-balanced loss on data already on disk — plus `MSP60K`,
+   extracted 2026-09-10 — and no site labels are needed for either.
+
+
 ## 9. The distance to the product, read across the steps
 
 Written 2026-09-09. **This section measures nothing new.** Every figure in it is cited

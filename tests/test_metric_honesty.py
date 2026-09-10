@@ -200,3 +200,66 @@ def test_a_real_class_0_is_still_checked():
     cm = _cm([0] + [2] * 999, [0] + [2] * 999, n=3)
     _seg_metrics({"traversability": cm}, {"data": {}}, logger)
     assert any("blocked" in w for w in warned), f"blocked at 0.1% must warn: {warned}"
+
+
+# -- a fourth way: a mean that a majority class carries --------------------
+#
+# `train_attributes.evaluate` reported `_mean_accuracy` and nothing else per epoch. Over
+# crop_encoder01's eight epochs that number rose every single time, 0.8964 -> 0.9276,
+# while **18 of its 26 attributes ended worse than epoch 1**: `AgeOver60` 0.381 -> 0.119,
+# `boots` 0.356 -> 0.133, `HoldObjectsInFront` 0.174 -> 0.058. The metric did not merely
+# hide the collapse, it moved the other way, and the checkpoint kept is the run's worst by
+# per-class recall. On site the age head then answered `Age18-60` for 178 of 178
+# Taichung-cam04 tracks at a median probability of 0.995.
+#
+# Same shape as `best-pt-is-selected-by-one-heads-metric`: a selection number that cannot
+# see the thing being lost.
+
+
+def _attr_module():
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    if str(root / "scripts") not in sys.path:
+        sys.path.insert(0, str(root / "scripts"))
+    import train_attributes
+
+    return train_attributes
+
+
+def test_a_head_that_abandons_a_rare_attribute_is_visible_per_class():
+    """The exact failure: answer "no" to a 1%-positive attribute and mean accuracy barely
+    moves, while that attribute's recall is zero."""
+    import numpy as np
+
+    ta = _attr_module()
+    n, k = 1000, len(ta.ATTRIBUTES)
+    y = np.zeros((n, k), np.float32)
+    y[:, 0] = 1.0  # a majority attribute, every row positive
+    y[:10, 1] = 1.0  # a 1% attribute
+    p = np.zeros((n, k), np.float32)
+    p[:, 0] = 1.0  # answered only the easy one
+
+    out = ta.attribute_metrics(p, y)
+    assert out["_mean_accuracy"] > 0.99, "mean accuracy stays high while a head is dead"
+    assert out[ta.ATTRIBUTES[1]]["recall"] == 0.0
+    assert out["_worst_recall"] == 0.0
+    assert out["_worst_attribute"] == ta.ATTRIBUTES[1]
+    assert out["_macro_recall"] == 0.5, "two attributes carried, one of them at zero"
+
+
+def test_attributes_with_no_positives_do_not_dilute_the_macro():
+    """An attribute absent from the split has no recall to report, and counting it as 0
+    would make the number a property of the split rather than of the model."""
+    import numpy as np
+
+    ta = _attr_module()
+    n, k = 100, len(ta.ATTRIBUTES)
+    y = np.zeros((n, k), np.float32)
+    y[:, 0] = 1.0
+    p = np.zeros((n, k), np.float32)
+    p[:, 0] = 1.0
+    out = ta.attribute_metrics(p, y)
+    assert out["_macro_recall"] == 1.0
+    assert out["_worst_attribute"] == ta.ATTRIBUTES[0]
