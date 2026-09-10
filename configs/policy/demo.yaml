@@ -1,0 +1,25 @@
+# A store policy: the thresholds the event layer fires on, out of the code and out of
+# camera.json. `analytics/policy.py` reads it; `scripts/step6_events.py` and the serving
+# path apply it. docs/PLAN.md section 3's placement rule and section 5 are why this is a
+# file: "four minutes is loitering" is an argument a store manager changes on a Tuesday,
+# not a property of the mount and not a weight.
+#
+# THESE ARE DEMONSTRATION VALUES, NOT A STORE'S RULES. They are the exact numbers
+# `scripts/step6_events.py` carried as argument defaults from 2026-09-09 until this file
+# existed, kept so `runs/step6_fleet01` and `runs/step6_fleet02` re-run unchanged. A real
+# policy arrives from whoever owns the store's rules, as a second file beside this one.
+schema: store_policy/1
+store: demo
+provenance: >
+  Demonstration values carried over from scripts/step6_events.py's argument defaults
+  (2026-09-09): loiter 8 s on display zones, occupancy 4 on the walkable outline, a 1 s
+  boundary-jitter floor, trading hours 10-22 local. Chosen to make the L3 log fire on a
+  five-minute clip, not measured against any store's rules.
+timezone_hours: 8
+open_hours: [10, 22]
+min_seconds: 1.0
+zones:
+  display:
+    loiter_seconds: 8
+  walkable:
+    max_occupancy: 4

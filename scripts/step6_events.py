@@ -35,10 +35,12 @@ every policy field comes back at its default, so a commissioned camera on its ow
 nothing at all. docs/PLAN.md section 5 is why: "four minutes is loitering" is an argument
 a store manager changes on a Tuesday, not a property of the mount.
 
-So the thresholds below are arguments, they are recorded in the report by
-`delivery.report_settings`, and **they are demonstration values and not a store's rules**
--- the same disclaimer `site_events.py` puts on its derived zone. A real policy arrives
-from whoever owns the store's rules and replaces these.
+So the thresholds come from a **policy file** (`--policy`, `analytics/policy.py`), which
+the serving path reads too, so the offline log and the live one fire on the same numbers.
+The default file, `configs/policy/demo.yaml`, holds the demonstration values this script
+carried as argument defaults until 2026-09-10 -- **not a store's rules**, and the file
+says so in its `provenance`. A real policy arrives from whoever owns the store's rules,
+as a second file.
 
 ---------------------------------------------------------------------------
 TWO PIXEL-FRAME TRAPS, BOTH LIVE, BOTH SILENT
@@ -97,6 +99,7 @@ from syncai_hydranet import shipped  # noqa: E402
 from syncai_hydranet.analytics import events as ev  # noqa: E402
 from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
 from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
+from syncai_hydranet.analytics.policy import load_policy  # noqa: E402
 from syncai_hydranet.analytics.tracker import Track, Tracker  # noqa: E402
 from syncai_hydranet.data.video import frames, probe  # noqa: E402
 from syncai_hydranet.geometry.camera_json import CameraFile  # noqa: E402
@@ -111,6 +114,7 @@ from syncai_hydranet.serving.camera import BIRTH_REF, KEEP_REF  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
 DEFAULT_COMMISSION = ROOT / "runs/commission01"
+DEFAULT_POLICY = ROOT / "configs/policy/demo.yaml"
 
 
 def to_calibrated(tracks: list[Track], src_w: int, src_h: int, cam_file: CameraFile):
@@ -139,21 +143,6 @@ def to_calibrated(tracks: list[Track], src_w: int, src_h: int, cam_file: CameraF
         )
         for t in tracks
     ]
-
-
-def policy_zones(cam_file: CameraFile, args) -> list[ev.Zone]:
-    """Commissioned geometry + the thresholds this run argues for. See the header."""
-    zones = ev.zones_from_camera(cam_file)
-    out = []
-    for z in zones:
-        kind = next(c.kind for c in cam_file.zones if c.name == z.name)
-        if kind == "display":
-            out.append(replace(z, loiter_seconds=args.loiter_seconds))
-        elif kind == "walkable":
-            out.append(replace(z, max_occupancy=args.max_occupancy))
-        else:
-            out.append(z)
-    return out
 
 
 def observations(tracks, cam_file: CameraFile, camera: str, clip: str) -> dict:
@@ -207,7 +196,7 @@ def observations(tracks, cam_file: CameraFile, camera: str, clip: str) -> dict:
     return out
 
 
-def run_clip(camera, cam_file, clip, model, size, device, args) -> dict:
+def run_clip(camera, cam_file, clip, model, size, device, args, policy) -> dict:
     """One camera, one clip: tracks, events, alert rows, and the observation table."""
     # The band: boxes down to `keep_thr` reach the tracker and may continue a track; only
     # a box at `score_thr` may start one. `single_threshold` is the first fleet run's
@@ -226,7 +215,7 @@ def run_clip(camera, cam_file, clip, model, size, device, args) -> dict:
         max_frames=args.max_frames, k1=cam_file.lens.k1,
     )  # fmt: skip
     tracks = to_calibrated(out.tracks, out.src_w, out.src_h, cam_file)
-    zones = policy_zones(cam_file, args)
+    zones = policy.zones_for(cam_file)
 
     bounds = None
     if not args.no_edge_gate:
@@ -238,7 +227,7 @@ def run_clip(camera, cam_file, clip, model, size, device, args) -> dict:
         )
     events = ev.zone_events(
         tracks, zones, cam_file.camera, cam_file.plane, args.fps, camera,
-        min_seconds=args.min_seconds, bounds=bounds,
+        min_seconds=policy.min_seconds, bounds=bounds,
     )  # fmt: skip
     for zone in zones:
         if zone.max_occupancy is not None:
@@ -281,9 +270,13 @@ def main() -> int:
     ap.add_argument("--iou", type=float, default=0.3)
     ap.add_argument("--max-age", type=int, default=5)
     ap.add_argument("--min-hits", type=int, default=3)
-    ap.add_argument("--loiter-seconds", type=float, default=8.0)
-    ap.add_argument("--max-occupancy", type=int, default=4)
-    ap.add_argument("--min-seconds", type=float, default=1.0)
+    ap.add_argument(
+        "--policy",
+        type=Path,
+        default=DEFAULT_POLICY,
+        help="the store policy file (analytics/policy.py); the default is the "
+        "demonstration policy, which says so in its provenance",
+    )
     ap.add_argument(
         "--no-edge-gate",
         action="store_true",
@@ -296,6 +289,8 @@ def main() -> int:
             f"birth {args.score_thr}: a keep edge above the birth edge is a band that "
             "admits nothing"
         )
+
+    policy = load_policy(args.policy)
 
     # ---- what to run --------------------------------------------------------------
     if args.camera == "all":
@@ -348,7 +343,7 @@ def main() -> int:
     t0 = time.perf_counter()
     for n, (cam, cam_path, cam_file, clip) in enumerate(jobs, 1):
         print(f"[{n}/{len(jobs)}] {cam}  {Path(clip).name}", flush=True)
-        r = run_clip(cam, cam_file, clip, model, size, device, args)
+        r = run_clip(cam, cam_file, clip, model, size, device, args, policy)
         records = [
             dp.record_alert(args.out / "dispositions", e, model=model_id,
                             calib=cam_path, clip=Path(clip).resolve().relative_to(ROOT))
@@ -389,7 +384,22 @@ def main() -> int:
         kinds[e.type] = kinds.get(e.type, 0) + 1
 
     fleet = {
-        **report_settings(args),
+        **report_settings(
+            args,
+            policy={
+                "store": policy.store,
+                "provenance": policy.provenance,
+                "min_seconds": policy.min_seconds,
+                "open_hours": policy.open_hours,
+                "zones": {
+                    k: {
+                        f: getattr(r, f)
+                        for f in ("loiter_seconds", "max_occupancy", "restricted")
+                    }
+                    for k, r in policy.rules.items()
+                },
+            },
+        ),
         "seconds": round(elapsed, 1),
         "clips": len(jobs),
         "cameras": len(by_camera),

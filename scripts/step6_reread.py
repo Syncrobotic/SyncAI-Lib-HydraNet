@@ -18,8 +18,9 @@ The rule, stated because every part of it is a choice:
 * **occupancy_exceeded** has no duration to re-read against and is counted whole at every
   threshold. Its docstring says it counts tracks and so over-counts by the fragmentation
   rate; that is the number this re-read exists to watch move.
-* **Open hours** are local 10:00-22:00, twelve trading hours, and a clip is open or closed
-  by its start. The corpus stamps names in UTC and the stores are UTC+8
+* **Open hours** come from the store policy (`--policy`; the demonstration file says
+  10:00-22:00 local, twelve trading hours), and a clip is open or closed by its start.
+  The corpus stamps names in UTC and the stores are UTC+8
   (`events.clip_start_from_name` carries the cost of forgetting that). Closed-hours
   events are reported separately, not folded in: an after-hours person is a different
   alert with a different threshold, and 1 event in 40 camera-minutes says nothing about
@@ -32,24 +33,19 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import timedelta, timezone
 from pathlib import Path
 
 from syncai_hydranet.analytics.events import clip_start_from_name
+from syncai_hydranet.analytics.policy import StorePolicy, load_policy
 
-STORE_TZ = timezone(timedelta(hours=8))
-OPEN_HOURS = (10, 22)
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_POLICY = ROOT / "configs/policy/demo.yaml"
 THRESHOLDS = (8.0, 30.0, 120.0, 240.0)
-TRADING_MINUTES = (OPEN_HOURS[1] - OPEN_HOURS[0]) * 60
 
 
-def is_open(clip_name: str) -> bool:
-    hour = clip_start_from_name(clip_name, tz=STORE_TZ).hour
-    return OPEN_HOURS[0] <= hour < OPEN_HOURS[1]
-
-
-def reread(fleet: dict, cameras: set[str] | None = None) -> dict:
+def reread(fleet: dict, policy: StorePolicy, cameras: set[str] | None = None) -> dict:
     """The table for one log. `cameras` restricts to a common set for a comparison."""
+    trading_minutes = (policy.open_hours[1] - policy.open_hours[0]) * 60
     reports = [r for r in fleet["clip_reports"] if cameras is None or r["camera"] in cameras]
     fps = float(fleet["fps"])
     open_min = closed_min = 0.0
@@ -62,7 +58,7 @@ def reread(fleet: dict, cameras: set[str] | None = None) -> dict:
         c["clips"] += 1
         c["tracks"] += r["tracks"]
         c["events"] += len(r["events"])
-        if is_open(r["clip"]):
+        if policy.is_open(clip_start_from_name(r["clip"])):
             open_min += minutes
             open_ev += r["events"]
         else:
@@ -79,8 +75,8 @@ def reread(fleet: dict, cameras: set[str] | None = None) -> dict:
                 "occupancy_exceeded": occupancy,
                 # The headline is loitering only, which is what the plan's four numbers
                 # are; occupancy is beside it so the over-count is visible, not hidden.
-                "loitering_per_camera_day": loiter / open_min * TRADING_MINUTES,
-                "all_per_camera_day": (loiter + occupancy) / open_min * TRADING_MINUTES,
+                "loitering_per_camera_day": loiter / open_min * trading_minutes,
+                "all_per_camera_day": (loiter + occupancy) / open_min * trading_minutes,
             }
         )
     return {
@@ -106,14 +102,16 @@ def main() -> int:
         "commissioned one more camera is compared on the same footage",
     )
     ap.add_argument("--json", type=Path, default=None, help="write the tables here too")
+    ap.add_argument("--policy", type=Path, default=DEFAULT_POLICY, help="for open hours")
     args = ap.parse_args()
+    policy = load_policy(args.policy)
 
     fleets = {str(p): json.loads((p / "fleet.json").read_text()) for p in args.runs}
     common = None
     if args.common:
         sets = [{r["camera"] for r in f["clip_reports"]} for f in fleets.values()]
         common = set.intersection(*sets)
-    tables = {name: reread(f, common) for name, f in fleets.items()}
+    tables = {name: reread(f, policy, common) for name, f in fleets.items()}
 
     for name, t in tables.items():
         print(
