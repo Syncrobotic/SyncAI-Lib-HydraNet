@@ -1104,6 +1104,18 @@ Metrics, all automatic, reported per camera by the tools that produce them: repr
 IoU per fixture, orthogonality residual, same-store scale agreement, share of fixtures
 inside their interval. A fixture below the IoU floor is flagged and not drawn.
 
+**Status 2026-09-11.** D1 measured and closed as "the floor's right angle is an axis,
+not a calibration": the skew moves 0.05-0.1 deg per degree of vfov, under the reading's
+own +-2 deg noise, and 7-13 deg across k1 on cam15 -- the residual is reported per camera
+and a floor whose second family is >5 deg off is not trusted for its axis. D2-D5 shipped
+(`6bbea3c`, `15ce1ee`, `5bb5f8a`, `29172df`). Fleet reading, 9 cameras / 63 objects: 79%
+placed, **52% of placed at IoU >= 0.6 against the gate's 90%**; 27 walls from their feet;
+9 fixtures flagged outside their interval, all foot-built counter rows of 3.7-6.2 m on
+Taichung-cam01/cam10 whose tops a low camera behind a row of laptops does not see. The
+lever left is the mask, not the geometry: a counter's mask is ragged and carries its
+merchandise (a right box scores 0.7-0.85), and a `masks_pass` cluster that is two things
+scores 0.2-0.4 until the split can see a top. See `runs/commission01/REVIEW.md`.
+
 ### 10.5 Architecture decisions this plan fixes
 
 * **The world frame is the contract** (§2.3.1). Every layer above L1 reads metres and
