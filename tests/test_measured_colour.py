@@ -124,7 +124,8 @@ def test_too_few_pixels_do_not_paint(tmp_path, monkeypatch):
 
 
 def test_the_store_axis_is_fitted_to_the_ungated_evidence(tmp_path, monkeypatch):
-    root = _store(tmp_path, monkeypatch, ghost_offset_m=1.0)
+    """The blob fallback (no plate, so no floor lines) votes over the UNGATED grids."""
+    root = _store(tmp_path, monkeypatch, plate=False, ghost_offset_m=1.0)
     gated = scene_mesh.cell_grids(CAMERA, root)[1][scene_mesh.WALL_CID].sum()
     ungated = scene_mesh.cell_grids(CAMERA, root, gated=False)[1][scene_mesh.WALL_CID].sum()
     assert ungated > gated, "the gate removed nothing; the test store has no ghost"

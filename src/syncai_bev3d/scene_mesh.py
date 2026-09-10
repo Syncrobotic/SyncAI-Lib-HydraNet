@@ -34,6 +34,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage
 
+from syncai_bev3d.floor_axis import floor_line_axis
 from syncai_bev3d.floorplan import (
     FLOOR_BOTH_SIDES,
     floor_both_sides,
@@ -56,6 +57,7 @@ from syncai_bev3d.meshes import (
 from syncai_bev3d.shading import View, contact_shadows, draw_scene, occlusion_alpha
 from syncai_hydranet.geometry.bands import Band
 from syncai_hydranet.geometry.camera_json import CameraFile
+from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 
 # The checkout this package sits in -- `src/syncai_bev3d/scene.py` -> the repo root --
 # rather than the absolute path this file carried while it lived under `tools/`. Every
@@ -842,6 +844,40 @@ class Painter:
         return self._key("wall", rgb[near])
 
 
+def store_axis(ev: Evidence, camera, root: Path | None = None) -> float:
+    """The store's axis in radians: the floor's joints where they can be read, else the
+    fixture blobs.
+
+    The joints first because they are laid with the walls; the blob vote answers which way
+    the depth smear is elongated, and on Taichung-cam01 that was 36 deg from the tiles
+    (2026-09-10, `floor_axis`). The fallback is the ungated blob evidence -- never the
+    gated one, which halves the wall points and turned three cameras' axes.
+    """
+    fh, fw = ev.z["gx"].shape
+    w, h = ev.cf.image_size_px
+    scale = np.array([w / fw, h / fh])
+
+    def ground(px):
+        # `CameraFile.ground_points` drops or raises on the horizon; here a NaN row must
+        # stay a row, because each point is paired with its half-pixel neighbour.
+        pts = px * scale
+        if ev.cf.lens is not None:
+            lens = ev.cf.lens
+            pts = undistort_points(pts, lens.k1, lens.centre_px, lens.radius_px)
+        x, z = pixel_to_ground(pts[:, 0], pts[:, 1], ev.cf.camera, ev.cf.plane)
+        return np.stack([x, z], axis=1)
+
+    if ev.plate is not None:
+        axis, second = floor_line_axis(ev.plate, ev.walk, ev.z["gz"], ev.z["geom_ok"], ground)
+        if axis is not None:
+            print(
+                f"  {camera}: store axis {np.degrees(axis):.1f} deg from the floor's lines "
+                f"(2nd peak {second:.2f})"
+            )
+            return axis
+    return store_yaw(cell_grids(camera, root, gated=False, evidence=ev)[1])
+
+
 def build_scene_regular(camera, root: Path | None = None):
     """B-path: every fixture becomes a store-axis-aligned parametric mesh.
 
@@ -859,7 +895,7 @@ def build_scene_regular(camera, root: Path | None = None):
     # and since every box is fitted in the store frame, every fixture turned with it.
     # The gate decides where a fixture stands; it has nothing to say about which way
     # the shop faces.
-    yaw = store_yaw(cell_grids(camera, root, gated=False, evidence=ev)[1])
+    yaw = store_axis(ev, camera, root)
     cy, sy = np.cos(yaw), np.sin(yaw)
     paint = Painter(ev, yaw)
     items = [(floor_mesh(grids[1]), paint.floor(), 150, False)]
