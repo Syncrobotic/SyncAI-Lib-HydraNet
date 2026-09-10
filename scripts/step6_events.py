@@ -77,8 +77,17 @@ its own docstring what that costs: it counts tracks, so it over-counts by exactl
 fragmentation rate.
 
 Now the default: decode at `--keep-thr` so the low boxes reach the tracker, birth at
-`--score-thr` inside it. `--single-threshold` reproduces the first run's tracker, and it
-exists so the two logs can be read against each other rather than so anyone runs it.
+`--score-thr` inside it. `--tracker band` reproduces that run and `--tracker single`
+the first; both exist so old logs can be read against new ones, not so anyone runs them.
+
+**Since the evening of 2026-09-10 the default is the tracker that ships**: bytetrack's
+two-stage association over a Kalman prediction, built by `bytetrack.shipped_forward` the
+way `serve_pilot.py` builds it, with the appearance gate at each camera's calibrated
+distance under `--appearance-gate`. The four-arm measurement (`runs/endings04-07`) put
+two-stage at 38 mid-view deaths against the band's 48 on the same clips, and
+`runs/band_probe01` had already shown its dwell total is not inflated by coasting
+(3,304 s against the band's 3,509 s). One tracker on both paths is what makes an
+offline row and a live row the same claim.
 """
 
 from __future__ import annotations
@@ -98,6 +107,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from syncai_hydranet import shipped  # noqa: E402
 from syncai_hydranet.analytics import events as ev  # noqa: E402
 from syncai_hydranet.analytics.appearance import torso_histograms  # noqa: E402
+from syncai_hydranet.analytics.bytetrack import TwoStageForClip, shipped_forward  # noqa: E402
 from syncai_hydranet.analytics.clip_tracks import track_clip  # noqa: E402
 from syncai_hydranet.analytics.delivery import report_settings  # noqa: E402
 from syncai_hydranet.analytics.policy import load_policy  # noqa: E402
@@ -202,22 +212,31 @@ def run_clip(camera, cam_file, clip, model, size, device, args, policy) -> dict:
     # The band: boxes down to `keep_thr` reach the tracker and may continue a track; only
     # a box at `score_thr` may start one. `single_threshold` is the first fleet run's
     # tracker, kept for reading the two logs against each other -- see the header.
-    band = not args.single_threshold
     # The appearance gate is per camera and off by default: `appearance_thr` is a
     # measured distance in camera.json (licensed on five cameras as of 2026-09-10) and a
     # camera without one runs ungated, which the clip report says.
     gate = cam_file.appearance_thr if args.appearance_gate else None
-    tracker = Tracker(
-        iou_threshold=args.iou,
-        max_age=args.max_age,
-        min_hits=args.min_hits,
-        birth_thr=args.score_thr if band else None,
-        appearance_thr=gate,
-    )
+    tracker: Tracker | TwoStageForClip
+    if args.tracker == "two_stage":
+        # The tracker that ships, built the way serving builds it (bytetrack.SHIPPED_*),
+        # so this log and the live one are produced by one tracker. Decode at the keep
+        # edge: the low band has to reach it.
+        tracker = TwoStageForClip(shipped_forward(args.fps, appearance_thr=gate))
+        decode_thr = args.keep_thr
+    else:
+        band = args.tracker == "band"
+        tracker = Tracker(
+            iou_threshold=args.iou,
+            max_age=args.max_age,
+            min_hits=args.min_hits,
+            birth_thr=args.score_thr if band else None,
+            appearance_thr=gate,
+        )
+        decode_thr = args.keep_thr if band else args.score_thr
     out = track_clip(
         clip, model, size, device, tracker,
         frames=frames, preprocess=preprocess, probe=probe,
-        fps=args.fps, score_thr=args.keep_thr if band else args.score_thr,
+        fps=args.fps, score_thr=decode_thr,
         max_frames=args.max_frames, k1=cam_file.lens.k1,
         describe=torso_histograms if args.appearance_gate else None,
     )  # fmt: skip
@@ -246,6 +265,7 @@ def run_clip(camera, cam_file, clip, model, size, device, args, policy) -> dict:
         "camera": camera,
         "clip": Path(clip).name,
         "appearance_thr": gate,
+        "refusals": len(getattr(tracker, "refusals", [])),
         "frames_read": out.frames,
         "detections": out.detections,
         "tracks": len(tracks),
@@ -270,10 +290,13 @@ def main() -> int:
     # start one; `serving/camera.py` names both edges for the reason it gives there.
     ap.add_argument("--keep-thr", type=float, default=KEEP_REF)
     ap.add_argument(
-        "--single-threshold",
-        action="store_true",
-        help="decode and birth both at --score-thr, no survival band: the tracker "
-        "`runs/step6_fleet01` was written with, for comparison and not for use",
+        "--tracker",
+        choices=("two_stage", "band", "single"),
+        default="two_stage",
+        help="two_stage: the shipped tracker (bytetrack, the one serving runs; default "
+        "since 2026-09-10). band: tracker.Tracker with the survival band, the "
+        "runs/step6_fleet02 arm. single: decode and birth both at --score-thr, the "
+        "runs/step6_fleet01 arm. The last two exist for reading old logs, not for use",
     )
     ap.add_argument(
         "--appearance-gate",

@@ -365,3 +365,40 @@ def test_a_camera_state_takes_one_camera_s_thresholds():
     book = load_thresholds("configs/serving/thresholds_retail_security.json")
     s = make_state(thresholds=book.for_camera("Kaohsiung-cam04"))
     assert s.thresholds["person"].birth == pytest.approx(0.35)
+
+
+# -- the appearance gate reaches the injected tracker (2026-09-10) ----------------------
+
+
+def test_appearance_rows_are_filtered_by_the_same_keep_mask_as_the_boxes():
+    """Row i must describe box i after the keep threshold drops some boxes."""
+    import numpy as np
+
+    class Looking(StubTracker):
+        def update(self, boxes, scores, frame_idx, appearance=None):
+            super().update(boxes, scores, frame_idx)
+            self.looks = appearance
+
+    s = make_state(tracker_factory=Looking)
+    terrain = np.zeros(HW, dtype=np.uint8)
+    boxes = np.array([[0, 0, 10, 20], [20, 0, 30, 20], [40, 0, 50, 20]], float)
+    scores = np.array([0.9, 0.05, 0.5])  # the middle box is under every keep threshold
+    labels = np.zeros(3, dtype=np.int64)
+    looks = np.arange(9, dtype=float).reshape(3, 3)
+    s.update(0, terrain, boxes, scores, labels, appearance=looks)
+    kept = s.tracker.calls[-1][0]
+    assert len(kept) == 2 and np.allclose(s.tracker.looks, looks[[0, 2]])
+
+
+def test_a_threshold_lands_on_a_tracker_that_has_a_gate_and_is_refused_on_one_that_does_not():
+    import pytest
+
+    from syncai_hydranet.analytics.bytetrack import OfflineForward
+
+    s = make_state(
+        tracker_factory=lambda: OfflineForward(0.35, 0.2, 0.3, 0.4, 5, 1, 5.0),
+        appearance_thr=0.39,
+    )
+    assert s.tracker.appearance_thr == 0.39 and s.appearance_thr == 0.39
+    with pytest.raises(ValueError, match="no appearance gate"):
+        make_state(tracker_factory=StubTracker, appearance_thr=0.39)

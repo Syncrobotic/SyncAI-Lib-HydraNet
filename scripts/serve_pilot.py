@@ -37,7 +37,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from syncai_hydranet.analytics.bytetrack import as_track  # noqa: E402
+from syncai_hydranet.analytics.appearance import torso_histograms  # noqa: E402
+from syncai_hydranet.analytics.bytetrack import MOT17_FPS, as_track  # noqa: E402
 from syncai_hydranet.analytics.events import clip_start_from_name  # noqa: E402
 from syncai_hydranet.analytics.policy import load_policy  # noqa: E402
 from syncai_hydranet.data.label_maps_retail_security import get_det_vocab  # noqa: E402
@@ -261,7 +262,14 @@ def make_tracker_factory(vel_scale: float):
     import numpy as _np
     from scipy.optimize import linear_sum_assignment
 
-    from syncai_hydranet.analytics.bytetrack import OfflineForward, iou
+    from syncai_hydranet.analytics.bytetrack import (
+        SHIPPED_IOU,
+        SHIPPED_IOU_LOW,
+        SHIPPED_MAX_AGE,
+        SHIPPED_MIN_HITS,
+        OfflineForward,
+        iou,
+    )
     from syncai_hydranet.serving.camera import BIRTH_REF, KEEP_REF
 
     class ScipyAssocForward(OfflineForward):
@@ -290,8 +298,12 @@ def make_tracker_factory(vel_scale: float):
             }
             return pairs, set(range(len(boxes))) - set(pairs.values())
 
-    # The tracker's global hysteresis; CameraState rescales per-class onto it.
-    return lambda: ScipyAssocForward(BIRTH_REF, KEEP_REF, 0.3, 0.4, 5, 2, vel_scale)
+    # The tracker's global hysteresis; CameraState rescales per-class onto it. The four
+    # other constants are bytetrack.SHIPPED_*, the same ones step 6 builds from.
+    return lambda: ScipyAssocForward(
+        BIRTH_REF, KEEP_REF, SHIPPED_IOU, SHIPPED_IOU_LOW, SHIPPED_MAX_AGE, SHIPPED_MIN_HITS,
+        vel_scale,
+    )  # fmt: skip
 
 
 def live_tracks(state: CameraState) -> int:
@@ -317,7 +329,10 @@ def cmd_run(args) -> int:
     book = load_thresholds(args.thresholds)
     overridden = sorted(book.cameras)
     streams = discover_streams(ROOT / "datasets/studioa_clips", args.streams)
-    factory = make_tracker_factory(vel_scale=25.0 / args.assumed_fps)
+    # The Kalman's velocity prior is scaled by the rate frames are CONSUMED at, which
+    # with paced streams is --stream-fps; --assumed-fps stands in only when free-running.
+    consumed_fps = args.stream_fps if args.stream_fps > 0 else args.assumed_fps
+    factory = make_tracker_factory(vel_scale=MOT17_FPS / consumed_fps)
     policy = load_policy(args.policy)
     cameras = {}
     commissioned: dict[str, Path] = {}
@@ -342,6 +357,9 @@ def cmd_run(args) -> int:
             tracker_factory=factory,
             camera_file=camera_file,
             source_size_px=None if camera_file is None else probe_wh(clip),
+            # The re-association gate, at this camera's calibrated distance when it has
+            # one. Descriptors are then cut from the canvas frame in post_one.
+            appearance_thr=None if camera_file is None else camera_file.appearance_thr,
         )
     calibrated = sorted(c for c, s in cameras.items() if s.calib is not None)
     print(f"{len(streams)} streams; {len(calibrated)} with calibration")
@@ -418,7 +436,17 @@ def cmd_run(args) -> int:
 
     def post_one(item, terrain, det):
         state = cameras[item.camera]
-        state.update(item.seq, terrain, det["boxes"], det["scores"], det["labels"])
+        # The descriptor is cut from the letterboxed canvas at canvas coordinates -- the
+        # same space the boxes are in here. The thresholds were calibrated on raw-frame
+        # crops (tools/commissioning/appearance_calibrate.py); a colour histogram is
+        # near enough scale-invariant for the gap to be small, and it is stated rather
+        # than assumed: the first refusal log from a live run is where it gets checked.
+        looks = None
+        if state.appearance_thr is not None:
+            looks = torso_histograms(item.frame, det["boxes"])
+        state.update(
+            item.seq, terrain, det["boxes"], det["scores"], det["labels"], appearance=looks
+        )
         l3, tracker = alerts.get(item.camera), state.tracker
         if l3 is not None and tracker is not None:
             l3.on_frame([as_track(f) for f in tracker.tracks])
@@ -562,6 +590,12 @@ def cmd_run(args) -> int:
             "policy": None if not alerts else {"store": policy.store, "file": str(args.policy)},
             "cameras": sorted(alerts),
             "alerts_filed": sum(len(a.filed) for a in alerts.values()),
+            "gated_cameras": sorted(n for n, s in cameras.items() if s.appearance_thr),
+            "refusals": {
+                n: len(getattr(s.tracker, "refusals", []))
+                for n, s in cameras.items()
+                if s.appearance_thr
+            },
             "dispositions": None if not alerts else str(args.out / "dispositions"),
             "seconds_are": "consumed frames over --stream-fps; see serving/alerts.py",
         },

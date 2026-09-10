@@ -205,6 +205,7 @@ class CameraState:
         ema_alpha: float = 0.35,
         camera_file: CameraFile | None = None,
         source_size_px: tuple[int, int] | None = None,
+        appearance_thr: float | None = None,
     ):
         self.camera = camera
         self.num_terrain_classes = int(num_terrain_classes)
@@ -222,6 +223,18 @@ class CameraState:
         self._best: torch.Tensor | None = None  # argmax, maintained incrementally
         self._best_val: torch.Tensor | None = None
         self.tracker = tracker_factory() if tracker_factory is not None else None
+        # The re-association gate's distance is a per-camera measurement (camera.json's
+        # `appearance_thr`) and the tracker is injected, so the two meet here: set on the
+        # tracker that has the attribute, refused on one that does not, rather than a
+        # threshold that silently gates nothing.
+        if appearance_thr is not None:
+            if self.tracker is None or not hasattr(self.tracker, "appearance_thr"):
+                raise ValueError(
+                    f"{camera}: appearance_thr given but the tracker has no appearance "
+                    "gate; a threshold nothing reads would look like coverage"
+                )
+            self.tracker.appearance_thr = float(appearance_thr)
+        self.appearance_thr = appearance_thr
         self.calib = self._load_calib(calib_path)
         # `calib` above is the *onboard* artefact (`hydranet-onboard-calib/v1`, the
         # stage-0 estimate). `camera_file` is the commissioned `camera.json`, which
@@ -369,14 +382,19 @@ class CameraState:
         """
         if len(boxes) == 0:
             return boxes, scores, labels
+        sel = self.keep_mask(scores, labels)
         births = np.array(
             [self.thresholds[self.det_classes[int(c)]].birth for c in labels], np.float64
         )
+        return boxes[sel], scores[sel] * (BIRTH_REF / births[sel]), labels[sel]
+
+    def keep_mask(self, scores: np.ndarray, labels: np.ndarray) -> np.ndarray:
+        """Which detections survive their class's keep threshold -- one mask, so anything
+        index-aligned with the boxes (the appearance rows) is filtered the same way."""
         keeps = np.array(
             [self.thresholds[self.det_classes[int(c)]].keep for c in labels], np.float64
         )
-        sel = scores >= keeps
-        return boxes[sel], scores[sel] * (BIRTH_REF / births[sel]), labels[sel]
+        return scores >= keeps
 
     def update(
         self,
@@ -386,6 +404,7 @@ class CameraState:
         scores: np.ndarray,
         labels: np.ndarray,
         time_s: float | None = None,
+        appearance: np.ndarray | None = None,
     ) -> dict[str, Any]:
         """One consumed frame: smooth terrain, feed the tracker, return the stable view.
 
@@ -402,10 +421,20 @@ class CameraState:
         knows whether the session is continuous, may turn a seq into a clock.
         """
         stable = self.ema_labels(terrain_labels)
+        # ``appearance`` is one descriptor row per incoming box, and it has to be
+        # filtered by the same mask the boxes are, or row i describes box j.
+        looks = None
+        if appearance is not None:
+            looks = np.asarray(appearance, float)
+            if len(boxes):
+                looks = looks[self.keep_mask(scores, labels)]
         boxes, scaled, labels = self.filter_and_scale(boxes, scores, labels)
         tracked = None
         if self.tracker is not None:
-            self.tracker.update(boxes, scaled, self.frames_seen)
+            if looks is None:
+                self.tracker.update(boxes, scaled, self.frames_seen)
+            else:
+                self.tracker.update(boxes, scaled, self.frames_seen, appearance=looks)
             tracked = confirmed_track_boxes(self.tracker, labels, boxes, self.canvas_hw)
         if time_s is not None:
             self._times_s[self.frames_seen] = float(time_s)
