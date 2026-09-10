@@ -1,21 +1,25 @@
-"""Onboard calibration -> `camera.json`, and the metre grid that proves it.
+"""Onboard calibration -> `camera.json`: the converter behind build-order step 2.
 
-Build-order step 2's gate is visual: **a 1 m floor grid rendered on a real frame, one
-per camera, judged by eye** (docs/PLAN.md §6). This module is both halves of that step:
-the converter that turns a `runs/onboard01/<camera>.calib.json` (the 2026-08-19 fleet
-scan) into the `camera.json` contract, and the renderer that draws the grid the human
-judges.
+Turns a `runs/onboard01/<camera>.calib.json` (the 2026-08-19 fleet scan) into the
+`camera.json` contract every downstream consumer reads.
 
-The converter **refuses a camera without metres rather than writing plausible NaN**: a
-calib whose `scale_source` is unmeasured has a shape (DA-V2's relative plane) but no
-scale, and a `camera.json` written from it would put confident wrong metres under every
-downstream event. Those cameras wait for their visual reference (door height / tile
-pitch, the calib02 method) -- the refusal message says exactly that.
+It **refuses a camera without metres rather than writing plausible NaN**: a calib whose
+`scale_source` is unmeasured has a shape (DA-V2's relative plane) but no scale, and a
+`camera.json` written from it would put confident wrong metres under every downstream
+event. Those cameras wait for their visual reference (door height / tile pitch, the
+calib02 method) -- the refusal message says exactly that.
 
-The grid is drawn on the **undistorted** frame, because that is the frame the
-`Camera` + `GroundPlane` model lives in: `pixel_to_ground` knows nothing about the lens,
-and drawing the grid on the raw frame would bake the lens error into the picture the
-human is asked to approve.
+**This module used to be both halves of step 2 and is now one.** The gate is visual -- a
+1 m floor grid on a real frame, one per camera, judged by eye (docs/PLAN.md §6) -- and
+`render_metre_grid` drew it, on the undistorted frame because that is where the
+`Camera` + `GroundPlane` model lives. It was deleted in `5c209c7` as uncalled, which it
+was: the scripts that drove it had already left the tree. So the eight commissioned
+cameras passed a gate this module can no longer render, and the 15-camera backlog needs
+it rebuilt (`git show 08cd335:src/syncai_bev3d/commissioning.py` has the original).
+
+`from_onboard_calib` has no caller outside `tests/test_camera_json.py` either. That is
+the same absence one step earlier and it is why README's stage-0 runbook has no command
+between the calibration sweep and `masks_pass.py`.
 """
 
 from __future__ import annotations
