@@ -580,6 +580,58 @@ order. A component with no step is not scheduled, it is assumed.
    (overlapping views double-count a person). Single-store re-linking is in scope,
    cross-store is banned; the mechanism is unscoped.
 
+41. **The counter crowd is the detector's, not the tracker's, and the design for it is
+   three mechanisms ranked by what each costs. Opened 2026-09-10 night, as Gate B's B1.**
+
+   **The evidence, all of it already measured.** `runs/endings09` (the shipped two-stage
+   tracker, the `taken` verdict): of 40 mid-view track deaths, **24 demoted, 13 taken,
+   3 vacated, 0 available** -- every one of the 37 a person still standing there whose
+   box scored 0.20–0.30 while the neighbour's scored 0.4–0.6. §7.11's density probe: at
+   0.35 the box head returns **1 → 2 → 4** people for ~1 / 7 / 13 present, at 0.15 it
+   returns **1 → 5 → 15**, and the top score never moves — one or two people per
+   cluster keep their score and the rest are demoted. §9.3: the dense head marks **20%
+   more people than the box head** at 0.35, IoU 0.885, every one behind a counter or a
+   table. And person01 — site person boxes in detection supervision since 2026-09-02,
+   the remedy §7c.20 prescribed — is the model endings09 ran on: `coco_person` rose
+   +0.005, `site_person` reads 0.739 against its own teacher, **and the huddle is
+   unchanged**. The likeliest reason is the ceiling nobody has measured: the site
+   person labels are Grounding DINO at 0.35, and a student cannot learn a crowd its
+   teacher did not label.
+
+   **Three mechanisms, in the order they cost.**
+
+   1. **Dense-confirmed birth** (inference only, no training). The band already lets a
+      0.20 box *continue* a track; a birth still needs 0.35, so the demoted shopper is
+      never born and reads `taken` the moment a neighbour's box drifts over them. Let an
+      unmatched `person` box in **[0.15, 0.35)** be born when the dense head puts person
+      pixels under it (`serving/decode.confirm_with_dense`, `MIN_PERSON_FRACTION`, written
+      2026-08-26 and consumed by nothing since), optionally only inside a `till` /
+      `display` service zone. Duplicates are the risk — a huddle is one dense blob — and
+      an unmatched box is by construction not on a live track at IoU 0.3, which leaves
+      the lower overlaps; that is measured, not assumed. Decode floor 0.15 on both paths.
+      **Gate**: `demoted + taken` on the endings clips (37 today), `tracks` and
+      `occupancy_exceeded` on step 6's 32 clips beside a by-eye person count on three
+      Kaohsiung-cam04 crowd frames, and the strips. An hour to build, two runs to score.
+   2. **A second pass at the counter, at twice the scale** (inference, no training).
+      `camera.json`'s service zones say where the counter is; run the same engine on that
+      region upscaled ×2 and merge by NMS — the two-scale pattern §2.2f already reserves
+      for products, applied to people, because a shopper at 3–5 m under a 50° mount is
+      small and half-hidden and 640×1120 gives them few pixels. Costs up to a second
+      engine pass on counter cameras (analytics is 32% of the card; the reserve is the
+      VLM's), so it runs only where 1 leaves demoted people, and it can run at 1 fps to
+      seed births that the full-frame low band then continues.
+   3. **Labels the teacher did not give, then person02** (a retrain). Measure the ceiling
+      first: Grounding DINO boxes against dense blobs against a person's count on thirty
+      Kaohsiung-cam04 crowd frames. If the teacher misses the huddle, the labels come from
+      a source that does not — SAM 3 on the 1080p counter crop, a VLM count, or the
+      operator's graded rows once Gate A produces them — and person02 re-baselines
+      everything. The crowd-aware assigner stays where §7c.20 left it: refuted as the
+      cause. A day of GPU and a re-baseline, scored on graded rows (Gate B).
+
+   **Decision: build 1, score it, and let its residual choose between 2 and 3.** Nothing
+   here is a per-frame dense scene understanding (§5 rule 6): the trunk already emits the
+   dense map every frame for the terrain reading, and 1 reads a number off it.
+
 ### 7b. Decided — the answer, and what it cost
 
 2. ~~Night is unscoped~~ — **decided 2026-08-25: night is in v1, gated on a measurement.**
@@ -956,7 +1008,7 @@ incidents shrinks**. Nothing in this gate ships without a before/after on Gate A
 
 | # | work | evidence it rests on | done when |
 |---|---|---|---|
-| B1 | **occluded-person recall**: the dense head's 20% of shoppers behind counters become boxes — the crop-stage fallback `models/heads/pose.py` reserved, or a dense-to-box proposal at the counter zones only | §9.3 | detection mAP unchanged elsewhere, counter-zone recall up on the graded misses |
+| B1 | **occluded-person recall**: the dense head's 20% of shoppers behind counters become boxes — the crop-stage fallback `models/heads/pose.py` reserved, or a dense-to-box proposal at the counter zones only. **Designed 2026-09-10 night as §7a.41**: dense-confirmed birth first, the ×2 counter pass second, crowd labels and person02 third, each gated by the endings instrument and step 6 | §9.3, §7a.41 | detection mAP unchanged elsewhere, counter-zone recall up on the graded misses; `demoted + taken` on the endings clips down from 37 |
 | B2 | **`staff/customer` licensed on every pilot camera**: the three uniform photos per store, and a VLM at L2 as the teacher for the cameras the colour statistics refuse | step 9, §7.15 | balanced accuracy ≥ 0.90 held out by camera on all pilot cameras; `reach_to_shelf` no longer fires on staff at their workstation |
 | B3 | **the VLM at L4, on trigger**, on the card's reserved budget: reads the frames of an alert already filed and writes its verdict as a disposition row beside the operator's | §1.1, §7.4 | agreement between VLM and operator measured per event kind; the disagreements are the next training set |
 | B4 | **per-camera, per-hour baseline** from L1 output: counts, dwell, speed on the world frame, kept beside `camera.json`, no network; each event gains a `rarity` field against its own camera's history | §1.1's survey; §7.37 | rarity separates accepted from rejected rows better than the fleet constant does — or it is dropped |
