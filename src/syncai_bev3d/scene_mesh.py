@@ -970,6 +970,19 @@ def build_scene_regular(camera, root: Path | None = None):
         # keeps its connectivity label.
         if grid_obj.get(cid) is not None:
             obj = grid_obj[cid] * opened
+            # An object is one body. Its cells that lie apart from the largest connected
+            # run of them are the depth smear wearing its id -- and taken together they
+            # widened Kaohsiung-cam04's counter from 2.70x1.00 to 2.85x1.85 m the first
+            # time ids were used (2026-09-10). Connectivity had dropped them by accident;
+            # now they are dropped on purpose, and not as fixtures of their own either.
+            for oid in np.unique(obj[obj > 0]):
+                body = obj == oid
+                parts, n_parts = ndimage.label(body, structure=np.ones((3, 3)))
+                if n_parts > 1:
+                    largest = np.argmax(np.bincount(parts.ravel())[1:]) + 1
+                    stray = body & (parts != largest)
+                    obj[stray] = 0
+                    lab[stray] = 0
             lab = np.where(obj > 0, obj + n, lab)
         for k in np.unique(lab[lab > 0]):
             r, c = np.nonzero(lab == k)
