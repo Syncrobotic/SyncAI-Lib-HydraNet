@@ -70,6 +70,9 @@ A second pass runs the model at 0.03 over exactly those frames. Pass one is unto
 `exit` still reproduces; the two passes are separate because `decode` thresholds *before*
 NMS, and filtering a 0.03 decode down to 0.35 afterwards is not the same set of survivors.
 
+    taken       the box below was observed by another live track on that frame. The
+                person next to the dead track has a track; the dead track's person was
+                demoted (added 2026-09-10; before it, this read as `available`).
     available   a box at or above the shipped threshold overlapped the dead track by the
                 **tracker's own** IoU rule and was still not associated. Judged at
                 `--iou`, not at the looser `--witness-iou` the other bins use: a box the
@@ -145,6 +148,7 @@ class Recording(Tracker):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.seen: dict[int, np.ndarray] = {}
+        self.taken: dict[int, list[tuple[int, np.ndarray]]] = {}
 
     def update(
         self,
@@ -164,7 +168,7 @@ class Recording(Tracker):
         # unexpected keyword fails only on the run that first passes it. `appearance`
         # arrived on 2026-09-09 and did it again, caught the same way.
         self.seen[int(frame_idx)] = np.asarray(boxes, dtype=float).reshape(-1, 4).copy()
-        return super().update(
+        out = super().update(
             boxes,
             frame_idx,
             keypoints=keypoints,
@@ -172,6 +176,14 @@ class Recording(Tracker):
             staff_scores=staff_scores,
             appearance=appearance,
         )
+        # Which live tracks were OBSERVED on this frame, and where: the witness pass asks
+        # whether a box near a dead track was already somebody else's.
+        self.taken[int(frame_idx)] = [
+            (t.track_id, np.asarray(t.boxes[-1], float).copy())
+            for t in self.tracks
+            if t.age == 0 and t.boxes
+        ]
+        return out
 
 
 @dataclass(frozen=True)
@@ -213,6 +225,7 @@ class RecordingByteTrack:
         )  # fmt: skip
         self.high_thr = high_thr
         self.seen: dict[int, np.ndarray] = {}
+        self.taken: dict[int, list[tuple[int, np.ndarray]]] = {}
 
     def update(self, boxes, frame_idx, keypoints=None, scores=None):  # noqa: ARG002
         # `keypoints` is part of the interface `track_clip` may call with and this
@@ -222,6 +235,11 @@ class RecordingByteTrack:
         s = np.zeros(len(b)) if scores is None else np.asarray(scores, dtype=float).reshape(-1)
         self.seen[int(frame_idx)] = b[s >= self.high_thr].copy()
         self.inner.update(b, s, int(frame_idx))
+        self.taken[int(frame_idx)] = [
+            (t.frag_id, np.asarray(t.boxes[-1], float).copy())
+            for t in self.inner.tracks
+            if t.age == 0 and t.boxes
+        ]
 
     def finished(self) -> list[Ended]:
         # A `Fragment` names its id `frag_id`, and everything downstream reads
@@ -292,7 +310,13 @@ def classify(track, tracker: Recording | RecordingByteTrack, cam_file, src, args
 
 
 def witness_verdict(
-    *, best_assoc: float, best_score: float, dense: bool, score_thr: float, witness_thr: float
+    *,
+    best_assoc: float,
+    best_score: float,
+    dense: bool,
+    score_thr: float,
+    witness_thr: float,
+    taken_by: int | None = None,
 ) -> str:
     """The four-way rule, as a function so it can be tested without a model or a clip.
 
@@ -303,13 +327,22 @@ def witness_verdict(
     looser presence IoU, where the question is only whether somebody was there.
     """
     if best_assoc >= score_thr:
-        return "available"
+        # `taken`: the box the tracker "could have taken" was observed by ANOTHER live
+        # track on that frame. Added 2026-09-10 after the first strips of `available`
+        # deaths (runs/endings08) showed the same thing thirteen times: a huddle at a
+        # counter, the dead track's last box in the low band, and the high-band box next
+        # to it already on a neighbour's track. That is the detector demoting a person
+        # in a crowd (PLAN 7.11), not the tracker refusing a match, and it was being
+        # counted as the tracker's failure.
+        return "taken" if taken_by is not None else "available"
     if best_score >= witness_thr:
         return "demoted"
     return "boxless" if dense else "vacated"
 
 
-def witness(clip: str, model, cfg, device, args, targets: dict, k1: float | None) -> dict:
+def witness(
+    clip: str, model, cfg, device, args, targets: dict, k1: float | None, taken: dict
+) -> dict:
     """A second pass that asks, at each mid-view death, whether anybody was still there.
 
     The `lost` / `gone` split above is undecidable from geometry because it needs an
@@ -397,6 +430,16 @@ def witness(clip: str, model, cfg, device, args, targets: dict, k1: float | None
                         # The box the tracker could have taken, and the frame it was on.
                         rec["best_assoc_box"] = [round(float(x), 1) for x in low[j]]
                         rec["best_assoc_frame"] = n - 1
+                        # Was it somebody else's? A live track other than the dead one,
+                        # observed on this frame, whose box overlaps it at the tracker's
+                        # own IoU.
+                        rec["taken_by"] = None
+                        for other_id, other_box in taken.get(n - 1, []):
+                            if other_id == tid:
+                                continue
+                            if float(iou(low[j][None], other_box[None])[0, 0]) >= args.iou:
+                                rec["taken_by"] = int(other_id)
+                                break
                     rec["best_assoc"] = max(rec["best_assoc"], float(low_sc[assoc].max()))
             if len(dense) and (iou(box[None], dense)[0] >= args.witness_iou).any():
                 rec["dense"] = True
@@ -408,6 +451,7 @@ def witness(clip: str, model, cfg, device, args, targets: dict, k1: float | None
             dense=rec["dense"],
             score_thr=args.score_thr,
             witness_thr=args.witness_thr,
+            taken_by=rec.get("taken_by"),
         )
         for k in ("best_score", "best_assoc", "best_iou"):
             rec[k] = round(rec[k], 3)
@@ -502,7 +546,7 @@ def run_camera(camera: str, model, cfg, device, args) -> dict:
 
     seen = witness(
         str(CLIPS / camera / SWEEP_CLIPS[camera]), model, cfg, device, args, targets,
-        cam_file.lens.k1 if cam_file.lens else None,
+        cam_file.lens.k1 if cam_file.lens else None, tracker.taken,
     ) if targets else {}  # fmt: skip
     verdicts: dict[str, int] = {}
     for tid in mid_view:
