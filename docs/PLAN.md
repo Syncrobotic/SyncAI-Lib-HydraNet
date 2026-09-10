@@ -666,6 +666,21 @@ order. A component with no step is not scheduled, it is assumed.
    whether those boxes then track is what a build would measure, and the ceiling probe
    for 3 is cheaper and decides more.
 
+   **The ceiling probe, the same night: the teacher stops where the student stops.**
+   Grounding DINO (`scripts/gdino_person_boxes.py`, the source of every site person
+   label) over 30 frames of the same Kaohsiung-cam04 19:28 clip: **333 boxes at ≥ 0.35,
+   11.1 a frame**, 442 at ≥ 0.25 (14.7), 945 at the 0.10 floor (31.5), median score
+   0.23 — for a counter holding **15–17 people by eye**. So the labels person01 trained
+   on carry about eleven of them, the front row, and the student returns eight to
+   eleven: the crowd recall ceiling is the teacher's, at the threshold the labels were
+   cut at, and no scale, birth rule or assigner reaches past it. **Decision: mechanism
+   3 is the fix, and its first step is labels the teacher did not give** — the same
+   counter frames labelled by a source that sees the back row (SAM 3 at 1080p on the
+   counter crop, a VLM asked to box every person, or a human on thirty frames), then
+   person02 on site labels cut at 0.25 with the back-row boxes added, scored on graded
+   rows. Mechanism 2 stays available as a third-more patch for the pilot store's counter
+   cameras until person02 lands, at the cost of a second engine pass on those cameras.
+
 ### 7b. Decided — the answer, and what it cost
 
 2. ~~Night is unscoped~~ — **decided 2026-08-25: night is in v1, gated on a measurement.**
