@@ -33,6 +33,52 @@ Model metrics (mAP, IoU) are debugging instruments, never the reported result. A
 figure is an *accuracy* until a human has graded it — until then it is an *agreement* with
 the teacher models (§4.5 resolves this via shadow mode).
 
+
+### 1.1 One model, two readings — what they share, where they part
+
+The reason this is one system and not two products, stated as a design decision rather
+than left implicit in the section that follows.
+
+**Shared, all of it, down to L3.** One network on one frame (§2.2), one `camera.json` per
+camera (§2.1), one set of tracks in metres (§2.3 L1), one event layer in metres and
+seconds (§2.3 L3). Security does not get a detector and retail another. A shopper standing
+at a fixture and an intruder standing in a shut shop are **the same measurement** — a
+person, a floor position, a duration — and nothing above L3 is asked to tell them apart.
+
+**They part at the threshold, and that is measured, not asserted.** The same 162 minutes of
+fleet footage, re-read at four loiter thresholds, gives **1,478 / 427 / 30 / 6 alerts per
+camera-day** at 8 / 30 / 120 / 240 seconds (§6 step 6). Security wants the 6 and will pay
+recall for it, because every alert costs a person's attention. Retail wants the 1,478,
+because it aggregates and a missed dwell is a rounding error. **One model, one export, two
+thresholds** — the divergence is a config value, which is §3's placement rule holding.
+
+**What each is blocked on, and neither is a model problem.**
+
+* **Security** — step 7: a person grading a day of alerts. The chain produces gradeable
+  rows (§9.6); none has been graded, so no number here is an accuracy (§9.2).
+* **Both** — `staff/customer` (§6 step 9, blocking two steps). Without it an L3 log is
+  **11.7 alerts a minute of staff working**, and retail counts a member of staff at their
+  own workstation as customer dwell. It is a uniform, not an identity, which is what §5 rule 5
+  permits.
+
+**The two additions under discussion, and where each would land.**
+
+* **A VLM / visual judgement head.** It already has a place: **L4, on trigger** (§2.3),
+  and the card is already budgeted for it — analytics needs 32% of the engine and the
+  remainder is held for exactly this (§7.4). It is an escalation layer, not a fifth head:
+  it reads the frames an event already selected. That keeps §3's rule — walk down from a
+  config value and stop at the first rung that answers the question.
+* **Memory.** Absent, and the only one of the two that changes the shape of the system.
+  What it must NOT be is re-identification across visits or stores — §5 rule 5 forbids it. What
+  it can be is a **per-camera, per-time-of-day normal**: what this floor usually looks like
+  at this hour, so an event is scored against its own camera's history rather than a fleet
+  constant. §7.37 refuted one route to it (a distance in the backbone's feature space,
+  killed by its own control) and left the other untouched: a model of *normal* learned from
+  ordinary footage, of which this fleet has 48 cameras' worth and almost no anomalies.
+  Before it is built it needs the thing step 7 produces — graded alerts — or it will be
+  learning the teachers' opinion again.
+
+
 ## 2. The two packages
 
 ```
@@ -41,47 +87,9 @@ src/syncai_hydranet   runs EVERY frame, continuous     →  boxes + keypoints �
                                                           in metres → events → alerts
 ```
 
-The boundary is the load-bearing design decision: **anything constant on a fixed camera is
-computed once by `syncai_bev3d` and cached; only what changes frame-to-frame is computed by
-`syncai_hydranet`.** The contract between them is one `camera.json` per camera.
-
-**Dependency rule — as built (2026-08-25).** `syncai_bev3d` imports `syncai_hydranet`'s
-core along four named edges: the labels contract (`IGNORE`), the runtime geometry it
-writes parameters for, the single `iou` in `analytics.tracker`, and the prompt tables in
-`data.sam3_prompts` (which stay in hydranet because the label maps read them too).
-Hydranet's offline CLI may import bev3d (`cli/scene.py` does, for the BEV renderer). The
-**serving path — `serving`, `analytics`, `models`, `engine`, `geometry` — never imports
-bev3d**: at runtime `camera.json` is the only crossing, and its loader lives in
-`syncai_hydranet.geometry.camera_json` because a reader barred from the producer's
-package still has to read the file. `tests/test_package_boundaries.py` enforces both
-directions, so the rule is a failing test rather than a memory.
-
-Why the boundary sits here — three measurements:
-
-* A trained dense head does not generalise across these cameras: `column` scored 0.86–0.88
-  on cameras it trained on and **0.00–0.51 on cameras it never saw**. A commissioning cache
-  never has to generalise — it is fitted to its camera by construction.
-* ~~The throughput margin is thin~~ — **this leg of the argument no longer carries
-  weight, and saying so is cheaper than letting it be quoted.** It read: 1,552 fps under
-  TensorRT against the 1,440 target (1.08×, measured 2026-08-24), engine-only and with
-  the cheaper terrain head in the second slot; every per-frame head spends that margin
-  and a head whose answer never changes spends it on nothing. **§7.4 revised the target
-  to 96 × 5 fps = 480 f/s on 2026-08-26**, and at 480 the shipped engine's 1,494 f/s is
-  **3.1× the requirement, not 1.08×**. The margin is not thin. The boundary still stands
-  on the other two reasons — the `column` generalisation failure and the +3% vs +74%
-  trunk-sharing measurement — so it is now a two-legged argument and should be argued as
-  one.
-* A shared trunk buys a second task for **+3% cost; two separate networks cost +74%**
-  (941 vs 541 fps eager, batch 16, 640×1120 FP16). The trunk is worth sharing only between
-  tasks that genuinely need to run every frame.
-
-Scale caveat: at ~1,000+ self-installed cameras, per-camera teacher runs stop being
-affordable and a generalising segmentation head becomes the right answer. Revisit then.
-
 ### 2.1 `syncai_bev3d` — first-pass analysis, calibration, 3D scene
 
 Per camera, once, offline. Target under 20 minutes, of which ~4 are human.
-
 | step | what | human? | status |
 |---|---|---|---|
 | a | temporal-median **static plate** — people and moving stock disappear | no | ✅ `scripts/static_plates.py` |
@@ -94,67 +102,17 @@ Per camera, once, offline. Target under 20 minutes, of which ~4 are human.
 | h | store the plate for **tamper / fixture-change detection** — a knocked camera silently invalidates every metre downstream | no | ❌ |
 | i | **3D scene / BEV render** for verification: a 1 m floor grid drawn on a real frame | checked by eye | partial — `syncai_bev3d/bev3d.py`, `syncai_bev3d/depth_scene.py` |
 
-Output: `camera.json` — homography, structure masks, walkable polygon, zones in metres,
-shelf ROIs, FP polygons, plate reference. Valid until the camera moves **or the store
-does**: seasonal display resets invalidate the fixture masks, shelf ROIs and human-drawn
-zones while leaving the homography intact.
-
-**Decided 2026-08-25 — the refresh is a nightly job, not a person.** In closed-store
-hours the pipeline captures a clip (an empty store barely needs the temporal median),
-compares it against the stored plate, and on divergence re-runs the teachers and
-re-derives the masks, ROIs and walkable polygon. Zones follow automatically where they
-can: floor-anchored zones (entrance line, till) do not move with displays, and
-fixture-anchored zones (premium shelf) re-attach to the matched fixture in the new mask.
-A human sees only a **morning accept/reject when the diff exceeds a threshold** — fully
-silent zone drift is how a knocked zone raises wrong alerts for a month. A homography
-change (the camera itself moved) always escalates to re-commissioning, never auto-heals.
-
-**Depth lives here, not in a per-frame head.** Every spatial output the product sells
-(dwell, paths, heatmaps, queues, zone occupancy) needs *the person's floor position in
-metres*, and the homography gives that exactly, in metric units, from 4 clicks. A monocular
-depth head gives relative depth at per-frame GPU cost, needs a scale calibration anyway,
-and has no right-viewpoint training data.
-
-The package exists (2026-08-25): `syncai_bev3d` holds bev, bev3d, calibrate,
-plate_calibration, depth_scene, meshes, shading, scene_types and `teachers/` (sam3,
-gdino, boxes, photometry). The runtime side — `Camera`, `GroundPlane`, the projections,
-`undistort_points` and the `camera.json` loader — stayed in `syncai_hydranet.geometry`,
-because commissioning *fits* the parameters and serving *applies* them, and both sides
-sharing one definition is what keeps the metres honest. `scripts/static_plates.py` and
-the `tools/site30k` recipe remain thin front ends over the package.
 
 ### 2.2 `syncai_hydranet` — the per-frame network
 
 Trunk, frozen by measurement: **RegNetX-800MF + BiFPN ×2, 96 ch, P3–P7, input 640 × 1120,
 FP16.** (64 ch measured slower; input below 640×1120 measured −21% relative site mAP —
 boxes under 8 px do not span a stride-8 cell and are unlearnable, not merely hard.)
-
-**Two heads:**
-
 | head | output | status |
 |---|---|---|
 | **detection** (FCOS) | `person`, `bag`, `device`, `boxed_stock` (+ `stack`, open — §7) | trained today. `device` carries collected-but-merged sub-labels `iphone \| ipad \| macbook` — they stay merged until each sub-class exists on ≥2 test cameras (§4.4), then splitting is a deliberate re-baseline |
 | **pose** | 17 keypoints / person | next to land. ViTPose is the offline teacher; measured over 66,599 verified person boxes, **99.9% of people clear the 32 px bottom-up floor** at network scale (median height 178 px) |
 
-**Two-scale inference for small objects:** full frame at 640×1120 for `person`/`bag`/
-`stack`; shelf-ROI crops at native 1080p for `device`/`boxed_stock`. The ROIs come free
-from commissioning (§2.1f). **Decided 2026-08-25: the ROI path polls at 0.2–1 fps per
-camera, not frame rate** — shelf stock is a slow variable and the stock-removal alarm
-tolerates tens of seconds of latency. This matters for the budget: the 1.08× throughput
-margin was measured **whole-frame only** — the ROI passes were never in it, and at frame
-rate they would multiply the per-camera load past the margin. **Unmeasured:** `device` mAP
-at native-ROI vs whole-frame, and the ROI path's cost at the chosen cadence — both taken
-in gate 3's re-measure.
-
-**No dense segmentation head, no depth head, no behaviour head.** The static structure
-those would predict is a per-camera constant (§2.1); single-frame behaviour classification
-is ill-posed (walking vs standing is motion, invisible in one frame — and no teacher can
-label it from one frame either). Behaviour lands in §2.3.
-
-**The risk the architecture rests on:** distilling top-down ViTPose (per-crop) into a
-bottom-up whole-frame head is standard but not free. If it fails, pose becomes a crop-stage
-model, L0 has one head, and the honest move is an off-the-shelf detector. Gate 3 in §6
-exists to answer this early.
 
 ### 2.3 The layers above — where behaviour actually lives
 
@@ -166,42 +124,6 @@ L3  facts   →  events                 rules in metres and seconds, CPU
 L4  events  →  judgement              VLM on trigger, GPU queue
 ```
 
-Two L1 rules that are cheap to write and expensive to discover missing:
-
-* **Floor position is the foot point through the homography — except under fixture
-  occlusion.** A person behind a display table has their bbox cut at the table edge; the
-  naive foot point lands metres off, and the bias concentrates exactly at the
-  highest-value positions (table-edge dwell, shelf reach). When ankle keypoints are
-  missing or low-confidence, L1 falls back to head/shoulder keypoints plus a height prior
-  — the pose head pays for itself here a second time.
-* **The time base is PTS, never frame index.** Measured: every clip in
-  `gs://studioa-recording` writes `30/1` into `r_frame_rate` regardless of the true,
-  variable rate. Speeds in m/s over nominal fps silently misclassify walk as run on a
-  slow stream, and the failure surfaces only as unexplainable run alerts.
-
-* **walk / stand / run** — speed thresholds over L1 tracks. CPU, free, and the thresholds
-  are config a manager can change, not classes.
-* **sit / crouch / fall** — a <100K-parameter temporal model over pose sequences, CPU.
-  Training data is already on disk: **PoseLift** (real retail store, 6 indoor cameras,
-  pose sequences + person IDs + frame-level shoplifting labels). For the actions PoseLift
-  lacks — fall, crouch — in-store staging is ruled out entirely (decided 2026-08-25,
-  off-hours included), so the source is **3D action / mocap data projected to the
-  measured store camera pose**: NTU RGB+D's falling and squatting classes, CMU MoCap
-  skeletons, projected through the same camera parameters `hm3d_cctv` renders at (height
-  2.38 m, pitch 50.2°, vfov 70.4°). The model consumes keypoint sequences, not pixels, so
-  the projection *is* the domain adaptation; sim-to-real transfer is **unmeasured** and
-  is checked at step 6 on watched clips. **Caveat, unmeasured:**
-  PoseLift's sequences came from a different pose estimator whose noise (jitter spectrum,
-  occlusion failure modes) differs from our distilled head's; train with noise
-  augmentation matched to our head's error profile and measure the transfer after gate 3.
-* **loiter, intrusion, line-cross, queue, dwell, tailgating** — rules over tracks in
-  metres. `analytics/events/zones.py` is already built this way.
-* **intent / concealment** — VLM on trigger only.
-
-Invariants already enforced in the tree: nothing crosses from L3/L4 down into L0, and heads
-read only the neck, never each other (`models/hydranet.py`), so `forward` stays pure
-convolution and the ONNX/TensorRT export stays clean.
-
 #### 2.3.1 What L1 emits — the vector space, as a contract
 
 **Built 2026-08-25: `analytics/world.py` (`WorldFrame`, `WorldObject`, `world_frame`).**
@@ -209,73 +131,6 @@ convolution and the ONNX/TensorRT export stays clean.
 metre side had no type, so `dwell.track_ground_path`, `events/zones.py` and `cli/scene.py`
 each called `pixel_to_ground` and kept the answer in a private shape — the same failure
 `stage.py` records as its own reason for existing, one coordinate system later.
-
-`WorldFrame` is one camera's floor at one instant: `frame_index`, PTS `time_s`, `space`,
-and a list of `WorldObject{track_id, name, x_m, z_m, vx_ms, vz_ms, yaw_rad, height_m,
-observed, basis}`. Four decisions carry it:
-
-* **It lives in `syncai_hydranet.analytics`, not `syncai_bev3d.scene_types`**, even though
-  `PlaneObject`/`DepthObject` already describe almost this shape and `DepthObject` already
-  carries `yaw_rad`. The serving path may not import bev3d (§2), and this is produced every
-  frame on the serving path. Same precedent as `geometry/camera_json.py`.
-* **`space` names which metric frame the coordinates live in**, carried per frame rather
-  than assumed — the rule `BoxFrame.class_names` exists for. Today the only value is
-  `camera_floor(<camera_id>)`, because **there is no store frame**: nothing in `CameraFile`
-  maps a camera's metres onto a store plan, so two cameras' `x_m` are two different x. That
-  is open question 5's missing piece and it is a commissioning artefact (a 2D similarity
-  transform per camera, 2–3 correspondences against a store plan), not a model change. It
-  needs a `SCHEMA_VERSION` bump, so the 8 shipped `camera.json` get regenerated.
-* **Every key is required and unfillable values are `None`**, so "not supplied" and "not
-  measured" stay different claims. `yaw_rad` is `None` until the pose head lands (shoulder
-  line → body yaw, which is what §1's "which display draws attention" actually needs);
-  `height_m` is `None` until a serving-side producer exists.
-* **`basis` names the instrument**, as `SecurityEvent.basis` does: `foot_point` today,
-  `keypoint_ankle` / `keypoint_prior` reserved for the occlusion fallback above,
-  `above_horizon` for the refusal `pixel_to_ground` already makes.
-
-**A correction it carries and `dwell` does not.** `camera_json.py` states that the lens
-applies to points on their way to the floor, and `undistort_points` states that a runtime
-consumer that skips it makes the metres drift silently. Nothing on the serving path did:
-the only callers are two commissioning modules, and `track_ground_path` projects the raw
-foot point. `world_frame` undistorts. `track_ground_path` is deliberately left alone —
-fixing it moves every dwell, path and heatmap number already reported, which is a
-re-baseline and belongs in its own commit next to a measurement of what moved.
-
-**State 2026-08-26: adopted.** `analytics/journey.py` is the first consumer, and `dwell`
-and `events/zones.py` still take `Track` — moving *them* stays measured-first, but the
-payload is no longer a contract nobody reads.
-
-**`journeys()` — what L1 actually answers.** One `Journey` per track: an ordered list of
-`Visit`s with durations, the `transitions` between them, the floor distance walked, and
-the detector confidence the positions were built from. That is the "walked from A to B and
-stood at C for how long" question, in metres, and it is the shape the retail dashboard
-(open question 5) and step 6's event log both read. Four refusals are built in, each one a
-measurement this project already paid for: two cameras' floors are not one route (`space`
-must match, since every origin is under its own camera); a position `pixel_to_ground`
-declined to measure is not a place and adds no distance; a *missed observation* does not
-end a visit but a sustained observation outside does; and no clock means `seconds` is
-`None`, never a nominal 30/1. It is a **track's** journey, not a customer's — the events
-package measures 1,234 tracks in a 4.6-minute clip — so `track_id` is the field name and
-nothing merges two journeys. Association is step 5.
-
-**A defect the first real run found, and it produced numbers rather than errors.**
-Taichung-cam01's intrinsics are fitted on 960×540 and its clips decode at 1920×1080, while
-`clip_tracks.track_clip` returns boxes in the decoded stream's pixels. Feeding those
-straight in put three shoppers at x 0.4–8.8 m — metres outside the commissioned walkable
-polygon — with a 38 m walk in 60 s, and **nothing was NaN**. `camera_json.py`'s header had
-always stated the contract ("pixels on the raw stream frame at `image_size_px`") and
-nothing enforced it. `world_frame`/`world_frames` now take `source_size_px`: stating it
-scales the points, omitting it is checked, and a point more than 1.5× outside the
-calibrated canvas is refused with the mismatch named. Corrected, the same clip reads
-x −1.9…1.0 m, z 1.6…5.1 m — inside the commissioned floor — and one shopper stands 20.2 s
-in one 1.5 m cell and 23.4 s in the next (rendered by `scripts/site_journeys.py`; the
-frame itself is not in `assets/`, whose allowlist keeps customer shop floors out of the
-history unless a figure earns a line in `.gitignore`).
-
-**Confidence travels with the position.** `WorldObject` carries `score`, and
-`Journey.score_p50` reports it, for the reason §4/step 4's sweep established: a track
-built from 0.15 boxes is not the claim a 0.6 track is.
-
 ## 3. The requirements → where each one lands
 
 The four capability families this plan must deliver, and their placement:
@@ -294,7 +149,9 @@ The general placement rule, kept from the previous plan because every 2026-08-19
 was a violation of it: **for any new capability, walk down from "a config value" and stop
 at the first rung that answers it — never start at "a new head".**
 
+
 ## 4. Data — minimum human labelling, teachers do the rest
+
 
 ### 4.1 The onsite corpus
 
@@ -302,27 +159,9 @@ at the first rung that answers it — never start at "a new head".**
 emit nothing, 1 mounted sideways, 24 annotated so far.** Two rules with measurements behind
 them:
 
-* **More cameras buy generalisation; more frames from the same cameras do not.** The
-  2026-08-20 counter-example: 29,211 new frames, 10.4 GPU-hours, zero new cameras, no gain.
-* **Viewpoint, not class count, is the bottleneck.** Auto-annotate only our own footage —
-  public data already has boxes; in-domain labels are the ones money cannot buy.
-
 ### 4.2 The teachers — SAM 3 + Grounding DINO
 
 Both already live in the wheel (`data/teachers/`). Their jobs, in value order:
-
-1. **Commissioning masks** (§2.1c) — per camera, once. A cached artefact, not training data.
-2. **Detection pseudo-labels on site footage.** Grounding DINO for `person` (measured
-   day:night separation 11–49× against SAM 3's 0.9×); SAM 3 mask → tight box refinement.
-   SAM 3 product prompts need adequate resolution — the "0 instances" result was 352×240.
-3. **Temporal-consistency filtering** — a box a point tracker follows coherently is real; a
-   scattering one is a hallucination. Raw material already on disk:
-   `datasets/site30k_v1/annotations/instances_all_*.json` keeps every box to score 0.10,
-   no NMS. Zero GPU cost.
-4. **Cross-model agreement as confidence:** GDINO + SAM 3 + current student, 2-of-3 →
-   **Gold** (full weight); disagreement → **ignore region, never a negative**. The tiering
-   pass ran 2026-08-24: Gold verified **60/60 by eye**, and 43.4% of the Gray tier traced
-   to the 37 fixed hotspots that become §2.1g's FP polygons.
 
 ### 4.3 Supporting datasets
 
@@ -402,13 +241,6 @@ proposals, and **shadow-mode grading**: the system runs live raising no alerts, 
 grades what it would have raised. That grading is the human test set — free,
 in-distribution, accumulating, and it produces the success number itself.
 
-**Shadow grading measures precision only.** A missed theft never becomes an alert to
-grade, so recall has no instrument in that loop. Decided 2026-08-25 (staged in-store
-theft tests are not an option): recall is measured by **reconciliation against the
-store's shrinkage counts and incident reports**, weekly. The signal is weak and delayed
-by weeks — it is also the only one available, so it is reported with that caveat rather
-than not at all.
-
 ### 4.6 Retention — what is kept, for how long, and why the tiers differ
 
 Decided 2026-08-30. Until then this document said nothing about retention and neither did
@@ -416,13 +248,6 @@ anything else in the tree: `grep -rniE "retention|PDPA|GDPR|consent"` over `src`
 `scripts`, `docs` and CONTRIBUTING returned one line, and it was about git history being
 uneditable. A product that records customers in a shop in Taiwan, where the 個人資料保護法
 applies, had no stated answer to "how long do you keep this".
-
-**The tiers are short on imagery and long on numbers**, because those carry different risk
-and different value. A frame of a shop floor is the thing a person could be recognised in
-and is the thing a model no longer needs once it has been trained on. A row saying
-`reach_to_shelf` fired at `basis=wrist_over_fixture value=0.66 threshold=0.35` identifies
-nobody and is the only record of why an alert was raised months later.
-
 | what | where | kept | why that number |
 |---|---|---|---|
 | raw store clips | `datasets/studioa_clips/` | **30 days** | long enough for one incident investigation and one re-cut of a figure; past that a clip is a liability holding no answer the measurements have not already extracted |
@@ -431,23 +256,6 @@ nobody and is the only record of why an alert was raised months later.
 | static plates | `datasets/studioa_static/` | **kept** | the temporal median removes every moving person by construction; a plate is the empty shop |
 | disposition log | the JSONL store | **kept** | `frame_ref` is a *pointer* — clip path plus frame offsets — not an image. When the clip expires the pointer stops resolving, which is the deletion, and the operator's verdict survives as a number |
 | published figures | `assets/` | **permanent, and unerasable** | they are in git history. CONTRIBUTING already states this; §4.6 restates it as the reason the audit gate in front of `assets/` is the strictest one here |
-
-**Two properties of the design carry most of the weight, and neither was added for this.**
-The disposition log stores a pointer rather than a frame, so expiring a clip severs the
-link without touching the log. And everything except `assets/` is gitignored, so deletion
-is deletion — the only holding that cannot be revoked is the five tracked figures, which
-is why the thing guarding that directory is an allowlist plus a per-figure audit verdict
-rather than a convention.
-
-**What this does not decide, and it is not a code question.** Whether the deployment
-partner or this project is the 蒐集者 under the PDPA changes who owes notice to whom, and
-that changes the numbers above rather than the mechanism. Stated here so the omission is
-visible: the tiers are engineering defaults chosen to be defensible, not a legal position.
-
-`scripts/retention_sweep.py` enforces the table and `tests/test_retention_policy.py` holds
-the two to each other, because a policy nothing executes is the failure mode this
-repository has the most notes about.
-
 
 ## 5. What it must never do
 
@@ -849,169 +657,70 @@ measurement and its prose is what that measurement cannot show, and the pair is 
 decision rests on -- reading either half alone is how a figure gets quoted for
 something it does not support.
 
-11. **The Kaohsiung person-score investigation is two investigations, and the fix is not
-   on the inference side.** Opened 2026-08-27 from step 2's blocker list and step 5's
-   "two cameras carry the fragmentation". The name was wrong on both counts: it is not
-   one fault, and on the camera it is named after the scores are fine.
+11. **The Kaohsiung person-score investigation is two investigations, and the fix is not on the
+   inference side.**
 
-12. **The seven blocked Kaohsiung cameras split, and the block was never a group
-   property.** §7.11 answered what the person-score investigation was; this answers what
-   it *blocks*, which is `runs/commission01/REVIEW.md`'s "the Kaohsiung person-score
-   investigation before its 7 cameras can use the person-height path". Measured
-   2026-08-27 with `scripts/person_score_probe.py solo` over all four clips of each,
-   against Kaohsiung-cam04's 0.50 / 99%:
+12. **The seven blocked Kaohsiung cameras split, and the block was never a group property.**
 
-13. **Step 5's geometry gate: 7.3 cm, and what it is agreement with.** Run 2026-08-27 with
-   `scripts/wildtrack_ground_eval.py`, and run **before the archive finished downloading**:
-   a zip stores every file behind its own local header, so all 7 calibration XMLs and all
-   400 annotation JSONs were already in the bytes on disk and could be inflated out of the
-   partial file. The images are not needed — the boxes are in the JSON.
+13. **Step 5's geometry gate: 7.3 cm, and what it is agreement with.**
 
 14. **The `fall` height threshold is measured now, and on its own it does not work.**
-   `analytics/events/pose.py` says of its own defaults that "none is measured", and
-   `fall_head_height_m = 0.80` was added 2026-08-26 on the evidence of one 24-minute clip
-   where it took the fleet from 3 false falls to 0. Measured against NTU RGB+D's official
-   3D skeletons — real camera-frame metres, read by `data/ntu_skeletons.py`, 120 clips per
-   class, `tools/temporal/ntu_fall_discriminator.py`, `runs/ntu_fall01/`:
 
-15. **`staff/customer` has its first measurement, and nine colour numbers beat every
-   embedding in the tree.** 421 crops from 142 people were extracted by
-   `scripts/staff_crops.py` and sorted by hand into 154 staff / 223 customer / 44
-   unclear — 54, 75 and 16 people. Probed by `scripts/staff_probe.py`,
-   `runs/staff_probe01/`, **leave one camera out** over the 16 cameras carrying both
-   classes, 230 held-out crops:
+15. **`staff/customer` has its first measurement, and nine colour numbers beat every embedding
+   in the tree.**
 
 16. **Step 8's precondition holds: the features separate the classes, and they beat the
-   geometric rule they would replace.** Asked before a trainer was written, because
-   `analytics/pose_sequence.py` has been in the tree tested and with **zero consumers**,
-   so nothing had ever measured what its features can tell apart, and building a pipeline
-   first and discovering the features were the problem is the expensive order.
+   geometric rule they would replace.**
 
 17. **Step 8 has a model, and it passes — after failing first, which is the useful half.**
-   `tools/temporal/train_posture.py`, two 1-D convolutions over time with masked mean and
-   max pooling, **32,933 parameters** against §2.3's 100K budget, trained on NTU projected
-   through our camera pose, **held out by performer**, no early stopping on the held-out
-   fold.
 
-18. **Two-stage tracking's identity was measured, the instrument was wrong first, and
-   fixing it is a component step 9 also needs.** Opened 2026-08-27 against decision 1:
-   `runs/endings05/` cuts mid-view track deaths 111 → 38 and doubles track length, and the
-   objection to adopting it was that the Kalman coasts onto neighbours and inflates dwell.
-   **Length cannot tell those apart — recovering a chopped-up shopper and merging two
-   shoppers produce the same number.** Only identity can, which is what §6 step 5 already
-   says: "distinguishing 'the same person, a metre on' from 'a different person, a metre
-   away' is what an appearance model is for."
+18. **Two-stage tracking's identity was measured, the instrument was wrong first, and fixing it
+   is a component step 9 also needs.**
 
-19. **"Scale-measured" meant the person-height prior all along, and a second fleet arrived
-   that has more of it than the first.** Opened 2026-08-27 when a new corpus —
-   `gs://syncai-rtsp-recordings`, ten RTSP channels of a second store, wood floor, not
-   STUDIO A — was asked for 3D scenes and the first answer given was "these need a
-   physical reference first". **That answer was wrong, and checking it corrected this
-   plan rather than the new cameras.**
+19. **"Scale-measured" meant the person-height prior all along, and a second fleet arrived that
+   has more of it than the first.**
 
-20. **The `person` detector has never seen a labelled shopper from these stores, and half
-   the site training images teach it that shoppers are background.** Opened 2026-08-28 to
-   confirm §7.11's premises before spending its retrain, and both of them moved.
+20. **The `person` detector has never seen a labelled shopper from these stores, and half the
+   site training images teach it that shoppers are background.**
 
 21. **`masks_pass` is not the bev-3d bottleneck, and three explanations for the missing
-   furniture are ruled out.** Opened 2026-08-28 on the handoff's statement that the render
-   covers about a third of the store because "half the furniture is never found". The
-   apparatus is `tools/commissioning/masks_diagnose.py` (the recipe's front half, with the
-   per-cluster verdicts kept instead of printed as a total, plus the SAM 3 proposals cached
-   bit-packed so a later rule costs no GPU) and `tools/commissioning/cluster_rules.py`
-   (replays those proposals through an alternative merge rule and paint order into the
-   recipe's own `decide_structure`). Records in `runs/masks_diag01/<camera>/`; the offline
-   replay reproduces the online run exactly on all three cameras checked first, which is
-   what licenses the comparison.
+   furniture are ruled out.**
 
-22. **A merchandise wall was being drawn as a small cabinet on every camera turned the
-   other way, and the tripwire could not see it.** Found 2026-08-28 by a reviewer asking
-   why the README figure's fixtures were placed as they were — the render, not a number,
-   which is the third time today that a defect surfaced only when somebody opened the
-   picture (§7.21, and the p85 wall heights before it).
+22. **A merchandise wall was being drawn as a small cabinet on every camera turned the other
+   way, and the tripwire could not see it.**
 
-23. **The staff/customer classifier became something that can be applied, and the number
-   that licensed it is per camera rather than the headline.** Done 2026-08-28, for the
-   demo colouring the user asked for: staff blue, customers green.
+23. **The staff/customer classifier became something that can be applied, and the number that
+   licensed it is per camera rather than the headline.**
 
-24. **The face blur was missing people, and the instrument that found it had to be built
-   wrong twice first.** Found 2026-08-28 while cutting the two store figures the user
-   asked for. This is the privacy path, so it is written out in full.
+24. **The face blur was missing people, and the instrument that found it had to be built wrong
+   twice first.**
 
-25. **"Relative relationships must be correct" turned out to be a different requirement
-   from "the numbers must be right", and it is the one the scene was failing.** Stated by
-   the user on 2026-08-28 after reading the renders: *precision is negotiable; a cabinet is
-   not at 45 degrees and a wall is not several disconnected panes.* Every defect below is
-   invisible to a per-object check, which is why `PLAUSIBLE_M` passed all of them — a 7.9 m
-   wall 15 cm thick is plausible in every dimension it has.
+25. **"Relative relationships must be correct" turned out to be a different requirement from
+   "the numbers must be right", and it is the one the scene was failing.**
 
-26. **The checkout counter is not a trained class, and it is being classified as
-   merchandise shelving.** Reported by the user 2026-08-29 from the renders, and it is a
-   labelling gap rather than a geometry one, so none of §7.25's work touches it.
+26. **The checkout counter is not a trained class, and it is being classified as merchandise
+   shelving.**
 
 27. **`implausible()` names seven fixtures across the fleet and nothing reads it.**
-   Measured 2026-08-29 over all eight commissioned cameras, on the build the renders
-   actually use (`build_scene_regular`), because the previous entries in this section
-   name the function repeatedly and none of them says how much it is finding.
 
-30. **The mesh figure can be driven by the pose head, and the thing that stops it is
-   constraint design rather than data.** Opened 2026-09-02 on the question "can the 3D
-   figure replicate what the person is doing". Four solvers, one subject: the single
-   confident person on `Kaohsiung-cam04` at 10:58 local, standing at the counter typing,
-   keypoint confidence min 0.69 / median 0.90.
+30. **The mesh figure can be driven by the pose head, and the thing that stops it is constraint
+   design rather than data.**
 
-31. **The shipped model was walked into three foreign venues — metro, mall, airport —
-   and the failure is a confidence slide, not a collapse.** 2026-09-03, seven public
-   fixed-camera clips (Taipei MRT platform day x2 + elevated night, UK shopping-centre
-   entrance + retail store, Hanoi terminal gate hall timelapse, LaGuardia apron) beside
-   a Taichung-cam01 in-domain control; person01 `last.pt` EMA at 1 fps sampling.
-   Apparatus and per-frame JSONs: `runs/domain_probe_20260903/` (probe + stats scripts
-   copied in), sources and caveats in `datasets/domain_probe_20260903/SOURCES.md`.
+31. **The shipped model was walked into three foreign venues — metro, mall, airport — and the
+   failure is a confidence slide, not a collapse.**
 
-33. **The text-embedding head, tested with a vocabulary it was built for, trains to
-   parity and does not win. 2026-09-08.** `heads/text_classifier.py` was built 2026-08-17
-   against a measured failure -- the detection head over Kaohsiung-cam08 returns 1,683
-   `book` at score 0.05 and no `laptop` at any threshold -- and then never revisited, with
-   no decision on record. The reason it stalled is now measured: **the only matrix ever
-   built for it embedded the two internal alarm names** in generic templates ("a photo of
-   boxed stock"). Those are not English phrases, and CLIP reads `device` loosely enough to
-   collide with `person` at excess **0.79**, above `make_text_embeddings.EXCESS_SIMILARITY`
-   -- which is why `runs/hydranet_retail_openvocab` could only carry two classes.
+33. **The text-embedding head, tested with a vocabulary it was built for, trains to parity and
+   does not win. 2026-09-08.**
 
 34. **person01's throughput on the pro6000, measured on an idle card 2026-09-08**
-   (`runs/bench_person01/`, `runs/bench_person01_argmax/`; `scripts/bench_trt.py`, 15 s per
-   engine, H2D **and** D2H in the end-to-end figure). The target is 96 streams x 5 fps =
-   480 f/s.
 
-35. **70.4 is not the wrong number, and this is the first independent check of it.
-   2026-09-08.** Three any-view models now answer the lens with one voice -- MapAnything
-   38.27, DA3 Metric-Large 39.8-42.0, DA3 nested Giant-Large 37.7-40.6 -- against a tile
-   grid measured on Taichung-cam01 at 70.4. Two witnesses agreeing is 7.19's own warning
-   (GeoCalib and HumanFoV matched to 0.16 deg and were both wrong), and 7c.32 showed DA3's
-   number does not move for a zero baseline, so it is a resolution prior rather than a
-   reading. But "the models are not measuring" does not establish that the tile grid is.
+35. **70.4 is not the wrong number, and this is the first independent check of it. 2026-09-08.**
 
-36. **The counting-line escape from fragmentation was tried on Kaohsiung-cam04 and the
-   camera cannot supply it, 2026-09-07.** `line_events` needs identity across ONE frame
-   step -- 0.2 s at 5 fps -- not across a visit, so a crossing count should survive
-   fragmentation that halves the track count. That reasoning is sound and this camera is
-   the wrong subject for it: re-derived from 900 frames (87 tracks, against the
-   `runs/zones01` proposal's 5 events from 300 frames, which says of itself "weak
-   evidence, confirm against the plate"), **all 87 births and deaths cluster at the right
-   frame edge and at the counter's near end. There is no door in this view.** A line at
-   the frame edge counts "entered the field of view", and a track born inside it never
-   crosses it. The birth/death map is a cheap per-camera test of "does this camera see an
-   entrance", and it is worth running before any footfall line is drawn.
+36. **The counting-line escape from fragmentation was tried on Kaohsiung-cam04 and the camera
+   cannot supply it, 2026-09-07.**
 
-37. **The backbone carries no novelty signal, and the control is what says so.
-   2026-09-08.** The tree has no anomaly capability -- "anomaly" appears nowhere in
-   `src/` -- so every intrusion alarm raised on the UCF-Crime probe was a rule written
-   outside the model: person, after hours, survived `night_person`'s static veto. The
-   model detected the burglar because a burglar is a person; it did not detect the
-   burglary, and would have raised the same alarm for a cleaner. Option A of the
-   redesign was the cheap one: expose the neck feature, fit a per-camera "normal" at
-   commissioning, score the distance -- Avigilon UMD's shape, which learns a scene for
-   two weeks and flags what departs from it.
+37. **The backbone carries no novelty signal, and the control is what says so. 2026-09-08.**
+
 
 ## 8. What the health audit changed, and what it taught
 
@@ -1021,61 +730,6 @@ raising 34 items. All 34 are closed. The working list they were tracked on is go
 as it said it would be: the fixes are in the code, the arguments are in the commits
 that made them, and what generalises is here.
 
-**The structural finding, which is why the P0 list looked the way it did: this
-project's guards were trusted more widely than they reached.** `split_leaks` covered
-one dataset type of five; `deterministic` warned instead of enforcing; `check_parity`
-gated the ONNX and not the fp16 engine that ships; the face-blur tests could not see a
-blur -- their fixture was `np.zeros`, and a Gaussian blur of a uniform image is the
-identity, so all five passed against a no-op `blur_region`. A guard that half-covers is
-worse than an absent one, because its presence is read as coverage. Every fix in this
-pass was verified by reverting it and watching the test go red.
-
-**Four of the 34 findings were wrong, and the pattern in how is the useful part.** Each
-was wrong because it was read off a name or a grep rather than measured:
-
-* *"`place_boxes` and `track_ground_path` have drifted apart."* They had not.
-  `clip_tracks.tracks_for_clip` undistorts upstream and passes `k1` as a keyword-only
-  argument with no default, so the second call site cannot silently skip it.
-* *"`select_weights`'s 'every caller goes through this' is bypassed by three scripts."*
-  All three go through it. But it pointed at a real defect one level down: the
-  *fallback* was silent, and `cli/export_onnx.py` had already worked that out and
-  recovered the answer with an identity test on the returned dict.
-* *"Configs for the deleted quadruped line survive as fixtures."* The dangling dataset
-  path was inside a comment, and the config that looked orphaned was the only test of a
-  taxonomy `src/` still shipped. Retiring the taxonomy was the real question, and it was
-  taken deliberately rather than as cleanup.
-* *"The 26 absolute `ROOT` constants encode a real assumption -- leave them."* 26 of the
-  27 named the repo root itself, not `runs/` or `datasets/`, and each sat exactly two
-  levels below it, so `parents[2]` was the same directory computed. The failure they
-  caused was also worse than the one they were weighed against: with two checkouts on
-  one box, a tool run from the second reads the first's `runs/` and answers about the
-  wrong tree, with no error at all.
-
-**Three decisions, so they are not rediscovered as findings:**
-
-* **No LFS.** The 113 MB was 88 MB of loose objects, not history; one `git gc` took
-  `.git` to 78 MB. LFS would have rewritten history on a repo three branches and several
-  sessions share, to reclaim space that was never in it. Re-run `git gc` if it grows.
-* **`dev` is meant to lag `main`.** `dev` sits at `0.1.0` with no CHANGELOG while `v0.4.0`
-  is released, because release-please writes to `main` and nothing flows back. That is the
-  design. A version bump is metadata *about a release* and putting it on the unreleased
-  branch would make `dev` claim something untrue. Do not back-merge to make them agree.
-* **Privacy is a publication-time control here, not a runtime one.** `face_blur` is used
-  by the figure tools and one CLI, and by nothing on the serving or analytics path;
-  retention is `scripts/retention_sweep.py` rather than policy in code. Coherent as
-  designed -- the analytics path keeps positions and dwell times, not faces, and the faces
-  that leave this repository leave through a figure. Do not read the blur as a runtime
-  guarantee it does not make.
-
-**Two failures worth not repeating.** A shell glob expanded `[[...]]` while editing this
-document and replaced per character; the same class of accident had earlier eaten three
-backtick references out of a docstring in `tools/commissioning/service_zones.py`, where it
-sat unnoticed through two commits. Edit prose through a file-based script, not a shell
-one-liner. And a figure's audit must be re-cut *after* the code commit lands, not before,
-or it records a version the tree has already left -- which put a red `dev` on the board
-once in this pass.
-
-
 ## 9. The distance to the product, read across the steps
 
 Written 2026-09-09. **This section measures nothing new.** Every figure in it is cited
@@ -1084,52 +738,16 @@ section 6 is right and this is stale -- it is a reading of the table, not a seco
 it. What is mine and not the evidence's is the **ranking**; the ordering below is a
 planner's judgement about which gap makes the others unreadable, and it is arguable.
 
-It exists because sections 6 and 7 answer "what is the state of each piece" and nothing
-answered "how far is this from the thing section 1 says success is" -- which is
-*actionable alerts per camera per day, and the incidents missed*.
-
 ### 9.1 What is solid
 
 Named first because the list below is long and it would otherwise read as a verdict on
 the whole system, which it is not.
-
-* **The geometry is validated independently of this fleet.** 7.3 cm median floor error
-  over 19,824 WILDTRACK observations, yaw under 0.2 deg, and it did not need the images
-  (section 7.13).
-* **The two-head architecture's bet paid.** Distilled pose reads PCK@0.2h 0.915 /
-  L2 p50 7.7 px with a flat end-of-run curve (step 3).
-* **Throughput is not a constraint.** 1,494 f/s against the 480 f/s requirement, 3.1x
-  (step 3, section 7.4).
-* **The night false-positive rate is measured and is zero.** 2,250 frames of an empty shop
-  at 23:58 across 15 cameras, zero `person` boxes at the shipped 0.35 (step 4). The ghosts
-  were the teachers' and the student did not inherit them.
 
 ### 9.2 Nothing has been graded, so no number here is an accuracy
 
 Section 1 states the rule: *no site figure is an accuracy until a human has graded it --
 until then it is an agreement with the teacher models.* Section 4.5 names the instrument
 that would fix it (shadow grading) and calls it the human test set, free and accumulating.
-
-**Verified 2026-09-09: that instrument had never been switched on.**
-`serving/dispositions.py` is a complete schema -- append-only JSONL by UTC day, alert row
-plus operator verdict joined by `alert_id`, calibration hash, checkpoint and commit -- and
-there was **no store on disk**. **Amended the same day**: step 6's first fleet run wrote
-**263 alert rows**. What that changes is that the instrument now has input; it does not
-change this entry, because **not one of the 263 has been graded by a person**, and an
-ungraded alert row is not a label. And the one ground-truth artefact in the tree,
-`runs/gt_cam01/provenance.json`, declares in its own text that it was
-`"labelled_by": "Claude (Opus 5) ... by eye from the clip"` and is
-`"not_a_human_label_set"`; the tracking IDF1 0.739 rests on it (step 5).
-
-So `detection_mAP/site_person` 0.7387 means *agrees closely with Grounding DINO*. The
-same teacher is measured returning people on an empty store on 13 of 42 cameras, and
-SAM 3's `person` prompt returned 14 hanging accessory packets as people (step 4).
-
-**The cost is not that the figures are uncertain. It is that improvement has no
-verifiable direction.** Raising site mAP and raising agreement-with-the-teacher are the
-same movement under every instrument this project currently owns, and they are not the
-same thing. Every gain booked since the teachers became the label source carries that
-ambiguity, and no amount of further training resolves it.
 
 ### 9.3 The known recall failure sits exactly where the product sells
 
@@ -1139,22 +757,11 @@ regions with no box at all -- 20% more people than the box head returned** -- an
 one, cropped and looked at, is a shopper whose lower body is behind a counter or a display
 table. Dense `person` IoU is 0.885 against detection mAP@50 0.302.
 
-Table-edge dwell, shelf reach and queue position are the readings section 1 sells, and
-they are the same geometry. `confirm_with_dense` recovers part of it, and the same sweep
-found the boxes it admits **were never the ones firing events** (step 4) -- so the
-recovery is real for positions and has not been shown to reach the event layer.
-
 ### 9.4 Tracks do not survive long enough to measure a duration
 
 Section 7.11: 202 tracks over 24 minutes, 43% ever enter a zone, **median visit 3.2 s**,
 and 58% of endings are mid-view deaths -- of which **86% still have a box on the person**,
 at a median score 0.338 against a 0.35 threshold.
-
-Dwell, loiter, queue and path are durations. An instrument whose median observation is
-3.2 s cannot measure a 4-minute loiter, and section 7.11 also records that the
-tracker-lost / detector-gone split is not established and will not be until an appearance
-model can tell two shoppers apart. This is a threshold problem before it is a tracker one,
-which is the cheap half and is not done.
 
 ### 9.5 The metres are a population prior, fleet-wide
 
@@ -1164,11 +771,6 @@ vfov is `fleet_hardware_assumed` on **22 of the 23** onboarded cameras -- Taichu
 tile-grid pin is the exception, and §7c.31 refused the same pin at two other venues
 on a flat k1 sweep. Taichung-cam05 was withdrawn when two furniture checks disagreed.
 
-Section 9.1's 7.3 cm validates the **arithmetic**. It says nothing about this fleet's
-**parameters**, and every speed threshold, zone verdict and dwell figure is denominated in
-them. Coverage compounds it: 8 of 48 cameras commissioned, 15 selling-floor cameras still
-in the stage-0 backlog.
-
 ### 9.6 The chain has never run end to end
 
 Verified 2026-09-09, before the commits below: `world_frame`, `pixel_to_ground`,
@@ -1177,23 +779,6 @@ Verified 2026-09-09, before the commits below: `world_frame`, `pixel_to_ground`,
 on the letterboxed network canvas -- the pixel frame `analytics/world.py` gained
 `canvas_region` for the same day, and whose two wrong readings cost 2.4-3.4 m in metres
 that carry no NaN and raise nothing.
-
-**Amended the same day, and the amendment is the smaller half.** `CameraState` now holds
-the commissioned `camera.json` and the canvas region and produces a `WorldFrame`
-(`serving/camera.py`), and the tracker it runs records the score each track was built
-from and converts to the producer's type (`bytetrack.Fragment.scores`, `as_track`) --
-that second gap is the one docs/PLAN.md step 4 named as its next mechanism and had no
-owner. `tests/test_serving_world.py` runs the chain in metres.
-
-**Amended again the same day: step 6 has now run** (`scripts/step6_events.py`, section 6),
-over 8 commissioned cameras and 162 minutes, filing 263 alert rows. Two things that
-follow, and the second is the one that matters:
-
-* It runs the **offline** chain -- `clip_tracks.track_clip` over stored clips -- not the
-  serving path. `scripts/serve_pilot.py` still emits no positions, no events and no alert
-  rows, so the live half of this entry stands unchanged.
-* **Step 7 (shadow mode) is what remains, and nothing about it is a code problem.** The
-  chain produces gradeable rows; what it has never had is a person grading them.
 
 ### 9.7 Two components have no consumer on the serving path
 
@@ -1208,18 +793,12 @@ follow, and the second is the one that matters:
   found in a frame holding about ten, and **one false alarm per eight minutes on a safety
   alert does not ship** (step 3).
 
-Both are prerequisites for steps 6 and 7, as section 6 already states.
-
 ### 9.8 Out of domain it is measured to fail, and that is a scope statement
 
 §7c.31: out of domain the person-score distribution slides into the threshold band
 (a 0.15 to 0.30 cut costs 36-67% against 11% at home), ad posters detect as people every
 frame, night OSD text mints phantom devices, and `fixture` is approximately zero outside
 retail so zones cannot be drawn at all.
-
-This is consistent with section 1 -- the first vertical is an Apple-reseller chain -- and
-is recorded here as the boundary rather than as a defect. What follows from it is that
-**self-calibration is the product** (ruled 2026-09-03), and that ruling is not yet built.
 
 ### 9.9 The read
 
@@ -1228,24 +807,7 @@ step 6; nothing in this tree can currently answer that, because every site numbe
 agreement with a teacher or with a model-labelled set, and the one instrument that would
 break the circle is a schema with no rows in it.
 
-The counterweight, stated because it is unusual and is this repository's strongest asset:
-**every failure above is one this project recorded about itself, with a number.**
-`provenance.json` volunteers that its labeller was a model; `dispositions.py` volunteers
-that it cannot measure recall; section 2 volunteers that one leg of its own boundary
-argument no longer carries weight. The problem is not blindness. It is that steps 1-5
-build instruments and steps 6-7 use them, and 6 has not started.
-
 ### 9.10 What this ordering implies for the next steps
 
 Not a build order -- section 6 is the build order -- but the sequence this reading argues
 for inside it:
-
-1. ~~Step 6~~ **done 2026-09-09** (section 6): 263 alert rows over 8 cameras, and the
-   measured finding is that **the loiter threshold, not the geometry, is what stands
-   between 1,478 alerts per camera-day and 6**. What follows is not another gate:
-   it is a person grading a day of them, which is step 7.
-2. **Then shadow mode, even at one camera for one week.** The first operator verdicts are
-   worth more than any retrain, because they are the first signal that is not the
-   teachers' opinion.
-3. **Fragmentation (the 0.338-against-0.35 half) and the per-store uniform reference**
-   are what make 1 and 2 readable rather than noisy.
