@@ -181,6 +181,7 @@ class Ended:
     track_id: int
     frames: list[int]
     boxes: list[np.ndarray]
+    scores: list[float]
 
 
 class RecordingByteTrack:
@@ -227,7 +228,7 @@ class RecordingByteTrack:
         # `track_id`. Rebuilt rather than assigned onto the Fragment: setting an
         # attribute a dataclass does not declare is invisible to the type checker and to
         # the next reader, and only the three fields below are ever used.
-        return [Ended(f.frag_id, f.frames, f.boxes) for f in self.inner.finished()]
+        return [Ended(f.frag_id, f.frames, f.boxes, f.scores) for f in self.inner.finished()]
 
 
 def foot_m(boxes: np.ndarray, cam_file: CameraFile, src) -> np.ndarray:
