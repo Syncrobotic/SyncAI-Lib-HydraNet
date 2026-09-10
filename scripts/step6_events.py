@@ -59,6 +59,24 @@ TWO PIXEL-FRAME TRAPS, BOTH LIVE, BOTH SILENT
    through both paths get the lens applied twice. The two contracts are genuinely
    different and neither is wrong; this runner picks the event layer's, because the event
    layer is what step 6 is about.
+
+---------------------------------------------------------------------------
+THE TRACKER RUNS THE SHIPPED BAND, AND THE FIRST FLEET RUN DID NOT
+
+`runs/step6_fleet01` (2026-09-09, the 263 rows) tracked at a single threshold: decode at
+0.35, birth at 0.35, nothing survives below it. The serving path had already moved off
+that point -- `serving/camera.py` ships `person` at birth 0.35 / keep 0.20 and
+`serve_pilot.py` builds its tracker from the pair -- and the survival band was measured
+on its own before that (`runs/band_probe01`, PLAN 7.11): 202 tracks -> 109 over the same
+eight clips, coasted fraction 0.0643 -> 0.0167, 91% of what bytetrack's band-plus-Kalman
+recovers with no filter and no change to association. So the L3 log was being written by
+a tracker one operating point behind the one that ships, and `occupancy_events` says in
+its own docstring what that costs: it counts tracks, so it over-counts by exactly the
+fragmentation rate.
+
+Now the default: decode at `--keep-thr` so the low boxes reach the tracker, birth at
+`--score-thr` inside it. `--single-threshold` reproduces the first run's tracker, and it
+exists so the two logs can be read against each other rather than so anyone runs it.
 """
 
 from __future__ import annotations
@@ -89,7 +107,7 @@ from syncai_hydranet.geometry.ground import (  # noqa: E402
     pixel_to_ground,
 )
 from syncai_hydranet.serving import dispositions as dp  # noqa: E402
-from syncai_hydranet.serving.camera import BIRTH_REF  # noqa: E402
+from syncai_hydranet.serving.camera import BIRTH_REF, KEEP_REF  # noqa: E402
 from syncai_hydranet.utils.visualize import preprocess  # noqa: E402
 
 DEFAULT_COMMISSION = ROOT / "runs/commission01"
@@ -191,12 +209,21 @@ def observations(tracks, cam_file: CameraFile, camera: str, clip: str) -> dict:
 
 def run_clip(camera, cam_file, clip, model, size, device, args) -> dict:
     """One camera, one clip: tracks, events, alert rows, and the observation table."""
-    tracker = Tracker(iou_threshold=args.iou, max_age=args.max_age, min_hits=args.min_hits)
+    # The band: boxes down to `keep_thr` reach the tracker and may continue a track; only
+    # a box at `score_thr` may start one. `single_threshold` is the first fleet run's
+    # tracker, kept for reading the two logs against each other -- see the header.
+    band = not args.single_threshold
+    tracker = Tracker(
+        iou_threshold=args.iou,
+        max_age=args.max_age,
+        min_hits=args.min_hits,
+        birth_thr=args.score_thr if band else None,
+    )
     out = track_clip(
         clip, model, size, device, tracker,
         frames=frames, preprocess=preprocess, probe=probe,
-        fps=args.fps, score_thr=args.score_thr, max_frames=args.max_frames,
-        k1=cam_file.lens.k1,
+        fps=args.fps, score_thr=args.keep_thr if band else args.score_thr,
+        max_frames=args.max_frames, k1=cam_file.lens.k1,
     )  # fmt: skip
     tracks = to_calibrated(out.tracks, out.src_w, out.src_h, cam_file)
     zones = policy_zones(cam_file, args)
@@ -242,6 +269,15 @@ def main() -> int:
     # The shipped birth edge, named rather than restated: `test_shared_constants`
     # holds every `--score-thr` default to one of the three operating points.
     ap.add_argument("--score-thr", type=float, default=BIRTH_REF)
+    # The shipped keep edge. A box between the two may continue a track and may not
+    # start one; `serving/camera.py` names both edges for the reason it gives there.
+    ap.add_argument("--keep-thr", type=float, default=KEEP_REF)
+    ap.add_argument(
+        "--single-threshold",
+        action="store_true",
+        help="decode and birth both at --score-thr, no survival band: the tracker "
+        "`runs/step6_fleet01` was written with, for comparison and not for use",
+    )
     ap.add_argument("--iou", type=float, default=0.3)
     ap.add_argument("--max-age", type=int, default=5)
     ap.add_argument("--min-hits", type=int, default=3)
@@ -254,6 +290,12 @@ def main() -> int:
         help="keep foot points the frame bottom decided; the state before the gate",
     )
     args = ap.parse_args()
+    if not 0.0 < args.keep_thr <= args.score_thr <= 1.0:
+        raise SystemExit(
+            f"need 0 < --keep-thr <= --score-thr <= 1, got keep {args.keep_thr} and "
+            f"birth {args.score_thr}: a keep edge above the birth edge is a band that "
+            "admits nothing"
+        )
 
     # ---- what to run --------------------------------------------------------------
     if args.camera == "all":
