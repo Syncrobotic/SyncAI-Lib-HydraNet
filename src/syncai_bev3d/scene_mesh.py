@@ -54,6 +54,7 @@ from syncai_bev3d.meshes import (
     box,
     column,
     extrude,
+    glass_panel,
     ground_disc,
     place,
     shelf_levels,
@@ -136,6 +137,7 @@ WALL_CID = 2  # named because the wall runs read the class mask directly, not by
 # corrupt, and the component's lowest rows are not it.
 CELL = 0.06
 DRAWN_H = {"wall": 2.4, "column": 2.4, "display_table": 0.75, "display_shelf": 2.0}
+GLAZING_H = 2.6  # a shopfront's glass reaches the ceiling; drawn to that convention
 # A column runs floor to ceiling. The depth model reads 1.07-1.65 m for one (see the
 # block below), so the drawn height is floored here rather than taken from the depth.
 COLUMN_MIN_H = 2.2
@@ -735,6 +737,8 @@ PLAUSIBLE_M = {
     # should be *drawn* as is a separate decision -- glass is not opaque either -- and
     # this only stops it being drawn silently.
     "door": {"height": (1.90, 2.60), "span": (0.6, 2.4), "short": (0.05, 0.4)},
+    # A shopfront: floor-to-ceiling glass, as wide as the frontage.
+    "glazing": {"height": (2.0, 3.5), "span": (2.4, 12.0), "short": (0.05, 0.4)},
 }
 
 # How far above a fixture's top a product may sit and still count as resting on it. A
@@ -1244,6 +1248,19 @@ def build_scene_regular(camera, root: Path | None = None):
                 short = min(w, d)
                 if short > 0.3:
                     w, d = (w, 0.12) if w >= d else (0.12, d)
+                if max(w, d) > PLAUSIBLE_M["door"]["span"][1]:
+                    # Gate D5: a "door" wider than any door is the shopfront glazing --
+                    # 3.7-5.3 m on Tao-Hsin-cam04, cam15 and cam03 -- and is drawn as
+                    # what it is: translucent panes in a frame, never a slab that hides
+                    # the street behind it, and not flagged as a door that failed.
+                    run = max(w, d)
+                    a0 = (-run / 2, 0.0) if w >= d else (0.0, -run / 2)
+                    a1 = (run / 2, 0.0) if w >= d else (0.0, run / 2)
+                    shapes.append(("glazing", w, d, GLAZING_H))
+                    items.append(
+                        (place(glass_panel([a0, a1], GLAZING_H), at), "glass", 70, False)
+                    )
+                    continue
                 shapes.append((name, w, d, hgt))
                 mesh = extrude(
                     np.array(

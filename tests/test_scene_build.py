@@ -231,3 +231,33 @@ def test_a_welded_fixture_reaches_the_picture(tmp_path):
     assert len(rows), "the render is identical: the caption never reached the image"
     # Only the caption band moves -- the geometry is untouched by being described.
     assert rows.min() >= 50 and rows.max() <= 75, f"pixels changed outside the caption: {rows}"
+
+
+# ------------------------------------------------------------ Gate D5: door or glazing
+
+
+def _with_door(root, cols):
+    """A `door` extras mask spanning `cols` of the plate, one band of rows."""
+    masks = root / "runs/commission01" / CAMERA / "masks"
+    masks.mkdir(parents=True, exist_ok=True)
+    m = np.zeros((PLATE_H, PLATE_W), bool)
+    m[60:76, cols] = True
+    _png(masks / "door.png", m)
+
+
+def test_a_door_wider_than_any_door_is_the_shopfront_glazing(tmp_path):
+    root = a_store(tmp_path)
+    _with_door(root, slice(60, 400))  # ~5 m of the 7.2 m lattice
+    _cf, items, _h, shapes = scene_mesh.build_scene_regular(CAMERA, root)
+    names = [n for n, *_ in shapes]
+    assert "glazing" in names and "door" not in names, names
+    assert any(k == "glass" for _m, k, _a, _s in items)
+    assert not [line for line in scene_mesh.implausible(shapes) if "door" in line]
+
+
+def test_a_door_sized_door_is_still_a_door(tmp_path):
+    root = a_store(tmp_path)
+    _with_door(root, slice(200, 260))  # ~0.9 m
+    _cf, _items, _h, shapes = scene_mesh.build_scene_regular(CAMERA, root)
+    names = [n for n, *_ in shapes]
+    assert "door" in names and "glazing" not in names, names
