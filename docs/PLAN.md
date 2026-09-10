@@ -632,6 +632,20 @@ order. A component with no step is not scheduled, it is assumed.
    here is a per-frame dense scene understanding (§5 rule 6): the trunk already emits the
    dense map every frame for the terrain reading, and 1 reads a number off it.
 
+   **1 as first built, the same night: rejected by its own number.** `runs/endings10`:
+   5,528 dense births over 7,200 frames, tracks **105 → 936**, the Kaohsiung-cam04 19:28
+   clip **100 → 1,083** tracks for 31 → 37 loiters. Three crowd frames drawn with every
+   box coloured by band said why: the huddle holds 15–17 people, the high band returns
+   8–11 (the front row), the low band adds 6–8 **all vouched** — the dense map is one
+   blob, so the vouch selects nothing inside a huddle — and the back row's partial boxes
+   jitter enough between frames that stage 2's 0.4 IoU does not carry them, so every
+   frame's unmatched ones were born again and died two frames on. Two facts survive:
+   the back row is real, and the box head's boxes on it are not stable enough to track.
+   Rebuilt with three guards (no birth over a live track at IoU 0.5, one birth per
+   overlapping group, two frames of persistence) as `runs/endings11`; and the second
+   fact is mechanism 2's argument made for it — twice the pixels on the counter is what
+   stabilises a partial box, and no birth rule can.
+
 ### 7b. Decided — the answer, and what it cost
 
 2. ~~Night is unscoped~~ — **decided 2026-08-25: night is in v1, gated on a measurement.**
