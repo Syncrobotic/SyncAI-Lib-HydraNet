@@ -63,7 +63,11 @@ from syncai_bev3d.meshes import (
     shelving,
     wall,
 )
+from syncai_bev3d.object_assets import COLORS as OBJECT_COLORS
+from syncai_bev3d.object_assets import door_mesh
+from syncai_bev3d.object_placement import scene_objects
 from syncai_bev3d.shading import View, contact_shadows, draw_scene, occlusion_alpha
+from syncai_bev3d.support_refinement import refine_scene_supports
 from syncai_bev3d.surfaces import scene_surfaces, wall_sections
 from syncai_hydranet.geometry.bands import Band
 from syncai_hydranet.geometry.camera_json import CameraFile
@@ -84,6 +88,7 @@ H: int = 700
 SS: int = 2
 BG = (17, 21, 28)
 PALETTE = {
+    **OBJECT_COLORS,
     "wall": (118, 128, 145),
     "column": (150, 160, 178),
     "display_shelf": (126, 143, 176),
@@ -1048,7 +1053,9 @@ def store_axis(ev: Evidence, camera, root: Path | None = None) -> float:
     return blobs
 
 
-def build_scene_regular(camera, root: Path | None = None):
+def build_scene_regular(
+    camera, root: Path | None = None, *, object_report=None, support_report=None
+):
     """B-path: every fixture becomes a store-axis-aligned parametric mesh.
 
     The depth-derived footprints are ragged; the furniture is not. Each component is
@@ -1307,14 +1314,32 @@ def build_scene_regular(camera, root: Path | None = None):
                 # Explicit masks carry material; a wide door alone does not.
                 shapes.append((surface.kind, length, 0.05, surface.height))
             else:
-                items.append(
-                    (wall(surface.points, surface.height, thickness_m=0.08), "door", 255, True)
-                )
+                items.append((door_mesh(surface.points, surface.height), "door", 255, True))
                 shapes.append(("door", length, 0.08, surface.height))
             print(
                 f"  {camera}: {surface.kind} {length:.2f} m from {surface.source}, "
                 f"reprojection IoU {surface.iou:.2f}"
             )
+
+    refinements = []
+    items = refine_scene_supports(
+        camera, ev, Path(root) if root else ROOT, items, -yaw, counter, report=refinements
+    )
+    table_rows = [i for i, shape in enumerate(shapes) if shape[0] == "display_table"]
+    table_meshes = [i for i, (_mesh, key, *_rest) in enumerate(items) if key == "display_table"]
+    shape_of = dict(zip(table_meshes, table_rows, strict=True))
+    for refinement in refinements:
+        if refinement["accepted"]:
+            shapes[shape_of[refinement["mesh_index"]]] = (
+                "display_table",
+                *refinement["after_parameters"][3:],
+            )
+    if support_report is not None:
+        support_report.extend(refinements)
+    assets, detected_categories = scene_objects(
+        camera, ev, Path(root) if root else ROOT, items, report=object_report
+    )
+    items.extend(assets)
 
     # Every fixture that can hold merchandise, as a world AABB plus its top.
     # Each support carries the heights merchandise may actually rest at: a table's top,
@@ -1339,6 +1364,8 @@ def build_scene_regular(camera, root: Path | None = None):
         (10, "product_ipad", 0.1),
         (11, "product_iphone", 0.08),
     ):
+        if {9: "laptop", 10: "tablet", 11: "phone"}.get(cid) in detected_categories:
+            continue  # each detected device is now fitted once, never tiled into a region
         if name == "door" and by_object:
             continue  # openings now use a supported plane, never transmitted depth
         if cid not in grids:

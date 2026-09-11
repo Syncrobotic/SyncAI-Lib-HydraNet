@@ -118,6 +118,10 @@ def run_camera(camera, proc, model, device, table):
     cf.validate()
     cf.save(ROOT / f"runs/commission01/{camera}.camera.json")
     print(f"  [{camera}] " + "; ".join(stats))
+    # Preserve individual assets as well as the semantic unions used by depth completion.
+    from syncai_bev3d.teachers.scene_objects import run_camera as run_objects
+
+    run_objects(camera, proc, model, device, root=ROOT)
 
 
 def main():
