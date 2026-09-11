@@ -1131,7 +1131,9 @@ Metrics, all automatic, reported per camera by the tools that produce them: repr
 IoU per fixture, orthogonality residual, same-store scale agreement, share of fixtures
 inside their interval. A fixture below the IoU floor is flagged and not drawn.
 
-**Status 2026-09-11.** D1 measured and closed as "the floor's right angle is an axis,
+**Status 2026-09-11, evening.** The score is over what the camera sees (merchandise on a counter counts as the counter; the box's pixels on another object are neither hit nor miss), `masks_pass` keeps its SAM 3 instances and a welded counter is cut where they part, and where a floor's two line families are off square the fixtures choose the axis (`a73b76d`, `6fb1855`, `ff85a8c`). Fleet: placed 86%, **67% of placed at IoU >= 0.6**, 35 walls, 15 flagged -- the foot-built counter rows on Taichung-cam01/cam10 whose tops are hidden.
+
+**Status 2026-09-11, morning.** D1 measured and closed as "the floor's right angle is an axis,
 not a calibration": the skew moves 0.05-0.1 deg per degree of vfov, under the reading's
 own +-2 deg noise, and 7-13 deg across k1 on cam15 -- the residual is reported per camera
 and a floor whose second family is >5 deg off is not trusted for its axis. D2-D5 shipped
