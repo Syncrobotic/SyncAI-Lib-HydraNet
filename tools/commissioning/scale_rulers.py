@@ -85,7 +85,8 @@ def verdicts(cameras: list[str]) -> dict[str, rulers.Verdict]:
             r = read[c]
             rs = [
                 rulers.person_ruler(r["calib"]),
-                rulers.tile_ruler(r["period"], tile),
+                # the catalogue size is the cameras' consensus, not an independent fact
+                rulers.tile_ruler(r["period"], tile, anchored=False),
                 rulers.table_ruler(r["table_h"], tables),
             ]
             v = rulers.combine([x for x in rs if x is not None])

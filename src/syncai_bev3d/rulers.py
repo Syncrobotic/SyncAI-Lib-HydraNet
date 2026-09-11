@@ -64,10 +64,27 @@ class Ruler:
     factor: float  # multiply the camera's current metres by this
     sigma: float  # fractional uncertainty of `factor`
     note: str = ""
+    #: Whether the reference length came from outside the camera's own metres. Every
+    #: ruler *reads* through those metres; what separates a witness from an echo is where
+    #: its reference came from. The 1.70 m prior and a known object are anchored. A
+    #: catalogue tile chosen because the store's cameras agree on it is not: two cameras
+    #: through one over-scaled depth model agree with each other, not with the floor --
+    #: FTI's 600 mm raised floor read 0.85 / 0.74 m and the catalogue picked 0.80
+    #: (2026-09-10). A store-median counter is relative by construction.
+    anchored: bool = True
 
 
-def person_ruler(calib: dict) -> Ruler:
-    """The calibration's own person-prior scale: factor 1, uncertainty from its record."""
+def person_ruler(calib: dict) -> Ruler | None:
+    """The calibration's own person-prior scale: factor 1, uncertainty from its record.
+
+    None when the calibration says its scale was never measured -- `unmeasured`, or a
+    bootstrap on the depth model's raw metres: factor 1 there would anchor the other
+    rulers to the very reading they are meant to check. A record with no `scale_source`
+    at all is read as measured; absence is not a declaration.
+    """
+    source = str(calib.get("scale_source") or "")
+    if source.startswith("unmeasured") or "bootstrap" in source:
+        return None
     u = calib.get("uncertainty") or {}
     stat = float(u.get("scale_frac_stat_person_mad") or 0.09)
     sys_ = float(u.get("scale_frac_sys_person_prior") or 0.11)
@@ -93,11 +110,19 @@ def standard_tile(periods_m: dict[str, float]) -> tuple[float | None, float]:
     return best, best_err
 
 
-def tile_ruler(period_m: float | None, tile_m: float | None) -> Ruler | None:
+def tile_ruler(
+    period_m: float | None, tile_m: float | None, *, anchored: bool = True
+) -> Ruler | None:
+    """`anchored=False` when `tile_m` is `standard_tile`'s consensus pick rather than a
+    size known independently of the cameras' readings."""
     if not period_m or not tile_m:
         return None
     return Ruler(
-        "tile", tile_m / period_m, TILE_SIGMA, f"pitch {period_m:.2f} m vs {tile_m:.2f} m"
+        "tile",
+        tile_m / period_m,
+        TILE_SIGMA,
+        f"pitch {period_m:.2f} m vs {tile_m:.2f} m",
+        anchored=anchored,
     )
 
 
@@ -108,7 +133,11 @@ def table_ruler(table_h_m: float | None, store_table_h_m: list[float]) -> Ruler 
         return None
     ref = float(np.median(store_table_h_m))
     return Ruler(
-        "table", ref / table_h_m, TABLE_SIGMA, f"{table_h_m:.2f} m vs store {ref:.2f} m"
+        "table",
+        ref / table_h_m,
+        TABLE_SIGMA,
+        f"{table_h_m:.2f} m vs store {ref:.2f} m",
+        anchored=False,
     )
 
 
@@ -124,6 +153,17 @@ def combine(rulers: list[Ruler]) -> Verdict:
     rs = tuple(r for r in rulers if r is not None)
     if not rs:
         return Verdict(1.0, False, "no ruler", ())
+    if not any(r.anchored for r in rs):
+        # A verdict here would be an echo: the rulers can agree with each other and all be
+        # wrong by the same factor. Say so rather than "within 10%".
+        names = ", ".join(r.name for r in rs)
+        return Verdict(
+            1.0,
+            False,
+            f"unanchored: {names} take their reference from the same metres they read; "
+            "needs a person prior or a size known independently",
+            rs,
+        )
     logs = np.array([math.log(r.factor) for r in rs])
     w = np.array([1.0 / (r.sigma**2) for r in rs])
     order = np.argsort(logs)
