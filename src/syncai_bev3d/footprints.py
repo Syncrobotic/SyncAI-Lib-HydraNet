@@ -100,6 +100,7 @@ class Footprint:
     source: str  # "top" or "foot"
     iou: float = 0.0  # reprojection score, filled by `object_footprints`
     members: tuple[int, ...] = ()  # the objects a merged footprint is the union of
+    kind: str = "box"
 
 
 def _ground(px_cache, cf: CameraFile, cache_shape) -> np.ndarray:
@@ -318,7 +319,13 @@ def object_footprints(ev, yaw: float, *, products=None) -> list[Footprint]:
         # the foot on the floor
         r, c = _foot_pixels(obj)
         g = _ground(np.stack([c + 0.5, r + 0.5], axis=1).astype(float), cf, (fh, fw))
-        foot = _near_edge(_in_range(g[np.isfinite(g).all(axis=1)]))
+        contact = _in_range(g[np.isfinite(g).all(axis=1)])
+        foot = _near_edge(contact)
+        if name == "display_shelf" and len(contact) >= FOOT_MIN_PTS:
+            # A long oblique shelf's contact line need not lie inside the PCA near
+            # band's 25 cm. Keep its full run as a competing candidate; reprojection
+            # still rejects the upper-face strays the near band was meant to remove.
+            candidates.append(_box(contact, h_meas, "full foot", name, oid, n_px, cy, sy))
         if len(foot) >= FOOT_MIN_PTS:
             candidates.append(_box(foot, h_meas, "foot", name, oid, n_px, cy, sy))
             if name == "display_table" and h_meas < TOP_EDGE_MAX_FRAC * h_cam:
@@ -385,6 +392,12 @@ def object_footprints(ev, yaw: float, *, products=None) -> list[Footprint]:
                 )
         if not candidates:
             continue
+        # A tied full contact line adds no evidence over the original near-side fit.
+        candidates.sort(key=lambda candidate: candidate.source == "full foot")
+        if name == "display_table":
+            rounded = _round_candidate(obj, ev, yaw, int(oid))
+            if rounded is not None:
+                candidates.append(rounded)
         raw = {}
         for fp in candidates:
             raw[id(fp)] = fp.iou = reprojection_iou(fp, ev, yaw)
@@ -398,6 +411,10 @@ def object_footprints(ev, yaw: float, *, products=None) -> list[Footprint]:
         # stools and the wall behind as top, 0.31); then the best candidate stands. The
         # top is judged on its unpenalised score: an L-shaped top is implausible as one
         # box and is still the top -- the split is what makes it two.
+        rounded = [fp for fp in candidates if fp.kind == "round"]
+        if rounded and rounded[0].iou >= max(fp.iou for fp in candidates) - 0.02:
+            out.append(rounded[0])
+            continue
         tops = [fp for fp in candidates if fp.source == "top" and raw[id(fp)] >= TOP_PREFER_MIN]
         if tops:
             top = max(tops, key=lambda f: raw[id(f)])
@@ -412,6 +429,76 @@ def object_footprints(ev, yaw: float, *, products=None) -> list[Footprint]:
                 continue
         out.append(max(candidates, key=lambda f: f.iou))
     return out
+
+
+def _round_candidate(mask: np.ndarray, ev, yaw: float, oid: int) -> Footprint | None:
+    """Fit a grounded circular podium only when its lower outline is a smooth arc.
+
+    The silhouette fit estimates diameter/height; these remain camera-dependent
+    estimates. A sharp rectangular corner or a frame-clipped base supplies no arc.
+    """
+    from types import SimpleNamespace
+
+    from scipy.optimize import differential_evolution
+
+    cols = np.flatnonzero(mask.any(axis=0))
+    if len(cols) < 24:
+        return None
+    rows = np.array([np.flatnonzero(mask[:, c])[-1] for c in cols])
+    central = (cols >= np.percentile(cols, 15)) & (cols <= np.percentile(cols, 85))
+    if (rows[central] >= mask.shape[0] - 2).any():
+        return None
+    width = float(np.ptp(cols))
+    x = (cols[central] - cols.mean()) / width
+    coeff = np.polyfit(x, rows[central], 2)
+    error = np.abs(np.polyval(coeff, x) - rows[central])
+    if coeff[0] > -0.08 * width or np.percentile(error, 95) > max(1.5, 0.012 * width):
+        return None
+    ground = _ground(np.c_[cols[central] + 0.5, rows[central] + 0.5], ev.cf, mask.shape)
+    ground = _in_range(ground[np.isfinite(ground).all(axis=1)])
+    if len(ground) < FOOT_MIN_PTS:
+        return None
+    lo, hi = np.percentile(ground, [3, 97], axis=0)
+    fw = min(mask.shape[1], 480)
+    fh = max(1, round(mask.shape[0] * fw / mask.shape[1]))
+    target = np.asarray(Image.fromarray(mask).resize((fw, fh), Image.Resampling.NEAREST))
+    proxy = SimpleNamespace(cf=ev.cf, z={"gx": np.empty((fh, fw))})
+    cy, sy = np.cos(yaw), np.sin(yaw)
+    n_px = int(mask.sum())
+
+    def candidate(params):
+        gx, gz, radius, height = params
+        u, v = gx * cy + gz * sy, -gx * sy + gz * cy
+        return Footprint(
+            "display_table",
+            oid,
+            u - radius,
+            u + radius,
+            v - radius,
+            v + radius,
+            height,
+            0.0,
+            n_px,
+            "round silhouette",
+            kind="round",
+        )
+
+    def loss(params):
+        sil = _silhouette(candidate(params), proxy, yaw)
+        if sil is None:
+            return 1.0
+        return 1.0 - float((sil & target).sum() / max((sil | target).sum(), 1))
+
+    bounds = [
+        (lo[0] - 1.0, hi[0] + 1.0),
+        (max(0.2, lo[1] - 1.0), hi[1] + 1.0),
+        (0.2, 1.2),
+        HEIGHT_CLIP["display_table"],
+    ]
+    fit = differential_evolution(loss, bounds, seed=0, maxiter=40, popsize=8, tol=0.001)
+    if fit.fun > 0.30:
+        return None
+    return candidate(fit.x)
 
 
 def _plausible(fp: Footprint) -> bool:
@@ -475,11 +562,18 @@ def _silhouette(fp: Footprint, ev, yaw: float) -> np.ndarray | None:
     w, h = cf.image_size_px
     cy, sy = np.cos(yaw), np.sin(yaw)
     corners = []
-    for u in (fp.u0, fp.u1):
-        for v in (fp.v0, fp.v1):
-            x, zz = u * cy - v * sy, u * sy + v * cy
-            for y in (0.0, fp.h):
-                corners.append((x, y, zz))
+    um, vm = (fp.u0 + fp.u1) / 2, (fp.v0 + fp.v1) / 2
+    if fp.kind == "round":
+        angles = np.linspace(0, 2 * np.pi, 48, endpoint=False)
+        ring = np.c_[np.cos(angles) * (fp.u1 - fp.u0) / 2, np.sin(angles) * (fp.v1 - fp.v0) / 2]
+    else:
+        ring = np.array([(u - um, v - vm) for u in (fp.u0, fp.u1) for v in (fp.v0, fp.v1)])
+    for du, dv in ring:
+        u = um + du
+        v = vm + dv
+        x, zz = u * cy - v * sy, u * sy + v * cy
+        for y in (0.0, fp.h):
+            corners.append((x, y, zz))
     verts = np.asarray(corners, float)
     level = np.stack([verts[:, 0], cf.plane.height - verts[:, 1], verts[:, 2]], axis=-1)
     cam = level @ cf.plane.rotation.T
@@ -637,7 +731,8 @@ def _touching(a: Footprint, b: Footprint) -> bool:
 
 def _same_fixture(a: Footprint, b: Footprint) -> bool:
     return (
-        a.name == b.name
+        a.kind == b.kind == "box"
+        and a.name == b.name
         and abs(a.h - b.h) <= MERGE_HEIGHT_M
         and abs(((a.own_deg - b.own_deg) + 45) % 90 - 45) <= MERGE_AXIS_DEG
         and _touching(a, b)
@@ -729,6 +824,7 @@ def split_footprints(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
     for fp in fps:
         if (
             fp.name != "display_table"
+            or fp.kind != "box"
             or not fp.source.startswith("top")
             or "(split)" in fp.source
             or fp.iou < REPROJECTION_MIN
@@ -811,7 +907,7 @@ def regularise_footprints(fps: list[Footprint], ev, yaw: float) -> list[Footprin
 # other and within WALL_GAP_M end to end are one wall. The cell smear these replace put
 # walls a metre into the aisle wherever DA-V2 lowered a white face too far.
 WALL_PERP_M = 0.35
-WALL_GAP_M = 1.0
+WALL_GAP_M = 0.60  # preserve a door-sized opening between wall patches
 WALL_MIN_RUN_M = 0.8
 WALL_MIN_PTS = 40
 # The scene's own extent (scene_mesh's 24 x 14 m grid); a foot beyond it is the horizon.
@@ -838,12 +934,17 @@ def wall_runs_from_feet(ev, yaw: float) -> list[WallRun]:
     fh, fw = z["gx"].shape
     cy, sy = np.cos(yaw), np.sin(yaw)
     runs: list[WallRun] = []
+    floor_distance = ndimage.distance_transform_edt(~ev.walk)
     for oid in np.unique(ev.objects[ev.objects > 0]):
         obj = _body(ev.objects == oid)
         cids, counts = np.unique(ev.static[obj], return_counts=True)
         if int(cids[np.argmax(counts)]) != WALL_CID:
             continue
         r, c = _foot_pixels(obj)
+        # An exposed patch above a counter ends on the counter, not on the floor.
+        # Only lower-edge pixels adjacent to observed walkable floor locate a wall.
+        contact = floor_distance[r, c] <= max(3.0, 0.012 * fh)
+        r, c = r[contact], c[contact]
         g = _ground(np.stack([c + 0.5, r + 0.5], axis=1).astype(float), cf, (fh, fw))
         g = g[np.isfinite(g).all(axis=1)]
         # a wall mask reaches the horizon, and a pixel near it casts kilometres away
@@ -936,7 +1037,12 @@ def split_by_instances(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
         return fps
     out: list[Footprint] = []
     for fp in fps:
-        if fp.name != "display_table" or fp.members or fp.iou >= INSTANCE_SPLIT_MAX:
+        if (
+            fp.name != "display_table"
+            or fp.members
+            or fp.iou >= INSTANCE_SPLIT_MAX
+            or fp.kind != "box"
+        ):
             out.append(fp)
             continue
         parts = _instance_boxes(fp, ev, yaw)

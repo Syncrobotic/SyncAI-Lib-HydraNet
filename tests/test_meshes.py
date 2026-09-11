@@ -575,3 +575,24 @@ def test_glass_panel_is_thin_and_full_height():
     v, _ = glass_panel([(0.0, 0.0), (4.0, 0.0)], 2.0)
     assert v[:, 1].max() == pytest.approx(2.0, abs=1e-9)
     assert v[:, 2].max() - v[:, 2].min() < 0.06  # rails govern; wall() is 0.12 thick
+
+
+def test_round_table_has_a_circular_top_and_stands_on_the_floor():
+    from syncai_bev3d.meshes import round_table
+
+    vertices, faces = round_table(1.2, 0.9)
+    assert np.isfinite(vertices).all()
+    assert vertices[:, 1].min() == 0
+    assert np.isclose(vertices[:, 1].max(), 0.9)
+    top = vertices[np.isclose(vertices[:, 1], 0.9)]
+    radii = np.linalg.norm(top[:, [0, 2]], axis=1)
+    assert np.allclose(radii, 0.6)
+    assert faces.min() >= 0 and faces.max() < len(vertices)
+
+
+def test_round_table_rejects_invalid_dimensions():
+    from syncai_bev3d.meshes import round_table
+
+    for diameter, height in [(0, 1), (1, -1), (float("nan"), 1), (1, float("inf"))]:
+        with pytest.raises(ValueError):
+            round_table(diameter, height)

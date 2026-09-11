@@ -474,3 +474,67 @@ def test_two_counters_welded_into_one_object_split_by_their_instances(tmp_path, 
     assert len(tables) == 2, [(round(t.u0, 2), round(t.u1, 2), t.source) for t in tables]
     assert all("instance" in t.source for t in tables)
     assert max(t.u1 - t.u0 for t in tables) < 1.8
+
+
+def test_a_wall_patch_ending_above_the_floor_cannot_locate_a_wall(tmp_path, monkeypatch):
+    root = _store_with_wall(tmp_path, monkeypatch, z_wall=8.0)
+    ev = scene_mesh.load_evidence(CAMERA, root)
+    rows = np.flatnonzero((ev.objects == 1).any(axis=1))
+    # The wall is visible only above an occluding fixture. Its visible lower edge
+    # is now far from the observed floor, but still projects to finite floor metres.
+    ev.objects[max(0, rows[-1] - 10) : rows[-1] + 1] = 0
+    assert footprints.wall_runs_from_feet(ev, 0.0) == []
+
+
+def test_a_rectangular_counter_does_not_become_a_round_table(tmp_path, monkeypatch):
+    root = _store(tmp_path, monkeypatch, table=(-0.8, 0.8, 2.5, 3.5, 0.85))
+    ev = scene_mesh.load_evidence(CAMERA, root)
+    assert footprints._round_candidate(ev.objects == 1, ev, 0.0, 1) is None
+
+
+def test_round_podium_fit_recovers_known_ground_position(tmp_path, monkeypatch):
+    from scipy.spatial import ConvexHull
+
+    root = _store(tmp_path, monkeypatch, table=(-0.8, 0.8, 2.5, 3.5, 0.85))
+    ev = scene_mesh.load_evidence(CAMERA, root)
+    # A cylinder with known dimensions, independently projected into the image.
+    radius, z, height = 0.55, 3.0, 0.85
+    angles = np.linspace(0, 2 * np.pi, 96, endpoint=False)
+    pixels = np.array(
+        _poly_px(
+            [
+                (radius * np.cos(a), h, z + radius * np.sin(a))
+                for h in (0, height)
+                for a in angles
+            ]
+        )
+    )
+    mask = _mask([list(map(tuple, pixels[ConvexHull(pixels).vertices]))])
+    fitted = footprints._round_candidate(mask, ev, 0.0, 1)
+    assert fitted is not None and fitted.kind == "round"
+    assert abs((fitted.u0 + fitted.u1) / 2) < 0.08
+    assert abs((fitted.v0 + fitted.v1) / 2 - z) < 0.12
+    assert abs((fitted.u1 - fitted.u0) / 2 - radius) < 0.08
+    assert abs(fitted.h - height) < 0.10
+
+
+def test_scene_build_does_not_draw_a_wall_across_a_glass_door(tmp_path, monkeypatch):
+    root = _store_with_wall(tmp_path, monkeypatch, z_wall=5.0)
+    # This test supplies observed floor right up to the threshold. The wall fixture
+    # otherwise leaves a 10 cm unobserved strip, too wide at this distance to anchor it.
+    r, c = np.mgrid[:H, :W]
+    _gx, gz = pixel_to_ground(c + 0.5, r + 0.5, CAM, PLANE)
+    floor = np.isfinite(gz) & (gz > 0.5) & (gz < 5.0)
+    Image.fromarray(np.where(floor, 255, 0).astype(np.uint8)).save(
+        root / "runs/commission01/walkable.png"
+    )
+    mask = _mask([_poly_px([(-0.7, 0, 5), (-0.7, 2.4, 5), (0.7, 2.4, 5), (0.7, 0, 5)])])
+    directory = root / "runs/commission01" / CAMERA / "masks"
+    directory.mkdir(parents=True)
+    Image.fromarray(np.where(mask, 255, 0).astype(np.uint8)).save(directory / "glass_door.png")
+    _cf, items, _heights, _shapes = scene_mesh.build_scene_regular(CAMERA, root)
+    assert any(key == "glass" for _mesh, key, _alpha, _shadow in items)
+    walls = [mesh for mesh, key, _alpha, _shadow in items if key == "wall"]
+    assert len(walls) == 2
+    for vertices, _faces in walls:
+        assert vertices[:, 0].max() < -0.5 or vertices[:, 0].min() > 0.5

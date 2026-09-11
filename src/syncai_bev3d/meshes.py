@@ -484,6 +484,20 @@ def table(
     return _merge(*parts)
 
 
+def round_table(diameter_m: float, height_m: float = 0.85, *, sides: int = 48) -> Mesh:
+    """A circular display podium: a round slab on a recessed cylindrical body."""
+    if not np.isfinite([diameter_m, height_m]).all() or min(diameter_m, height_m) <= 0:
+        raise ValueError("diameter and height must be finite and positive")
+    if sides < 12:
+        raise ValueError("a round table needs at least 12 sides")
+    angles = np.linspace(0, 2 * np.pi, sides, endpoint=False)
+    ring = np.c_[np.cos(angles), np.sin(angles)] * diameter_m / 2
+    slab_h = min(0.04, height_m * 0.1)
+    slab = extrude(ring, slab_h)
+    body = extrude(ring * 0.96, height_m - slab_h)
+    return _merge(body, (slab[0] + [0, height_m - slab_h, 0], slab[1]))
+
+
 def chair(width_m: float, depth_m: float, height_m: float) -> Mesh:
     """A seat slab on four legs with a back. ``height_m`` is the top of the back.
 
@@ -580,6 +594,8 @@ def glass_panel(points, height_m: float, *, frame_t: float = 0.05) -> Mesh:
     pts = np.asarray(points, float)
     if pts.ndim != 2 or pts.shape[1] != 2 or len(pts) < 2:
         raise ValueError(f"points must be (N>=2, 2) of (x, z), got shape {pts.shape}")
+    if not np.isfinite(pts).all() or not np.isfinite(height_m) or height_m <= 0:
+        raise ValueError("glass points and height must be finite, with positive height")
     parts = []
     for a, b in itertools.pairwise(pts):
         d = b - a
@@ -593,6 +609,10 @@ def glass_panel(points, height_m: float, *, frame_t: float = 0.05) -> Mesh:
         for y0, t in ((0.0, frame_t), (height_m - frame_t, frame_t)):
             rail = extrude([a + rail_n, b + rail_n, b - rail_n, a - rail_n], t)
             parts.append((rail[0] + [0, y0, 0], rail[1]))
+        # End jambs make a pane a framed opening rather than an unsupported slab.
+        for x, z in (a, b):
+            jamb = box(frame_t, height_m, frame_t)
+            parts.append((jamb[0] + [x, 0, z], jamb[1]))
     if not parts:
         raise ValueError("every glass segment had zero length")
     return _merge(*parts)

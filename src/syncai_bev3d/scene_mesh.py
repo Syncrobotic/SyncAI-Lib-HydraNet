@@ -58,11 +58,13 @@ from syncai_bev3d.meshes import (
     glass_panel,
     ground_disc,
     place,
+    round_table,
     shelf_levels,
     shelving,
     wall,
 )
 from syncai_bev3d.shading import View, contact_shadows, draw_scene, occlusion_alpha
+from syncai_bev3d.surfaces import scene_surfaces, wall_sections
 from syncai_hydranet.geometry.bands import Band
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
@@ -1096,7 +1098,7 @@ def build_scene_regular(camera, root: Path | None = None):
                 f"reprojection IoU {fp.iou:.2f}{'' if placed else ' -- NOT PLACED'}"
             )
             if placed:
-                fixtures.append([fp.name, fp.u0, fp.u1, fp.v0, fp.v1, fp.h])
+                fixtures.append([fp.name, fp.u0, fp.u1, fp.v0, fp.v1, fp.h, fp.kind])
             else:
                 unplaced.append(f"{fp.name} #{fp.oid} reprojects at IoU {fp.iou:.2f}")
     for cid, name in CLASS_NAMES.items():
@@ -1158,7 +1160,7 @@ def build_scene_regular(camera, root: Path | None = None):
                 # only one side of it
                 side = min(max(w, d), 0.8)
                 w, d, h = side, side, max(h, COLUMN_MIN_H)
-            fixtures.append([name, um - w / 2, um + w / 2, vm - d / 2, vm + d / 2, h])
+            fixtures.append([name, um - w / 2, um + w / 2, vm - d / 2, vm + d / 2, h, "box"])
 
     # ---- 2. THE WALLS, fitted to the whole `wall` point set rather than to its
     # components, and then only the runs a shopper cannot stand on both sides of.
@@ -1207,16 +1209,28 @@ def build_scene_regular(camera, root: Path | None = None):
             # A fixture the mask cannot place is better absent than present and wrong.
             continue
         walls.append(run)
-    for axis, perp, lo, hi, _thick in walls:
+    surfaces = (
+        scene_surfaces(camera, ev, Path(root) if root else ROOT, walls=walls, yaw=yaw)
+        if by_object
+        else []
+    )
+    sections = wall_sections(walls, surfaces, yaw, DRAWN_H["wall"])
+    walls = [
+        (axis, perp, lo, hi, 0.15)
+        for axis, perp, lo, hi, bottom, _top in sections
+        if bottom == 0.0
+    ]
+    for axis, perp, lo, hi, bottom, top in sections:
         a = (lo, perp) if axis == "u" else (perp, lo)
         b = (hi, perp) if axis == "u" else (perp, hi)
         pts = [
             [a[0] * cy - a[1] * sy, a[0] * sy + a[1] * cy],
             [b[0] * cy - b[1] * sy, b[0] * sy + b[1] * cy],
         ]
-        shapes.append(("wall", hi - lo, 0.15, DRAWN_H["wall"]))
+        shapes.append(("wall", hi - lo, 0.15, top - bottom))
         key = paint.run(axis, perp, lo, hi)
-        items.append((wall(pts, DRAWN_H["wall"], thickness_m=0.15), key, 105, False))
+        mesh = wall(pts, top - bottom, thickness_m=0.15)
+        items.append(((mesh[0] + [0, bottom, 0], mesh[1]), key, 105, False))
 
     # ---- 3. REGULARISE. The step every scan-to-BIM and structured-modelling pipeline
     # has between fitting and meshing, and the one this file did not: two fixtures cannot
@@ -1224,13 +1238,17 @@ def build_scene_regular(camera, root: Path | None = None):
     resolved = resolve_overlaps([(f[1], f[2], f[3], f[4]) for f in fixtures])
     kept = []
     for spec, resolved_box in zip(fixtures, resolved, strict=True):
+        if spec[6] != "box":
+            # Rectangle trimming must not deform a measured circular footprint.
+            kept.append(spec)
+            continue
         if resolved_box is None:
             continue
         spec[1], spec[2], spec[3], spec[4] = snap_to_walls(resolved_box, walls)
         kept.append(spec)
 
     # ---- 4. MESH.
-    for name, u0, u1, v0, v1, h in kept:
+    for name, u0, u1, v0, v1, h, kind in kept:
         w, d = u1 - u0, v1 - v0
         if min(w, d) < 0.15:
             continue  # shrunk to nothing by a neighbour: it was that neighbour
@@ -1262,6 +1280,10 @@ def build_scene_regular(camera, root: Path | None = None):
             shapes.append((name, run_m, depth_m, h))
             mesh = shelving(run_m, depth_m, h)
             items.append((place(mesh, Placement(px, pz, heading_rad=head)), key, 255, True))
+        elif kind == "round":
+            diameter = min(w, d)
+            shapes.append((name, diameter, diameter, h))
+            items.append((place(round_table(diameter, h), at), key, 255, True))
         else:  # display_table
             # Every display table is a counter: a slab on a recessed solid body. Until
             # 2026-09-10 a footprint under 2.2 m was drawn as a four-leg table, and on
@@ -1273,6 +1295,26 @@ def build_scene_regular(camera, root: Path | None = None):
             # to measure the other case on, so nothing draws legs until one does.
             shapes.append((name, w, d, h))
             items.append((place(counter(w, d, h), at), key, 255, True))
+
+    if by_object:
+        for surface in surfaces:
+            length = float(np.linalg.norm(surface.points[1] - surface.points[0]))
+            glazed = surface.kind in {"glass", "glass_door", "window"}
+            if glazed:
+                mesh = glass_panel(surface.points, surface.height)
+                mesh = (mesh[0] + [0, surface.bottom, 0], mesh[1])
+                items.append((mesh, "glass", 70, False))
+                # Explicit masks carry material; a wide door alone does not.
+                shapes.append((surface.kind, length, 0.05, surface.height))
+            else:
+                items.append(
+                    (wall(surface.points, surface.height, thickness_m=0.08), "door", 255, True)
+                )
+                shapes.append(("door", length, 0.08, surface.height))
+            print(
+                f"  {camera}: {surface.kind} {length:.2f} m from {surface.source}, "
+                f"reprojection IoU {surface.iou:.2f}"
+            )
 
     # Every fixture that can hold merchandise, as a world AABB plus its top.
     # Each support carries the heights merchandise may actually rest at: a table's top,
@@ -1297,6 +1339,8 @@ def build_scene_regular(camera, root: Path | None = None):
         (10, "product_ipad", 0.1),
         (11, "product_iphone", 0.08),
     ):
+        if name == "door" and by_object:
+            continue  # openings now use a supported plane, never transmitted depth
         if cid not in grids:
             continue
         lab, n = ndimage.label(grids[cid], structure=np.ones((3, 3)))
