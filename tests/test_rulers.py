@@ -85,3 +85,32 @@ def test_two_rulers_on_opposite_sides_do_not_apply():
 def test_no_ruler_keeps():
     v = combine([])
     assert v.factor == 1.0 and not v.apply
+
+
+def test_a_bootstrap_calibration_has_no_person_ruler_to_anchor_to():
+    """Factor 1 on a scale that was never measured would anchor every other ruler to the
+    reading they exist to check."""
+    assert person_ruler({"scale_source": "unmeasured"}) is None
+    assert person_ruler({"scale_source": "dav2_metric_indoor_raw_bootstrap_unverified"}) is None
+    assert person_ruler({"scale_source": "person_height_median_vs_1.7m_prior_n38"}) is not None
+
+
+def test_unanchored_rulers_agreeing_is_not_a_verdict():
+    """FTI MDF room, 2026-09-10: a 600 mm raised floor read 0.85 and 0.74 m through DA-V2's
+    raw metres, the catalogue picked 0.80, and the two cameras 'agreed'. The consensus tile
+    and the store-median table both take their reference from the readings themselves."""
+    tile = tile_ruler(0.85, 0.80, anchored=False)
+    table = table_ruler(0.94, [0.94, 0.90, 0.92])
+    v = combine([tile, table])
+    assert not v.apply
+    assert v.factor == 1.0
+    assert "unanchored" in v.reason
+
+
+def test_an_anchored_ruler_restores_the_two_witness_rule():
+    """With the person prior present, an unanchored tile can still be the second witness."""
+    person = Ruler("person", 1.0, 0.14)
+    tile = tile_ruler(0.85, 0.60, anchored=False)  # x0.706, a real size this time
+    known = Ruler("folding_table", 0.74 / 0.94, 0.05, "0.94 m read vs 0.74 m")
+    v = combine([person, tile, known])
+    assert v.apply and abs(v.factor - 0.706) < 0.1
