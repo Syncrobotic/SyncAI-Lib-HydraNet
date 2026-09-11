@@ -714,11 +714,12 @@ order. A component with no step is not scheduled, it is assumed.
    one box per person at the counter on each, the back row included, people through
    the shopfront glass boxed as people. `configs/hydranet_retail_person02.yaml` is
    person01 with this root in the `site_person` block and nothing else changed.
-   **person02 is scheduled for 23:00 on 2026-09-11** (`hydranet-person02.timer` →
-   `hydranet-person02.service`, `/home/paul/hydranet-overnight/person02.sh`, log
+   **person02 was started 2026-09-11 mid-morning on the user's instruction** — first
+   scheduled for 23:00 as person01 was, then brought forward by the user
+   (`hydranet-person02.service`, `/home/paul/hydranet-overnight/person02.sh`, log
    `person02.log`, a five-minute watch in `person02-watch.log`), from scratch, 120
-   epochs, at night because the card is shared by day, as person01 was; the launcher
-   also waits for the card to be free. The user asked for the necessity to be confirmed
+   epochs; the launcher waits for the card to be free before it spends it, up to two
+   hours. The user asked for the necessity to be confirmed
    before the card is spent: it is the one mechanism left that changes what the model
    can output at the counter — 1 and 2 were built and measured short — and it costs no
    human time; what it does not buy is an accuracy, until the thirty-frame ruler is
