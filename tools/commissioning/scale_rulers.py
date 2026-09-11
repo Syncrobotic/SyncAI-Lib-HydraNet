@@ -19,6 +19,7 @@ re-rendered. The verdict beside it records every ruler that voted.
 import argparse
 import datetime as dt
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -29,7 +30,7 @@ import numpy as np
 from syncai_bev3d import floor_axis, rulers, scene_mesh
 from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 VERDICTS = ROOT / "runs/commission_review/scale"
 
 
@@ -85,7 +86,8 @@ def verdicts(cameras: list[str]) -> dict[str, rulers.Verdict]:
             r = read[c]
             rs = [
                 rulers.person_ruler(r["calib"]),
-                rulers.tile_ruler(r["period"], tile),
+                # the catalogue size is the cameras' consensus, not an independent fact
+                rulers.tile_ruler(r["period"], tile, anchored=False),
                 rulers.table_ruler(r["table_h"], tables),
             ]
             v = rulers.combine([x for x in rs if x is not None])

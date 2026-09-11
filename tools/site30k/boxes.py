@@ -19,6 +19,7 @@ Usage: batch30_boxes.py <batch_dir> [out_dir]
 
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -30,7 +31,7 @@ from scipy import ndimage
 # machine but the one it was typed on, and `sys.path` is the one place where that
 # fails before anything else can report it. `parents[2]` is the repo root --
 # tools/site30k/<file>.py.
-_REPO = Path(__file__).resolve().parents[2]
+_REPO = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(_REPO / "scripts"))
 spec = importlib.util.spec_from_file_location(
     "campaign", str(_REPO / "scripts/campaign_site30k.py")

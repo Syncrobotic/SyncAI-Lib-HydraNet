@@ -25,6 +25,7 @@ Usage: tools/commissioning/cluster_rules.py --rule sized --ratio 0.5 [cameras...
 import argparse
 import importlib.util
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -35,7 +36,7 @@ from scipy import ndimage
 # as an absolute path, so a second checkout ran against the first one's `runs/` and
 # any machine but this one failed at import with a path and no reason. Two levels up
 # from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 
 spec = importlib.util.spec_from_file_location("recipe", str(ROOT / "tools/site30k/recipe.py"))
 R = importlib.util.module_from_spec(spec)

@@ -59,11 +59,12 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent.parent
+REPO = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parent.parent.parent))
 
 # PLAN 7.19: pinned by tile grid on this camera and assumed on every other.
 ANCHOR_CAMERA = "Taichung-cam01"

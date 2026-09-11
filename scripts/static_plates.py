@@ -73,6 +73,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from syncai_bev3d.plate_calibration import utc_offset_hours
+
 # How many of a pixel's OWN noise floors it must move to count as dynamic.
 #
 # **Per pixel, not per frame, and that is the whole point.** A single floor for the frame
@@ -198,6 +200,32 @@ def plate_and_mask(frames: np.ndarray) -> tuple[np.ndarray, np.ndarray, dict]:
     )
 
 
+def source_size(path: Path) -> tuple[int, int] | None:
+    """The clip's native (width, height), before `WORK_W x WORK_H`: what a consumer of the
+    calibration will receive boxes in. None when ffprobe cannot say."""
+    proc = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height",
+            "-of",
+            "csv=p=0",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    try:
+        w, h = proc.stdout.strip().split(",")[:2]
+        return int(w), int(h)
+    except ValueError:
+        return None
+
+
 def slot_of(path: Path) -> str:
     """`archive_20260816-113024_...` -> `20260816-113024`, which is UTC. See the header."""
     return path.stem.split("_")[1]
@@ -216,7 +244,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = ap.parse_args(argv)
 
-    roles = json.loads((args.cameras or args.root / "cameras.json").read_text())["cameras"]
+    site = json.loads((args.cameras or args.root / "cameras.json").read_text())
+    roles = site["cameras"]
+    utc_offset = utc_offset_hours(site)
     names = args.only or sorted(
         k for k, v in roles.items() if args.include_dead or v.get("role") != "dead"
     )
@@ -244,7 +274,11 @@ def main(argv: list[str] | None = None) -> int:
             Image.fromarray((static * 255).astype(np.uint8)).save(
                 cam_out / f"static_{slot}.png"
             )
-            slots[slot] = {**stats, "role": roles.get(cam, {}).get("role")}
+            slots[slot] = {
+                **stats,
+                "role": roles.get(cam, {}).get("role"),
+                "source_wh": source_size(clip),
+            }
             every = static if every is None else (every & static)
         if every is not None:
             Image.fromarray((every * 255).astype(np.uint8)).save(cam_out / "static_all.png")
@@ -264,7 +298,8 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps(
             {
                 "measured": "static plates per camera per time slot",
-                "note": "slot keys are UTC; the burned-in timestamp is store-local (+8)",
+                "note": "slot keys are UTC; the burned-in timestamp is store-local",
+                "utc_offset_hours": utc_offset,
                 "sample_fps": SAMPLE_FPS,
                 "work_size": [WORK_W, WORK_H],
                 "dynamic_mult": DYNAMIC_MULT,

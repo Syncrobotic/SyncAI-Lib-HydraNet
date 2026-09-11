@@ -1,7 +1,7 @@
 {
  "camera": "Kaohsiung-cam04",
  "gif": "demo_Kaohsiung-cam04.gif",
- "render": "demo_Kaohsiung-cam04_20260911-101918.mp4",
+ "render": "demo_Kaohsiung-cam04_20260911-131431.mp4",
  "source_clip": "archive_20260816-112757_20260816-113301.mp4",
  "render_args": {
   "camera": "Kaohsiung-cam04",
@@ -30,7 +30,7 @@
   "held_out_n": 15,
   "min_accuracy_required": 0.9
  },
- "commit": "a682b446e1503f494db8562b25077b85bbb1c2b8",
+ "commit": "e2833ce7a13ecdda7c1456a427248f26d1ba9710",
  "start_frame": 517,
  "frames": 120,
  "stride": 1,

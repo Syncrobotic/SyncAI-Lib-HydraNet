@@ -55,7 +55,7 @@ from scipy import ndimage
 # machine but the one it was typed on, and `sys.path` is the one place where that
 # fails before anything else can report it. `parents[2]` is the repo root --
 # tools/site30k/<file>.py.
-_REPO = Path(__file__).resolve().parents[2]
+_REPO = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(_REPO / "scripts"))
 import importlib.util  # noqa: E402
 
@@ -80,7 +80,7 @@ from syncai_hydranet.utils.device import pick_device  # noqa: E402
 # as an absolute path, so a second checkout ran against the first one's `runs/` and
 # any machine but this one failed at import with a path and no reason. Two levels up
 # from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 # The pilot ran off datasets/studioa_clips; the campaign runs off the phase-2 pull. Both
 # are the same layout (<root>/<camera>/<stem>.mp4), so the root is a setting rather than
 # a fork in the code, and the plates follow it so a campaign plate never lands in the

@@ -353,6 +353,24 @@ def as_rows(frame: WorldFrame) -> list[dict]:
     return rows
 
 
+def panel_box(
+    box, source_size_px: tuple[int, int], panel_size_px: tuple[int, int]
+) -> tuple[float, float, float, float]:
+    """A source-frame box drawn on a panel of another size: scaled by each axis' ratio.
+
+    `demo_video.py` drew every track box with `/ 2.0` -- a 1920-wide source over a 960-wide
+    panel, written as a constant. On a 1280-wide clip the boxes sat at two thirds of the
+    people; on a 3840-wide one they drew at twice their size (FTI, 2026-09-11). The blur
+    boxes beside them were scaled by the probed source size and were right, which is what
+    made the two disagree on the same panel. The ratio is a property of the two frames,
+    computed here and nowhere else.
+    """
+    x0, y0, x1, y1 = (float(v) for v in box)
+    sx = panel_size_px[0] / source_size_px[0]
+    sy = panel_size_px[1] / source_size_px[1]
+    return (x0 * sx, y0 * sy, x1 * sx, y1 * sy)
+
+
 def _finite(value: float | None) -> float | None:
     if value is None:
         return None

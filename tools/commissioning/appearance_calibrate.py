@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from itertools import pairwise
 from pathlib import Path
@@ -44,7 +45,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(ROOT / "src"))
 
 from syncai_hydranet.analytics.appearance import torso_histogram  # noqa: E402

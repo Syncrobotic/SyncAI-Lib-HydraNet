@@ -9,6 +9,7 @@ puts the entry script's own directory on `sys.path`, and
 what a script is for: argument parsing, the export formats, and the orbit gif.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -24,7 +25,7 @@ from syncai_bev3d.scene_mesh import (
     render,
 )
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 
 
 def export_glb(camera, items):

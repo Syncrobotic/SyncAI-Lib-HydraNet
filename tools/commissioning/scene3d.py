@@ -13,6 +13,7 @@ Floor pixels stay on the ground-ray projection (``gx``/``gz``): they are on the 
 where that projection is exact.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -28,7 +29,7 @@ from syncai_hydranet.utils.visualize import TRAV_COLORS
 # as an absolute path, so a second checkout ran against the first one's `runs/` and
 # any machine but this one failed at import with a path and no reason. Two levels up
 # from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 CLASSES = {1: "floor", 2: "wall", 3: "column", 4: "display_table", 5: "display_shelf"}
 PALETTE = np.array(
     [

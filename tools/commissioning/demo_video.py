@@ -92,6 +92,7 @@ from syncai_hydranet.analytics.staff import (
     track_staff,
 )
 from syncai_hydranet.analytics.tracker import Tracker
+from syncai_hydranet.analytics.world import panel_box
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.data.video import probe as probe_video
@@ -112,7 +113,7 @@ from syncai_hydranet.utils.visualize import preprocess
 # as an absolute path, so a second checkout ran against the first one's `runs/` and
 # any machine but this one failed at import with a path and no reason. Two levels up
 # from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 
 
 def _display_verdict(track):
@@ -125,6 +126,19 @@ def _display_verdict(track):
 # The run the tools ship from, named once in `syncai_hydranet.shipped`. Six files
 # used to carry their own copy of this string and the best run was in none of them.
 RUN = SHIPPED_RUN
+
+
+def _check_source_size(cf, src_w: int, src_h: int, clip) -> None:
+    """Boxes are rescaled by the probed size, so a different stream is not a scaling
+    error any more -- it is a different lens crop, and the calibration cannot say which."""
+    if cf.source_size_px and tuple(cf.source_size_px) != (src_w, src_h):
+        cw, ch = cf.source_size_px
+        print(
+            f"  {cf.camera_id}: {Path(str(clip)).name} is {src_w}x{src_h}; the camera was "
+            f"commissioned from a {cw}x{ch} stream. Same aspect keeps the metres; a crop "
+            "does not, and only the NVR knows which this is.",
+            flush=True,
+        )
 
 
 def _records_pass(
@@ -290,6 +304,7 @@ def _render_in_chunks(args, camera, clip, cf, bounds, staff_model) -> int:
     # The decoded size the recorded boxes are in, so the replay converts to calibrated
     # pixels the same way the recording pass did.
     src_w, src_h, _ = probe_video(str(clip))
+    _check_source_size(cf, src_w, src_h, clip)
     t0 = time.time()
     per = math.ceil(args.frames / args.workers)
     edges = [(i, min(i + per, args.frames)) for i in range(0, args.frames, per)]
@@ -691,6 +706,7 @@ def main() -> int:
         ]
     n = n_det = n_fp = n_placed = n_outside = n_blur = n_posed = 0
     src_w, src_h, _ = probe_video(str(clip))
+    _check_source_size(cf, src_w, src_h, clip)
     # The plate is this camera's own empty shop, named by its camera.json. Missing is a
     # refusal rather than a silent single-instrument run: the whole argument for two
     # instruments is that neither is trusted alone.
@@ -840,7 +856,7 @@ def main() -> int:
         moving = 0
         for t in tracks:
             seen_ids.add(t.track_id)
-            bx = np.asarray(t.box, float) / 2.0
+            bx = panel_box(t.box, (src_w, src_h), view_img.size)
             box_col = track_colour(t, None if staff_model is None else _display_verdict)
             d.rectangle(list(bx), outline=box_col, width=2)
             d.text((bx[0] + 3, bx[1] + 2), f"#{t.track_id}", fill=box_col)
