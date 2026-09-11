@@ -695,6 +695,19 @@ order. A component with no step is not scheduled, it is assumed.
    SAM 3's known failure, hanging packets on IR night frames, is excluded by the tool's
    daylight gate and does not arise on a daytime counter.
 
+   **The pipeline exists (2026-09-11, `tools/annotation/counter_person_labels.py`).**
+   No human and no zone: each camera's crowded window is the densest 960×600 of its own
+   person-box centres; an image with four or more people in it goes to SAM 3 on the
+   window plus a 15% margin at ×2; inside, SAM 3's boxes replace Grounding DINO's
+   (which survive only where no SAM 3 box overlaps them at 0.3); outside, Grounding DINO
+   at site30k's 0.35 stands; every annotation says which teacher it came from, and the
+   output is a COCO root the loader reads unchanged. The first cut — Grounding DINO
+   lowered to 0.25 with SAM 3 added beside it — was rejected on its own preview (two or
+   three boxes per person, some to the floor under the counter): presence is not the
+   only thing a label carries. Pilot on 300 crowded Kaohsiung-cam04 frames: 5.2 SAM 3
+   boxes a frame, 57 s. The full build is `datasets/site30k_counter_v1`; the human
+   ruler's thirty frames wait unlabelled in `datasets/counter_ruler_v1`.
+
 ### 7b. Decided — the answer, and what it cost
 
 2. ~~Night is unscoped~~ — **decided 2026-08-25: night is in v1, gated on a measurement.**
