@@ -1,7 +1,7 @@
 {
  "camera": "Taichung-cam10",
  "gif": "demo_Taichung-cam10.gif",
- "render": "demo_Taichung-cam10_20260911-171324.mp4",
+ "render": "demo_Taichung-cam10_20260911-181255.mp4",
  "source_clip": "archive_20260816-112916_20260816-113416.mp4",
  "render_args": {
   "camera": "Taichung-cam10",
@@ -19,7 +19,7 @@
   "workers": 1,
   "chunk": null,
   "chunk_out": null,
-  "records": null,
+  "records": "runs/atomic_commit_20260911/Taichung-cam10.records.json",
   "records_only": null
  },
  "provenance": {
@@ -36,15 +36,16 @@
    "src/syncai_bev3d/floorplan.py": "822b0a5a254a9a1344dd3ed69db7ec3ad27fdcd0f0054b7ae18bd12116e90ba3",
    "src/syncai_bev3d/footprints.py": "150d0a2b7b43dc6e94a2938d47926822bf7ee7ed208ee793cb618459b566999b",
    "src/syncai_bev3d/geometry_cache.py": "53f4068cda3b0ad06e6afdf762fae978634023e4ab88d273c99552d167aa1443",
-   "src/syncai_bev3d/geometry_review.py": "844ac4e988e11831cd705ce33adc887ccf304909c99e1200debd3917d1e1cd2a",
+   "src/syncai_bev3d/geometry_review.py": "d1b78de0abe7bacea5271837aaac5c55e75f745f2e9bac804db48bcc9fe7fd73",
    "src/syncai_bev3d/geometry_teachers.py": "042a0cfb8911b9d9f8cad1d41169ed5935111e89ab85e366f08533fb539554a6",
    "src/syncai_bev3d/ground_control.py": "343be680955f04feab5331b1b919909e6851b15346d6f98dfca0db10582244e1",
    "src/syncai_bev3d/heatmap.py": "32aa146d88665730a3da62ae49399cbea0ce5f653c1e17869821c1d6f6f64d8d",
    "src/syncai_bev3d/meshes.py": "ded12167f035e81b2dcc362fd6edc7bf5f0f62dcbceec2bef48e3bcb274ec9f2",
    "src/syncai_bev3d/metric_scale.py": "04334f2b5386765ce38ddd431e1c2a1d20d8f545c36ac91bafb051953e4087e5",
    "src/syncai_bev3d/object_assets.py": "9fcae26a4a6d0c64225e8932a8de3de6c8ceee6a12136955df5717c064426a82",
+   "src/syncai_bev3d/object_facing.py": "18eb9d3709fdae1c4467ae63021ef2ccf9b262dd7a914c1484ec56d6d8574277",
    "src/syncai_bev3d/object_instances.py": "679206b5c29a1d3969debc4d3eb0574a1ee3378592bf7af8850e58ca9fc439fc",
-   "src/syncai_bev3d/object_placement.py": "14b7edbbe6ef51292b73e05991ba29e445848e843094dbf575acbf29898cd82c",
+   "src/syncai_bev3d/object_placement.py": "7e2d443d5fc0d43270050a1262db79120500cbbfa8445674e75bf019bbbf9f0d",
    "src/syncai_bev3d/plate_calibration.py": "1c58005222209d1e8a2801043f75d614517ea77c466bd36fbe4145cca50876e3",
    "src/syncai_bev3d/render_provenance.py": "c28243282e6a1c44b1b407aa02b8700d4330d1bdd9029e25f11f143d35c26612",
    "src/syncai_bev3d/rulers.py": "0cb65d5ae6b407e594d20c64bc59aa8e1c98a463f40c536ec1c8eb556539bcb3",
@@ -52,7 +53,7 @@
    "src/syncai_bev3d/scene_types.py": "2ca7cb3efc26dba154c0d4b396a189cf89850cd8b36d3d4a27471c4f479c58d6",
    "src/syncai_bev3d/shading.py": "72b82abbbbef55a196c73c4f3309b94fb9980ea6929ff121f94830067802fedc",
    "src/syncai_bev3d/support_refinement.py": "f177b94d702425e68c8a902f7d8af5dfdf7877e66143e549c717884bce94fb59",
-   "src/syncai_bev3d/surfaces.py": "597dc88d7d22af88fbd1c8ae1fbe689eda91dc909eb539780540c9eeccf24d2a",
+   "src/syncai_bev3d/surfaces.py": "089e39f2441a6b875379cf964ee724784f37a588204945dccd66fa4ad0707b53",
    "src/syncai_bev3d/teachers/__init__.py": "c2e5e234d1a1f858a3a505e1142ffdbc95426c74c3cffed478c27aafd3c50e9b",
    "src/syncai_bev3d/teachers/boxes.py": "b61450a858b3c391be59239fdf868fb874beb41e184dd207e6b75db285b1231b",
    "src/syncai_bev3d/teachers/gdino.py": "ee88da8c1f347e8f095b0b4cad47cfd8d5fb07f8a7655a860ecd5dc3c7871b91",
@@ -91,7 +92,7 @@
   "detector_checkpoint": "runs/hydranet_retail_person01/last.pt",
   "detector_weights": "ema"
  },
- "render_sha256": "2f082aa73dc7e501bb761a2a018ae6fac3a37c8cef57a3045c812ed2b70b63f7",
+ "render_sha256": "93a336767ac603fd57af4f6565fb01db848f030b4eb1c9d48d657d546f23884d",
  "source_duration_s": 24.0,
  "playback_duration_s": 12.0,
  "staff_model": {
@@ -102,7 +103,7 @@
   "held_out_n": 127,
   "min_accuracy_required": 0.85
  },
- "commit": "728ea17ebfd8cbf93f8cff08f63af0b6c7bbbb18",
+ "commit": "e3677fee0bc1c00a192b2f3a62a4aa2e16ae8160",
  "start_frame": 83,
  "frames": 120,
  "stride": 1,
@@ -113,7 +114,7 @@
  "person_boxes_failing": 0,
  "failing_examples": [],
  "contact_sheets": "runs/commission01/Taichung-cam10.gif_check",
- "gif_sha256": "bca5685c578289b286234c782fd604d44e09e9847db0c256a46bb0925ed0e884",
+ "gif_sha256": "9c257a3eef51acc1434ee2e5752b550a12b3723a5b1c4ea38f9055a9308a305d",
  "gif_size_px": [
   760,
   221
