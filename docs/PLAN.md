@@ -1140,6 +1140,8 @@ Metrics, all automatic, reported per camera by the tools that produce them: repr
 IoU per fixture, orthogonality residual, same-store scale agreement, share of fixtures
 inside their interval. A fixture below the IoU floor is flagged and not drawn.
 
+**Status 2026-09-11, night.** `c8c7964`: casts clipped, frame-border feet dropped, an implausible candidate scores 0.15 less, a hidden-top counter's depth measured from its far edge, outlier table heights clamped to the camera's median. Fleet: placed 85%, **60% of placed at IoU >= 0.6** (from 67% -- the penalty now charges the long counter rows that are still placed), flagged 15 -> 9, every ghost run over 12 m gone. The route through the geometry is measured out; the gate's 90% needs the mask (an instance prompt that draws the seam between counters, merchandise off the counter's edge).
+
 **Status 2026-09-11, evening.** The score is over what the camera sees (merchandise on a counter counts as the counter; the box's pixels on another object are neither hit nor miss), `masks_pass` keeps its SAM 3 instances and a welded counter is cut where they part, and where a floor's two line families are off square the fixtures choose the axis (`a73b76d`, `6fb1855`, `ff85a8c`). Fleet: placed 86%, **67% of placed at IoU >= 0.6**, 35 walls, 15 flagged -- the foot-built counter rows on Taichung-cam01/cam10 whose tops are hidden.
 
 **Status 2026-09-11, morning.** D1 measured and closed as "the floor's right angle is an axis,
