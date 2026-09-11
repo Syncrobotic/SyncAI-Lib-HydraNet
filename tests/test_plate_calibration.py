@@ -622,3 +622,28 @@ def test_a_depth_frame_with_nothing_in_it_yields_no_candidates():
     assert floor_candidates(empty, cam, inlier_m=0.03) == []
     plane, residual, rows = choose_floor([])
     assert plane is None and residual is None and rows == []
+
+
+def _plate(dir_, slot, luma):
+    from PIL import Image
+
+    Image.new("L", (4, 4), luma).save(dir_ / f"plate_{slot}.png")
+
+
+def test_the_daytime_gate_uses_the_sites_offset_not_a_constant(tmp_path):
+    """A US-Central site (UTC-5) recorded at 15:00 UTC is 10:00 local -- daytime -- and the
+    same plates read under +8 pick another slot. The old constant refused the 15 UTC slot
+    (23 local) and passed a 10 UTC slot by luck (18 local)."""
+    from syncai_bev3d.plate_calibration import pick_daytime_slot
+
+    _plate(tmp_path, "20260910-150000", 200)
+    _plate(tmp_path, "20260910-030000", 250)  # 22:00 local at -5: brighter, but night
+    assert pick_daytime_slot(tmp_path, utc_offset=-5) == "20260910-150000"
+    assert pick_daytime_slot(tmp_path, utc_offset=8) == "20260910-030000"
+
+
+def test_a_cameras_json_without_an_offset_still_means_the_original_site():
+    from syncai_bev3d.plate_calibration import DEFAULT_UTC_OFFSET_HOURS, utc_offset_hours
+
+    assert utc_offset_hours({"cameras": {}}) == DEFAULT_UTC_OFFSET_HOURS == 8
+    assert utc_offset_hours({"utc_offset_hours": -5, "cameras": {}}) == -5
