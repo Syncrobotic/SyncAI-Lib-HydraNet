@@ -381,3 +381,96 @@ def test_the_build_draws_the_wall_from_its_feet(tmp_path, monkeypatch):
     assert len(walls) == 1
     v = walls[0][0]
     assert abs(v[:, 2].mean() - 8.0) < 0.25, v[:, 2].mean()
+
+
+# --------------------------------------------------- the score is over what is seen
+
+
+def test_a_box_behind_another_object_is_not_penalised_for_it(tmp_path, monkeypatch):
+    """A wall behind a counter: the counter hides the wall's foot, and the box's pixels
+    on the counter are neither hit nor miss."""
+    root = _store_with_wall(tmp_path, monkeypatch, z_wall=8.0)
+    ev = scene_mesh.load_evidence(CAMERA, root)
+    run = footprints.wall_runs_from_feet(ev, 0.0)[0]
+    clear = run.iou
+    # a counter object in front of the wall, painted over the wall's lower pixels
+    front = _mask(
+        [_poly_px([(-2.0, 0, 6.0), (2.0, 0, 6.0), (2.0, 0.9, 6.0), (-2.0, 0.9, 6.0)])]
+    )
+    top = _mask(
+        [_poly_px([(-2.0, 0.9, 6.0), (2.0, 0.9, 6.0), (2.0, 0.9, 7.0), (-2.0, 0.9, 7.0)])]
+    )
+    counter = front | top
+    ev.objects[counter] = 2
+    ev.static[counter] = 4
+    occluded = footprints._wall_iou(run, ev, 0.0)
+    assert occluded >= clear - 0.10, (clear, occluded)
+    # and the plain IoU, which charges the box for the counter in front of it, would not
+    sil = footprints._silhouette(
+        footprints.Footprint(
+            "wall", 1, run.lo, run.hi, run.perp - 0.075, run.perp + 0.075, 2.4, 0.0, 0, "foot"
+        ),
+        ev,
+        0.0,
+    )
+    wall = ev.objects == 1
+    naive = (sil & wall).sum() / (sil | wall).sum()
+    assert naive < 0.4 < occluded, (naive, occluded)
+
+
+def test_merchandise_on_a_counter_counts_as_the_counter(tmp_path, monkeypatch):
+    root = _store(tmp_path, monkeypatch, table=(-1.0, 1.2, 4.0, 5.0, 0.85))
+    ev = scene_mesh.load_evidence(CAMERA, root)
+    fp = _by_name(footprints.object_footprints(ev, 0.0))["display_table"]
+    bare = footprints.reprojection_iou(fp, ev, 0.0)
+    # laptops on the top: pixels above the counter's top, inside its outline
+    goods = _mask(
+        [_poly_px([(-0.8, 0.85, 4.3), (1.0, 0.85, 4.3), (1.0, 1.15, 4.3), (-0.8, 1.15, 4.3)])]
+    )
+    ev.products = goods
+    with_goods = footprints.reprojection_iou(fp, ev, 0.0)
+    assert with_goods >= bare - 0.02, (bare, with_goods)
+
+
+# ------------------------------------------ a welded object, cut by its instances
+
+
+def test_two_counters_welded_into_one_object_split_by_their_instances(tmp_path, monkeypatch):
+    """The object map says one thing; the SAM 3 instances behind it say two, side by
+    side with an aisle between -- and the one box scores badly enough to ask them."""
+    root = _store_two_tables(tmp_path, monkeypatch, gap_m=1.2)
+    commission = root / "runs/commission01"
+    objects = np.asarray(Image.open(commission / "objects.png")).astype(np.uint16)
+    inst = [(objects == 1), (objects == 2)]
+    objects[objects == 2] = 1  # welded: one object
+    Image.fromarray(objects).save(commission / "objects.png")
+    ih, iw = H // 2, W // 2  # instances live at masks_pass's half resolution
+    packed = np.stack(
+        [
+            np.packbits(
+                np.asarray(Image.fromarray(m).resize((iw, ih), Image.Resampling.NEAREST), bool),
+                axis=-1,
+            )
+            for m in inst
+        ]
+    )
+    np.savez_compressed(
+        commission / "instances.npz",
+        masks=packed, shape=np.array([ih, iw]), cluster=np.array([0, 0], np.int32),
+        concept=np.array(["fixture", "fixture"]), prompt=np.array(["retail counter"] * 2),
+        score=np.array([0.9, 0.9], np.float32),
+    )  # fmt: skip
+    cf = CameraFile.load(commission / f"{CAMERA}.camera.json")
+    import dataclasses
+
+    dataclasses.replace(cf, mask_files={**cf.mask_files, "instances": "instances.npz"}).save(
+        commission / f"{CAMERA}.camera.json"
+    )
+    ev = scene_mesh.load_evidence(CAMERA, root)
+    assert ev.instances is not None and len(ev.instance_masks(1)) == 2
+    one = footprints.object_footprints(ev, 0.0)
+    assert len(one) == 1 and one[0].iou < footprints.INSTANCE_SPLIT_MAX, one
+    tables = footprints.regularise_footprints(one, ev, 0.0)
+    assert len(tables) == 2, [(round(t.u0, 2), round(t.u1, 2), t.source) for t in tables]
+    assert all("instance" in t.source for t in tables)
+    assert max(t.u1 - t.u0 for t in tables) < 1.8

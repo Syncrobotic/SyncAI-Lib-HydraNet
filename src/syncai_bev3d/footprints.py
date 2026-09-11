@@ -358,7 +358,18 @@ def reprojection_iou(fp: Footprint, ev, yaw: float, *, oids=None) -> float:
 
 def reprojection_iou_union(fps: list[Footprint], ev, yaw: float, *, oids) -> float:
     """Several boxes together against the union of their objects' masks -- the score a
-    split is judged by, since each part alone covers only its share of the mask."""
+    split is judged by, since each part alone covers only its share of the mask.
+
+    The score is over what the camera can see of the object. Two things are not the
+    box's fault and are left out of the union: the merchandise standing on a counter,
+    which is part of the thing the mask outlines and sits above the box's top, so it
+    is counted INTO the mask (inside the object's outline); and the pixels of the box
+    that fall on ANOTHER object -- a wall behind a counter, a pillar behind a table --
+    which the camera could not have seen and are neither hit nor miss. Measured before
+    this on the fleet (2026-09-11): a right box on a counter under a row of laptops
+    scored 0.7-0.85 and a wall behind a counter 0.2-0.4, the gate of 0.90 measuring the
+    occlusion and not the box.
+    """
     sil = None
     for fp in fps:
         one = _silhouette(fp, ev, yaw)
@@ -368,8 +379,14 @@ def reprojection_iou_union(fps: list[Footprint], ev, yaw: float, *, oids) -> flo
     if sil is None:
         return 0.0
     mask = np.isin(ev.objects, list(oids))
+    if ev.products is not None and mask.any():
+        r, c = np.nonzero(mask)
+        outline = np.zeros_like(mask)
+        outline[r.min() : r.max() + 1, c.min() : c.max() + 1] = True
+        mask = mask | (ev.products & outline & ndimage.binary_dilation(mask, iterations=6))
+    occluded = sil & (ev.objects > 0) & ~mask
     inter = (sil & mask).sum()
-    union = (sil | mask).sum()
+    union = ((sil | mask) & ~occluded).sum()
     return float(inter / union) if union else 0.0
 
 
