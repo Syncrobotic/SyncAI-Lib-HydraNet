@@ -231,12 +231,10 @@ def main() -> int:
         sheet = Image.new("RGB", (pw * 2, ph * 2))
         for k, im in enumerate((a, bb, c, d)):
             sheet.paste(im.resize((pw, ph)), ((k % 2) * pw, (k // 2) * ph))
-        ImageDraw.Draw(sheet).text(
-            (pw * 2 - 260, ph * 2 - 30),
-            f"{args.camera}  t={n / args.fps:5.1f}s",
-            fill=WHITE,
-            font=font,
-        )
+        stamp_text = f"{args.camera}  t={n / args.fps:5.1f}s"
+        sd = ImageDraw.Draw(sheet)
+        tw = sd.textlength(stamp_text, font=font)
+        sd.text((pw * 2 - tw - 16, ph * 2 - 34), stamp_text, fill=WHITE, font=font)
         ff.stdin.write(np.asarray(sheet).tobytes())
         if n % 100 == 0:
             means = {k: np.mean(v) for k, v in counts.items()}
