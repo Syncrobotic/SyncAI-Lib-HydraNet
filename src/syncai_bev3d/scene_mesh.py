@@ -329,6 +329,13 @@ def contact_cells(
 
 
 @dataclass
+class Instances:
+    packed: np.ndarray  # (N, H, ceil(W / 8)) packbits along the last axis
+    width: int
+    cluster: np.ndarray  # (N,) cluster index, -1 if none
+
+
+@dataclass
 class Evidence:
     """Everything `cell_grids` reads from disk for one camera, loaded once.
 
@@ -347,6 +354,27 @@ class Evidence:
     objects: np.ndarray | None = None
     # Every merchandise mask, as one boolean map: on a table it is the top it hides.
     products: np.ndarray | None = None
+    # `masks_pass`'s pre-cluster instances, packed at their own resolution, with each
+    # one's cluster index (object id - 1); None before 2026-09-11's masks_pass.
+    instances: Instances | None = None
+
+    def instance_masks(self, oid: int, *, min_px: int = 2000) -> list[np.ndarray]:
+        """The instances clustered into object `oid`, at the cache's resolution."""
+        if self.instances is None:
+            return []
+        fh, fw = self.z["gx"].shape
+        out = []
+        for i in np.nonzero(self.instances.cluster == oid - 1)[0]:
+            m = np.unpackbits(self.instances.packed[i], axis=-1)[:, : self.instances.width]
+            m = m.astype(bool)
+            if m.sum() < min_px:
+                continue
+            out.append(
+                np.asarray(
+                    Image.fromarray(m).resize((fw, fh), Image.Resampling.NEAREST), dtype=bool
+                )
+            )
+        return out
 
 
 def load_evidence(camera, root: Path | None = None) -> Evidence:
@@ -391,7 +419,12 @@ def load_evidence(camera, root: Path | None = None) -> Evidence:
     for f in sorted(extras.glob("product*.png")) if extras.exists() else []:
         m = np.asarray(Image.open(f).resize((fw, fh), Image.Resampling.NEAREST)) > 127
         products = m if products is None else (products | m)
-    return Evidence(cf, z, static, walk, plate, objects, products)
+    instances = None
+    f = cf.mask_files.get("instances")
+    if f and (root / "runs/commission01" / f).exists():
+        with np.load(root / "runs/commission01" / f) as npz:
+            instances = Instances(npz["masks"], int(npz["shape"][1]), npz["cluster"])
+    return Evidence(cf, z, static, walk, plate, objects, products, instances)
 
 
 def cell_grids(

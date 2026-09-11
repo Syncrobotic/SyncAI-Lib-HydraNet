@@ -78,7 +78,8 @@ def run_camera(camera, third, proc, model, static_concepts, plates_root=None, ou
                         }
                     )
                     smasks.append(m_)
-    cl_masks, cl_votes = R.cluster(smasks, smeta)
+    assign: list[int] = []
+    cl_masks, cl_votes = R.cluster(smasks, smeta, assign)
     static_map, decisions = R.decide_structure(
         cl_masks, cl_votes, [plate_cache[(camera, s)] for s in slots], geo, geo.lx, geo.lz
     )
@@ -155,6 +156,20 @@ def run_camera(camera, third, proc, model, static_concepts, plates_root=None, ou
         out / "masks" / "objects.png"
     )
     mask_files["objects"] = f"{camera}/masks/objects.png"
+    # The instances the objects were clustered from, packed. A cluster that is two
+    # things -- a counter row welded by containment -- can only be cut where its
+    # instances part, and the class PNG and the object map have both forgotten them.
+    # ~500 instances at 540x960 packbits to ~30 MB; the votes ride beside them.
+    np.savez_compressed(
+        out / "masks" / "instances.npz",
+        masks=np.packbits(np.stack(smasks).astype(bool), axis=-1),
+        shape=np.array([R.H, R.W]),
+        cluster=np.array(assign, dtype=np.int32),
+        concept=np.array([m["concept"] for m in smeta]),
+        prompt=np.array([m["prompt"] for m in smeta]),
+        score=np.array([m["score"] for m in smeta], dtype=np.float32),
+    )
+    mask_files["instances"] = f"{camera}/masks/instances.npz"
     walk = (combined == 1).astype(np.uint8) * 255
     Image.fromarray(
         np.asarray(Image.fromarray(walk).resize((w, h), Image.Resampling.NEAREST))

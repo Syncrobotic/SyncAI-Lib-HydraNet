@@ -591,7 +591,7 @@ def family_group(concept: str, prompt: str) -> str | None:
     return None
 
 
-def cluster(masks, meta):
+def cluster(masks, meta, assign=None):
     """One object per cluster: masks that are the same thing (IoU >= 0.6), or that sit
     inside an earlier, larger mask of the SAME group (containment >= 0.85).
 
@@ -601,9 +601,14 @@ def cluster(masks, meta):
     counter, the shelving and the pillar all went into wall clusters of 443k and 166k px
     and the right half of the shop was built as wall. A fixture inside a structure mask
     is the thing in front of it; it keeps its own cluster and its own vote.
+
+    `assign`, if given, receives the cluster index of every instance, in the order of
+    `masks` -- `masks_pass` writes it beside the packed instances so a cluster can later
+    be cut where its instances part.
     """
     order = np.argsort([-m["px"] for m in meta])
     cl_masks, cl_votes, cl_group = [], [], []
+    where = [-1] * len(masks)
     for i in order:
         m = masks[i]
         group = family_group(meta[i]["concept"], meta[i]["prompt"])
@@ -617,11 +622,15 @@ def cluster(masks, meta):
                 cl_votes[j].append((meta[i]["concept"], meta[i]["prompt"], meta[i]["score"]))
                 if cl_group[j] is None:
                     cl_group[j] = group
+                where[i] = j
                 break
         else:
             cl_masks.append(m)
             cl_votes.append([(meta[i]["concept"], meta[i]["prompt"], meta[i]["score"])])
             cl_group.append(group)
+            where[i] = len(cl_masks) - 1
+    if assign is not None:
+        assign[:] = where
     return cl_masks, cl_votes
 
 

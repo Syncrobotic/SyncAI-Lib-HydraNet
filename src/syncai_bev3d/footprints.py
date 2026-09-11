@@ -593,8 +593,10 @@ def split_footprints(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
 
 
 def regularise_footprints(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
-    """Gate D3 in one call: merge what is one surface, split what a box cannot hold."""
-    return split_footprints(merge_footprints(fps, ev, yaw), ev, yaw)
+    """Gate D3 in one call: merge what is one surface, split what a box cannot hold --
+    by its shape where the top is seen, by its instances where it is not."""
+    fps = split_footprints(merge_footprints(fps, ev, yaw), ev, yaw)
+    return split_by_instances(fps, ev, yaw)
 
 
 # --- Gate D4: the walls, from where they meet the floor ---------------------------------
@@ -710,3 +712,97 @@ def _wall_iou(run: WallRun, ev, yaw: float, *, height_m: float = 2.4) -> float:
             "foot",
         )
     return reprojection_iou(fp, ev, yaw, oids=run.members)
+
+
+# --- the instances behind a welded object ---------------------------------------------
+# A `masks_pass` cluster that is two counters scores 0.2-0.4 however the one box is
+# placed, and the top-based split cannot cut it when a low camera behind a row of
+# laptops never sees the seam. The SAM 3 instances the cluster was built from saw it:
+# each instance is one counter's own mask, and instances that are not one surface by
+# the D3 rule are not one box.
+INSTANCE_SPLIT_MAX = 0.50  # a placed footprint scoring above this is left alone
+INSTANCE_MIN_PX = 2000
+
+
+def split_by_instances(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
+    if ev.instances is None:
+        return fps
+    out: list[Footprint] = []
+    for fp in fps:
+        if fp.name != "display_table" or fp.members or fp.iou >= INSTANCE_SPLIT_MAX:
+            out.append(fp)
+            continue
+        parts = _instance_boxes(fp, ev, yaw)
+        if len(parts) < 2:
+            out.append(fp)
+            continue
+        groups = merge_footprints(parts, ev, yaw)
+        if len(groups) < 2 or len(groups) > SPLIT_MAX_PARTS:
+            out.append(fp)
+            continue
+        together = reprojection_iou_union(groups, ev, yaw, oids=(fp.oid,))
+        if together < fp.iou - 0.02:
+            out.append(fp)
+            continue
+        for g in groups:
+            g.oid = fp.oid
+            g.members = ()
+            g.iou = together
+            g.source = g.source.replace("top", "instance top").replace("foot", "instance foot")
+        out.extend(groups)
+    return out
+
+
+def _instance_boxes(fp: Footprint, ev, yaw: float) -> list[Footprint]:
+    """One footprint per instance of the object, by the same rules as the object's."""
+    cf, z = ev.cf, ev.z
+    fh, fw = z["gx"].shape
+    cy, sy = np.cos(yaw), np.sin(yaw)
+    h_cam = cf.plane.height
+    boxes: list[Footprint] = []
+    for m in ev.instance_masks(fp.oid, min_px=INSTANCE_MIN_PX):
+        good = m & z["geom_ok"]
+        top = good & (z["horiz"] >= TOP_HORIZ_MIN) if "horiz" in z else good
+        cands: list[Footprint] = []
+        if top.sum() >= TOP_MIN_PX:
+            r, c = np.nonzero(top)
+            g = _ground(np.stack([c + 0.5, r + 0.5], axis=1).astype(float), cf, (fh, fw))
+            g = g[np.isfinite(g).all(axis=1)]
+            cands.append(
+                _box(
+                    g * (h_cam - fp.h) / h_cam,
+                    fp.h,
+                    "top",
+                    fp.name,
+                    fp.oid,
+                    int(m.sum()),
+                    cy,
+                    sy,
+                )
+            )
+        r, c = _foot_pixels(m)
+        g = _ground(np.stack([c + 0.5, r + 0.5], axis=1).astype(float), cf, (fh, fw))
+        foot = _near_edge(g[np.isfinite(g).all(axis=1)])
+        if len(foot) >= FOOT_MIN_PTS:
+            cands.append(_box(foot, fp.h, "foot", fp.name, fp.oid, int(m.sum()), cy, sy))
+        if not cands:
+            continue
+        # scored against the instance's own mask, so the object's other instances do
+        # not count against it
+        for b in cands:
+            b.iou = _iou_against(b, m, ev, yaw)
+        tops = [b for b in cands if b.source == "top" and b.iou >= TOP_PREFER_MIN]
+        best = max(tops, key=lambda b: b.iou) if tops else max(cands, key=lambda b: b.iou)
+        if best.iou >= REPROJECTION_MIN:
+            boxes.append(best)
+    return boxes
+
+
+def _iou_against(fp: Footprint, mask: np.ndarray, ev, yaw: float) -> float:
+    sil = _silhouette(fp, ev, yaw)
+    if sil is None:
+        return 0.0
+    occluded = sil & (ev.objects > 0) & ~mask
+    inter = (sil & mask).sum()
+    union = ((sil | mask) & ~occluded).sum()
+    return float(inter / union) if union else 0.0
