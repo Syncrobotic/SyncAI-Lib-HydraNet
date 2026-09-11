@@ -167,6 +167,7 @@ def onboard_one(
     meter: PlatePersonMeter | None,
     plates_root: Path,
     person_anns: Path = PERSON_ANNS,
+    utc_offset: int = pc.DEFAULT_UTC_OFFSET_HOURS,
 ) -> dict:
     now = _dt.date.today().isoformat()
     is_pinned = camera == "Taichung-cam01"  # tile grid: k1 and vfov both measured
@@ -217,7 +218,7 @@ def onboard_one(
         )
         return result
 
-    slot = pc.pick_daytime_slot(cam_dir)
+    slot = pc.pick_daytime_slot(cam_dir, utc_offset)
     plate_path = cam_dir / f"plate_{slot}.png"
     rgb = np.asarray(Image.open(plate_path).convert("RGB"))
     h, w = rgb.shape[:2]
@@ -555,6 +556,7 @@ def main(argv=None) -> int:
 
     fleet = selling_floor_cameras(args.cameras_json)
     cameras = args.camera or fleet
+    utc_offset = pc.utc_offset_hours(json.loads(Path(args.cameras_json).read_text()))
     args.out.mkdir(parents=True, exist_ok=True)
 
     if args.report_only:
@@ -570,7 +572,9 @@ def main(argv=None) -> int:
     for i, cam in enumerate(cameras, 1):
         print(f"[{i}/{len(cameras)}] {cam}")
         try:
-            result = onboard_one(cam, vfovs, args.k1, meter, args.plates_root, args.person_anns)
+            result = onboard_one(
+                cam, vfovs, args.k1, meter, args.plates_root, args.person_anns, utc_offset
+            )
         except Exception:
             traceback.print_exc()
             result = {
