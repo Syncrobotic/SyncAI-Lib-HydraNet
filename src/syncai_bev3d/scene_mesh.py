@@ -26,6 +26,7 @@ figures moved to this panel, which makes the other look superseded; it is not, a
 `bev3d.py`'s own docstring carries the same note from the other side.
 """
 
+import hashlib
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,6 +45,7 @@ from syncai_bev3d.floorplan import (
 )
 from syncai_bev3d.footprints import (
     REPROJECTION_MIN,
+    object_foot_ranges,
     object_footprints,
     regularise_footprints,
     wall_runs_from_feet,
@@ -367,6 +369,23 @@ class Evidence:
     # `masks_pass`'s pre-cluster instances, packed at their own resolution, with each
     # one's cluster index (object id - 1); None before 2026-09-11's masks_pass.
     instances: Instances | None = None
+
+    @property
+    def object_foot_ranges(self) -> np.ndarray:
+        """Reuse foot distances until the masks or calibration change, even in place."""
+        if self.objects is None:
+            return np.full(self.z["gx"].shape, np.inf)
+        key = (
+            hashlib.sha256(self.objects.tobytes()).digest(),
+            self.objects.shape,
+            self.z["gx"].shape,
+            repr((self.cf.camera, self.cf.plane, self.cf.lens, self.cf.image_size_px)),
+        )
+        previous = getattr(self, "_foot_range_cache", None)
+        if previous is None or previous[0] != key:
+            previous = (key, object_foot_ranges(self))
+            self._foot_range_cache = previous
+        return previous[1]
 
     def instance_masks(self, oid: int, *, min_px: int = 2000) -> list[np.ndarray]:
         """The instances clustered into object `oid`, at the cache's resolution."""

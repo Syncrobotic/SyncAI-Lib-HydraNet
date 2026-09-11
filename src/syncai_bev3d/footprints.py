@@ -652,11 +652,17 @@ def _nearer_objects(ev, fps: list[Footprint], oids) -> np.ndarray:
     box_near = min(
         math.hypot(u, v) for fp in fps for u in (fp.u0, fp.u1) for v in (fp.v0, fp.v1)
     )
-    out = np.zeros(ev.objects.shape, bool)
+    return (ev.object_foot_ranges < box_near) & ~np.isin(ev.objects, list(oids))
+
+
+def object_foot_ranges(ev) -> np.ndarray:
+    """Per-pixel distance of the owning object's foot, independent of candidate boxes.
+
+    Evidence caches this for one build, invalidating when calibration or masks change.
+    """
+    out = np.full(ev.objects.shape, np.inf)
     fh, fw = ev.z["gx"].shape
     for oid in np.unique(ev.objects[ev.objects > 0]):
-        if oid in oids:
-            continue
         m = ev.objects == oid
         r, c = _foot_pixels(m)
         if len(r) < 5:
@@ -665,8 +671,7 @@ def _nearer_objects(ev, fps: list[Footprint], oids) -> np.ndarray:
         g = g[np.isfinite(g).all(axis=1)]
         if len(g) < 5:
             continue
-        if float(np.median(np.hypot(g[:, 0], g[:, 1]))) < box_near:
-            out |= m
+        out[m] = float(np.median(np.hypot(g[:, 0], g[:, 1])))
     return out
 
 

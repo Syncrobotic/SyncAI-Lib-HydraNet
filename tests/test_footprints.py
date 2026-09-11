@@ -8,6 +8,7 @@ not read them -- only the height scalar and the geometry.
 """
 
 import math
+from dataclasses import replace
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -122,6 +123,31 @@ def _store(tmp_path, monkeypatch, *, table, shelf=None, column=None):
 
 def _by_name(fps):
     return {fp.name: fp for fp in fps}
+
+
+def test_occluder_ranges_reuse_work_and_follow_calibration_changes(tmp_path, monkeypatch):
+    root = _store(tmp_path, monkeypatch, table=(-1.0, 1.2, 4.0, 5.0, 0.85))
+    ev = scene_mesh.load_evidence(CAMERA, root)
+    original = scene_mesh.object_foot_ranges
+    calls = []
+
+    def measured(evidence):
+        calls.append(1)
+        return original(evidence)
+
+    monkeypatch.setattr(scene_mesh, "object_foot_ranges", measured)
+    first = ev.object_foot_ranges
+    assert np.isfinite(first).any()
+    assert ev.object_foot_ranges is first
+    assert len(calls) == 1
+    ev.cf = replace(ev.cf, plane=replace(ev.cf.plane, height=ev.cf.plane.height * 1.2))
+    updated = ev.object_foot_ranges
+    np.testing.assert_allclose(updated[np.isfinite(first)], first[np.isfinite(first)] * 1.2)
+    assert len(calls) == 2
+    # A separate build owns its own cache, even for the same camera name.
+    fresh = scene_mesh.load_evidence(CAMERA, root)
+    np.testing.assert_array_equal(fresh.object_foot_ranges, first)
+    assert len(calls) == 3
 
 
 def test_a_table_is_its_top_on_its_own_height_plane(tmp_path, monkeypatch):
