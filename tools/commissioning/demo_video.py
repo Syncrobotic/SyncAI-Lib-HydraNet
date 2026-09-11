@@ -92,6 +92,7 @@ from syncai_hydranet.analytics.staff import (
     track_staff,
 )
 from syncai_hydranet.analytics.tracker import Tracker
+from syncai_hydranet.analytics.world import panel_box
 from syncai_hydranet.config import load_config
 from syncai_hydranet.data.video import frames as decode_frames
 from syncai_hydranet.data.video import probe as probe_video
@@ -840,7 +841,7 @@ def main() -> int:
         moving = 0
         for t in tracks:
             seen_ids.add(t.track_id)
-            bx = np.asarray(t.box, float) / 2.0
+            bx = panel_box(t.box, (src_w, src_h), view_img.size)
             box_col = track_colour(t, None if staff_model is None else _display_verdict)
             d.rectangle(list(bx), outline=box_col, width=2)
             d.text((bx[0] + 3, bx[1] + 2), f"#{t.track_id}", fill=box_col)
