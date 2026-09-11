@@ -32,15 +32,17 @@ THE MERGE, STATED BECAUSE EVERY PART IS A CHOICE
 * Non-person labels are copied verbatim. `boxed_stock` and `device` come from the
   campaign masks (`info.product`), not from Grounding DINO, and this tool has no opinion
   on them.
-* Person labels start from `instances_all_<split>.json` -- Grounding DINO down to its
-  0.10 floor -- cut at ``--base-thr`` (0.25: the threshold the ceiling probe found the
-  back row at, 14.7 a frame against 11.1 at 0.35). On every image, crowded or not, so one
-  threshold governs the whole split.
-* Inside the window of a crowded image, SAM 3's boxes at ``--min-score`` (0.50, the
-  score `scripts/sam3_person_boxes.py` measured its day person at) are mapped back to
-  frame pixels and **added where they do not overlap an existing person box at
-  ``--merge-iou``**; where they do, the existing box stays -- SAM 3 is the second opinion
-  on presence, not on geometry. Its own duplicates are removed by NMS first.
+* Person labels outside the window, and on every image that is not crowded, are
+  Grounding DINO's at ``--base-thr`` -- 0.35, the cut site30k already uses. The first
+  pilot cut at 0.25 to reach the back row that way and got what a lower cut buys: two
+  or three boxes per person, some running to the floor under the counter. Presence is
+  not the only thing a label carries.
+* **Inside the window of a crowded image, SAM 3 is the teacher.** Its boxes at
+  ``--min-score`` (0.50, the score `scripts/sam3_person_boxes.py` measured its day
+  person at), NMS'd, mapped back to frame pixels, replace Grounding DINO's person boxes
+  there; a Grounding DINO box at ``--base-thr`` survives inside the window only where no
+  SAM 3 box overlaps it at ``--merge-iou`` (0.3) -- somebody SAM 3 did not see. One
+  teacher per region, so no person carries two boxes of different geometry.
 * Every annotation carries ``source`` (`gdino` or `sam3`) and ``score``, so a training
   run, an audit or a re-cut can tell the two teachers apart later.
 
@@ -127,24 +129,41 @@ def in_window(boxes_xyxy: np.ndarray, window: tuple[int, int, int, int]) -> np.n
     return (cx >= x0) & (cx < x1) & (cy >= y0) & (cy < y1)
 
 
-def merge_additions(
-    existing_xyxy: np.ndarray, sam3_xyxys: np.ndarray, merge_iou: float, nms_iou: float = 0.55
-) -> np.ndarray:
-    """SAM 3 boxes (N, 5 xyxy+score) that add a person: NMS'd, then not on an existing one."""
-    if len(sam3_xyxys) == 0:
-        return np.zeros((0, 5))
-    cand = nms(sam3_xyxys, nms_iou)  # returns the kept boxes, input order preserved
-    if len(existing_xyxy) == 0:
-        return cand
-    ov = iou(cand[:, :4], existing_xyxy)
-    return cand[ov.max(axis=1) < merge_iou]
+def merge_window(
+    gdino_in: np.ndarray, sam3_xyxys: np.ndarray, merge_iou: float, nms_iou: float = 0.55
+) -> tuple[np.ndarray, np.ndarray]:
+    """Labels inside a crowded window: SAM 3's boxes, plus Grounding DINO's not under one.
+
+    Returns ``(sam3_kept (N, 5), gdino_kept_mask over gdino_in)``. SAM 3's duplicates go
+    first (NMS); a Grounding DINO box survives only where no SAM 3 box overlaps it at
+    ``merge_iou`` -- a person SAM 3 did not see keeps the label it had.
+    """
+    sam = nms(sam3_xyxys, nms_iou) if len(sam3_xyxys) else np.zeros((0, 5))
+    if len(gdino_in) == 0:
+        return sam, np.zeros(0, dtype=bool)
+    if len(sam) == 0:
+        return sam, np.ones(len(gdino_in), dtype=bool)
+    ov = iou(gdino_in[:, :4], sam[:, :4])
+    return sam, ov.max(axis=1) < merge_iou
 
 
-def to_frame(boxes_crop: np.ndarray, window, upscale: float) -> np.ndarray:
-    """Boxes on the upscaled crop -> frame pixels, clipped to the window."""
+def padded(window, frame_wh, pad: float) -> tuple[int, int, int, int]:
+    """The crop SAM 3 sees: the window plus a margin, so a person on its edge is whole."""
+    x0, y0, x1, y1 = window
+    px, py = int((x1 - x0) * pad), int((y1 - y0) * pad)
+    return (
+        max(0, x0 - px),
+        max(0, y0 - py),
+        min(frame_wh[0], x1 + px),
+        min(frame_wh[1], y1 + py),
+    )
+
+
+def to_frame(boxes_crop: np.ndarray, crop_region, upscale: float) -> np.ndarray:
+    """Boxes on the upscaled crop -> frame pixels, clipped to the crop's own region."""
     if len(boxes_crop) == 0:
         return np.zeros((0, 5))
-    x0, y0, x1, y1 = window
+    x0, y0, x1, y1 = crop_region
     out = boxes_crop.copy()
     out[:, :4] = out[:, :4] / upscale + np.array([x0, y0, x0, y0])
     out[:, [0, 2]] = out[:, [0, 2]].clip(x0, x1)
@@ -206,6 +225,13 @@ def main() -> int:
     ap.add_argument("--window", default="960x600", help="the crowded window, WxH frame px")
     ap.add_argument("--upscale", type=float, default=2.0)
     ap.add_argument(
+        "--pad",
+        type=float,
+        default=0.15,
+        help="margin around the window in the crop SAM 3 sees, as a fraction of its size, "
+        "so a person on the window's edge is boxed whole rather than cut at it",
+    )
+    ap.add_argument(
         "--min-persons",
         type=int,
         default=4,
@@ -214,17 +240,23 @@ def main() -> int:
     ap.add_argument(
         "--base-thr",
         type=float,
-        default=0.25,
-        help="existing person boxes kept at or above this",
+        default=0.35,
+        help="existing person boxes kept at or above this (site30k's own cut)",
     )
     ap.add_argument("--min-score", type=float, default=0.50, help="SAM 3's person score floor")
-    ap.add_argument("--merge-iou", type=float, default=0.5)
+    ap.add_argument(
+        "--merge-iou",
+        type=float,
+        default=0.3,
+        help="a Grounding DINO box inside the window survives only under this overlap "
+        "with every SAM 3 box",
+    )
     ap.add_argument("--model-id", default="facebook/sam3")
     ap.add_argument(
         "--limit", type=int, default=0, help="crowded images per camera per split; 0 = all"
     )
     ap.add_argument(
-        "--preview", type=int, default=8, help="crowded frames per camera on the sheet"
+        "--preview", type=int, default=8, help="the most crowded frames per camera on the sheet"
     )
     args = ap.parse_args()
     ww, wh = (int(v) for v in args.window.lower().split("x"))
@@ -277,15 +309,14 @@ def main() -> int:
                 others = [a for a in anns if a["category_id"] != PERSON_CAT]
                 kept = [a for a in persons if a.get("score", 1.0) >= args.base_thr]
                 kept_xyxy = np.array([xywh_to_xyxy(a["bbox"]) for a in kept]).reshape(-1, 4)
-                strong = np.array(
-                    [xywh_to_xyxy(a["bbox"]) for a in persons if a.get("score", 1.0) >= 0.35]
-                ).reshape(-1, 4)
-                crowded = int(in_window(strong, window).sum()) >= args.min_persons
+                inside = in_window(kept_xyxy, window)
+                n_in = int(inside.sum())
+                crowded = n_in >= args.min_persons
                 added = np.zeros((0, 5))
                 if crowded and (not args.limit or done < args.limit):
                     img = Image.open(args.root / split / info["file_name"]).convert("RGB")
-                    x0, y0, x1, y1 = window
-                    crop = img.crop((x0, y0, x1, y1))
+                    region = padded(window, (fw, fh), args.pad)
+                    crop = img.crop(region)
                     if args.upscale != 1.0:
                         crop = crop.resize(
                             (int(crop.width * args.upscale), int(crop.height * args.upscale)),
@@ -294,14 +325,25 @@ def main() -> int:
                     sam = boxes_from_masks(
                         segment(proc, model, crop, "person", args.min_score, device)
                     )
-                    sam = to_frame(sam, window, args.upscale)
-                    added = merge_additions(kept_xyxy, sam, args.merge_iou)
+                    sam = to_frame(sam, region, args.upscale)
+                    scores_all = np.array([[a.get("score", 1.0)] for a in kept]).reshape(-1, 1)
+                    gd_all = np.hstack([kept_xyxy, scores_all]).reshape(-1, 5)
+                    # Wherever a SAM 3 box lands -- the window and its margin -- Grounding
+                    # DINO keeps only what SAM 3 did not see; a person on the window's
+                    # edge is then one box, SAM 3's, and not a cut one plus the old one.
+                    added, survive = merge_window(gd_all, sam, args.merge_iou)
+                    drop = set(np.flatnonzero(~survive).tolist())
+                    stats["gdino_replaced_in_window"] += len(drop)
+                    stats["gdino_kept_in_window"] += int(survive.sum())
+                    kept = [a for k, a in enumerate(kept) if k not in drop]
+                    kept_xyxy = np.array([xywh_to_xyxy(a["bbox"]) for a in kept]).reshape(-1, 4)
                     stats["sam3_frames"] += 1
                     stats["sam3_boxes"] += len(sam)
                     stats["added"] += len(added)
                     done += 1
-                    if len(previews) < args.preview:
-                        previews.append((img, kept_xyxy, added, window))
+                    previews.append((n_in, img, kept_xyxy, added, window))
+                    previews.sort(key=lambda t: -t[0])
+                    del previews[args.preview :]
                 stats["images"] += 1
                 stats["crowded"] += int(crowded)
                 stats["gdino_kept"] += len(kept)
@@ -333,13 +375,17 @@ def main() -> int:
                     )
                     ann_id += 1
             if previews:
-                preview_sheet(previews, args.out / "preview" / f"{cam}_{split}.jpg")
+                preview_sheet(
+                    [(im, k, a, w) for _n, im, k, a, w in previews],
+                    args.out / "preview" / f"{cam}_{split}.jpg",
+                )
             report["cameras"].setdefault(cam, {})[split] = {"window": list(window), **stats}
             print(
                 f"{split:5s} {cam:16s} window {window}  images {stats['images']}  crowded "
                 f"{stats['crowded']}  sam3 frames {stats['sam3_frames']}  added "
-                f"{stats['added']}  gdino kept {stats['gdino_kept']} (dropped under "
-                f"{args.base_thr}: {stats['gdino_dropped_under_base']})",
+                f"{stats['added']}  gdino replaced/kept in window "
+                f"{stats['gdino_replaced_in_window']}/{stats['gdino_kept_in_window']}  "
+                f"gdino kept {stats['gdino_kept']}",
                 flush=True,
             )
         out = {
@@ -349,8 +395,9 @@ def main() -> int:
                     f"person: Grounding DINO cut at {args.base_thr} plus SAM 3 {args.model_id} "
                     f"person @{args.min_score} on the densest {args.window} window upscaled "
                     f"x{args.upscale}, on images with >= {args.min_persons} existing people in "
-                    f"it; additions where IoU < {args.merge_iou} against an existing person "
-                    "box. Two teachers' opinion, not ground truth (PLAN 7a.41)."
+                    f"it; inside that window SAM 3 replaces Grounding DINO, which survives "
+                    f"only under IoU {args.merge_iou} with every SAM 3 box. Two teachers' "
+                    "opinion, not ground truth (PLAN 7a.41)."
                 ),
                 "source_root": str(args.root),
             },

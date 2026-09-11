@@ -35,14 +35,23 @@ def test_the_densest_window_lands_on_the_huddle_and_stays_inside_the_frame():
     )
 
 
-def test_additions_are_nmsd_and_not_on_an_existing_person():
-    existing = np.array([[100, 100, 200, 300.0]])
+def test_inside_the_window_sam3_is_the_teacher_and_gdino_survives_only_where_unseen():
+    gd = np.array([[100, 100, 200, 300, 0.6], [700, 100, 800, 300, 0.5]])
     sam = np.array(
         [[102, 98, 198, 302, 0.9], [400, 100, 500, 300, 0.8], [405, 104, 498, 296, 0.7]]
     )
-    added = cpl.merge_additions(existing, sam, merge_iou=0.5)
-    assert len(added) == 1 and added[0, 4] == 0.8  # one new person, the duplicate suppressed
-    assert len(cpl.merge_additions(np.zeros((0, 4)), sam, 0.5)) == 2
+    kept, survive = cpl.merge_window(gd, sam, merge_iou=0.3)
+    assert len(kept) == 2 and sorted(kept[:, 4].tolist()) == [0.8, 0.9]  # NMS'd
+    assert survive.tolist() == [False, True]  # under a SAM 3 box; unseen by SAM 3
+    kept, survive = cpl.merge_window(gd, np.zeros((0, 5)), 0.3)
+    assert len(kept) == 0 and survive.tolist() == [True, True]
+    kept, survive = cpl.merge_window(np.zeros((0, 5)), sam, 0.3)
+    assert len(kept) == 2 and len(survive) == 0
+
+
+def test_the_crop_is_the_window_plus_a_margin_inside_the_frame():
+    assert cpl.padded((460, 0, 1420, 600), (1920, 1080), 0.15) == (316, 0, 1564, 690)
+    assert cpl.padded((0, 0, 960, 600), (1920, 1080), 0.15) == (0, 0, 1104, 690)
 
 
 def test_boxes_come_back_from_the_upscaled_crop_to_frame_pixels():
