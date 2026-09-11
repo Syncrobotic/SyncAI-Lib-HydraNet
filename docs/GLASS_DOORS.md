@@ -63,7 +63,14 @@ uv run python tools/commissioning/train_glazing.py train \
   --cache runs/glazing/features --out runs/glazing/model --epochs 12
 uv run python tools/commissioning/glazing_pass.py Tao-Hsin-cam03 \
   --checkpoint runs/glazing/model/best.pt --out runs/glazing/review --scene
+uv run python tools/commissioning/evaluate_glazing.py \
+  --checkpoint runs/glazing/model/best.pt --cache runs/glazing/features \
+  --validation <validation-parquet-file> --out runs/glazing/validation.json
 ```
+
+Use source-resolution evaluation when comparing different input sizes: feature-resolution
+IoU alone changes the scoring grid. The evaluator verifies training cache/source hashes,
+checks image identities, excludes duplicate records and refuses to overwrite results.
 
 Output directories must be new. Feature caches record source, encoder and array hashes;
 training refuses modified cache arrays. Inference checks encoder identities and records
