@@ -762,7 +762,11 @@ def store_yaw(grids):
 # "that is not furniture", not a shape prior that pulls a fitted box toward a mean.
 # `span` is the longer horizontal side, `short` the other.
 PLAUSIBLE_M = {
-    "display_table": {"height": (0.55, 1.15), "span": (0.4, 3.2), "short": (0.3, 1.6)},
+    # A counter row in these shops runs to 6 m as one continuous fixture (Taichung-cam10's
+    # right-hand rows, 3.75 and 4.54 m, are one piece each and SAM 3 draws them as one);
+    # the 3.2 m cap of 2026-08 was a tripwire for masks welded across an aisle, and the
+    # object map and the instances catch those now.
+    "display_table": {"height": (0.55, 1.15), "span": (0.4, 6.5), "short": (0.3, 1.6)},
     "display_shelf": {"height": (0.90, 2.60), "span": (0.4, 9.0), "short": (0.2, 1.4)},
     "column": {"height": (1.60, 3.20), "span": (0.15, 1.30), "short": (0.15, 1.30)},
     "wall": {"height": (1.80, 3.20), "span": (0.3, 20.0), "short": (0.05, 0.6)},

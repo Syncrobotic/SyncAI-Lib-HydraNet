@@ -184,12 +184,17 @@ def test_every_built_fixture_is_inside_its_class_interval(tmp_path):
 
 
 def test_a_welded_table_is_reported_rather_than_drawn_silently(tmp_path):
-    """The same store with the table stretched to 3.6 m -- a mask bridge, not furniture."""
-    welded = ("display_table", slice(180, 240), slice(120, 400), 0.78)
+    """The same store with the table welded two deep -- a mask bridge, not furniture.
+
+    Two deep, not merely long: a counter row runs to 6 m as one fixture in these shops
+    (the span interval widened on 2026-09-11 once the object map and the instances
+    caught the welds), but nothing a shopper reaches across is 2.2 m deep.
+    """
+    welded = ("display_table", slice(140, 240), slice(120, 400), 0.78)  # 4.4 x 2.2 m
     root = a_store(tmp_path, fixtures=(welded,))
     _items, shapes = _built(root)
     said = scene_mesh.implausible(shapes)
-    assert any("display_table" in line and "span" in line for line in said), said
+    assert any("display_table" in line and "short" in line for line in said), said
 
 
 # --------------------------------------------------- the picture says what the code knows
@@ -218,7 +223,7 @@ def test_a_welded_fixture_reaches_the_picture(tmp_path):
     whole of its life while four tools drew the fixture and said nothing (PLAN 7.27).
     This is the test that the sentence is now *on the image*.
     """
-    welded = ("display_table", slice(180, 240), slice(120, 400), 0.78)
+    welded = ("display_table", slice(140, 240), slice(120, 400), 0.78)  # 4.4 x 2.2 m: two deep
     root = a_store(tmp_path, fixtures=(welded,))
     _cf, items, heights, shapes = scene_mesh.build_scene_regular(CAMERA, root)
     assert scene_mesh.implausible(shapes)

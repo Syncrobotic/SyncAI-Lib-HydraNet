@@ -27,6 +27,7 @@ not sit on what it was built from is flagged rather than drawn as if it did.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -41,12 +42,14 @@ from syncai_hydranet.geometry.ground import distort_points, pixel_to_ground, und
 TOP_HORIZ_MIN = 0.8
 # Fewer top-face pixels than this and the top is not measured; the foot is used instead.
 TOP_MIN_PX = 300
+# With this many up-facing pixels of its own, a table's top needs no merchandise added.
+TOP_OWN_MIN_PX = 3000
 # Fewer contact points than this and the object places nothing.
 FOOT_MIN_PTS = 20
 # Class height intervals the scalar is clipped to (PLAN 7c.27's plausibility, by class).
 HEIGHT_CLIP = {
     "display_table": (0.55, 1.15),
-    "display_shelf": (0.90, 2.60),
+    "display_shelf": (0.95, 2.60),  # inside the class interval, not on its edge
     "column": (1.60, 3.20),
     "wall": (1.80, 3.20),
 }
@@ -289,9 +292,12 @@ def object_footprints(ev, yaw: float, *, products=None) -> list[Footprint]:
 
         if name == "display_table":
             top = good & (z["horiz"] >= TOP_HORIZ_MIN) if "horiz" in z else good
-            if products is not None:
-                # merchandise hides the top it stands on; inside the object's outline it
-                # is the top, at the object's height
+            if products is not None and top.sum() < TOP_OWN_MIN_PX:
+                # Merchandise hides the top it stands on; inside the object's outline it
+                # is the top, at the object's height -- but only when the top itself is
+                # not seen. A laptop's lid is a face above the top, and cast at the
+                # counter's height it lands beyond the counter: with the top seen, the
+                # merchandise only widened it (2026-09-11).
                 r, c = np.nonzero(obj)
                 box = np.zeros_like(obj)
                 box[r.min() : r.max() + 1, c.min() : c.max() + 1] = True
@@ -502,10 +508,40 @@ def reprojection_iou_union(fps: list[Footprint], ev, yaw: float, *, oids) -> flo
         outline = np.zeros_like(mask)
         outline[r.min() : r.max() + 1, c.min() : c.max() + 1] = True
         mask = mask | (ev.products & outline & ndimage.binary_dilation(mask, iterations=6))
-    occluded = sil & (ev.objects > 0) & ~mask
+    occluded = sil & _nearer_objects(ev, fps, oids) & ~mask
     inter = (sil & mask).sum()
     union = ((sil | mask) & ~occluded).sum()
     return float(inter / union) if union else 0.0
+
+
+def _nearer_objects(ev, fps: list[Footprint], oids) -> np.ndarray:
+    """The pixels of objects standing NEARER the camera than the boxes: the only ones
+    that can hide a box. Any other object's pixels the box spills onto count against
+    it -- without this a box that grew over its neighbours scored 0.98 (Tao-Hsin-cam15's
+    bar, 2026-09-11), the neighbours excused as occluders.
+
+    Nearer: the object's foot is closer to the camera (which stands at the ground
+    frame's origin) than the box's nearest corner.
+    """
+    box_near = min(
+        math.hypot(u, v) for fp in fps for u in (fp.u0, fp.u1) for v in (fp.v0, fp.v1)
+    )
+    out = np.zeros(ev.objects.shape, bool)
+    fh, fw = ev.z["gx"].shape
+    for oid in np.unique(ev.objects[ev.objects > 0]):
+        if oid in oids:
+            continue
+        m = ev.objects == oid
+        r, c = _foot_pixels(m)
+        if len(r) < 5:
+            continue
+        g = _ground(np.stack([c + 0.5, r + 0.5], axis=1).astype(float), ev.cf, (fh, fw))
+        g = g[np.isfinite(g).all(axis=1)]
+        if len(g) < 5:
+            continue
+        if float(np.median(np.hypot(g[:, 0], g[:, 1]))) < box_near:
+            out |= m
+    return out
 
 
 # --- Gate D3: the same object, by geometry ------------------------------------------
@@ -876,7 +912,12 @@ def split_by_instances(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
             out.append(fp)
             continue
         groups = merge_footprints(parts, ev, yaw)
-        if len(groups) < 2 or len(groups) > SPLIT_MAX_PARTS or not all(map(_plausible, groups)):
+        if (
+            len(groups) < 2
+            or len(groups) > SPLIT_MAX_PARTS
+            or not all(map(_plausible, groups))
+            or _overlapping(groups)
+        ):
             out.append(fp)
             continue
         together = reprojection_iou_union(groups, ev, yaw, oids=(fp.oid,))
@@ -893,6 +934,21 @@ def split_by_instances(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
             g.source = g.source.replace("top", "instance top").replace("foot", "instance foot")
         out.extend(groups)
     return out
+
+
+def _overlapping(fps: list[Footprint], *, share: float = 0.2) -> bool:
+    """Two parts of one cut that overlap by more than `share` of the smaller are the same
+    piece twice -- Taichung-cam10's row came out as 1.15, 2.67 and 4.21 m boxes along
+    one line (2026-09-11), the instance groups nested rather than side by side."""
+    for i in range(len(fps)):
+        for j in range(i + 1, len(fps)):
+            a, b = fps[i], fps[j]
+            w = max(0.0, min(a.u1, b.u1) - max(a.u0, b.u0))
+            d = max(0.0, min(a.v1, b.v1) - max(a.v0, b.v0))
+            smaller = min((a.u1 - a.u0) * (a.v1 - a.v0), (b.u1 - b.u0) * (b.v1 - b.v0))
+            if smaller > 0 and w * d > share * smaller:
+                return True
+    return False
 
 
 def _instance_boxes(fp: Footprint, ev, yaw: float) -> list[Footprint]:
@@ -944,7 +1000,7 @@ def _iou_against(fp: Footprint, mask: np.ndarray, ev, yaw: float) -> float:
     sil = _silhouette(fp, ev, yaw)
     if sil is None:
         return 0.0
-    occluded = sil & (ev.objects > 0) & ~mask
+    occluded = sil & _nearer_objects(ev, [fp], ()) & ~mask
     inter = (sil & mask).sum()
     union = ((sil | mask) & ~occluded).sum()
     return float(inter / union) if union else 0.0
