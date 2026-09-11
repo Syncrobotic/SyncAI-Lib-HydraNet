@@ -31,14 +31,13 @@ The contact sheets are still written and are still the thing a person has to loo
 This refuses a figure that is definitely wrong; it cannot promise one is right.
 
 ---------------------------------------------------------------------------
-WHAT IT WILL NOT DO
+WHAT THE RECORD ESTABLISHES
 
-**It cannot tell a `--no-blur` render by its name, and does not pretend to.** What stops
-one being published is the audit: the source-frame check is against the blur regions the
-render *would* have applied, so an unblurred render fails on the first frame containing a
-person only if the auditor knows the render skipped them -- it does not. `--skip-audit`
-and `--no-blur` are both deliberate acts, and neither is a filename this can inspect.
-Do not publish a figure cut from a `--no-blur` render.
+New renders have an immutable sidecar recording whether blur was enabled, the MP4 hash,
+source and detector identities, and scene inputs. An unblurred render or a changed input
+is refused. The coverage check reconstructs the blur regions from those inputs; it is
+not an independent face detector, so the contact sheets still require visual review.
+`--skip-audit` is only for private inspection.
 
 """
 
@@ -53,6 +52,8 @@ from pathlib import Path
 import numpy as np
 import torch
 from PIL import Image
+
+from syncai_bev3d.render_provenance import changed_inputs, sha256
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -165,6 +166,8 @@ def main() -> int:
         "a figure that has not been audited must not be committed.",
     )
     a = ap.parse_args()
+    if min(a.count, a.stride, a.width, a.duration_ms) <= 0 or not 2 <= a.colors <= 256:
+        ap.error("count, stride, width and duration must be positive; colors must be 2..256")
 
     if a.video:
         video = Path(a.video)
@@ -195,6 +198,16 @@ def main() -> int:
         )
         return 1
     meta = json.loads(log.read_text())
+    if meta.get("camera") != a.camera:
+        print(f"render belongs to {meta.get('camera')}, not {a.camera}", file=sys.stderr)
+        return 1
+    provenance = meta.get("provenance")
+    if meta.get("render_sha256") and sha256(video) != meta["render_sha256"]:
+        print("render does not match its sidecar; re-render before cutting", file=sys.stderr)
+        return 1
+    if provenance and (changed := changed_inputs(ROOT, provenance)):
+        print(f"render inputs changed: {changed}; re-render before auditing", file=sys.stderr)
+        return 1
     start = a.start
     if isinstance(start, str) and start == "auto":
         d = meta
@@ -248,6 +261,7 @@ def main() -> int:
     # was written and before the gif was -- leaving a verdict on disk describing a render
     # that had not replaced the figure beside it.
     out = ROOT / Path(a.out) if a.out else ROOT / f"assets/demo_{a.camera}.gif"
+    out.parent.mkdir(parents=True, exist_ok=True)
     verdict = out.with_suffix(".audit.json")
     sheets_dir = ROOT / f"runs/commission01/{a.camera}.gif_check"
     sheets_dir.mkdir(parents=True, exist_ok=True)
@@ -273,7 +287,11 @@ def main() -> int:
     if not a.skip_audit:
         # The audit runs on the SOURCE clip, not on the render. `demo_tracks.json` names
         # the clip and the fps the render decoded at, so the window maps back exactly.
-        clip = ROOT / "datasets/studioa_clips" / a.camera / meta["clip"]
+        clip = (
+            Path(meta["source_path"])
+            if meta.get("source_path")
+            else (ROOT / "datasets/studioa_clips" / a.camera / meta["clip"])
+        )
         if not clip.exists():
             print(f"the render's source clip is gone: {clip}", file=sys.stderr)
             return 1
@@ -298,9 +316,13 @@ def main() -> int:
             )
             return 1
         render_blur_thr = float(meta["blur_score_thr"])
-        model, cfg, device = load_model(
-            str(RUN / "config.yaml"), RUN / "last.pt", validate=False
+        config = ROOT / provenance["detector_config"] if provenance else RUN / "config.yaml"
+        checkpoint = (
+            ROOT / provenance["detector_checkpoint"]
+            if provenance
+            else RUN / meta.get("checkpoint", "last.pt")
         )
+        model, cfg, device = load_model(str(config), checkpoint, validate=False)
         size = cfg["data"]["input_size"]
         person_label = list(cfg["model"]["heads"]["detection"]["classes"]).index("person")
         src_w, src_h, _ = probe_video(str(clip))
@@ -362,6 +384,10 @@ def main() -> int:
                     # `tests/test_figures_are_audited.py` refuses that rather than
                     # reading a missing key as agreement.
                     "render_args": meta.get("args"),
+                    "provenance": provenance,
+                    "render_sha256": sha256(video),
+                    "source_duration_s": a.count * a.stride / meta["fps"],
+                    "playback_duration_s": a.count * a.duration_ms / 1000,
                     "staff_model": meta.get("staff_model"),
                     "commit": subprocess.run(
                         ["git", "rev-parse", "HEAD"],
@@ -422,14 +448,22 @@ def main() -> int:
     base = max(small, key=lambda im: len(im.getcolors(maxcolors=1 << 24) or [1]))
     pal = base.quantize(colors=a.colors, method=Image.Quantize.MEDIANCUT)
     small = [im.quantize(palette=pal, dither=Image.Dither.NONE) for im in small]
+    part = out.with_suffix(".gif.part")
     small[0].save(
-        out,
+        part,
+        format="GIF",
         save_all=True,
         append_images=small[1:],
         duration=a.duration_ms,
         loop=0,
         optimize=True,
     )
+    part.replace(out)
+    if not a.skip_audit:
+        record = json.loads(verdict.read_text())
+        record["gif_sha256"] = sha256(out)
+        record["gif_size_px"] = [gw, gh]
+        verdict.write_text(json.dumps(record, indent=1) + "\n")
     print(
         f"wrote {out} ({len(small)} frames, {gw}x{gh}, {a.duration_ms} ms, "
         f"{out.stat().st_size / 1e6:.2f} MB)"

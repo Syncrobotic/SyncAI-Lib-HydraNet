@@ -85,6 +85,7 @@ from syncai_bev3d.meshes import (
     human_posed,
     place,
 )
+from syncai_bev3d.render_provenance import capture, sha256
 from syncai_bev3d.shading import draw_scene
 from syncai_hydranet.analytics.staff import (
     StaffModel,
@@ -204,7 +205,9 @@ def _records_pass(
     return out
 
 
-def _write_demo_tracks(args, camera, clip, staff_model, n_frames, positions) -> None:
+def _write_demo_tracks(
+    args, camera, clip, staff_model, n_frames, positions, render_path, provenance
+) -> None:
     """The track log that makes the right-hand panel checkable instead of merely
     convincing: every figure in the video has a frame, an id and a floor position in
     metres here. Written by the single-process path and the chunk orchestrator alike --
@@ -225,6 +228,9 @@ def _write_demo_tracks(args, camera, clip, staff_model, n_frames, positions) -> 
                 # An allowlist is broken again the day flag eleven lands;
                 # `tests/test_figures_are_audited.py` reads the parser and checks this.
                 "args": vars(args),
+                "provenance": provenance,
+                "render_sha256": sha256(render_path),
+                "source_path": str(clip.resolve()),
                 # And what the arguments RESOLVED to, because a path is not identity:
                 # `runs/` is gitignored and regenerable, so the same model file can be
                 # refitted at the same path with a different accuracy and no record
@@ -258,6 +264,7 @@ def _write_demo_tracks(args, camera, clip, staff_model, n_frames, positions) -> 
         )
         + "\n"
     )
+    render_path.with_suffix(".render.json").write_bytes(log_path.read_bytes())
 
 
 def _worker_cmd(args, camera):
@@ -272,6 +279,8 @@ def _worker_cmd(args, camera):
         cmd.append("--no-blur")
     if args.posed_figures:
         cmd.append("--posed-figures")
+    if args.no_heatmap:
+        cmd.append("--no-heatmap")
     if args.staff_colours:
         cmd += ["--staff-colours", args.staff_colours]
         if args.staff_min_accuracy is not None:
@@ -291,9 +300,11 @@ def _render_in_chunks(args, camera, clip, cf, bounds, staff_model) -> int:
     # pixels the same way the recording pass did.
     src_w, src_h, _ = probe_video(str(clip))
     t0 = time.time()
+    provenance = capture(ROOT, camera, clip, RUN, args.checkpoint)
     per = math.ceil(args.frames / args.workers)
     edges = [(i, min(i + per, args.frames)) for i in range(0, args.frames, per)]
     dev = ROOT / "assets/dev"
+    dev.mkdir(parents=True, exist_ok=True)
     r_paths, procs = [], []
     for k, (lo, hi) in enumerate(edges):
         rp = dev / f"_demo_{camera}_{os.getpid()}_rec{k:02d}.json"
@@ -417,7 +428,9 @@ def _render_in_chunks(args, camera, clip, cf, bounds, staff_model) -> int:
         )
     else:
         latest.write_bytes(final.read_bytes())
-    _write_demo_tracks(args, camera, clip, staff_model, len(records), positions)
+    _write_demo_tracks(
+        args, camera, clip, staff_model, len(records), positions, final, provenance
+    )
     print(f"wrote {final} ({len(records)} frames @ {args.fps} fps)")
     if not args.no_blur:
         print(f"  newest also at {latest}")
@@ -588,6 +601,7 @@ def main() -> int:
         return 0
 
     # the static scene, built once; the view frozen so the room does not swim
+    provenance = capture(ROOT, camera, clip, RUN, args.checkpoint)
     scene_mesh.SS = 1
     _cf2, items, heights, shapes = scene_mesh.build_scene_regular(camera)
     # merchandise stays in: the product regions are now tiled with unit-sized items
@@ -636,6 +650,7 @@ def main() -> int:
          "-f", "mp4", str(part_path)],
         stdin=subprocess.PIPE,
     )  # fmt: skip
+    assert enc.stdin is not None
 
     # staff-memory on in BOTH the render and its replay, or a chunked render's
     # colours diverge from a single-process one. 15/0.2 measured 2026-09-03:
@@ -1010,7 +1025,7 @@ def main() -> int:
         )
     else:
         latest.write_bytes(out_path.read_bytes())
-    _write_demo_tracks(args, camera, clip, staff_model, n, positions)
+    _write_demo_tracks(args, camera, clip, staff_model, n, positions, out_path, provenance)
     print(f"wrote {out_path} ({n} frames @ {args.fps} fps)")
     if not args.no_blur:
         print(f"  newest also at {latest}")

@@ -22,19 +22,20 @@ figure at every tracked shopper's floor position — wearing its verdict colour 
 first frame, because the verdict floor equals the tracker's confirmation delay. **The
 amber floor tiles are the live dwell field**: occupancy-seconds accumulating as the clip
 plays, clipped to the walkable polygon, scale-topped at its own p99 so one queue cannot
-eat the ramp. Nothing is drawn by hand and no second
-sensor is involved.*
+eat the ramp. Furniture and devices are fitted from the static plate using calibrated
+projection, support surfaces and class dimension priors; no second sensor is involved.*
 
 *Three things to read the panels with. **Every face is blurred by `demo_video.py` itself**,
 by two instruments, and `demo_gif.py` then re-runs the detector on the source frames at a
 far lower threshold and refuses to write the figure unless every person it finds falls
 inside a blurred region — it has refused one (PLAN §7.24). **The right panel has fixtures,
 not a room**: a fixed camera sees part of one store, so the walls are the runs that were
-observed rather than a closed boundary, and wall and column heights are a stated constant,
-printed on the panel, because the depth model collapses on white surfaces. And **the window
-is the busiest two minutes of a three-minute clip**, chosen automatically by
+observed rather than a closed boundary, and wall heights and minimum column heights follow
+stated conventions, printed on the panel, because depth is unreliable on white surfaces.
+And **the window
+is the busiest 24 seconds of a three-minute clip**, chosen automatically by
 `demo_gif.py --start auto` — a figure of an empty shop shows nothing, but it is a selection
-and this is it being said.*
+and this is it being said. The 120 sampled frames play in 12 seconds.*
 
 *The colours are licensed per camera and refused where they are not earned. This camera
 scores 1.00 held out on its own 15 labelled crops; the same model is refused on
@@ -53,14 +54,17 @@ license colouring them, and the gate refused it (PLAN §7.23). It has 127 crops 
 staff, 65 customer, 6 unclear — and the model reads **0.874** held out on them. That is
 below the derived 0.90 floor, so the exception is stated at the call site with
 `--staff-min-accuracy 0.85`, printed on the figure, and recorded in its verdict: a figure
-never carries a threshold nobody can see. **Its metres used to need a caveat and mostly no
-longer do**: this camera read 1.21x too large (PLAN §7.10), which stood its figures at
-1.98 m rather than 1.70. The person-box edge gate was measuring in the wrong space and
-dropping whole people for sitting off the optical axis; fixing it moved this camera 2.87 m
-to 2.57 m, and the figure above now stands its shoppers at a median **1.80 m** (re-cut
-2026-09-02 under the promoted person01 run, which finds the further, more foreshortened
-shoppers the previous model missed). What is left is 1.06x, and the 1.70 m prior it is
-measured against is itself an assumption.*
+never carries a threshold nobody can see. **Metres remain estimates**: camera calibration
+and class priors determine scale, and these figures have no new independent floor-distance
+measurements. Better silhouette alignment does not establish absolute dimensions or
+resolve every object's front/back orientation.*
+
+Both figures were rebuilt on **2026-09-11** with the current Stage0 furniture and device
+placement: cam04's round table and refined counter support, cam10's longer shelf and
+individually fitted laptops and stools. Each figure's audit records the render hash,
+scene source hashes (including uncommitted changes), input hashes and detector checkpoint:
+[cam04 audit](assets/demo_Kaohsiung-cam04.audit.json),
+[cam10 audit](assets/demo_Taichung-cam10.audit.json).
 
 The whole plan — architecture, data strategy, build order, and the measurements behind
 every decision — lives in **one document: [docs/PLAN.md](docs/PLAN.md)**. Everything the
@@ -158,10 +162,14 @@ python3 scripts/pull_studioa.py --date 2026-08-16 --times 11:30 16:00 --out data
 python3 scripts/static_plates.py --root datasets/studioa_clips --out datasets/studioa_static
 # 0-3  geometry: undistort -> DA-V2 once -> RANSAC ground plane -> person-height scale
 nice -n 10 .venv/bin/python scripts/onboard_camera.py --camera <camera> --out runs/onboard01
-# 0-4  calib.json -> camera.json                     <-- no CLI; see the gap below
+# 0-4  calib.json -> a camera.json review bundle and raw-frame 1 m grids
+uv run python tools/commissioning/commission_camera.py runs/onboard01/<camera>.calib.json \
+    --out runs/commission_review/<camera>
+# For a new camera, install the reviewed geometry before the structure passes:
+cp runs/commission_review/<camera>/<camera>.camera.json runs/commission01/<camera>.camera.json
 # 0-5  structure, then what the vote was too conservative to claim
-uv run python tools/commissioning/masks_pass.py --plates-root datasets/studioa_static --out-root runs/commission01
-uv run python tools/commissioning/extras_pass.py <camera>       # door, product subclasses
+uv run python tools/commissioning/masks_pass.py <camera> --plates-root datasets/studioa_static --out-root runs/commission01
+uv run python tools/commissioning/extras_pass.py <camera>       # doors, products, individual scene assets
 uv run python tools/commissioning/depth_complete.py <camera>    # zero GPU, reads the caches
 # 0-6  zones: proposed automatically, then accepted or rejected by a person
 uv run python tools/commissioning/service_zones.py --all --apply
@@ -177,22 +185,83 @@ Produces `runs/commission01/<camera>.camera.json` (pose, lens, walkable polygon,
 shelf ROIs, FP polygons), `<camera>/masks/`, `<camera>/scene.{glb,obj}`, and a verdict
 line in `REVIEW.md`.
 
-**The gate is a human eye and nothing else**: a 1 m floor grid on a real frame, per
-camera. Taichung-cam05 was withdrawn at this gate — two furniture checks agreed its cells
-were over-scaled. **8 of 23 selling-floor cameras are through it**; the backlog of 15
-needs the teacher passes and the two confirmations, no new calibration work.
+Stage0 now preserves individual laptop, monitor, chair, stool, tablet and phone masks.
+For an already commissioned camera, refresh just these objects with
+`uv run python tools/commissioning/objects_pass.py <camera>` (add `--device cpu` if needed),
+then rerun `tools/commissioning/scene_mesh.py <camera>`. The normal extras pass includes
+this step. Scene building reads `masks/object_instances.npz` and rejects masks from a
+different source plate. It fits each asset's continuous rotation and bounded dimensions
+against the raw-lens silhouette on a reconstructed tabletop, shelf or the floor;
+flat/standing devices and pedestal/four-leg stools are compared as separate templates.
+Support checks use rotated/round fixture polygons and reject floating or intersecting
+objects. Detected device categories replace the old region-filling schematic arrays.
 
-Two things the numbers do not say on their own, both in PLAN §9.5: `scale_source` reads
-`person_height_median_vs_1.7m_prior_nNN` on **15–37 boxes**, so "scale-measured" means a
-1.70 m prior rather than a tape measure; and vfov is `fleet_hardware_assumed` on **22 of
-23** cameras.
+`scene.objects.json` records every accepted/rejected object, dimensions in metres,
+heading, support height, silhouette IoU and front/back ambiguity. Dimensions inherit the
+camera's scale and category priors; silhouette alignment alone does not establish a
+surveyed size or reliably identify the front of a symmetric object. Unseen/occluded
+objects can remain absent. Computer-tower auto-detection is disabled after the local
+plate review found packaged goods misclassified as towers. Door frames use the fitted
+opening plane; handedness and opening angle are not inferred from a doorway mask.
 
-**Two gaps in this stage, found 2026-09-10 while writing this section.** Step 0-4 has no
-command: `syncai_bev3d.commissioning.from_onboard_calib` is the converter and its only
-caller anywhere is a test. And `render_metre_grid`, which drew the picture the gate is
-judged on, was deleted in `5c209c7` as uncalled — correctly, since the scripts that drew
-it had already gone. So **the eight cameras passed a gate whose instrument is no longer in
-the tree**, and the 15-camera backlog cannot be judged until it is rebuilt.
+The object pass also writes `masks/support_tops.npz`. Scene building can use the visible
+tabletop boundary and cabinet body together to refine a rectangular table's footprint
+and heading, while preserving round tables and already aligned tops. A cropped body
+cannot change the support height. Refinements must pass checks against neighboring
+fixtures and existing high-confidence devices; `scene.supports.json` records both gains
+and tradeoffs in top/body alignment. Refresh only these masks with
+`tools/commissioning/objects_pass.py <camera> --supports-only`.
+
+For independent scale validation, `tools/commissioning/measure_floor.py <camera>
+--out runs/scale_measurements/<camera>` creates an offline image picker. Enter **actual
+measured floor distances**, with at least two fitting segments and one separate validation
+segment in another direction. Its downloaded JSON can be passed to
+`tools/commissioning/commission_camera.py ... --distance-controls measurements.json --out ...`.
+This fits metric scale without requiring a room coordinate origin; it keeps intrinsics
+and camera angles fixed and transfers zones to preserve their image positions. A failed
+validation exits with status 2. Outputs remain a separate review bundle; geometry caches,
+upstream calibration scale and scenes must be updated consistently before installing it.
+Assumed tile sizes and device dimensions are not independent metric validation.
+
+The review bundle contains `grid.before.png`, `grid.after.png`, the candidate
+`<camera>.camera.json`, and `geometry-review.json`. It refuses an existing output
+directory. Use `--existing runs/commission01/<camera>.camera.json` when updating a
+commissioned camera so its zones, masks and ROIs are retained. A conversion without
+surveyed controls is explicitly **UNVERIFIED for absolute metric accuracy**.
+
+**Nine selling-floor cameras now have commissioned files** (Gate D, PLAN §10.4b).
+Most field of view values still inherit the fleet assumption, and scale comes from
+person-height or automatic ruler estimates; these are not tape-measure ground truth.
+The grid shows the camera's geometry, including lens distortion, rather than certifying
+that its metres are correct.
+
+Optional independent metric calibration:
+
+```bash
+uv run python tools/commissioning/commission_camera.py runs/onboard01/<camera>.calib.json \
+    --existing runs/commission01/<camera>.camera.json \
+    --controls <survey-controls.json> --fit-focal --out runs/commission_review/<camera>-survey
+```
+
+The control format and acceptance rules are in **[PLAN §10.9](docs/PLAN.md#109-stage-0-precision-and-cache-consistency)**.
+This optional survey path complements automatic commissioning; it does not turn the
+person, tile or table priors into independent measurements.
+
+**After changing geometry, rebuild depth geometry before the scene.** Consumers now
+refuse stale caches. This command runs DA-V2 once and reuses existing masks:
+
+```bash
+uv run python tools/commissioning/rebuild_geometry.py runs/commission01/<camera>.camera.json \
+    --calib runs/onboard01/<camera>.calib.json --out runs/commission_review/<camera>.geometry.npz
+```
+
+`--calib` verifies that the onboard calibration matches the camera before inheriting its
+depth scale. After survey refinement, use `--floor-mask <raw-walkable-mask.png>` instead
+to align depth to the corrected floor; its residuals measure consistency with that floor,
+not independent object-height accuracy. `--depth <plate.depth.npy>` reuses a previous
+unscaled DA-V2 pass on the same undistorted plate. Install the reviewed cache at
+`runs/site30k_qa/geometry_cache/<camera>.npz`, then rerun the scene export. The initial
+missing converter CLI and grid renderer are both restored by this workflow.
 
 ### Stage 1 — continuous analysis
 
@@ -239,6 +308,20 @@ uv run python tools/commissioning/demo_video.py <camera>      # 3 min, faces blu
 python3 scripts/retail_flow.py --out runs/flow02 --cell 0.25 <clips...>
 python3 scripts/site_journeys.py --cameras <camera> --min-seconds 1.0 --out runs/journeys01
 ```
+
+To rebuild the two README figures from the current Stage0 inputs:
+
+```bash
+uv run python tools/commissioning/demo_video.py Kaohsiung-cam04 --frames 900 --fps 5 --staff-colours runs/staff_model01/model_Kaohsiung-cam04.json
+uv run python tools/commissioning/demo_gif.py Kaohsiung-cam04 --start auto
+uv run python tools/commissioning/demo_video.py Taichung-cam10 --frames 900 --fps 5 --staff-colours runs/staff_model01/model_Taichung-cam10.json --staff-min-accuracy 0.85
+uv run python tools/commissioning/demo_gif.py Taichung-cam10 --start auto
+```
+
+The renderer rebuilds geometry and saves a `.render.json` beside each stamped MP4.
+The GIF tool checks its render and input identities before auditing source frames;
+inspect all generated contact sheets in `runs/commission01/<camera>.gif_check/` as well.
+If the camera, masks, plate or detector changes, re-render before cutting the GIF.
 
 `hydranet-report` is **not** one of these — it summarises training runs. And this hardware
 does not do footfall: an angled view merges two shoppers walking abreast, which is

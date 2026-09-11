@@ -34,6 +34,7 @@ from pathlib import Path
 
 import pytest
 
+from syncai_bev3d.render_provenance import scene_code, sha256
 from syncai_hydranet.utils.face_blur import BLUR_THR
 
 REPO = Path(__file__).resolve().parent.parent
@@ -156,6 +157,18 @@ def test_a_figure_is_not_older_than_the_code_that_drew_it(figure: str):
     noise that somebody would then ignore.
     """
     v = _verdict(figure)
+    provenance = v.get("provenance")
+    if provenance:
+        assert v.get("gif_sha256") == sha256(REPO / figure), (
+            f"{figure} no longer matches the GIF that was audited"
+        )
+        recorded = provenance["scene_code"]
+        current = scene_code(REPO)
+        changed = sorted(
+            k for k in recorded.keys() | current.keys() if recorded.get(k) != current.get(k)
+        )
+        assert not changed, f"{figure} scene sources changed since rendering: {changed}"
+        return
     at = v.get("commit")
     if not at or _git("cat-file", "-e", at).returncode != 0:
         pytest.skip(f"{figure}'s verdict names no commit reachable here")
