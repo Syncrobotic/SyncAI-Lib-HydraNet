@@ -681,6 +681,20 @@ order. A component with no step is not scheduled, it is assumed.
    rows. Mechanism 2 stays available as a third-more patch for the pilot store's counter
    cameras until person02 lands, at the cost of a second engine pass on those cameras.
 
+   **The label source, measured 2026-09-11 00:xx on the same clip: SAM 3 sees the back
+   row.** `scripts/sam3_person_boxes.py` over 30 frames, full 1080p frame: **median 14
+   boxes a frame at ≥ 0.3, 12.5 at ≥ 0.5** (range 11–17) against Grounding DINO's 11
+   at its 0.35; over the same 30 frames of the counter crop upscaled ×2 (960×600 →
+   1920×1200, the ROI alone): **median 13 at ≥ 0.3, 12 at ≥ 0.5** for the 12–14 the ROI
+   holds by eye, and the three frames drawn are one clean box per person, back row
+   included, where the student and Grounding DINO return partial boxes on the front row.
+   So the labels person02 needs exist at zero human cost: **SAM 3 on every commissioned
+   camera's counter crop at ×2, mapped back to frame pixels, merged with the site30k
+   boxes cut at 0.25** — the pipeline to build next — with thirty human-boxed frames as
+   the ruler both teachers are scored against before a single epoch runs. What stays
+   SAM 3's known failure, hanging packets on IR night frames, is excluded by the tool's
+   daylight gate and does not arise on a daytime counter.
+
 ### 7b. Decided — the answer, and what it cost
 
 2. ~~Night is unscoped~~ — **decided 2026-08-25: night is in v1, gated on a measurement.**
@@ -1179,3 +1193,108 @@ per-frame dense scene understanding (§5 rule 6).
    what the corpus actually holds.
 5. Whether the retail reading (C3) is in scope by December, or the chain buys the
    security reading alone first.
+
+### 10.9 Stage 0 precision and cache consistency
+
+The 2026-09-10/11 audit separates three questions: **does the pipeline use the current
+calibration; does a reconstructed object project onto the observed object; and are its
+metres physically correct?** These require different evidence. Gate D's reprojection
+IoU answers the second. A copied vfov, the 1.70 m population prior, a catalogue tile
+choice and the same-store table consensus do not independently answer the third.
+
+The architecture remains offline commissioning in `syncai_bev3d`, then runtime
+`Camera` + `GroundPlane` + `Lens` in `syncai_hydranet.geometry.camera_json`. The current
+Gate D path builds per-object footprints from tops and feet in `footprints.py`; the
+older per-pixel path remains for cameras without object IDs. `floor_axis.py` estimates
+store axes and `rulers.py` checks scale across cameras. The new work below maintains
+that automatic path and provides an optional independent survey instrument.
+
+```mermaid
+flowchart LR
+    RAW[Raw static plate] --> LENS[Lens correction]
+    LENS --> DEPTH[One cached DA-V2 depth pass]
+    CAL[Current camera.json] --> CHECK[Calibration and cache consistency]
+    DEPTH --> CHECK
+    CHECK --> GEO[Ground points, height and surface normals]
+    GEO --> OBJECTS[Gate D tops and feet + object masks]
+    OBJECTS --> SCENE[3D mesh + raw-frame reprojection]
+    SURVEY[Optional surveyed floor controls] --> FIT[Robust pose and optional focal fit]
+    FIT --> VALID[Independent held-out pixel and metre errors]
+    VALID --> CAL
+```
+
+**Concrete defects and remedies.**
+
+* `scene_overlay.py` projected ideal pinhole vertices onto a raw distorted plate.
+  It now reapplies the division lens and samples mesh edges so their curves follow the
+  raw frame. A wrong overlay could previously be mistaken for a wrong reconstruction.
+* Geometry caches were keyed by camera name alone. Scene rendering, depth completion,
+  door filtering and the mask recipe now check their ground projection against the
+  current camera before using them. Legacy files are sampled on a 17 x 17 lattice;
+  discrepancy above 2 mm is a stale-cache failure, **not an accuracy target**. New caches
+  also carry a signature of the camera, intrinsics, pose, lens and image dimensions.
+* Height-only `regeometry_from_calib` previously refused changed pitch/roll but accepted
+  changed focal length, lens or image dimensions and even another camera's calibration.
+  It now refuses those cases too; a uniform zone rescale is not valid for them.
+* `commission_camera.py` restores the missing converter command and raw-frame metre
+  grid. `rebuild_geometry.py` rebuilds only geometry, retaining mask teacher results.
+  The depth pass is saved separately for reuse, with model revision and plate hash in
+  the geometry cache. `--calib` verifies the camera match before reading depth scale.
+  A corrected camera can instead use `--floor-mask` to refit one depth scale to the
+  floor; alternating 64-pixel image blocks fit and check it separately. This is depth
+  alignment to the calibration, not validation of that calibration.
+
+**Local evidence.** The initial eight-camera snapshot had five stale geometry caches;
+maximum sampled discrepancies included near-horizon rays and were not store-position
+error measurements. During continuation the checkout advanced through Gate D and its
+calibration/cache refresh. Rechecking the current nine cameras found all nine coherent.
+`runs/stage0_review_20260910/fleet_geometry_audit.json` records the latter snapshot,
+including median and p95 discrepancy on the walkable mask. The corrected grid images,
+reconstructed depth caches and a current Taichung-cam10 scene are in that same review
+run. These files are local, gitignored artefacts, not a new published demo or evidence
+of surveyed absolute accuracy.
+
+**Optional survey refinement.** `ground_control.py` accepts corresponding raw pixels
+and floor metres in any rigid survey frame. It fits height, pitch, roll, survey yaw and
+translation; `--fit-focal` additionally adjusts both focal lengths by one common factor.
+Principal point, aspect ratio and lens stay fixed. This prevents a sparse set of clicks
+from jointly absorbing focal and distortion error. The bounded robust fit uses
+[SciPy's `least_squares`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html)
+with `soft_l1`; gross fitting outliers are recorded and excluded before a second fit.
+
+A controls JSON contains these fields (all point arrays have equal length):
+
+| field | meaning |
+|---|---|
+| `camera_id` | exact commissioned camera ID |
+| `image_size_px` | `[width, height]` of the raw calibrated frame |
+| `pixel_space` | exactly `"raw"` |
+| `measurement_source` | what physically established the metre coordinates |
+| `points_px` | `[[u, v], ...]`, raw floor pixels |
+| `points_m` | `[[x, z], ...]`, surveyed floor coordinates; not tabletop corners |
+| `validation` | `[false, ..., true, true]`; true points never enter fitting or alignment |
+
+Use at least six **fitting** points, or eight with focal fitting, spread across the
+visible floor; add at least two spatially separate validation points. Duplicate,
+non-finite, out-of-frame, mismatched-camera and near-collinear controls are refused.
+A candidate passes only if the solver converges away from bounds, the normalised
+Jacobian condition is acceptable, sufficient inliers remain, and every held-out point
+is within both configured error limits (defaults: 4 px and 0.15 m). These thresholds
+are policy defaults, not achieved site accuracy. The report retains all before/after
+point errors, rejected inliers, the survey transform, source hashes and refusal reasons.
+No validation points means an inspectable candidate with an **UNVERIFIED** result;
+a requested survey that fails returns exit code 2.
+
+Survey refinement transfers each existing metre-zone vertex through its old raw pixel
+back into the new geometry. This preserves its observed boundary; it does not establish
+a surveyed policy zone. Depth caches and meshes must be rebuilt after refinement, and
+zone boundaries need checking against their intended locations.
+
+**Limits that remain.** A floor calibration does not recover hidden walls, object
+back faces, non-planar floors, or reliable heights on reflective and textureless surfaces.
+DA-V2 still supplies object height and surface orientation; Gate D still uses explicit
+class dimensions when evidence is missing. Floor/ruler agreement and mask IoU can
+expose inconsistency while sharing bias. The next accuracy experiment should therefore
+report per-object reprojection, ruler disagreement, floor depth residuals, and any
+independent control errors separately. Do not replace that vector with one confidence
+score or claim centimetre accuracy from the synthetic recovery tests.
