@@ -25,6 +25,7 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
+from syncai_bev3d.geometry_review import load_geometry_cache
 from syncai_hydranet.geometry.camera_json import CameraFile
 
 # The repo root, derived rather than written out: every one of these 26 tools had it
@@ -40,12 +41,12 @@ CLASS_NAMES = {1: "floor", 2: "wall", 3: "column", 4: "display_table", 5: "displ
 
 
 def run(camera: str):
-    z = np.load(ROOT / f"runs/site30k_qa/geometry_cache/{camera}.npz")
+    cf = CameraFile.load(ROOT / f"runs/commission01/{camera}.camera.json")
+    z = load_geometry_cache(ROOT / f"runs/site30k_qa/geometry_cache/{camera}.npz", cf)
     height, geom_ok = z["height"], z["geom_ok"]
     rng = np.hypot(z["gx"], z["gz"])
     tol = np.clip(0.06 + 0.035 * rng, None, 0.30)  # the recipe's own on-plane tolerance
     fh, fw = height.shape
-    cf = CameraFile.load(ROOT / f"runs/commission01/{camera}.camera.json")
     w, h = cf.image_size_px
     mask_dir = ROOT / "runs/commission01"
 

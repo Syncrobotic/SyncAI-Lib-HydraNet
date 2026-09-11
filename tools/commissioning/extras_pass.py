@@ -19,6 +19,7 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
+from syncai_bev3d.geometry_review import load_geometry_cache
 from syncai_bev3d.teachers import sam3 as SAM3
 from syncai_hydranet.data import sam3_prompts as P
 from syncai_hydranet.data import sam3_prompts_objects as O
@@ -93,7 +94,7 @@ def run_camera(camera, proc, model, device, table):
                 n += 1
         if name == "door" and union.any():
             # A doorway is tall; a cabinet door is not. The height map already knows.
-            z = np.load(ROOT / f"runs/site30k_qa/geometry_cache/{camera}.npz")
+            z = load_geometry_cache(ROOT / f"runs/site30k_qa/geometry_cache/{camera}.npz", cf)
             height, ok = z["height"], z["geom_ok"]
             lab, ncomp = ndimage.label(union, structure=np.ones((3, 3)))
             kept = np.zeros_like(union)

@@ -9,17 +9,8 @@ It **refuses a camera without metres rather than writing plausible NaN**: a cali
 event. Those cameras wait for their visual reference (door height / tile pitch, the
 calib02 method) -- the refusal message says exactly that.
 
-**This module used to be both halves of step 2 and is now one.** The gate is visual -- a
-1 m floor grid on a real frame, one per camera, judged by eye (docs/PLAN.md §6) -- and
-`render_metre_grid` drew it, on the undistorted frame because that is where the
-`Camera` + `GroundPlane` model lives. It was deleted in `5c209c7` as uncalled, which it
-was: the scripts that drove it had already left the tree. So the eight commissioned
-cameras passed a gate this module can no longer render, and the 15-camera backlog needs
-it rebuilt (`git show 08cd335:src/syncai_bev3d/commissioning.py` has the original).
-
-`from_onboard_calib` has no caller outside `tests/test_camera_json.py` either. That is
-the same absence one step earlier and it is why README's stage-0 runbook has no command
-between the calibration sweep and `masks_pass.py`.
+`tools/commissioning/commission_camera.py` writes a review bundle and a raw-frame
+metre grid. Survey refinement and independent error checks live in `ground_control`.
 """
 
 from __future__ import annotations
@@ -124,6 +115,17 @@ def regeometry_from_calib(camera_json: str | Path, calib: str | Path) -> CameraF
     """
     existing = CameraFile.load(camera_json)
     fresh = from_onboard_calib(calib)
+
+    if fresh.camera_id != existing.camera_id:
+        raise ValueError("calibration camera_id does not match the commissioned camera")
+    if (
+        fresh.camera != existing.camera
+        or fresh.lens != existing.lens
+        or fresh.image_size_px != existing.image_size_px
+    ):
+        raise ValueError(
+            "intrinsics, lens or image size changed; a height-only zone rescale is invalid"
+        )
 
     d_pitch = abs(math.degrees(fresh.plane.pitch - existing.plane.pitch))
     d_roll = abs(math.degrees(fresh.plane.roll - existing.plane.roll))

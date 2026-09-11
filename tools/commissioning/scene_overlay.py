@@ -19,6 +19,7 @@ from PIL import Image, ImageDraw
 
 from syncai_bev3d import scene_mesh
 from syncai_hydranet.geometry.camera_json import CameraFile
+from syncai_hydranet.geometry.ground import distort_points
 
 # The repo root, derived rather than written out: every one of these 26 tools had it
 # as an absolute path, so a second checkout ran against the first one's `runs/` and
@@ -40,7 +41,11 @@ def project(verts: np.ndarray, cf: CameraFile, scale: float) -> tuple[np.ndarray
     with np.errstate(divide="ignore", invalid="ignore"):
         u = cf.camera.fx * cam[:, 0] / cam[:, 2] + cf.camera.cx
         w = cf.camera.fy * cam[:, 1] / cam[:, 2] + cf.camera.cy
-    return np.stack([u, w], axis=-1), cam[:, 2]
+    pixels = np.stack([u, w], axis=-1)
+    if cf.lens is not None:
+        lens = cf.lens
+        pixels = distort_points(pixels, lens.k1, lens.centre_px, lens.radius_px)
+    return pixels, cam[:, 2]
 
 
 def main() -> int:
@@ -77,10 +82,17 @@ def main() -> int:
         rgb = scene_mesh.PALETTE.get(key, (200, 200, 200))
         uv, depth = project(mesh[0], cf, args.metre_scale)
         for face in mesh[1]:
-            if not (depth[face] > 0).all():
+            if not (depth[face] > 0).all() or not np.isfinite(uv[face]).all():
                 continue
-            pts = [(float(uv[i, 0]) * up, float(uv[i, 1]) * up) for i in face]
-            d.polygon(pts, outline=(*rgb, 230))
+            # Straight 3D edges curve under the raw division lens. Project samples,
+            # not just corners, or a long cabinet edge still misses its image boundary.
+            for a, b in zip(face, np.roll(face, -1), strict=True):
+                edge = np.linspace(mesh[0][a], mesh[0][b], 33)
+                pixels, edge_depth = project(edge, cf, args.metre_scale)
+                if not np.isfinite(pixels).all() or not (edge_depth > 0).all():
+                    continue
+                pts = [(float(u) * up, float(v) * up) for u, v in pixels]
+                d.line(pts, fill=(*rgb, 230), width=1)
         drawn += 1
     # This is the falsifiable view -- the wireframe over the plate it was built from --
     # so it is the one place a fixture the code does not believe in most needs saying.

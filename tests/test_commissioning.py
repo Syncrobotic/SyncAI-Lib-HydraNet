@@ -186,3 +186,23 @@ def test_a_commissioned_camera_still_agrees_with_its_own_calibration():
         "across and rescales the metre zones, which re-running `from_onboard_calib` "
         "would discard."
     )
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"vfov_assumed_deg": 75.0},
+        {"k1_division_model": -0.3},
+        {"frame_hw_px": [1080, 1920]},
+    ],
+)
+def test_height_only_update_refuses_changed_image_geometry(tmp_path, overrides):
+    cam = _commissioned(tmp_path)
+    with pytest.raises(ValueError, match="intrinsics, lens or image size"):
+        regeometry_from_calib(cam, write(tmp_path, **overrides))
+
+
+def test_height_only_update_refuses_another_camera(tmp_path):
+    cam = _commissioned(tmp_path)
+    with pytest.raises(ValueError, match="camera_id"):
+        regeometry_from_calib(cam, write(tmp_path, camera="Another-camera"))

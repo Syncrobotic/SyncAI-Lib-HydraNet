@@ -64,6 +64,8 @@ spec = importlib.util.spec_from_file_location(
 )
 M = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
+from syncai_bev3d.commissioning import from_onboard_calib  # noqa: E402
+from syncai_bev3d.geometry_review import load_geometry_cache  # noqa: E402
 from syncai_bev3d.teachers import sam3 as SAM3  # noqa: E402
 from syncai_hydranet.data.frame_selection import describe, farthest_first  # noqa: E402
 from syncai_hydranet.data.video import frames as decode_frames  # noqa: E402
@@ -297,8 +299,15 @@ class CameraGeometry:
         # campaign that starts one process per camera-date that is hours of repeated
         # work, so it is cached on disk and the cache is keyed by the camera name.
         cache = self.CACHE / f"{camera}.npz"
+        cached = None
         if cache.exists():
-            z = np.load(cache)
+            cf = from_onboard_calib(self.CALIB_ROOT / f"{camera}.calib.json")
+            try:
+                cached = load_geometry_cache(cache, cf)
+            except ValueError as error:
+                print(f"  [{camera}] rebuilding: {error}", flush=True)
+        if cached is not None:
+            z = cached
             for k in ("gx", "gz", "oob", "height", "horiz", "geom_ok", "lx", "lz"):
                 setattr(self, k, z[k])
             self.lx = None if not np.isfinite(self.lx).any() else self.lx

@@ -51,6 +51,21 @@ def _png(path, mask):
     Image.fromarray(np.where(mask, 255, 0).astype(np.uint8)).save(path)
 
 
+@pytest.fixture(autouse=True)
+def synthetic_topdown_cache(monkeypatch):
+    """These layout tests use an orthographic lattice, not a perspective camera.
+
+    Isolate layout from calibration checking. test_ground_control exercises the real
+    cache reader and its integration with scene_mesh on perspective geometry.
+    """
+
+    def load(path, _cf):
+        with np.load(path) as cache:
+            return {key: cache[key] for key in cache.files}
+
+    monkeypatch.setattr(scene_mesh, "load_geometry_cache", load)
+
+
 def a_store(tmp_path, fixtures=(TABLE, SHELF), wall=True):
     """A commissioned camera and its geometry cache, on disk, as `cell_grids` reads them."""
     root = tmp_path / "checkout"

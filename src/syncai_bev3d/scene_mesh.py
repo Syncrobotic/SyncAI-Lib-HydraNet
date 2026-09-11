@@ -48,6 +48,7 @@ from syncai_bev3d.footprints import (
     regularise_footprints,
     wall_runs_from_feet,
 )
+from syncai_bev3d.geometry_review import load_geometry_cache
 from syncai_bev3d.meshes import (
     Placement,
     _merge,
@@ -382,7 +383,7 @@ class Evidence:
 def load_evidence(camera, root: Path | None = None) -> Evidence:
     root = Path(root) if root is not None else ROOT
     cf = CameraFile.load(root / f"runs/commission01/{camera}.camera.json")
-    z = np.load(root / f"runs/site30k_qa/geometry_cache/{camera}.npz")
+    z = load_geometry_cache(root / f"runs/site30k_qa/geometry_cache/{camera}.npz", cf)
     fh, fw = z["gx"].shape
     # The mask PNGs are the artefact of record -- depth completion and the human zone
     # stamps land there, not in the intermediate cache. Rebuild the class map from them.

@@ -21,6 +21,7 @@ from PIL import Image, ImageDraw
 
 from syncai_bev3d import bev3d
 from syncai_bev3d.bev import IGNORE, BevGrid, free_space_map
+from syncai_bev3d.geometry_review import load_geometry_cache
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.utils.visualize import TRAV_COLORS
 
@@ -56,7 +57,7 @@ def bin_cells(x, z, grid):
 def run(camera: str):
     cf = CameraFile.load(ROOT / f"runs/commission01/{camera}.camera.json")
     w, h = cf.image_size_px
-    z = np.load(ROOT / f"runs/site30k_qa/geometry_cache/{camera}.npz")
+    z = load_geometry_cache(ROOT / f"runs/site30k_qa/geometry_cache/{camera}.npz", cf)
     gx, gz, lx, lz = z["gx"], z["gz"], z["lx"], z["lz"]
     height, geom_ok = z["height"], z["geom_ok"]
     fh, fw = gx.shape
