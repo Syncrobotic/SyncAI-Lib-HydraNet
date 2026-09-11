@@ -12,6 +12,7 @@ Usage: uv run python tools/commissioning/extras_pass.py <camera> [...]
 """
 
 import dataclasses
+import os
 import sys
 from pathlib import Path
 
@@ -29,7 +30,7 @@ from syncai_hydranet.utils.device import pick_device
 # as an absolute path, so a second checkout ran against the first one's `runs/` and
 # any machine but this one failed at import with a path and no reason. Two levels up
 # from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 W, H = 1920, 1080
 MIN_PX = 2000  # doors and the generic product union
 MIN_SUB_PX = 150  # a phone on a table is small and real

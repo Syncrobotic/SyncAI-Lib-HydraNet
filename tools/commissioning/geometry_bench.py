@@ -56,6 +56,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -72,7 +73,7 @@ from syncai_hydranet.geometry.ground import (
     unproject,
 )
 
-ROOT = Path(__file__).resolve().parent.parent.parent
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parent.parent.parent))
 
 
 FRAME_H, FRAME_W = 1080, 1920

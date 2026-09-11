@@ -46,6 +46,7 @@ import datetime as dt
 import hashlib
 import json
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -54,6 +55,7 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
 HERE = Path(__file__).resolve().parent
+ROOT = Path(os.environ.get("SYNCAI_ROOT", HERE.parent))
 sys.path.insert(0, str(HERE))
 
 from syncai_bev3d.floorplan import (  # noqa: E402

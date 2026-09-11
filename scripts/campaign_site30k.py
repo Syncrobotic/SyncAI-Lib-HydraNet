@@ -59,6 +59,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from collections import Counter, defaultdict
@@ -70,6 +71,7 @@ import torch
 from PIL import Image
 
 HERE = Path(__file__).resolve().parent
+ROOT = Path(os.environ.get("SYNCAI_ROOT", HERE.parent))
 sys.path.insert(0, str(HERE))
 
 # The teachers live in the wheel as of 2026-08-20 (52eb141 SAM 3, 556582b Grounding
@@ -158,13 +160,13 @@ SCORE_FLOOR = 0.10  # kept in instances_all so both populations stay visible
 CONSENSUS = 0.9  # the measured setting from sam3_prelabel
 NMS_IOU = 0.55  # same as teachers.boxes.nms
 
-THIRD_OPINION_RUN = HERE.parent / "runs/hydranet_retail_security_b03_gdino"
+THIRD_OPINION_RUN = ROOT / "runs/hydranet_retail_security_b03_gdino"
 # b03 terrain head: 0 void, 1 floor, 2 wall, 3 column, 4 fixture, 5 person.
 # Veto map: site id -> the b03 id that counts as agreement. `display_table` and
 # `shelf` are absent on purpose -- the model cannot arbitrate a split it never saw.
 VETO_SITE_TO_B03 = {1: 1, 2: 2, 3: 3, 6: 5}
 
-PROGRESS_LOG = HERE.parent / "runs/site30k_qa/progress.log"
+PROGRESS_LOG = ROOT / "runs/site30k_qa/progress.log"
 
 
 def log_progress(msg: str) -> None:
@@ -351,9 +353,9 @@ class GeomTeacher:
             unproject,
         )
 
-        root = Path(calib_root) if calib_root is not None else HERE.parent / "runs/onboard01"
+        root = Path(calib_root) if calib_root is not None else ROOT / "runs/onboard01"
         calib = json.loads((root / f"{camera}.calib.json").read_text())
-        zones = json.loads((HERE.parent / f"runs/zones01/{camera}.zones.json").read_text())
+        zones = json.loads((ROOT / f"runs/zones01/{camera}.zones.json").read_text())
         if zones.get("units") != "m" or calib.get("scale") is None:
             raise SystemExit(f"{camera}: zones/calib not metric; v2 floor recipe needs both")
         poly = next(p for p in zones["proposals"] if p["name_suggestion"] == "walkable_floor")
@@ -650,13 +652,11 @@ def cmd_annotate(args) -> int:
                 geom_cache[camera] = GeomTeacher(camera, third)
             geom = geom_cache[camera]
             slot = Path(clip).stem.split("_")[1]
-            cand = HERE.parent / f"datasets/studioa_static/{camera}/plate_{slot}.png"
+            cand = ROOT / f"datasets/studioa_static/{camera}/plate_{slot}.png"
             if cand.exists():
                 plate_path = str(cand)  # the SAME clip's own median -- crispest diff
             else:
-                calib_p = json.loads(
-                    (HERE.parent / f"runs/onboard01/{camera}.calib.json").read_text()
-                )
+                calib_p = json.loads((ROOT / f"runs/onboard01/{camera}.calib.json").read_text())
                 plate_path = calib_p["plate_used"]
             plate_floor, dirty, plate_rgb = geom.plate_labeling(plate_path)
             # Per-pixel noise floor of |frame - plate|, static_plates style: a LOW
@@ -984,7 +984,7 @@ def cmd_floor_diag(args) -> int:
     report = {}
     for camera in args.cameras:
         geom = GeomTeacher(camera, third)
-        calib = json.loads((HERE.parent / f"runs/onboard01/{camera}.calib.json").read_text())
+        calib = json.loads((ROOT / f"runs/onboard01/{camera}.calib.json").read_text())
         plate = (
             Image.open(calib["plate_used"])
             .convert("RGB")
@@ -1408,7 +1408,7 @@ def build_parser() -> argparse.ArgumentParser:
     an.add_argument("--sample-fps", type=float, default=1.0)
     an.add_argument(
         "--split-json",
-        default=str(HERE.parent / "datasets/retail_objects_batch03/split.json"),
+        default=str(ROOT / "datasets/retail_objects_batch03/split.json"),
         help="camera split assignments to INHERIT (R1/R2)",
     )
     an.add_argument(
