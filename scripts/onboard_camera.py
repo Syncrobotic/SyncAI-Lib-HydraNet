@@ -75,6 +75,41 @@ PLATE_MODEL_CONFIG = SHIPPED_CONFIG
 PLATE_MODEL_CKPT = for_terrain()
 K1_FLEET = pc.K1_FLEET  # the fleet lens; defined once in syncai_bev3d.plate_calibration
 VFOV_PRIMARY = 70.4  # likewise: pinned on cam01, a fleet assumption for the rest
+#: The one camera whose vfov and k1 were measured off its tile grid (calib01), as data.
+#: Until 2026-09-11 this was `camera == "Taichung-cam01"` inside the sweep, so a vfov
+#: measured on any other camera -- `floor_calibrate.py` writes them to a pins file --
+#: had nowhere to go: the primary row was the 70.4 constant whatever the instrument said.
+BUILTIN_PINS: dict[str, dict] = {
+    "Taichung-cam01": {
+        "vfov_deg": 70.4,
+        "source": "tile_grid_pinned",
+        "k1_source": "tile_grid_measured",
+    }
+}
+
+
+def load_pins(path: Path | None) -> dict[str, dict]:
+    """`floor_calibrate.py --pins-out` rows (`{camera: {vfov_deg, source, ...}}`) over
+    the built-in tile pin; a file pin for the same camera wins, being the later measurement."""
+    pins = {k: dict(v) for k, v in BUILTIN_PINS.items()}
+    if path is not None:
+        for cam, row in json.loads(Path(path).read_text()).items():
+            if "vfov_deg" not in row:
+                raise ValueError(f"{path}: pin for {cam} has no vfov_deg")
+            pins[cam] = {"source": "pinned", **row}
+    return pins
+
+
+def pin_for(camera: str, pins: dict[str, dict] | None) -> dict | None:
+    return (pins if pins is not None else BUILTIN_PINS).get(camera)
+
+
+def primary_row(by_vfov: list[dict], vfov: float) -> dict | None:
+    """The sweep row at the camera's own vfov; None when that row has no fitted floor."""
+    row = next((r for r in by_vfov if abs(float(r["vfov_deg"]) - vfov) < 1e-9), None)
+    return row if row is not None and "pitch_deg" in row else None
+
+
 MIN_HEIGHTS = 10  # min samples for the person-height statistic to emit a number (task spec)
 DIRTY_PLATE_FRAC = 0.05  # person share above this marks a dirty plate (cam04's 8.6% is above)
 # calib01: the gap between the person-height scale and the tile-grid anchor (pose bias,
@@ -168,21 +203,29 @@ def onboard_one(
     plates_root: Path,
     person_anns: Path = PERSON_ANNS,
     utc_offset: int = pc.DEFAULT_UTC_OFFSET_HOURS,
+    pins: dict[str, dict] | None = None,
 ) -> dict:
     now = _dt.date.today().isoformat()
-    is_pinned = camera == "Taichung-cam01"  # tile grid: k1 and vfov both measured
+    pin = pin_for(camera, pins)
+    is_pinned = pin is not None
+    vfov_primary = float(pin["vfov_deg"]) if pin else VFOV_PRIMARY
+    k1_source = (pin or {}).get("k1_source", "fleet_hardware_assumed")
     flags: list[str] = []
     if not is_pinned:
-        flags += ["vfov_fleet_assumed", "k1_fleet_assumed"]
+        flags.append("vfov_fleet_assumed")
+    if k1_source == "fleet_hardware_assumed":
+        flags.append("k1_fleet_assumed")
+    # the sweep always contains the camera's own vfov, so the primary row exists
+    vfovs = sorted(set(vfovs) | {vfov_primary})
 
     result: dict = {
         "schema": SCHEMA,
         "camera": camera,
         "generated": now,
-        "vfov_assumed_deg": VFOV_PRIMARY,
-        "vfov_source": "tile_grid_pinned" if is_pinned else "fleet_hardware_assumed",
+        "vfov_assumed_deg": vfov_primary,
+        "vfov_source": pin["source"] if pin else "fleet_hardware_assumed",
         "k1_division_model": k1,
-        "k1_source": "tile_grid_measured" if is_pinned else "fleet_hardware_assumed",
+        "k1_source": k1_source,
         # calib02's visual priors (door height / floor tiles) cannot be automated: the
         # fields are kept, the values left empty, and the SOP's manual step back-fills
         # them. This is "not measured", not "measured out as null".
@@ -274,8 +317,8 @@ def onboard_one(
     result["by_vfov"] = by_vfov
 
     ok_rows = [r for r in by_vfov if "pitch_deg" in r]
-    primary = next((r for r in by_vfov if r["vfov_deg"] == VFOV_PRIMARY), None)
-    if primary is None or "pitch_deg" not in primary:
+    primary = primary_row(by_vfov, vfov_primary)
+    if primary is None:
         primary = ok_rows[0] if ok_rows else None
         if primary is not None:
             flags.append("primary_vfov_failed_using_fallback")
@@ -543,6 +586,13 @@ def main(argv=None) -> int:
     ap.add_argument("--plates-root", type=Path, default=pc.PLATES)
     ap.add_argument("--k1", type=float, default=K1_FLEET)
     ap.add_argument("--vfovs", default="55,70.4,85")
+    ap.add_argument(
+        "--vfov-pins",
+        type=Path,
+        default=None,
+        help="per-camera measured vfov, `floor_calibrate.py --pins-out`'s file; the "
+        "camera's row becomes its primary and joins the sweep",
+    )
     ap.add_argument("--skip-person-frac", action="store_true")
     ap.add_argument("--cameras-json", type=Path, default=CAMERAS_JSON)
     ap.add_argument(
@@ -568,12 +618,13 @@ def main(argv=None) -> int:
     if not args.skip_person_frac:
         meter = PlatePersonMeter(PLATE_MODEL_CONFIG, PLATE_MODEL_CKPT)
     vfovs = [float(x) for x in args.vfovs.split(",")]
+    pins = load_pins(args.vfov_pins)
 
     for i, cam in enumerate(cameras, 1):
         print(f"[{i}/{len(cameras)}] {cam}")
         try:
             result = onboard_one(
-                cam, vfovs, args.k1, meter, args.plates_root, args.person_anns, utc_offset
+                cam, vfovs, args.k1, meter, args.plates_root, args.person_anns, utc_offset, pins
             )
         except Exception:
             traceback.print_exc()
