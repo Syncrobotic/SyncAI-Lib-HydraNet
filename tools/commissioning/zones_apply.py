@@ -23,6 +23,7 @@ Usage:
 
 import dataclasses
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -35,7 +36,7 @@ from syncai_hydranet.geometry.camera_json import CameraFile, Zone
 # as an absolute path, so a second checkout ran against the first one's `runs/` and
 # any machine but this one failed at import with a path and no reason. Two levels up
 # from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 ZONES_HUMAN = ROOT / "tools/site30k/zones.json"
 ZONES_PROPOSED = ROOT / "runs/zones01"
 CLASS_FILES = {

@@ -21,6 +21,7 @@ Usage:
 """
 
 import argparse
+import os
 from pathlib import Path
 
 import numpy as np
@@ -29,7 +30,7 @@ from syncai_bev3d import floor_axis, scene_mesh
 from syncai_bev3d.rulers import write_scaled_root
 from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 # Below this autocorrelation the pitch is not trusted to rescale anything.
 STRENGTH_MIN = 0.35
 

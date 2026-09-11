@@ -7,6 +7,7 @@ This records visible evidence. Geometry still has to pass the renderer's fit che
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -15,7 +16,7 @@ from syncai_bev3d.object_facing import mask_identity
 from syncai_bev3d.object_instances import image_digest, load_instances
 from syncai_hydranet.geometry.camera_json import CameraFile
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 
 
 def main():

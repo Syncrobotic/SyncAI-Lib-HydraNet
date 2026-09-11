@@ -37,7 +37,7 @@ from syncai_hydranet.data.datasets import _index_pairs
 from syncai_hydranet.data.label_maps import get_scheme
 from syncai_hydranet.data.store_split import STORES, camera_store, fold_split, validate_fold
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 SOURCES = {
     "retail_objects_batch02": "retail_surfaces_from_objects",
     "retail_objects_batch03": "retail_surfaces_from_objects",

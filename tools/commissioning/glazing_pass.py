@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -24,7 +25,7 @@ from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.models.glazing import GlazingEncoder, GlazingHead
 from syncai_hydranet.utils.visualize import preprocess
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 
 
 def main():

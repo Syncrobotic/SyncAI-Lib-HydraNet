@@ -23,6 +23,7 @@ import argparse
 import itertools
 import json
 import math
+import os
 from pathlib import Path
 
 import numpy as np
@@ -33,7 +34,7 @@ from syncai_bev3d import plate_calibration as pc
 from syncai_hydranet.geometry.camera_json import CameraFile
 from syncai_hydranet.geometry.ground import Camera, pixel_to_ground, undistort_points
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 OUT = ROOT / "runs/commission_review/floor_calib"
 # The sweep. 45-95 covers every lens the fleet census found (PLAN 7.12).
 VFOV_MIN, VFOV_MAX, VFOV_STEP = 45.0, 95.0, 2.5

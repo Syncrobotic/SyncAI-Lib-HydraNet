@@ -11,6 +11,7 @@ what a script is for: argument parsing, the export formats, and the orbit gif.
 
 import argparse
 import json
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -29,7 +30,7 @@ from syncai_bev3d.scene_mesh import (
     render,
 )
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 
 
 def export_glb(camera, items, *, out=None):

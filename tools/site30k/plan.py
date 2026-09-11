@@ -33,6 +33,7 @@ Writes campaign_plan.json: one entry per unit, ready for run_campaign.sh.
 
 import argparse
 import json
+import os
 import re
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -48,7 +49,7 @@ from syncai_hydranet.data.video import probe
 # as an absolute path, so a second checkout ran against the first one's `runs/` and
 # any machine but this one failed at import with a path and no reason. Two levels up
 # from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 PULL = ROOT / "datasets/studioa_pull_site30k"
 CALIB = ROOT / "runs/onboard01"
 # Filenames are UTC; the store is UTC+8. 23:00-06:00 local is the night tranche.

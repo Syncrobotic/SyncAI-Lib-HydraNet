@@ -62,6 +62,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -74,7 +75,7 @@ from syncai_hydranet.geometry.ground import distort_points, ground_to_pixel
 # as an absolute path, so a second checkout ran against the first one's `runs/` and
 # any machine but this one failed at import with a path and no reason. Two levels up
 # from `tools/<group>/<tool>.py`, and `tests/test_no_absolute_sys_path.py` keeps it so.
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 PROPOSED = ROOT / "runs/zones01"
 COMMISSIONED = ROOT / "runs/commission01"
 OUT = ROOT / "runs/zones_confirm01"
