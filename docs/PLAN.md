@@ -713,9 +713,23 @@ order. A component with no step is not scheduled, it is assumed.
    loader reads all three splits unchanged. Every camera's preview sheet was looked at:
    one box per person at the counter on each, the back row included, people through
    the shopfront glass boxed as people. `configs/hydranet_retail_person02.yaml` is
-   person01 with this root in the `site_person` block and nothing else changed. **Not
-   started: the retrain** (a day of the shared card, the user's call) and the human
-   ruler — thirty frames wait unlabelled in `datasets/counter_ruler_v1`.
+   person01 with this root in the `site_person` block and nothing else changed.
+   **person02 is scheduled for 23:00 on 2026-09-11** (`hydranet-person02.timer` →
+   `hydranet-person02.service`, `/home/paul/hydranet-overnight/person02.sh`, log
+   `person02.log`, a five-minute watch in `person02-watch.log`), from scratch, 120
+   epochs, at night because the card is shared by day, as person01 was; the launcher
+   also waits for the card to be free. The user asked for the necessity to be confirmed
+   before the card is spent: it is the one mechanism left that changes what the model
+   can output at the counter — 1 and 2 were built and measured short — and it costs no
+   human time; what it does not buy is an accuracy, until the thirty-frame ruler is
+   labelled. `--allow-dirty` because the dirt is
+   another session's `src/syncai_bev3d`, which cannot alter a hydranet weight, and
+   `meta.json` records the list. **It is judged on three numbers and the selected one is
+   the least informative**: `detection_mAP/site_person` is agreement with two teachers
+   now; read it beside `detection_mAP/coco_person` (person01 `last.pt` 0.2157, the
+   human-labelled one) and `detection_mAP/site_boxes03`, `last.pt` to `last.pt`. The
+   human ruler — thirty frames in `datasets/counter_ruler_v1` — is still unlabelled, and
+   until it is, no number from this run is an accuracy.
 
 ### 7b. Decided — the answer, and what it cost
 
