@@ -183,11 +183,14 @@ def fit_surface(
     return max(proposals, key=lambda p: p.iou) if proposals else None
 
 
-def scene_surfaces(camera, ev, root: Path, *, walls=(), yaw=0.0) -> list[Surface]:
+def scene_surfaces(
+    camera, ev, root: Path, *, walls=(), yaw=0.0, mask_overrides=None, report=None
+) -> list[Surface]:
     """Read explicit glazing masks first; door masks cannot overwrite them."""
     out = []
     covered = np.zeros(ev.walk.shape, bool)
     masks = {}
+    sources = {}
     filled_ev = ev
     fill_path = root / "runs/commission01" / camera / "masks/floor_fill.png"
     if fill_path.exists():
@@ -210,10 +213,20 @@ def scene_surfaces(camera, ev, root: Path, *, walls=(), yaw=0.0) -> list[Surface
     for kind in ("glass_door", "window", "glass", "door"):
         relative = ev.cf.mask_files.get(kind, f"{camera}/masks/{kind}.png")
         path = root / "runs/commission01" / relative
-        if not path.exists():
+        if mask_overrides is not None and kind in mask_overrides:
+            supplied = np.asarray(mask_overrides[kind], dtype=bool)
+            if supplied.ndim != 2:
+                raise ValueError("surface masks must have two dimensions")
+            image = Image.fromarray(supplied)
+            mask = np.array(image.resize(ev.walk.shape[::-1], Image.Resampling.NEAREST))
+        elif not path.exists():
             continue
-        with Image.open(path) as image:
-            mask = np.asarray(image.resize(ev.walk.shape[::-1], Image.Resampling.NEAREST)) > 127
+        else:
+            with Image.open(path) as image:
+                mask = (
+                    np.asarray(image.resize(ev.walk.shape[::-1], Image.Resampling.NEAREST))
+                    > 127
+                )
         if kind == "door" and covered.any():
             components, n_components = ndimage.label(mask, np.ones((3, 3)))
             for component in range(1, n_components + 1):
@@ -225,6 +238,11 @@ def scene_surfaces(camera, ev, root: Path, *, walls=(), yaw=0.0) -> list[Surface
         mask &= ~covered
         covered |= mask
         masks[kind] = mask
+        sources[kind] = (
+            "candidate override"
+            if mask_overrides is not None and kind in mask_overrides
+            else str(path)
+        )
     glazing = np.zeros_like(covered)
     for kind, mask in masks.items():
         if kind != "door":
@@ -240,13 +258,49 @@ def scene_surfaces(camera, ev, root: Path, *, walls=(), yaw=0.0) -> list[Surface
         for label in range(1, count + 1):
             part = labels == label
             if part.sum() < 100:
+                if report is not None:
+                    report.append(
+                        {
+                            "kind": kind,
+                            "component": label,
+                            "status": "rejected",
+                            "reason": "component has fewer than 100 scene pixels",
+                        }
+                    )
                 continue
             group = int(np.argmax(np.bincount(groups[part]), axis=0))
             surface = fit(part, kind=kind, support=supports.get(group))
+            reason = "no supported plane passes reprojection"
+            if (
+                surface is not None
+                and sources[kind] == "candidate override"
+                and kind == "glass_door"
+            ):
+                span = float(np.linalg.norm(surface.points[1] - surface.points[0]))
+                if not 0.6 <= span <= 2.4 or not 1.9 <= surface.height <= 2.8:
+                    surface = None
+                    reason = "candidate door outside span 0.6-2.4 m or height 1.9-2.8 m prior"
             if surface is not None and group in supports:
                 surface.source += "; " + supports[group].source
             if surface is not None:
                 out.append(surface)
+            if report is not None:
+                report.append(
+                    {
+                        "kind": kind,
+                        "component": label,
+                        "mask_pixels": int(part.sum()),
+                        "status": "supported" if surface is not None else "rejected",
+                        "geometry_stage": "fit before coplanar overlap trimming",
+                        "reason": None if surface is not None else reason,
+                        "iou": surface.iou if surface is not None else None,
+                        "source": surface.source if surface is not None else None,
+                        "points_m": surface.points.tolist() if surface is not None else None,
+                        "bottom_m": surface.bottom if surface is not None else None,
+                        "height_m": surface.height if surface is not None else None,
+                        "mask_source": sources[kind],
+                    }
+                )
     return separate_glazing(out)
 
 

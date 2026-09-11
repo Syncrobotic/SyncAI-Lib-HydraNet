@@ -66,7 +66,7 @@ from syncai_bev3d.meshes import (
     wall,
 )
 from syncai_bev3d.object_assets import COLORS as OBJECT_COLORS
-from syncai_bev3d.object_assets import door_mesh
+from syncai_bev3d.object_assets import door_mesh, glass_door_meshes
 from syncai_bev3d.object_placement import scene_objects
 from syncai_bev3d.shading import View, contact_shadows, draw_scene, occlusion_alpha
 from syncai_bev3d.support_refinement import refine_scene_supports
@@ -103,6 +103,7 @@ PALETTE = {
     "stair": (196, 190, 178),
     "glass": (150, 200, 225),
     "door": (176, 126, 88),
+    "door_frame": (136, 150, 165),
     "product": (86, 214, 188),
     "product_boxed_stock": (190, 90, 235),
     "product_macbook": (60, 150, 255),
@@ -1073,7 +1074,13 @@ def store_axis(ev: Evidence, camera, root: Path | None = None) -> float:
 
 
 def build_scene_regular(
-    camera, root: Path | None = None, *, object_report=None, support_report=None
+    camera,
+    root: Path | None = None,
+    *,
+    object_report=None,
+    support_report=None,
+    surface_masks=None,
+    surface_report=None,
 ):
     """B-path: every fixture becomes a store-axis-aligned parametric mesh.
 
@@ -1236,7 +1243,15 @@ def build_scene_regular(
             continue
         walls.append(run)
     surfaces = (
-        scene_surfaces(camera, ev, Path(root) if root else ROOT, walls=walls, yaw=yaw)
+        scene_surfaces(
+            camera,
+            ev,
+            Path(root) if root else ROOT,
+            walls=walls,
+            yaw=yaw,
+            mask_overrides=surface_masks,
+            report=surface_report,
+        )
         if by_object
         else []
     )
@@ -1326,7 +1341,12 @@ def build_scene_regular(
         for surface in surfaces:
             length = float(np.linalg.norm(surface.points[1] - surface.points[0]))
             glazed = surface.kind in {"glass", "glass_door", "window"}
-            if glazed:
+            if surface.kind == "glass_door":
+                pane, frame = glass_door_meshes(surface.points, surface.height, surface.bottom)
+                items.append((pane, "glass", 70, False))
+                items.append((frame, "door_frame", 255, False))
+                shapes.append((surface.kind, length, 0.04, surface.height))
+            elif glazed:
                 mesh = glass_panel(surface.points, surface.height)
                 mesh = (mesh[0] + [0, surface.bottom, 0], mesh[1])
                 items.append((mesh, "glass", 70, False))

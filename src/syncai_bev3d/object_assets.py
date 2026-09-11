@@ -123,3 +123,32 @@ def door_mesh(points, height: float, thickness: float = 0.08):
     return place(
         _merge(*pieces), Placement(*centre, heading_rad=-float(np.arctan2(delta[1], delta[0])))
     )
+
+
+def glass_door_meshes(points, height: float, bottom: float = 0.0):
+    """A transparent leaf and opaque perimeter in the observed opening plane.
+
+    Endpoints bound the OUTSIDE of the frame. No handle, centre mullion, hinge side
+    or swing angle is invented from a material mask. Frame thickness is a template
+    prior, not a measured quantity. Separate materials keep the frame visible.
+    """
+    from syncai_bev3d.meshes import Placement, place
+
+    points = np.asarray(points, float)
+    if points.shape != (2, 2) or not np.isfinite(points).all():
+        raise ValueError("a glass door needs two finite ground endpoints")
+    delta = points[1] - points[0]
+    width = float(np.linalg.norm(delta))
+    if not np.isfinite([height, bottom]).all() or width <= 0 or height <= 0 or bottom < 0:
+        raise ValueError("invalid glass door dimensions")
+    jamb = min(0.035, width / 8, height / 8)
+    depth = 0.04
+    frame = [
+        _shift(box(jamb, height, depth), [x, bottom, 0])
+        for x in (-width / 2 + jamb / 2, width / 2 - jamb / 2)
+    ]
+    for y in (bottom, bottom + height - jamb):
+        frame.append(_shift(box(width - 2 * jamb, jamb, depth), [0, y, 0]))
+    pane = _shift(box(width - 2 * jamb, height - 2 * jamb, 0.012), [0, bottom + jamb, 0])
+    at = Placement(*points.mean(0), heading_rad=-float(np.arctan2(delta[1], delta[0])))
+    return place(pane, at), place(_merge(*frame), at)

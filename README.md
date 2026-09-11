@@ -204,6 +204,16 @@ objects can remain absent. Computer-tower auto-detection is disabled after the l
 plate review found packaged goods misclassified as towers. Door frames use the fitted
 opening plane; handedness and opening angle are not inferred from a doorway mask.
 
+Glass doors now use separate transparent leaves and opaque frames within the fitted
+opening. An experimental specialist segmentation head can be trained on Trans10K-v2
+with `tools/commissioning/train_glazing.py`; `glazing_pass.py <camera> --checkpoint
+<best.pt> --out <review-directory> --scene` writes masks, detections and a candidate GLB.
+Candidates pass calibrated plane and dimension-prior checks and leave commissioned
+masks intact. Public validation is separate from StudioA applicability; neither
+segmentation confidence nor the rendered frame establishes a hinge or opening angle.
+See [glass-door training and evaluation](docs/GLASS_DOORS.md) for the reproducible recipe
+and the measured limitations.
+
 When the source clearly shows a display or rear casing, record that visual review with
 `uv run python tools/commissioning/facing_review.py <camera> --instance <id>
 --visible-side front --reviewer <name> --evidence <description>` (use `back` for a rear

@@ -8,6 +8,10 @@ the prompt table records 112 frames of it failing four distinct ways ("it stays 
 class"), so glass remains a human polygon for the zone tool, exactly as PLAN 2.1 always
 had it.
 
+An experimental specialist can now be trained with `train_glazing.py` and previewed
+with `glazing_pass.py --scene`. It separates glass doors, glass walls and windows;
+candidate masks do not replace reviewed commissioning masks in this default pass.
+
 Usage: uv run python tools/commissioning/extras_pass.py <camera> [...]
 """
 
