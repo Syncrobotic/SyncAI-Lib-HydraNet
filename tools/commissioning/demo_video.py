@@ -128,6 +128,19 @@ def _display_verdict(track):
 RUN = SHIPPED_RUN
 
 
+def _check_source_size(cf, src_w: int, src_h: int, clip) -> None:
+    """Boxes are rescaled by the probed size, so a different stream is not a scaling
+    error any more -- it is a different lens crop, and the calibration cannot say which."""
+    if cf.source_size_px and tuple(cf.source_size_px) != (src_w, src_h):
+        cw, ch = cf.source_size_px
+        print(
+            f"  {cf.camera_id}: {Path(str(clip)).name} is {src_w}x{src_h}; the camera was "
+            f"commissioned from a {cw}x{ch} stream. Same aspect keeps the metres; a crop "
+            "does not, and only the NVR knows which this is.",
+            flush=True,
+        )
+
+
 def _records_pass(
     args, clip, src_w, src_h, size, model, device, cf, person_label, rng, staff_model
 ):
@@ -291,6 +304,7 @@ def _render_in_chunks(args, camera, clip, cf, bounds, staff_model) -> int:
     # The decoded size the recorded boxes are in, so the replay converts to calibrated
     # pixels the same way the recording pass did.
     src_w, src_h, _ = probe_video(str(clip))
+    _check_source_size(cf, src_w, src_h, clip)
     t0 = time.time()
     per = math.ceil(args.frames / args.workers)
     edges = [(i, min(i + per, args.frames)) for i in range(0, args.frames, per)]
@@ -692,6 +706,7 @@ def main() -> int:
         ]
     n = n_det = n_fp = n_placed = n_outside = n_blur = n_posed = 0
     src_w, src_h, _ = probe_video(str(clip))
+    _check_source_size(cf, src_w, src_h, clip)
     # The plate is this camera's own empty shop, named by its camera.json. Missing is a
     # refusal rather than a silent single-instrument run: the whole argument for two
     # instruments is that neither is trusted alone.

@@ -66,3 +66,16 @@ def test_the_primary_row_is_the_cameras_own_vfov_and_a_failed_row_is_none():
     assert ob.primary_row(rows, 62.75)["pitch_deg"] == 39.1
     assert ob.primary_row(rows, 70.4) is None
     assert ob.primary_row(rows, 85.0) is None
+
+
+def test_the_plate_indexs_source_size_reaches_the_calib(tmp_path):
+    root = tmp_path / "plates"
+    root.mkdir()
+    (root / "index.json").write_text(
+        json.dumps(
+            {"cameras": {"X-cam01": {"slots": {"20260910-150000": {"source_wh": [1280, 720]}}}}}
+        )
+    )
+    assert ob.source_size_from_index(root, "X-cam01", "20260910-150000") == [1280, 720]
+    assert ob.source_size_from_index(root, "X-cam01", "20260910-160000") is None
+    assert ob.source_size_from_index(tmp_path / "nowhere", "X-cam01", "s") is None

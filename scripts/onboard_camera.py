@@ -104,6 +104,16 @@ def pin_for(camera: str, pins: dict[str, dict] | None) -> dict | None:
     return (pins if pins is not None else BUILTIN_PINS).get(camera)
 
 
+def source_size_from_index(plates_root: Path, camera: str, slot: str) -> list[int] | None:
+    """The clip's native (w, h) that `static_plates.py` recorded for this slot, if any."""
+    index = Path(plates_root) / "index.json"
+    if not index.exists():
+        return None
+    slots = json.loads(index.read_text()).get("cameras", {}).get(camera, {}).get("slots", {})
+    wh = (slots.get(slot) or {}).get("source_wh")
+    return [int(wh[0]), int(wh[1])] if wh else None
+
+
 def primary_row(by_vfov: list[dict], vfov: float) -> dict | None:
     """The sweep row at the camera's own vfov; None when that row has no fitted floor."""
     row = next((r for r in by_vfov if abs(float(r["vfov_deg"]) - vfov) < 1e-9), None)
@@ -266,7 +276,12 @@ def onboard_one(
     rgb = np.asarray(Image.open(plate_path).convert("RGB"))
     h, w = rgb.shape[:2]
     result.update(
-        {"plate_used": str(plate_path), "plate_slot_utc": slot, "frame_hw_px": [h, w]}
+        {
+            "plate_used": str(plate_path),
+            "plate_slot_utc": slot,
+            "frame_hw_px": [h, w],
+            "source_size_px": source_size_from_index(plates_root, camera, slot),
+        }
     )
 
     # Plate dirty region (the raw plate, not the undistorted one -- stable_infer

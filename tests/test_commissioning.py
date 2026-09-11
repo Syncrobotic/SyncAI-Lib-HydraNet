@@ -186,3 +186,11 @@ def test_a_commissioned_camera_still_agrees_with_its_own_calibration():
         "across and rescales the metre zones, which re-running `from_onboard_calib` "
         "would discard."
     )
+
+
+def test_the_streams_native_size_reaches_the_contract_when_the_scan_recorded_it(tmp_path):
+    """Recorded by static_plates from the clip, carried by the calib, kept by camera.json;
+    a scan that did not record it converts as before."""
+    cf = from_onboard_calib(write(tmp_path, source_size_px=[1280, 720]))
+    assert cf.source_size_px == (1280, 720)
+    assert from_onboard_calib(write(tmp_path)).source_size_px is None

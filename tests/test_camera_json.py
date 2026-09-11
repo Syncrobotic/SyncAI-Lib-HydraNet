@@ -285,3 +285,21 @@ def test_ground_points_rejects_a_policy_it_does_not_have():
 
     with pytest.raises(ValueError, match="above_horizon must be"):
         a_camera_file().ground_points(np.array([[960.0, 900.0]]), above_horizon="warn")
+
+
+def test_the_source_frame_survives_a_round_trip_and_is_absent_from_older_files(tmp_path):
+    """The boxes' own frame is part of the contract; a v3 file simply does not know it."""
+    cf = dataclasses.replace(a_camera_file(), source_size_px=(1280, 720))
+    path = tmp_path / "c.json"
+    cf.save(path)
+    back = CameraFile.load(path)
+    assert back.source_size_px == (1280, 720)
+    raw = json.loads(path.read_text())
+    del raw["source_size_px"]
+    path.write_text(json.dumps(raw))
+    assert CameraFile.load(path).source_size_px is None
+
+
+def test_a_source_frame_of_another_aspect_is_refused():
+    with pytest.raises(ValueError, match="aspect"):
+        dataclasses.replace(a_camera_file(), source_size_px=(1280, 960)).validate()

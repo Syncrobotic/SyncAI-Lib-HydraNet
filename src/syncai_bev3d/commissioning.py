@@ -90,6 +90,11 @@ def from_onboard_calib(path: str | Path) -> CameraFile:
             radius_px=math.hypot(h, w) / 2.0,
         ),
         plate_file=raw.get("plate_used"),
+        source_size_px=(
+            (int(raw["source_size_px"][0]), int(raw["source_size_px"][1]))
+            if raw.get("source_size_px")
+            else None
+        ),
         commissioned_at=raw.get("generated"),
         teachers=_teachers_of(raw),
     )

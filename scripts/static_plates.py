@@ -200,6 +200,32 @@ def plate_and_mask(frames: np.ndarray) -> tuple[np.ndarray, np.ndarray, dict]:
     )
 
 
+def source_size(path: Path) -> tuple[int, int] | None:
+    """The clip's native (width, height), before `WORK_W x WORK_H`: what a consumer of the
+    calibration will receive boxes in. None when ffprobe cannot say."""
+    proc = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height",
+            "-of",
+            "csv=p=0",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    try:
+        w, h = proc.stdout.strip().split(",")[:2]
+        return int(w), int(h)
+    except ValueError:
+        return None
+
+
 def slot_of(path: Path) -> str:
     """`archive_20260816-113024_...` -> `20260816-113024`, which is UTC. See the header."""
     return path.stem.split("_")[1]
@@ -248,7 +274,11 @@ def main(argv: list[str] | None = None) -> int:
             Image.fromarray((static * 255).astype(np.uint8)).save(
                 cam_out / f"static_{slot}.png"
             )
-            slots[slot] = {**stats, "role": roles.get(cam, {}).get("role")}
+            slots[slot] = {
+                **stats,
+                "role": roles.get(cam, {}).get("role"),
+                "source_wh": source_size(clip),
+            }
             every = static if every is None else (every & static)
         if every is not None:
             Image.fromarray((every * 255).astype(np.uint8)).save(cam_out / "static_all.png")
