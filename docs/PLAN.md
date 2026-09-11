@@ -705,8 +705,17 @@ order. A component with no step is not scheduled, it is assumed.
    lowered to 0.25 with SAM 3 added beside it — was rejected on its own preview (two or
    three boxes per person, some to the floor under the counter): presence is not the
    only thing a label carries. Pilot on 300 crowded Kaohsiung-cam04 frames: 5.2 SAM 3
-   boxes a frame, 57 s. The full build is `datasets/site30k_counter_v1`; the human
-   ruler's thirty frames wait unlabelled in `datasets/counter_ruler_v1`.
+   boxes a frame, 57 s. **The full build ran the same night, 18 minutes of GPU**:
+   `datasets/site30k_counter_v1`, 29,211 images over the nine site30k cameras, 5,465
+   crowded ones sent to SAM 3, **35,808 SAM 3 person boxes in, 31,552 Grounding DINO
+   boxes replaced, 3,573 kept beside them**; train carries 23,907 SAM 3 and 27,025
+   Grounding DINO person labels, val 10,828 and 16,728, test 1,073 and 6,845, and the
+   loader reads all three splits unchanged. Every camera's preview sheet was looked at:
+   one box per person at the counter on each, the back row included, people through
+   the shopfront glass boxed as people. `configs/hydranet_retail_person02.yaml` is
+   person01 with this root in the `site_person` block and nothing else changed. **Not
+   started: the retrain** (a day of the shared card, the user's call) and the human
+   ruler — thirty frames wait unlabelled in `datasets/counter_ruler_v1`.
 
 ### 7b. Decided — the answer, and what it cost
 
@@ -1084,7 +1093,7 @@ incidents shrinks**. Nothing in this gate ships without a before/after on Gate A
 
 | # | work | evidence it rests on | done when |
 |---|---|---|---|
-| B1 | **occluded-person recall**: the dense head's 20% of shoppers behind counters become boxes — the crop-stage fallback `models/heads/pose.py` reserved, or a dense-to-box proposal at the counter zones only. **Designed 2026-09-10 night as §7a.41**: dense-confirmed birth first, the ×2 counter pass second, crowd labels and person02 third, each gated by the endings instrument and step 6. **Dense-confirmed birth built and rejected the same night** (`runs/endings10`, `11`: 3× the fragments for a fifth more visits; kept as the `--dense-birth` arm); the ×2 counter pass is next | §9.3, §7a.41 | detection mAP unchanged elsewhere, counter-zone recall up on the graded misses; `demoted + taken` on the endings clips down from 37 |
+| B1 | **occluded-person recall**: the dense head's 20% of shoppers behind counters become boxes — the crop-stage fallback `models/heads/pose.py` reserved, or a dense-to-box proposal at the counter zones only. **Designed 2026-09-10 night as §7a.41**: dense-confirmed birth first, the ×2 counter pass second, crowd labels and person02 third, each gated by the endings instrument and step 6. **Dense-confirmed birth built and rejected the same night** (`runs/endings10`, `11`: 3× the fragments for a fifth more visits; kept as the `--dense-birth` arm); the ×2 pass probed at a third more people and shelved as a patch; **the labels are built** (`datasets/site30k_counter_v1`, 2026-09-11) and `person02`'s config waits for the card | §9.3, §7a.41 | detection mAP unchanged elsewhere, counter-zone recall up on the graded misses; `demoted + taken` on the endings clips down from 37 |
 | B2 | **`staff/customer` licensed on every pilot camera**: the three uniform photos per store, and a VLM at L2 as the teacher for the cameras the colour statistics refuse | step 9, §7.15 | balanced accuracy ≥ 0.90 held out by camera on all pilot cameras; `reach_to_shelf` no longer fires on staff at their workstation |
 | B3 | **the VLM at L4, on trigger**, on the card's reserved budget: reads the frames of an alert already filed and writes its verdict as a disposition row beside the operator's | §1.1, §7.4 | agreement between VLM and operator measured per event kind; the disagreements are the next training set |
 | B4 | **per-camera, per-hour baseline** from L1 output: counts, dwell, speed on the world frame, kept beside `camera.json`, no network; each event gains a `rarity` field against its own camera's history | §1.1's survey; §7.37 | rarity separates accepted from rejected rows better than the fleet constant does — or it is dropped |
