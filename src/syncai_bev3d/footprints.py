@@ -57,9 +57,21 @@ SHELF_DEPTH_M = 0.45
 # A counter whose top is not seen: the depth its foot is given (the fleet's counters
 # measure 0.8-1.3 m deep where a top is seen).
 TABLE_DEPTH_M = 0.9
+# A measured counter depth outside this is a top edge that was not the counter's.
+TABLE_DEPTH_RANGE = (0.4, 1.8)
+# A table further than this from the camera's median table height takes the median.
+TABLE_H_TOL = 0.15
 COLUMN_SIDE_M = (0.3, 0.8)
 # A footprint within this of the store's axis is snapped to it; beyond it keeps its own.
 SNAP_DEG = 5.0
+# A top edge is cast only below this fraction of the camera height (see above).
+TOP_EDGE_MAX_FRAC = 0.70
+# The scene's own extent, and how far past the set's median distance a cast may reach.
+CAST_RANGE_M = 12.0
+CAST_SPREAD = 2.5
+# A candidate outside its class's interval scores this much less, so a box that reads
+# right beats a longer one that reads a little better (Taichung-cam10's 6.75 m "table").
+IMPLAUSIBLE_PENALTY = 0.15
 # Heights a tall class's top edge is tried at besides its measured one: a wall-mounted
 # accessory run tops out near 2.0 m, a shop pillar at the ceiling.
 TOP_EDGE_HEIGHTS = {"display_shelf": (1.6, 1.8, 2.0, 2.2), "column": (2.4, 2.7, 3.0)}
@@ -131,8 +143,23 @@ def _foot_pixels(mask: np.ndarray):
     if len(cols) < 5:
         return rows, cols
     slope = np.abs(np.gradient(rows.astype(float), cols.astype(float)))
-    keep = slope <= FOOT_MAX_SLOPE
+    # a foot on the frame's bottom row is the frame's edge, not the fixture's
+    keep = (slope <= FOOT_MAX_SLOPE) & (rows < mask.shape[0] - 1)
     return rows[keep], cols[keep]
+
+
+def _in_range(pts: np.ndarray) -> np.ndarray:
+    """Cast points the scene can hold: within its 12 m and within 2.5x the median
+    distance of the set. A pixel near the horizon casts kilometres away, and one such
+    pixel on a shelf's top edge made Taichung-cam07's shelf 34 m long."""
+    if not len(pts):
+        return pts
+    ok = (np.abs(pts[:, 0]) < CAST_RANGE_M) & (pts[:, 1] > 0) & (pts[:, 1] < CAST_RANGE_M)
+    pts = pts[ok]
+    if len(pts) < 3:
+        return pts
+    dist = np.hypot(pts[:, 0], pts[:, 1])
+    return pts[dist <= CAST_SPREAD * np.median(dist)]
 
 
 def _near_edge(pts: np.ndarray, *, band_m: float = 0.25) -> np.ndarray:
@@ -231,6 +258,7 @@ def object_footprints(ev, yaw: float, *, products=None) -> list[Footprint]:
     cy, sy = np.cos(yaw), np.sin(yaw)
     h_cam = cf.plane.height
     out: list[Footprint] = []
+    objs = []
     for oid in np.unique(ev.objects[ev.objects > 0]):
         obj = _body(ev.objects == oid)
         cids, counts = np.unique(ev.static[obj], return_counts=True)
@@ -239,7 +267,23 @@ def object_footprints(ev, yaw: float, *, products=None) -> list[Footprint]:
             continue
         name = CLASS_NAMES[cid]
         good = obj & z["geom_ok"]
-        h_meas = _height(name, z["height"][good])
+        objs.append((oid, obj, name, good, _height(name, z["height"][good])))
+    # One store buys one counter: a table whose measured height sits far from the
+    # camera's other tables' is DA-V2 collapsing on that one (Taichung-cam10's 4.5 m
+    # row read 0.64 m beside 0.86-1.10), and takes the median of the well-seen ones.
+    table_hs = [
+        h
+        for _oid, obj, name, _good, h in objs
+        if name == "display_table" and obj.sum() >= 20000
+    ]
+    h_store = float(np.median(table_hs)) if len(table_hs) >= 3 else None
+    for oid, obj, name, good, h_meas in objs:
+        if (
+            name == "display_table"
+            and h_store is not None
+            and abs(h_meas - h_store) > TABLE_H_TOL
+        ):
+            h_meas = h_store
         n_px = int(obj.sum())
         candidates: list[Footprint] = []
 
@@ -255,7 +299,7 @@ def object_footprints(ev, yaw: float, *, products=None) -> list[Footprint]:
             if top.sum() >= TOP_MIN_PX:
                 r, c = np.nonzero(top)
                 g = _ground(np.stack([c + 0.5, r + 0.5], axis=1).astype(float), cf, (fh, fw))
-                g = g[np.isfinite(g).all(axis=1)]
+                g = _in_range(g[np.isfinite(g).all(axis=1)])
                 # cast at the measured height. Letting the reprojection choose the height
                 # was tried (2026-09-10): the score climbs with a taller box whatever the
                 # counter is, and it picked 1.10-1.15 m for 0.9 m counters and 0.55 for
@@ -266,9 +310,23 @@ def object_footprints(ev, yaw: float, *, products=None) -> list[Footprint]:
         # the foot on the floor
         r, c = _foot_pixels(obj)
         g = _ground(np.stack([c + 0.5, r + 0.5], axis=1).astype(float), cf, (fh, fw))
-        foot = _near_edge(g[np.isfinite(g).all(axis=1)])
+        foot = _near_edge(_in_range(g[np.isfinite(g).all(axis=1)]))
         if len(foot) >= FOOT_MIN_PTS:
             candidates.append(_box(foot, h_meas, "foot", name, oid, n_px, cy, sy))
+            if name == "display_table" and h_meas < TOP_EDGE_MAX_FRAC * h_cam:
+                # A counter whose top is hidden under its merchandise still shows its
+                # far edge: the mask's top edge, cast at the counter's height, is the
+                # back of the top, and the foot is the front. The depth between them is
+                # measured, where the foot alone had to guess 0.9 m (Taichung-cam10's
+                # rows read 0.33-0.47 at that guess).
+                tr, tc = _top_pixels(obj)
+                gt = _ground(np.stack([tc + 0.5, tr + 0.5], axis=1).astype(float), cf, (fh, fw))
+                back = _in_range(gt[np.isfinite(gt).all(axis=1)] * (h_cam - h_meas) / h_cam)
+                if len(back) >= FOOT_MIN_PTS:
+                    fb = _box(foot, h_meas, "foot", name, oid, n_px, cy, sy)
+                    depth = _depth_between(back, fb, cy, sy)
+                    if depth is not None:
+                        candidates.append(_deepen(fb, depth, "foot+top edge"))
         # the top edge cast at the measured height: a shelf standing on a cabinet, a
         # pillar whose foot is behind a counter, have no foot on the floor to read
         if name != "display_table":
@@ -277,27 +335,85 @@ def object_footprints(ev, yaw: float, *, products=None) -> list[Footprint]:
             g = g[np.isfinite(g).all(axis=1)]
             if len(g) >= FOOT_MIN_PTS:
                 for h in (h_meas, *TOP_EDGE_HEIGHTS.get(name, ())):
-                    if h < h_cam - 0.3:
-                        candidates.append(
-                            _box(
-                                g * (h_cam - h) / h_cam, h, "top edge", name, oid, n_px, cy, sy
-                            )
-                        )
+                    # A top edge near the camera's own height sits near the horizon and
+                    # its floor hits run to 30-100 m; scaled by the few percent left they
+                    # land anywhere. Taichung-cam07's 2.26 m shelf top under a 2.77 m
+                    # camera came out 14-34 m long. Below TOP_EDGE_MAX_FRAC of the camera
+                    # height the cast is conditioned; above it the foot has to serve.
+                    if h < TOP_EDGE_MAX_FRAC * h_cam:
+                        cast = _in_range(g * (h_cam - h) / h_cam)
+                        if len(cast) < FOOT_MIN_PTS:
+                            continue
+                        candidates.append(_box(cast, h, "top edge", name, oid, n_px, cy, sy))
         if not candidates:
             continue
+        raw = {}
         for fp in candidates:
-            fp.iou = reprojection_iou(fp, ev, yaw)
+            raw[id(fp)] = fp.iou = reprojection_iou(fp, ev, yaw)
+            if not _plausible(fp):
+                fp.iou = max(0.0, fp.iou - IMPLAUSIBLE_PENALTY)
         # A table's top says where the table is; its foot says only where its front is.
         # The score cannot choose between them: a shallow box from the foot still covers
         # the counter's whole front face, which is most of its mask from a low camera,
         # and on Taichung-cam10 it beat the top (0.60 to 0.55) with a 0.45 m deep counter.
         # A top that reprojects poorly is not the top (Tao-Hsin-cam15's bar reads its
-        # stools and the wall behind as top, 0.31); then the best candidate stands.
-        tops = [fp for fp in candidates if fp.source == "top" and fp.iou >= TOP_PREFER_MIN]
-        out.append(
-            max(tops, key=lambda f: f.iou) if tops else max(candidates, key=lambda f: f.iou)
-        )
+        # stools and the wall behind as top, 0.31); then the best candidate stands. The
+        # top is judged on its unpenalised score: an L-shaped top is implausible as one
+        # box and is still the top -- the split is what makes it two.
+        tops = [fp for fp in candidates if fp.source == "top" and raw[id(fp)] >= TOP_PREFER_MIN]
+        if tops:
+            top = max(tops, key=lambda f: raw[id(f)])
+            if _plausible(top):
+                out.append(top)
+                continue
+            # an implausible top that cuts into plausible boxes is those boxes; one
+            # that does not (Taichung-cam04's #3 smear, 2.0 x 2.1 m) is not the top
+            parts = _split_top(top, ev, yaw, floor=raw[id(top)])
+            if parts is not None and all(map(_plausible, parts)):
+                out.extend(parts)
+                continue
+        out.append(max(candidates, key=lambda f: f.iou))
     return out
+
+
+def _plausible(fp: Footprint) -> bool:
+    """Inside its class's size interval (`scene_mesh.PLAUSIBLE_M`), span and short side."""
+    from syncai_bev3d.scene_mesh import PLAUSIBLE_M
+
+    iv = PLAUSIBLE_M.get(fp.name)
+    if iv is None:
+        return True
+    span, short = max(fp.u1 - fp.u0, fp.v1 - fp.v0), min(fp.u1 - fp.u0, fp.v1 - fp.v0)
+    return iv["span"][0] <= span <= iv["span"][1] and iv["short"][0] <= short <= iv["short"][1]
+
+
+def _depth_between(back: np.ndarray, fb: Footprint, cy, sy) -> float | None:
+    """Metres from the foot line to the back-edge line, across the box's long side."""
+    bu = back[:, 0] * cy + back[:, 1] * sy
+    bv = -back[:, 0] * sy + back[:, 1] * cy
+    along_u = (fb.u1 - fb.u0) >= (fb.v1 - fb.v0)
+    front = (fb.v0 + fb.v1) / 2 if along_u else (fb.u0 + fb.u1) / 2
+    rear = float(np.median(bv if along_u else bu))
+    depth = abs(rear - front)
+    if not TABLE_DEPTH_RANGE[0] <= depth <= TABLE_DEPTH_RANGE[1]:
+        return None
+    return depth
+
+
+def _deepen(fb: Footprint, depth: float, source: str) -> Footprint:
+    """The foot-built box with its guessed depth replaced, extending away from the camera."""
+    along_u = (fb.u1 - fb.u0) >= (fb.v1 - fb.v0)
+    u0, u1, v0, v1 = fb.u0, fb.u1, fb.v0, fb.v1
+    if along_u:
+        front = v0 if (v0 + v1) / 2 >= 0 else v1
+        v0, v1 = (front, front + depth) if front >= 0 else (front - depth, front)
+    else:
+        front = u0 if (u0 + u1) / 2 >= 0 else u1
+        u0, u1 = (front, front + depth) if front >= 0 else (front - depth, front)
+    return Footprint(
+        name=fb.name, oid=fb.oid, u0=u0, u1=u1, v0=v0, v1=v1, h=fb.h, own_deg=fb.own_deg,
+        n_px=fb.n_px, source=source,
+    )  # fmt: skip
 
 
 def _top_pixels(mask: np.ndarray):
@@ -307,7 +423,9 @@ def _top_pixels(mask: np.ndarray):
     if len(cols) < 5:
         return rows, cols
     slope = np.abs(np.gradient(rows.astype(float), cols.astype(float)))
-    keep = slope <= FOOT_MAX_SLOPE
+    # a top edge on the frame's top row is the frame's edge: the fixture's top is not
+    # seen, and casting the frame's edge put Taichung-cam11's accessory wall at 15 m
+    keep = (slope <= FOOT_MAX_SLOPE) & (rows > 0)
     return rows[keep], cols[keep]
 
 
@@ -539,52 +657,58 @@ def split_footprints(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
     diagonal (-36 deg on the synthetic one), which is why `own_deg` says nothing about
     an L and why the cut is made along the axes the counters were laid on.
     """
-    from syncai_bev3d.scene_mesh import rect_decompose
-
     out: list[Footprint] = []
     for fp in fps:
         if (
             fp.name != "display_table"
             or not fp.source.startswith("top")
+            or "(split)" in fp.source
             or fp.iou < REPROJECTION_MIN
         ):
             out.append(fp)  # a footprint not on its object is not worth cutting
             continue
-        pts = _points_uv(fp, ev, yaw)
-        # not a box in any frame: a rotated rectangle fills its own frame and is left
-        # alone; an L fills neither (its own minimum rectangle is diagonal)
-        if (
-            len(pts) < 200
-            or _fill(pts) >= SPLIT_FILL_OWN_MAX
-            or _fill_axis(pts) >= SPLIT_FILL_MAX
-        ):
-            out.append(fp)
-            continue
-        lo = np.percentile(pts, 1, axis=0)
-        cells = np.floor((pts - lo) / SPLIT_GRID_M).astype(int)
-        cells = cells[(cells >= 0).all(axis=1)]
-        grid = np.zeros((cells[:, 1].max() + 2, cells[:, 0].max() + 2), bool)
-        grid[cells[:, 1], cells[:, 0]] = True
-        grid = ndimage.binary_closing(grid, np.ones((3, 3)))
-        rects = [r for group in rect_decompose(grid, SPLIT_MIN_CELLS) for r in group]
-        rects = [
-            r
-            for r in rects
-            if (r[1] - r[0] + 1) * (r[3] - r[2] + 1) >= SPLIT_MIN_CELLS
-            and min(r[1] - r[0] + 1, r[3] - r[2] + 1) * SPLIT_GRID_M >= SPLIT_PART_SHORT_M
-        ]
-        if not 2 <= len(rects) <= SPLIT_MAX_PARTS:
-            out.append(fp)
-            continue
-        covered = np.zeros_like(grid)
-        for r0, r1, c0, c1 in rects:
-            covered[r0 : r1 + 1, c0 : c1 + 1] = True
-        if (covered & grid).sum() < SPLIT_COVER_MIN * grid.sum():
-            out.append(fp)
-            continue
-        boxes = []
-        for r0, r1, c0, c1 in rects:
-            part = Footprint(
+        parts = _split_top(fp, ev, yaw)
+        out.extend(parts if parts is not None else [fp])
+    return out
+
+
+def _split_top(
+    fp: Footprint, ev, yaw: float, *, floor: float | None = None
+) -> list[Footprint] | None:
+    """The rectangles a top-built footprint decomposes into, or None when it is one box
+    or the parts do not reproject at least as well as `floor` (default: the box's own)."""
+    from syncai_bev3d.scene_mesh import rect_decompose
+
+    floor = fp.iou if floor is None else floor
+    pts = _points_uv(fp, ev, yaw)
+    # not a box in any frame: a rotated rectangle fills its own frame and is left
+    # alone; an L fills neither (its own minimum rectangle is diagonal)
+    if len(pts) < 200 or _fill(pts) >= SPLIT_FILL_OWN_MAX or _fill_axis(pts) >= SPLIT_FILL_MAX:
+        return None
+    lo = np.percentile(pts, 1, axis=0)
+    cells = np.floor((pts - lo) / SPLIT_GRID_M).astype(int)
+    cells = cells[(cells >= 0).all(axis=1)]
+    grid = np.zeros((cells[:, 1].max() + 2, cells[:, 0].max() + 2), bool)
+    grid[cells[:, 1], cells[:, 0]] = True
+    grid = ndimage.binary_closing(grid, np.ones((3, 3)))
+    rects = [r for group in rect_decompose(grid, SPLIT_MIN_CELLS) for r in group]
+    rects = [
+        r
+        for r in rects
+        if (r[1] - r[0] + 1) * (r[3] - r[2] + 1) >= SPLIT_MIN_CELLS
+        and min(r[1] - r[0] + 1, r[3] - r[2] + 1) * SPLIT_GRID_M >= SPLIT_PART_SHORT_M
+    ]
+    if not 2 <= len(rects) <= SPLIT_MAX_PARTS:
+        return None
+    covered = np.zeros_like(grid)
+    for r0, r1, c0, c1 in rects:
+        covered[r0 : r1 + 1, c0 : c1 + 1] = True
+    if (covered & grid).sum() < SPLIT_COVER_MIN * grid.sum():
+        return None
+    boxes = []
+    for r0, r1, c0, c1 in rects:
+        boxes.append(
+            Footprint(
                 name=fp.name,
                 oid=fp.oid,
                 u0=float(lo[0] + c0 * SPLIT_GRID_M),
@@ -597,16 +721,13 @@ def split_footprints(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
                 source=fp.source + " (split)",
                 members=fp.members,
             )
-            boxes.append(part)
-        oids = fp.members or (fp.oid,)
-        together = reprojection_iou_union(boxes, ev, yaw, oids=oids)
-        if together >= fp.iou - 0.02:
-            for b in boxes:
-                b.iou = together
-            out.extend(boxes)
-        else:
-            out.append(fp)
-    return out
+        )
+    together = reprojection_iou_union(boxes, ev, yaw, oids=fp.members or (fp.oid,))
+    if together < floor - 0.02:
+        return None
+    for b in boxes:
+        b.iou = together
+    return boxes
 
 
 def regularise_footprints(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
@@ -739,6 +860,7 @@ def _wall_iou(run: WallRun, ev, yaw: float, *, height_m: float = 2.4) -> float:
 # the D3 rule are not one box.
 INSTANCE_SPLIT_MAX = 0.50  # a placed footprint scoring above this is left alone
 INSTANCE_MIN_PX = 2000
+INSTANCE_SPLIT_GAIN = 0.05  # the parts must reproject this much better than the whole
 
 
 def split_by_instances(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
@@ -754,11 +876,14 @@ def split_by_instances(fps: list[Footprint], ev, yaw: float) -> list[Footprint]:
             out.append(fp)
             continue
         groups = merge_footprints(parts, ev, yaw)
-        if len(groups) < 2 or len(groups) > SPLIT_MAX_PARTS:
+        if len(groups) < 2 or len(groups) > SPLIT_MAX_PARTS or not all(map(_plausible, groups)):
             out.append(fp)
             continue
         together = reprojection_iou_union(groups, ev, yaw, oids=(fp.oid,))
-        if together < fp.iou - 0.02:
+        if together < fp.iou + INSTANCE_SPLIT_GAIN:
+            # The cut has to earn its place: on Taichung-cam10 twenty-six instances of
+            # one counter row chained into 9.3 and 7.3 m "counters" at the same 0.35 as
+            # the one box, and a tie is not a reason to draw three things for one.
             out.append(fp)
             continue
         for g in groups:
