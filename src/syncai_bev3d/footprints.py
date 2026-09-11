@@ -67,6 +67,8 @@ TABLE_H_TOL = 0.15
 COLUMN_SIDE_M = (0.3, 0.8)
 # A footprint within this of the store's axis is snapped to it; beyond it keeps its own.
 SNAP_DEG = 5.0
+# A table mask with this many pixels on the frame's bottom row is cut by the frame.
+FRAME_CUT_MIN_PX = 40
 # A top edge is cast only below this fraction of the camera height (see above).
 TOP_EDGE_MAX_FRAC = 0.70
 # The scene's own extent, and how far past the set's median distance a cast may reach.
@@ -351,6 +353,36 @@ def object_footprints(ev, yaw: float, *, products=None) -> list[Footprint]:
                         if len(cast) < FOOT_MIN_PTS:
                             continue
                         candidates.append(_box(cast, h, "top edge", name, oid, n_px, cy, sy))
+        if (
+            name == "display_table"
+            and obj[-1].sum() >= FRAME_CUT_MIN_PX
+            and h_meas < TOP_EDGE_MAX_FRAC * h_cam
+        ):
+            # A counter cut by the frame's bottom edge has no foot in the picture and a
+            # top under its displays (Taichung-cam11's front counter, 196k px, built
+            # 1.2 m long from the few top pixels between its glass cases). Its far edge
+            # is seen -- the mask's top edge cast at its height -- and its near end is
+            # at least where the frame cuts it: the bottom row's pixels cast at the same
+            # height. The box between them is a lower bound on the counter, on its mask.
+            tr, tc = _top_pixels(obj)
+            gt = _ground(np.stack([tc + 0.5, tr + 0.5], axis=1).astype(float), cf, (fh, fw))
+            back = _in_range(gt[np.isfinite(gt).all(axis=1)] * (h_cam - h_meas) / h_cam)
+            bc = np.nonzero(obj[-1])[0]
+            gb = _ground(np.stack([bc + 0.5, np.full(len(bc), fh - 0.5)], axis=1), cf, (fh, fw))
+            front = _in_range(gb[np.isfinite(gb).all(axis=1)] * (h_cam - h_meas) / h_cam)
+            if len(back) >= FOOT_MIN_PTS and len(front) >= 5:
+                candidates.append(
+                    _box(
+                        np.concatenate([back, front]),
+                        h_meas,
+                        "top edge+frame",
+                        name,
+                        oid,
+                        n_px,
+                        cy,
+                        sy,
+                    )
+                )
         if not candidates:
             continue
         raw = {}
