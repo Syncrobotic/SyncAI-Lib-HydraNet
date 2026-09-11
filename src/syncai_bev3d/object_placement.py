@@ -18,6 +18,11 @@ from scipy.spatial import ConvexHull
 
 from syncai_bev3d.meshes import Placement, place, shelf_levels
 from syncai_bev3d.object_assets import FLOOR_OBJECTS, asset_mesh, plausible_aspect, templates
+from syncai_bev3d.object_facing import (
+    apply_observation,
+    describe_orientation,
+    load_observations,
+)
 from syncai_bev3d.object_instances import OBJECT_PROMPTS, load_instances
 from syncai_bev3d.surfaces import _project, _rays
 
@@ -254,8 +259,9 @@ def fit_instance(instance, cf, supports, *, floor_mask=None, maxiter=None):
     record["dimension_bound_hit"] = bool(
         np.minimum(fractions - 0.7, 1.4 - fractions).min() < 0.02
     )
+    describe_orientation(record)
     record["needs_review"] = bool(
-        score < 0.60 or record["heading_ambiguous"] or record["dimension_bound_hit"]
+        score < 0.60 or record["heading_requires_review"] or record["dimension_bound_hit"]
     )
     return mesh, record
 
@@ -266,6 +272,11 @@ def scene_objects(camera, ev, root: Path, items, *, report=None):
         return [], set()
     source = root / ev.cf.plate_file if ev.cf.plate_file else None
     instances, metadata = load_instances(path, source=source)
+    observations, observation_status = (
+        load_observations(path.with_name("object_facing.json"), source, instances, camera)
+        if source is not None
+        else ({}, "missing source plate")
+    )
     supports = fixture_supports(items)
     built = []
     occupied = []
@@ -278,6 +289,19 @@ def scene_objects(camera, ev, root: Path, items, *, report=None):
         mesh, record = fit_instance(instance, ev.cf, supports, floor_mask=floor)
         record["instance_id"] = index
         if mesh is not None:
+            record["facing_observations_status"] = observation_status
+            mesh = apply_observation(
+                mesh,
+                record,
+                ev.cf,
+                observations.get(index),
+                Silhouette(instance.mask, ev.cf).score,
+            )
+            record["needs_review"] = bool(
+                record["silhouette_iou"] < 0.60
+                or record["heading_requires_review"]
+                or record["dimension_bound_hit"]
+            )
             polygon = footprint(
                 [
                     record["x_m"],

@@ -204,6 +204,17 @@ objects can remain absent. Computer-tower auto-detection is disabled after the l
 plate review found packaged goods misclassified as towers. Door frames use the fitted
 opening plane; handedness and opening angle are not inferred from a doorway mask.
 
+When the source clearly shows a display or rear casing, record that visual review with
+`uv run python tools/commissioning/facing_review.py <camera> --instance <id>
+--visible-side front --reviewer <name> --evidence <description>` (use `back` for a rear
+casing), then rebuild the scene. Reviews in `masks/object_facing.json` are bound to the
+source image and instance mask; changed evidence invalidates them. A reviewed 180-degree
+flip preserves position and dimensions and must retain silhouette IoU at least 0.42,
+losing at most 0.05. Edge-on views remain unresolved. This is a reviewed observation,
+not automatic screen recognition. Reports distinguish `axis_only` templates, whose
+front/back is not represented, from directed assets; `heading_requires_review` and
+`front_back_status` retain that distinction.
+
 The object pass also writes `masks/support_tops.npz`. Scene building can use the visible
 tabletop boundary and cabinet body together to refine a rectangular table's footprint
 and heading, while preserving round tables and already aligned tops. A cropped body
