@@ -34,7 +34,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage
 
-from syncai_bev3d.floor_axis import floor_line_axis
+from syncai_bev3d.floor_axis import SHARPNESS_MAX, floor_line_axes
 from syncai_bev3d.floorplan import (
     FLOOR_BOTH_SIDES,
     floor_both_sides,
@@ -264,6 +264,8 @@ CONTACT_GATED = frozenset({"wall", "column", "display_shelf"})
 # either way. A cabinet's merchandise face stands SHELF_MAX_DEPTH_M off the wall behind
 # it; this is the same distance with the tolerance a contact line's raggedness needs.
 CONTACT_BAND_M = 0.30
+# Floor line families further than this from square are two candidate axes, not one.
+FAMILY_SKEW_MAX = 5.0
 
 
 def _majority_id(ids, rows, cols, shape) -> np.ndarray:
@@ -975,6 +977,22 @@ class Painter:
         return self._key("wall", rgb[near])
 
 
+def _fixture_misalignment(ev: Evidence, axis: float) -> float:
+    """Pixel-weighted mean |own axis| of the placed table and shelf footprints at `axis`:
+    how far the fixtures lie from the store frame this axis defines."""
+    if ev.objects is None or "horiz" not in ev.z:
+        return 90.0
+    fps = [
+        fp
+        for fp in object_footprints(ev, float(axis), products=ev.products)
+        if fp.iou >= REPROJECTION_MIN and fp.name in ("display_table", "display_shelf")
+    ]
+    if not fps:
+        return 90.0  # no fixture to judge by: every candidate ties, and the first wins
+    w = np.array([fp.n_px for fp in fps], float)
+    return float(np.average([abs(fp.own_deg) for fp in fps], weights=w))
+
+
 def store_axis(ev: Evidence, camera, root: Path | None = None) -> float:
     """The store's axis in radians: the floor's joints where they can be read, else the
     fixture blobs.
@@ -998,15 +1016,29 @@ def store_axis(ev: Evidence, camera, root: Path | None = None) -> float:
         x, z = pixel_to_ground(pts[:, 0], pts[:, 1], ev.cf.camera, ev.cf.plane)
         return np.stack([x, z], axis=1)
 
+    blobs = store_yaw(cell_grids(camera, root, gated=False, evidence=ev)[1])
     if ev.plate is not None:
-        axis, second = floor_line_axis(ev.plate, ev.walk, ev.z["gz"], ev.z["geom_ok"], ground)
-        if axis is not None:
+        a1, a2, second = floor_line_axes(ev.plate, ev.walk, ev.z["gz"], ev.z["geom_ok"], ground)
+        if a1 is not None and second <= SHARPNESS_MAX:
+            axis = np.radians(a1 % 90)
+            skew = None if a2 is None else ((a2 - a1) % 180) - 90
+            if skew is not None and abs(skew) > FAMILY_SKEW_MAX:
+                # The two families are not square -- Tao-Hsin-cam15's are 100 deg apart
+                # -- so folding them mod 90 gives two different axes 10 deg apart, and
+                # which is the stronger flipped with a re-run of the masks (7.4 -> 16.4
+                # deg, 2026-09-11). The fixtures decide: the axis along which their own
+                # footprints lie straightest is the one the counters were laid along.
+                # (The blob vote was tried as the judge and sits between the two.)
+                cands = [np.radians(a1 % 90), np.radians(a2 % 90)]
+                axis = min(cands, key=lambda a: _fixture_misalignment(ev, a))
             print(
                 f"  {camera}: store axis {np.degrees(axis):.1f} deg from the floor's lines "
-                f"(2nd peak {second:.2f})"
+                f"(2nd peak {second:.2f}"
+                + ("" if skew is None else f", families {skew:+.1f} deg off square")
+                + ")"
             )
-            return axis
-    return store_yaw(cell_grids(camera, root, gated=False, evidence=ev)[1])
+            return float(axis)
+    return blobs
 
 
 def build_scene_regular(camera, root: Path | None = None):

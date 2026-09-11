@@ -195,3 +195,40 @@ def test_a_lone_family_reports_no_partner():
     ang = rng.normal(30.0, 1.5, 4000) % 180
     a1, a2, _second = floor_axis._two_families(ang, np.ones(len(ang)))
     assert abs(a1 - 30.0) < 0.5 and a2 is None
+
+
+# ------------------------------------- two families off square: which is the axis
+
+
+def _skewed_plate(a_deg, b_deg, *, tile_m=0.6):
+    """Two line families on the floor, at `a_deg` and `b_deg` -- not necessarily square."""
+    img = Image.new("RGB", (W, H), (150, 150, 150))
+    d = ImageDraw.Draw(img)
+    for ang in (a_deg, b_deg):
+        a = math.radians(ang)
+        c, s = math.cos(a), math.sin(a)
+        along = np.linspace(-8, 8, 400)
+        for k in np.arange(-12, 12.01, tile_m):
+            # a line through (k * perp) running along (c, s)
+            x = along * c - k * s
+            z = along * s + k * c
+            u_px, v_px, depth = ground_to_pixel(x, z, CAM, PLANE)
+            ok = np.isfinite(u_px) & np.isfinite(v_px) & (depth > 0) & (z > 0.5) & (z < 9)
+            pts = [(float(p), float(q)) for p, q in zip(u_px[ok], v_px[ok], strict=True)]
+            if len(pts) > 1:
+                d.line(pts, fill=(90, 90, 90), width=2)
+    return np.asarray(img).astype(np.uint8)
+
+
+def test_two_families_off_square_are_both_reported(tmp_path, monkeypatch):
+    root = _store(tmp_path, monkeypatch, plate=_skewed_plate(12.0, 112.0))
+    ev = scene_mesh.load_evidence(CAMERA, root)
+    walk, gz, ok, ground = _floor_geometry()
+    a1, a2, _second = floor_axis.floor_line_axes(ev.plate, walk, gz, ok, ground)
+    assert a1 is not None and a2 is not None
+    # Two families are found. Their angle is not asserted: the drawn 100 deg reads as
+    # 92-112 on this synthetic floor (the mask's own straight edges vote too), and the
+    # 10 deg skew that matters was measured on Tao-Hsin-cam15's real planks.
+    got = math.degrees(scene_mesh.store_axis(ev, CAMERA, root)) % 90
+    fams = [a1 % 90, a2 % 90]
+    assert min(abs(((got - f) + 45) % 90 - 45) for f in fams) < 1.0, (got, fams)  # one of them
