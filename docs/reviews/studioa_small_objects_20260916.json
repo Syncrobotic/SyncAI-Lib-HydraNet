@@ -1,0 +1,404 @@
+{
+  "status": "ai_source_correction_and_partial_detection_wiring_completed",
+  "training_ready_all_detection_classes": false,
+  "source_holdout": "Tao-Hsin",
+  "semantic_source": "runs/studioa_partial_supervision_20260916_v3",
+  "source_manifest_sha256": "9149f9850dbf08ec42619a6f33b58f10036adb992b818dd127d7551bff9a4210",
+  "previous_source_manifest_sha256": "3721c824a93b8dc8aa7444ec410ae0fef09675a95f10fb5e2c5c0ad9b5442876",
+  "changed_semantic_frames": [
+    "0031-Taichung-cam08"
+  ],
+  "unchanged_masks_by_split": {
+    "train": 45,
+    "val": 33,
+    "test": 26,
+    "excluded": 16
+  },
+  "all_split_assignments_unchanged": true,
+  "ai_review": {
+    "reviewer_kind": "ai",
+    "new_phone_masks": 2,
+    "remote_control_removed_from_phone": 1,
+    "independent_ground_truth": false,
+    "phone_train_pixels_before": 40021,
+    "phone_train_pixels_after": 44982
+  },
+  "source_train_val_coverage": {
+    "train": {
+      "floor": {
+        "positive_frames": 46,
+        "positive_cameras": 9,
+        "valid_pixels": 25243222
+      },
+      "wall": {
+        "positive_frames": 46,
+        "positive_cameras": 9,
+        "valid_pixels": 12673905
+      },
+      "ceiling": {
+        "positive_frames": 25,
+        "positive_cameras": 6,
+        "valid_pixels": 76814
+      },
+      "column": {
+        "positive_frames": 10,
+        "positive_cameras": 2,
+        "valid_pixels": 1492236
+      },
+      "door": {
+        "positive_frames": 4,
+        "positive_cameras": 1,
+        "valid_pixels": 428653
+      },
+      "glass_panel": {
+        "positive_frames": 20,
+        "positive_cameras": 6,
+        "valid_pixels": 1463510
+      },
+      "display_cabinet": {
+        "positive_frames": 40,
+        "positive_cameras": 7,
+        "valid_pixels": 9071675
+      },
+      "display_table": {
+        "positive_frames": 42,
+        "positive_cameras": 8,
+        "valid_pixels": 10988248
+      },
+      "counter": {
+        "positive_frames": 15,
+        "positive_cameras": 4,
+        "valid_pixels": 1462965
+      },
+      "laptop": {
+        "positive_frames": 22,
+        "positive_cameras": 5,
+        "valid_pixels": 96336
+      },
+      "phone": {
+        "positive_frames": 6,
+        "positive_cameras": 3,
+        "valid_pixels": 44982
+      },
+      "tablet": {
+        "positive_frames": 6,
+        "positive_cameras": 3,
+        "valid_pixels": 112490
+      },
+      "boxed_stock": {
+        "positive_frames": 17,
+        "positive_cameras": 4,
+        "valid_pixels": 1385062
+      },
+      "cardboard_box": {
+        "positive_frames": 3,
+        "positive_cameras": 2,
+        "valid_pixels": 79078
+      },
+      "speaker": {
+        "positive_frames": 9,
+        "positive_cameras": 4,
+        "valid_pixels": 34971
+      },
+      "poster": {
+        "positive_frames": 4,
+        "positive_cameras": 3,
+        "valid_pixels": 107697
+      },
+      "fire_equipment": {
+        "positive_frames": 8,
+        "positive_cameras": 2,
+        "valid_pixels": 107992
+      },
+      "chair": {
+        "positive_frames": 12,
+        "positive_cameras": 3,
+        "valid_pixels": 95854
+      },
+      "person": {
+        "positive_frames": 38,
+        "positive_cameras": 8,
+        "valid_pixels": 4067976
+      }
+    },
+    "val": {
+      "floor": {
+        "positive_frames": 33,
+        "positive_cameras": 6,
+        "valid_pixels": 19800807
+      },
+      "wall": {
+        "positive_frames": 29,
+        "positive_cameras": 6,
+        "valid_pixels": 8540767
+      },
+      "ceiling": {
+        "positive_frames": 11,
+        "positive_cameras": 3,
+        "valid_pixels": 36670
+      },
+      "column": {
+        "positive_frames": 0,
+        "positive_cameras": 0,
+        "valid_pixels": 0
+      },
+      "door": {
+        "positive_frames": 7,
+        "positive_cameras": 1,
+        "valid_pixels": 1608698
+      },
+      "glass_panel": {
+        "positive_frames": 19,
+        "positive_cameras": 4,
+        "valid_pixels": 391272
+      },
+      "display_cabinet": {
+        "positive_frames": 31,
+        "positive_cameras": 6,
+        "valid_pixels": 6440465
+      },
+      "display_table": {
+        "positive_frames": 33,
+        "positive_cameras": 6,
+        "valid_pixels": 8294039
+      },
+      "counter": {
+        "positive_frames": 8,
+        "positive_cameras": 3,
+        "valid_pixels": 673270
+      },
+      "laptop": {
+        "positive_frames": 22,
+        "positive_cameras": 5,
+        "valid_pixels": 277928
+      },
+      "phone": {
+        "positive_frames": 10,
+        "positive_cameras": 4,
+        "valid_pixels": 35870
+      },
+      "tablet": {
+        "positive_frames": 6,
+        "positive_cameras": 2,
+        "valid_pixels": 25004
+      },
+      "boxed_stock": {
+        "positive_frames": 17,
+        "positive_cameras": 4,
+        "valid_pixels": 388634
+      },
+      "cardboard_box": {
+        "positive_frames": 1,
+        "positive_cameras": 1,
+        "valid_pixels": 39600
+      },
+      "speaker": {
+        "positive_frames": 3,
+        "positive_cameras": 1,
+        "valid_pixels": 30142
+      },
+      "poster": {
+        "positive_frames": 5,
+        "positive_cameras": 2,
+        "valid_pixels": 189146
+      },
+      "fire_equipment": {
+        "positive_frames": 4,
+        "positive_cameras": 2,
+        "valid_pixels": 9661
+      },
+      "chair": {
+        "positive_frames": 18,
+        "positive_cameras": 3,
+        "valid_pixels": 296563
+      },
+      "person": {
+        "positive_frames": 31,
+        "positive_cameras": 6,
+        "valid_pixels": 3102333
+      }
+    }
+  },
+  "instance_package": "runs/studioa_partial_instances_20260916_v1",
+  "instance_counts": {
+    "laptop": 2,
+    "phone": 4,
+    "tablet": 3,
+    "boxed_stock": 0,
+    "cardboard_box": 3,
+    "speaker": 1,
+    "poster": 0,
+    "fire_equipment": 2,
+    "chair": 0,
+    "person": 0
+  },
+  "instance_frames": 6,
+  "reviewed_negative_regions": 6,
+  "reviewed_negative_pixels": 198600,
+  "missing_reviewed_positive_classes": [
+    "boxed_stock",
+    "poster",
+    "chair",
+    "person"
+  ],
+  "gpu_smoke": {
+    "status": "passed",
+    "kind": "wiring_check_not_trained_detector",
+    "job_sha256": "a1c41ce128f800dad323af00564ff75e3a270bb011ecb78cdd0609e5bd7cfcc6",
+    "git_commit": "cab2cb147b2bd4d9c3d1bbaff4d466ec4e93276c",
+    "frames": [
+      "0050-Kaohsiung-cam04",
+      "0030-Taichung-cam08",
+      "0112-Taichung-cam11",
+      "0078-Taichung-cam09",
+      "0025-Taichung-cam05",
+      "0031-Taichung-cam08"
+    ],
+    "partition": "train",
+    "input_size": [
+      512,
+      896
+    ],
+    "classes": [
+      "laptop",
+      "phone",
+      "tablet",
+      "boxed_stock",
+      "cardboard_box",
+      "speaker",
+      "poster",
+      "fire_equipment",
+      "chair",
+      "person"
+    ],
+    "model_config": {
+      "model": {
+        "backbone": {
+          "name": "resnet18",
+          "pretrained": false
+        },
+        "neck": {
+          "name": "fpn",
+          "out_channels": 32,
+          "num_levels": 5
+        },
+        "heads": {
+          "detection": {
+            "type": "fcos",
+            "num_classes": 10,
+            "classes": [
+              "laptop",
+              "phone",
+              "tablet",
+              "boxed_stock",
+              "cardboard_box",
+              "speaker",
+              "poster",
+              "fire_equipment",
+              "chair",
+              "person"
+            ],
+            "channels": 32,
+            "num_convs": 2
+          }
+        },
+        "loss_balancing": "fixed",
+        "fixed_weights": {
+          "detection": 1.0
+        }
+      }
+    },
+    "torch": "2.13.0+cu130",
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",
+    "amp": "bfloat16",
+    "seed": 42,
+    "steps": [
+      {
+        "loss": 2.788435935974121,
+        "detection": 2.788435935974121,
+        "det_cls": 1.147904872894287,
+        "det_reg": 0.9436749815940857,
+        "det_ctr": 0.6968560814857483,
+        "total": 2.788435935974121,
+        "unknown_logit_channels_checked": 180030
+      },
+      {
+        "loss": 2.71453857421875,
+        "detection": 2.71453857421875,
+        "det_cls": 1.0613640546798706,
+        "det_reg": 0.9571650624275208,
+        "det_ctr": 0.6960094571113586,
+        "total": 2.71453857421875,
+        "unknown_logit_channels_checked": 183490
+      },
+      {
+        "loss": 2.7807259559631348,
+        "detection": 2.7807259559631348,
+        "det_cls": 1.1714684963226318,
+        "det_reg": 0.9261210560798645,
+        "det_ctr": 0.683136522769928,
+        "total": 2.7807259559631348,
+        "unknown_logit_channels_checked": 188060
+      }
+    ],
+    "classifier_update_norm": 0.0037068394012749195,
+    "unknown_gradients_nonzero": 0,
+    "checkpoint_written": false,
+    "accuracy_claim": false
+  },
+  "verification": {
+    "frozen_smoke_input_hashes": 188,
+    "initial_related_tests_passed": 260,
+    "final_affected_tests_passed": 187,
+    "test_reused_for_training_or_tuning": false,
+    "new_accuracy_measurement": false
+  },
+  "previews": [
+    {
+      "frame_id": "0050-Kaohsiung-cam04",
+      "image": "0050-Kaohsiung-cam04_instances.jpg",
+      "sha256": "c8065e09a02bb33644b6630c3e31c8b125aaf9de82235a4a950625bcc8bc6f07"
+    },
+    {
+      "frame_id": "0030-Taichung-cam08",
+      "image": "0030-Taichung-cam08_instances.jpg",
+      "sha256": "f4d9e37dfdd0a438c85d8ddbc1792d39989c621ed2495cacfd2450304b964c09"
+    },
+    {
+      "frame_id": "0112-Taichung-cam11",
+      "image": "0112-Taichung-cam11_instances.jpg",
+      "sha256": "57421bf6abf8a9553bfa8f6a1717da60b6bb0d51d18409b5cefcff32697e0a37"
+    },
+    {
+      "frame_id": "0078-Taichung-cam09",
+      "image": "0078-Taichung-cam09_instances.jpg",
+      "sha256": "898907d7869821fccb7f57aaa9e120abaf8bf7d187c899d9aafcbff67ab15675"
+    },
+    {
+      "frame_id": "0025-Taichung-cam05",
+      "image": "0025-Taichung-cam05_instances.jpg",
+      "sha256": "ad8d28f1a1eaee980a24faadd247643fa401fb4eff97367b5193642e797e87b1"
+    },
+    {
+      "frame_id": "0031-Taichung-cam08",
+      "image": "0031-Taichung-cam08_instances.jpg",
+      "sha256": "91f5aaab60d4cd89d868745a38e98cd83d929f0ddc0f25a6a5c94ee1d74b1347"
+    }
+  ],
+  "files": {
+    "runs/studioa_partial_supervision_20260916_v3/report.json": "9280457b4a5b97ea8fe958b3f0b4598bf66821a62446268bf7f10bd76d26740f",
+    "runs/studioa_partial_instances_20260916_v1/manifest.json": "a3994e4aae9f936e1c930b3437a3200aad7f2cde43e471fe2189171b81ad3d99",
+    "runs/studioa_partial_instances_20260916_v1/report.json": "e251b6e40de462eefcb8ba229d0b519756e53174e4b27833a47f8a6e9220a940",
+    "runs/studioa_partial_instances_20260916_v1/reviews.json": "56d0918e4fd1637e805a36449228974cd06b5abc10276d791ec21c3dcb282771",
+    "runs/studioa_partial_detection_smoke_20260916_v1/job.json": "a1c41ce128f800dad323af00564ff75e3a270bb011ecb78cdd0609e5bd7cfcc6",
+    "runs/studioa_partial_detection_smoke_20260916_v1/report.json": "cfc354340db98b96f12c3afb09efad6db49205bfa35557535140191e035d6da8",
+    "runs/studioa_small_objects_20260916_v1/index.html": "00a380c1ef131bd119e03931ddc26def32718f19545972b2e9b367e2e419555c",
+    "docs/reviews/studioa_small_object_decisions_20260916.json": "deda3d31277d58db3d8e11ac54b6e41c72b9ca7eae9ce1230f88e2dda5a17ff7",
+    "docs/reviews/studioa_instance_decisions_20260916.json": "56d0918e4fd1637e805a36449228974cd06b5abc10276d791ec21c3dcb282771"
+  },
+  "next_required": [
+    "expand AI-reviewed positives for boxed_stock/poster/chair/person and camera diversity",
+    "review source-val instances and define explicit partial-label evaluation before detector model selection",
+    "train joint scene/detection only after coverage and evaluation prerequisites are met"
+  ]
+}

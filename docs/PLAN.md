@@ -1900,3 +1900,35 @@ Next: diagnose rare-class and small-product failures using source-store train/va
 AI-supplement missing supervision and implement partial instance-detection supervision.
 Any model revision informed by this test needs fresh reserved evaluation data before a
 new independent generalization claim. Cloud expansion still needs restored credentials.
+
+### 10.24 Small-object AI correction and partial FCOS wiring — 2026-09-16
+
+Source train/val audit identified sparse camera support: phone positive semantic pixels
+on six train frames / three cameras, cardboard_box three frames / two cameras, door
+four frames / one camera. Assistant inspection of source images and isolated masks
+confirmed two previously unresolved phones in train `0031-Taichung-cam08` and rejected
+a remote control incorrectly labelled phone. Prior group deferrals remain preserved.
+
+AI v5 / semantic v3 changes only that train mask: phone train pixels 40,021 -> 44,982.
+All other 120 masks, including 33 source val and 26 held-out Tao-Hsin test, and all fold
+assignments are unchanged. No new test evaluation, cloud download or accuracy claim.
+
+The reviewed instance seed contains 6 train frames / 5 cameras, 15 objects and six
+explicitly empty regions. `studioa_instances` integrates with the dataset factory,
+fingerprints and split checks. FCOS uses positive assigned channels and explicit
+negative regions; unknown pixels/channels/padding contribute no classification loss.
+Positive boxes are protected even on unassigned FPN levels. Existing exhaustive box
+training is unchanged. Config and evaluator refuse ordinary COCO mAP on partial labels.
+
+The frozen GPU smoke completed three 512x896 / batch-2 / bf16 SGD updates with finite
+losses/gradients. All 551,580 checked unknown logit gradients are zero; classifier
+update norm 0.00370684. 188 frozen input hashes verified; systemd exited successfully.
+No checkpoint was written. 260 related tests passed, then 187 affected tests passed
+after the class-order guard; lint/types/commit checks passed. Code/reviews: `cab2cb1`.
+
+[Method, limitations and reproduction](STUDIOA_PARTIAL_DETECTION.md),
+[tracked report](reviews/studioa_small_objects_20260916.json).
+This is completed wiring, not a trained detector. Next: expand reviewed source train
+instances for boxed_stock/poster/chair/person and camera diversity, define reviewed
+source-val detection evaluation, then run joint semantic/detection training. Existing
+semantic checkpoints and held-out test remain untouched.

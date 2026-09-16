@@ -108,3 +108,14 @@ logit 梯度全為零。此 loss 是隨機初始化單步數值，不是學習�
 該次 smoke 未儲存 checkpoint；後續獨立 GPU pilot 見上述試訓練文件。
 見 [AI 補查方法與雲端登入阻塞](STUDIOA_AI_COMPLETION.md)及
 [結果記錄](reviews/studioa_ai_completion_20260916.json)。
+
+## 小商品修正與部分偵測接線（v3）
+
+`runs/studioa_partial_supervision_20260916_v3/` 修正一張來源 train 影像：新增兩個
+手機遮罩、將一個遙控器錯標改列 unknown。手機 train 像素 40,021 → 44,982；
+其餘 120 張語意 mask、所有分割及 val／test 保持不變。
+
+原始正向 COCO 仍不是完整實例真值。另有明確 AI 覆核的 `studioa_instances`
+資料集與 FCOS 部分監督損失，首批 6 張、15 個實例及 6 塊空白區已完成 GPU
+三步接線檢查，未知位置梯度為零。尚未完成全類別偵測資料或正式偵測訓練。
+見 [小商品修正、資料契約與驗證](STUDIOA_PARTIAL_DETECTION.md)。
