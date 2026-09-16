@@ -1833,3 +1833,33 @@ and the real-batch loss path. The [tracked report](reviews/studioa_partial_super
 binds source/export/smoke evidence. Next: AI reclassification and additional labels for
 tables, cabinets/upright racks and counters, plus floor-reflection correction; then
 partial instance-detection loss/loader and a frozen pilot training configuration.
+
+
+### 10.22 AI supplementation and remaining data gaps — 2026-09-16
+
+The local 121-image / 24-camera batch completed in
+`runs/studioa_ai_relabel_20260916_v4/`: 2,825 positive AI instances across all 19 entities,
+5,088 unresolved proposals. SAM added eight fixture/carton/fire queries. Local Cosmos
+review required corrections: context confused object families, isolation confused some
+fixtures, and repeated furniture answers could not settle competing product/structural
+proposals. Failed pilots remain excluded; source-bound assistant decisions and conservative
+abstention are recorded separately. No human annotation was requested.
+
+`runs/studioa_partial_supervision_20260916_v2/` has 177,318,087 valid pixels and 66,137,913
+ignored pixels (72.83% supervision coverage, not accuracy). Cabinet/table/counter train
+support is now nonzero in all three unchanged whole-store folds. Remaining missing train
+classes: Kaohsiung-held-out column/door/cardboard_box; Taichung-held-out fire_equipment;
+Tao-Hsin-held-out none. This is completed local processing, not an exhaustive annotation
+or complete cross-store training dataset. Nested fixture conflicts and uncertain regions
+remain ignored; do not shift held-out cameras or turn ambiguous labels into truth.
+
+Validation: 50 relevant tests, source/output hash checks, camera/decoded-content split
+checks and a new train-only CPU one-step smoke passed. No checkpoint or formal training.
+[Method and artifacts](STUDIOA_AI_COMPLETION.md),
+[tracked results](reviews/studioa_ai_completion_20260916.json).
+
+Cloud supplementation was attempted against user-provided `gs://studioa`; current user
+credentials require reauthentication, other cached credentials cannot read the objects.
+No downloads or default-account changes. User was asked to run `gcloud auth login`.
+Next: restore cloud read access, select new source-bound examples for the four missing
+fold/class combinations, AI-label them, and recheck split isolation before formal training.

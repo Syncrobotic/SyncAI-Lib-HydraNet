@@ -89,3 +89,54 @@ IoU 分組不會把桌面和桌體等不同範圍的遮罩合為一組。因此�
 既有來源中，助理已對前景印表機及三個不成立的玻璃面板候選做過指定遮罩
 延後判定。補查不能僅憑 VLM 回答把它們重新升為正向標籤；合併時保留這四個
 來源綁定的未決判讀。它們與同圖中已另行確認的左上服務櫃檯是不同候選。
+
+## 本機批次結果與剩餘缺口
+
+最終版 `runs/studioa_ai_relabel_20260916_v4/` 完成 **121 張、24 支鏡頭、19 類**：
+2,825 個正向 AI 標籤、5,088 個未決候選。前兩個試跑已停止；第三版完整跑完
+後，另對 587 個跨類別群組做隔離重判，最終合併 695 個群組更正／保留未決決定。
+助理的指定圖像判讀包含 22 個家具候選、100 個稀少類別候選和 11 個重複櫃檯遮罩。
+模型回覆重複不代表正確；不支持的類別、印表機誤判、反射與邊緣不清的區域仍忽略。
+
+`runs/studioa_partial_supervision_20260916_v2/` 完成匯出與完整 hash／分割檢查：
+177,318,087 個可監督像素、66,137,913 個忽略像素。監督覆蓋率由 52.62% 變成
+72.83%，**是資料量，不是準確率**。未決遮罩依然可以排除看似有顏色的正向區域；
+資料集 PNG 和 manifest 的像素統計才代表實際監督量。不同範圍的家具部件遮罩
+仍可能衝突，不能宣稱每個櫃檯或每件商品都已完整標好。
+
+| 留出門市 | train / val / test | train 展示櫃／架像素 | train 展示桌像素 | train 櫃檯像素 | train 缺類 |
+| --- | --- | ---: | ---: | ---: | --- |
+| Kaohsiung | 38 / 29 / 35 | 7,356,581 | 13,331,806 | 517,988 | column, door, cardboard_box |
+| Taichung | 22 / 20 / 60 | 2,808,824 | 5,540,034 | 996,083 | fire_equipment |
+| Tao-Hsin | 46 / 33 / 26 | 9,071,675 | 10,988,248 | 1,462,965 | 無 |
+
+展示櫃／直立架、圓桌／長桌、櫃檯的核心缺類已補上；但 **19 類全資料有標籤**
+不等於 **每個留出方案的 train 都有 19 類**。目前仍有上述四個分割／類別缺口。
+不能搬入 test 影像來消除缺類，也不能降低未決規則來製造覆蓋率。
+
+50 項相關測試通過。兩張 train 影像再做一次 CPU 前向／反向／SGD 接線檢查：
+loss 4.528347，30,627 個有效像素、18,525 個忽略像素；忽略位置的 logit 梯度全零。
+未寫入 checkpoint，未開始正式訓練，未宣稱偵測 loss 或 3D 幾何已完成。
+
+已嘗試讀取使用者提供的 `gs://studioa` 補找新素材，但目前主要帳號需要重新驗證；
+其他已存帳號分別沒有物件讀取權限或登入失效。本輪沒有下載新雲端影片，也沒有
+變更預設帳號。需要在本機執行 `gcloud auth login`，登入可讀取該 bucket 的帳號，
+才能接續補抓資料。**本機補標批次完成，整體資料完整性尚未完成。**
+
+- 全類別標註瀏覽：`runs/studioa_ai_relabel_20260916_v4/index.html`。
+- 地板／展示設備／盒裝商品合併預覽：`runs/studioa_ai_relabel_combined_20260916_v4/index.html`。
+- 最終訓練資料：`runs/studioa_partial_supervision_20260916_v2/`。
+- [可追溯結果與 hash](reviews/studioa_ai_completion_20260916.json)。
+
+重現最終合併與匯出：
+
+```bash
+.venv/bin/python tools/annotation/studioa_autolabel.py relabel-review \
+  --source runs/studioa_ai_relabel_20260916_v3 \
+  --decisions docs/reviews/studioa_group_decisions_20260916.json \
+  --out /tmp/studioa-ai-reviewed
+.venv/bin/python tools/annotation/studioa_supervision.py export \
+  --source /tmp/studioa-ai-reviewed --out /tmp/studioa-partial-targets
+```
+
+輸出目錄必須不存在。原始教師輸出、逐組回覆及修正程式均以 hash 留存。
