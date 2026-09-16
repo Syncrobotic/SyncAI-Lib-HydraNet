@@ -1,0 +1,64 @@
+{
+  "status": "predeclared next experiment; not implemented or launched in this diagnostic step",
+  "diagnostic_report": "docs/reviews/studioa_detector_bottlenecks_20260916.json",
+  "diagnostic_sha256": "d4fe6eff0509637a424b40e0e097dcbc8e8dd50db013655b29153c29b46ec495",
+  "question": "Does averaging regression loss per assigned object instead of per positive grid point improve small-device localization and fixed validation performance?",
+  "control": {
+    "positive_classification": "assigned_object",
+    "regression_normalization": "positive_point_mean"
+  },
+  "candidate": {
+    "positive_classification": "assigned_object",
+    "regression_normalization": "assigned_object_mean",
+    "formula": "For each image and GT object with >=1 actual assigned FCOS point: average GIoU over its assigned points; then average those object losses over the batch. Empty objects contribute no invented targets; zero-positive batch retains zero regression loss.",
+    "assignment_identity": "Use actual target assignment object identity; never merge separate objects by class.",
+    "scope": "Only regression term; classification/centerness formulas and weights stay unchanged. Default remains old behavior."
+  },
+  "fixed": {
+    "instances": "runs/studioa_partial_instances_20260916_v5",
+    "manifest_sha256": "eba13055187110a16c211fd2e76b7cd93fc437e76f711266a1f6c8b022b96428",
+    "initial_checkpoint": "runs/studioa_scene_pilot_20260916_v2/model/best.pt",
+    "initial_sha256": "e0775eee8de02e51f975ce4e25a5f17f92be406bdef32adf954d4affd6aa579d",
+    "class_negative_normalization": "positive_budget",
+    "image_size": [
+      512,
+      896
+    ],
+    "seed": 42,
+    "epochs": 25,
+    "optimizer_updates": 425,
+    "early_stop": false,
+    "small_object_crop": false,
+    "scene_and_backbone_frozen": true,
+    "score_gt": 0.2,
+    "iou_ge": 0.5,
+    "nms": 0.6,
+    "max_det": 100,
+    "validation_selection": "highest recall, earlier wins tie; report best andlast",
+    "test_inference": false,
+    "threshold_search": false
+  },
+  "checks_before_training": [
+    "Overlap and same-class distinct-object assignment identities remain exact.",
+    "Equal points per object agrees with old regression loss; duplicating one object points does not increase its weight.",
+    "Unknown/unassigned positions and classification/centerness losses unchanged.",
+    "Zero-positive and CUDA mixed precision deterministic backward finite.",
+    "Control reproduces previous assigned model best/last and history."
+  ],
+  "promotion": {
+    "strictly_exceeds_same_budget_control": true,
+    "matched_total_gt": 7,
+    "matched_phone_ge": 1,
+    "matched_person_ge": 5,
+    "matched_poster_ge": 1,
+    "reviewed_empty_fp_le": 0,
+    "scene_logits_byte_identical": true,
+    "experimental_reference_only": true
+  },
+  "risks": [
+    "Equal object weighting can amplify uncertain tiny AI labels.",
+    "Train size correlation and supervision point counts do not prove causal underweighting.",
+    "No new image detail or finer feature grid is created by changing loss normalization.",
+    "Six-frame source validation reused; scores are not independent accuracy."
+  ]
+}

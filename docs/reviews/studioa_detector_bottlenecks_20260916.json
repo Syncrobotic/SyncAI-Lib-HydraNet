@@ -1,0 +1,733 @@
+{
+  "status": "completed; diagnostic only; retained reference unchanged",
+  "source_commit": "0ac5809",
+  "protocol": {
+    "score_gt": 0.2,
+    "iou_ge": 0.5,
+    "nms": 0.6,
+    "max_det": 100,
+    "test_evaluated": false,
+    "val_evaluated": false,
+    "centerness_counterfactual": "set to 1 only to classify bottlenecks; not applied to decoder"
+  },
+  "scope": "source-train only; full-frame float32 no augmentation; per-object coverage, not one-to-one recall or independent accuracy",
+  "runs": {
+    "runs/studioa_detector_competition_20260916_v2_control": {
+      "best.pt": {
+        "sha256": "4e7b6a915ad4bc04e5d8629a0a8b3d51f7a609afbfe738a6ffb005eb958f4759",
+        "epoch": 11,
+        "global_step": 187,
+        "summary": {
+          "laptop": {
+            "objects": 9,
+            "cameras": 2,
+            "reasons": {
+              "class_competition": 9
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 0,
+            "raw_localization_coverage": 9
+          },
+          "phone": {
+            "objects": 33,
+            "cameras": 5,
+            "reasons": {
+              "localization": 25,
+              "class_competition": 8
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 0,
+            "raw_localization_coverage": 8
+          },
+          "tablet": {
+            "objects": 31,
+            "cameras": 7,
+            "reasons": {
+              "class_competition": 19,
+              "localization": 12
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 0,
+            "raw_localization_coverage": 19
+          },
+          "boxed_stock": {
+            "objects": 10,
+            "cameras": 5,
+            "reasons": {
+              "class_competition": 5,
+              "covered_after_decode": 1,
+              "localization": 4
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 1,
+            "raw_localization_coverage": 6
+          },
+          "cardboard_box": {
+            "objects": 4,
+            "cameras": 2,
+            "reasons": {
+              "class_competition": 2,
+              "centerness_gate": 1,
+              "covered_after_decode": 1
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 2,
+            "raw_localization_coverage": 4
+          },
+          "speaker": {
+            "objects": 9,
+            "cameras": 3,
+            "reasons": {
+              "centerness_gate": 1,
+              "class_competition": 7,
+              "localization": 1
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 1,
+            "raw_localization_coverage": 8
+          },
+          "poster": {
+            "objects": 20,
+            "cameras": 7,
+            "reasons": {
+              "covered_after_decode": 13,
+              "nms_or_cap": 4,
+              "centerness_gate": 1,
+              "class_competition": 2
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 18,
+            "raw_localization_coverage": 20
+          },
+          "fire_equipment": {
+            "objects": 8,
+            "cameras": 2,
+            "reasons": {
+              "class_competition": 4,
+              "localization": 4
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 0,
+            "raw_localization_coverage": 4
+          },
+          "chair": {
+            "objects": 15,
+            "cameras": 5,
+            "reasons": {
+              "nms_or_cap": 4,
+              "covered_after_decode": 2,
+              "class_competition": 4,
+              "localization": 5
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 6,
+            "raw_localization_coverage": 10
+          },
+          "person": {
+            "objects": 23,
+            "cameras": 7,
+            "reasons": {
+              "covered_after_decode": 18,
+              "nms_or_cap": 5
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 23,
+            "raw_localization_coverage": 23
+          }
+        }
+      },
+      "last.pt": {
+        "sha256": "918609bb997b02a085f13d3ec835997426189de7b01e611ef17bbb327e92a53c",
+        "epoch": 25,
+        "global_step": 425,
+        "summary": {
+          "laptop": {
+            "objects": 9,
+            "cameras": 2,
+            "reasons": {
+              "class_competition": 9
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 0,
+            "raw_localization_coverage": 9
+          },
+          "phone": {
+            "objects": 33,
+            "cameras": 5,
+            "reasons": {
+              "class_competition": 12,
+              "localization": 21
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 0,
+            "raw_localization_coverage": 12
+          },
+          "tablet": {
+            "objects": 31,
+            "cameras": 7,
+            "reasons": {
+              "class_competition": 21,
+              "localization": 10
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 0,
+            "raw_localization_coverage": 21
+          },
+          "boxed_stock": {
+            "objects": 10,
+            "cameras": 5,
+            "reasons": {
+              "class_competition": 5,
+              "covered_after_decode": 1,
+              "localization": 4
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 1,
+            "raw_localization_coverage": 6
+          },
+          "cardboard_box": {
+            "objects": 4,
+            "cameras": 2,
+            "reasons": {
+              "localization": 1,
+              "class_competition": 2,
+              "covered_after_decode": 1
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 1,
+            "raw_localization_coverage": 3
+          },
+          "speaker": {
+            "objects": 9,
+            "cameras": 3,
+            "reasons": {
+              "centerness_gate": 1,
+              "nms_or_cap": 1,
+              "class_competition": 5,
+              "localization": 1,
+              "covered_after_decode": 1
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 3,
+            "raw_localization_coverage": 8
+          },
+          "poster": {
+            "objects": 20,
+            "cameras": 7,
+            "reasons": {
+              "covered_after_decode": 13,
+              "nms_or_cap": 6,
+              "class_competition": 1
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 19,
+            "raw_localization_coverage": 20
+          },
+          "fire_equipment": {
+            "objects": 8,
+            "cameras": 2,
+            "reasons": {
+              "class_competition": 4,
+              "localization": 4
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 0,
+            "raw_localization_coverage": 4
+          },
+          "chair": {
+            "objects": 15,
+            "cameras": 5,
+            "reasons": {
+              "nms_or_cap": 4,
+              "covered_after_decode": 1,
+              "class_competition": 4,
+              "localization": 6
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 5,
+            "raw_localization_coverage": 9
+          },
+          "person": {
+            "objects": 23,
+            "cameras": 7,
+            "reasons": {
+              "covered_after_decode": 18,
+              "nms_or_cap": 4,
+              "class_competition": 1
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 22,
+            "raw_localization_coverage": 23
+          }
+        }
+      }
+    },
+    "runs/studioa_detector_competition_20260916_v2_assigned": {
+      "best.pt": {
+        "sha256": "c434e8aa48dda71aca932fd78f63a3fb35a44d957d5bdb0224c180aa32e1a55d",
+        "epoch": 5,
+        "global_step": 85,
+        "summary": {
+          "laptop": {
+            "objects": 9,
+            "cameras": 2,
+            "reasons": {
+              "centerness_gate": 3,
+              "class_competition": 2,
+              "class_probability": 4
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 3,
+            "raw_localization_coverage": 9
+          },
+          "phone": {
+            "objects": 33,
+            "cameras": 5,
+            "reasons": {
+              "localization": 30,
+              "class_probability": 2,
+              "centerness_gate": 1
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 1,
+            "raw_localization_coverage": 3
+          },
+          "tablet": {
+            "objects": 31,
+            "cameras": 7,
+            "reasons": {
+              "covered_after_decode": 7,
+              "centerness_gate": 9,
+              "localization": 13,
+              "nms_or_cap": 1,
+              "class_probability": 1
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 17,
+            "raw_localization_coverage": 18
+          },
+          "boxed_stock": {
+            "objects": 10,
+            "cameras": 5,
+            "reasons": {
+              "centerness_gate": 2,
+              "covered_after_decode": 3,
+              "localization": 4,
+              "class_probability": 1
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 5,
+            "raw_localization_coverage": 6
+          },
+          "cardboard_box": {
+            "objects": 4,
+            "cameras": 2,
+            "reasons": {
+              "class_probability": 3,
+              "centerness_gate": 1
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 1,
+            "raw_localization_coverage": 4
+          },
+          "speaker": {
+            "objects": 9,
+            "cameras": 3,
+            "reasons": {
+              "covered_after_decode": 1,
+              "nms_or_cap": 1,
+              "localization": 2,
+              "centerness_gate": 5
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 7,
+            "raw_localization_coverage": 7
+          },
+          "poster": {
+            "objects": 20,
+            "cameras": 7,
+            "reasons": {
+              "centerness_gate": 9,
+              "covered_after_decode": 4,
+              "class_probability": 5,
+              "class_competition": 2
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 13,
+            "raw_localization_coverage": 20
+          },
+          "fire_equipment": {
+            "objects": 8,
+            "cameras": 2,
+            "reasons": {
+              "centerness_gate": 1,
+              "class_probability": 3,
+              "localization": 4
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 1,
+            "raw_localization_coverage": 4
+          },
+          "chair": {
+            "objects": 15,
+            "cameras": 5,
+            "reasons": {
+              "class_probability": 10,
+              "localization": 4,
+              "covered_after_decode": 1
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 1,
+            "raw_localization_coverage": 11
+          },
+          "person": {
+            "objects": 23,
+            "cameras": 7,
+            "reasons": {
+              "covered_after_decode": 16,
+              "centerness_gate": 3,
+              "nms_or_cap": 3,
+              "class_probability": 1
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 22,
+            "raw_localization_coverage": 23
+          }
+        }
+      },
+      "last.pt": {
+        "sha256": "70dd3ba8ce2fb571ee1016624a70b9146bb74465aabc0a235b58463bf6be8a7f",
+        "epoch": 25,
+        "global_step": 425,
+        "summary": {
+          "laptop": {
+            "objects": 9,
+            "cameras": 2,
+            "reasons": {
+              "covered_after_decode": 7,
+              "centerness_gate": 2
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 9,
+            "raw_localization_coverage": 9
+          },
+          "phone": {
+            "objects": 33,
+            "cameras": 5,
+            "reasons": {
+              "centerness_gate": 6,
+              "nms_or_cap": 2,
+              "covered_after_decode": 2,
+              "localization": 23
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 10,
+            "raw_localization_coverage": 10
+          },
+          "tablet": {
+            "objects": 31,
+            "cameras": 7,
+            "reasons": {
+              "covered_after_decode": 16,
+              "centerness_gate": 5,
+              "localization": 10
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 21,
+            "raw_localization_coverage": 21
+          },
+          "boxed_stock": {
+            "objects": 10,
+            "cameras": 5,
+            "reasons": {
+              "covered_after_decode": 6,
+              "localization": 4
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 6,
+            "raw_localization_coverage": 6
+          },
+          "cardboard_box": {
+            "objects": 4,
+            "cameras": 2,
+            "reasons": {
+              "centerness_gate": 1,
+              "covered_after_decode": 3
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 4,
+            "raw_localization_coverage": 4
+          },
+          "speaker": {
+            "objects": 9,
+            "cameras": 3,
+            "reasons": {
+              "covered_after_decode": 6,
+              "centerness_gate": 2,
+              "localization": 1
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 8,
+            "raw_localization_coverage": 8
+          },
+          "poster": {
+            "objects": 20,
+            "cameras": 7,
+            "reasons": {
+              "covered_after_decode": 13,
+              "centerness_gate": 7
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 20,
+            "raw_localization_coverage": 20
+          },
+          "fire_equipment": {
+            "objects": 8,
+            "cameras": 2,
+            "reasons": {
+              "covered_after_decode": 4,
+              "localization": 4
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 4,
+            "raw_localization_coverage": 4
+          },
+          "chair": {
+            "objects": 15,
+            "cameras": 5,
+            "reasons": {
+              "centerness_gate": 4,
+              "covered_after_decode": 5,
+              "localization": 5,
+              "class_probability": 1
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 9,
+            "raw_localization_coverage": 10
+          },
+          "person": {
+            "objects": 23,
+            "cameras": 7,
+            "reasons": {
+              "covered_after_decode": 20,
+              "class_competition": 1,
+              "nms_or_cap": 2
+            },
+            "no_assigned_points": 0,
+            "oracle_centerness_coverage": 22,
+            "raw_localization_coverage": 23
+          }
+        }
+      }
+    }
+  },
+  "scale_breakdown": {
+    "bins": "Short side in model input pixels, 16 and32 are 2x and4x stride8; descriptive train-only bins, not tuning.",
+    "last_epoch_25": {
+      "runs/studioa_detector_competition_20260916_v2_control": {
+        "phone": {
+          "short_side_lt16": {
+            "objects": 19,
+            "raw_localized": 3,
+            "assignment_points": 61,
+            "reasons": {
+              "localization": 16,
+              "class_competition": 3
+            }
+          },
+          "short_side_16_to32": {
+            "objects": 12,
+            "raw_localized": 8,
+            "assignment_points": 239,
+            "reasons": {
+              "class_competition": 8,
+              "localization": 4
+            }
+          },
+          "short_side_ge32": {
+            "objects": 2,
+            "raw_localized": 1,
+            "assignment_points": 44,
+            "reasons": {
+              "class_competition": 1,
+              "localization": 1
+            }
+          }
+        },
+        "tablet": {
+          "short_side_lt16": {
+            "objects": 0,
+            "raw_localized": 0,
+            "assignment_points": 0,
+            "reasons": {}
+          },
+          "short_side_16_to32": {
+            "objects": 14,
+            "raw_localized": 4,
+            "assignment_points": 154,
+            "reasons": {
+              "class_competition": 4,
+              "localization": 10
+            }
+          },
+          "short_side_ge32": {
+            "objects": 17,
+            "raw_localized": 17,
+            "assignment_points": 731,
+            "reasons": {
+              "class_competition": 17
+            }
+          }
+        },
+        "laptop": {
+          "short_side_lt16": {
+            "objects": 0,
+            "raw_localized": 0,
+            "assignment_points": 0,
+            "reasons": {}
+          },
+          "short_side_16_to32": {
+            "objects": 0,
+            "raw_localized": 0,
+            "assignment_points": 0,
+            "reasons": {}
+          },
+          "short_side_ge32": {
+            "objects": 9,
+            "raw_localized": 9,
+            "assignment_points": 442,
+            "reasons": {
+              "class_competition": 9
+            }
+          }
+        }
+      },
+      "runs/studioa_detector_competition_20260916_v2_assigned": {
+        "phone": {
+          "short_side_lt16": {
+            "objects": 19,
+            "raw_localized": 2,
+            "assignment_points": 61,
+            "reasons": {
+              "localization": 17,
+              "centerness_gate": 2
+            }
+          },
+          "short_side_16_to32": {
+            "objects": 12,
+            "raw_localized": 7,
+            "assignment_points": 239,
+            "reasons": {
+              "centerness_gate": 4,
+              "covered_after_decode": 2,
+              "localization": 5,
+              "nms_or_cap": 1
+            }
+          },
+          "short_side_ge32": {
+            "objects": 2,
+            "raw_localized": 1,
+            "assignment_points": 44,
+            "reasons": {
+              "nms_or_cap": 1,
+              "localization": 1
+            }
+          }
+        },
+        "tablet": {
+          "short_side_lt16": {
+            "objects": 0,
+            "raw_localized": 0,
+            "assignment_points": 0,
+            "reasons": {}
+          },
+          "short_side_16_to32": {
+            "objects": 14,
+            "raw_localized": 4,
+            "assignment_points": 154,
+            "reasons": {
+              "covered_after_decode": 1,
+              "centerness_gate": 3,
+              "localization": 10
+            }
+          },
+          "short_side_ge32": {
+            "objects": 17,
+            "raw_localized": 17,
+            "assignment_points": 731,
+            "reasons": {
+              "covered_after_decode": 15,
+              "centerness_gate": 2
+            }
+          }
+        },
+        "laptop": {
+          "short_side_lt16": {
+            "objects": 0,
+            "raw_localized": 0,
+            "assignment_points": 0,
+            "reasons": {}
+          },
+          "short_side_16_to32": {
+            "objects": 0,
+            "raw_localized": 0,
+            "assignment_points": 0,
+            "reasons": {}
+          },
+          "short_side_ge32": {
+            "objects": 9,
+            "raw_localized": 9,
+            "assignment_points": 442,
+            "reasons": {
+              "covered_after_decode": 7,
+              "centerness_gate": 2
+            }
+          }
+        }
+      }
+    }
+  },
+  "verification": {
+    "all_4_checkpoints_162_objects": true,
+    "gates_nested": true,
+    "paired_products_verified": true,
+    "each_run_frozen_inputs_verified": 807,
+    "each_run_outputs_verified": 8,
+    "training_or_inference_behavior_modified": false
+  },
+  "service": {
+    "unit": "studioa-detector-diagnosis-20260916-v1",
+    "Result": "success",
+    "ExecMainStatus": 0
+  },
+  "tests": {
+    "passed": 13,
+    "ruff": "passed",
+    "ty": "passed",
+    "commit_hooks": "passed"
+  },
+  "visual_review": {
+    "reviewer_kind": "ai",
+    "images": 8,
+    "finding": "Several small device examples have oversized raw predictions; larger device examples can localize. Native/input pairs reviewed. This illustrative selection does not validate all existing AI labels; tiny, occluded labels retain uncertainty.",
+    "labels_changed": false
+  },
+  "decision": {
+    "immediate_gcs_expansion": false,
+    "reason": "Phone localization already fails on23/33 existing train positives at425 updates. Collecting more similar frames alone does not isolate this failure.",
+    "next_experiment": "Compare point-mean vs object-mean regression loss with assigned_object classification fixed, at equal budget. This is a hypothesis, not an established cure.",
+    "retained_reference": "runs/studioa_detector_warmup_20260916_v1/model/best.pt",
+    "deployed": false
+  },
+  "artifacts": {
+    "runs/studioa_detector_diagnosis_20260916_v1/diagnosis.json": "1839ff2e21943f85082007be883d79b3cc4843521fdab91a162250e9b2f97f09",
+    "runs/studioa_detector_diagnosis_20260916_v1/scale_breakdown.json": "76b30f51f6e9ffa05a28afe5a5ef9a784493287e40a4b775ff84e2b422848676",
+    "runs/studioa_detector_diagnosis_20260916_v1/visual_selection.json": "3d7855c5a56dc097b0769b273b796bb8dee4e6f318d8130e96fda3ea75a6f81b",
+    "runs/studioa_detector_diagnosis_20260916_v1/train_review.jpg": "3d8386d4a2707377c86fb467bfe9ebf5b56dd8b262e65da813140808d060a5ee",
+    "runs/studioa_detector_diagnosis_20260916_v1/render_review.py": "7f77c816c6bb86d2a24af9609f54a54188b141f3b68b040b73403ddf615133f5",
+    "runs/studioa_detector_diagnosis_20260916_v1/status.json": "0cb87b61f0afab118ac222a0af92bc06c579959aeea208461294d16becf11b39",
+    "runs/studioa_detector_diagnosis_20260916_v1.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tools/annotation/studioa_detector_diagnose.py": "afa92473d4e787d70266394f856ef6a7a5564b2267ecab371b5bd72cc5a04c18",
+    "tests/test_studioa_detector_diagnose.py": "efd4aa6d287b7f5a6e71371cc067a4946a761a51f89a7bfa4009bf953d9e4efc"
+  }
+}
