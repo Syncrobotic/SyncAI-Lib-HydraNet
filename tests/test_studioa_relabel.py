@@ -157,3 +157,20 @@ def test_visual_decisions_bind_sources_reject_duplicates_and_preserve_model_answ
     with pytest.raises(ValueError, match="duplicate"):
         validate_visual_decisions(document, [frame], annotations)
     assert parse_answer("display_table")["response_format"] == "class_only"
+
+
+def test_isolated_recheck_targets_mixed_family_furniture_only():
+    from syncai_hydranet.data.studioa_relabel import needs_isolated_recheck
+
+    fixture = [{"entity": "display_cabinet"}]
+    mixed = [*fixture, {"entity": "laptop"}]
+    assert needs_isolated_recheck(mixed, {"entity": "display_cabinet"})
+    assert not needs_isolated_recheck(fixture, {"entity": "display_cabinet"})
+    assert not needs_isolated_recheck(mixed, {"entity": "laptop"})
+    assert not needs_isolated_recheck(
+        mixed,
+        {
+            "entity": "display_cabinet",
+            "basis": "assistant_visual_review",
+        },
+    )

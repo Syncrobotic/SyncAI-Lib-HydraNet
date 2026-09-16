@@ -251,6 +251,13 @@ def apply_visual_decision(group: list[dict], decision: dict, overrides: dict) ->
     }
 
 
+def needs_isolated_recheck(group: list[dict], decision: dict) -> bool:
+    fixtures = {"display_table", "display_cabinet", "counter", "other_shelf"}
+    if decision.get("basis") == "assistant_visual_review":
+        return False
+    return decision["entity"] in fixtures and not {row["entity"] for row in group} <= fixtures
+
+
 def revise_group_decisions(raw: dict, reviews: list[dict]) -> list[dict]:
     """Apply explicit AI inspection decisions; caller verifies the raw file hash."""
     decisions = deepcopy(raw["decisions"])
@@ -269,7 +276,8 @@ def revise_group_decisions(raw: dict, reviews: list[dict]) -> list[dict]:
             **previous,
             "entity": review["entity"],
             "reason": review["reason"],
-            "basis": "assistant_visual_group_review",
+            "basis": review.get("review_source", "assistant_visual_group_review"),
+            "review_decision": review,
             "previous_decision": previous,
         }
     return decisions

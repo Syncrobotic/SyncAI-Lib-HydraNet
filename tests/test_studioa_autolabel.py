@@ -205,6 +205,17 @@ def test_worker_freezes_writes_resumes_and_rejects_foreign_checkpoints(tmp_path,
     worker.relabel_run(relabeled, "cpu")
     assert relabeled_target.read_bytes() == relabeled_bytes
     raw_path = relabeled / "raw" / target.name
+    recheck_path = tool_path.with_name("studioa_isolated_recheck.py")
+    spec = importlib.util.spec_from_file_location("recheck_test", recheck_path)
+    assert spec is not None and spec.loader is not None
+    recheck = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(recheck)
+    monkeypatch.setattr(recheck, "LocalReviewer", lambda _device: FakeReviewer())
+    rechecked = tmp_path / "rechecked"
+    recheck.prepare(relabeled, rechecked)
+    recheck.run(rechecked, "cpu")
+    assert json.loads((rechecked / "report.json").read_text())["reviewed_groups"] == 0
+    recheck.run(rechecked, "cpu")
     group_decisions = tmp_path / "group_decisions.json"
     worker.write(
         group_decisions,
