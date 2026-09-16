@@ -224,6 +224,40 @@ def warm_start(model, checkpoint: dict, cfg: dict) -> None:
         raise ValueError(f"incompatible warm start: {result}")
 
 
+def scene_comparison_config(
+    config: dict, train_frames: int, updates: int, interval: int, weights: list[float]
+) -> dict:
+    """Equal update/selection budgets across unequal datasets; never read test images."""
+    if config["train"].get("grad_accum_steps", 1) != 1:
+        raise ValueError("scene comparison requires one batch per optimizer update")
+    steps = train_frames // config["train"]["batch_size"]
+    if (
+        steps < 1
+        or updates < 1
+        or interval < 1
+        or updates % steps
+        or interval % steps
+        or updates % interval
+    ):
+        raise ValueError("scene updates/validation interval must align with full epochs")
+    if len(weights) != len(CLASSES) or not all(np.isfinite(w) and w > 0 for w in weights):
+        raise ValueError("scene comparison requires positive finite class weights")
+    config["experiment"] = "studioa_scene_data_comparison"
+    config["model"]["heads"]["scene"]["loss"]["class_weights"] = weights
+    config["train"].update(
+        epochs=updates // steps,
+        val_interval=interval // steps,
+        early_stop_patience=0,
+        deterministic=True,
+        cudnn_benchmark=False,
+        tf32=False,
+    )
+    for ds in config["data"]["datasets"]:
+        ds.pop("split_test", None)
+    check_config(config)
+    return config
+
+
 def prepare(
     source: Path,
     out: Path,
@@ -236,6 +270,9 @@ def prepare(
     fixed_epochs: int | None = None,
     positive_classification: str = "positive_only",
     regression_normalization: str = "positive_point_mean",
+    scene_comparison_updates: int | None = None,
+    scene_validation_updates: int = 165,
+    scene_class_weights_source: Path | None = None,
 ) -> None:
     from syncai_hydranet.utils.visualize import terrain_palette
 
@@ -263,6 +300,15 @@ def prepare(
         raise ValueError("unsupported class negative normalization")
     if class_negative_normalization != "sum" and not detector_warmup:
         raise ValueError("class negative normalization comparison requires detector warmup")
+    scene_weights_manifest = None
+    if scene_comparison_updates is not None:
+        if instances is not None or detector_warmup or scene_class_weights_source is None:
+            raise ValueError("scene comparison requires semantic-only data and weight source")
+        scene_weights_manifest = check_supervision(scene_class_weights_source)
+        if scene_weights_manifest["folds"][held_out]["missing_train_classes"]:
+            raise ValueError("scene comparison weight source is missing train classes")
+    elif scene_class_weights_source is not None:
+        raise ValueError("scene weight source requires scene comparison updates")
     instance_counts = {}
     if instances is not None:
         from collections import Counter
@@ -314,6 +360,18 @@ def prepare(
     weights.parent.mkdir(parents=True)
     shutil.copyfile(Path.home() / ".cache/torch/hub/checkpoints" / weights.name, weights)
     config = pilot_config(out / "data", out, manifest, held_out)
+    if scene_weights_manifest is not None:
+        weight_config = pilot_config(out / "data", out, scene_weights_manifest, held_out)
+        weights = weight_config["model"]["heads"]["scene"]["loss"]["class_weights"]
+        assert scene_comparison_updates is not None
+        config = scene_comparison_config(
+            config,
+            manifest["folds"][held_out]["counts"]["train"],
+            scene_comparison_updates,
+            scene_validation_updates,
+            weights,
+        )
+        write_json(out / "class_weights_source_manifest.json", scene_weights_manifest)
     if instances is not None:
         config = joint_config(config, out / "instances", held_out)
     if detector_warmup:
@@ -361,13 +419,25 @@ def prepare(
             "fixed_epochs": fixed_epochs,
             "positive_classification": positive_classification,
             "regression_normalization": regression_normalization,
+            "scene_comparison": scene_comparison_updates is not None,
+            "scene_comparison_updates": scene_comparison_updates,
+            "scene_validation_updates": scene_validation_updates
+            if scene_comparison_updates is not None
+            else None,
+            "scene_class_weights_source_sha256": digest(
+                scene_class_weights_source / "manifest.json"
+            )
+            if scene_class_weights_source is not None
+            else None,
             "instance_counts": instance_counts,
             "git_commit": git,
             "held_out": held_out,
             "counts": manifest["folds"][held_out]["counts"],
             "source_manifest_sha256": digest(source / "manifest.json"),
             "classes": CLASSES,
-            "class_weights": "sqrt median/train frequency clipped 0.25..4",
+            "class_weights": "shared train reference; sqrt median/frequency clipped 0.25..4"
+            if scene_comparison_updates is not None
+            else "sqrt median/train frequency clipped 0.25..4",
             "selection": (
                 "maximum reviewed-positive source-val recall at fixed score >0.20 / IoU >=0.50"
                 if detector_warmup
@@ -380,7 +450,9 @@ def prepare(
                 else None
             ),
             "evaluation": (
-                "source val only; partial recall and empty-region alarms; no test evaluation"
+                "source val only; retained AI semantic pixels; no test evaluation"
+                if scene_comparison_updates is not None
+                else "source val only; partial recall and empty-region alarms; no test"
                 if instances is not None
                 else "held-out store once, after selection; no independent accuracy claim"
             ),
@@ -460,6 +532,8 @@ def run(out: Path) -> None:
 
         last = out / "model/last.pt"
         trainer = PilotTrainer(cfg, resuming=last.exists())
+        if job.get("scene_comparison") and not last.exists():
+            torch.save(trainer.model.state_dict(), out / "initial_state.pt")
         if warmup:
             warm_start(trainer.model, load_checkpoint(out / "initial.pt"), cfg)
             reference = frozen_state(trainer.model)
@@ -493,7 +567,7 @@ def run(out: Path) -> None:
                 loaders=trainer.val_loaders,
             )
             write_json(out / "baseline_val.json", baseline)
-            if job.get("joint"):
+            if job.get("joint") or job.get("scene_comparison"):
                 # Keep epoch zero eligible: adding a head must not silently promote
                 # a checkpoint whose scene agreement regressed below its warm start.
                 trainer.record_epoch(0, baseline)
@@ -528,11 +602,13 @@ def run(out: Path) -> None:
                 "scene_logits_equal": True,
             }
         joint = job.get("joint", False)
+        source_validation_only = joint or job.get("scene_comparison", False)
         status(
-            "source_validation" if joint else "held_out_evaluation", best_epoch=best["epoch"]
+            "source_validation" if source_validation_only else "held_out_evaluation",
+            best_epoch=best["epoch"],
         )
         samples = {}
-        if joint:
+        if source_validation_only:
             evaluation_sets = trainer.val_sets
         else:
             dataset = build_dataset(
@@ -547,7 +623,7 @@ def run(out: Path) -> None:
             trainer.logger,
             samples=samples,
         )
-        evaluation_name = "validation" if joint else "test"
+        evaluation_name = "validation" if source_validation_only else "test"
         write_json(out / f"{evaluation_name}.json", test)
         if warmup:
             baseline = json.loads((out / "baseline_val.json").read_text())
@@ -583,10 +659,10 @@ def run(out: Path) -> None:
             "primary_metric": trainer.primary_metric,
             "best_primary_metric": best["best_metric"],
             "best_validation_teacher_miou": test["scene_mIoU"]
-            if joint
+            if source_validation_only
             else best["best_metric"],
             "warmup": warmup_evidence,
-            "test_evaluated": not joint,
+            "test_evaluated": not source_validation_only,
             f"{evaluation_name}_teacher_miou": test["scene_mIoU"],
             "instance_counts": job.get("instance_counts", {}),
             "independent_accuracy": False,
@@ -602,6 +678,7 @@ def run(out: Path) -> None:
                     *out.glob(f"{evaluation_name}_*_preview.jpg"),
                     *out.glob("scene_before.json"),
                     *out.glob("warmup_evidence.json"),
+                    *out.glob("initial_state.pt"),
                 ]
             },
         }
@@ -630,6 +707,9 @@ def main():
     parser.add_argument("--detector-warmup", action="store_true")
     parser.add_argument("--small-object-crop", action="store_true")
     parser.add_argument("--fixed-epochs", type=int)
+    parser.add_argument("--scene-comparison-updates", type=int)
+    parser.add_argument("--scene-validation-updates", type=int, default=165)
+    parser.add_argument("--scene-class-weights-source", type=Path)
     parser.add_argument(
         "--positive-classification",
         choices=("positive_only", "assigned_object"),
@@ -662,6 +742,9 @@ def main():
             args.fixed_epochs,
             args.positive_classification,
             args.regression_normalization,
+            args.scene_comparison_updates,
+            args.scene_validation_updates,
+            args.scene_class_weights_source,
         )
     else:
         out = args.out.resolve()
