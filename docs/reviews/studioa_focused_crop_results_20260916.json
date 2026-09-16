@@ -1,0 +1,660 @@
+{
+  "status": "completed; no upgrade",
+  "plan": "docs/reviews/studioa_focused_crop_plan_20260916.json",
+  "plan_sha256": "0eba20150996e9341a42fdb34c8a4d70bb89b1d065bc418a35d3a1e83df30fd6",
+  "comparison_preflight": {
+    "normalized_configs_equal_except_small_object_crop": true,
+    "differing_input_files": [
+      "config.json"
+    ],
+    "shared_input_files": 806,
+    "job_sha256": {
+      "control": "468a254a6aef37e02f415215dca5b0d502ddf05564158eeae9a3d6aa9bb533ec",
+      "focused": "fb03e59da94f7330d800e99af29602467cd0a3692828c53d860e72d8c32d499f"
+    },
+    "plan_sha256": "0eba20150996e9341a42fdb34c8a4d70bb89b1d065bc418a35d3a1e83df30fd6",
+    "steps_per_epoch": 17,
+    "epochs": 25,
+    "total_updates": 425,
+    "early_stopping": false
+  },
+  "source_commit": "0cafb5fe90cfb4c67ff7a2f4cee29eafde009724",
+  "arms": {
+    "reference": {
+      "run": "runs/studioa_detector_warmup_20260916_v1",
+      "job_sha256": "be9412eb64d286d129ef79c794c6da36b6df7d2b163851f12bc8f686ff66cbe6",
+      "checkpoints": {
+        "best.pt": {
+          "epoch": 20,
+          "global_step": 260,
+          "sha256": "8381ff3ab6d97a86d9c2896568867971991805288c9f847d6f09d3928aa2c3f5"
+        },
+        "last.pt": {
+          "epoch": 40,
+          "global_step": 520,
+          "sha256": "c9337234b942d950591c9f2ab49b35c0976bed05294ab432918b033ed54d68a2"
+        }
+      },
+      "matched": 7,
+      "support": 31,
+      "recall": 0.22580645161290322,
+      "empty_fp": 0,
+      "empty_pixels": 51761,
+      "unknown_predictions": 593,
+      "per_class_matches": {
+        "laptop": 0,
+        "phone": 1,
+        "tablet": 0,
+        "boxed_stock": 0,
+        "cardboard_box": 0,
+        "speaker": 0,
+        "poster": 1,
+        "fire_equipment": 0,
+        "chair": 0,
+        "person": 5
+      },
+      "last_epoch_metrics": {
+        "epoch": 40,
+        "global_step": 520,
+        "partial_det/studioa_instances/images": 6.0,
+        "partial_det/studioa_instances/support": 31.0,
+        "partial_det/studioa_instances/matched": 6.0,
+        "partial_det/studioa_instances/empty_fp": 0.0,
+        "partial_det/studioa_instances/empty_pixels": 51761.0,
+        "partial_det/studioa_instances/unknown_predictions": 594.0,
+        "partial_det/studioa_instances/recall50_at_020": 0.1935483870967742,
+        "partial_det/studioa_instances/empty_fp_per_megapixel": 0.0,
+        "partial_det/studioa_instances/laptop/support": 5.0,
+        "partial_det/studioa_instances/laptop/matched": 0.0,
+        "partial_det/studioa_instances/laptop/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/phone/support": 4.0,
+        "partial_det/studioa_instances/phone/matched": 0.0,
+        "partial_det/studioa_instances/phone/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/tablet/support": 1.0,
+        "partial_det/studioa_instances/tablet/matched": 0.0,
+        "partial_det/studioa_instances/tablet/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/boxed_stock/support": 1.0,
+        "partial_det/studioa_instances/boxed_stock/matched": 0.0,
+        "partial_det/studioa_instances/boxed_stock/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/cardboard_box/support": 2.0,
+        "partial_det/studioa_instances/cardboard_box/matched": 0.0,
+        "partial_det/studioa_instances/cardboard_box/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/speaker/support": 1.0,
+        "partial_det/studioa_instances/speaker/matched": 0.0,
+        "partial_det/studioa_instances/speaker/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/poster/support": 2.0,
+        "partial_det/studioa_instances/poster/matched": 1.0,
+        "partial_det/studioa_instances/poster/recall50_at_020": 0.5,
+        "partial_det/studioa_instances/fire_equipment/support": 1.0,
+        "partial_det/studioa_instances/fire_equipment/matched": 0.0,
+        "partial_det/studioa_instances/fire_equipment/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/chair/support": 5.0,
+        "partial_det/studioa_instances/chair/matched": 0.0,
+        "partial_det/studioa_instances/chair/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/person/support": 9.0,
+        "partial_det/studioa_instances/person/matched": 5.0,
+        "partial_det/studioa_instances/person/recall50_at_020": 0.5555555555555556
+      },
+      "scene": {
+        "frozen_state_tensors": 194,
+        "frozen_state_equal": true,
+        "scene_before": {
+          "frames": 33,
+          "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+        },
+        "scene_after": {
+          "frames": 33,
+          "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+        },
+        "scene_logits_equal": true,
+        "baseline_recall": 0.0,
+        "selected_recall": 0.22580645161290322,
+        "baseline_empty_fp": 0.0,
+        "selected_empty_fp": 0.0,
+        "accepted": true
+      }
+    },
+    "control": {
+      "run": "runs/studioa_detector_crop_20260916_control",
+      "job_sha256": "468a254a6aef37e02f415215dca5b0d502ddf05564158eeae9a3d6aa9bb533ec",
+      "checkpoints": {
+        "best.pt": {
+          "epoch": 11,
+          "global_step": 187,
+          "sha256": "b84027b88bea88e52bed01a29f5f99c0c183d04977f555d85d418ee064b44af1"
+        },
+        "last.pt": {
+          "epoch": 25,
+          "global_step": 425,
+          "sha256": "0d088830a7c3a8f3ff61abdf1a8125eeaba9a457e62078b0a52453a075cdb455"
+        }
+      },
+      "matched": 7,
+      "support": 31,
+      "recall": 0.22580645161290322,
+      "empty_fp": 0,
+      "empty_pixels": 51761,
+      "unknown_predictions": 593,
+      "per_class_matches": {
+        "laptop": 0,
+        "phone": 0,
+        "tablet": 0,
+        "boxed_stock": 0,
+        "cardboard_box": 0,
+        "speaker": 0,
+        "poster": 1,
+        "fire_equipment": 0,
+        "chair": 0,
+        "person": 6
+      },
+      "last_epoch_metrics": {
+        "epoch": 25,
+        "global_step": 425,
+        "partial_det/studioa_instances/images": 6.0,
+        "partial_det/studioa_instances/support": 31.0,
+        "partial_det/studioa_instances/matched": 6.0,
+        "partial_det/studioa_instances/empty_fp": 0.0,
+        "partial_det/studioa_instances/empty_pixels": 51761.0,
+        "partial_det/studioa_instances/unknown_predictions": 594.0,
+        "partial_det/studioa_instances/recall50_at_020": 0.1935483870967742,
+        "partial_det/studioa_instances/empty_fp_per_megapixel": 0.0,
+        "partial_det/studioa_instances/laptop/support": 5.0,
+        "partial_det/studioa_instances/laptop/matched": 0.0,
+        "partial_det/studioa_instances/laptop/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/phone/support": 4.0,
+        "partial_det/studioa_instances/phone/matched": 0.0,
+        "partial_det/studioa_instances/phone/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/tablet/support": 1.0,
+        "partial_det/studioa_instances/tablet/matched": 0.0,
+        "partial_det/studioa_instances/tablet/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/boxed_stock/support": 1.0,
+        "partial_det/studioa_instances/boxed_stock/matched": 0.0,
+        "partial_det/studioa_instances/boxed_stock/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/cardboard_box/support": 2.0,
+        "partial_det/studioa_instances/cardboard_box/matched": 0.0,
+        "partial_det/studioa_instances/cardboard_box/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/speaker/support": 1.0,
+        "partial_det/studioa_instances/speaker/matched": 0.0,
+        "partial_det/studioa_instances/speaker/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/poster/support": 2.0,
+        "partial_det/studioa_instances/poster/matched": 1.0,
+        "partial_det/studioa_instances/poster/recall50_at_020": 0.5,
+        "partial_det/studioa_instances/fire_equipment/support": 1.0,
+        "partial_det/studioa_instances/fire_equipment/matched": 0.0,
+        "partial_det/studioa_instances/fire_equipment/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/chair/support": 5.0,
+        "partial_det/studioa_instances/chair/matched": 0.0,
+        "partial_det/studioa_instances/chair/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/person/support": 9.0,
+        "partial_det/studioa_instances/person/matched": 5.0,
+        "partial_det/studioa_instances/person/recall50_at_020": 0.5555555555555556
+      },
+      "scene": {
+        "frozen_state_tensors": 194,
+        "frozen_state_equal": true,
+        "scene_before": {
+          "frames": 33,
+          "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+        },
+        "scene_after": {
+          "frames": 33,
+          "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+        },
+        "scene_logits_equal": true,
+        "baseline_recall": 0.0,
+        "selected_recall": 0.22580645161290322,
+        "baseline_empty_fp": 0.0,
+        "selected_empty_fp": 0.0,
+        "accepted": true
+      }
+    },
+    "focused": {
+      "run": "runs/studioa_detector_crop_20260916_focused",
+      "job_sha256": "fb03e59da94f7330d800e99af29602467cd0a3692828c53d860e72d8c32d499f",
+      "checkpoints": {
+        "best.pt": {
+          "epoch": 10,
+          "global_step": 170,
+          "sha256": "e7566d9f36567fc612136cdeabf82551577514d933228359759667b503e2c568"
+        },
+        "last.pt": {
+          "epoch": 25,
+          "global_step": 425,
+          "sha256": "83d0c0074dc8816006ec163cdff8a3b85c0096c1026eb47afae03f5b8a1fd758"
+        }
+      },
+      "matched": 5,
+      "support": 31,
+      "recall": 0.16129032258064516,
+      "empty_fp": 0,
+      "empty_pixels": 51761,
+      "unknown_predictions": 595,
+      "per_class_matches": {
+        "laptop": 0,
+        "phone": 0,
+        "tablet": 0,
+        "boxed_stock": 0,
+        "cardboard_box": 0,
+        "speaker": 0,
+        "poster": 1,
+        "fire_equipment": 0,
+        "chair": 0,
+        "person": 4
+      },
+      "last_epoch_metrics": {
+        "epoch": 25,
+        "global_step": 425,
+        "partial_det/studioa_instances/images": 6.0,
+        "partial_det/studioa_instances/support": 31.0,
+        "partial_det/studioa_instances/matched": 4.0,
+        "partial_det/studioa_instances/empty_fp": 0.0,
+        "partial_det/studioa_instances/empty_pixels": 51761.0,
+        "partial_det/studioa_instances/unknown_predictions": 596.0,
+        "partial_det/studioa_instances/recall50_at_020": 0.12903225806451613,
+        "partial_det/studioa_instances/empty_fp_per_megapixel": 0.0,
+        "partial_det/studioa_instances/laptop/support": 5.0,
+        "partial_det/studioa_instances/laptop/matched": 0.0,
+        "partial_det/studioa_instances/laptop/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/phone/support": 4.0,
+        "partial_det/studioa_instances/phone/matched": 0.0,
+        "partial_det/studioa_instances/phone/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/tablet/support": 1.0,
+        "partial_det/studioa_instances/tablet/matched": 0.0,
+        "partial_det/studioa_instances/tablet/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/boxed_stock/support": 1.0,
+        "partial_det/studioa_instances/boxed_stock/matched": 0.0,
+        "partial_det/studioa_instances/boxed_stock/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/cardboard_box/support": 2.0,
+        "partial_det/studioa_instances/cardboard_box/matched": 0.0,
+        "partial_det/studioa_instances/cardboard_box/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/speaker/support": 1.0,
+        "partial_det/studioa_instances/speaker/matched": 0.0,
+        "partial_det/studioa_instances/speaker/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/poster/support": 2.0,
+        "partial_det/studioa_instances/poster/matched": 1.0,
+        "partial_det/studioa_instances/poster/recall50_at_020": 0.5,
+        "partial_det/studioa_instances/fire_equipment/support": 1.0,
+        "partial_det/studioa_instances/fire_equipment/matched": 0.0,
+        "partial_det/studioa_instances/fire_equipment/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/chair/support": 5.0,
+        "partial_det/studioa_instances/chair/matched": 0.0,
+        "partial_det/studioa_instances/chair/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/person/support": 9.0,
+        "partial_det/studioa_instances/person/matched": 3.0,
+        "partial_det/studioa_instances/person/recall50_at_020": 0.3333333333333333
+      },
+      "scene": {
+        "frozen_state_tensors": 194,
+        "frozen_state_equal": true,
+        "scene_before": {
+          "frames": 33,
+          "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+        },
+        "scene_after": {
+          "frames": 33,
+          "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+        },
+        "scene_logits_equal": true,
+        "baseline_recall": 0.0,
+        "selected_recall": 0.16129032258064516,
+        "baseline_empty_fp": 0.0,
+        "selected_empty_fp": 0.0,
+        "accepted": true
+      }
+    }
+  },
+  "verification": {
+    "reference": {
+      "frozen_inputs_verified": 757,
+      "outputs_verified": 8,
+      "checkpoint_job_binding": true,
+      "best_last_finite": true,
+      "original_shared_tensors_equal": 194,
+      "scene_logits_equal": true,
+      "test_evaluated": false
+    },
+    "control": {
+      "frozen_inputs_verified": 807,
+      "outputs_verified": 8,
+      "checkpoint_job_binding": true,
+      "best_last_finite": true,
+      "original_shared_tensors_equal": 194,
+      "scene_logits_equal": true,
+      "test_evaluated": false,
+      "saved_predictions_reproduce_metrics": true
+    },
+    "focused": {
+      "frozen_inputs_verified": 807,
+      "outputs_verified": 8,
+      "checkpoint_job_binding": true,
+      "best_last_finite": true,
+      "original_shared_tensors_equal": 194,
+      "scene_logits_equal": true,
+      "test_evaluated": false,
+      "saved_predictions_reproduce_metrics": true
+    }
+  },
+  "promotion": {
+    "upgrade": false,
+    "criteria": {
+      "total_matches_exceed_7": false,
+      "strictly_exceeds_equal_budget_control": false,
+      "person_at_least_5": false,
+      "phone_at_least_1": false,
+      "poster_at_least_1": true,
+      "reviewed_empty_fp_at_most_0": true,
+      "scene_logits_byte_identical": true
+    },
+    "retained_reference": "runs/studioa_detector_warmup_20260916_v1",
+    "deployment": false,
+    "worker_acceptance_is_against_random_epoch0_only": true
+  },
+  "train_view_probe": {
+    "scope": "35 source-train frames x10 seeded geometry-only draws per arm, same source masks, no model inference; no val-driven augmentation tuning",
+    "manifest_sha256": "eba13055187110a16c211fd2e76b7cd93fc437e76f711266a1f6c8b022b96428",
+    "summaries": {
+      "control": {
+        "views": 350,
+        "zoomed_views": 0,
+        "counts": {
+          "phone": {
+            "input_boxes": 330,
+            "retained_boxes": 321,
+            "zero_assignment": 2,
+            "assignable_points": 3595
+          },
+          "tablet": {
+            "input_boxes": 310,
+            "retained_boxes": 310,
+            "zero_assignment": 0,
+            "assignable_points": 8830
+          }
+        },
+        "mean_width_height_points": {
+          "tablet": [
+            47.25075432562059,
+            41.24982413015058,
+            28.483870967741936
+          ],
+          "phone": [
+            22.341717966620426,
+            28.075088836693688,
+            11.199376947040498
+          ]
+        }
+      },
+      "focused": {
+        "views": 350,
+        "zoomed_views": 114,
+        "counts": {
+          "phone": {
+            "input_boxes": 330,
+            "retained_boxes": 263,
+            "zero_assignment": 2,
+            "assignable_points": 4919
+          },
+          "tablet": {
+            "input_boxes": 310,
+            "retained_boxes": 289,
+            "zero_assignment": 0,
+            "assignable_points": 9942
+          }
+        },
+        "mean_width_height_points": {
+          "tablet": [
+            66.34303626882163,
+            56.799041748046875,
+            34.40138408304498
+          ],
+          "phone": [
+            30.773723297699323,
+            38.65876090843868,
+            18.70342205323194
+          ]
+        }
+      }
+    },
+    "val_tensors_identical_with_option_enabled": true,
+    "val_frames": 6,
+    "limitations": "Aggregate assignment counts on transformed training boxes do not establish localization accuracy or deployed recall."
+  },
+  "phone_diagnostics": {
+    "scope": "source-val phone geometric diagnostics at existing score >0.20 and IoU >=0.50; no tuning or test inference; not one-to-one recall",
+    "results": {
+      "studioa_detector_warmup_20260916_v1": [
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            540.86669921875,
+            399.26666259765625,
+            566.066650390625,
+            439.8666687011719
+          ],
+          "localized_grid_candidates": 11,
+          "localized_phone_score_over_020": 10,
+          "eligible_before_nms_and_cap": 5,
+          "retained": true,
+          "max_phone_score_on_localized_boxes": 0.40896254777908325,
+          "reason": "retained"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            494.6666564941406,
+            403.0,
+            516.5999755859375,
+            445.0
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            572.5999755859375,
+            375.0,
+            600.5999755859375,
+            412.79998779296875
+          ],
+          "localized_grid_candidates": 7,
+          "localized_phone_score_over_020": 6,
+          "eligible_before_nms_and_cap": 4,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": 0.3057223856449127,
+          "reason": "removed_by_nms_or_top100"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            457.3333435058594,
+            385.73333740234375,
+            482.0666809082031,
+            425.8666687011719
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        }
+      ],
+      "studioa_detector_crop_20260916_control": [
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            540.86669921875,
+            399.26666259765625,
+            566.066650390625,
+            439.8666687011719
+          ],
+          "localized_grid_candidates": 8,
+          "localized_phone_score_over_020": 4,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": 0.24350395798683167,
+          "reason": "other_class_wins"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            494.6666564941406,
+            403.0,
+            516.5999755859375,
+            445.0
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            572.5999755859375,
+            375.0,
+            600.5999755859375,
+            412.79998779296875
+          ],
+          "localized_grid_candidates": 9,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": 0.17739534378051758,
+          "reason": "phone_score_below_threshold"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            457.3333435058594,
+            385.73333740234375,
+            482.0666809082031,
+            425.8666687011719
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        }
+      ],
+      "studioa_detector_crop_20260916_focused": [
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            540.86669921875,
+            399.26666259765625,
+            566.066650390625,
+            439.8666687011719
+          ],
+          "localized_grid_candidates": 5,
+          "localized_phone_score_over_020": 3,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": 0.27541425824165344,
+          "reason": "other_class_wins"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            494.6666564941406,
+            403.0,
+            516.5999755859375,
+            445.0
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            572.5999755859375,
+            375.0,
+            600.5999755859375,
+            412.79998779296875
+          ],
+          "localized_grid_candidates": 6,
+          "localized_phone_score_over_020": 2,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": 0.22748027741909027,
+          "reason": "other_class_wins"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            457.3333435058594,
+            385.73333740234375,
+            482.0666809082031,
+            425.8666687011719
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        }
+      ]
+    }
+  },
+  "tests": {
+    "training_related": 201,
+    "tooling_boundary": 11,
+    "lint_type_commit_hooks": "passed"
+  },
+  "limits": [
+    "AI reviewed partial source-validation subset, not independent accuracy or precision.",
+    "Single seed; reused six-frame source validation; phone4 fromone camera and tablet1.",
+    "Fixed425 optimizer updates per arm, but different retained object exposure by design.",
+    "No threshold sweep or held-out test inference; scene/3D geometry and Stage2-4 unchanged."
+  ],
+  "service": {
+    "unit": "studioa-focused-comparison-20260916-v1",
+    "Result": "success",
+    "ExecMainStatus": 0
+  },
+  "artifacts": {
+    "runs/studioa_detector_crop_20260916_control/job.json": "468a254a6aef37e02f415215dca5b0d502ddf05564158eeae9a3d6aa9bb533ec",
+    "runs/studioa_detector_crop_20260916_control/report.json": "43f1fb11ddb6a11c215f4233ef5dee635ac436f21cedc4109aef1bb54335a6c9",
+    "runs/studioa_detector_crop_20260916_control/review/inspect_selected.py": "051122629b1d49a8377db36cb5c6388ce8338269f9b86eea61efccb492ca5fff",
+    "runs/studioa_detector_crop_20260916_control/review/selected_diagnostics.json": "ab96c79cc906672ae9cb1552c028b750e8a9c09f201c714a473d1fffe5eadf46",
+    "runs/studioa_detector_crop_20260916_control/review/selected_val_review.jpg": "d410eade090518b51a0021a16653f9072eaa7f6ffa04d8b8b4dcf1a9897af3c2",
+    "runs/studioa_detector_crop_20260916_control/service.log": "3c4425e0e92c7b7c874ac8a6c3afe0e32627a905883da66bacc3b04c3969330a",
+    "runs/studioa_detector_crop_20260916_control/status.json": "63fd3410cede1dd4a397d73a85583d013781d8bb403e9ba22d8a745eb3e02dcd",
+    "runs/studioa_detector_crop_20260916_control/validation.json": "723a3af2d5e0bc96aed9998cbfb4349bfa7fd5dc65cda20be97bef1bf1ca4c3d",
+    "runs/studioa_detector_crop_20260916_focused/job.json": "fb03e59da94f7330d800e99af29602467cd0a3692828c53d860e72d8c32d499f",
+    "runs/studioa_detector_crop_20260916_focused/report.json": "e30a31cfc1cdf14645a015c0619448f9919fa32fa88f66d04a60da5f6f480db5",
+    "runs/studioa_detector_crop_20260916_focused/review/inspect_selected.py": "273f469b7a00c9aa5b4b71c22331d00b5472d4f8742563ec98693d6b7af5c884",
+    "runs/studioa_detector_crop_20260916_focused/review/phone_candidate_probe.json": "ee9526e70e28a91a4fda938ea8cbe72a74adce3c83f67c868ae816b2150e751a",
+    "runs/studioa_detector_crop_20260916_focused/review/probe_phone_candidates.py": "e6eb6d9222a43cdcf5337ddcea35a231224b38c96b9febf2464aab881a507a1f",
+    "runs/studioa_detector_crop_20260916_focused/review/selected_diagnostics.json": "92cb8f72ad765da2e36d19402af4fe60fb06a6d042e75ac71134bca0a7fb3706",
+    "runs/studioa_detector_crop_20260916_focused/review/selected_val_review.jpg": "70e05abeb37abc49fb19cfb717c25be5f024f3d1d82bd2278664b05a6f51bff3",
+    "runs/studioa_detector_crop_20260916_focused/service.log": "0b36ac5563a3c28eb4fa09fc768e6175515d992362110e99021bb9ac5ae22cc9",
+    "runs/studioa_detector_crop_20260916_focused/status.json": "e8a71bc404a5e224aac89662ac2c0d64de78fc4fb0959c70dbf7e3f08e397d70",
+    "runs/studioa_detector_crop_20260916_focused/validation.json": "798a1a21e1df76d73aa5fa086cd3e18bdb748501c5974ded54c36a577a3b87e5",
+    "runs/studioa_focused_crop_20260916_v1/comparison_preflight.json": "ed58bd4e98301e8152e485676ee24303eb459ee0545c3f97f438293c5b5a00c4",
+    "runs/studioa_focused_crop_20260916_v1/prepare_comparison.py": "1af4117af97df6163fb75ac3e038864ffcf3a5093dd244bc3d6a23f4b766a45e",
+    "runs/studioa_focused_crop_20260916_v1/probe_training_views.py": "a95d9df8d9ecc5f26aa3624c814a8f2a6d81703352828c271e2a49b8eb8973ab",
+    "runs/studioa_focused_crop_20260916_v1/promotion_decision.json": "e99722ee9adb238c6da77480493d522f0fedae09e7deb85ebc7ed5e97939c37a",
+    "runs/studioa_focused_crop_20260916_v1/results_core.json": "a7e0524a875184d06688bbe9c9bd717375d3f84a6e65f9cafacdd0b5872c204f",
+    "runs/studioa_focused_crop_20260916_v1/run_comparison.sh": "ceaae61f2778bf142541475e4faf18f3fc68e7c86ac7a4c5d83c54a61b695c60",
+    "runs/studioa_focused_crop_20260916_v1/service.log": "233c3a39e831678bfb35d3f2c8b19a01c5f5f2e5a94df7f263794dfabb1d542b",
+    "runs/studioa_focused_crop_20260916_v1/train_view_probe.json": "66182ef5394e449e966dc6028eedafeba8e07d0b7913c84608f8e9519adeee75",
+    "runs/studioa_focused_crop_20260916_v1/training_views.jpg": "47d57b7e60e8187c1aefdf6425d56b79c957db27ad52f3a406324d3ba35d10d9",
+    "runs/studioa_focused_crop_20260916_v1/verification.json": "b795b88cbac393765773a01adf542f0d9dd28681240cd89ded61e2b8c4be20bf",
+    "runs/studioa_focused_crop_20260916_v1/verification.log": "be494062940c097b5d4820215dc0bee4dab44e20656215f5530d35e72ca6e882",
+    "runs/studioa_focused_crop_20260916_v1/verify_results.py": "5eee99f3e37470c42db0258c74c8483d031a96a638de37dab95034c2e6fa8ad9"
+  }
+}

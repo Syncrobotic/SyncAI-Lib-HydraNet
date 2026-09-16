@@ -11,9 +11,10 @@ snapshots](../docs/TOOLING_STATUS.md) for the FTI copy, BEV diagnostics and curr
 
 ## [`commissioning/`](commissioning/) — the per-camera pipeline (PLAN §2.1)
 
-Everything that turns one camera's plates into its `camera.json`, its zones, and its 3D
-scene. Each is idempotent from the caches; re-runs cost no GPU except the two teacher
-passes. The groups below distinguish production of evidence from its review and display.
+These steps turn one camera's plates into its `camera.json`, zones and 3D scene.
+Many geometry and review steps reuse caches; teacher inference and training workers
+require their own compute. The groups below distinguish production of evidence from
+its review and display. Prefer isolated review outputs when the tool supports `--out`.
 
 **Build the artefacts.** `masks_pass.py` (structure vote), `extras_pass.py` (door /
 product subclasses / the SAM 3 floor source), `depth_complete.py` (geometry fills what the
