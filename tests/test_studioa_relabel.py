@@ -12,6 +12,7 @@ from syncai_hydranet.data.studioa_autolabel import (
 )
 from syncai_hydranet.data.studioa_relabel import (
     candidate_groups,
+    constrain_decision,
     parse_answer,
     reannotate,
     review_panel,
@@ -52,6 +53,15 @@ def test_vlm_malformed_unknown_and_unsupported_class_abstain():
         '```json\n{"entity":"display_cabinet","reason":"Upright stocked rack"}\n```'
     )
     assert answer["entity"] == "display_cabinet"
+
+
+def test_context_cannot_turn_person_or_small_product_into_counter():
+    answer = {"entity": "counter", "reason": "white service desk", "raw": "fixture"}
+    for entity in ("person", "boxed_stock", "floor", "wall"):
+        group = rows([(entity, (5, 5, 25, 25))])
+        result = constrain_decision(group, answer)
+        assert result["entity"] == "unknown" and result["model_entity"] == "counter"
+    assert constrain_decision(rows([("display_table", (5, 5, 25, 25))]), answer) == answer
 
 
 def test_grouping_merges_alternative_names_but_not_nested_merchandise():
@@ -107,7 +117,7 @@ def test_review_panel_is_bound_to_mask_context_and_does_not_mutate_image():
     source = Image.new("RGB", (80, 60), "white")
     original = source.tobytes()
     panel = review_panel(source, rows([("floor", (5, 5, 50, 55))])[0])
-    assert panel.size == (896, 448)
+    assert panel.size == (448, 448)
     assert source.tobytes() == original
     with pytest.raises(ValueError, match="count mismatch"):
         reannotate([], [{"entity": "floor", "reason": "x"}], (60, 80))

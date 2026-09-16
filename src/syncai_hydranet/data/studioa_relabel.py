@@ -33,9 +33,9 @@ class ReviewCache(TypedDict):
     extra_candidates: int
 
 
-PROMPT = """Classify the highlighted target in an electronics store. Left is the scene with
-a red target box. Right is a close crop with a red mask outline. Classify the target
-surface/object, not a nearby object. Return only JSON with keys entity and reason.
+PROMPT = """Classify the isolated segmented object/surface from an electronics store.
+Everything outside its mask is replaced by gray; gray is not part of the target.
+Identify the visible target itself. Return only JSON with keys entity and reason.
 entity is CLASS; reason describes visible evidence in at most twelve words.
 Allowed CLASS: floor, wall, ceiling, column, door, glass_panel, display_cabinet,
 display_table, counter, laptop, phone, tablet, boxed_stock, cardboard_box, speaker,
@@ -65,7 +65,9 @@ def relabel_policy() -> dict:
         "max_new_tokens": 96,
         "min_pixels": 128 * 28 * 28,
         "max_pixels": 512 * 28 * 28,
-        "batch_size": 8,
+        "batch_size": 16,
+        "presentation": "isolated target on gray background",
+        "cross_family_policy": "abstain on family changes; room surfaces require agreement",
         "quality": "AI reclassification, not independently verified accuracy",
         "occlusion": "person > goods > fixtures > openings/columns > room surfaces",
     }
@@ -94,17 +96,12 @@ def candidate_groups(rows: list[dict]) -> list[list[dict]]:
 
 
 def review_panel(image: Image.Image, row: dict) -> Image.Image:
-    """Show both source context and the actual mask; an object crop alone loses role."""
+    """Isolate the mask so a nearby large fixture cannot answer for a small target."""
     mask = decode(row["segmentation"])
     rgb = np.asarray(image.convert("RGB")).copy()
-    edge = mask & ~(
-        np.roll(mask, 1, 0) & np.roll(mask, -1, 0) & np.roll(mask, 1, 1) & np.roll(mask, -1, 1)
-    )
-    edge[[0, -1], :] |= mask[[0, -1], :]
-    edge[:, [0, -1]] |= mask[:, [0, -1]]
-    rgb[edge] = (255, 0, 0)
+    rgb[~mask] = (100, 100, 100)
     x, y, w, h = row["bbox_xywh"]
-    margin = max(12, round(max(w, h) * 0.12))
+    margin = max(2, round(max(w, h) * 0.04))
     crop = Image.fromarray(rgb).crop(
         (
             max(0, x - margin),
@@ -113,18 +110,11 @@ def review_panel(image: Image.Image, row: dict) -> Image.Image:
             min(image.height, y + h + margin),
         )
     )
-    context = image.copy()
-    ImageDraw.Draw(context).rectangle((x, y, x + w - 1, y + h - 1), outline="red", width=4)
-    panel = Image.new("RGB", (896, 448), "#505050")
-    for index, picture in enumerate((context, crop)):
-        resized = ImageOps.contain(picture, (448, 420))
-        panel.paste(
-            resized,
-            (448 * index + (448 - resized.width) // 2, 28 + (420 - resized.height) // 2),
-        )
+    panel = Image.new("RGB", (448, 448), (100, 100, 100))
+    resized = ImageOps.contain(crop, (448, 420))
+    panel.paste(resized, ((448 - resized.width) // 2, 28 + (420 - resized.height) // 2))
     draw = ImageDraw.Draw(panel)
-    draw.text((8, 8), "SCENE / target box", fill="white")
-    draw.text((456, 8), "TARGET / mask outline", fill="white")
+    draw.text((8, 8), "ISOLATED TARGET", fill="white")
     return panel
 
 
@@ -143,6 +133,41 @@ def parse_answer(raw: str) -> dict:
             "reason": "invalid or incomplete model response",
             "raw": raw,
         }
+
+
+def constrain_decision(group: list[dict], decision: dict) -> dict:
+    """Do not let a tiny product mask become furniture based on nearby context."""
+    fixtures = {"display_table", "display_cabinet", "counter", "other_shelf"}
+    goods = {
+        "laptop",
+        "phone",
+        "tablet",
+        "boxed_stock",
+        "cardboard_box",
+        "speaker",
+        "other_monitor",
+    }
+    allowed = {"unknown"}
+    for row in group:
+        entity = row["entity"]
+        if entity in fixtures:
+            allowed.update(fixtures - {"other_shelf"})
+        elif entity in goods:
+            allowed.update(goods - {"other_monitor"})
+        elif entity in {"door", "glass_panel"}:
+            allowed.update(fixtures - {"other_shelf"})
+            allowed.update({"door", "glass_panel"})
+        else:
+            allowed.add(entity)
+    if decision["entity"] in allowed:
+        return decision
+    return {
+        **decision,
+        "entity": "unknown",
+        "model_entity": decision["entity"],
+        "constraint": "unsupported cross-family change",
+        "reason": "Source instruments disagree on object family: " + decision["reason"],
+    }
 
 
 def layer(entity: str) -> int:

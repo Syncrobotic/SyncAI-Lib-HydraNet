@@ -39,6 +39,7 @@ from syncai_hydranet.data.studioa_relabel import (
     LocalReviewer,
     ReviewCache,
     candidate_groups,
+    constrain_decision,
     reannotate,
     relabel_policy,
     review_panel,
@@ -775,18 +776,23 @@ def relabel_run(out: Path, device: str) -> None:
                 )
                 write(raw_path, raw)
             groups = raw["groups"]
-            for first in range(len(raw["decisions"]), len(groups), 8):
+            batch_size = job["relabel_policy"]["batch_size"]
+            for first in range(len(raw["decisions"]), len(groups), batch_size):
                 status(
                     "classifying",
                     frame_id=identity,
                     reviewed_groups=first,
                     total_groups=len(groups),
                 )
-                panels = [review_panel(image, group[0]) for group in groups[first : first + 8]]
+                batch_groups = groups[first : first + batch_size]
+                panels = [review_panel(image, group[0]) for group in batch_groups]
                 decisions = reviewer.classify(panels)
                 if len(decisions) != len(panels):
                     raise ValueError("review batch length mismatch")
-                raw["decisions"].extend(decisions)
+                raw["decisions"].extend(
+                    constrain_decision(group, decision)
+                    for group, decision in zip(batch_groups, decisions, strict=True)
+                )
                 write(raw_path, raw)
             data = reannotate(groups, raw["decisions"], shape)
             data.update(
