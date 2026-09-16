@@ -134,6 +134,15 @@ def test_worker_freezes_writes_resumes_and_rejects_foreign_checkpoints(tmp_path,
     bundle, out = tmp_path / "bundle", tmp_path / "ai"
     prepare_package([(dataset, "site30k_native")], bundle, 1)
     worker.prepare(bundle, out, None)
+    # The teacher is a test double, including its optional distribution metadata.
+    # CI installs dev + export, without the annotate extra. Keep real metadata
+    # for the required packages and never claim an installed teacher was exercised.
+    package_version = worker.importlib.metadata.version
+
+    def teacher_package_version(name):
+        return "test-double" if name == "transformers" else package_version(name)
+
+    monkeypatch.setattr(worker.importlib.metadata, "version", teacher_package_version)
     monkeypatch.setattr(worker.sam3, "load_sam3", lambda *_args: (None, None))
     monkeypatch.setattr(worker.sam3, "vision_features", lambda *_args: None)
     monkeypatch.setattr(
@@ -145,6 +154,8 @@ def test_worker_freezes_writes_resumes_and_rejects_foreign_checkpoints(tmp_path,
     )
     monkeypatch.setattr(worker.signal, "signal", lambda *_args: None)
     worker.run(out, "cpu")
+    environment = json.loads((out / "environment.json").read_text())
+    assert environment["packages"]["transformers"] == "test-double"
     assert json.loads((out / "status.json").read_text())["status"] == "completed"
     report = json.loads((out / "report.json").read_text())
     assert report["instances_by_entity"] == {"floor": 1}
@@ -197,6 +208,8 @@ def test_worker_freezes_writes_resumes_and_rejects_foreign_checkpoints(tmp_path,
     relabeled = tmp_path / "relabeled"
     worker.relabel_prepare(refined, relabeled)
     worker.relabel_run(relabeled, "cpu")
+    environment = json.loads((relabeled / "environment.json").read_text())
+    assert environment["packages"]["transformers"] == "test-double"
     relabeled_target = relabeled / "frames" / target.name
     relabeled_bytes = relabeled_target.read_bytes()
     assert json.loads((relabeled / "report.json").read_text())["instances_by_entity"] == {
