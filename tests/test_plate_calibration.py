@@ -647,3 +647,23 @@ def test_a_cameras_json_without_an_offset_still_means_the_original_site():
 
     assert utc_offset_hours({"cameras": {}}) == DEFAULT_UTC_OFFSET_HOURS == 8
     assert utc_offset_hours({"utc_offset_hours": -5, "cameras": {}}) == -5
+
+
+def test_a_night_shift_site_states_its_own_lit_hours(tmp_path):
+    """FTI's only capture is 05:22 local (UTC-6, slot 11 UTC): lit, and refused by a shop's
+    08-18 window. The site's cameras.json widens the window; a window across midnight
+    is stated as [start, end] with start > end."""
+    from syncai_bev3d.plate_calibration import (
+        DEFAULT_DAYTIME_HOURS_LOCAL,
+        daytime_hours_local,
+        in_daytime,
+        pick_daytime_slot,
+    )
+
+    _plate(tmp_path, "20260910-112151", 149)
+    with pytest.raises(SystemExit, match="no daytime plate"):
+        pick_daytime_slot(tmp_path, utc_offset=-6)
+    assert pick_daytime_slot(tmp_path, utc_offset=-6, daytime=(4, 23)) == "20260910-112151"
+    assert daytime_hours_local({"cameras": {}}) == DEFAULT_DAYTIME_HOURS_LOCAL == (8, 18)
+    assert daytime_hours_local({"daytime_hours_local": [4, 23], "cameras": {}}) == (4, 23)
+    assert in_daytime(23, (20, 6)) and in_daytime(2, (20, 6)) and not in_daytime(12, (20, 6))

@@ -73,7 +73,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from syncai_bev3d.plate_calibration import utc_offset_hours
+from syncai_bev3d.plate_calibration import daytime_hours_local, utc_offset_hours
 
 # How many of a pixel's OWN noise floors it must move to count as dynamic.
 #
@@ -247,6 +247,7 @@ def main(argv: list[str] | None = None) -> int:
     site = json.loads((args.cameras or args.root / "cameras.json").read_text())
     roles = site["cameras"]
     utc_offset = utc_offset_hours(site)
+    daytime = daytime_hours_local(site)
     names = args.only or sorted(
         k for k, v in roles.items() if args.include_dead or v.get("role") != "dead"
     )
@@ -300,6 +301,7 @@ def main(argv: list[str] | None = None) -> int:
                 "measured": "static plates per camera per time slot",
                 "note": "slot keys are UTC; the burned-in timestamp is store-local",
                 "utc_offset_hours": utc_offset,
+                "daytime_hours_local": list(daytime),
                 "sample_fps": SAMPLE_FPS,
                 "work_size": [WORK_W, WORK_H],
                 "dynamic_mult": DYNAMIC_MULT,

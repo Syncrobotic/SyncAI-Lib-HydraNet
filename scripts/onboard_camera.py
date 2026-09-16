@@ -214,6 +214,7 @@ def onboard_one(
     person_anns: Path = PERSON_ANNS,
     utc_offset: int = pc.DEFAULT_UTC_OFFSET_HOURS,
     pins: dict[str, dict] | None = None,
+    daytime: tuple[int, int] = pc.DEFAULT_DAYTIME_HOURS_LOCAL,
 ) -> dict:
     now = _dt.date.today().isoformat()
     pin = pin_for(camera, pins)
@@ -271,7 +272,7 @@ def onboard_one(
         )
         return result
 
-    slot = pc.pick_daytime_slot(cam_dir, utc_offset)
+    slot = pc.pick_daytime_slot(cam_dir, utc_offset, daytime)
     plate_path = cam_dir / f"plate_{slot}.png"
     rgb = np.asarray(Image.open(plate_path).convert("RGB"))
     h, w = rgb.shape[:2]
@@ -621,7 +622,9 @@ def main(argv=None) -> int:
 
     fleet = selling_floor_cameras(args.cameras_json)
     cameras = args.camera or fleet
-    utc_offset = pc.utc_offset_hours(json.loads(Path(args.cameras_json).read_text()))
+    site = json.loads(Path(args.cameras_json).read_text())
+    utc_offset = pc.utc_offset_hours(site)
+    daytime = pc.daytime_hours_local(site)
     args.out.mkdir(parents=True, exist_ok=True)
 
     if args.report_only:
@@ -639,7 +642,15 @@ def main(argv=None) -> int:
         print(f"[{i}/{len(cameras)}] {cam}")
         try:
             result = onboard_one(
-                cam, vfovs, args.k1, meter, args.plates_root, args.person_anns, utc_offset, pins
+                cam,
+                vfovs,
+                args.k1,
+                meter,
+                args.plates_root,
+                args.person_anns,
+                utc_offset,
+                pins,
+                daytime=daytime,
             )
         except Exception:
             traceback.print_exc()
