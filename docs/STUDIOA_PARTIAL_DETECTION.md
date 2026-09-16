@@ -336,3 +336,41 @@ regression、centerness 與未知通道均不改；缺少該類正例的 batch �
 本次只有這兩組，不依此 val 分數追加參數搜尋。
 
 [執行前比較計畫與診斷](reviews/studioa_negative_balance_plan_20260916.json)。
+
+### 比較結果：修正新增負項權重，但仍不升級
+
+程式 commit `633cfbd`。`studioa_detector_balance_20260916_control` 與
+`studioa_detector_balance_20260916_budget` 都在第 25 輪停止，350 次更新，
+選定第 5 輪／70 次更新。除設定檔中的正規化方式與必要輸出路徑外，兩組
+778 個凍結輸入完全相同。對照組 best、last 的每個模型 tensor 及驗證指標
+均精確重現之前的 v2。
+
+| 同一來源 val | 原實驗基準 v1 | sum 對照 | positive_budget |
+| --- | ---: | ---: | ---: |
+| 命中／31 | 7 | 6 | 7 |
+| 人物 | 5 | 5 | 5 |
+| 手機 | 1 | 0 | 0 |
+| 海報 | 1 | 1 | 1 |
+| 紙箱 | 0 | 0 | 1 |
+| 其他六類 | 0 | 0 | 0 |
+| 覆核空白誤報 | 0 | 0 | 0 |
+| 未配對、真偽未定預測 | 593 | 594 | 593 |
+
+限制負項權重在本 seed/fold 多命中一個紙箱，但沒有超過基準的總命中數，
+手機也未恢復，**未通過事先固定的升級條件**。保留 v1 作為實驗基準。
+所有結果僅是 AI 覆核子集上的選模診斷，六張影像仍均達 100 框上限。
+
+手機的兩個定位候選最高 score 約 0.065／0.076，相較 sum 的約 0.024／0.025
+回升，但仍低於固定 0.20。另兩個手機仍無 IoU ≥0.50 的原始候選框。
+不繼續對這份 val 搜尋負項係數或調整門檻；下一步應補跨鏡頭小物件正例及
+定位訓練，尤其手機／平板，而不是只增加負向監督。
+
+173 項測試、lint、型別、提交 hook 通過。兩組各 779 個輸入與 8 個正式輸出
+hashes 核對通過，best/last 有限且綁定正確 job；所有非偵測 tensors 與初始
+模型相同。兩組 33 張 scene float32 logits SHA256 都與原基準完全一致。
+逐框紀錄可重算候選模型的所有正式偵測指標。診斷與依序比較的 systemd 工作
+均正常退出；本輪未推論 test，也未部署或改寫舊模型。
+
+[逐圖對照](../runs/studioa_detector_balance_20260916_budget/review/selected_val_review.jpg) ·
+[升級判定](../runs/studioa_negative_balance_20260916_v1/promotion_decision.json) ·
+[完整比較結果](reviews/studioa_negative_balance_results_20260916.json)。

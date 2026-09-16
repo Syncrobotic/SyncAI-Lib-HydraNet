@@ -1,0 +1,342 @@
+{
+  "status": "completed controlled comparison; no upgrade",
+  "predeclared_plan": "docs/reviews/studioa_negative_balance_plan_20260916.json",
+  "preflight": {
+    "only_different_input": "config.json",
+    "only_different_training_field": "model.heads.detection.loss.class_negative_normalization",
+    "shared_input_files": 778,
+    "input_hashes_match_except_config": true,
+    "normalized_configs_match_except_mode": true,
+    "plan_sha256": "69f873bd8ab7d9f9a4401c861a0ee9b33dc637dffa1512f16542ae1162676d68",
+    "job_sha256": {
+      "studioa_detector_balance_20260916_control": "663a0a9d7900437b578fefd4498bb833c4b3d53c1cd1edf71a61d8c7abd9d245",
+      "studioa_detector_balance_20260916_budget": "c58c2f3aa41e04a6d4c493a3e098140896826f73e697818c950851da2b31dc63"
+    }
+  },
+  "control_reproduction": {
+    "metrics_identical": true,
+    "checkpoints": {
+      "best.pt": {
+        "model_tensors_bit_identical": true,
+        "epoch": 5,
+        "global_step": 70
+      },
+      "last.pt": {
+        "model_tensors_bit_identical": true,
+        "epoch": 25,
+        "global_step": 350
+      }
+    }
+  },
+  "arms": {
+    "control": {
+      "run": "runs/studioa_detector_balance_20260916_control",
+      "git_commit": "633cfbd09ea9a218d00fbbfaccd7c97a15532005",
+      "job_sha256": "663a0a9d7900437b578fefd4498bb833c4b3d53c1cd1edf71a61d8c7abd9d245",
+      "last_epoch": 25,
+      "best_epoch": 5,
+      "total_optimizer_steps": 350,
+      "selected_optimizer_steps": 70,
+      "reviewed_positive_matches": 6,
+      "support": 31,
+      "recall": 0.1935483870967742,
+      "reviewed_empty_fp": 0,
+      "unknown_predictions": 594,
+      "scene_invariance": {
+        "frozen_state_tensors": 194,
+        "frozen_state_equal": true,
+        "scene_before": {
+          "frames": 33,
+          "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+        },
+        "scene_after": {
+          "frames": 33,
+          "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+        },
+        "scene_logits_equal": true,
+        "baseline_recall": 0.0,
+        "selected_recall": 0.1935483870967742,
+        "baseline_empty_fp": 0.0,
+        "selected_empty_fp": 0.0,
+        "accepted": true
+      },
+      "per_class_matches": {
+        "laptop": 0,
+        "phone": 0,
+        "tablet": 0,
+        "boxed_stock": 0,
+        "cardboard_box": 0,
+        "speaker": 0,
+        "poster": 1,
+        "fire_equipment": 0,
+        "chair": 0,
+        "person": 5
+      }
+    },
+    "budget": {
+      "run": "runs/studioa_detector_balance_20260916_budget",
+      "git_commit": "633cfbd09ea9a218d00fbbfaccd7c97a15532005",
+      "job_sha256": "c58c2f3aa41e04a6d4c493a3e098140896826f73e697818c950851da2b31dc63",
+      "last_epoch": 25,
+      "best_epoch": 5,
+      "total_optimizer_steps": 350,
+      "selected_optimizer_steps": 70,
+      "reviewed_positive_matches": 7,
+      "support": 31,
+      "recall": 0.22580645161290322,
+      "reviewed_empty_fp": 0,
+      "unknown_predictions": 593,
+      "scene_invariance": {
+        "frozen_state_tensors": 194,
+        "frozen_state_equal": true,
+        "scene_before": {
+          "frames": 33,
+          "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+        },
+        "scene_after": {
+          "frames": 33,
+          "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+        },
+        "scene_logits_equal": true,
+        "baseline_recall": 0.0,
+        "selected_recall": 0.22580645161290322,
+        "baseline_empty_fp": 0.0,
+        "selected_empty_fp": 0.0,
+        "accepted": true
+      },
+      "per_class_matches": {
+        "laptop": 0,
+        "phone": 0,
+        "tablet": 0,
+        "boxed_stock": 0,
+        "cardboard_box": 1,
+        "speaker": 0,
+        "poster": 1,
+        "fire_equipment": 0,
+        "chair": 0,
+        "person": 5
+      }
+    }
+  },
+  "promotion": {
+    "accepted_for_upgrade": false,
+    "gates": {
+      "strictly_above_reference_7": false,
+      "person_at_least_5": true,
+      "phone_at_least_1": false,
+      "poster_at_least_1": true,
+      "empty_fp_not_increased": true,
+      "scene_logits_identical": true
+    },
+    "retained_experimental_reference": "runs/studioa_detector_warmup_20260916_v1/model/best.pt",
+    "reason": "Candidate improves control by one cardboard box, ties old reference total and loses its phone match; predeclared upgrade criteria fail.",
+    "worker_acceptance_scope": "warmup.accepted in each worker report compares to epoch-0 random head only.",
+    "deployment_ready": false
+  },
+  "verification": {
+    "control": {
+      "frozen_input_files_verified": 779,
+      "output_files_verified": 8,
+      "best_last_all_tensors_finite": true,
+      "best_last_shared_tensors_equal_original": true,
+      "checkpoint_job_binding_valid": true,
+      "scene_logits_equal": true,
+      "test_evaluated": false
+    },
+    "budget": {
+      "frozen_input_files_verified": 779,
+      "output_files_verified": 8,
+      "best_last_all_tensors_finite": true,
+      "best_last_shared_tensors_equal_original": true,
+      "checkpoint_job_binding_valid": true,
+      "scene_logits_equal": true,
+      "test_evaluated": false,
+      "saved_per_image_predictions_reproduce_metrics": true
+    }
+  },
+  "tests_passed": 173,
+  "ruff_ty_commit_hooks_passed": true,
+  "services": {
+    "diagnosis": "success; exit 0",
+    "sequential_comparison": "success; exit 0"
+  },
+  "phone_candidate_diagnosis": {
+    "scope": "source-val phone geometric diagnostics at existing score >0.20 and IoU >=0.50; no tuning or test inference; not one-to-one recall",
+    "results": {
+      "studioa_detector_warmup_20260916_v1": [
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            540.86669921875,
+            399.26666259765625,
+            566.066650390625,
+            439.8666687011719
+          ],
+          "localized_grid_candidates": 11,
+          "localized_phone_score_over_020": 10,
+          "eligible_before_nms_and_cap": 5,
+          "retained": true,
+          "max_phone_score_on_localized_boxes": 0.40896254777908325,
+          "reason": "retained"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            494.6666564941406,
+            403.0,
+            516.5999755859375,
+            445.0
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            572.5999755859375,
+            375.0,
+            600.5999755859375,
+            412.79998779296875
+          ],
+          "localized_grid_candidates": 7,
+          "localized_phone_score_over_020": 6,
+          "eligible_before_nms_and_cap": 4,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": 0.3057223856449127,
+          "reason": "removed_by_nms_or_top100"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            457.3333435058594,
+            385.73333740234375,
+            482.0666809082031,
+            425.8666687011719
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        }
+      ],
+      "studioa_detector_balance_20260916_budget": [
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            540.86669921875,
+            399.26666259765625,
+            566.066650390625,
+            439.8666687011719
+          ],
+          "localized_grid_candidates": 1,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": 0.07618378102779388,
+          "reason": "phone_score_below_threshold"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            494.6666564941406,
+            403.0,
+            516.5999755859375,
+            445.0
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            572.5999755859375,
+            375.0,
+            600.5999755859375,
+            412.79998779296875
+          ],
+          "localized_grid_candidates": 5,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": 0.06502106040716171,
+          "reason": "phone_score_below_threshold"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            457.3333435058594,
+            385.73333740234375,
+            482.0666809082031,
+            425.8666687011719
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        }
+      ]
+    }
+  },
+  "interpretation": [
+    "Under this seed and fold, normalization changes the selected score from 6/31 to 7/31 at the same epoch 5; one extra cardboard match is not independent accuracy or a generalization guarantee.",
+    "Both final best/last control model tensor sets exactly reproduce previous v2, ruling out incidental model drift in the control.",
+    "Candidate phone scores on localized boxes rose to about 0.065-0.076 but remain below fixed 0.20; two other phones have no raw candidate at IoU >=0.50.",
+    "Do not raise max_det or lower thresholds to hide remaining errors. No parameter sweep after this comparison."
+  ],
+  "next_step": "Improve cross-camera positive support and small-object localization training, especially phone/tablet; keep scene frozen and define the next comparison before using its validation results.",
+  "test_evaluated": false,
+  "independent_accuracy": false,
+  "deployment_ready": false,
+  "artifacts": {
+    "runs/studioa_detector_balance_20260916_control/job.json": "663a0a9d7900437b578fefd4498bb833c4b3d53c1cd1edf71a61d8c7abd9d245",
+    "runs/studioa_detector_balance_20260916_control/report.json": "480c9cbe58b4598dbb33fc143695a861a5cc6a80b8a3abf5a9e45d280ba21709",
+    "runs/studioa_detector_balance_20260916_control/status.json": "f539e48849d30b38fe8bc2055aafcd494a22663f394182da74f28ec9bf647909",
+    "runs/studioa_detector_balance_20260916_control/service.log": "45b384463eafddcbc74aadd6633a3383b01c2a803762a82779867643526ae62f",
+    "runs/studioa_detector_balance_20260916_control/model/best.pt": "d835abacc8128f21a2b10e39d9b2a6e52b49abc9bf3398b6abc6906b404b15dc",
+    "runs/studioa_detector_balance_20260916_control/model/last.pt": "17922d663823d001d617e5a9f3c11b4e3733decee9a18845279ab0e599aefe26",
+    "runs/studioa_detector_balance_20260916_control/validation.json": "6950b3e1e5ac11d506131bc7e33b6f40bd6e14051ce705dd4ce1f40ca58fdf97",
+    "runs/studioa_detector_balance_20260916_control/baseline_val.json": "445010c860040e87a677a984948f275e120f3f0f9bd6c85c070820efe7831962",
+    "runs/studioa_detector_balance_20260916_control/model/metrics.jsonl": "e9c2012e73bb114c4faea57117851039b26c649a05976a079aa64da60bc220ae",
+    "runs/studioa_detector_balance_20260916_control/validation_scene_preview.jpg": "e1798a2a38d0cab2eb1b06b75d18d29a8d66ad69cecb3082cc7c9bad25b78b57",
+    "runs/studioa_detector_balance_20260916_control/scene_before.json": "d7c9e18e014bb4e47b0a6acbae3e56ead9448a44e7dffe79097eeb4221d527a4",
+    "runs/studioa_detector_balance_20260916_control/warmup_evidence.json": "2e90f6e5b4e97f471fd2a99f1de143153801a87a1262024410fefeec30002c3c",
+    "runs/studioa_detector_balance_20260916_budget/job.json": "c58c2f3aa41e04a6d4c493a3e098140896826f73e697818c950851da2b31dc63",
+    "runs/studioa_detector_balance_20260916_budget/report.json": "7137d292a6e70f574ee530809e4bc1139dee8863bbe29e0e4213ba3e28a9a24b",
+    "runs/studioa_detector_balance_20260916_budget/status.json": "8fc4d53bfbd5ce6ca7c6776d0942d0ab41ccd37358d101f004c46bce0b9f2b60",
+    "runs/studioa_detector_balance_20260916_budget/service.log": "1c38343f5475266646e4097ff5c404bbd1923ed52f69ee7df90037c8ce31184b",
+    "runs/studioa_detector_balance_20260916_budget/model/best.pt": "d8f4d8c0680525ad0e940393e588edbabf44c586f49599b3d1f9d0cc5d813a98",
+    "runs/studioa_detector_balance_20260916_budget/model/last.pt": "0ef9934ba92f984d061dfbb8629f1a581488f7b04ebe77fbd2773f25bacab051",
+    "runs/studioa_detector_balance_20260916_budget/validation.json": "39f2b6e2f18fcc73cb371a8b5ae92a1d11d41e4bff923018d6407e0f2ccde9c4",
+    "runs/studioa_detector_balance_20260916_budget/baseline_val.json": "445010c860040e87a677a984948f275e120f3f0f9bd6c85c070820efe7831962",
+    "runs/studioa_detector_balance_20260916_budget/model/metrics.jsonl": "c39d0f1a3f3e564438dc4ef5f22387dcdde18aa4be7533166e34f99303ac3367",
+    "runs/studioa_detector_balance_20260916_budget/validation_scene_preview.jpg": "e1798a2a38d0cab2eb1b06b75d18d29a8d66ad69cecb3082cc7c9bad25b78b57",
+    "runs/studioa_detector_balance_20260916_budget/scene_before.json": "d7c9e18e014bb4e47b0a6acbae3e56ead9448a44e7dffe79097eeb4221d527a4",
+    "runs/studioa_detector_balance_20260916_budget/warmup_evidence.json": "93b264b01dfe739bd1ca301060719fb7dbb3dd89d1a33cc27c9a1a8975064641",
+    "docs/reviews/studioa_negative_balance_plan_20260916.json": "69f873bd8ab7d9f9a4401c861a0ee9b33dc637dffa1512f16542ae1162676d68",
+    "runs/studioa_negative_balance_20260916_v1/preflight.json": "96b5545461c23ebe16c5c62c0cce53294d61c7dac8e7d7dfc82ea73f3a7299a2",
+    "runs/studioa_negative_balance_20260916_v1/control_reproduction.json": "3337987232a0e998baa286c3d49ce7bf91db6a78c5a4c9163afd63953dc0b005",
+    "runs/studioa_negative_balance_20260916_v1/verification.json": "c2c824876f8e9fe1fedcbb5b874d07d19ec81ed6ac6eb26747c244a7d1648139",
+    "runs/studioa_negative_balance_20260916_v1/promotion_decision.json": "431e8891e6888f43920b454b9bd32537c662275bf892ff4595299c181aad0371",
+    "runs/studioa_negative_balance_20260916_v1/diagnose.py": "8b7823c9ec02abe2cdda9cf852b2cedcf1ba14325c8cdc21f2dc44fda05bd371",
+    "runs/studioa_negative_balance_20260916_v1/diagnose.log": "43a23f0fe14ec609efb9525229b6d76e1a842ec20155e9b23da5e188b160a551",
+    "runs/studioa_negative_balance_20260916_v1/loss_diagnosis.json": "3c5fe8da9fb69ae9f03a4d81828c5ff46417a66e9dd8500a560f5202ed30a53b",
+    "runs/studioa_negative_balance_20260916_v1/run_comparison.sh": "f519c8672f8b0a3fcf88c68fb190f43674d7aea074cc382f8b2769e044287a1c",
+    "runs/studioa_detector_balance_20260916_budget/review/phone_candidate_probe.json": "955a974d8e7d4ccf3418d05c1a2d5a2c6e01c5d18199abca937567bd421b04b9",
+    "runs/studioa_detector_balance_20260916_budget/review/selected_diagnostics.json": "924d34e443dfeaa67d97a0c1a550c5975b2a867c588a6113abda50398d3a00d4",
+    "runs/studioa_detector_balance_20260916_budget/review/probe_phone_candidates.py": "0bf0fb98df8fc9ec53cd3f43d40b3c9722ecd357bb019c975a6b474ca2744cab",
+    "runs/studioa_detector_balance_20260916_budget/review/inspect_selected.py": "c601e403d28427ecdd0ca95e646446082578d290880c4bbe731d016ac7e5aaa1",
+    "runs/studioa_detector_balance_20260916_budget/review/selected_val_review.jpg": "5fbb6ddd501b55840f303f5bbd8d5a647909b062913d5da9f4a1fcfdb8e19b53"
+  }
+}
