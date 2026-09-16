@@ -117,7 +117,7 @@ def overlay(image: Image.Image, annotation: dict, dest: Path) -> None:
 
 
 def focus_preview(source: Path, out: Path) -> None:
-    """Render floor/cabinet masks without changing any annotation decisions."""
+    """Render floor/table/cabinet masks without changing annotation decisions."""
     parent = json.loads((source / "report.json").read_text())
     job = json.loads((source / "job.json").read_text())
     if parent["status"] != "completed" or digest(source / "job.json") != parent["job_sha256"]:
@@ -143,6 +143,7 @@ def focus_preview(source: Path, out: Path) -> None:
         panels = []
         for entity, label, color in (
             ("floor", "地板", (0, 255, 80)),
+            ("display_table", "展示桌 (含圓桌、長桌)", (0, 200, 255)),
             ("display_cabinet", "展示櫃", (255, 0, 210)),
         ):
             positive = np.zeros(shape, dtype=bool)
@@ -181,14 +182,16 @@ def focus_preview(source: Path, out: Path) -> None:
     (out / "index.html").write_text(
         '<!doctype html><html lang="zh-Hant"><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        "<title>StudioA 地板 / 展示櫃遮罩檢查</title><style>"
+        "<title>StudioA 地板 / 展示桌 / 展示櫃遮罩檢查</title><style>"
         "body{font-family:sans-serif;margin:1rem;background:#171717;color:#eee}"
         "a{color:#8cd5ff}.panels{display:grid;grid-template-columns:"
         "repeat(auto-fit,minmax(min(550px,100%),1fr));gap:1rem}img{width:100%}"
         ".positive{display:none}body.clean .positive{display:block}"
         "body.clean .uncertain{display:none}article{border-top:1px solid #555}"
-        "</style><body><h1>地板 / 展示櫃遮罩檢查</h1>"
-        "<p>綠色 = 地板保留標籤; 桃紅色 = 展示櫃保留標籤; 橘色斜線 = 未決候選。"
+        "</style><body><h1>地板 / 展示桌 / 展示櫃遮罩檢查</h1>"
+        "<p>圓桌、長桌屬於展示桌。本頁一起呈現展示桌與展示櫃。</p>"
+        "<p>綠色 = 地板保留標籤; 藍色 = 展示桌保留標籤; "
+        "桃紅色 = 展示櫃保留標籤; 橘色斜線 = 未決候選。"
         "未上色不代表不存在。未決候選尚未確認類別, 可能和其他物件衝突。"
         "本頁只改善顯示, 沒有新增、補全或確認標註。</p>"
         '<label><input type="checkbox" checked '
