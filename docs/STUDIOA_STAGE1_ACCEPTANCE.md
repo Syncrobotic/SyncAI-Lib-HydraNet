@@ -4,9 +4,10 @@
 
 2026-09-16追加標籤審查：固定玻璃train含不透明面板及玻璃門混標，已另立
 20張修正版。接續已完成val玻璃／門改版，並補入柱子14張／2相機正例；
-[訓練前資料補齊](STUDIOA_TRAINING_READINESS.md)。新版尚未重訓或重新推論。
+[訓練前資料補齊](STUDIOA_TRAINING_READINESS.md)。後續已完成
+[新版共用val受控重訓與診斷](STUDIOA_SEMANTIC_COMPARISON.md)：整體持平、海報退步，候選未升級。
 下表保留原始歷史數字，尤其固定玻璃的0%不能單獨用來歸因模型能力。
-本次沒有重訓或更新下表分數。[AI審查與修正證據](reviews/studioa_semantic_glass_results_20260916.json)。
+下表保留原始批次分數，不混入不同val標籤的結果。[AI審查與修正證據](reviews/studioa_semantic_glass_results_20260916.json)。
 
 | 類別 | 歷史語意 val IoU（舊AI標籤） | 保留模型實例命中 | 本輪候選實例命中 |
 | --- | ---: | ---: | ---: |
@@ -32,10 +33,10 @@
 
 語意評估33張；實例評估6張／31個部分正例。兩模型實例val的影像、框與負區逐檔一致。
 沒有獨立偵測類別不代表場景中不存在，而是當前10類偵測頭尚不輸出該設施的物件框／ID。
-柱子的原始IoU記為0，但當時val沒有正向柱子像素；新版已有正例，仍待模型重新評估。
+柱子的原始IoU記為0，但當時val沒有正向柱子像素；新版已有正例；新候選IoU僅0.08%，其結果見上方受控比較。
 
 圓桌、長桌歸展示桌；直立展示架包含在目前展示櫃訓練範圍。玻璃門仍需door加玻璃屬性，結帳櫃檯仍需counter加用途；通用語意類別不能替代這些驗收。void為ignore，不生成實體。
 
-新增語意資料尚未用來重訓目前凍結的scene模型；資料補齊不能當作模型能力已補齊。既有Tao-Hsin test已在先前scene pilot揭露，後續不能重新稱為全新盲測。
+新增語意資料已用於獨立候選重訓，但沒有替換目前保留的scene模型；資料補齊不能當作模型能力已補齊。既有Tao-Hsin test已在先前scene pilot揭露，後續不能重新稱為全新盲測。
 
 [可追溯盤點](reviews/studioa_stage1_acceptance_20260916.json) · [順序與進度](STUDIOA_EXECUTION_PROGRESS.md)。

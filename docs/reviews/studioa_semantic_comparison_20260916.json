@@ -1,0 +1,1097 @@
+{
+  "schema": "studioa.semantic-data-comparison.v1",
+  "status": "completed",
+  "preflight": {
+    "status": "passed",
+    "git_commit": "72081e7c6efa947e0efd505615428020409b97de",
+    "job_sha256": {
+      "control": "fbadb18cfed3fbec47701073f401a262bf3b53bae50cd74deeef00cc625d9bd4",
+      "candidate": "072714222c1f6a18536358f52f7d0028ca5c5b437567e1f341fd7053728b5b74"
+    },
+    "shared_validation_sha256": "f005f5e8b2f736fca6ebb7ffa5d4966fcac1c9d4b997f796f9395c3cd38fbb15",
+    "shared_train_weights_sha256": "3721c824a93b8dc8aa7444ec410ae0fef09675a95f10fb5e2c5c0ad9b5442876",
+    "updates_per_arm": 495,
+    "validation_updates": [
+      0,
+      165,
+      330,
+      495
+    ],
+    "normalized_configs_equal": true,
+    "test_inference": false,
+    "automatic_promotion": false
+  },
+  "arms": {
+    "control": {
+      "report": {
+        "status": "completed",
+        "kind": "AI partial-semantic pilot",
+        "job_sha256": "fbadb18cfed3fbec47701073f401a262bf3b53bae50cd74deeef00cc625d9bd4",
+        "git_commit": "72081e7c6efa947e0efd505615428020409b97de",
+        "counts": {
+          "train": 46,
+          "val": 33,
+          "test": 26
+        },
+        "best_epoch": 45,
+        "last_epoch": 45,
+        "primary_metric": "scene_mIoU",
+        "best_primary_metric": 0.2560633785257698,
+        "best_validation_teacher_miou": 0.2560633785257698,
+        "warmup": {},
+        "test_evaluated": false,
+        "validation_teacher_miou": 0.2560633785257698,
+        "instance_counts": {},
+        "independent_accuracy": false,
+        "deployment_ready": false,
+        "outputs": {
+          "model/best.pt": "8a2bb09fb1d0031b99fccd13e86e55d21f6c1a8abff928a1caa133e8636c6781",
+          "model/last.pt": "49dc374b8cb9919bc3d9d7a4111108e15a077b52bbcd978457c8eb06eb1e3d8e",
+          "validation.json": "9fa790346c0002e5ae39157696ca5fe6df184459f35755e98864693faaa7d52e",
+          "baseline_val.json": "14dfcdc799360a3292eae097748307d7ac6bb87fce28fc6434361131c9468673",
+          "model/metrics.jsonl": "cd1b0d452a7d97f1fe4499c10c3056534f6aeaac64385690566d072f147a04d8",
+          "validation_scene_preview.jpg": "4a1e4c23aff9a7341c2b1862196558f5c35398143561b2e3046d5b397a6ae954",
+          "initial_state.pt": "a28f1a7eacddcb40aa14fa19635d723376db164c53d886fafeff4b3182b371e0",
+          "backend.json": "f0c53ec5b85f32a3c4cc3435103b07cc0d16ae3aa2eae6df88bcd2ce212cd957"
+        }
+      },
+      "backend": {
+        "device": "cuda",
+        "deterministic": true,
+        "warn_only": true,
+        "cudnn_benchmark": false,
+        "cudnn_tf32": false,
+        "matmul_tf32": false
+      },
+      "global_step": 495,
+      "best_global_step": 495,
+      "validation": {
+        "scene_mIoU": 0.2560633785257698,
+        "scene_mIoU_classes": 19.0,
+        "IoU/scene/00_floor": 0.8508461890835668,
+        "support/scene/00_floor": 0.40166558853597734,
+        "IoU/scene/01_wall": 0.5815332831918447,
+        "support/scene/01_wall": 0.17160072470495427,
+        "IoU/scene/02_ceiling": 0.25934405016672474,
+        "support/scene/02_ceiling": 0.0007404602194917028,
+        "IoU/scene/03_column": 0.0003493530377235365,
+        "support/scene/03_column": 0.007966279262821197,
+        "IoU/scene/04_door": 0.00013574199970589233,
+        "support/scene/04_door": 0.015548733447077906,
+        "IoU/scene/05_glass_panel": 0.0,
+        "support/scene/05_glass_panel": 0.0009024824506179053,
+        "IoU/scene/06_display_cabinet": 0.695309147889334,
+        "support/scene/06_display_cabinet": 0.13067213991420457,
+        "IoU/scene/07_display_table": 0.5349432076525685,
+        "support/scene/07_display_table": 0.16815328271473276,
+        "IoU/scene/08_counter": 0.12140416150329818,
+        "support/scene/08_counter": 0.013659219013737157,
+        "IoU/scene/09_laptop": 0.18431969689703132,
+        "support/scene/09_laptop": 0.005624964906822784,
+        "IoU/scene/10_phone": 0.0,
+        "support/scene/10_phone": 0.000725096042402149,
+        "IoU/scene/11_tablet": 0.0,
+        "support/scene/11_tablet": 0.0005070178439552718,
+        "IoU/scene/12_boxed_stock": 0.3054243374096802,
+        "support/scene/12_boxed_stock": 0.007878563779073562,
+        "IoU/scene/13_cardboard_box": 0.054951291024307194,
+        "support/scene/13_cardboard_box": 0.0008042448334695468,
+        "IoU/scene/14_speaker": 0.04279111376174147,
+        "support/scene/14_speaker": 0.0006107493183659555,
+        "IoU/scene/15_poster": 0.4665759315146853,
+        "support/scene/15_poster": 0.0038359228800252383,
+        "IoU/scene/16_fire_equipment": 0.0,
+        "support/scene/16_fire_equipment": 0.00019368174755316167,
+        "IoU/scene/17_chair": 0.06257854762034862,
+        "support/scene/17_chair": 0.006004972220171078,
+        "IoU/scene/18_person": 0.7046981392370656,
+        "support/scene/18_person": 0.06290587616454643
+      },
+      "selection_history": [
+        {
+          "epoch": 15,
+          "global_step": 165,
+          "weights": "model",
+          "primary_metric": "scene_mIoU",
+          "scene_mIoU": 0.23455382017297802,
+          "scene_mIoU_classes": 19.0,
+          "IoU/scene/00_floor": 0.8357546684256235,
+          "support/scene/00_floor": 0.40166558853597734,
+          "IoU/scene/01_wall": 0.5601245483638296,
+          "support/scene/01_wall": 0.17160072470495427,
+          "IoU/scene/02_ceiling": 0.17311618200789367,
+          "support/scene/02_ceiling": 0.0007404602194917028,
+          "IoU/scene/03_column": 0.0,
+          "support/scene/03_column": 0.007966279262821197,
+          "IoU/scene/04_door": 0.001556947948029403,
+          "support/scene/04_door": 0.015548733447077906,
+          "IoU/scene/05_glass_panel": 0.0,
+          "support/scene/05_glass_panel": 0.0009024824506179053,
+          "IoU/scene/06_display_cabinet": 0.6560770328992076,
+          "support/scene/06_display_cabinet": 0.13067213991420457,
+          "IoU/scene/07_display_table": 0.4713857571000428,
+          "support/scene/07_display_table": 0.16815328271473276,
+          "IoU/scene/08_counter": 0.13010264779707706,
+          "support/scene/08_counter": 0.013659219013737157,
+          "IoU/scene/09_laptop": 0.07721122485226209,
+          "support/scene/09_laptop": 0.005624964906822784,
+          "IoU/scene/10_phone": 0.0,
+          "support/scene/10_phone": 0.000725096042402149,
+          "IoU/scene/11_tablet": 0.03301107048038872,
+          "support/scene/11_tablet": 0.0005070178439552718,
+          "IoU/scene/12_boxed_stock": 0.26501964885422113,
+          "support/scene/12_boxed_stock": 0.007878563779073562,
+          "IoU/scene/13_cardboard_box": 0.06649514008004574,
+          "support/scene/13_cardboard_box": 0.0008042448334695468,
+          "IoU/scene/14_speaker": 0.04544998495033611,
+          "support/scene/14_speaker": 0.0006107493183659555,
+          "IoU/scene/15_poster": 0.47322442903592277,
+          "support/scene/15_poster": 0.0038359228800252383,
+          "IoU/scene/16_fire_equipment": 0.0,
+          "support/scene/16_fire_equipment": 0.00019368174755316167,
+          "IoU/scene/17_chair": 0.01696939047859862,
+          "support/scene/17_chair": 0.006004972220171078,
+          "IoU/scene/18_person": 0.6510239100131027,
+          "support/scene/18_person": 0.06290587616454643
+        },
+        {
+          "epoch": 30,
+          "global_step": 330,
+          "weights": "model",
+          "primary_metric": "scene_mIoU",
+          "scene_mIoU": 0.25276733069604895,
+          "scene_mIoU_classes": 19.0,
+          "IoU/scene/00_floor": 0.8513230645655339,
+          "support/scene/00_floor": 0.40166558853597734,
+          "IoU/scene/01_wall": 0.5729383791674982,
+          "support/scene/01_wall": 0.17160072470495427,
+          "IoU/scene/02_ceiling": 0.24088711177236377,
+          "support/scene/02_ceiling": 0.0007404602194917028,
+          "IoU/scene/03_column": 0.0024255249877909815,
+          "support/scene/03_column": 0.007966279262821197,
+          "IoU/scene/04_door": 7.349947984983491e-05,
+          "support/scene/04_door": 0.015548733447077906,
+          "IoU/scene/05_glass_panel": 0.0,
+          "support/scene/05_glass_panel": 0.0009024824506179053,
+          "IoU/scene/06_display_cabinet": 0.6793958555657001,
+          "support/scene/06_display_cabinet": 0.13067213991420457,
+          "IoU/scene/07_display_table": 0.5210482443348087,
+          "support/scene/07_display_table": 0.16815328271473276,
+          "IoU/scene/08_counter": 0.1121906297409715,
+          "support/scene/08_counter": 0.013659219013737157,
+          "IoU/scene/09_laptop": 0.18078935271326313,
+          "support/scene/09_laptop": 0.005624964906822784,
+          "IoU/scene/10_phone": 0.0,
+          "support/scene/10_phone": 0.000725096042402149,
+          "IoU/scene/11_tablet": 0.027439506563340186,
+          "support/scene/11_tablet": 0.0005070178439552718,
+          "IoU/scene/12_boxed_stock": 0.28004393599270133,
+          "support/scene/12_boxed_stock": 0.007878563779073562,
+          "IoU/scene/13_cardboard_box": 0.054576790501723475,
+          "support/scene/13_cardboard_box": 0.0008042448334695468,
+          "IoU/scene/14_speaker": 0.04870892018779343,
+          "support/scene/14_speaker": 0.0006107493183659555,
+          "IoU/scene/15_poster": 0.44136249602487543,
+          "support/scene/15_poster": 0.0038359228800252383,
+          "IoU/scene/16_fire_equipment": 0.0,
+          "support/scene/16_fire_equipment": 0.00019368174755316167,
+          "IoU/scene/17_chair": 0.08661469519794235,
+          "support/scene/17_chair": 0.006004972220171078,
+          "IoU/scene/18_person": 0.7027612764287735,
+          "support/scene/18_person": 0.06290587616454643
+        },
+        {
+          "epoch": 45,
+          "global_step": 495,
+          "weights": "model",
+          "primary_metric": "scene_mIoU",
+          "scene_mIoU": 0.2560633785257698,
+          "scene_mIoU_classes": 19.0,
+          "IoU/scene/00_floor": 0.8508461890835668,
+          "support/scene/00_floor": 0.40166558853597734,
+          "IoU/scene/01_wall": 0.5815332831918447,
+          "support/scene/01_wall": 0.17160072470495427,
+          "IoU/scene/02_ceiling": 0.25934405016672474,
+          "support/scene/02_ceiling": 0.0007404602194917028,
+          "IoU/scene/03_column": 0.0003493530377235365,
+          "support/scene/03_column": 0.007966279262821197,
+          "IoU/scene/04_door": 0.00013574199970589233,
+          "support/scene/04_door": 0.015548733447077906,
+          "IoU/scene/05_glass_panel": 0.0,
+          "support/scene/05_glass_panel": 0.0009024824506179053,
+          "IoU/scene/06_display_cabinet": 0.695309147889334,
+          "support/scene/06_display_cabinet": 0.13067213991420457,
+          "IoU/scene/07_display_table": 0.5349432076525685,
+          "support/scene/07_display_table": 0.16815328271473276,
+          "IoU/scene/08_counter": 0.12140416150329818,
+          "support/scene/08_counter": 0.013659219013737157,
+          "IoU/scene/09_laptop": 0.18431969689703132,
+          "support/scene/09_laptop": 0.005624964906822784,
+          "IoU/scene/10_phone": 0.0,
+          "support/scene/10_phone": 0.000725096042402149,
+          "IoU/scene/11_tablet": 0.0,
+          "support/scene/11_tablet": 0.0005070178439552718,
+          "IoU/scene/12_boxed_stock": 0.3054243374096802,
+          "support/scene/12_boxed_stock": 0.007878563779073562,
+          "IoU/scene/13_cardboard_box": 0.054951291024307194,
+          "support/scene/13_cardboard_box": 0.0008042448334695468,
+          "IoU/scene/14_speaker": 0.04279111376174147,
+          "support/scene/14_speaker": 0.0006107493183659555,
+          "IoU/scene/15_poster": 0.4665759315146853,
+          "support/scene/15_poster": 0.0038359228800252383,
+          "IoU/scene/16_fire_equipment": 0.0,
+          "support/scene/16_fire_equipment": 0.00019368174755316167,
+          "IoU/scene/17_chair": 0.06257854762034862,
+          "support/scene/17_chair": 0.006004972220171078,
+          "IoU/scene/18_person": 0.7046981392370656,
+          "support/scene/18_person": 0.06290587616454643
+        }
+      ],
+      "frozen_files_verified": 1057,
+      "initial_sha256": "a28f1a7eacddcb40aa14fa19635d723376db164c53d886fafeff4b3182b371e0",
+      "job_sha256": "fbadb18cfed3fbec47701073f401a262bf3b53bae50cd74deeef00cc625d9bd4",
+      "meta": {
+        "package_version": "0.1.0",
+        "python": "3.11.15",
+        "torch": "2.13.0+cu130",
+        "platform": "Linux-6.8.0-136-generic-x86_64-with-glibc2.35",
+        "device": "cuda"
+      }
+    },
+    "candidate": {
+      "report": {
+        "status": "completed",
+        "kind": "AI partial-semantic pilot",
+        "job_sha256": "072714222c1f6a18536358f52f7d0028ca5c5b437567e1f341fd7053728b5b74",
+        "git_commit": "72081e7c6efa947e0efd505615428020409b97de",
+        "counts": {
+          "train": 62,
+          "val": 33,
+          "test": 26
+        },
+        "best_epoch": 22,
+        "last_epoch": 33,
+        "primary_metric": "scene_mIoU",
+        "best_primary_metric": 0.2563865096055708,
+        "best_validation_teacher_miou": 0.2563865096055708,
+        "warmup": {},
+        "test_evaluated": false,
+        "validation_teacher_miou": 0.2563865096055708,
+        "instance_counts": {},
+        "independent_accuracy": false,
+        "deployment_ready": false,
+        "outputs": {
+          "model/best.pt": "d768056737046e7bca389f100db919d13b7cffd4960a655d96efcbc15d78613f",
+          "model/last.pt": "5cc5dcdc3a69365c5fa39f212aac747108aa806b88affddaf173f089796e48f0",
+          "validation.json": "ee91279c6de6b7558daf79441eb16eed6d24433c4c1646823806520bb644aa2b",
+          "baseline_val.json": "14dfcdc799360a3292eae097748307d7ac6bb87fce28fc6434361131c9468673",
+          "model/metrics.jsonl": "9320358e5664d36a864446a46acccc889709ea133b31402fd437a7dff5996077",
+          "validation_scene_preview.jpg": "7b6a509e855b1771c96151cd9d12ad9e4122a602b1702192133d4fb296913426",
+          "initial_state.pt": "a28f1a7eacddcb40aa14fa19635d723376db164c53d886fafeff4b3182b371e0",
+          "backend.json": "f0c53ec5b85f32a3c4cc3435103b07cc0d16ae3aa2eae6df88bcd2ce212cd957"
+        }
+      },
+      "backend": {
+        "device": "cuda",
+        "deterministic": true,
+        "warn_only": true,
+        "cudnn_benchmark": false,
+        "cudnn_tf32": false,
+        "matmul_tf32": false
+      },
+      "global_step": 495,
+      "best_global_step": 330,
+      "validation": {
+        "scene_mIoU": 0.2563865096055708,
+        "scene_mIoU_classes": 19.0,
+        "IoU/scene/00_floor": 0.8440926882623431,
+        "support/scene/00_floor": 0.40166558853597734,
+        "IoU/scene/01_wall": 0.5419977677669117,
+        "support/scene/01_wall": 0.17160072470495427,
+        "IoU/scene/02_ceiling": 0.2838632460841963,
+        "support/scene/02_ceiling": 0.0007404602194917028,
+        "IoU/scene/03_column": 0.0007984164739932467,
+        "support/scene/03_column": 0.007966279262821197,
+        "IoU/scene/04_door": 0.08650761075043792,
+        "support/scene/04_door": 0.015548733447077906,
+        "IoU/scene/05_glass_panel": 0.05526199911933069,
+        "support/scene/05_glass_panel": 0.0009024824506179053,
+        "IoU/scene/06_display_cabinet": 0.6806842622672675,
+        "support/scene/06_display_cabinet": 0.13067213991420457,
+        "IoU/scene/07_display_table": 0.5207226706135483,
+        "support/scene/07_display_table": 0.16815328271473276,
+        "IoU/scene/08_counter": 0.16532913745294178,
+        "support/scene/08_counter": 0.013659219013737157,
+        "IoU/scene/09_laptop": 0.2818061663970102,
+        "support/scene/09_laptop": 0.005624964906822784,
+        "IoU/scene/10_phone": 0.0,
+        "support/scene/10_phone": 0.000725096042402149,
+        "IoU/scene/11_tablet": 0.055498856237902516,
+        "support/scene/11_tablet": 0.0005070178439552718,
+        "IoU/scene/12_boxed_stock": 0.3075528612214043,
+        "support/scene/12_boxed_stock": 0.007878563779073562,
+        "IoU/scene/13_cardboard_box": 0.03282300435003672,
+        "support/scene/13_cardboard_box": 0.0008042448334695468,
+        "IoU/scene/14_speaker": 0.054143480222589864,
+        "support/scene/14_speaker": 0.0006107493183659555,
+        "IoU/scene/15_poster": 0.1705024759453005,
+        "support/scene/15_poster": 0.0038359228800252383,
+        "IoU/scene/16_fire_equipment": 0.004565316637318202,
+        "support/scene/16_fire_equipment": 0.00019368174755316167,
+        "IoU/scene/17_chair": 0.10176938733751897,
+        "support/scene/17_chair": 0.006004972220171078,
+        "IoU/scene/18_person": 0.6834243353657925,
+        "support/scene/18_person": 0.06290587616454643
+      },
+      "selection_history": [
+        {
+          "epoch": 11,
+          "global_step": 165,
+          "weights": "model",
+          "primary_metric": "scene_mIoU",
+          "scene_mIoU": 0.22420804488957768,
+          "scene_mIoU_classes": 19.0,
+          "IoU/scene/00_floor": 0.8255508008565599,
+          "support/scene/00_floor": 0.40166558853597734,
+          "IoU/scene/01_wall": 0.525506657285218,
+          "support/scene/01_wall": 0.17160072470495427,
+          "IoU/scene/02_ceiling": 0.14759725400457666,
+          "support/scene/02_ceiling": 0.0007404602194917028,
+          "IoU/scene/03_column": 0.0,
+          "support/scene/03_column": 0.007966279262821197,
+          "IoU/scene/04_door": 0.0566893950384448,
+          "support/scene/04_door": 0.015548733447077906,
+          "IoU/scene/05_glass_panel": 0.023561365247989723,
+          "support/scene/05_glass_panel": 0.0009024824506179053,
+          "IoU/scene/06_display_cabinet": 0.6395805071032157,
+          "support/scene/06_display_cabinet": 0.13067213991420457,
+          "IoU/scene/07_display_table": 0.47227789917178253,
+          "support/scene/07_display_table": 0.16815328271473276,
+          "IoU/scene/08_counter": 0.14795314984482935,
+          "support/scene/08_counter": 0.013659219013737157,
+          "IoU/scene/09_laptop": 0.25639325542632446,
+          "support/scene/09_laptop": 0.005624964906822784,
+          "IoU/scene/10_phone": 0.02519298977675777,
+          "support/scene/10_phone": 0.000725096042402149,
+          "IoU/scene/11_tablet": 0.03561081603090294,
+          "support/scene/11_tablet": 0.0005070178439552718,
+          "IoU/scene/12_boxed_stock": 0.23509015256588073,
+          "support/scene/12_boxed_stock": 0.007878563779073562,
+          "IoU/scene/13_cardboard_box": 0.0,
+          "support/scene/13_cardboard_box": 0.0008042448334695468,
+          "IoU/scene/14_speaker": 0.018047200370198982,
+          "support/scene/14_speaker": 0.0006107493183659555,
+          "IoU/scene/15_poster": 0.12721530846462534,
+          "support/scene/15_poster": 0.0038359228800252383,
+          "IoU/scene/16_fire_equipment": 0.0014374338023906794,
+          "support/scene/16_fire_equipment": 0.00019368174755316167,
+          "IoU/scene/17_chair": 0.08311598146097987,
+          "support/scene/17_chair": 0.006004972220171078,
+          "IoU/scene/18_person": 0.6391326864512984,
+          "support/scene/18_person": 0.06290587616454643
+        },
+        {
+          "epoch": 22,
+          "global_step": 330,
+          "weights": "model",
+          "primary_metric": "scene_mIoU",
+          "scene_mIoU": 0.2563865096055708,
+          "scene_mIoU_classes": 19.0,
+          "IoU/scene/00_floor": 0.8440926882623431,
+          "support/scene/00_floor": 0.40166558853597734,
+          "IoU/scene/01_wall": 0.5419977677669117,
+          "support/scene/01_wall": 0.17160072470495427,
+          "IoU/scene/02_ceiling": 0.2838632460841963,
+          "support/scene/02_ceiling": 0.0007404602194917028,
+          "IoU/scene/03_column": 0.0007984164739932467,
+          "support/scene/03_column": 0.007966279262821197,
+          "IoU/scene/04_door": 0.08650761075043792,
+          "support/scene/04_door": 0.015548733447077906,
+          "IoU/scene/05_glass_panel": 0.05526199911933069,
+          "support/scene/05_glass_panel": 0.0009024824506179053,
+          "IoU/scene/06_display_cabinet": 0.6806842622672675,
+          "support/scene/06_display_cabinet": 0.13067213991420457,
+          "IoU/scene/07_display_table": 0.5207226706135483,
+          "support/scene/07_display_table": 0.16815328271473276,
+          "IoU/scene/08_counter": 0.16532913745294178,
+          "support/scene/08_counter": 0.013659219013737157,
+          "IoU/scene/09_laptop": 0.2818061663970102,
+          "support/scene/09_laptop": 0.005624964906822784,
+          "IoU/scene/10_phone": 0.0,
+          "support/scene/10_phone": 0.000725096042402149,
+          "IoU/scene/11_tablet": 0.055498856237902516,
+          "support/scene/11_tablet": 0.0005070178439552718,
+          "IoU/scene/12_boxed_stock": 0.3075528612214043,
+          "support/scene/12_boxed_stock": 0.007878563779073562,
+          "IoU/scene/13_cardboard_box": 0.03282300435003672,
+          "support/scene/13_cardboard_box": 0.0008042448334695468,
+          "IoU/scene/14_speaker": 0.054143480222589864,
+          "support/scene/14_speaker": 0.0006107493183659555,
+          "IoU/scene/15_poster": 0.1705024759453005,
+          "support/scene/15_poster": 0.0038359228800252383,
+          "IoU/scene/16_fire_equipment": 0.004565316637318202,
+          "support/scene/16_fire_equipment": 0.00019368174755316167,
+          "IoU/scene/17_chair": 0.10176938733751897,
+          "support/scene/17_chair": 0.006004972220171078,
+          "IoU/scene/18_person": 0.6834243353657925,
+          "support/scene/18_person": 0.06290587616454643
+        },
+        {
+          "epoch": 33,
+          "global_step": 495,
+          "weights": "model",
+          "primary_metric": "scene_mIoU",
+          "scene_mIoU": 0.25120753201689905,
+          "scene_mIoU_classes": 19.0,
+          "IoU/scene/00_floor": 0.8468390560899536,
+          "support/scene/00_floor": 0.40166558853597734,
+          "IoU/scene/01_wall": 0.5453588211888163,
+          "support/scene/01_wall": 0.17160072470495427,
+          "IoU/scene/02_ceiling": 0.25197260036417235,
+          "support/scene/02_ceiling": 0.0007404602194917028,
+          "IoU/scene/03_column": 0.0011446220930232559,
+          "support/scene/03_column": 0.007966279262821197,
+          "IoU/scene/04_door": 0.07523479748533797,
+          "support/scene/04_door": 0.015548733447077906,
+          "IoU/scene/05_glass_panel": 0.04275269527861539,
+          "support/scene/05_glass_panel": 0.0009024824506179053,
+          "IoU/scene/06_display_cabinet": 0.6798952964848735,
+          "support/scene/06_display_cabinet": 0.13067213991420457,
+          "IoU/scene/07_display_table": 0.5285422116444678,
+          "support/scene/07_display_table": 0.16815328271473276,
+          "IoU/scene/08_counter": 0.15294000018179008,
+          "support/scene/08_counter": 0.013659219013737157,
+          "IoU/scene/09_laptop": 0.27854203409758965,
+          "support/scene/09_laptop": 0.005624964906822784,
+          "IoU/scene/10_phone": 0.0013086864060199575,
+          "support/scene/10_phone": 0.000725096042402149,
+          "IoU/scene/11_tablet": 0.046802756695454945,
+          "support/scene/11_tablet": 0.0005070178439552718,
+          "IoU/scene/12_boxed_stock": 0.30761927367671493,
+          "support/scene/12_boxed_stock": 0.007878563779073562,
+          "IoU/scene/13_cardboard_box": 0.024386260954765662,
+          "support/scene/13_cardboard_box": 0.0008042448334695468,
+          "IoU/scene/14_speaker": 0.03083370752881305,
+          "support/scene/14_speaker": 0.0006107493183659555,
+          "IoU/scene/15_poster": 0.1794678714859438,
+          "support/scene/15_poster": 0.0038359228800252383,
+          "IoU/scene/16_fire_equipment": 0.0019822391373295273,
+          "support/scene/16_fire_equipment": 0.00019368174755316167,
+          "IoU/scene/17_chair": 0.08823796961702902,
+          "support/scene/17_chair": 0.006004972220171078,
+          "IoU/scene/18_person": 0.6890822079103706,
+          "support/scene/18_person": 0.06290587616454643
+        }
+      ],
+      "frozen_files_verified": 1170,
+      "initial_sha256": "a28f1a7eacddcb40aa14fa19635d723376db164c53d886fafeff4b3182b371e0",
+      "job_sha256": "072714222c1f6a18536358f52f7d0028ca5c5b437567e1f341fd7053728b5b74",
+      "meta": {
+        "package_version": "0.1.0",
+        "python": "3.11.15",
+        "torch": "2.13.0+cu130",
+        "platform": "Linux-6.8.0-136-generic-x86_64-with-glibc2.35",
+        "device": "cuda"
+      }
+    }
+  },
+  "initial_tensors_equal": true,
+  "initial_tensor_count": 194,
+  "baseline_metrics_equal": true,
+  "shared_validation_support_equal": true,
+  "all_checkpoint_tensors_finite": true,
+  "per_class": [
+    {
+      "class": "floor",
+      "control_iou": 0.8508461890835668,
+      "candidate_iou": 0.8440926882623431,
+      "delta_pp": -0.6753500821223724,
+      "validation_support": 0.40166558853597734
+    },
+    {
+      "class": "wall",
+      "control_iou": 0.5815332831918447,
+      "candidate_iou": 0.5419977677669117,
+      "delta_pp": -3.9535515424933054,
+      "validation_support": 0.17160072470495427
+    },
+    {
+      "class": "ceiling",
+      "control_iou": 0.25934405016672474,
+      "candidate_iou": 0.2838632460841963,
+      "delta_pp": 2.4519195917471537,
+      "validation_support": 0.0007404602194917028
+    },
+    {
+      "class": "column",
+      "control_iou": 0.0003493530377235365,
+      "candidate_iou": 0.0007984164739932467,
+      "delta_pp": 0.044906343626971025,
+      "validation_support": 0.007966279262821197
+    },
+    {
+      "class": "door",
+      "control_iou": 0.00013574199970589233,
+      "candidate_iou": 0.08650761075043792,
+      "delta_pp": 8.637186875073203,
+      "validation_support": 0.015548733447077906
+    },
+    {
+      "class": "glass_panel",
+      "control_iou": 0.0,
+      "candidate_iou": 0.05526199911933069,
+      "delta_pp": 5.526199911933069,
+      "validation_support": 0.0009024824506179053
+    },
+    {
+      "class": "display_cabinet",
+      "control_iou": 0.695309147889334,
+      "candidate_iou": 0.6806842622672675,
+      "delta_pp": -1.462488562206643,
+      "validation_support": 0.13067213991420457
+    },
+    {
+      "class": "display_table",
+      "control_iou": 0.5349432076525685,
+      "candidate_iou": 0.5207226706135483,
+      "delta_pp": -1.4220537039020265,
+      "validation_support": 0.16815328271473276
+    },
+    {
+      "class": "counter",
+      "control_iou": 0.12140416150329818,
+      "candidate_iou": 0.16532913745294178,
+      "delta_pp": 4.39249759496436,
+      "validation_support": 0.013659219013737157
+    },
+    {
+      "class": "laptop",
+      "control_iou": 0.18431969689703132,
+      "candidate_iou": 0.2818061663970102,
+      "delta_pp": 9.748646949997891,
+      "validation_support": 0.005624964906822784
+    },
+    {
+      "class": "phone",
+      "control_iou": 0.0,
+      "candidate_iou": 0.0,
+      "delta_pp": 0.0,
+      "validation_support": 0.000725096042402149
+    },
+    {
+      "class": "tablet",
+      "control_iou": 0.0,
+      "candidate_iou": 0.055498856237902516,
+      "delta_pp": 5.549885623790251,
+      "validation_support": 0.0005070178439552718
+    },
+    {
+      "class": "boxed_stock",
+      "control_iou": 0.3054243374096802,
+      "candidate_iou": 0.3075528612214043,
+      "delta_pp": 0.212852381172407,
+      "validation_support": 0.007878563779073562
+    },
+    {
+      "class": "cardboard_box",
+      "control_iou": 0.054951291024307194,
+      "candidate_iou": 0.03282300435003672,
+      "delta_pp": -2.212828667427048,
+      "validation_support": 0.0008042448334695468
+    },
+    {
+      "class": "speaker",
+      "control_iou": 0.04279111376174147,
+      "candidate_iou": 0.054143480222589864,
+      "delta_pp": 1.1352366460848398,
+      "validation_support": 0.0006107493183659555
+    },
+    {
+      "class": "poster",
+      "control_iou": 0.4665759315146853,
+      "candidate_iou": 0.1705024759453005,
+      "delta_pp": -29.60734555693848,
+      "validation_support": 0.0038359228800252383
+    },
+    {
+      "class": "fire_equipment",
+      "control_iou": 0.0,
+      "candidate_iou": 0.004565316637318202,
+      "delta_pp": 0.45653166373182025,
+      "validation_support": 0.00019368174755316167
+    },
+    {
+      "class": "chair",
+      "control_iou": 0.06257854762034862,
+      "candidate_iou": 0.10176938733751897,
+      "delta_pp": 3.9190839717170354,
+      "validation_support": 0.006004972220171078
+    },
+    {
+      "class": "person",
+      "control_iou": 0.7046981392370656,
+      "candidate_iou": 0.6834243353657925,
+      "delta_pp": -2.127380387127309,
+      "validation_support": 0.06290587616454643
+    }
+  ],
+  "test_evaluated": false,
+  "model_promoted": false,
+  "independent_accuracy": false,
+  "limitations": [
+    "single seed",
+    "AI-reviewed partial source-val labels, not independent truth",
+    "glass validation uses one camera",
+    "candidate changes image count and labels together",
+    "deterministic mode is warn-only; CUDA cross-entropy warns about nondeterministic kernel"
+  ],
+  "artifact_sha256": {
+    "prepare_comparison.py": "b5f6f600a280631b76618908b13fc65cff8fe69c9c13ebc17537d4dc88a9c532",
+    "run_comparison.sh": "cf6f75b4cc96d5ce9fcda01bb907df02e31218fdec72b9e93979c2d97ccd2a01",
+    "inspect_results.py": "3415ec62eaecb611949f576c5bf7103b841220bfa3304a82ea32c217d6c0602e"
+  },
+  "run_root": "runs/studioa_semantic_comparison_20260916_v2",
+  "diagnosis": {
+    "control": {
+      "focus_classes": [
+        {
+          "class": "column",
+          "train_input_pixels": 325039,
+          "train_pixel_fraction": 0.021615017296256523,
+          "train_positive_frames": 10,
+          "train_positive_cameras": [
+            "Kaohsiung-cam04",
+            "Kaohsiung-cam08"
+          ],
+          "val_labeled_pixels": 85552,
+          "val_top_predictions": [
+            {
+              "class": "wall",
+              "pixels": 79233,
+              "fraction": 0.9261384888722648
+            },
+            {
+              "class": "display_table",
+              "pixels": 5286,
+              "fraction": 0.061786983355152425
+            },
+            {
+              "class": "person",
+              "pixels": 980,
+              "fraction": 0.01145502150738732
+            }
+          ]
+        },
+        {
+          "class": "door",
+          "train_input_pixels": 93349,
+          "train_pixel_fraction": 0.006207686614800839,
+          "train_positive_frames": 4,
+          "train_positive_cameras": [
+            "Kaohsiung-cam04"
+          ],
+          "val_labeled_pixels": 166982,
+          "val_top_predictions": [
+            {
+              "class": "wall",
+              "pixels": 155756,
+              "fraction": 0.9327711968954737
+            },
+            {
+              "class": "tablet",
+              "pixels": 3972,
+              "fraction": 0.023786995005449688
+            },
+            {
+              "class": "display_table",
+              "pixels": 2780,
+              "fraction": 0.016648501036039813
+            }
+          ]
+        },
+        {
+          "class": "glass_panel",
+          "train_input_pixels": 318831,
+          "train_pixel_fraction": 0.021202186751690607,
+          "train_positive_frames": 20,
+          "train_positive_cameras": [
+            "Kaohsiung-cam04",
+            "Kaohsiung-cam07",
+            "Taichung-cam03",
+            "Taichung-cam04",
+            "Taichung-cam05",
+            "Taichung-cam09"
+          ],
+          "val_labeled_pixels": 9692,
+          "val_top_predictions": [
+            {
+              "class": "wall",
+              "pixels": 3643,
+              "fraction": 0.37587701196863393
+            },
+            {
+              "class": "display_cabinet",
+              "pixels": 2142,
+              "fraction": 0.22100701609574908
+            },
+            {
+              "class": "counter",
+              "pixels": 1141,
+              "fraction": 0.11772595955427156
+            }
+          ]
+        },
+        {
+          "class": "phone",
+          "train_input_pixels": 8698,
+          "train_pixel_fraction": 0.0005784149607980557,
+          "train_positive_frames": 6,
+          "train_positive_cameras": [
+            "Kaohsiung-cam04",
+            "Taichung-cam05",
+            "Taichung-cam08"
+          ],
+          "val_labeled_pixels": 7787,
+          "val_top_predictions": [
+            {
+              "class": "display_table",
+              "pixels": 7223,
+              "fraction": 0.9275715936817773
+            },
+            {
+              "class": "counter",
+              "pixels": 446,
+              "fraction": 0.05727494542185694
+            },
+            {
+              "class": "display_cabinet",
+              "pixels": 103,
+              "fraction": 0.013227173494285347
+            }
+          ]
+        },
+        {
+          "class": "poster",
+          "train_input_pixels": 23449,
+          "train_pixel_fraction": 0.0015593530025009897,
+          "train_positive_frames": 4,
+          "train_positive_cameras": [
+            "Kaohsiung-cam04",
+            "Taichung-cam04",
+            "Taichung-cam09"
+          ],
+          "val_labeled_pixels": 41195,
+          "val_top_predictions": [
+            {
+              "class": "poster",
+              "pixels": 23654,
+              "fraction": 0.5741958975603836
+            },
+            {
+              "class": "wall",
+              "pixels": 17313,
+              "fraction": 0.4202694501759922
+            },
+            {
+              "class": "floor",
+              "pixels": 228,
+              "fraction": 0.005534652263624226
+            }
+          ]
+        },
+        {
+          "class": "fire_equipment",
+          "train_input_pixels": 23535,
+          "train_pixel_fraction": 0.0015650719823387263,
+          "train_positive_frames": 8,
+          "train_positive_cameras": [
+            "Taichung-cam05",
+            "Taichung-cam09"
+          ],
+          "val_labeled_pixels": 2080,
+          "val_top_predictions": [
+            {
+              "class": "person",
+              "pixels": 1169,
+              "fraction": 0.5620192307692308
+            },
+            {
+              "class": "display_cabinet",
+              "pixels": 814,
+              "fraction": 0.39134615384615384
+            },
+            {
+              "class": "floor",
+              "pixels": 97,
+              "fraction": 0.046634615384615385
+            }
+          ]
+        }
+      ],
+      "poster_labeled_pixel_precision": 0.7134153697671612,
+      "poster_labeled_pixel_recall": 0.5741958975603836,
+      "poster_labeled_pixel_false_positives": 9502,
+      "poster_false_positive_sources": [
+        {
+          "class": "wall",
+          "pixels": 8982
+        },
+        {
+          "class": "counter",
+          "pixels": 432
+        },
+        {
+          "class": "floor",
+          "pixels": 41
+        },
+        {
+          "class": "boxed_stock",
+          "pixels": 34
+        }
+      ],
+      "matches_recorded_iou": true
+    },
+    "candidate": {
+      "focus_classes": [
+        {
+          "class": "column",
+          "train_input_pixels": 325039,
+          "train_pixel_fraction": 0.021138054669977334,
+          "train_positive_frames": 10,
+          "train_positive_cameras": [
+            "Kaohsiung-cam04",
+            "Kaohsiung-cam08"
+          ],
+          "val_labeled_pixels": 85552,
+          "val_top_predictions": [
+            {
+              "class": "wall",
+              "pixels": 79845,
+              "fraction": 0.9332920329156537
+            },
+            {
+              "class": "display_table",
+              "pixels": 4577,
+              "fraction": 0.053499625958481394
+            },
+            {
+              "class": "person",
+              "pixels": 986,
+              "fraction": 0.011525154292126426
+            }
+          ]
+        },
+        {
+          "class": "door",
+          "train_input_pixels": 103504,
+          "train_pixel_fraction": 0.006731109837777418,
+          "train_positive_frames": 9,
+          "train_positive_cameras": [
+            "Kaohsiung-cam04",
+            "Taichung-cam09"
+          ],
+          "val_labeled_pixels": 166982,
+          "val_top_predictions": [
+            {
+              "class": "wall",
+              "pixels": 138735,
+              "fraction": 0.8308380544010732
+            },
+            {
+              "class": "door",
+              "pixels": 14964,
+              "fraction": 0.08961444946161862
+            },
+            {
+              "class": "poster",
+              "pixels": 6315,
+              "fraction": 0.03781844749733504
+            }
+          ]
+        },
+        {
+          "class": "glass_panel",
+          "train_input_pixels": 218684,
+          "train_pixel_fraction": 0.01422153756149054,
+          "train_positive_frames": 11,
+          "train_positive_cameras": [
+            "Kaohsiung-cam08",
+            "Taichung-cam03"
+          ],
+          "val_labeled_pixels": 9692,
+          "val_top_predictions": [
+            {
+              "class": "glass_panel",
+              "pixels": 2510,
+              "fraction": 0.25897647544366487
+            },
+            {
+              "class": "display_cabinet",
+              "pixels": 1610,
+              "fraction": 0.16611638464713166
+            },
+            {
+              "class": "poster",
+              "pixels": 1589,
+              "fraction": 0.16394964919521254
+            }
+          ]
+        },
+        {
+          "class": "phone",
+          "train_input_pixels": 18300,
+          "train_pixel_fraction": 0.00119009226726819,
+          "train_positive_frames": 12,
+          "train_positive_cameras": [
+            "Kaohsiung-cam04",
+            "Taichung-cam03",
+            "Taichung-cam05",
+            "Taichung-cam08"
+          ],
+          "val_labeled_pixels": 7787,
+          "val_top_predictions": [
+            {
+              "class": "display_table",
+              "pixels": 5007,
+              "fraction": 0.6429947348144344
+            },
+            {
+              "class": "poster",
+              "pixels": 1648,
+              "fraction": 0.21163477590856555
+            },
+            {
+              "class": "counter",
+              "pixels": 1019,
+              "fraction": 0.13085912418132786
+            }
+          ]
+        },
+        {
+          "class": "poster",
+          "train_input_pixels": 126036,
+          "train_pixel_fraction": 0.008196419070896918,
+          "train_positive_frames": 16,
+          "train_positive_cameras": [
+            "Kaohsiung-cam04",
+            "Kaohsiung-cam08",
+            "Taichung-cam03",
+            "Taichung-cam04",
+            "Taichung-cam05",
+            "Taichung-cam09",
+            "Taichung-cam11"
+          ],
+          "val_labeled_pixels": 41195,
+          "val_top_predictions": [
+            {
+              "class": "poster",
+              "pixels": 32056,
+              "fraction": 0.7781526884330623
+            },
+            {
+              "class": "wall",
+              "pixels": 8794,
+              "fraction": 0.2134725087996116
+            },
+            {
+              "class": "floor",
+              "pixels": 345,
+              "fraction": 0.008374802767326132
+            }
+          ]
+        },
+        {
+          "class": "fire_equipment",
+          "train_input_pixels": 35855,
+          "train_pixel_fraction": 0.0023317354231093415,
+          "train_positive_frames": 11,
+          "train_positive_cameras": [
+            "Taichung-cam05",
+            "Taichung-cam09"
+          ],
+          "val_labeled_pixels": 2080,
+          "val_top_predictions": [
+            {
+              "class": "person",
+              "pixels": 1358,
+              "fraction": 0.6528846153846154
+            },
+            {
+              "class": "display_cabinet",
+              "pixels": 518,
+              "fraction": 0.24903846153846154
+            },
+            {
+              "class": "floor",
+              "pixels": 119,
+              "fraction": 0.05721153846153846
+            }
+          ]
+        }
+      ],
+      "poster_labeled_pixel_precision": 0.17921395426846312,
+      "poster_labeled_pixel_recall": 0.7781526884330623,
+      "poster_labeled_pixel_false_positives": 146814,
+      "poster_false_positive_sources": [
+        {
+          "class": "wall",
+          "pixels": 97302
+        },
+        {
+          "class": "display_table",
+          "pixels": 32605
+        },
+        {
+          "class": "door",
+          "pixels": 6315
+        },
+        {
+          "class": "speaker",
+          "pixels": 2583
+        }
+      ],
+      "matches_recorded_iou": true
+    }
+  },
+  "diagnosis_scope": "selected checkpoints on shared source-val only; resized train masks without random augmentation",
+  "checks": {
+    "focused_cpu_passed": 89,
+    "focused_cpu_cuda_skipped": 2,
+    "gpu_precision_passed": 17,
+    "full_cpu": {
+      "tests": 4197,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 12,
+      "passed": 4185
+    },
+    "ruff": "passed",
+    "type_ratchets": "passed"
+  },
+  "services": {
+    "studioa-semantic-comparison-20260916-v2": {
+      "result": "success",
+      "exit_code": 0
+    },
+    "studioa-semantic-comparison-regression-20260916-v2": {
+      "result": "success",
+      "exit_code": 0
+    },
+    "studioa-semantic-diagnosis-20260916-v2": {
+      "result": "success",
+      "exit_code": 0
+    }
+  },
+  "superseded_run": {
+    "root": "runs/studioa_semantic_comparison_20260916_v1",
+    "reason": "deterministic branch skipped requested TF32 settings; kept as diagnostic history, superseded by v2"
+  },
+  "additional_artifacts": {
+    "runs/studioa_semantic_comparison_20260916_v2/diagnosis.json": "5302545c6c51e955790a59d681e00d713a314d650d16c616333286faf71c8a70",
+    "runs/studioa_semantic_comparison_20260916_v2/diagnose.py": "5d0b97b9931ec8da22859768f71d1b7d7f965b1337f8ffc0e6fea90ad7fbac19",
+    "runs/studioa_semantic_comparison_20260916_v2/regression.log": "ab8a750d4c210c8086679f0308a36c873e54c1667dcdc316eb7d7dbf89f8ebe9",
+    "runs/studioa_semantic_comparison_20260916_v2/regression.xml": "292dff02e4422a45d7704e95c931ec3f7a78ff67834c925bde470a90d2582d1c",
+    "runs/studioa_semantic_comparison_20260916_v2/class_comparison.png": "51f5de9321765964590d0d738c62c4be7b97378d1ad4b760e3b1609d47ed10b3",
+    "runs/studioa_semantic_comparison_20260916_v2/index.html": "73097f43c93f8e5270a61c43ae239dd46d9ebef9c0934607ce03bfa636845aec"
+  }
+}

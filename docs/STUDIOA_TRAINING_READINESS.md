@@ -4,6 +4,9 @@
 這個結論限定於局部 AI 語意監督；不代表整店 3D、偵測實例或 Stage2–4 已可驗收。
 本輪只做資料修訂與驗證，沒有啟動正式模型訓練、test 推論或模型升級。
 
+後續已完成[共用新版val的受控重訓](STUDIOA_SEMANTIC_COMPARISON.md)，候選未升級；
+下文保留本次資料補齊的範圍與驗證紀錄。
+
 新資料：`runs/studioa_semantic_ready_20260916_v1`，僅供 `Tao-Hsin` held-out fold。
 保留 137 張影像：62 train、33 val、26 test，另 16 張依原規則排除。
 影像不增加；此次缺口可由現有影像補標解決，新增 GCS 下載為 0。
