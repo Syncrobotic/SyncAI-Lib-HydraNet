@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from copy import deepcopy
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -353,3 +354,32 @@ def coco_annotations(data: dict, image_id: int, first_id: int) -> list[dict]:
         }
         for index, row in enumerate(data["entities"])
     ]
+
+
+def apply_ai_review(data: dict, decisions: list[dict]) -> dict:
+    """AI visual review may defer a positive label; it cannot manufacture a new label."""
+    result = deepcopy(data)
+    seen = set()
+    for decision in decisions:
+        identity = decision.get("id")
+        reason = decision.get("reason")
+        if (
+            decision.get("action") != "defer"
+            or not isinstance(reason, str)
+            or not reason.strip()
+        ):
+            raise ValueError("AI review requires a defer action and visible reason")
+        if identity in seen:
+            raise ValueError("duplicate AI review decision")
+        seen.add(identity)
+        row = next((row for row in result["entities"] if row["id"] == identity), None)
+        if row is None:
+            raise ValueError("AI review target is not a resolved candidate")
+        result["entities"].remove(row)
+        row.update(reasons=["ai_visual_review: " + reason], possible_entities=[row["entity"]])
+        result["unresolved_candidates"].append(row)
+    result["counts_by_view"] = dict(
+        Counter(view for row in result["entities"] for view in entity_views(row))
+    )
+    result["coverage"] = coverage(result["entities"], result["unresolved_candidates"])
+    return result

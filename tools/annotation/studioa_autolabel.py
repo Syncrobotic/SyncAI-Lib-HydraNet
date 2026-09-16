@@ -27,6 +27,7 @@ from syncai_hydranet.data.studioa_autolabel import (
     PROMPTS,
     Candidate,
     annotate,
+    apply_ai_review,
     coco_annotations,
     decode,
     policy,
@@ -275,6 +276,80 @@ def refine(source: Path, out: Path) -> None:
         raise
 
 
+def visual_review(source: Path, decisions_path: Path, out: Path) -> None:
+    """Preserve the base inference job identity and attach a separate AI review layer."""
+    parent = json.loads((source / "report.json").read_text())
+    decisions = json.loads(decisions_path.read_text())
+    if parent["status"] != "completed" or decisions.get("reviewer_kind") != "ai":
+        raise ValueError("AI review requires completed labels and AI provenance")
+    for name, expected in parent["outputs"].items():
+        if digest(source / name) != expected:
+            raise ValueError("AI review source changed")
+    updates = {}
+    for item in decisions["frames"]:
+        identity = item["frame_id"]
+        if Path(identity).name != identity or identity in updates:
+            raise ValueError("invalid or duplicate AI review frame ID")
+        path = source / "frames" / (identity + ".json")
+        if digest(path) != item["annotation_sha256"]:
+            raise ValueError("AI review annotation changed")
+        original = json.loads(path.read_text())
+        if original["image_sha256"] != item["image_sha256"]:
+            raise ValueError("AI review image changed")
+        updated = apply_ai_review(original, item["decisions"])
+        validate_annotation(
+            updated, item["image_sha256"], tuple(original["image_size_px"][::-1])
+        )
+        updated["ai_visual_review"] = {
+            "reviewer_kind": "ai",
+            "source_annotation_sha256": digest(path),
+            "decisions_sha256": digest(decisions_path),
+        }
+        updates[identity] = updated
+    shutil.copytree(source, out)
+    write(
+        out / "status.json", {"status": "applying_ai_review", "reviewed_frames": len(updates)}
+    )
+    shutil.copyfile(decisions_path, out / "ai_visual_decisions.json")
+    shutil.copyfile(__file__, out / "ai_review_worker.py")
+    shutil.copyfile(
+        ROOT / "src/syncai_hydranet/data/studioa_autolabel.py", out / "ai_review_rules.py"
+    )
+    try:
+        job = json.loads((out / "job.json").read_text())
+        for frame in job["frames"]:
+            if frame["id"] not in updates:
+                continue
+            data = updates[frame["id"]]
+            write(out / "frames" / (frame["id"] + ".json"), data)
+            with Image.open(out / frame["image"]) as image:
+                overlay(image.convert("RGB"), data, out / "frames" / (frame["id"] + ".jpg"))
+        report = summarise(out, job)
+        report["ai_visual_review"] = {
+            "parent_run": str(source.resolve()),
+            "parent_report_sha256": digest(source / "report.json"),
+            "frames_checked": len(updates),
+            "decision_count": sum(len(item["decisions"]) for item in decisions["frames"]),
+            "reviewer_kind": "ai",
+            "decisions_sha256": digest(decisions_path),
+            "worker_sha256": digest(out / "ai_review_worker.py"),
+            "rules_sha256": digest(out / "ai_review_rules.py"),
+        }
+        write(out / "report.json", report)
+        write(
+            out / "status.json",
+            {
+                "status": "completed",
+                "completed": len(job["frames"]),
+                "total": len(job["frames"]),
+                "instances": report["instances"],
+            },
+        )
+    except BaseException:
+        write(out / "status.json", {"status": "failed", "error": traceback.format_exc()})
+        raise
+
+
 def run(out: Path, device: str) -> None:
     job = json.loads((out / "job.json").read_text())
     if job["policy"] != policy() or job["teacher"] != {
@@ -394,11 +469,17 @@ def main() -> None:
     p = sub.add_parser("refine")
     p.add_argument("--source", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
+    p = sub.add_parser("visual-review")
+    p.add_argument("--source", type=Path, required=True)
+    p.add_argument("--decisions", type=Path, required=True)
+    p.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     if args.action == "prepare":
         prepare(args.bundle, args.out, args.limit)
     elif args.action == "refine":
         refine(args.source, args.out)
+    elif args.action == "visual-review":
+        visual_review(args.source, args.decisions, args.out)
     else:
         expected = args.out.resolve() / "snapshot/tools/annotation/studioa_autolabel.py"
         if Path(__file__).resolve() != expected:

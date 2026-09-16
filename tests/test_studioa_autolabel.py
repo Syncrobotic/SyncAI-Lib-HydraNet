@@ -159,6 +159,35 @@ def test_worker_freezes_writes_resumes_and_rejects_foreign_checkpoints(tmp_path,
         "floor": 1
     }
     assert target.read_bytes() == previous
+    refined_target = refined / "frames" / target.name
+    refined_data = json.loads(refined_target.read_text())
+    decisions_path = tmp_path / "decisions.json"
+    worker.write(
+        decisions_path,
+        {
+            "reviewer_kind": "ai",
+            "frames": [
+                {
+                    "frame_id": refined_data["frame_id"],
+                    "annotation_sha256": worker.digest(refined_target),
+                    "image_sha256": refined_data["image_sha256"],
+                    "decisions": [
+                        {
+                            "id": refined_data["entities"][0]["id"],
+                            "action": "defer",
+                            "reason": "synthetic ambiguity",
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    visually_reviewed = tmp_path / "visually_reviewed"
+    worker.visual_review(refined, decisions_path, visually_reviewed)
+    review_report = json.loads((visually_reviewed / "report.json").read_text())
+    assert review_report["instances"] == 0
+    assert review_report["ai_visual_review"]["decision_count"] == 1
+    assert json.loads(refined_target.read_text())["entities"]
     data = json.loads(previous)
     data["job_sha256"] = "other-policy"
     worker.write(target, data)
@@ -176,3 +205,27 @@ def test_semantic_conflict_does_not_discard_the_entire_floor():
     conflicts = [row for row in data["unresolved_candidates"] if row["entity"] == "floor"]
     assert len(conflicts) == 1 and conflicts[0]["area"] == 100
     assert not (decode(floors[0]["segmentation"]) & decode(conflicts[0]["segmentation"])).any()
+
+
+def test_ai_visual_review_only_defers_and_preserves_the_mask():
+    from syncai_hydranet.data.studioa_autolabel import apply_ai_review
+
+    original = bound([candidate("counter", "checkout counter")])
+    row = original["entities"][0]
+    reviewed = apply_ai_review(
+        original,
+        [
+            {
+                "id": row["id"],
+                "action": "defer",
+                "reason": "visible printer, not a verified counter",
+            }
+        ],
+    )
+    validate_annotation(reviewed, "fixture", (50, 60))
+    assert not reviewed["entities"]
+    assert original["entities"] == [row]
+    assert reviewed["unresolved_candidates"][0]["segmentation"] == row["segmentation"]
+    assert reviewed["coverage"]["checkout_counter"] == "uncertain"
+    with pytest.raises(ValueError, match="defer"):
+        apply_ai_review(original, [{"id": row["id"], "action": "promote", "reason": "guess"}])

@@ -1,0 +1,34 @@
+{
+  "reviewer_kind": "ai",
+  "reviewer": "assistant_visual_analysis",
+  "scope": "One source frame inspected visually; not independent human verification.",
+  "frames": [
+    {
+      "frame_id": "0004-Kaohsiung-cam05",
+      "annotation_sha256": "1c7cdd81cfac7f4e9b6bf21b2c8e9cd554d03ee0d031111dcfeb00eb030c6536",
+      "image_sha256": "ff5cc5e03988f11b8709d95f7bb8e7fdc9dc70a9e6f9a3b438b33ea7ba842e73",
+      "decisions": [
+        {
+          "id": "ai-0007",
+          "action": "defer",
+          "reason": "Foreground region is a visible printer/device; checkout counter role is unsupported."
+        },
+        {
+          "id": "ai-0017",
+          "action": "defer",
+          "reason": "Visible fixture/wall region does not establish a separate fixed-glass panel boundary."
+        },
+        {
+          "id": "ai-0021",
+          "action": "defer",
+          "reason": "Visible fixture/wall region does not establish a separate fixed-glass panel boundary."
+        },
+        {
+          "id": "ai-0023",
+          "action": "defer",
+          "reason": "Visible fixture/wall region does not establish a separate fixed-glass panel boundary."
+        }
+      ]
+    }
+  ]
+}
