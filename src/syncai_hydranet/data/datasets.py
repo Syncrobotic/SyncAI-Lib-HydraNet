@@ -415,6 +415,7 @@ def build_dataset(
             input_size,
             train=train,
             augment=augment,
+            partial_eval=dcfg.get("partial_eval"),
         )
     if dcfg["type"] == "studioa_partial":
         if folder != split or sup != ["scene"] or not letterbox or dcfg.get("label_map"):

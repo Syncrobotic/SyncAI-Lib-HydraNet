@@ -598,8 +598,14 @@ def evaluate(
     # Restore whatever mode the caller had it in. Training passes the EMA copy, which
     # lives in eval mode; leaving it in train mode would let a stray forward pass move
     # its BatchNorm statistics, and hydranet-eval would return a model set to train.
+    from .partial_detection import PROTOCOL, SCORE_THRESHOLD, PartialDetectionAccumulator
+
     for _, ds in val_sets:
-        if getattr(ds, "partial_detection", False) and model.det_head_name in ds.supervises:
+        if (
+            getattr(ds, "partial_detection", False)
+            and model.det_head_name in ds.supervises
+            and getattr(ds, "partial_detection_evaluation", None) != PROTOCOL
+        ):
             raise ValueError(
                 "partial detection labels cannot be scored with exhaustive COCO mAP; "
                 "use an explicitly reviewed evaluation set"
@@ -617,6 +623,7 @@ def evaluate(
     # against the last one's ground truth -- a wrong mAP, silently, and only when
     # someone added a second detection source.
     det_results: dict[str, list] = {}
+    partial_accs: dict[str, PartialDetectionAccumulator] = {}
     # `Any`, not `object`: pycocotools ships no stubs, so the COCO handle genuinely has
     # no type here. Declaring `object` claimed more than was known and made every
     # `coco_gt.loadRes(...)` an error against a class nothing can describe.
@@ -669,6 +676,29 @@ def evaluate(
             _update_pose_heads(model, out, batch, sup, pose_accs, pose_max)
 
             if model.det_head is not None and model.det_head_name in sup:
+                if getattr(ds, "partial_detection", False):
+                    acc = partial_accs.setdefault(
+                        name, PartialDetectionAccumulator(ds.detection_classes)
+                    )
+                    dets = model.det_head.decode(
+                        out["det_cls"],
+                        out["det_reg"],
+                        out["det_ctr"],
+                        score_thr=SCORE_THRESHOLD,
+                        nms_thr=0.6,
+                        max_det=100,
+                        img_size=images.shape[-2:],
+                    )
+                    targets = batch["targets"]
+                    for det, boxes, labels, negative in zip(
+                        dets,
+                        targets["boxes"],
+                        targets["labels"],
+                        targets["det_negative_mask"],
+                        strict=True,
+                    ):
+                        acc.update(det, boxes, labels, negative)
+                    continue
                 coco_gts[name] = ds.coco
                 det_cat_ids[name] = list(getattr(ds, "score_cat_ids", None) or [])
                 _collect_detections(
@@ -678,6 +708,12 @@ def evaluate(
     metrics.update(_seg_metrics(seg_cms, cfg, logger))
     metrics.update(_seg_metrics_per_dataset(seg_cms_by_ds, cfg, logger))
     metrics.update(_det_metrics(det_results, coco_gts, det_cat_ids, logger))
+    for name, acc in partial_accs.items():
+        metrics.update(acc.metrics(name))
+        logger.info(
+            f"[val] partial detection {name}: {acc.matched.sum()}/{acc.support.sum()} "
+            f"reviewed positives matched; {acc.empty_fp} reviewed-empty false alarms"
+        )
     metrics.update(_depth_metrics(depth_accs, logger))
     metrics.update(_pose_metrics(pose_accs, logger))
 

@@ -101,17 +101,105 @@ def pilot_config(data: Path, out: Path, manifest: dict, held_out: str) -> dict:
     return cfg
 
 
-def prepare(source: Path, out: Path, held_out: str) -> None:
+def joint_config(config: dict, instances: Path, held_out: str) -> dict:
+    from syncai_hydranet.data.studioa_instances import CLASSES as DET_CLASSES
+
+    config["experiment"] = "studioa_joint_source_pilot"
+    config["model"]["backbone"]["pretrained"] = False
+    config["model"]["heads"]["detection"] = {
+        "type": "fcos",
+        "num_classes": len(DET_CLASSES),
+        "classes": list(DET_CLASSES),
+        "channels": 64,
+        "num_convs": 2,
+    }
+    config["model"]["fixed_weights"]["detection"] = 0.5
+    config["data"]["datasets"][0].pop("split_test")
+    config["data"]["datasets"].append(
+        {
+            "name": "studioa_instances",
+            "type": "studioa_instances",
+            "root": str(instances),
+            "held_out": held_out,
+            "split_train": "train",
+            "split_val": "val",
+            "partial_eval": "reviewed_regions_v1",
+            "supervises": ["detection"],
+            "sample_ratio": 1.0,
+        }
+    )
+    config["train"].update(
+        epochs=30, batch_size=2, lr=1e-4, warmup_iters=56, detection_val_interval=1
+    )
+    check_config(config)
+    return config
+
+
+def warm_start(model, checkpoint: dict, cfg: dict) -> None:
+    """Transfer only a taxonomy-compatible scene model; detection starts fresh."""
+    prior = checkpoint["cfg"]
+    if prior["data"]["terrain_classes"] != cfg["data"]["terrain_classes"] or set(
+        prior["model"]["heads"]
+    ) != {"scene"}:
+        raise ValueError("warm start requires a compatible scene-only checkpoint")
+    result = model.load_state_dict(checkpoint["model"], strict=False)
+    if result.unexpected_keys or any(
+        not k.startswith("det_head.") for k in result.missing_keys
+    ):
+        raise ValueError(f"incompatible warm start: {result}")
+
+
+def prepare(
+    source: Path,
+    out: Path,
+    held_out: str,
+    instances: Path | None = None,
+    initial_checkpoint: Path | None = None,
+) -> None:
     from syncai_hydranet.utils.visualize import terrain_palette
 
     terrain_palette(list(CLASSES), len(CLASSES))
     manifest = check_supervision(source)
     if manifest["folds"][held_out]["missing_train_classes"]:
         raise ValueError("pilot requires positive train support for every class")
+    if (instances is None) != (initial_checkpoint is None):
+        raise ValueError("joint pilot requires both instances and initial checkpoint")
+    instance_counts = {}
+    if instances is not None:
+        from collections import Counter
+
+        from syncai_hydranet.data.studioa_instances import check_instances
+
+        im = check_instances(instances)
+        if im["held_out"] != held_out or im["source_manifest_sha256"] != digest(
+            source / "manifest.json"
+        ):
+            raise ValueError("joint instance source/fold mismatch")
+        for split in ("train", "val"):
+            counts: Counter = Counter()
+            for frame in im["frames"]:
+                if im["folds"][held_out]["assignments"][frame["id"]] == split:
+                    counts.update(
+                        json.loads((instances / frame["targets"]).read_text())["labels"]
+                    )
+            if set(counts) != set(range(len(im["classes"]))):
+                raise ValueError(f"joint pilot requires all detection classes in {split}")
+            instance_counts[split] = {name: counts[i] for i, name in enumerate(im["classes"])}
+        assert initial_checkpoint is not None
+        parent = initial_checkpoint.parent.parent
+        prior_report = json.loads((parent / "report.json").read_text())
+        if prior_report["status"] != "completed" or prior_report["outputs"].get(
+            str(initial_checkpoint.relative_to(parent))
+        ) != digest(initial_checkpoint):
+            raise ValueError("initial checkpoint is not bound to a completed pilot report")
     out = out.resolve()
     out.mkdir(parents=True, exist_ok=False)
     shutil.copytree(source, out / "data")
     check_supervision(out / "data")
+    if instances is not None:
+        shutil.copytree(instances, out / "instances")
+        assert initial_checkpoint is not None
+        shutil.copyfile(initial_checkpoint, out / "initial.pt")
     for folder in ("src", "configs"):
         shutil.copytree(
             ROOT / folder,
@@ -127,6 +215,8 @@ def prepare(source: Path, out: Path, held_out: str) -> None:
     weights.parent.mkdir(parents=True)
     shutil.copyfile(Path.home() / ".cache/torch/hub/checkpoints" / weights.name, weights)
     config = pilot_config(out / "data", out, manifest, held_out)
+    if instances is not None:
+        config = joint_config(config, out / "instances", held_out)
     write_json(out / "config.json", config)
     git = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
@@ -144,7 +234,11 @@ def prepare(source: Path, out: Path, held_out: str) -> None:
     write_json(
         out / "job.json",
         {
-            "schema": "studioa.semantic-pilot.v1",
+            "schema": "studioa.joint-pilot.v1"
+            if instances is not None
+            else "studioa.semantic-pilot.v1",
+            "joint": instances is not None,
+            "instance_counts": instance_counts,
             "git_commit": git,
             "held_out": held_out,
             "counts": manifest["folds"][held_out]["counts"],
@@ -152,7 +246,11 @@ def prepare(source: Path, out: Path, held_out: str) -> None:
             "classes": CLASSES,
             "class_weights": "sqrt median/train frequency clipped 0.25..4",
             "selection": "source-camera val mIoU on retained AI pixels only",
-            "evaluation": "held-out store once, after selection; no independent accuracy claim",
+            "evaluation": (
+                "source val only; partial recall and empty-region alarms; no test evaluation"
+                if instances is not None
+                else "held-out store once, after selection; no independent accuracy claim"
+            ),
             "resume": "last complete epoch optimizer/scheduler; not bitwise RNG replay",
             "files": {str(p.relative_to(out)): digest(p) for p in sorted(files)},
         },
@@ -227,7 +325,9 @@ def run(out: Path) -> None:
             if load_checkpoint(last).get("studioa_job_sha256") != job_hash:
                 raise ValueError("foreign pilot checkpoint")
             trainer.load(str(last), resume=True)
-        elif not (out / "baseline_val.json").exists():
+        else:
+            if job.get("joint"):
+                warm_start(trainer.model, load_checkpoint(out / "initial.pt"), cfg)
             status("baseline_validation", gpu=torch.cuda.get_device_name(0))
             baseline = evaluate(
                 trainer.model,
@@ -238,6 +338,10 @@ def run(out: Path) -> None:
                 loaders=trainer.val_loaders,
             )
             write_json(out / "baseline_val.json", baseline)
+            if job.get("joint"):
+                # Keep epoch zero eligible: adding a head must not silently promote
+                # a checkpoint whose scene agreement regressed below its warm start.
+                trainer.record_epoch(0, baseline)
         if not (out / "training_finished.json").exists():
             status("training")
             trainer.train()
@@ -250,34 +354,44 @@ def run(out: Path) -> None:
         if best.get("studioa_job_sha256") != job_hash:
             raise ValueError("foreign best checkpoint")
         trainer.model.load_state_dict(best["model"])
-        status("held_out_evaluation", best_epoch=best["epoch"])
-        samples = {}
-        dataset = build_dataset(
-            cfg["data"]["datasets"][0], cfg["data"]["input_size"], "test", letterbox=True
+        joint = job.get("joint", False)
+        status(
+            "source_validation" if joint else "held_out_evaluation", best_epoch=best["epoch"]
         )
+        samples = {}
+        if joint:
+            evaluation_sets = trainer.val_sets
+        else:
+            dataset = build_dataset(
+                cfg["data"]["datasets"][0], cfg["data"]["input_size"], "test", letterbox=True
+            )
+            evaluation_sets = [("studioa", dataset)]
         test = evaluate(
             trainer.model,
-            [("studioa", dataset)],
+            evaluation_sets,
             cfg,
             trainer.device,
             trainer.logger,
             samples=samples,
         )
-        write_json(out / "test.json", test)
+        evaluation_name = "validation" if joint else "test"
+        write_json(out / f"{evaluation_name}.json", test)
         for head, (images, predictions, targets) in samples.items():
             grid = prediction_grid(images, predictions, targets, terrain_palette(list(CLASSES)))
-            Image.fromarray(grid).save(out / f"test_{head}_preview.jpg")
+            Image.fromarray(grid).save(out / f"{evaluation_name}_{head}_preview.jpg")
         verify(out)
         report = {
             "status": "completed",
-            "kind": "AI partial-semantic pilot",
+            "kind": "AI partial joint pilot" if joint else "AI partial-semantic pilot",
             "job_sha256": job_hash,
             "git_commit": job["git_commit"],
             "counts": job["counts"],
             "best_epoch": best["epoch"],
             "last_epoch": load_checkpoint(last)["epoch"],
             "best_validation_teacher_miou": best["best_metric"],
-            "test_teacher_miou": test["scene_mIoU"],
+            "test_evaluated": not joint,
+            f"{evaluation_name}_teacher_miou": test["scene_mIoU"],
+            "instance_counts": job.get("instance_counts", {}),
             "independent_accuracy": False,
             "deployment_ready": False,
             "outputs": {
@@ -285,15 +399,19 @@ def run(out: Path) -> None:
                 for p in [
                     checkpoint,
                     last,
-                    out / "test.json",
+                    out / f"{evaluation_name}.json",
                     out / "baseline_val.json",
                     out / "model/metrics.jsonl",
-                    *out.glob("test_*_preview.jpg"),
+                    *out.glob(f"{evaluation_name}_*_preview.jpg"),
                 ]
             },
         }
         write_json(out / "report.json", report)
-        status("completed", best_epoch=best["epoch"], test_teacher_miou=test["scene_mIoU"])
+        status(
+            "completed",
+            best_epoch=best["epoch"],
+            **{f"{evaluation_name}_teacher_miou": test["scene_mIoU"]},
+        )
     except BaseException:
         status("failed", error=traceback.format_exc())
         raise
@@ -308,6 +426,8 @@ def main():
     parser.add_argument("action", choices=("prepare", "run"))
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--source", type=Path)
+    parser.add_argument("--instances", type=Path)
+    parser.add_argument("--initial-checkpoint", type=Path)
     parser.add_argument(
         "--held-out", default="Tao-Hsin", choices=("Tao-Hsin", "Taichung", "Kaohsiung")
     )
@@ -315,7 +435,7 @@ def main():
     if args.action == "prepare":
         if args.source is None:
             parser.error("prepare requires --source")
-        prepare(args.source, args.out, args.held_out)
+        prepare(args.source, args.out, args.held_out, args.instances, args.initial_checkpoint)
     else:
         out = args.out.resolve()
         target = out / "snapshot/tools/annotation/studioa_train.py"

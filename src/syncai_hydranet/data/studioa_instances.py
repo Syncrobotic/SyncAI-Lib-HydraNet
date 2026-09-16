@@ -194,7 +194,15 @@ class StudioAInstanceDataset(Dataset):
     partial_detection = True
 
     def __init__(
-        self, root: Path, held_out: str, split: str, input_size, *, train=False, augment=None
+        self,
+        root: Path,
+        held_out: str,
+        split: str,
+        input_size,
+        *,
+        train=False,
+        augment=None,
+        partial_eval=None,
     ):
         m = check_instances(root)
         if (
@@ -204,6 +212,10 @@ class StudioAInstanceDataset(Dataset):
         ):
             raise ValueError("invalid instance fold/split/augmentation")
         self.root = root
+        if partial_eval not in (None, "reviewed_regions_v1"):
+            raise ValueError("unsupported partial evaluation protocol")
+        self.partial_detection_evaluation = partial_eval
+        self.detection_classes = CLASSES
         self.supervises = ["detection"]
         self.frames = [
             f for f in m["frames"] if m["folds"][held_out]["assignments"][f["id"]] == split

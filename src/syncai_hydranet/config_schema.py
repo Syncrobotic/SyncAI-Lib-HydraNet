@@ -224,6 +224,7 @@ DATASET = {
     # dict is keyed by head name, so a config that renames the head must say so here or
     # the head is declared supervised and receives nothing.
     "held_out": Spec((str,), choices=("Kaohsiung", "Taichung", "Tao-Hsin")),
+    "partial_eval": Spec((str,), choices=("reviewed_regions_v1",)),
     "head_name": Spec((str,)),
     # nyu_depth only: returns beyond this are zeroed as invalid rather than clipped.
     # Must match the head's `max_depth` or the dataset masks away depths the head is
@@ -826,7 +827,9 @@ def _check_detection_head_classes(rep: _Report, cfg: dict) -> None:
             )
         if ds.get("classes") is not None or ds.get("det_vocab") is not None:
             rep.errors.append("StudioA instance IDs cannot be remapped with classes/det_vocab")
-        if ds.get("split_val") or ds.get("split_test"):
+        if ds.get("split_test") or (
+            ds.get("split_val") and ds.get("partial_eval") != "reviewed_regions_v1"
+        ):
             rep.errors.append(
                 "StudioA partial instances cannot provide exhaustive COCO evaluation"
             )

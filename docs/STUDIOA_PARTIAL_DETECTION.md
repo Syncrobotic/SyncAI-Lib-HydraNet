@@ -120,3 +120,25 @@ review 文件綁定正式語意來源 manifest hash；manifest 包含來源路�
 先擴充來源店 train 的實例與鏡頭，補足上述四個尚無正向實例的類別，再建立來源店
 val 的實例覆核與明確評估規則。資料量與評估契約成立後才啟動 scene／detection
 聯合訓練。桃新 test 保持封存；既有語意 pilot checkpoint 沒有被改寫。
+
+## 2026-09-16：聯合 pilot 的資料與評估契約
+
+第二批 `runs/studioa_partial_instances_20260916_v2/` 綁定相同語意 v3，
+包含 11 張 train／31 個實例、6 張 val／31 個實例；兩邊均涵蓋十類。
+新增決定見 [AI 實例覆核](reviews/studioa_joint_instance_decisions_20260916.json)。
+排除價牌誤認手機、耳機誤認喇叭、電視廣告中的手機、合併多盒商品及污染遮罩。
+只推進可確認的實例；語意 v3 和既有 test 標籤不變。
+
+`partial_eval: reviewed_regions_v1` 顯式啟用部分標註驗證：score > 0.20、
+同類 IoU ≥ 0.50、依信心排序一對一配對；報告確認實例的召回及各類支持數。
+只有預測框向外取整的像素面積至少 95% 位於覆核空白區，才計為空白區誤報。
+padding 不算空白；其他未配對預測列為未知，不算 precision 或 COCO mAP。
+NMS 0.6、每圖上限 100 固定於訓練前；誤報另依覆核空白區百萬像素正規化，
+不可與不同區域覆蓋的批次直接比較。沒有顯式啟用時，原本 COCO 評估防護仍有效。
+
+`studioa_train.py prepare --instances … --initial-checkpoint …` 可凍結聯合 pilot。
+從前次 scene best 初始化共享 backbone／neck 和 scene head，FCOS 隨機初始化；
+30 epochs、batch 2、lr 1e-4、backbone ×0.1、scene loss ×1／detection ×0.5。
+模型仍由來源 val scene mIoU 選擇，包含 warm-start 第 0 輪；偵測指標只作診斷。
+聯合設定不宣告 test split，結束後僅回看來源 val。資料、程式、初始權重均綁 hash，
+既有 checkpoint 不覆寫。此資料量只足以執行有限 pilot，不能證明部署可靠度。
