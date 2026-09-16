@@ -59,7 +59,8 @@ def synthetic_topdown_cache(monkeypatch):
     cache reader and its integration with scene_mesh on perspective geometry.
     """
 
-    def load(path, _cf):
+    def load(path, _cf, *, plate_path=None):
+        del plate_path  # Synthetic top-down fixtures have no optical plate contract.
         with np.load(path) as cache:
             return {key: cache[key] for key in cache.files}
 

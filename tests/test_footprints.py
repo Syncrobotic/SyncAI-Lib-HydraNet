@@ -113,7 +113,8 @@ def _store(tmp_path, monkeypatch, *, table, shelf=None, column=None):
         camera_id=CAMERA, image_size_px=(W, H), camera=CAM, plane=PLANE, mask_files=mask_files
     ).save(commission / f"{CAMERA}.camera.json")
 
-    def load(path, _cf):
+    def load(path, _cf, *, plate_path=None):
+        del plate_path  # Synthetic geometry fixture; real source checks have separate tests.
         with np.load(path) as cache:
             return {key: cache[key] for key in cache.files}
 
@@ -252,7 +253,8 @@ def _store_two_tables(tmp_path, monkeypatch, *, gap_m, dh=0.0):
         mask_files={"display_table": "display_table.png", "walkable": "walkable.png", "objects": "objects.png"},
     ).save(commission / f"{CAMERA}.camera.json")  # fmt: skip
 
-    def load(path, _cf):
+    def load(path, _cf, *, plate_path=None):
+        del plate_path  # Synthetic geometry fixture; real source checks have separate tests.
         with np.load(path) as cache:
             return {key: cache[key] for key in cache.files}
 
@@ -318,7 +320,8 @@ def test_an_l_shaped_counter_row_is_two_boxes(tmp_path, monkeypatch):
         mask_files={"display_table": "display_table.png", "walkable": "walkable.png", "objects": "objects.png"},
     ).save(commission / f"{CAMERA}.camera.json")  # fmt: skip
 
-    def load(path, _cf):
+    def load(path, _cf, *, plate_path=None):
+        del plate_path  # Synthetic geometry fixture; real source checks have separate tests.
         with np.load(path) as cache:
             return {key: cache[key] for key in cache.files}
 
@@ -375,7 +378,8 @@ def _store_with_wall(tmp_path, monkeypatch, *, z_wall=8.0, to_horizon=False):
         mask_files={"wall": "wall.png", "walkable": "walkable.png", "objects": "objects.png"},
     ).save(commission / f"{CAMERA}.camera.json")  # fmt: skip
 
-    def load(path, _cf):
+    def load(path, _cf, *, plate_path=None):
+        del plate_path  # Synthetic geometry fixture; real source checks have separate tests.
         with np.load(path) as cache:
             return {key: cache[key] for key in cache.files}
 
@@ -427,6 +431,7 @@ def test_a_box_behind_another_object_is_not_penalised_for_it(tmp_path, monkeypat
         [_poly_px([(-2.0, 0.9, 6.0), (2.0, 0.9, 6.0), (2.0, 0.9, 7.0), (-2.0, 0.9, 7.0)])]
     )
     counter = front | top
+    assert ev.objects is not None
     ev.objects[counter] = 2
     ev.static[counter] = 4
     occluded = footprints._wall_iou(run, ev, 0.0)
@@ -440,6 +445,7 @@ def test_a_box_behind_another_object_is_not_penalised_for_it(tmp_path, monkeypat
         0.0,
     )
     wall = ev.objects == 1
+    assert sil is not None
     naive = (sil & wall).sum() / (sil | wall).sum()
     assert naive < 0.4 < occluded, (naive, occluded)
 
@@ -505,6 +511,7 @@ def test_two_counters_welded_into_one_object_split_by_their_instances(tmp_path, 
 def test_a_wall_patch_ending_above_the_floor_cannot_locate_a_wall(tmp_path, monkeypatch):
     root = _store_with_wall(tmp_path, monkeypatch, z_wall=8.0)
     ev = scene_mesh.load_evidence(CAMERA, root)
+    assert ev.objects is not None
     rows = np.flatnonzero((ev.objects == 1).any(axis=1))
     # The wall is visible only above an occluding fixture. Its visible lower edge
     # is now far from the observed floor, but still projects to finite floor metres.
@@ -515,6 +522,7 @@ def test_a_wall_patch_ending_above_the_floor_cannot_locate_a_wall(tmp_path, monk
 def test_a_rectangular_counter_does_not_become_a_round_table(tmp_path, monkeypatch):
     root = _store(tmp_path, monkeypatch, table=(-0.8, 0.8, 2.5, 3.5, 0.85))
     ev = scene_mesh.load_evidence(CAMERA, root)
+    assert ev.objects is not None
     assert footprints._round_candidate(ev.objects == 1, ev, 0.0, 1) is None
 
 

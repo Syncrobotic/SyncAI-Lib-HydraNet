@@ -12,6 +12,7 @@ from syncai_hydranet.geometry.ground import pixel_to_ground, undistort_points
 
 from .geometry_cache import geometry_signature
 from .ground_control import floor_pixels
+from .render_provenance import sha256
 
 
 def cache_ground_error(cf: CameraFile, arrays) -> float:
@@ -44,7 +45,9 @@ def cache_ground_error(cf: CameraFile, arrays) -> float:
     return float(np.linalg.norm(expected[finite] - stored[finite], axis=1).max())
 
 
-def load_geometry_cache(path: str | Path, cf: CameraFile) -> dict[str, np.ndarray]:
+def load_geometry_cache(
+    path: str | Path, cf: CameraFile, *, plate_path: Path | None = None
+) -> dict[str, np.ndarray]:
     """Refuse stale geometry before drawing metre-space fixtures from it."""
     with np.load(path, allow_pickle=False) as cache:
         arrays = {key: cache[key] for key in cache.files}
@@ -54,6 +57,12 @@ def load_geometry_cache(path: str | Path, cf: CameraFile) -> dict[str, np.ndarra
         raise ValueError(
             f"{cf.camera_id}: stale geometry cache signature; rebuild_geometry.py required"
         )
+    if "plate_sha256" in arrays:
+        source = plate_path or (Path(cf.plate_file) if cf.plate_file else None)
+        if source is None or not source.is_file():
+            raise ValueError(f"{cf.camera_id}: recorded cache plate is unavailable")
+        if sha256(source) != str(arrays["plate_sha256"]):
+            raise ValueError(f"{cf.camera_id}: stale geometry cache plate; rebuild required")
     error = cache_ground_error(cf, arrays)
     if error > 0.002:
         raise ValueError(

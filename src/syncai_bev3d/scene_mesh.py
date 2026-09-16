@@ -410,7 +410,11 @@ class Evidence:
 def load_evidence(camera, root: Path | None = None) -> Evidence:
     root = Path(root) if root is not None else ROOT
     cf = CameraFile.load(root / f"runs/commission01/{camera}.camera.json")
-    z = load_geometry_cache(root / f"runs/site30k_qa/geometry_cache/{camera}.npz", cf)
+    z = load_geometry_cache(
+        root / f"runs/site30k_qa/geometry_cache/{camera}.npz",
+        cf,
+        plate_path=root / cf.plate_file if cf.plate_file else None,
+    )
     fh, fw = z["gx"].shape
     # The mask PNGs are the artefact of record -- depth completion and the human zone
     # stamps land there, not in the intermediate cache. Rebuild the class map from them.

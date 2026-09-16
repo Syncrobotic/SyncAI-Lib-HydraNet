@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 
@@ -11,6 +10,11 @@ import numpy as np
 from PIL import Image
 
 from syncai_bev3d.commissioning import from_onboard_calib
+from syncai_bev3d.depth_provenance import (
+    inference_record,
+    load_depth_record,
+    plate_contract,
+)
 from syncai_bev3d.geometry_cache import (
     build_geometry_cache,
     floor_depth_scale,
@@ -18,6 +22,7 @@ from syncai_bev3d.geometry_cache import (
     save_geometry_cache,
 )
 from syncai_bev3d.plate_calibration import MODEL, MODEL_REVISION, run_depth, undistort_image
+from syncai_bev3d.render_provenance import sha256
 from syncai_hydranet.geometry.camera_json import CameraFile
 
 
@@ -43,10 +48,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--depth", type=Path, help="reuse unscaled DA-V2 depth .npy of this undistorted plate"
     )
+    parser.add_argument(
+        "--depth-manifest",
+        type=Path,
+        help="source binding for --depth; defaults to the adjacent .json when present",
+    )
     parser.add_argument("--out", type=Path, required=True, help="new cache path for review")
     args = parser.parse_args(argv)
     if args.out.exists():
         parser.error("output exists; write a new cache and review before replacing it")
+    if args.depth_manifest and not args.depth:
+        parser.error("--depth-manifest requires --depth")
+    inferred_depth = args.out.with_suffix(".depth.npy")
+    inferred_manifest = inferred_depth.with_suffix(".json")
+    if not args.depth and (inferred_depth.exists() or inferred_manifest.exists()):
+        parser.error("depth output or manifest exists; choose a new output path")
     cf = CameraFile.load(args.camera_file)
     depth_scale = args.depth_scale
     if args.calib:
@@ -63,6 +79,9 @@ def main(argv: list[str] | None = None) -> int:
     if cf.plate_file is None:
         parser.error("camera.json has no plate_file")
     plate_path = Path(cf.plate_file)
+    before = plate_contract(cf, plate_path)
+    if cf.plate_sha256 and cf.plate_sha256 != before["plate_sha256"]:
+        parser.error("plate differs from camera.json's recorded plate_sha256")
     with Image.open(plate_path) as image:
         plate = np.asarray(image.convert("RGB"))
     if abs(plate.shape[1] / plate.shape[0] - cf.image_size_px[0] / cf.image_size_px[1]) > 0.01:
@@ -73,11 +92,22 @@ def main(argv: list[str] | None = None) -> int:
         or not np.isclose(cf.lens.radius_px, np.hypot(*cf.image_size_px) / 2)
     ):
         parser.error("plate undistortion requires a centred, half-diagonal division lens")
-    depth = (
-        np.load(args.depth, allow_pickle=False)
-        if args.depth
-        else run_depth(undistort_image(plate, k1))
-    )
+    if args.depth:
+        manifest_path = args.depth_manifest or args.depth.with_suffix(".json")
+        if args.depth_manifest or manifest_path.exists():
+            record = load_depth_record(manifest_path, cf, plate_path, args.depth)
+        else:
+            record = {
+                "schema": 1,
+                "status": "external_unverified",
+                "depth_sha256": sha256(args.depth),
+                "scope": "external depth has no image, preprocessing or model evidence",
+            }
+        depth = np.load(args.depth, allow_pickle=False)
+        if sha256(args.depth) != record["depth_sha256"]:
+            raise ValueError("depth changed while loading")
+    else:
+        depth = run_depth(undistort_image(plate, k1))
     if depth.shape != plate.shape[:2]:
         parser.error("depth must match the uncropped undistorted plate dimensions")
     floor_report = None
@@ -90,12 +120,23 @@ def main(argv: list[str] | None = None) -> int:
     arrays = build_geometry_cache(cf, depth, depth_scale=depth_scale)
     if floor_report is not None:
         arrays["floor_scale_report"] = np.array(json.dumps(floor_report))
-    arrays["plate_sha256"] = np.array(hashlib.sha256(plate_path.read_bytes()).hexdigest())
-    arrays["depth_model"] = np.array(MODEL)
-    arrays["depth_revision"] = np.array(MODEL_REVISION)
-    save_geometry_cache(args.out, arrays)
+    if plate_contract(cf, plate_path) != before:
+        raise ValueError("plate or preprocessing changed during depth generation")
     if not args.depth:
-        np.save(args.out.with_suffix(".depth.npy"), depth)
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        np.save(inferred_depth, depth)
+        record = inference_record(
+            cf, plate_path, inferred_depth, model=MODEL, revision=MODEL_REVISION
+        )
+        inferred_manifest.write_text(json.dumps(record, indent=2) + "\n")
+    arrays["plate_sha256"] = np.array(before["plate_sha256"])
+    arrays["depth_source"] = np.array(json.dumps(record))
+    arrays["depth_sha256"] = np.array(record["depth_sha256"])
+    if record["status"] == "bound":
+        arrays["depth_model"] = np.array(record["model"])
+        arrays["depth_revision"] = np.array(record["revision"])
+    save_geometry_cache(args.out, arrays)
+    print(f"Depth provenance: {record['status']}")
     print(f"Wrote {args.out}; calibrated geometry, object depths retain the teacher's errors")
     return 0
 
