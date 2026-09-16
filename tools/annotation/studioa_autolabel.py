@@ -116,6 +116,105 @@ def overlay(image: Image.Image, annotation: dict, dest: Path) -> None:
     preview.save(dest, quality=85)
 
 
+def focus_preview(source: Path, out: Path) -> None:
+    """Render floor/cabinet masks without changing any annotation decisions."""
+    parent = json.loads((source / "report.json").read_text())
+    job = json.loads((source / "job.json").read_text())
+    if parent["status"] != "completed" or digest(source / "job.json") != parent["job_sha256"]:
+        raise ValueError("preview requires a completed bound inference run")
+    for name, expected in parent["outputs"].items():
+        if digest(source / name) != expected:
+            raise ValueError("source annotation changed")
+    out.mkdir(parents=True, exist_ok=False)
+    (out / "frames").mkdir()
+    (out / "images").mkdir()
+    cards = []
+    for frame in job["frames"]:
+        original = source / frame["image"]
+        if digest(original) != frame["image_sha256"]:
+            raise ValueError("source image changed")
+        shutil.copyfile(original, out / frame["image"])
+        data = json.loads((source / "frames" / (frame["id"] + ".json")).read_text())
+        with Image.open(original) as image:
+            rgb = np.asarray(image.convert("RGB"))
+        shape = rgb.shape[:2]
+        yy, xx = np.ogrid[: shape[0], : shape[1]]
+        stripes = (xx + yy) % 16 < 7
+        panels = []
+        for entity, label, color in (
+            ("floor", "地板", (0, 255, 80)),
+            ("display_cabinet", "展示櫃", (255, 0, 210)),
+        ):
+            positive = np.zeros(shape, dtype=bool)
+            uncertain = np.zeros(shape, dtype=bool)
+            counts = []
+            for key, mask in (("entities", positive), ("unresolved_candidates", uncertain)):
+                rows = [row for row in data[key] if row["entity"] == entity]
+                counts.append(len(rows))
+                for row in rows:
+                    mask |= decode(row["segmentation"])
+            result = rgb.copy()
+            result[positive] = (0.35 * rgb[positive] + 0.65 * np.array(color)).astype(np.uint8)
+            uncertain_only = uncertain & ~positive & stripes
+            with_uncertain = result.copy()
+            with_uncertain[uncertain_only] = (
+                0.2 * rgb[uncertain_only] + 0.8 * np.array((255, 170, 0))
+            ).astype(np.uint8)
+            for mode, pixels in (("positive", result), ("uncertain", with_uncertain)):
+                preview = Image.fromarray(pixels)
+                preview.thumbnail((1280, 720))
+                preview.save(out / "frames" / f"{frame['id']}-{entity}-{mode}.jpg", quality=92)
+            name = html.escape(frame["id"])
+            panels.append(
+                f"<section><h3>{label}: 保留 {counts[0]} 筆 / 未決 {counts[1]} 筆</h3>"
+                + "".join(
+                    f'<img class="{mode}" loading="lazy" '
+                    f'src="frames/{name}-{entity}-{mode}.jpg">'
+                    for mode in ("positive", "uncertain")
+                )
+                + "</section>"
+            )
+        cards.append(
+            f'<article><h2>{name}</h2><a href="{html.escape(frame["image"])}">原圖</a>'
+            '<div class="panels">' + "".join(panels) + "</div></article>"
+        )
+    (out / "index.html").write_text(
+        '<!doctype html><html lang="zh-Hant"><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        "<title>StudioA 地板 / 展示櫃遮罩檢查</title><style>"
+        "body{font-family:sans-serif;margin:1rem;background:#171717;color:#eee}"
+        "a{color:#8cd5ff}.panels{display:grid;grid-template-columns:"
+        "repeat(auto-fit,minmax(min(550px,100%),1fr));gap:1rem}img{width:100%}"
+        ".positive{display:none}body.clean .positive{display:block}"
+        "body.clean .uncertain{display:none}article{border-top:1px solid #555}"
+        "</style><body><h1>地板 / 展示櫃遮罩檢查</h1>"
+        "<p>綠色 = 地板保留標籤; 桃紅色 = 展示櫃保留標籤; 橘色斜線 = 未決候選。"
+        "未上色不代表不存在。未決候選尚未確認類別, 可能和其他物件衝突。"
+        "本頁只改善顯示, 沒有新增、補全或確認標註。</p>"
+        '<label><input type="checkbox" checked '
+        "onchange=\"document.body.classList.toggle('clean',!this.checked)\">顯示未決候選</label>"
+        + "".join(cards)
+        + "</body></html>\n"
+    )
+    shutil.copyfile(__file__, out / "preview_worker.py")
+    write(
+        out / "report.json",
+        {
+            "kind": "visualization_only",
+            "frames": len(job["frames"]),
+            "source": str(source.resolve()),
+            "source_report_sha256": digest(source / "report.json"),
+            "annotations_changed": False,
+            "outputs": {
+                str(p.relative_to(out)): digest(p)
+                for p in sorted(out.rglob("*"))
+                if p.is_file()
+            },
+        },
+    )
+    print(f"Rendered {len(job['frames'])} previews at {out}")
+
+
 def summarise(out: Path, job: dict) -> dict:
     counts, unresolved = Counter(), Counter()
     coco = {
@@ -473,6 +572,9 @@ def main() -> None:
     p.add_argument("--source", type=Path, required=True)
     p.add_argument("--decisions", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
+    p = sub.add_parser("focus-preview")
+    p.add_argument("--source", type=Path, required=True)
+    p.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     if args.action == "prepare":
         prepare(args.bundle, args.out, args.limit)
@@ -480,6 +582,8 @@ def main() -> None:
         refine(args.source, args.out)
     elif args.action == "visual-review":
         visual_review(args.source, args.decisions, args.out)
+    elif args.action == "focus-preview":
+        focus_preview(args.source, args.out)
     else:
         expected = args.out.resolve() / "snapshot/tools/annotation/studioa_autolabel.py"
         if Path(__file__).resolve() != expected:
