@@ -36,7 +36,7 @@ Kaohsiung-cam04、Taichung-cam01、Taichung-cam10、Taichung-cam11、Tao-Hsin-ca
 
 ## 無人值守與截止時間
 
-工作根目錄：`runs/studioa_overnight_20260917/`。
+工作根目錄：`runs/studioa_overnight_20260917_v2/`。
 
 - `index.html`：完成後可直接開啟的模型下載與五視角圖集，隨最後交付更新。
 - `delivery.json`：目前已完成的模型、視角與時間，綁定同一 checkpoint。
@@ -56,4 +56,26 @@ systemd user service 在登出後持續執行，機器已啟用 linger。每組�
 PNG／兩種 GLB 已完成 smoke test；這張 smoke 圖使用前一批模型，只驗證流程，
 不作為本夜新模型的正式交付。
 
-狀態與凍結版本於啟動後補入。
+## 已啟動的正式版本
+
+凍結程式 `1c1f9e4`，服務 `studioa-overnight-20260917-v2.service` 已啟動。
+完整 CPU 回歸 **4,211 通過、12 項因 CUDA 條件跳過**；型別與提交檢查通過。
+三組配對設定核對完成，只有 focus crop 與凍結路徑不同。主批次每組 330 epochs、
+每 33 epochs 驗證一次，實際更新預算 4,950、驗證間隔 495。
+
+第一版完整回歸發現出圖推論不應放入 commissioning 套件，已移到 offline CLI。
+原有套件邊界檢查保留；正式版本重新凍結。第一版已完成的新 bootstrap 模型與
+五視角保留在 `runs/studioa_overnight_20260917/deliveries/bootstrap/`，不刪除或改標
+為 v2。已啟動的 v2 會另立自己的交付物。
+
+系統確認 linger 已開啟、插電閒置休眠 timeout 為 0、logind IdleAction 為 ignore。
+系統未允許取得額外 sleep inhibitor；本輪沒有修改電源設定。
+
+[正式圖集入口](../runs/studioa_overnight_20260917_v2/index.html) ·
+[即時狀態](../runs/studioa_overnight_20260917_v2/status.json) ·
+[機器可讀交接](reviews/studioa_overnight_20260917.json)。
+圖集由背景工作在完整出圖後發布，文件本身記錄啟動快照；最新進度以狀態檔為準。
+
+正式 v2 的 bootstrap 已完成 495 更新，AI source-val mIoU 26.3404%。五張 PNG、
+五組 GLB 與 checkpoint／來源雜湊已全部核對，194 個模型 state 張量皆有限。
+六組較長訓練已接續啟動；背景流程最後會更新同一圖集入口。

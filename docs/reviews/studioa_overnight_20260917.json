@@ -1,0 +1,271 @@
+{
+  "schema": "studioa.overnight-handoff.v1",
+  "recorded_at": "2026-09-16T13:58:56.377247+00:00",
+  "run_root": "runs/studioa_overnight_20260917_v2",
+  "frozen_commit": "1c1f9e4e8c162d83836bc0edb1953e970a587534",
+  "deadline": "2026-09-17T06:00:00+08:00",
+  "service": "studioa-overnight-20260917-v2.service",
+  "plan": {
+    "schema": "studioa.overnight.v1",
+    "deadline": "2026-09-17T06:00:00+08:00",
+    "training_stop": 1789592400.0,
+    "jobs": [
+      {
+        "name": "bootstrap",
+        "seed": 42,
+        "crop": true,
+        "updates": 495,
+        "job_sha256": "3c5c6478c01f69e363d932e6b4bee3faf06be9061ee766fffc1a43fd94b36358"
+      },
+      {
+        "name": "uniform_seed42",
+        "seed": 42,
+        "crop": false,
+        "updates": 4950,
+        "job_sha256": "19c6f1fb8abe0c945a7e40379eaf3bc495a84d9ecdc18b4bf96e0413d4ce8d7a"
+      },
+      {
+        "name": "focus_seed42",
+        "seed": 42,
+        "crop": true,
+        "updates": 4950,
+        "job_sha256": "3383300d64351a9419e319567564f3dea1453d05901f3230543005c2e0e277a3"
+      },
+      {
+        "name": "uniform_seed43",
+        "seed": 43,
+        "crop": false,
+        "updates": 4950,
+        "job_sha256": "fca7a6d05f436b65394cb59e8f6c4bee4aa5e809c3305492f039422f3f7f3ec6"
+      },
+      {
+        "name": "focus_seed43",
+        "seed": 43,
+        "crop": true,
+        "updates": 4950,
+        "job_sha256": "10865d02f23e2856cdf94837ddf3b51864ddb7bdb8ceb4cec9de0d8d37b50842"
+      },
+      {
+        "name": "uniform_seed44",
+        "seed": 44,
+        "crop": false,
+        "updates": 4950,
+        "job_sha256": "96ad155e41bd17be3b63abf9c7bdf4b2cf91aeee084d7e735e309d8e7d699c1d"
+      },
+      {
+        "name": "focus_seed44",
+        "seed": 44,
+        "crop": true,
+        "updates": 4950,
+        "job_sha256": "7d91bf669a47f9c7019fc256930f36bf6cb3dffd4bb0888f59021e6f694e7ef9"
+      }
+    ],
+    "cameras": [
+      "Kaohsiung-cam04",
+      "Taichung-cam01",
+      "Taichung-cam10",
+      "Taichung-cam11",
+      "Tao-Hsin-cam03"
+    ],
+    "camera_manifest_sha256": "85a2cdfc83adc3a106f06fd64d6df84b66723d479264ed3d813bbd63eb7f9045",
+    "runner_files": {
+      "studioa_overnight.py": "ae093c61957c70b064a33ce2171f8d9dbd90cc651727c62233f5ea1ca33cf7ab",
+      "studioa_model_preview.py": "473f21e4223fdf02d26cbba7f1afe88119e94ff4c1b9e0ff17ae145bf5b085ae"
+    },
+    "git_commit": "1c1f9e4e8c162d83836bc0edb1953e970a587534",
+    "selection": "maximum completed checkpoint source-val 19-class mIoU; AI partial labels, not independent accuracy",
+    "test_evaluated": false,
+    "automatic_deployment": false
+  },
+  "plan_sha256": "2eb6c3c96d3b6e16c18665ec4ebcde98127bb7413cc3d265c12875fec0042d1c",
+  "camera_manifest": {
+    "cameras": [
+      {
+        "camera": "Kaohsiung-cam04",
+        "source_plate": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_static/Kaohsiung-cam04/plate_20260816-025809.png",
+        "files": {
+          "Kaohsiung-cam04/plate.png": "947a2f880652e5ec825177ba69cdc769a10512c3da077f2ee6fa3bc0e36506a2",
+          "Kaohsiung-cam04/geometry.npz": "86b5d165b9c4a0676ece7f8d68666bd7c825b5df6350a239b5e59918e9df9e29",
+          "Kaohsiung-cam04/camera.json": "85b6d84432b30f0021d652627c01a93a2aa2f027eb4a81cbd616e938ce39830a"
+        }
+      },
+      {
+        "camera": "Taichung-cam01",
+        "source_plate": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_static/Taichung-cam01/plate_20260816-062728.png",
+        "files": {
+          "Taichung-cam01/plate.png": "b741eeac7f8cfb26b3360e6cdf5e507f2af880d6a40e9e06a2b57de00d7d846a",
+          "Taichung-cam01/geometry.npz": "f81775eee5994e8232edcdbbeff215e3f80ee3d0430ca5f0058c3230c15d41f1",
+          "Taichung-cam01/camera.json": "410aa1418cb92c2115e2df94e63c97f3adcf0b16603d2b037e71027a96797633"
+        }
+      },
+      {
+        "camera": "Taichung-cam10",
+        "source_plate": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_static/Taichung-cam10/plate_20260816-030028.png",
+        "files": {
+          "Taichung-cam10/plate.png": "c1de5ea3902c66a161f30ebb5e171fbd4117d60529890b7e2c529e4d008d8b0e",
+          "Taichung-cam10/geometry.npz": "4b679a2b0200fdc8d031deb72bc36c8e2928cbb2029b805ade53e6cc9b75afdc",
+          "Taichung-cam10/camera.json": "8b3339bb5d7c3c99ea49e088fd09dc542ce5dcb67f8b84cbb20c3dd7d6532f70"
+        }
+      },
+      {
+        "camera": "Taichung-cam11",
+        "source_plate": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_static/Taichung-cam11/plate_20260816-030054.png",
+        "files": {
+          "Taichung-cam11/plate.png": "7101e9b7d53580bc5428bfc9fb4432d0adc18d7c156a2959168f19a94a415551",
+          "Taichung-cam11/geometry.npz": "6d5be520dd30651c3b2308eb5afc79bad2d9b2607a94205dfca5b1310638f099",
+          "Taichung-cam11/camera.json": "abdfbaa4fc9cfdf6d4671ec6826dddf193f12541c61a42b2fcf1afded89fb5b9"
+        }
+      },
+      {
+        "camera": "Tao-Hsin-cam03",
+        "source_plate": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_static/Tao-Hsin-cam03/plate_20260816-025853.png",
+        "files": {
+          "Tao-Hsin-cam03/plate.png": "93af25ac35e726431c1be820254c7cd224ce54193c91b52923339bf0170ddb3c",
+          "Tao-Hsin-cam03/geometry.npz": "838d09e80af24d51349dfb178fa3f795ba17b20bf36eddf05138f0e5611e9b58",
+          "Tao-Hsin-cam03/camera.json": "46f66e19eb482b81239d296ee4c3cb165f1ab7e4479a46e6f9fe3839f754113d"
+        }
+      }
+    ],
+    "selection": "fixed before overnight training; three stores; five source-bound calibrated cameras"
+  },
+  "paired_configs_equal_except_focus_crop": true,
+  "validation": {
+    "focused_tests_passed": 1167,
+    "package_boundary_and_delivery_tests_passed": 10,
+    "full_cpu": {
+      "tests": 4223,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 12,
+      "passed": 4211
+    },
+    "ruff": "passed",
+    "type_ratchets": "passed",
+    "real_gpu_render_smoke": "passed"
+  },
+  "host_checks": {
+    "linger": true,
+    "ac_idle_timeout_seconds": 0,
+    "logind_idle_action": "ignore",
+    "system_sleep_inhibitor_acquired": false
+  },
+  "preserved_first_delivery": "runs/studioa_overnight_20260917/delivery.json",
+  "superseded_run_reason": "First full regression caught renderer in commissioning package; moved unchanged inference/rendering logic into offline CLI and re-froze v2. First new-model five-view delivery remains preserved.",
+  "live_status": "Use run_root/status.json and delivery.json; this checked-in handoff is a startup snapshot.",
+  "artifacts": {
+    "runs/studioa_overnight_20260917_v2/regression.xml": "73bd6a656b2f9320578bb76514c32fbea2ccb383ede47daae586a631deb3dc19",
+    "runs/studioa_overnight_20260917_v2/regression.log": "346cd8b3e00e92aec63da14911a2b25fed7e7e7ff81ccf4083d9b84b7d3d3496"
+  },
+  "initial_delivery_verified": {
+    "delivery": {
+      "selected": {
+        "name": "bootstrap",
+        "seed": 42,
+        "crop": true,
+        "updates": 495,
+        "miou": 0.26340439290558976,
+        "best_epoch": 33,
+        "checkpoint_sha256": "fb57e3399e649caf83b18615376b78c49227ab652c6f357b99d5f22312a2263a",
+        "validation": {
+          "scene_mIoU": 0.26340439290558976,
+          "scene_mIoU_classes": 19.0,
+          "IoU/scene/00_floor": 0.8375789236256642,
+          "support/scene/00_floor": 0.40166558853597734,
+          "IoU/scene/01_wall": 0.5646720922509586,
+          "support/scene/01_wall": 0.17160072470495427,
+          "IoU/scene/02_ceiling": 0.10263366112806602,
+          "support/scene/02_ceiling": 0.0007404602194917028,
+          "IoU/scene/03_column": 0.004430216504073675,
+          "support/scene/03_column": 0.007966279262821197,
+          "IoU/scene/04_door": 0.4775928363139016,
+          "support/scene/04_door": 0.015548733447077906,
+          "IoU/scene/05_glass_panel": 0.020133557832253644,
+          "support/scene/05_glass_panel": 0.0009024824506179053,
+          "IoU/scene/06_display_cabinet": 0.6581747944799184,
+          "support/scene/06_display_cabinet": 0.13067213991420457,
+          "IoU/scene/07_display_table": 0.4776816406419071,
+          "support/scene/07_display_table": 0.16815328271473276,
+          "IoU/scene/08_counter": 0.10830188562424348,
+          "support/scene/08_counter": 0.013659219013737157,
+          "IoU/scene/09_laptop": 0.20525087417669582,
+          "support/scene/09_laptop": 0.005624964906822784,
+          "IoU/scene/10_phone": 0.0,
+          "support/scene/10_phone": 0.000725096042402149,
+          "IoU/scene/11_tablet": 0.016389907267629934,
+          "support/scene/11_tablet": 0.0005070178439552718,
+          "IoU/scene/12_boxed_stock": 0.3580333587058537,
+          "support/scene/12_boxed_stock": 0.007878563779073562,
+          "IoU/scene/13_cardboard_box": 0.0,
+          "support/scene/13_cardboard_box": 0.0008042448334695468,
+          "IoU/scene/14_speaker": 0.04297620242996285,
+          "support/scene/14_speaker": 0.0006107493183659555,
+          "IoU/scene/15_poster": 0.20694883680630768,
+          "support/scene/15_poster": 0.0038359228800252383,
+          "IoU/scene/16_fire_equipment": 0.012874837027379401,
+          "support/scene/16_fire_equipment": 0.00019368174755316167,
+          "IoU/scene/17_chair": 0.2566875098760694,
+          "support/scene/17_chair": 0.006004972220171078,
+          "IoU/scene/18_person": 0.6543223305153196,
+          "support/scene/18_person": 0.06290587616454643
+        }
+      },
+      "checkpoint_sha256": "fb57e3399e649caf83b18615376b78c49227ab652c6f357b99d5f22312a2263a",
+      "model": "deliveries/bootstrap/model.pt",
+      "preview_root": "deliveries/bootstrap",
+      "cameras": [
+        "Kaohsiung-cam04",
+        "Taichung-cam01",
+        "Taichung-cam10",
+        "Taichung-cam11",
+        "Tao-Hsin-cam03"
+      ],
+      "render_errors": [],
+      "completed_at": "2026-09-16T13:58:53.648931+00:00",
+      "before_deadline": true,
+      "test_evaluated": false,
+      "automatic_deployment": false,
+      "geometry": "new semantics on existing source-bound depth; visible surfaces; absolute scale unverified"
+    },
+    "model_tensor_count": 194,
+    "all_tensors_finite": true,
+    "five_pngs_and_glbs_verified": true,
+    "views": [
+      {
+        "camera": "Kaohsiung-cam04",
+        "vertices": 14105,
+        "triangles": 26441,
+        "world_png_sha256": "ca0aeb9986bd23a3c673158d33e6a36fba827112dd131957a3f8166c6aecd335",
+        "provenance_sha256": "175227b812cd709752902b66d649b1a6372c26353c3681a96001fc371c9168cf"
+      },
+      {
+        "camera": "Taichung-cam01",
+        "vertices": 12452,
+        "triangles": 23060,
+        "world_png_sha256": "61bb05321d90f6645dc8f43c364657c745df340c8ab504f44cf42c5d10f16f1c",
+        "provenance_sha256": "eb942a3de70ff81fb03d6fc880b1ffd6988bef50c7da4417cae3107852a723f8"
+      },
+      {
+        "camera": "Taichung-cam10",
+        "vertices": 14591,
+        "triangles": 27489,
+        "world_png_sha256": "1475252c9ac42fb09613d53cdf5cb1f78ec140051c65bcf2ee9cdebdc091999c",
+        "provenance_sha256": "0de238d094b1ad1fe52b4fec55e8a917d2a98e5e78c184e7d94c43b5bb977675"
+      },
+      {
+        "camera": "Taichung-cam11",
+        "vertices": 15706,
+        "triangles": 30003,
+        "world_png_sha256": "e570f0d9a0fb1eab73239c51f699c03d78374a30e26afc4ab765d2fce83800c3",
+        "provenance_sha256": "94c102421fcc054fa567d99a6240d206f92a806a1ef789ca217f965fe81bb9cc"
+      },
+      {
+        "camera": "Tao-Hsin-cam03",
+        "vertices": 11911,
+        "triangles": 21771,
+        "world_png_sha256": "f053ed994d468269fd919c36f9f855c312a016bb24ba080a6d9dc13f38c8bebc",
+        "provenance_sha256": "5b2d0fde283a3e9311d9175b15d6170447ad0393b0831bd146b21786e66241a9"
+      }
+    ],
+    "current_long_job": "uniform_seed42"
+  }
+}
