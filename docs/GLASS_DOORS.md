@@ -117,3 +117,24 @@ error, and measure temporal stability on separate clips. Higher input resolution
 trainable encoder layers are experiments to compare, not guaranteed remedies for missing
 site labels. Only then should predictions replace reviewed Stage0 materials. Metric
 widths and positions still need independent site measurements.
+
+## September 12 handoff
+
+The bounded background follow-up completed three experiments: 256 × 384 for up to
+36 epochs (seed 42), and 384 × 576 for up to 24 epochs (seeds 42 and 43). Their selected
+checkpoints score 33.38%, 31.13% and 31.69% glass-door IoU on the same 998 public
+validation images at original resolution. The first selected epoch is 21; the others
+are 12 and 24. The initial 12-epoch experiment used batch size 32, while these used 16,
+so the difference does not isolate training duration. Validation still selects models.
+
+The September 12 review of 27 camera/model previews found incomplete entrance leaves
+and continued white-wall/person glass errors. All nine entrance scene attempts retained
+their existing GLBs; none of the three checkpoints was promoted. The handoff rechecked
+all 141 commissioned-input hashes recorded by the worker and found no changes.
+The worker's `status.json` still says visual review is pending; the later
+`runs/glass_doors_background_20260911/visual-review.json` records the rejection.
+
+The next implementation is final-mesh reporting followed by source-bound door-frame and
+contact controls, with independent scale collection and cross-store annotation as
+separate work. See [the current task queue](PLAN.md#1010-stage-0-handoff-and-next-tasks--2026-09-12).
+No further public-only epoch/resolution sweep is scheduled.

@@ -142,13 +142,15 @@ three stages below, and none of it goes through those entry points.
 
 ## Running it over a store — the three stages
 
-**Read this first, because the shape of the system is not what the diagram suggests.**
-There is no service. [`deploy/`](deploy/) states it: the one deployment surface is
-`not assembled — README only, no runtime here yet`. `scripts/serve_pilot.py` runs L0 plus
-a tracker and emits **no positions, no events and no alert rows** (PLAN §9.6). What runs
-the whole chain today is an **offline batch** over stored clips. Stage 1 below is a
-scheduled batch job, not a daemon, and saying otherwise is the failure this repository
-has the most notes about.
+The commands below describe the existing offline commissioning and analysis workflow.
+The serving pilot now connects commissioned `CameraState.world_frame` to
+`CameraAlerts`, `ZoneMonitor` and persisted alert rows; it is still a pilot rather than
+an assembled store deployment. Continuous attribute heatmaps and the complete multi-camera
+service need end-to-end acceptance. The new-store Stage0–4 target and the September 12
+whole-store training protocol are in [STUDIOA_STAGE0_4.md](docs/STUDIOA_STAGE0_4.md).
+The latest requested Stage1 scene-understanding scope, class coverage gaps, and proposed
+Stage2–4 responsibilities are audited in [STUDIOA_CAPABILITY_AUDIT.md](docs/STUDIOA_CAPABILITY_AUDIT.md).
+These product stage names differ from the historical command workflow below.
 
 ### Stage 0 — once per camera (commissioning)
 
@@ -315,11 +317,11 @@ raised it, the calibration hash, and a `frame_ref` — **a pointer to footage, n
 image**, which is what lets the 30-day clip tier expire without touching the log (§4.6).
 A row with no `frame_ref` is refused at write time.
 
-Scheduling this is a systemd user unit. Making it *live* is three separate things, and
-only the last is research: the serving path does not reach the event layer; `data/video.py`
-decodes 63–69 streams where NVDEC reaches ~520 and is not wired in; and there is no
-service shell. The engine is not the constraint — 990 f/s end to end against a 480 f/s
-target (§7a.29). **Decode is.**
+Scheduling this offline command uses a systemd user unit. The serving pilot separately
+reaches the event layer through `CameraAlerts`; its CPU decode path, deployment shell,
+input-resolution parity and timing under dropped frames still require integration and
+acceptance. Historical engine throughput in PLAN §7a.29 does not establish live
+camera-to-dashboard latency.
 
 ### Stage 2 — reports, and the algorithms above them
 

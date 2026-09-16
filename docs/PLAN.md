@@ -1341,3 +1341,389 @@ expose inconsistency while sharing bias. The next accuracy experiment should the
 report per-object reprojection, ruler disagreement, floor depth residuals, and any
 independent control errors separately. Do not replace that vector with one confidence
 score or claim centimetre accuracy from the synthetic recovery tests.
+
+### 10.10 Stage 0 handoff and next tasks — 2026-09-12
+
+This is the current execution order for Gate D. Earlier dated percentages in section
+10.4b used changing visibility and scoring rules; they are historical snapshots, not a
+comparable improvement series or proof that Gate D has closed.
+
+**Checked baseline:** local `dev` at `95d8636`. The handoff inspected the preceding
+conversation, code, existing scene reports and comparison images, then rechecked current
+cache geometry and the background worker's commissioned-input hashes. It did not rerun
+the complete scene pipeline. Evidence is in the local, gitignored
+`runs/stage0_handoff_20260912/audit.json` and `REPORT.zh-TW.md`.
+
+* All nine current camera caches pass the existing 2 mm sampled consistency check.
+  Taichung-cam07 and Tao-Hsin-cam04 still use legacy caches without geometry signatures;
+  this check does not establish their depth/plate provenance or physical scale.
+* Four cameras have individual-object masks: Kaohsiung-cam04, Taichung-cam01/cam10 and
+  Tao-Hsin-cam15. Their 71 candidates produce 44 placed objects; 18 hit dimension
+  bounds and 21 carry `needs_review`. Front/back status is 2 appearance-reviewed,
+  17 not represented by the template and 25 unverified. Only one of the latter has
+  `heading_requires_review`; absence of that flag is not appearance verification.
+* Three background glazing experiments finished in 2,512 seconds. Original-resolution
+  public-validation door IoU is 33.38%, 31.13% and 31.69%; all nine entrance preview
+  attempts retained their prior GLBs. The September 12 visual review rejected promotion.
+  All 141 commissioned inputs recorded by the worker still match their hashes.
+* `build_scene_regular` accepts `surface_report`, but the standard `scene_mesh.py` CLI
+  only saves object and support reports. Surface scores describe fits before coplanar
+  trimming, not the final exported geometry. Explicit material PNGs are read directly;
+  their earlier review bundle is not a source-identity gate in `scene_surfaces`.
+* The focused handoff regression run passed 122 tests. This verifies implementation
+  contracts, not site accuracy. No new surveyed controls were supplied.
+
+**Why this order:** a calibrated image point defines a ray, not a unique 3D point.
+A supported plane supplies the missing intersection; a physical measurement fixes
+metric scale. Glass appearance contains transmitted and reflected structure, and an
+object silhouette can admit multiple dimensions and headings. More training epochs
+cannot supply an absent geometric constraint. One measured length constrains a global
+scale only when pose and intrinsics are already valid; it cannot independently validate
+them. The reviewed opening route below accelerates existing fixed-camera commissioning
+while retaining automatic proposals and the later cross-store automation objective.
+
+| ID / priority | concrete task and scope | dependency | completion contract |
+|---|---|---|---|
+| S0-01 / P0 | **Freeze the nine-camera acceptance baseline.** Wire and persist surface reports in the standard CLI; identify final surfaces after overlap trimming and wall apertures. Record source plate, camera, masks, code/scoring version and GLB hashes. Keep fixture, device and opening metrics separate. | Ready; first implementation task | Nine per-camera manifests; missing inputs and unrun stages are explicit rather than zero detections. Before/after uses identical input hashes and metric definitions. Final exported surfaces map to report IDs and are reprojected on the raw image. Existing 0.35 opening and 0.42 device admission thresholds remain distinct from Gate D's fixture target of 0.6 on 90% of fixtures. |
+| S0-02 / P1 | **Source-bound opening controls**, initially Tao-Hsin-cam03/cam04/cam15. Store raw door-frame corners, visible contact endpoints, leaf/fixed-pane identity, occlusion and reviewer evidence. Reuse `surfaces.py` rays and grounded planes; add plate/calibration/mask invalidation and final mesh checks. | S0-01; visible evidence can be prepared now | Each entrance has a reviewable raw overlay and GLB, with a supported plane or an explicit abstention. Changed inputs invalidate controls. No duplicated panes, wall across the reviewed aperture or invented hinge/swing state. Report corner/boundary residuals separately from material-mask IoU; fitted corners alone are not independent validation. |
+| S0-03 / P1 | **Independently establish scale**, starting Kaohsiung-cam04. Reuse `measure_floor.py`, `metric_scale.py` and `ground_control.py`; prepare collection now, fit only when physical measurements exist. | Physical site data; does not block S0-01/02 | Scale-only route: at least two fitting distances and one independent held-out distance with the existing direction/endpoint checks. Use existing 0.05 m absolute and 3% relative validation limits, reported as limits rather than achieved accuracy. If spatial residuals indicate pose/focal error, use surveyed point controls instead. Install only after upstream scale, camera, zones, depth cache and scene are rebuilt and checked together. |
+| S0-04 / P2 | **Complete nine-camera object coverage and triage dimension bounds.** Extend the four-camera object/support path to Taichung-cam04/cam07/cam11 and Tao-Hsin-cam03/cam04; inspect the current 18 bound-hitting objects and cam15 laptop #18. | S0-01; S0-03 before claiming better metric dimensions | Nine cameras have explicit candidate/placed/rejected reports and per-object support, crop, dimension and facing evidence. Review the known 21 flagged objects; do not relax priors just to raise counts. Distinguish directed-but-unverified from axis-only templates. Process and compare in isolated review output before batched installation. |
+| S0-05 / P2 | **Cross-store glass-door labels**, starting from the existing 42-camera queue. Prioritise Kaohsiung-cam01/cam03 and Taichung-cam09 entrances, Taichung-cam07 and Kaohsiung-cam04 hard negatives; add separate-time views where available. | Annotation preparation ready; training waits for reviewed labels and a frozen split | Leaf/fixed-glass boundaries, uncertain pixels and source identities recorded. Camera-grouped splits and a whole held-out store fixed before training. Select thresholds on development data; report held-out door precision/recall, boundary error, false glass on negatives and accepted final 3D openings against the frozen baseline. No automatic promotion from public-validation improvement. |
+
+Execution sequence: **S0-01 → S0-02 → S0-04** while preparing the inputs to S0-03 and
+S0-05. Training follows S0-05's data gate; no further public-only epoch/resolution sweep
+is scheduled. README GIFs are rebuilt once after an accepted scene batch, with the
+existing render-input and blur audit, rather than after each intermediate candidate.
+
+The untracked `tools/commissioning/floor_calibrate.py` is a legacy orthogonality probe,
+not an approved self-calibration route: section 10.4b already records its weak focal
+identifiability. Its nearest-assumed zero crossing must not be installed as measured
+vfov. The pre-existing test edit, this probe and `:memory:.ses` were preserved during
+handoff. GPU/host-job availability needs a host-level check before future training;
+the handoff sandbox could not communicate with the NVIDIA driver, which alone does
+not diagnose the host driver or establish that no other job is running.
+
+**Implementation started 2026-09-12 (S0-01).** The standard scene CLI now saves
+`scene.surfaces.json` and `scene.manifest.json`, reads the exported GLB back, and maps
+trimmed panes and wall sections to its actual node names. The original fit scores stay
+separate from `raw-glb-silhouette-v1`: full raw-frame triangle coverage against all
+original material-mask pixels, with no occlusion discount. Missing references and
+unrun device/support stages are explicit; this does not score the per-fixture Gate D
+target. `--out` writes a new review tree and preserves commissioned outputs; input or
+code changes during a build prevent publishing a complete candidate manifest.
+
+`stage0_baseline.py` freezes the source and per-camera inputs, runs each camera with a
+timeout, verifies output hashes and keeps an atomic progress report. The nine-camera
+batch completed all nine cameras as the persistent user service `stage0-baseline-20260912`, with four
+CPU cores, 8 GiB and a three-hour limit. Its local results are in
+`runs/stage0_baseline_background_20260912/`. A separate service,
+`stage0-readme-20260912`, initially failed because its PATH lacked ffprobe. The retry
+rendered cam04 and passed source-head coverage, then exposed a `demo_gif.py` log statement
+that rejected an absolute output outside the snapshot root. That print is fixed;
+`stage0-readme-20260912-finish` resumes the existing cam04 render and then processes
+cam10 in `runs/stage0_readme_background_20260912_retry/` using the frozen copy.
+Candidates await visual review; published figures and commissioned scenes are not
+automatically replaced.
+
+Validation at launch: **129 focused regression tests passed**, along with Ruff and
+the modified files' local type checks. The two published GIF/code-identity checks
+currently fail because their scene sources predate this reporting change; the other
+13 figure checks pass. Those two checks remain open until refreshed GIFs are reviewed
+and installed. The cam03 smoke export has identical node names, vertices and faces to
+its previous commissioned GLB; its binary file hash differs, which is why a hash
+difference alone is not recorded as a geometric regression. No claim of new site
+accuracy or a completed nine-camera review is made at launch.
+
+### 10.11 New-store Stage0–4 objective and bounded training — 2026-09-12
+
+The user requested new training during a six-hour absence, with the eventual product
+producing spatial attribute heatmaps and behaviour analysis in previously unseen
+STUDIO A stores. [STUDIOA_STAGE0_4.md](STUDIOA_STAGE0_4.md) defines the five-stage
+contracts, the present implementation and the remaining acceptance work. Stage0 supplies
+geometry and source identity; a better segmentation score cannot supply missing metric
+constraints or prove the downstream live service.
+
+`tools/commissioning/stage0_train.py` prepared a frozen whole-store experiment in
+`runs/stage0_cross_store_20260912_v2/`, and `stage0-cross-store-20260912.service` has
+started GPU training. The first epoch completed source-store validation and wrote
+best/last checkpoints before handoff. The absolute worker deadline is September 12,
+16:25 Asia/Taipei. The service has a 12-core CPU quota, 48 GiB host-memory limit and a
+5-hour-40-minute outer runtime limit; every training and evaluation child also has a
+timeout. Source, configurations, selected data and ImageNet initialization files are
+copied and hashed; dataset links point only into that frozen pool.
+
+There are 1,700 retained site pairs: batch02 288, batch03 368, site30k 1,044. The latter
+is capped at four spread-out samples per camera/day. ADE contributes a fixed 512 train
+and 64 validation pairs. Source camera splits are preserved, source test cameras remain
+unused, and all retained images of each target store are test-only. Camera identity and
+decoded-image content are checked for leakage before writing the training configurations.
+
+| whole held-out store | source train | source validation | target test |
+|---|---:|---:|---:|
+| Kaohsiung | 644 | 488 | 340 |
+| Taichung | 344 | 140 | 988 |
+| Tao-Hsin | 700 | 516 | 372 |
+
+Six runs compare the standard and stronger photometric augmentation recipes with the
+same seed, public initialization and data in each fold. Only the six-class terrain head
+is trained, at 512×896, up to 40 epochs or 40 minutes per run; source-store validation
+selects the checkpoint. Final target-store evaluation records per-class IoU and support;
+complete folds produce an equal-store mean and worst-store score. A timeout is partial,
+not a completed replicate. This single-seed experiment does not establish a stable gain.
+
+If the budget permits, `staff_store_probe.py` follows with whole-store staff/customer
+probes over human-sorted crops, one row per track, source-only standardisation and
+frozen ImageNet features. Candidates retain per-camera results and cannot bypass the
+deployed unknown/new-camera gates. Site segmentation scores are teacher agreement;
+the old wall/door taxonomy and the fixture merge remain limitations. No further
+public-only glass-door training is scheduled, and no candidate automatically replaces
+commissioned scenes or production models.
+
+The working tree remains uncommitted; the experiment explicitly uses `--allow-dirty`
+and is not a release bundle. Frozen files retain the actual experiment source rather
+than relying solely on the parent checkout's patch. At launch, 57 relevant split,
+worker-timeout, taxonomy, staff, serving-alert, provenance and documentation checks
+passed; the new training tools and split module also passed Ruff and local type checks.
+The earlier nine-camera batch is complete with no commissioned-file changes. GIF
+candidate visual review and installation remain separate, pending tasks.
+
+### 10.12 Nine-camera review and source-bound opening candidates — 2026-09-12
+
+The user authorized execution of the next Stage0 milestone. The nine-camera baseline
+was reviewed against its source plates and rendered scenes; all nine output manifests
+and their current commissioned-input hashes were verified. The local deliverable is
+`runs/stage0_opening_review_20260912/REPORT.zh-TW.md`, with an image-switching
+`index.html`, per-object `review.json`, and three before/after comparison images.
+
+The baseline has 71 device candidates and 44 placed devices, with 18 dimension-bound
+hits and 21 review flags. Five cameras have not run the individual-device stage. Seven
+camera exports have no wall surfaces; material coverage does not close the fixture
+Gate D target. Front/back remains 2 appearance-reviewed, 17 not represented by the
+template and 25 unverified. The report lists the actual instance IDs and camera-specific
+defects instead of turning these incomplete stages into a completion percentage.
+
+`opening_controls.py` now binds visible raw-frame contacts and frame edges to the
+plate, camera and masks. The scene CLI accepts a control directory only with `--out`
+on the regular path. Contact rays supply a vertical plane, adjacent fixed panes reuse
+that plane, and observed frame divisions produce separate entrance panels. Changed
+source identities fail; unsupported or overlapping control groups abstain together.
+Missing lintels explicitly retain the 2.4 m drawing convention, and hinge/swing states
+remain unknown. Final GLB boundary residuals are separate from original-mask IoU and
+are explicitly fitting consistency, not independent accuracy. The API and schema are
+described in [OPENING_CONTROLS.md](OPENING_CONTROLS.md).
+
+Reading the actual GLBs exposed another defect: fixed-glass end jambs were world-axis
+boxes centred on the nominal endpoints. They extended about 2.5 cm into neighbouring
+door intervals after nominal trimming. `glass_panel` now rotates jambs along each panel
+and keeps their geometry inside the endpoints. Tests cover rotated adjacent panes;
+the three final candidate exports have zero overlaps under the review's coplanar-solid
+check, compared with five in the baseline. This is model geometry, not surveyed error.
+
+The three final outputs are `final_candidates_v2/`; their code is frozen in
+`source_snapshot_v2/`. Earlier candidate folders are superseded.
+
+| entrance | original glass-door mask IoU before → after | maximum final GLB boundary residual | decision |
+|---|---|---|---|
+| Tao-Hsin-cam03 | 77.92% → 87.83% | 21.38 raw px | Hold: upright edges conflict with current calibration/observations despite better IoU. |
+| Tao-Hsin-cam04 | 87.88% → 78.28% | 3.61 raw px | Visible frame divisions improve; hold because original material-mask agreement falls and the left fixed-pane extent is occluded. |
+| Tao-Hsin-cam15 | 78.06% → 82.39% | 10.00 raw px | Hold: calibration/observation review; the internal opaque door and device #18 also remain unresolved. |
+
+The current checkpoints from section 10.11 have also finished: all six whole-store runs
+and the staff probe completed. Segmentation's equal-store mean is 64.74% standard and
+65.79% photometric. Kaohsiung's regression is in column (-3.50 pp), wall (-2.85), floor
+(-2.10) and fixture (-1.32); person rises 0.40 pp. These locate affected classes but do
+not establish the cause from one seed or prove human-label accuracy.
+
+Validation: **149 focused tests passed**, plus Ruff, changed-module local type checks,
+three complete CLI builds, manifest checks and exported-solid comparisons. The historical
+commissioned-output hashes remain unchanged. No scene or model was promoted, and no
+new public-only training sweep was started. Next work is independent pose/edge evidence
+for cam03/cam15, material-boundary review for cam04, and targeted GCS sampling after
+camera/time identity checks. Independent scale still needs physical measurements.
+
+### 10.13 Opening material conflicts and conditional pose checks — 2026-09-12
+
+The follow-up is `runs/stage0_pose_review_20260912/REPORT.zh-TW.md` and `index.html`.
+`material_review.py` produces source-bound, mutually exclusive candidate material
+masks; `scene_audit.py` exposes conflicting glass/glass-door reference pixels without
+changing the historical coverage metric. Tao-Hsin-cam04 had 7,795 overlapping pixels
+(61.26% of its glass-door reference). Source-image facade/frame regions remove the
+intersection, retain 2,580 occluded pixels as unknown and exclude 1,922 glazing pixels
+outside the reviewed facade. Original masks remain unchanged; these agent-reviewed
+teacher masks are not independent human labels.
+
+The isolated cam04 candidate preserves the opening divisions and has zero exported
+coplanar-solid overlaps; final boundary residual remains 3.61 raw pixels. Against the
+same reviewed references, fixed-glass IoU is 64.31% for the prior opening candidate
+and 65.01% after the material change; glass-door remains 77.66%. Against the same
+legacy references, glass falls 43.63% to 42.90% and glass-door remains 78.28%. The
+two-reference matrix prevents annotation changes being presented as model gains.
+Left-pane occlusion and the legacy depth cache's missing signature remain unresolved.
+
+`vertical_controls.py` fits only pitch/roll from three separated structural lines
+per camera and checks three whole held-out lines, conditional on existing focal
+length, lens and height. cam03's proposal changes pitch 41.97° to 13.05° and reduces
+held-out maximum raw distance 22.45 to 2.03 px; cam15 changes 39.07° to 11.84° and
+9.03 to 2.63 px. Both proposals fail entrance-ground consistency; cam15 also fails
+zone transfer. Failed transfer never returns stale metre-space zones. Neither
+proposal was installed or used to rebuild depth geometry.
+
+Focal sensitivity demonstrates the unresolved constraint: cam03's held-out residual
+stays 2.03 px while the contact span changes from 13.80 m at existing focal length
+to 1.89 m at twice that focal length, with height/lens fixed. This is ambiguity,
+not a recommendation to double focal length. Camera settings or corresponding
+measured distances are needed before choosing a focal/scale hypothesis, rebuilding
+depth and confirming zones. More monocular video alone cannot establish metric scale.
+
+Validation: **135 relevant tests passed**, Ruff and local type checks passed, one
+complete candidate CLI build and all candidate input/code/output identities checked;
+all 30 historical commissioned-output hashes remain unchanged. The material and
+pose APIs, limits and rebinding rules are documented in `OPENING_CONTROLS.md`.
+
+### 10.14 Traceable depth rebuilds for the two unsigned caches — 2026-09-12
+
+The user requested continued optimization. The nine-camera baseline's two unsigned
+caches, Tao-Hsin-cam04 and Taichung-cam07, now have isolated replacement candidates in
+`runs/stage0_depth_review_20260912/`. Both depths were freshly inferred offline on CPU
+from the locally cached revision-pinned DA-V2 model. Original calibration, plate and
+reference masks remain fixed; cam04 uses the preceding material-reviewed candidate
+and its unchanged opening controls. Both complete scene builds passed.
+
+`depth_provenance.py` and the rebuild CLI bind raw image bytes, dimensions, lens
+preprocessing/code, model revision and unscaled depth bytes. Fresh inference writes
+a reusable sidecar. Reuse validates that sidecar when present, and rejects stale
+sources. Unrecorded external depth is explicitly `external_unverified`, with no
+fabricated default model identity. Scene loading now checks recorded cache plate
+hashes using the selected workspace root, and the audit exposes depth provenance.
+
+Same-reference material IoUs are unchanged to two decimal percentage places. Matched
+mesh bounds differ by at most 0.00121 m on cam04 and 0.00186 m on cam07 under the
+existing calibration; both candidates add/remove no mesh nodes and have no detected
+coplanar-solid overlap. These are consistency checks, not surveyed metric accuracy.
+cam04's floor-height absolute p95 is 0.05198 → 0.05194 m; cam07's is 0.62239 →
+0.62245 m, so cam07's existing floor inconsistency and absent walls remain an explicit
+next geometry-review target. Source binding does not resolve teacher/calibration error.
+
+Validation: **145 relevant tests passed**, Ruff and changed-module type checks passed,
+both complete CLI exports and their frozen identities verified, and all 30 historical
+commissioned-output hashes remain unchanged. The report, image switcher, per-camera
+source records and reproduction instructions are in the new run directory. No camera,
+cache, scene or model was promoted to the commissioned paths.
+
+### 10.15 cam07 visibility scope and the actual wall-removal stage — 2026-09-12
+
+The continued cam07 investigation is `runs/stage0_cam07_geometry_20260912/`. The
+preceding 0.622 m floor-height p95 mixes people, stools and ghosted foreground inside
+the walkable-area mask. Two broad source-image regions with visible tiles contain
+69,688 raw pixels and have p95 0.0424 m under the **same** camera and depth. This
+changes the observation scope, not model accuracy. Original walkable statistics and
+their denominator remain visible. The regions were specified from image evidence
+before scoring, are source-bound, and are not independently measured ground truth.
+
+The missing wall was not rejected by floor-both-sides: its ratio is 0.0247 against
+the unchanged 0.25 threshold. A 1.694 m wall run survives that check. `door:1` then
+cuts about 1.612 m of the run with its 1.618 m fitted span; remaining strips of
+3.07 cm and 5.11 cm are below the existing 10 cm minimum. The door's observed ground
+contact supports only a 0.838 m span. A rectangle constrained to that span fails the
+existing 0.35 fitting gate, so narrowing it is not an accepted geometry fix.
+
+Implemented `floor_review.py` with separate walkable and explicitly visible-floor
+statistics, source-bound image-region validation, and no residual-driven selection.
+Scene audits now retain both wall decisions and aperture provenance, and opening
+fits record their ground-contact span. This exposes fully cut walls instead of
+reporting only absent exports. Geometry and admission thresholds are unchanged.
+
+Validation: **100 relevant tests passed**, Ruff and changed-module type checks passed,
+one complete scene CLI build passed, candidate GLB hash/material metrics match the
+preceding candidate exactly, and all 30 historical commissioned outputs remain
+unchanged. A scene-build test double was updated for the prior cache loader's new
+`plate_path` argument; real source checks remain tested. The unresolved next geometry
+constraint is consistency between the door's frame, contact plane and calibration,
+not an automatic rescaling based on the occupied walkable-area statistic.
+
+### 10.16 cam07 structural calibration and rejected geometry candidate — 2026-09-16
+
+The next step is completed in `runs/stage0_cam07_calibration_20260916/`: original
+1920×1080 daytime footage supplies unobstructed structural observations, followed by
+joint focal/attitude/division-lens fitting, fresh source-bound depth and a full isolated
+scene export. `structural_controls.py` and its CLI bind the separate annotation frame,
+its uniform coordinate scaling and commissioned inputs. Whole lines are reserved per
+axis; multistart selection uses training lines only. Exact raw-curve scoring, rank/bound
+checks, synthetic recovery and holdout-corruption tests prevent declaring fit success
+from solver completion alone. Height is fixed and unmeasured; stale metric zones are
+removed. Principal point, square pixels and orthogonal structure remain assumptions.
+
+The held-out maximum falls from 58.60 to 4.17 raw pixels but still fails the unchanged
+4 px gate. Door final-GLB same-reference IoU improves 53.31% → 86.42%, and fitted width /
+ground-contact width improves 1.929 → 1.093. A single lintel is exported; this inherits
+the existing 2.4 m wall-height prior and is not recovery of all wall geometry.
+
+The candidate is **rejected for promotion**: common-visible-floor p95 worsens 0.04160 →
+0.16078 m on the same 226,150 valid cache pixels, fixtures decrease 3 → 2, and schematic
+product meshes decrease 28 → 0. These are conditional consistency and output-retention
+checks, not surveyed accuracy. Annotation corrections occurred during diagnosis, so
+these held-out lines do not constitute a blind independent acceptance set.
+
+Validation: **59 relevant tests passed**, Ruff and changed-module type checks passed,
+source/frame/depth/code/output bindings verified, and all 30 historical commissioned
+outputs remain unchanged. The report and image switcher preserve both improvements
+and regressions. The fit-code snapshot defines an uncommitted review boundary, not a
+release. Next: independently review same-view structural lines and lens assumptions,
+then address depth-shape/support consistency; obtain a measured scale constraint before
+claiming metric accuracy. More monocular clips or global scalar tuning cannot supply it.
+
+### 10.17 cam07 consistency decomposition and typed-product heights — 2026-09-16
+
+`runs/stage0_cam07_consistency_20260916/` separates lens, focal/pose, depth-planarity
+and merchandise-support regressions. Train-only principal-point and lens-centre
+proposals worsen held-out door error to 4.47 and 4.63 px; neither is adopted. Crossed
+focal/pose and correctly paired lens/depth inputs expose a roughly 9.3–9.6 degree
+model-floor tilt under the structural camera. A ray-preserving inverse-depth plane
+proposal reduces its fitting-region p95 to 1.65 cm, but held-out-region median error
+worsens 5.79 → 7.14 cm. The plane deformation is retained only as a rejected diagnostic.
+
+A concrete implementation bug was found: `cell_grids()` retained height only for
+`product`, leaving typed stock/laptop/tablet/phone grids to use 0.9 m at support checks.
+Typed products now carry heights from their own selected depth pixels. All support,
+footprint and admission thresholds remain unchanged. With identical structural-camera
+inputs, 4 laptop and 6 tablet schematic meshes reappear on the 0.644 m table. Reading
+the final GLB verifies every restored bottom contacts that top and all horizontal
+vertices lie inside its convex hull. They are not independent real-object detections.
+The old-calibration regression build keeps 28 merchandise meshes. Both builds retain
+exact non-product geometry and material/floor scores; calibration rejection remains.
+
+Validation: **72 relevant tests passed**, including eight typed-product low/high-height
+cases. Four stale synthetic cache-reader stubs in `test_footprints.py` were updated for
+the existing `plate_path` keyword, with explicit fixture non-null assertions; real cache
+checks are unchanged. Final footprints recheck, Ruff and local type checks passed.
+Two complete scene exports and frozen input/code/output identities verified; all 30
+historical commissioned outputs unchanged. This remains an uncommitted local review
+snapshot. Next work needs independent same-view structure/scale controls, not more
+unconstrained lens parameters or forcing the model floor flat.
+
+### 10.18 progress checkpoint and requested capability audit — 2026-09-16
+
+Optimization is paused for a review of the requested StudioA taxonomy and Stage1–4
+responsibilities. The current changes are grouped into atomic commits for store
+holdout training, depth provenance, scene audits/opening controls, calibration
+proposals, typed-product support heights and documentation. Prior run snapshots
+retain their original source hashes; they are not relabelled as runs of the final
+committed tree. No rejected camera/depth proposal is promoted by this checkpoint.
+
+[The capability audit](STUDIOA_CAPABILITY_AUDIT.md) compares all requested classes
+against actual student heads, data mappings, offline teachers, mesh assets and
+analytics. The architecture is partially implemented: primary segmentation still
+merges several requested structures and fixtures, and primary detection does not
+separate all requested products. Tracking, attributes and event rules exist, but
+complete StudioA class/geometry/attribute/interaction acceptance is outstanding.
+The proposed Stage1 scene-understanding definition is distinguished from historical
+stage numbering; no runtime interfaces or training taxonomy are changed here.
+
+Validation of the checkpoint: **171 relevant tests passed** across training splits,
+source-bound depth, opening/floor/material/scene audits, structural controls and
+scene support. After final test typing/assertion cleanup, the affected four test
+modules were rechecked: **39 passed**. Ruff, format checks and type checks passed
+for all 33 changed Python files. This is targeted validation, not the entire CI
+suite or an independent real-world accuracy measurement. Next work starts with
+class/instance/material/role contracts and human-reviewed acceptance data, before
+changing output heads or starting another training run.

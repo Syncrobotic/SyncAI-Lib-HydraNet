@@ -49,6 +49,44 @@ metres agree with the pixels), `masks_diagnose.py` (why `masks_pass` gave a came
 structure it did, per cluster, with the picture), `cluster_rules.py` (replay a merge rule
 against the cached SAM 3 proposals on every camera, no GPU).
 
+`scene_mesh.py CAMERA --out runs/scene_review/NEW_RUN` writes an isolated review
+directory with the GLB, OBJ, scene image, final surface overlays, object/support
+reports and a source/output manifest. Existing output directories are refused. The
+surface report separates pre-trim fitting scores from raw-frame coverage of actual
+exported GLB triangles, and marks missing references and unrun stages explicitly.
+Without `--out`, the standard commissioned paths are updated as before.
+
+`stage0_baseline.py --out runs/stage0_baseline/NEW_RUN [CAMERA ...]` freezes the source
+and inputs, builds a camera at a time and writes `status.json` and `REPORT.zh-TW.md`.
+It defaults to all commissioned cameras, preserves the source scenes, and is a finite
+worker rather than a daemon. Run it under a persistent user service when it must
+survive SSH logout; each camera defaults to a 20-minute timeout. Completed candidates
+are under `candidates/CAMERA/`; no failed build has a complete manifest.
+
+`scene_mesh.py CAMERA --opening-controls CONTROL_DIRECTORY --out NEW_REVIEW` uses
+source-bound floor contacts and visible frame edges for entrance review candidates.
+It records frame residuals separately from original-mask IoU and refuses stale source
+identities. See [opening controls](../docs/OPENING_CONTROLS.md) for the schema, cropped
+lintel conventions, supported scope and September 12 before/after artifacts.
+
+`rebuild_geometry.py CAMERA_JSON --calib MATCHING_CALIB --out NEW_CACHE.npz` records
+fresh depth with adjacent `.depth.npy` and `.depth.json` source bindings. Reuse with
+`--depth FILE.npy` validates an adjacent manifest, or one supplied by `--depth-manifest`.
+Unrecorded external depth stays explicitly unverified and receives no default teacher
+identity. Recorded cache plate hashes are checked when rendering. See the
+[depth provenance workflow](../docs/OPENING_CONTROLS.md#depth-reuse-and-scene-provenance).
+
+`stage0_train.py prepare --out runs/NEW_EXPERIMENT --deadline <ISO-time-with-timezone>`
+freezes the source, ImageNet weights and selected segmentation data, then writes six
+whole-store configurations. `stage0_train.py run --out runs/NEW_EXPERIMENT` runs their
+training and held-out evaluation with an absolute deadline, child timeouts and atomic
+status/report files. Use the copied script and `PYTHONPATH=<out>/snapshot/src` under a
+persistent user service. CUDA is required; data and pretrained files must already be
+local. No retail checkpoint initializes a held-out store. The optional final
+`staff_store_probe.py` phase uses human-sorted crops and source-only standardisation.
+These candidates do not install themselves. See [the protocol and Stage0–4 contracts](
+../docs/STUDIOA_STAGE0_4.md) for the teacher-label limits, splits and release status.
+
 **Question the geometry itself.** `geometry_bench.py` scores any depth source against the
 floor the commissioned camera already knows is at height zero — no labels, and a flat
 control so flatness cannot be read as a verdict; it is what caught MapAnything's rise as a
@@ -110,6 +148,17 @@ the question is answerable there and only there.
 - **`train_posture.py`** — the step-8 model itself, fitted on `ntu_project.py`'s `.npz`.
   Under 100K parameters, because it runs per track per frame behind a network that has
   already spent the budget.
+
+### Structural camera candidates
+
+`commissioning/structural_calibrate.py CAMERA CONTROLS --out NEW_DIR` jointly fits
+focal length, pose and division distortion from source-bound vertical and orthogonal
+floor lines. It preserves whole-line holdouts, reports raw-curve errors, removes stale
+metric zones and writes a diagnostic camera/report without changing commissioning
+inputs. Read `line_checks_passed`; CLI completion does not imply acceptance, and
+`deployment_ready` remains false. Changing the lens requires a fresh depth rebuild.
+See [structural controls](../docs/OPENING_CONTROLS.md#joint-structural-calibration-candidates)
+for the evidence contract and the cam07 rejected-candidate comparison.
 
 ## [`annotation/`](annotation/) — the CVAT stack
 
