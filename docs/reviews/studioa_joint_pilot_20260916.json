@@ -1,0 +1,133 @@
+{
+  "status": "completed; joint upgrade rejected",
+  "training_commit": "97a246b764ec8784321495f17c9f3f6c725a0a51",
+  "run": "runs/studioa_joint_pilot_20260916_v1",
+  "instance_package": "runs/studioa_partial_instances_20260916_v2",
+  "counts": {
+    "train_frames": 11,
+    "train_cameras": 7,
+    "train_instances": 31,
+    "val_frames": 6,
+    "val_cameras": 6,
+    "val_instances": 31
+  },
+  "instances_by_class": {
+    "train": {
+      "laptop": 3,
+      "phone": 4,
+      "tablet": 4,
+      "boxed_stock": 3,
+      "cardboard_box": 3,
+      "speaker": 2,
+      "poster": 2,
+      "fire_equipment": 2,
+      "chair": 2,
+      "person": 6
+    },
+    "val": {
+      "laptop": 5,
+      "phone": 4,
+      "tablet": 1,
+      "boxed_stock": 1,
+      "cardboard_box": 2,
+      "speaker": 1,
+      "poster": 2,
+      "fire_equipment": 1,
+      "chair": 5,
+      "person": 9
+    }
+  },
+  "training": {
+    "epochs": 10,
+    "optimizer_steps": 280,
+    "selected_epoch": 0,
+    "early_stop_reason": "ten source-scene validations without improvement over warm-start baseline",
+    "baseline_scene_teacher_miou": 0.2506328618675332,
+    "last_scene_teacher_miou": 0.2454166107127542,
+    "selected_scene_teacher_miou": 0.2506328618675332
+  },
+  "last_partial_detection": {
+    "partial_det/studioa_instances/images": 6.0,
+    "partial_det/studioa_instances/support": 31.0,
+    "partial_det/studioa_instances/matched": 3.0,
+    "partial_det/studioa_instances/empty_fp": 0.0,
+    "partial_det/studioa_instances/empty_pixels": 51761.0,
+    "partial_det/studioa_instances/unknown_predictions": 349.0,
+    "partial_det/studioa_instances/recall50_at_020": 0.0967741935483871,
+    "partial_det/studioa_instances/empty_fp_per_megapixel": 0.0,
+    "partial_det/studioa_instances/laptop/support": 5.0,
+    "partial_det/studioa_instances/laptop/matched": 0.0,
+    "partial_det/studioa_instances/laptop/recall50_at_020": 0.0,
+    "partial_det/studioa_instances/phone/support": 4.0,
+    "partial_det/studioa_instances/phone/matched": 0.0,
+    "partial_det/studioa_instances/phone/recall50_at_020": 0.0,
+    "partial_det/studioa_instances/tablet/support": 1.0,
+    "partial_det/studioa_instances/tablet/matched": 0.0,
+    "partial_det/studioa_instances/tablet/recall50_at_020": 0.0,
+    "partial_det/studioa_instances/boxed_stock/support": 1.0,
+    "partial_det/studioa_instances/boxed_stock/matched": 0.0,
+    "partial_det/studioa_instances/boxed_stock/recall50_at_020": 0.0,
+    "partial_det/studioa_instances/cardboard_box/support": 2.0,
+    "partial_det/studioa_instances/cardboard_box/matched": 0.0,
+    "partial_det/studioa_instances/cardboard_box/recall50_at_020": 0.0,
+    "partial_det/studioa_instances/speaker/support": 1.0,
+    "partial_det/studioa_instances/speaker/matched": 0.0,
+    "partial_det/studioa_instances/speaker/recall50_at_020": 0.0,
+    "partial_det/studioa_instances/poster/support": 2.0,
+    "partial_det/studioa_instances/poster/matched": 0.0,
+    "partial_det/studioa_instances/poster/recall50_at_020": 0.0,
+    "partial_det/studioa_instances/fire_equipment/support": 1.0,
+    "partial_det/studioa_instances/fire_equipment/matched": 0.0,
+    "partial_det/studioa_instances/fire_equipment/recall50_at_020": 0.0,
+    "partial_det/studioa_instances/chair/support": 5.0,
+    "partial_det/studioa_instances/chair/matched": 0.0,
+    "partial_det/studioa_instances/chair/recall50_at_020": 0.0,
+    "partial_det/studioa_instances/person/support": 9.0,
+    "partial_det/studioa_instances/person/matched": 3.0,
+    "partial_det/studioa_instances/person/recall50_at_020": 0.3333333333333333
+  },
+  "last_prediction_class_counts": {
+    "person": 158,
+    "phone": 76,
+    "laptop": 26,
+    "cardboard_box": 31,
+    "fire_equipment": 18,
+    "poster": 15,
+    "tablet": 21,
+    "speaker": 1,
+    "boxed_stock": 9
+  },
+  "verification": {
+    "frozen_inputs_checked": 645,
+    "output_hashes_checked": 6,
+    "finite_checkpoints": true,
+    "selected_shared_and_scene_weights_equal_initial": true,
+    "systemd_result": "success",
+    "systemd_exit": 0,
+    "related_tests_passed": 212,
+    "targeted_after_type_fix_passed": 5,
+    "test_evaluated": false
+  },
+  "interpretation": [
+    "Ten classes have source train/val support but only 2-6 train instances per class.",
+    "Only person matched in last epoch: 3/9; all nine other classes have zero reviewed-positive recall at fixed threshold.",
+    "349 unmatched predictions have unknown truth status; zero false alarms in small reviewed floor patches does not establish precision.",
+    "Visual review shows overlapping boxes and class confusion; weak localization and classification require targeted diagnosis.",
+    "Scene decline co-occurs with joint training; shared-feature and normalization drift are hypotheses, not isolated causes.",
+    "Best epoch zero retains initial scene/shared tensors exactly; it is not a trained detector upgrade."
+  ],
+  "next_steps": [
+    "Freeze shared scene features and normalization during detector warm-up; verify scene predictions stay unchanged.",
+    "Expand AI-reviewed source-train instances and explicitly reviewed class-specific confusers; keep val/test assignments unchanged.",
+    "Use a predeclared joint acceptance rule that requires detection improvement and preserves scene agreement; do not select detection by scene mIoU alone."
+  ],
+  "independent_accuracy": false,
+  "deployment_ready": false,
+  "artifacts": {
+    "runs/studioa_joint_pilot_20260916_v1/job.json": "76a8542bdc97de028dbeb5b6b380bb8fe3620e60aa9f58bf456bfb9edd1a446d",
+    "runs/studioa_joint_pilot_20260916_v1/report.json": "3ea6223fe33ca0cc6437731b0a2082182132689942791cebccebeae2c2ddb9fc",
+    "runs/studioa_joint_review_20260916_v1/joint_last_diagnostics.json": "ad80e53b965163836cc66dda0e909453f2acdb3f1aa0833942064af0ed389a2b",
+    "runs/studioa_joint_review_20260916_v1/joint_last_val_review.jpg": "593aa54fa6d746ec75631ecfa5936fde307234137961b106982476ff1c87a59a",
+    "runs/studioa_joint_review_20260916_v1/inspect_joint.py": "e0d0fbc624c31aa9f4b13736d48764b367d9ba618a9c9a166bb71a2a6944e1ac"
+  }
+}

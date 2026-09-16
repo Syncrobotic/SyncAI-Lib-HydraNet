@@ -1932,3 +1932,42 @@ This is completed wiring, not a trained detector. Next: expand reviewed source t
 instances for boxed_stock/poster/chair/person and camera diversity, define reviewed
 source-val detection evaluation, then run joint semantic/detection training. Existing
 semantic checkpoints and held-out test remain untouched.
+
+### 10.25 Reviewed-instance expansion and joint pilot — 2026-09-16
+
+Expanded instances v2 to 11 train frames / 7 cameras / 31 objects and 6 source-val
+frames / 6 cameras / 31 objects. All ten detection classes have positive support in
+both partitions. AI inspection rejects grouped packaging, contaminated masks,
+headphones labelled speaker, price cards labelled phone, and phones depicted in TV
+advertisements. Four physical display phones are promoted from unresolved proposals.
+Semantic v3 and all split assignments are unchanged.
+
+Explicit `reviewed_regions_v1` evaluation reports same-class one-to-one recall at
+score > .20 / IoU >= .50 and false alarms only inside >=95% reviewed-empty boxes.
+Unknown predictions remain unknown; no COCO mAP or precision claim. Existing exhaustive
+evaluation guards remain unless the dataset explicitly requests the partial protocol.
+
+Frozen joint pilot `runs/studioa_joint_pilot_20260916_v1/`, code `97a246b`, completed
+10 epochs / 280 steps, then stopped after ten validations without beating warm start.
+Source scene teacher mIoU declined from 25.0633% to 24.5417%. Epoch zero remains selected;
+its shared/scene tensors equal the initial semantic checkpoint exactly. This is a
+rejected joint upgrade, not a trained detection best model.
+
+Last-epoch reviewed recall is 3/31 (9.68%), all person: 3/9. Other nine classes are zero.
+349 unmatched predictions have unknown truth status. Zero alarms on 51,761 reviewed
+empty input pixels does not establish full-image precision. The visual diagnostic
+shows overlapping boxes and class confusion; sparse per-class support and empty-floor
+only negatives leave object confusion weakly constrained. No test evaluation occurred.
+
+212 related tests and five targeted tests after type compatibility fix passed, plus
+lint/types/commit checks. All 645 frozen inputs and six completed outputs verify;
+checkpoints are finite/job-bound, systemd succeeded with exit 0. CPU diagnostic checked
+the actual mixed-data train/val path separately; its reduced-resolution score is not
+model evidence. Unrelated `:memory:.ses` remains untouched.
+
+[Method, results, visual review and next constraints](STUDIOA_PARTIAL_DETECTION.md),
+[tracked evidence](reviews/studioa_joint_pilot_20260916.json).
+Next: freeze shared features and normalization for detection warm-up, add AI-reviewed
+source-train instances and class-specific confusers, then use a predeclared acceptance
+rule requiring both detection improvement and preserved scene agreement. Do not extend
+the same run or use source test / Tao-Hsin test for iteration.
