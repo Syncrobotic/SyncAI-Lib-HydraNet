@@ -1,0 +1,1350 @@
+{
+  "reviewer_kind": "ai",
+  "reviewer": "assistant_visual_analysis",
+  "held_out": "Tao-Hsin",
+  "source_manifest_sha256": "0139eaccc00c6cf2fd841c7cfbd3a231c9b744a624b9c8ec95f82bc6e7a7b1ee",
+  "scope": "Existing reviewed train/val subset plus 16 AI-reviewed GCS source-train frames; unknown pixels are not negative. Original val positives/boxes/negative masks preserved.",
+  "frames": [
+    {
+      "frame_id": "0050-Kaohsiung-cam04",
+      "image_sha256": "7b1e1be2cf234ab9d881fef37b49789f4f1b64eff655758b2e674d6819ee6bac",
+      "companion_sha256": "0423e2002e1c61c16d815172dd247c61c3f4a21d982f6c64d88ad962b16656e0",
+      "positives": [
+        {
+          "id": "ai-0005",
+          "entity": "laptop",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0007",
+          "entity": "cardboard_box",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0008",
+          "entity": "cardboard_box",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0010",
+          "entity": "cardboard_box",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0017",
+          "entity": "laptop",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        }
+      ],
+      "negative_rects": [
+        {
+          "xyxy": [
+            1650,
+            400,
+            1800,
+            650
+          ],
+          "reason": "Assistant inspected source image: empty floor patch, no visible object from the declared ten detection classes; not inferred from missing labels."
+        }
+      ]
+    },
+    {
+      "frame_id": "0030-Taichung-cam08",
+      "image_sha256": "e95523bd8f92ab2fbb7ed5fa672e25b7cf01d531ed94711a016572351d1b1ea4",
+      "companion_sha256": "e452f0356246f096cc9bcf3c8a16b403c24a87983900fb9fc509a76397a5d720",
+      "positives": [
+        {
+          "id": "ai-0003",
+          "entity": "tablet",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0004",
+          "entity": "tablet",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0005",
+          "entity": "tablet",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        }
+      ],
+      "negative_rects": [
+        {
+          "xyxy": [
+            1000,
+            960,
+            1500,
+            1050
+          ],
+          "reason": "Assistant inspected source image: empty floor patch, no visible object from the declared ten detection classes; not inferred from missing labels."
+        }
+      ]
+    },
+    {
+      "frame_id": "0112-Taichung-cam11",
+      "image_sha256": "3353277f188293dba730eefd1f3f42ddbd4e6b50ee87e38d4c954f22d8495355",
+      "companion_sha256": "051477d05602005a21aef67b3af839ec4956f1c3511be724e006eafb1ff30eb9",
+      "positives": [
+        {
+          "id": "ai-0003",
+          "entity": "speaker",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        }
+      ],
+      "negative_rects": [
+        {
+          "xyxy": [
+            1100,
+            650,
+            1250,
+            850
+          ],
+          "reason": "Assistant inspected source image: empty floor patch, no visible object from the declared ten detection classes; not inferred from missing labels."
+        }
+      ]
+    },
+    {
+      "frame_id": "0078-Taichung-cam09",
+      "image_sha256": "30918a1a840d0e54a4d88dd8c34bb2907a0b7931f25ce60f7f4e878b5528f6b2",
+      "companion_sha256": "bedfde8148dae9581b2fa7322caa9afb173a9448e394227f68887d27baa4ffc0",
+      "positives": [
+        {
+          "id": "ai-0002",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0003",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        }
+      ],
+      "negative_rects": [
+        {
+          "xyxy": [
+            1500,
+            850,
+            1800,
+            1000
+          ],
+          "reason": "Assistant inspected source image: empty floor patch, no visible object from the declared ten detection classes; not inferred from missing labels."
+        }
+      ]
+    },
+    {
+      "frame_id": "0025-Taichung-cam05",
+      "image_sha256": "08b398cb45b48e99021b07d5247539c8138805cfb043c7d86421c6bfd2fe24a4",
+      "companion_sha256": "9dd17564938c9007cd40050ce79aceaebfedbad2b9aa1f1970174557ac462e87",
+      "positives": [
+        {
+          "id": "ai-0009",
+          "entity": "phone",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        }
+      ],
+      "negative_rects": [
+        {
+          "xyxy": [
+            1730,
+            760,
+            1810,
+            930
+          ],
+          "reason": "Assistant inspected source image: empty floor patch, no visible object from the declared ten detection classes; not inferred from missing labels."
+        }
+      ]
+    },
+    {
+      "frame_id": "0031-Taichung-cam08",
+      "image_sha256": "ddd3f30a15b4b527c8dc5a025b7e9a5c5cf21561936b3e98fa17bbcd8d411b4c",
+      "companion_sha256": "51097af5eae2df30092a13a14afc6ebaf964454f62d0800d9291c31bbca40b53",
+      "positives": [
+        {
+          "id": "ai-0005",
+          "entity": "phone",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0007",
+          "entity": "phone",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0008",
+          "entity": "phone",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        }
+      ],
+      "negative_rects": [
+        {
+          "xyxy": [
+            200,
+            920,
+            450,
+            1030
+          ],
+          "reason": "Assistant inspected source image: empty floor patch, no visible object from the declared ten detection classes; not inferred from missing labels."
+        }
+      ]
+    },
+    {
+      "frame_id": "0008-Kaohsiung-cam07",
+      "image_sha256": "6acd71ce695fa11235c63cf3d83cea62bb39017bfbfd2eba47e198449ad48a28",
+      "companion_sha256": "901ae7a38b80cd42c036e8e6f594dc668096a8646132bb76102ce3ac494ad632",
+      "positives": [
+        {
+          "id": "ai-0028",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0002",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "0002-Kaohsiung-cam04",
+      "image_sha256": "a7339928d2e72363cefb35a8f6e25d8b1784ceaf747f87b815293dfdc53257bb",
+      "companion_sha256": "3dfce18c1f9d25ef717683209d6396964fcaa024ba1477777078ebf0de796436",
+      "positives": [
+        {
+          "id": "ai-0004",
+          "entity": "laptop",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0005",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0013",
+          "entity": "poster",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0001",
+          "entity": "person",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "0033-Taichung-cam09",
+      "image_sha256": "c5b1f42f5025b4479295913c3c41c9cfa324fbc5b4200bc6a2994efa52220b3d",
+      "companion_sha256": "276fbc3a765a4b33f48c00a1bf2edbb7dd9ed8fc5da0a71df6f3a85f56824137",
+      "positives": [
+        {
+          "id": "ai-0011",
+          "entity": "poster",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0001",
+          "entity": "person",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "0022-Taichung-cam04",
+      "image_sha256": "ad8f01fb6860896c9bbd1e3ff9bf86c10515013c23f4e8c2de87802fcea2d07b",
+      "companion_sha256": "f094e3b5cf5919a27ee9155700bc98cc57af081e5750f4c8ebe3f96da235691f",
+      "positives": [
+        {
+          "id": "ai-0010",
+          "entity": "chair",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0013",
+          "entity": "chair",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0000",
+          "entity": "person",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0003",
+          "entity": "person",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "0082-Taichung-cam11",
+      "image_sha256": "4c85c1f28791ebc81eb3f687cc55f913899381ac90cb6a16ef223aeea997df1d",
+      "companion_sha256": "26b1250e73b68449e4b501b9509702909c3021e44a506f1108e1f8cad4c36492",
+      "positives": [
+        {
+          "id": "ai-0010",
+          "entity": "tablet",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0003",
+          "entity": "speaker",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0000",
+          "entity": "person",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0002",
+          "entity": "person",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "0007-Kaohsiung-cam06",
+      "image_sha256": "8340acd371f970f294282695828b7fdd2d27e08b9529575f7f275290b38b50f8",
+      "companion_sha256": "3a26496740076a5e3a58e36c63fae01393ed39b344a66d0b0fe67440b2f1bc8f",
+      "positives": [
+        {
+          "id": "ai-0005",
+          "entity": "laptop",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0011",
+          "entity": "laptop",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0010",
+          "entity": "tablet",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0007",
+          "entity": "speaker",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0016",
+          "entity": "poster",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0001",
+          "entity": "person",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0002",
+          "entity": "person",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        }
+      ],
+      "negative_rects": [
+        {
+          "xyxy": [
+            150,
+            800,
+            400,
+            950
+          ],
+          "reason": "Assistant inspected original context with this rectangle: clear floor without a visible object from the ten detection classes."
+        }
+      ]
+    },
+    {
+      "frame_id": "0053-Kaohsiung-cam05",
+      "image_sha256": "68440d495ad4d190d7b68b046d64707339105fa7c5290b36b2c46abd3a1f4e8a",
+      "companion_sha256": "a9565f0ac21f98f711d0a0ff3c91608767fdc023a91557974fc41903ded832ab",
+      "positives": [
+        {
+          "id": "ai-0004",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0002",
+          "entity": "cardboard_box",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0006",
+          "entity": "cardboard_box",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0005",
+          "entity": "person",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        }
+      ],
+      "negative_rects": [
+        {
+          "xyxy": [
+            850,
+            500,
+            1250,
+            800
+          ],
+          "reason": "Assistant inspected original context with this rectangle: clear floor without a visible object from the ten detection classes."
+        }
+      ]
+    },
+    {
+      "frame_id": "0016-Taichung-cam01",
+      "image_sha256": "fb3086c1ff8ed11a485226d69bacacb33ea4d534d0708096c80526f348230784",
+      "companion_sha256": "b30aed64d3c57dba492dec341442706b77458556b8afb6991fe1b2f6741d7bee",
+      "positives": [
+        {
+          "id": "ai-0002",
+          "entity": "laptop",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0021",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0004",
+          "entity": "chair",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0005",
+          "entity": "chair",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0000",
+          "entity": "person",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0001",
+          "entity": "person",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        }
+      ],
+      "negative_rects": [
+        {
+          "xyxy": [
+            600,
+            700,
+            700,
+            900
+          ],
+          "reason": "Assistant inspected original context with this rectangle: clear floor without a visible object from the ten detection classes."
+        }
+      ]
+    },
+    {
+      "frame_id": "0076-Taichung-cam07",
+      "image_sha256": "a7e42db0b7ac8ebae37bc90da01b090b7de169b9cf0bf1b06088d049add3f83e",
+      "companion_sha256": "bf42c51b3bb9657e8bd99379eaabba2d1e53e4d4559bae34f2ceae1959b11dd0",
+      "positives": [
+        {
+          "id": "ai-0005",
+          "entity": "laptop",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0006",
+          "entity": "poster",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0001",
+          "entity": "chair",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0004",
+          "entity": "person",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0002",
+          "entity": "person",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        }
+      ],
+      "negative_rects": [
+        {
+          "xyxy": [
+            900,
+            800,
+            1200,
+            1000
+          ],
+          "reason": "Assistant inspected original context with this rectangle: clear floor without a visible object from the ten detection classes."
+        }
+      ]
+    },
+    {
+      "frame_id": "0034-Taichung-cam10",
+      "image_sha256": "28c5c9e5a09f55a473bda61d0d84de4a8f679ebc3db43f892358a6a56d0c57fd",
+      "companion_sha256": "602aa819d8944d6dadc76bedecfa8b2609641066dd2dc6a046c52cbebf2846d3",
+      "positives": [
+        {
+          "id": "ai-0002",
+          "entity": "laptop",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0007",
+          "entity": "chair",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0005",
+          "entity": "chair",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0000",
+          "entity": "person",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        },
+        {
+          "id": "ai-0010",
+          "entity": "person",
+          "reason": "Assistant inspected original context and isolated mask; a visible single physical object supports this class. Partial AI review only."
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "0013-Kaohsiung-cam11",
+      "image_sha256": "4c19e17cad632f5551e2280b514e76884e74658d62841354e3ddfcc1c73a6f19",
+      "companion_sha256": "06b6e65f9c04d603749965cb03a5fc7eb6ee2c8419638baeb6cb93bba69f5f0a",
+      "positives": [
+        {
+          "id": "vlm-unknown-0004",
+          "entity": "phone",
+          "reason": "Assistant inspected context and isolated mask: real tethered smartphone on foreground circular display table; excludes phone depicted on TV advertisement."
+        },
+        {
+          "id": "vlm-unknown-0006",
+          "entity": "phone",
+          "reason": "Assistant inspected context and isolated mask: real tethered smartphone on foreground circular display table; excludes phone depicted on TV advertisement."
+        },
+        {
+          "id": "vlm-unknown-0007",
+          "entity": "phone",
+          "reason": "Assistant inspected context and isolated mask: real tethered smartphone on foreground circular display table; excludes phone depicted on TV advertisement."
+        },
+        {
+          "id": "vlm-unknown-0008",
+          "entity": "phone",
+          "reason": "Assistant inspected context and isolated mask: real tethered smartphone on foreground circular display table; excludes phone depicted on TV advertisement."
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam04-t330",
+      "image_sha256": "a479c28dc3688ca122efa93ce4288707fffa4eb2031ca942d860fae2397c0add",
+      "companion_sha256": "8cbb99661c64303eae9bd97cf37953079b614235f7f39622385d8b70302abc89",
+      "positives": [
+        {
+          "id": "ai-0005",
+          "entity": "laptop",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 0
+        },
+        {
+          "id": "ai-0011",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 3
+        },
+        {
+          "id": "ai-0019",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 4
+        },
+        {
+          "id": "ai-0009",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 5
+        },
+        {
+          "id": "ai-0006",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 6
+        },
+        {
+          "id": "ai-0031",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 12
+        },
+        {
+          "id": "ai-0001",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 13
+        },
+        {
+          "id": "ai-0000",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 14
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam07-t030",
+      "image_sha256": "43a4ec3d39087331280da0a4b868ffc47b98cebb4410a304a2f1d14adf9fdc9d",
+      "companion_sha256": "18d91aac7c1cbb4a2e29a8a6f3ef9df12f4e7ef96d967e94e7175ff509d06e53",
+      "positives": [
+        {
+          "id": "ai-0080",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 19
+        },
+        {
+          "id": "ai-0017",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 21
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam08-t030",
+      "image_sha256": "facae65b929ba40c46bf9bb671e1b158c3e9edd392734e6cdea2b4fb69717462",
+      "companion_sha256": "97cf772c23ef3a6058ae6aac87f2cf207b5391d34336713254257157b839e66f",
+      "positives": [
+        {
+          "id": "ai-0023",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 27
+        },
+        {
+          "id": "ai-0025",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 28
+        },
+        {
+          "id": "ai-0018",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 29
+        },
+        {
+          "id": "ai-0042",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 31
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam03-t030",
+      "image_sha256": "e4dc5e1e322ad6b43c802169a816c06fd0b1f6cb8c399e87d4215cd5056e1f82",
+      "companion_sha256": "5ed3466365e1b23c8810968530385e6203616aeb487dae6f0c77e31e10043c6a",
+      "positives": [
+        {
+          "id": "ai-0005",
+          "entity": "laptop",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 32
+        },
+        {
+          "id": "ai-0006",
+          "entity": "laptop",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 33
+        },
+        {
+          "id": "ai-0014",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 35
+        },
+        {
+          "id": "ai-0011",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 36
+        },
+        {
+          "id": "ai-0008",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 37
+        },
+        {
+          "id": "ai-0020",
+          "entity": "speaker",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 40
+        },
+        {
+          "id": "ai-0057",
+          "entity": "speaker",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 41
+        },
+        {
+          "id": "ai-0010",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 42
+        },
+        {
+          "id": "ai-0003",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 43
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam04-t330",
+      "image_sha256": "7daaff94e19ec7f2eb63738d779c358cbbe59406841f5499f8269376befbcad1",
+      "companion_sha256": "503fb3c85237741465e9b3d8c3702535e9651206267e325c69634c81540e62f8",
+      "positives": [
+        {
+          "id": "ai-0054",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 50
+        },
+        {
+          "id": "ai-0057",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 51
+        },
+        {
+          "id": "ai-0050",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 53
+        },
+        {
+          "id": "ai-0009",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 55
+        },
+        {
+          "id": "ai-0028",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 56
+        },
+        {
+          "id": "ai-0016",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 58
+        },
+        {
+          "id": "ai-0000",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 59
+        },
+        {
+          "id": "ai-0012",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 60
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam05-t030",
+      "image_sha256": "8a7a6e129561f819a598241bbe50107322192a61ca450510ae97c957672686ad",
+      "companion_sha256": "dd4ebfadebb5c9b9a4777c130b124aa1cac9cb3610d20783acf610056b056e4e",
+      "positives": [
+        {
+          "id": "ai-0036",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 64
+        },
+        {
+          "id": "ai-0005",
+          "entity": "speaker",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 66
+        },
+        {
+          "id": "ai-0061",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 68
+        },
+        {
+          "id": "ai-0014",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 69
+        },
+        {
+          "id": "ai-0011",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 70
+        },
+        {
+          "id": "ai-0009",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 71
+        },
+        {
+          "id": "ai-0055",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 73
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam08-t030",
+      "image_sha256": "8f15fd481aeb8f63aa50b25dfa79637535b45defcecae4b5f99b9a5e547b5daa",
+      "companion_sha256": "8a5a47e8f624dde013d5b8bfddfc02b5b6f309196da9a60c94325871d1c28c2d",
+      "positives": [
+        {
+          "id": "ai-0002",
+          "entity": "tablet",
+          "reason": "Assistant corrected phone proposal to tablet: full-size physical iPad with tether and stand on tabletop, compared with the surrounding counter and power sockets; not the adjacent black desk mats.",
+          "review_index": 76
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam09-t030",
+      "image_sha256": "c989bfe1f6a7998834c79588b000dd24f869b96bfc93c14055b9a2b8d2995828",
+      "companion_sha256": "5f7a89f5e2cc3d58f472a954b8fd41992c5615be016b97956911f9bac6aead07",
+      "positives": [
+        {
+          "id": "ai-0066",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 82
+        },
+        {
+          "id": "ai-0028",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 83
+        },
+        {
+          "id": "ai-0026",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 84
+        },
+        {
+          "id": "ai-0002",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 85
+        },
+        {
+          "id": "ai-0005",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 86
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam11-t330",
+      "image_sha256": "272d31978a93c47d1a1aaa04f8581cd0c47135abdd60aab94d0650ef49186d7d",
+      "companion_sha256": "b5d5d582256ff8a0ba2a0f87bedde01d97739e6e1eb9ba8ffdb1e885b9251965",
+      "positives": [
+        {
+          "id": "ai-0017",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 91
+        },
+        {
+          "id": "ai-0030",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 92
+        },
+        {
+          "id": "ai-0011",
+          "entity": "speaker",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 93
+        },
+        {
+          "id": "ai-0028",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 95
+        },
+        {
+          "id": "ai-0002",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 96
+        },
+        {
+          "id": "ai-0006",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 97
+        },
+        {
+          "id": "ai-0000",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 98
+        },
+        {
+          "id": "ai-0001",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 99
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260912-Kaohsiung-cam04-t030",
+      "image_sha256": "8f2455851cd3d7d609931dfe0c7681801df689eb20633bb42af56f06837d0730",
+      "companion_sha256": "e57e043fc7a2e8f7a9fce6db43bd41c0758fd9a997cfc803ed49aafdf71a8d43",
+      "positives": [
+        {
+          "id": "ai-0006",
+          "entity": "laptop",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 100
+        },
+        {
+          "id": "ai-0039",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 102
+        },
+        {
+          "id": "ai-0010",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 103
+        },
+        {
+          "id": "ai-0020",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 105
+        },
+        {
+          "id": "ai-0008",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 106
+        },
+        {
+          "id": "ai-0074",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 113
+        },
+        {
+          "id": "ai-0068",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 114
+        },
+        {
+          "id": "ai-0002",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 115
+        },
+        {
+          "id": "ai-0001",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 116
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam03-t330",
+      "image_sha256": "6f696165a74ce3d833e6fc59a868213f3f261d6b904e2964553abd3107513c52",
+      "companion_sha256": "ffbc822f24b384d131a9e6255a56762405c5c9999e140ebcb54a53edb5ffda85",
+      "positives": [
+        {
+          "id": "ai-0011",
+          "entity": "laptop",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 117
+        },
+        {
+          "id": "ai-0010",
+          "entity": "laptop",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 118
+        },
+        {
+          "id": "ai-0017",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 120
+        },
+        {
+          "id": "ai-0019",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 121
+        },
+        {
+          "id": "ai-0015",
+          "entity": "speaker",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 125
+        },
+        {
+          "id": "ai-0005",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 126
+        },
+        {
+          "id": "ai-0006",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 127
+        },
+        {
+          "id": "ai-0008",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 129
+        },
+        {
+          "id": "ai-0000",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 130
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam04-t030",
+      "image_sha256": "e528fceb02e0402a1b98840d1e13cd342b8e823ee2bd9f7367353ab9be0bb4cb",
+      "companion_sha256": "d21485f131d60f65e634d033b0a5b58c18c26e78dc4bd3edb89083f882076e8e",
+      "positives": [
+        {
+          "id": "ai-0016",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 139
+        },
+        {
+          "id": "ai-0033",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 140
+        },
+        {
+          "id": "ai-0020",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 141
+        },
+        {
+          "id": "ai-0038",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 142
+        },
+        {
+          "id": "ai-0000",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 143
+        },
+        {
+          "id": "ai-0003",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 144
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam05-t330",
+      "image_sha256": "f0757ff6f43fadc72a211aee58b1132ac29afe242e35a07ef55c41a2b5bf4209",
+      "companion_sha256": "8b39a80107cfbf5bfd72aed896d486f1579b4a4939f7f72d54696dd98ab1c20e",
+      "positives": [
+        {
+          "id": "ai-0014",
+          "entity": "speaker",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 151
+        },
+        {
+          "id": "ai-0081",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 154
+        },
+        {
+          "id": "ai-0020",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 155
+        },
+        {
+          "id": "ai-0019",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 156
+        },
+        {
+          "id": "ai-0010",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 157
+        },
+        {
+          "id": "ai-0024",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 158
+        },
+        {
+          "id": "ai-0000",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 159
+        },
+        {
+          "id": "ai-0004",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 160
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam08-t030",
+      "image_sha256": "04aae73f6f1184bb6b1fdd4f2f924243c68f6a423b794ca7d806e4fc03cad2ad",
+      "companion_sha256": "d9d462189ede768927dc8b63bf925e6bd141076a6adbc7ba9c2318505e54d331",
+      "positives": [
+        {
+          "id": "ai-0002",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 161
+        },
+        {
+          "id": "ai-0003",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 162
+        },
+        {
+          "id": "ai-0001",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 164
+        },
+        {
+          "id": "ai-0005",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 165
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam08-t330",
+      "image_sha256": "c834c7362415b2fa11d32470166b44b0a80519929e258ab8b228bdb5a1a79578",
+      "companion_sha256": "2c5ec8ec5dfa4e68f5d6fa34e4cfd1ff0f3203233738a149bd975c8e6a0787cf",
+      "positives": [
+        {
+          "id": "ai-0007",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 167
+        },
+        {
+          "id": "ai-0001",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 168
+        },
+        {
+          "id": "ai-0002",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 169
+        },
+        {
+          "id": "ai-0005",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 173
+        },
+        {
+          "id": "ai-0004",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 174
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam11-t330",
+      "image_sha256": "f3360b01d4e4d82e1fc8c552714e287efadaeedd015cc3ab0440ee01603ab19a",
+      "companion_sha256": "adba1791cd74f51dab852defec9e743ed3b20045454f100b59a93cb1617b370c",
+      "positives": [
+        {
+          "id": "ai-0003",
+          "entity": "speaker",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 176
+        },
+        {
+          "id": "ai-0016",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 178
+        },
+        {
+          "id": "ai-0000",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 179
+        },
+        {
+          "id": "ai-0011",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 180
+        },
+        {
+          "id": "ai-0001",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 181
+        }
+      ],
+      "negative_rects": []
+    }
+  ],
+  "deferred_candidates": [
+    {
+      "frame_id": "0008-Kaohsiung-cam07",
+      "id": "ai-0035",
+      "reason": "Multiple packaged objects in one mask"
+    },
+    {
+      "frame_id": "0008-Kaohsiung-cam07",
+      "id": "ai-0036",
+      "reason": "Disconnected mask contaminates bounding box"
+    },
+    {
+      "frame_id": "0002-Kaohsiung-cam04",
+      "id": "ai-0007",
+      "reason": "Ambiguous payment terminal or calculator"
+    },
+    {
+      "frame_id": "0033-Taichung-cam09",
+      "id": "ai-0007",
+      "reason": "Multiple overlapping packages"
+    },
+    {
+      "frame_id": "0033-Taichung-cam09",
+      "id": "ai-0008",
+      "reason": "Multiple overlapping packages"
+    },
+    {
+      "frame_id": "0082-Taichung-cam11",
+      "id": "ai-0001",
+      "reason": "Mask includes floor or disconnected background"
+    },
+    {
+      "frame_id": "0007-Kaohsiung-cam06",
+      "id": "ai-0008",
+      "reason": "Printed price placard, not physical phone"
+    },
+    {
+      "frame_id": "0007-Kaohsiung-cam06",
+      "id": "ai-0018",
+      "reason": "Headphones, not speaker"
+    },
+    {
+      "frame_id": "0053-Kaohsiung-cam05",
+      "id": "ai-0003",
+      "reason": "Phone versus payment terminal unresolved"
+    },
+    {
+      "frame_id": "0016-Taichung-cam01",
+      "id": "ai-0014",
+      "reason": "Disconnected mask contaminates bounding box"
+    },
+    {
+      "frame_id": "0016-Taichung-cam01",
+      "id": "ai-0015",
+      "reason": "Printed placard, not boxed stock"
+    },
+    {
+      "frame_id": "0016-Taichung-cam01",
+      "id": "ai-0016",
+      "reason": "Printed placard, not boxed stock"
+    },
+    {
+      "frame_id": "0034-Taichung-cam10",
+      "id": "ai-0020",
+      "reason": "Laptop versus detachable tablet unresolved"
+    },
+    {
+      "frame_id": "0034-Taichung-cam10",
+      "id": "ai-0014",
+      "reason": "Physical phone versus printed price card unresolved"
+    },
+    {
+      "frame_id": "0013-Kaohsiung-cam11",
+      "id": "ai-0004",
+      "reason": "Phone depicted inside TV advertisement, not a physical scene instance"
+    }
+  ],
+  "parent_review_sha256": "8f7d9a491442c8482d5e392b7558c6c579d37609457c16d940013e6fa18cb59f",
+  "added_review_sha256": "9f4c858c78cc83a28f40769d859f8f373572f8b8ee1f5058e0297c3df2615b55"
+}

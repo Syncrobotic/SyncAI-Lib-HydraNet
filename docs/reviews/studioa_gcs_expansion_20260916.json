@@ -1,0 +1,119 @@
+{
+  "status": "completed AI-reviewed data expansion; not a trained model upgrade",
+  "intake": {
+    "bucket": "gs://studioa",
+    "source_stores": [
+      "Kaohsiung",
+      "Taichung"
+    ],
+    "source_train_cameras": 9,
+    "date_slots": [
+      "2026-09-10 12:00",
+      "2026-09-12 18:50"
+    ],
+    "filename_time_is_approximate": true,
+    "clips": 18,
+    "download_bytes": 453678490,
+    "download_budget_bytes": 1000000000,
+    "gcs_generation_and_md5_verified": true,
+    "candidate_frames": 36,
+    "selected_frames": 16,
+    "excluded_redundant_frames": 20,
+    "excluded_exact_pixel_duplicates": 0
+  },
+  "annotation": {
+    "teacher": "facebook/sam3",
+    "source_ai_entities": 504,
+    "source_unresolved_candidates": 553,
+    "candidate_masks_visually_inspected": 183,
+    "new_accepted_instance_observations": 98,
+    "manually_class_corrected_by_assistant": 1,
+    "unselected_proposals": "unknown; no negative/background claim",
+    "human_reviewed": false,
+    "unique_physical_object_count": "not measured; same physical object may recur across dates"
+  },
+  "instance_training_package": "runs/studioa_partial_instances_20260916_v3",
+  "semantic_training_package": "runs/studioa_gcs_training_extension_20260916_v1/semantic",
+  "counts": {
+    "train": {
+      "frames": 27,
+      "cameras": 9,
+      "instances": 129,
+      "by_class": {
+        "laptop": 9,
+        "cardboard_box": 3,
+        "tablet": 15,
+        "speaker": 9,
+        "fire_equipment": 8,
+        "phone": 17,
+        "boxed_stock": 10,
+        "poster": 20,
+        "person": 23,
+        "chair": 15
+      },
+      "negative_pixels": 198600
+    },
+    "val": {
+      "frames": 6,
+      "cameras": 6,
+      "instances": 31,
+      "by_class": {
+        "laptop": 5,
+        "tablet": 1,
+        "speaker": 1,
+        "poster": 2,
+        "person": 9,
+        "boxed_stock": 1,
+        "cardboard_box": 2,
+        "fire_equipment": 1,
+        "chair": 5,
+        "phone": 4
+      },
+      "negative_pixels": 237500
+    }
+  },
+  "preservation": {
+    "old_semantic_masks_byte_identical": 121,
+    "old_instance_images_targets_negative_masks_byte_identical": 17,
+    "all_prior_fold_assignments_unchanged": true,
+    "test_evaluated": false
+  },
+  "validation": {
+    "related_tests_passed": 59,
+    "intake_output_hashes_verified": 57,
+    "ai_report_output_hashes_verified": 17,
+    "smoke_frozen_files_verified": 297,
+    "gpu_steps": 14,
+    "gpu_frames": 27,
+    "unknown_logit_channels_checked": 2366580,
+    "unknown_nonzero_gradients": 0,
+    "classifier_update_norm": 0.014031676575541496,
+    "checkpoint_written": false,
+    "services_final_result": "success; exit 0",
+    "initial_intake_failure": "ffprobe missing from systemd PATH; resumed same pinned job with explicit PATH; logs retained"
+  },
+  "remaining_gaps": [
+    "Cardboard box still only 3 training observations; no new unambiguous boxes accepted.",
+    "Object-specific hard negatives have not been added; reviewed-empty regions remain the original floor patches.",
+    "Only 31 reviewed validation positives; this is not sufficient for deployment/generalization claims.",
+    "Same-camera repeated physical objects do not establish independent sample diversity."
+  ],
+  "next_step": "Freeze shared scene features and normalization for detector warm-up; add reviewed class-specific confusers and cardboard boxes; do not repeat the failed unrestricted joint recipe.",
+  "independent_accuracy": false,
+  "deployment_ready": false,
+  "artifacts": {
+    "runs/studioa_gcs_intake_20260916_v1/plan.json": "1b4d177c7b0b01f142395cd0cf325deee222e8224ee89876650cd128598033e9",
+    "runs/studioa_gcs_intake_20260916_v1/manifest.json": "a59a572a41e29dc42e6b8113c00f3a8a581abee341993aff964fe3a82fa59d0d",
+    "runs/studioa_gcs_intake_20260916_v1/report.json": "f925f7e6c20a89539432d18ff9d54aa093c425479b9398d696bab844fdf49f0a",
+    "runs/studioa_gcs_ai_20260916_v1/job.json": "2c48f8697a173d8bc4460d2960806d6e620ee98c5871a19ef4eff7006984b13d",
+    "runs/studioa_gcs_ai_20260916_v1/report.json": "68f3b1c535b01cb1c1dc7524539cd99cee2d988e2c3c7b12253dd98b7bad9d62",
+    "runs/studioa_gcs_training_extension_20260916_v1/extension_report.json": "55b66c5e6414f6001c366b2003a6ca132886a8fd4af91d19d223d48cf5519438",
+    "runs/studioa_gcs_training_extension_20260916_v1/semantic/manifest.json": "0139eaccc00c6cf2fd841c7cfbd3a231c9b744a624b9c8ec95f82bc6e7a7b1ee",
+    "runs/studioa_partial_instances_20260916_v3/manifest.json": "f74f99103a841bd4553d41cc8ce85e1257486de0cb065a108dbc077dfb643367",
+    "runs/studioa_partial_instances_20260916_v3/report.json": "43892b57c74c50a441952949c74bfde145a72fd5c4922743feea6ec199d342f7",
+    "runs/studioa_gcs_instance_smoke_20260916_v1/job.json": "d336b04d781e597f6a1edbbe0bf14fd0e75a11679e2691bb4eb7e4154aa69dfa",
+    "runs/studioa_gcs_instance_smoke_20260916_v1/report.json": "757be212a1abd9c1a8301e5fe02ba7f3eadfcfc337fa32de97043b8d1d411c55",
+    "runs/studioa_gcs_expansion_20260916_v1/reviewed_contact.jpg": "c9479bae04651c97b281d4347506f828d09e9b512813c0eeef23f011779c928c",
+    "runs/studioa_gcs_expansion_20260916_v1/reviewed_gallery.html": "215ff833266288f2e60c1131fdb3f77a6ada9e97d068d0e20337dc20e55cadb7"
+  }
+}
