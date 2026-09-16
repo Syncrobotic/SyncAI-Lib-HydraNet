@@ -258,6 +258,20 @@ def needs_isolated_recheck(group: list[dict], decision: dict) -> bool:
     return decision["entity"] in fixtures and not {row["entity"] for row in group} <= fixtures
 
 
+def constrain_isolated_recheck(group: list[dict], decision: dict) -> dict:
+    """Furniture cannot settle a mixed-family proposal without source-specific review."""
+    constrained = constrain_decision(group, decision)
+    if needs_isolated_recheck(group, constrained):
+        return {
+            **constrained,
+            "entity": "unknown",
+            "model_entity": constrained["entity"],
+            "constraint": "mixed object families remain unresolved",
+            "reason": "Furniture prediction cannot resolve competing object-family masks",
+        }
+    return constrained
+
+
 def revise_group_decisions(raw: dict, reviews: list[dict]) -> list[dict]:
     """Apply explicit AI inspection decisions; caller verifies the raw file hash."""
     decisions = deepcopy(raw["decisions"])

@@ -174,3 +174,14 @@ def test_isolated_recheck_targets_mixed_family_furniture_only():
             "basis": "assistant_visual_review",
         },
     )
+
+
+def test_repeated_furniture_answer_cannot_resolve_competing_product_family():
+    from syncai_hydranet.data.studioa_relabel import constrain_isolated_recheck
+
+    group = [{"entity": "display_cabinet"}, {"entity": "laptop"}]
+    repeated = {"entity": "display_cabinet", "reason": "VLM answer"}
+    result = constrain_isolated_recheck(group, repeated)
+    assert result["entity"] == "unknown" and result["model_entity"] == "display_cabinet"
+    supported = {"entity": "laptop", "reason": "Visible screen and keyboard"}
+    assert constrain_isolated_recheck(group, supported) == supported

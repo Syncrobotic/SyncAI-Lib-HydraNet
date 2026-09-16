@@ -22,7 +22,7 @@ from syncai_hydranet.data.studioa_relabel import (
     PROMPT,
     REVISION,
     LocalReviewer,
-    constrain_decision,
+    constrain_isolated_recheck,
     needs_isolated_recheck,
     review_panel,
 )
@@ -152,13 +152,13 @@ def run(out: Path, device: str) -> None:
                     )
                     answers = reviewer.classify(panels)
                     for i, group, answer in zip(indices, groups, answers, strict=True):
-                        answer = constrain_decision(group, answer)
+                        answer = constrain_isolated_recheck(group, answer)
                         result["decisions"].append(
                             {
                                 **answer,
                                 "group": i,
                                 "review_source": "local_vlm_isolated_target",
-                                "reason": "Local VLM classified the isolated target",
+                                "reason": answer["reason"],
                             }
                         )
                 write_json(target, result)

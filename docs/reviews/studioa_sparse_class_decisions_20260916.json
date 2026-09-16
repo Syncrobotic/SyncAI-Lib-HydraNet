@@ -1,0 +1,806 @@
+{
+  "reviewer_kind": "ai",
+  "review_method": "Assistant inspected 100 source-bound highlighted object crops across fire equipment, cartons, speakers and chairs; ambiguous masks remain unknown.",
+  "decisions": [
+    {
+      "frame_id": "0032-Taichung-cam09",
+      "image_sha256": "004ea89d05db559376d665d483de2c5de540a1caba6a6bb261befd55e7a7f5e5",
+      "annotation_sha256": "ce1c6c7d08241dd69144e0c1ce74bc7d69318c43150916bb70dd2fcc7910c21f",
+      "candidate_id": "ai-0002",
+      "entity": "fire_equipment",
+      "reason": "Visible fire extinguisher with handle/hose or wall fire equipment cabinet with fire-service markings."
+    },
+    {
+      "frame_id": "0078-Taichung-cam09",
+      "image_sha256": "30918a1a840d0e54a4d88dd8c34bb2907a0b7931f25ce60f7f4e878b5528f6b2",
+      "annotation_sha256": "d3b18a5de7abb5c2650726e3092f0b2a2100f4ff7cd29e43df12f2aed2281f80",
+      "candidate_id": "ai-0003",
+      "entity": "fire_equipment",
+      "reason": "Visible fire extinguisher with handle/hose or wall fire equipment cabinet with fire-service markings."
+    },
+    {
+      "frame_id": "0025-Taichung-cam05",
+      "image_sha256": "08b398cb45b48e99021b07d5247539c8138805cfb043c7d86421c6bfd2fe24a4",
+      "annotation_sha256": "1510c985e1372629760ac55e0eab49666a51669893001d6b7d958b99a145a580",
+      "candidate_id": "ai-0014",
+      "entity": "fire_equipment",
+      "reason": "Visible fire extinguisher with handle/hose or wall fire equipment cabinet with fire-service markings."
+    },
+    {
+      "frame_id": "0105-Taichung-cam05",
+      "image_sha256": "948aefbd4445ad76104e7897e29ce28e36670d1f1326ec435d48d6d97b3956de",
+      "annotation_sha256": "469f554583f75ddbaa2afbe496b0c7cd2e6307bffc80d29f620b7582dcf4926d",
+      "candidate_id": "ai-0015",
+      "entity": "fire_equipment",
+      "reason": "Visible fire extinguisher with handle/hose or wall fire equipment cabinet with fire-service markings."
+    },
+    {
+      "frame_id": "0068-Taichung-cam03",
+      "image_sha256": "ae2a348ba8b41c9632e0cfb270aad69c81dd660ddddab12b4004c085d6a1b029",
+      "annotation_sha256": "5ca463834f8fa821eff8f839462977d0c10422fc32ed7918e2bdeb0624d46ee2",
+      "candidate_id": "ai-0022",
+      "entity": "unknown",
+      "reason": "Red product display box by storefront is not supported as fire equipment."
+    },
+    {
+      "frame_id": "0068-Taichung-cam03",
+      "image_sha256": "ae2a348ba8b41c9632e0cfb270aad69c81dd660ddddab12b4004c085d6a1b029",
+      "annotation_sha256": "5ca463834f8fa821eff8f839462977d0c10422fc32ed7918e2bdeb0624d46ee2",
+      "candidate_id": "ai-0024",
+      "entity": "unknown",
+      "reason": "Red product display box by storefront is not supported as fire equipment."
+    },
+    {
+      "frame_id": "0026-Taichung-cam06",
+      "image_sha256": "0facdcefec200e1c95a1058a00070f88fc2310a62564e7113c9dc63941363226",
+      "annotation_sha256": "815f4eefbf486671877e519f1489567927bee58a226c064f86568ac358e7b13f",
+      "candidate_id": "ai-0019",
+      "entity": "fire_equipment",
+      "reason": "Visible fire extinguisher with handle/hose or wall fire equipment cabinet with fire-service markings."
+    },
+    {
+      "frame_id": "0027-Taichung-cam06",
+      "image_sha256": "f4994cc3548927bbda3a326a5447af39c816c3146f031cd316dd4d29bf3ffd0d",
+      "annotation_sha256": "1e305dfe55e2f21fd205e4dfb05b13fd1a4261347a93866830726997a6fe99d4",
+      "candidate_id": "ai-0023",
+      "entity": "fire_equipment",
+      "reason": "Visible fire extinguisher with handle/hose or wall fire equipment cabinet with fire-service markings."
+    },
+    {
+      "frame_id": "0080-Taichung-cam10",
+      "image_sha256": "0fc1ab9b651bf72617250ce0f88c9cfae79c0ad4837ffce572a53774b1d41a6c",
+      "annotation_sha256": "c3211cc073c55cf4d09c1372ad57e38cbd9767f1367b64cd84dfc44629d093f1",
+      "candidate_id": "ai-0042",
+      "entity": "fire_equipment",
+      "reason": "Visible fire extinguisher with handle/hose or wall fire equipment cabinet with fire-service markings."
+    },
+    {
+      "frame_id": "0111-Taichung-cam10",
+      "image_sha256": "a86d13188331aeac2bbfdda30c6e4c1805a7f4b438d25fba42b26c8c32db6cb8",
+      "annotation_sha256": "8cf929e287578fffb1c6f36f2c7f217a6b91066ed950d56484d8f665bbe8c45a",
+      "candidate_id": "ai-0040",
+      "entity": "fire_equipment",
+      "reason": "Visible fire extinguisher with handle/hose or wall fire equipment cabinet with fire-service markings."
+    },
+    {
+      "frame_id": "0016-Taichung-cam01",
+      "image_sha256": "fb3086c1ff8ed11a485226d69bacacb33ea4d534d0708096c80526f348230784",
+      "annotation_sha256": "ce87e2c8379b897e33431e74763e55e1d77573288c066ec7cca3798ce9ba333b",
+      "candidate_id": "ai-0102",
+      "entity": "fire_equipment",
+      "reason": "Visible fire extinguisher with handle/hose or wall fire equipment cabinet with fire-service markings."
+    },
+    {
+      "frame_id": "0044-Tao-Hsin-cam04",
+      "image_sha256": "8e91fe22d1f716af90e050a5eecf3fb5907c3e894c209b6e3bbb8559a401ada1",
+      "annotation_sha256": "cf2c975d5e3e964c995660aebcf78367d4a2293e34ddfda201d5fc1f9912b988",
+      "candidate_id": "ai-0075",
+      "entity": "unknown",
+      "reason": "Target is partial, ambiguous or not supported as the proposed class in the inspected image."
+    },
+    {
+      "frame_id": "0097-Taichung-cam01",
+      "image_sha256": "2b5b74bd6caf91eea724aeed779eff630e4219a82562ed536e705e4ae0ff1c73",
+      "annotation_sha256": "144e938015beb2296193ab8c69b8041d2b3eb10020bc70885c34464f52a753d1",
+      "candidate_id": "ai-0115",
+      "entity": "fire_equipment",
+      "reason": "Visible fire extinguisher with handle/hose or wall fire equipment cabinet with fire-service markings."
+    },
+    {
+      "frame_id": "0092-Tao-Hsin-cam15",
+      "image_sha256": "0abe668030dd1f67f33689d4bf4d637a3b7165e8257f69b7eaea830de22bfb1d",
+      "annotation_sha256": "c22b5e7329fefe0dbf980f56d887329279bcc22aee7d80ab8edc1f6e930fefc6",
+      "candidate_id": "ai-0007",
+      "entity": "cardboard_box",
+      "reason": "Visible shipping/storage carton with folded cardboard walls or shipping labels; distinct from retail product packaging."
+    },
+    {
+      "frame_id": "0053-Kaohsiung-cam05",
+      "image_sha256": "68440d495ad4d190d7b68b046d64707339105fa7c5290b36b2c46abd3a1f4e8a",
+      "annotation_sha256": "78ff2c835f9e58605c71bebc9d88ae0de292e296ea649258a8e877345a0eff42",
+      "candidate_id": "ai-0006",
+      "entity": "cardboard_box",
+      "reason": "Visible shipping/storage carton with folded cardboard walls or shipping labels; distinct from retail product packaging."
+    },
+    {
+      "frame_id": "0116-Tao-Hsin-cam03",
+      "image_sha256": "4dad1448688e8eba7886d66b59c1dae8c3c987004ac75cac552917eeef3a7e12",
+      "annotation_sha256": "7c4540c766f74dcc43ca8cc13456e102a29d4630db4f361be3e71687aeafab4f",
+      "candidate_id": "ai-0003",
+      "entity": "cardboard_box",
+      "reason": "Visible shipping/storage carton with folded cardboard walls or shipping labels; distinct from retail product packaging."
+    },
+    {
+      "frame_id": "0088-Tao-Hsin-cam03",
+      "image_sha256": "04ddc58299a2e5e9abbfdfb8c473a3a27b27d65893f35925a399ddb39598d77d",
+      "annotation_sha256": "efd249e0d7f030c45a8c5e6e2d47beae70eac57e4505606b3819c84a483a033a",
+      "candidate_id": "ai-0017",
+      "entity": "cardboard_box",
+      "reason": "Visible shipping/storage carton with folded cardboard walls or shipping labels; distinct from retail product packaging."
+    },
+    {
+      "frame_id": "0054-Kaohsiung-cam06",
+      "image_sha256": "cca6e84adb7708032c0a169b982c84e88237b219e8b6c9a134134805e3bd980f",
+      "annotation_sha256": "f7f3d1274b161361f8461b5693a5f010f56ce793bd3adcee0da3fece0e8a694e",
+      "candidate_id": "ai-0016",
+      "entity": "unknown",
+      "reason": "Target is partial, ambiguous or not supported as the proposed class in the inspected image."
+    },
+    {
+      "frame_id": "0058-Kaohsiung-cam08",
+      "image_sha256": "58dbfa809ad611de31ccc2bd1e2ba07b00377974702513e0bde6cef7e8cacd06",
+      "annotation_sha256": "bcc5e7612ab08472ed2ecae1e166721f2e2167329522f3c0cf24bc0943104860",
+      "candidate_id": "ai-0014",
+      "entity": "unknown",
+      "reason": "Target is partial, ambiguous or not supported as the proposed class in the inspected image."
+    },
+    {
+      "frame_id": "0051-Kaohsiung-cam04",
+      "image_sha256": "ed21956c0073550452669f186b8ef00060650b49bc97eb1165f0ee13e6a97709",
+      "annotation_sha256": "f7f16a813d7c2b439370c5c4753bc203e37142aadddba279acac5298c678be19",
+      "candidate_id": "ai-0019",
+      "entity": "cardboard_box",
+      "reason": "Visible shipping/storage carton with folded cardboard walls or shipping labels; distinct from retail product packaging."
+    },
+    {
+      "frame_id": "0050-Kaohsiung-cam04",
+      "image_sha256": "7b1e1be2cf234ab9d881fef37b49789f4f1b64eff655758b2e674d6819ee6bac",
+      "annotation_sha256": "9d868eb2d4a458403d228d7528438b251162a30dc5c9cfffb0994af125a2fe32",
+      "candidate_id": "ai-0014",
+      "entity": "cardboard_box",
+      "reason": "Visible shipping/storage carton with folded cardboard walls or shipping labels; distinct from retail product packaging."
+    },
+    {
+      "frame_id": "0053-Kaohsiung-cam05",
+      "image_sha256": "68440d495ad4d190d7b68b046d64707339105fa7c5290b36b2c46abd3a1f4e8a",
+      "annotation_sha256": "78ff2c835f9e58605c71bebc9d88ae0de292e296ea649258a8e877345a0eff42",
+      "candidate_id": "ai-0009",
+      "entity": "cardboard_box",
+      "reason": "Visible shipping/storage carton with folded cardboard walls or shipping labels; distinct from retail product packaging."
+    },
+    {
+      "frame_id": "0058-Kaohsiung-cam08",
+      "image_sha256": "58dbfa809ad611de31ccc2bd1e2ba07b00377974702513e0bde6cef7e8cacd06",
+      "annotation_sha256": "bcc5e7612ab08472ed2ecae1e166721f2e2167329522f3c0cf24bc0943104860",
+      "candidate_id": "ai-0021",
+      "entity": "unknown",
+      "reason": "Target is partial, ambiguous or not supported as the proposed class in the inspected image."
+    },
+    {
+      "frame_id": "0031-Taichung-cam08",
+      "image_sha256": "ddd3f30a15b4b527c8dc5a025b7e9a5c5cf21561936b3e98fa17bbcd8d411b4c",
+      "annotation_sha256": "7bb87c428082feb2d6134de71b1a3d7546ebdfcc489870630f673b9e325d5e52",
+      "candidate_id": "ai-0010",
+      "entity": "unknown",
+      "reason": "Target is partial, ambiguous or not supported as the proposed class in the inspected image."
+    },
+    {
+      "frame_id": "0027-Taichung-cam06",
+      "image_sha256": "f4994cc3548927bbda3a326a5447af39c816c3146f031cd316dd4d29bf3ffd0d",
+      "annotation_sha256": "1e305dfe55e2f21fd205e4dfb05b13fd1a4261347a93866830726997a6fe99d4",
+      "candidate_id": "ai-0038",
+      "entity": "unknown",
+      "reason": "Target is partial, ambiguous or not supported as the proposed class in the inspected image."
+    },
+    {
+      "frame_id": "0031-Taichung-cam08",
+      "image_sha256": "ddd3f30a15b4b527c8dc5a025b7e9a5c5cf21561936b3e98fa17bbcd8d411b4c",
+      "annotation_sha256": "7bb87c428082feb2d6134de71b1a3d7546ebdfcc489870630f673b9e325d5e52",
+      "candidate_id": "ai-0012",
+      "entity": "unknown",
+      "reason": "Target is partial, ambiguous or not supported as the proposed class in the inspected image."
+    },
+    {
+      "frame_id": "0016-Taichung-cam01",
+      "image_sha256": "fb3086c1ff8ed11a485226d69bacacb33ea4d534d0708096c80526f348230784",
+      "annotation_sha256": "ce87e2c8379b897e33431e74763e55e1d77573288c066ec7cca3798ce9ba333b",
+      "candidate_id": "ai-0093",
+      "entity": "unknown",
+      "reason": "Target is partial, ambiguous or not supported as the proposed class in the inspected image."
+    },
+    {
+      "frame_id": "0057-Kaohsiung-cam07",
+      "image_sha256": "697bd56ec846d1efc577a4bd29f369c0e552763bcc59bacb1134f8c5f98c0986",
+      "annotation_sha256": "0fb975400da33bd82ffafcb5a691cb64c8153dceab8d31abe9646b4aa5009940",
+      "candidate_id": "ai-0078",
+      "entity": "boxed_stock",
+      "reason": "Individual branded packaged merchandise hanging on a retail display rack, not a shipping carton."
+    },
+    {
+      "frame_id": "0057-Kaohsiung-cam07",
+      "image_sha256": "697bd56ec846d1efc577a4bd29f369c0e552763bcc59bacb1134f8c5f98c0986",
+      "annotation_sha256": "0fb975400da33bd82ffafcb5a691cb64c8153dceab8d31abe9646b4aa5009940",
+      "candidate_id": "ai-0079",
+      "entity": "boxed_stock",
+      "reason": "Individual branded packaged merchandise hanging on a retail display rack, not a shipping carton."
+    },
+    {
+      "frame_id": "0081-Taichung-cam10",
+      "image_sha256": "7ef814e925548fb6ca0d5dd542d9df9cd54133a78dee5d9b329a15292fe8e5f9",
+      "annotation_sha256": "d7ab1ee1e3719f0771b42e41ce0ed76021669b19eec260aba4e2124803b24580",
+      "candidate_id": "ai-0050",
+      "entity": "boxed_stock",
+      "reason": "Individual branded packaged merchandise hanging on a retail display rack, not a shipping carton."
+    },
+    {
+      "frame_id": "0055-Kaohsiung-cam06",
+      "image_sha256": "e9b6e03d7543c77e381971395813cc68e40e41caaa17e16207a7cbcd4a8d93f6",
+      "annotation_sha256": "3956fe4cdfdf4e015791debb2617cbd2b955abbf44e729d4ab4afbc33cc4393f",
+      "candidate_id": "ai-0032",
+      "entity": "unknown",
+      "reason": "Target is partial, ambiguous or not supported as the proposed class in the inspected image."
+    },
+    {
+      "frame_id": "0019-Taichung-cam02",
+      "image_sha256": "c0052409de43091f1723a912cf31a46bbcff747c853a6d26a54cd43bc4c2edc0",
+      "annotation_sha256": "6ba08f4a77e0c741a65d6d6f4a34883c9e56f051d393d1fe1c43fc78611404fa",
+      "candidate_id": "ai-0034",
+      "entity": "unknown",
+      "reason": "Target is partial, ambiguous or not supported as the proposed class in the inspected image."
+    },
+    {
+      "frame_id": "0065-Taichung-cam01",
+      "image_sha256": "9dcafdd643c583516a2529dfbad5937d79da595242ad2d81221e6cf4d1d6b86a",
+      "annotation_sha256": "69f1a9162132eaf7ab9366ab973ae7f1e4d0a956e06c1d40b44abffe79751bb3",
+      "candidate_id": "ai-0126",
+      "entity": "boxed_stock",
+      "reason": "Individual branded packaged merchandise hanging on a retail display rack, not a shipping carton."
+    },
+    {
+      "frame_id": "0040-Tao-Hsin-cam02",
+      "image_sha256": "3a7c720e2b3bdba36083b65e017b0b12e2e052b08d5e1327729a1f2d879bb9ee",
+      "annotation_sha256": "8c3a51e0499ec27e7a27e8f9e8e4f48d5aeac497c9f28b19ecb4a7400280cdc1",
+      "candidate_id": "ai-0123",
+      "entity": "boxed_stock",
+      "reason": "Individual branded packaged merchandise hanging on a retail display rack, not a shipping carton."
+    },
+    {
+      "frame_id": "0019-Taichung-cam02",
+      "image_sha256": "c0052409de43091f1723a912cf31a46bbcff747c853a6d26a54cd43bc4c2edc0",
+      "annotation_sha256": "6ba08f4a77e0c741a65d6d6f4a34883c9e56f051d393d1fe1c43fc78611404fa",
+      "candidate_id": "ai-0041",
+      "entity": "unknown",
+      "reason": "Target is partial, ambiguous or not supported as the proposed class in the inspected image."
+    },
+    {
+      "frame_id": "0080-Taichung-cam10",
+      "image_sha256": "0fc1ab9b651bf72617250ce0f88c9cfae79c0ad4837ffce572a53774b1d41a6c",
+      "annotation_sha256": "c3211cc073c55cf4d09c1372ad57e38cbd9767f1367b64cd84dfc44629d093f1",
+      "candidate_id": "ai-0128",
+      "entity": "boxed_stock",
+      "reason": "Individual branded packaged merchandise hanging on a retail display rack, not a shipping carton."
+    },
+    {
+      "frame_id": "0074-Taichung-cam06",
+      "image_sha256": "c83d4d79e7bca642518fa5fdd28a0ea7e27521bdd7b7a1291a85bf2af6849551",
+      "annotation_sha256": "c3bc058d7ff64e635442411bc8be59c4bfcca361597317dbdf0632abc65002ac",
+      "candidate_id": "ai-0041",
+      "entity": "unknown",
+      "reason": "Target is partial, ambiguous or not supported as the proposed class in the inspected image."
+    },
+    {
+      "frame_id": "0025-Taichung-cam05",
+      "image_sha256": "08b398cb45b48e99021b07d5247539c8138805cfb043c7d86421c6bfd2fe24a4",
+      "annotation_sha256": "1510c985e1372629760ac55e0eab49666a51669893001d6b7d958b99a145a580",
+      "candidate_id": "ai-0006",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0103-Taichung-cam05",
+      "image_sha256": "c127647ad252362c102046c2a588c89be5c443db134808749a1a0361cd1b8346",
+      "annotation_sha256": "0d5070f87e39fc5e5889733dbd1ee423feb63adb1ea2122543da66ea6cc9ddae",
+      "candidate_id": "ai-0007",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0007-Kaohsiung-cam06",
+      "image_sha256": "8340acd371f970f294282695828b7fdd2d27e08b9529575f7f275290b38b50f8",
+      "annotation_sha256": "224f65fa2a24cfece1bc59e5ae0abc32232c802c99fb40dbcc1c06aea2f5f617",
+      "candidate_id": "ai-0006",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0089-Tao-Hsin-cam03",
+      "image_sha256": "c74b0ff3764f867d81fde54f147e23360d7a44289d5b6075259e4f4d974d2db2",
+      "annotation_sha256": "1d3179b89df4456e288a1d53145648d27c2226ee29ca3c6e8fc1361c0d180fd8",
+      "candidate_id": "ai-0006",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0074-Taichung-cam06",
+      "image_sha256": "c83d4d79e7bca642518fa5fdd28a0ea7e27521bdd7b7a1291a85bf2af6849551",
+      "annotation_sha256": "c3bc058d7ff64e635442411bc8be59c4bfcca361597317dbdf0632abc65002ac",
+      "candidate_id": "ai-0007",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0116-Tao-Hsin-cam03",
+      "image_sha256": "4dad1448688e8eba7886d66b59c1dae8c3c987004ac75cac552917eeef3a7e12",
+      "annotation_sha256": "7c4540c766f74dcc43ca8cc13456e102a29d4630db4f361be3e71687aeafab4f",
+      "candidate_id": "ai-0001",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0026-Taichung-cam06",
+      "image_sha256": "0facdcefec200e1c95a1058a00070f88fc2310a62564e7113c9dc63941363226",
+      "annotation_sha256": "815f4eefbf486671877e519f1489567927bee58a226c064f86568ac358e7b13f",
+      "candidate_id": "ai-0009",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0006-Kaohsiung-cam06",
+      "image_sha256": "7095cb3a4c7eb993bffbc35cf5e5df98fd2d2acab6cf99f71ae102318e272150",
+      "annotation_sha256": "a16b90db38865ef07280f58f52b1409ca22a076ec0728ccbfd5686ab9d8186e2",
+      "candidate_id": "ai-0012",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0000-Kaohsiung-cam03",
+      "image_sha256": "158069a9a32538c8fe6f722df70da77ad6747aadb382dab8528ac662476349e6",
+      "annotation_sha256": "1261f4f90414dfb4cb9452c15fef1cb432d6aee7c114411c7f5ef7553c1399c5",
+      "candidate_id": "ai-0009",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0048-Kaohsiung-cam03",
+      "image_sha256": "dc65d3a45812de18f1f35fec149454ed6735da2806eb1171069151dabc4842a3",
+      "annotation_sha256": "219671f861ab25d541727673d89059d7e9f3efbedea4bf9ee8de63d44c9c2f8c",
+      "candidate_id": "ai-0010",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0082-Taichung-cam11",
+      "image_sha256": "4c85c1f28791ebc81eb3f687cc55f913899381ac90cb6a16ef223aeea997df1d",
+      "annotation_sha256": "b132f23b458da14e14baba545b39418595c31f8417d444733d173779fdcdaf95",
+      "candidate_id": "ai-0004",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0112-Taichung-cam11",
+      "image_sha256": "3353277f188293dba730eefd1f3f42ddbd4e6b50ee87e38d4c954f22d8495355",
+      "annotation_sha256": "72d62e9e3919dbb8b5c37b3436fd7d0d747a8392a0860f7d082dc401b704d3b3",
+      "candidate_id": "ai-0005",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0069-Taichung-cam03",
+      "image_sha256": "de58b4cd8c7dda92c9238a91a15e0c93bc1a25204a155b9781a60289bb699c81",
+      "annotation_sha256": "3bd3d04e0a4c49bfd6f3ec2070901b85eb29c178df1b08d55d84f68f3902a7b5",
+      "candidate_id": "ai-0018",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0120-Tao-Hsin-cam04",
+      "image_sha256": "557044d178d32e6f4a9ef5ba053a1e1675c51b33838ad82902ef283e6a469adc",
+      "annotation_sha256": "03f83607c9608ea6616527fbd232306d0b3b99c1d3fb7fe25419b9980af0d415",
+      "candidate_id": "ai-0024",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0091-Tao-Hsin-cam04",
+      "image_sha256": "ff0e812f05fc6392ee26c8651fff47283dd16e9ecc40182cb926ba1a4ad9f1d8",
+      "annotation_sha256": "69ac1cf78632b4d5376d9db52588593e3ef5dfa547b57cf1bd5ea70d62e59001",
+      "candidate_id": "ai-0022",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0046-Tao-Hsin-cam15",
+      "image_sha256": "b7b4488d140b6777063d6ad2b49b3fa3f5dcdbcc9f64dc76477478ff9f57cf5a",
+      "annotation_sha256": "7fc9d5e05918f3e58a9ee52f9b046f4557a7cdcd08aee135f9e883ac9fac78de",
+      "candidate_id": "ai-0017",
+      "entity": "unknown",
+      "reason": "Inspected target is ambiguous, a reflection, a cropped surface, or not supported as this physical object class."
+    },
+    {
+      "frame_id": "0046-Tao-Hsin-cam15",
+      "image_sha256": "b7b4488d140b6777063d6ad2b49b3fa3f5dcdbcc9f64dc76477478ff9f57cf5a",
+      "annotation_sha256": "7fc9d5e05918f3e58a9ee52f9b046f4557a7cdcd08aee135f9e883ac9fac78de",
+      "candidate_id": "ai-0018",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0021-Taichung-cam03",
+      "image_sha256": "925ee9ddbb923c69bdbb4a33709990e21e433cdf6a22f67e2de7a1a8950dbbf7",
+      "annotation_sha256": "ac8f6741f4cf54454cf77354069fd29c08f707f2f04eb5be9c67fe56093859fb",
+      "candidate_id": "ai-0027",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0062-Kaohsiung-cam12",
+      "image_sha256": "bef99b4068eb9a38beab60633f76e80f17e0b0faf191c0a3253ac993db7b6d70",
+      "annotation_sha256": "08686e789992786a4e656d19f5d2bfe0ce524928ed2b5ef82fc891192c0d24d7",
+      "candidate_id": "ai-0015",
+      "entity": "unknown",
+      "reason": "Inspected target is ambiguous, a reflection, a cropped surface, or not supported as this physical object class."
+    },
+    {
+      "frame_id": "0035-Taichung-cam10",
+      "image_sha256": "7a7436cb151e39c41d778a239c44e0f625a91153ccdf1afe745c5906e72facea",
+      "annotation_sha256": "1350bd863e3b8438d1fba0dd0dfdfc88eaf425d1af942f2cd09ba9a11426de18",
+      "candidate_id": "ai-0040",
+      "entity": "unknown",
+      "reason": "Inspected target is ambiguous, a reflection, a cropped surface, or not supported as this physical object class."
+    },
+    {
+      "frame_id": "0023-Taichung-cam04",
+      "image_sha256": "6f57491428dd6262480a26e72d8636659b62444b4b282ab1e442396d36b226b4",
+      "annotation_sha256": "f1c8f7728087708ed763555cb9f91c74cfc88f52b378d4befe36ce83b4b10381",
+      "candidate_id": "ai-0040",
+      "entity": "speaker",
+      "reason": "Physical tabletop loudspeaker with visible speaker enclosure, distinct from headphones and printed product packaging."
+    },
+    {
+      "frame_id": "0070-Taichung-cam04",
+      "image_sha256": "978dbb7a4383407b2ca1173b29a9526e7451b2dd628eae91dc901f59c647a7ad",
+      "annotation_sha256": "351fc30cd892f2652890cf0e19807cc4780ac5e34606d20350af5aee6f5820be",
+      "candidate_id": "ai-0040",
+      "entity": "unknown",
+      "reason": "Inspected target is ambiguous, a reflection, a cropped surface, or not supported as this physical object class."
+    },
+    {
+      "frame_id": "0004-Kaohsiung-cam05",
+      "image_sha256": "ff5cc5e03988f11b8709d95f7bb8e7fdc9dc70a9e6f9a3b438b33ea7ba842e73",
+      "annotation_sha256": "d8180222ca38d7e3ed8b466a57680c7969eb979c732c5fc4611018e7144ced2f",
+      "candidate_id": "ai-0009",
+      "entity": "unknown",
+      "reason": "Inspected target is ambiguous, a reflection, a cropped surface, or not supported as this physical object class."
+    },
+    {
+      "frame_id": "0035-Taichung-cam10",
+      "image_sha256": "7a7436cb151e39c41d778a239c44e0f625a91153ccdf1afe745c5906e72facea",
+      "annotation_sha256": "1350bd863e3b8438d1fba0dd0dfdfc88eaf425d1af942f2cd09ba9a11426de18",
+      "candidate_id": "ai-0044",
+      "entity": "unknown",
+      "reason": "Inspected target is ambiguous, a reflection, a cropped surface, or not supported as this physical object class."
+    },
+    {
+      "frame_id": "0095-Kaohsiung-cam04",
+      "image_sha256": "9061daaf8608b100494e4f5bf6ce588a5978accb1504170e04d68ab3318ac774",
+      "annotation_sha256": "2aead33e0573a5b46a515a84f03010d20556e7001a594eba68d143d3d535ee95",
+      "candidate_id": "ai-0025",
+      "entity": "boxed_stock",
+      "reason": "Packaged retail merchandise; printed product depiction is not a physical loudspeaker."
+    },
+    {
+      "frame_id": "0098-Taichung-cam01",
+      "image_sha256": "446ba7caf0634510fcb28ff18d2231f397028c26bc87bedfadadda6886406849",
+      "annotation_sha256": "af09bcc178f7aa6ec5539bb7b02933c6baaec950dbca212ec7205c0f196b8e9a",
+      "candidate_id": "ai-0085",
+      "entity": "boxed_stock",
+      "reason": "Packaged retail merchandise; printed product depiction is not a physical loudspeaker."
+    },
+    {
+      "frame_id": "0016-Taichung-cam01",
+      "image_sha256": "fb3086c1ff8ed11a485226d69bacacb33ea4d534d0708096c80526f348230784",
+      "annotation_sha256": "ce87e2c8379b897e33431e74763e55e1d77573288c066ec7cca3798ce9ba333b",
+      "candidate_id": "ai-0085",
+      "entity": "unknown",
+      "reason": "Inspected target is ambiguous, a reflection, a cropped surface, or not supported as this physical object class."
+    },
+    {
+      "frame_id": "0095-Kaohsiung-cam04",
+      "image_sha256": "9061daaf8608b100494e4f5bf6ce588a5978accb1504170e04d68ab3318ac774",
+      "annotation_sha256": "2aead33e0573a5b46a515a84f03010d20556e7001a594eba68d143d3d535ee95",
+      "candidate_id": "ai-0027",
+      "entity": "boxed_stock",
+      "reason": "Packaged retail merchandise; printed product depiction is not a physical loudspeaker."
+    },
+    {
+      "frame_id": "0033-Taichung-cam09",
+      "image_sha256": "c5b1f42f5025b4479295913c3c41c9cfa324fbc5b4200bc6a2994efa52220b3d",
+      "annotation_sha256": "0b00fc4afa319b7ee7e2f7603d78022170972d69ebcb0c0f10659549c5fb86cc",
+      "candidate_id": "ai-0084",
+      "entity": "unknown",
+      "reason": "Inspected target is ambiguous, a reflection, a cropped surface, or not supported as this physical object class."
+    },
+    {
+      "frame_id": "0033-Taichung-cam09",
+      "image_sha256": "c5b1f42f5025b4479295913c3c41c9cfa324fbc5b4200bc6a2994efa52220b3d",
+      "annotation_sha256": "0b00fc4afa319b7ee7e2f7603d78022170972d69ebcb0c0f10659549c5fb86cc",
+      "candidate_id": "ai-0100",
+      "entity": "poster",
+      "reason": "Printed headphone advertisement on a flat mounted or freestanding sign."
+    },
+    {
+      "frame_id": "0084-Tao-Hsin-cam01",
+      "image_sha256": "4d4678096394d239c2bab1b2a2aa174a6d3fd983cb52f5c6dcef196bd464721a",
+      "annotation_sha256": "860fe6226a8633e6c2d93c6984374d50825db563cc025b4ada402dc26159a576",
+      "candidate_id": "ai-0025",
+      "entity": "poster",
+      "reason": "Printed headphone advertisement on a flat mounted or freestanding sign."
+    },
+    {
+      "frame_id": "0005-Kaohsiung-cam05",
+      "image_sha256": "4f050a6ba2b192ebe6294d7253c27143487c4cf43ffb5f6e07192a7ad47b91d1",
+      "annotation_sha256": "4336074217402e2c9a927c9f7afad0c9d9f2d17057e9ef01cea58cb6e2c3b06c",
+      "candidate_id": "ai-0021",
+      "entity": "unknown",
+      "reason": "Inspected target is ambiguous, a reflection, a cropped surface, or not supported as this physical object class."
+    },
+    {
+      "frame_id": "0014-Kaohsiung-cam12",
+      "image_sha256": "0443832bfe0282a424e0bbcd5a2168e1083881b79f869b795c6d7f5f5596f652",
+      "annotation_sha256": "3cecf7dee7cbe1c3a20e20bc83a05019069f31c09653d898b72a5a17ef111ac6",
+      "candidate_id": "ai-0028",
+      "entity": "unknown",
+      "reason": "Inspected target is ambiguous, a reflection, a cropped surface, or not supported as this physical object class."
+    },
+    {
+      "frame_id": "0028-Taichung-cam07",
+      "image_sha256": "72937be1b43c42ad0831454b56c008be520a95ac1a641289506289437b64fb52",
+      "annotation_sha256": "5980aed1e6f474a07b9d43ecf1257251b3b7cda0cd4937d84f372dc8f3726a85",
+      "candidate_id": "ai-0033",
+      "entity": "unknown",
+      "reason": "Inspected target is ambiguous, a reflection, a cropped surface, or not supported as this physical object class."
+    },
+    {
+      "frame_id": "0077-Taichung-cam07",
+      "image_sha256": "1b51d620cd2088bbf8a83dea03a7df58ad5b12052e2ebfd7b2ca69e7a4b2e23c",
+      "annotation_sha256": "4055c64f3ecbacee1ae43386038b2c338d7daeb87c05170a302bdbcc6a5ce215",
+      "candidate_id": "ai-0035",
+      "entity": "unknown",
+      "reason": "Inspected target is ambiguous, a reflection, a cropped surface, or not supported as this physical object class."
+    },
+    {
+      "frame_id": "0062-Kaohsiung-cam12",
+      "image_sha256": "bef99b4068eb9a38beab60633f76e80f17e0b0faf191c0a3253ac993db7b6d70",
+      "annotation_sha256": "08686e789992786a4e656d19f5d2bfe0ce524928ed2b5ef82fc891192c0d24d7",
+      "candidate_id": "ai-0000",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0015-Kaohsiung-cam12",
+      "image_sha256": "a87a4fea665927f5d0722b4839abf406ec6da5d104207462ba997e19b544d4ef",
+      "annotation_sha256": "fec1b2600f3bd572ee504757b9446aa067915781fb2d6a553ce0806b144cd384",
+      "candidate_id": "ai-0000",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0028-Taichung-cam07",
+      "image_sha256": "72937be1b43c42ad0831454b56c008be520a95ac1a641289506289437b64fb52",
+      "annotation_sha256": "5980aed1e6f474a07b9d43ecf1257251b3b7cda0cd4937d84f372dc8f3726a85",
+      "candidate_id": "ai-0002",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0029-Taichung-cam07",
+      "image_sha256": "825b9d0be52ead8f3ab18b6c98d7ac1d4e0b552c8ee5edef42749771acc2ad42",
+      "annotation_sha256": "cb6da4c5630f5c26255cbffae93c956c69bb5fd3af43299672c6ec4ba3211f2a",
+      "candidate_id": "ai-0004",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0047-Tao-Hsin-cam15",
+      "image_sha256": "1ace98e3e49c18503b3144d80cff3cac25c8e2fe94812e8ef6e9199c46ddcf99",
+      "annotation_sha256": "b215df3227113573af8b215505c3f23c7f83f57ffdab13d0955fb2b577f73a9f",
+      "candidate_id": "ai-0003",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0113-Taichung-cam11",
+      "image_sha256": "a46b1ef896d91d0947fd427a897658619a39c412f07305b255c0cbce190112a7",
+      "annotation_sha256": "18d98f73b52ec2a6736c9e3b4201239632a06cae95fa26a64607e9408682778b",
+      "candidate_id": "ai-0001",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0082-Taichung-cam11",
+      "image_sha256": "4c85c1f28791ebc81eb3f687cc55f913899381ac90cb6a16ef223aeea997df1d",
+      "annotation_sha256": "b132f23b458da14e14baba545b39418595c31f8417d444733d173779fdcdaf95",
+      "candidate_id": "ai-0001",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0093-Tao-Hsin-cam15",
+      "image_sha256": "6c115f5cc5364fa1a47cc00c8ad8b73c9f2c99f29f044d0a52d639a2ad4204c0",
+      "annotation_sha256": "8be8ca3fbe1cd3e708d727059a3b69a651d8bc2c0e70708a14133a5544a73dde",
+      "candidate_id": "ai-0004",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0066-Taichung-cam02",
+      "image_sha256": "4cb37b0474ffd3f80e0d67322148ad0c5ead668229c2d902cff4db16be1fd7fc",
+      "annotation_sha256": "f043424742455530b39244992f1c88bf313b09d6ee971511db4f16c3c34f2b0c",
+      "candidate_id": "ai-0000",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0097-Taichung-cam01",
+      "image_sha256": "2b5b74bd6caf91eea724aeed779eff630e4219a82562ed536e705e4ae0ff1c73",
+      "annotation_sha256": "144e938015beb2296193ab8c69b8041d2b3eb10020bc70885c34464f52a753d1",
+      "candidate_id": "ai-0002",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0097-Taichung-cam01",
+      "image_sha256": "2b5b74bd6caf91eea724aeed779eff630e4219a82562ed536e705e4ae0ff1c73",
+      "annotation_sha256": "144e938015beb2296193ab8c69b8041d2b3eb10020bc70885c34464f52a753d1",
+      "candidate_id": "ai-0003",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0110-Taichung-cam10",
+      "image_sha256": "09334d25192eaa6a22a95116ff45be30904297544eac4f0c8255d1d6482e3f06",
+      "annotation_sha256": "4af459147cd0b984cc81d165a5fa9b4be36e26f4530f5de3596eb9563f5878bb",
+      "candidate_id": "ai-0001",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0111-Taichung-cam10",
+      "image_sha256": "a86d13188331aeac2bbfdda30c6e4c1805a7f4b438d25fba42b26c8c32db6cb8",
+      "annotation_sha256": "8cf929e287578fffb1c6f36f2c7f217a6b91066ed950d56484d8f665bbe8c45a",
+      "candidate_id": "ai-0003",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0066-Taichung-cam02",
+      "image_sha256": "4cb37b0474ffd3f80e0d67322148ad0c5ead668229c2d902cff4db16be1fd7fc",
+      "annotation_sha256": "f043424742455530b39244992f1c88bf313b09d6ee971511db4f16c3c34f2b0c",
+      "candidate_id": "ai-0001",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0025-Taichung-cam05",
+      "image_sha256": "08b398cb45b48e99021b07d5247539c8138805cfb043c7d86421c6bfd2fe24a4",
+      "annotation_sha256": "1510c985e1372629760ac55e0eab49666a51669893001d6b7d958b99a145a580",
+      "candidate_id": "ai-0007",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0040-Tao-Hsin-cam02",
+      "image_sha256": "3a7c720e2b3bdba36083b65e017b0b12e2e052b08d5e1327729a1f2d879bb9ee",
+      "annotation_sha256": "8c3a51e0499ec27e7a27e8f9e8e4f48d5aeac497c9f28b19ecb4a7400280cdc1",
+      "candidate_id": "ai-0008",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0087-Tao-Hsin-cam02",
+      "image_sha256": "edea430b82480b61223f6f2f94debf7a9d5c6915d2837774bcee9b6f20ac6089",
+      "annotation_sha256": "0704c0e261f0da2339d6dc12630b42a1a9f22e04657ee217588b5f1bbeeb0379",
+      "candidate_id": "ai-0008",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0101-Taichung-cam04",
+      "image_sha256": "ff5337bedecac9323493d848ca13470ceaed0ee92b9e1d51303ceffd6a0b6ed3",
+      "annotation_sha256": "a708f36e735f5a81eab9614d516af34f231e261aa25a71fa358001507a40b48d",
+      "candidate_id": "ai-0010",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0033-Taichung-cam09",
+      "image_sha256": "c5b1f42f5025b4479295913c3c41c9cfa324fbc5b4200bc6a2994efa52220b3d",
+      "annotation_sha256": "0b00fc4afa319b7ee7e2f7603d78022170972d69ebcb0c0f10659549c5fb86cc",
+      "candidate_id": "ai-0004",
+      "entity": "unknown",
+      "reason": "Inspected target is ambiguous, a reflection, a cropped surface, or not supported as this physical object class."
+    },
+    {
+      "frame_id": "0070-Taichung-cam04",
+      "image_sha256": "978dbb7a4383407b2ca1173b29a9526e7451b2dd628eae91dc901f59c647a7ad",
+      "annotation_sha256": "351fc30cd892f2652890cf0e19807cc4780ac5e34606d20350af5aee6f5820be",
+      "candidate_id": "ai-0008",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0025-Taichung-cam05",
+      "image_sha256": "08b398cb45b48e99021b07d5247539c8138805cfb043c7d86421c6bfd2fe24a4",
+      "annotation_sha256": "1510c985e1372629760ac55e0eab49666a51669893001d6b7d958b99a145a580",
+      "candidate_id": "ai-0015",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0115-Tao-Hsin-cam03",
+      "image_sha256": "d64c457dbe2ffb8a9ddecb2f8903b9702bb456047167931a62991c8303e219b7",
+      "annotation_sha256": "944b460433b60ffe1d86cf11f9a47eec0e563ac3354ce4a74d5f3f484cf4909d",
+      "candidate_id": "ai-0018",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0118-Tao-Hsin-cam04",
+      "image_sha256": "1f302c58d9c6a0266bcac74dc4155b8193d6f712dc1194c79e159fe971546e25",
+      "annotation_sha256": "9139079a7f7096cd8310c337ec1cf6f929953f0115596947ca743b7c0f0c9434",
+      "candidate_id": "ai-0020",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0120-Tao-Hsin-cam04",
+      "image_sha256": "557044d178d32e6f4a9ef5ba053a1e1675c51b33838ad82902ef283e6a469adc",
+      "annotation_sha256": "03f83607c9608ea6616527fbd232306d0b3b99c1d3fb7fe25419b9980af0d415",
+      "candidate_id": "ai-0033",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0033-Taichung-cam09",
+      "image_sha256": "c5b1f42f5025b4479295913c3c41c9cfa324fbc5b4200bc6a2994efa52220b3d",
+      "annotation_sha256": "0b00fc4afa319b7ee7e2f7603d78022170972d69ebcb0c0f10659549c5fb86cc",
+      "candidate_id": "ai-0038",
+      "entity": "unknown",
+      "reason": "Inspected target is ambiguous, a reflection, a cropped surface, or not supported as this physical object class."
+    },
+    {
+      "frame_id": "0116-Tao-Hsin-cam03",
+      "image_sha256": "4dad1448688e8eba7886d66b59c1dae8c3c987004ac75cac552917eeef3a7e12",
+      "annotation_sha256": "7c4540c766f74dcc43ca8cc13456e102a29d4630db4f361be3e71687aeafab4f",
+      "candidate_id": "ai-0032",
+      "entity": "chair",
+      "reason": "Visible seat and supporting legs/base identify a physical chair or stool, including partially occluded stools beside the demo table."
+    },
+    {
+      "frame_id": "0069-Taichung-cam03",
+      "image_sha256": "de58b4cd8c7dda92c9238a91a15e0c93bc1a25204a155b9781a60289bb699c81",
+      "annotation_sha256": "3bd3d04e0a4c49bfd6f3ec2070901b85eb29c178df1b08d55d84f68f3902a7b5",
+      "candidate_id": "ai-0026",
+      "entity": "unknown",
+      "reason": "Inspected target is ambiguous, a reflection, a cropped surface, or not supported as this physical object class."
+    },
+    {
+      "frame_id": "0069-Taichung-cam03",
+      "image_sha256": "de58b4cd8c7dda92c9238a91a15e0c93bc1a25204a155b9781a60289bb699c81",
+      "annotation_sha256": "3bd3d04e0a4c49bfd6f3ec2070901b85eb29c178df1b08d55d84f68f3902a7b5",
+      "candidate_id": "ai-0029",
+      "entity": "unknown",
+      "reason": "Inspected target is ambiguous, a reflection, a cropped surface, or not supported as this physical object class."
+    }
+  ]
+}
