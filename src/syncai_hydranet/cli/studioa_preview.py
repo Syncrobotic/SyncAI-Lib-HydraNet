@@ -8,11 +8,10 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from syncai_bev3d.geometry_review import cache_ground_error, load_geometry_cache
 from syncai_hydranet.data.studioa_review import digest, write_json
 from syncai_hydranet.data.studioa_supervision import CLASSES
 from syncai_hydranet.geometry.camera_json import CameraFile
-
-from .geometry_review import cache_ground_error, load_geometry_cache
 
 
 def visible_mesh(arrays, labels, confidence, *, stride=10, threshold=0.35):

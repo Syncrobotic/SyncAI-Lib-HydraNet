@@ -4,7 +4,7 @@
 import argparse
 from pathlib import Path
 
-from syncai_bev3d.studioa_preview import render_view
+from syncai_hydranet.cli.studioa_preview import render_view
 
 
 def main():

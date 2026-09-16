@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from syncai_bev3d.studioa_preview import visible_mesh
+from syncai_hydranet.cli.studioa_preview import visible_mesh
 
 
 def arrays():
