@@ -99,6 +99,9 @@ class HydraNet(nn.Module):
                     positive_classification=lcfg.get(
                         "positive_classification", "positive_only"
                     ),
+                    regression_normalization=lcfg.get(
+                        "regression_normalization", "positive_point_mean"
+                    ),
                 )
             elif hcfg["type"] == "depth_fpn":
                 self.depth_heads[name] = build_depth_head(hcfg, ch)

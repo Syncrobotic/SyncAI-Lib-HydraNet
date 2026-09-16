@@ -235,6 +235,7 @@ def prepare(
     small_object_crop: bool = False,
     fixed_epochs: int | None = None,
     positive_classification: str = "positive_only",
+    regression_normalization: str = "positive_point_mean",
 ) -> None:
     from syncai_hydranet.utils.visualize import terrain_palette
 
@@ -254,6 +255,10 @@ def prepare(
         raise ValueError("unsupported positive classification")
     if positive_classification != "positive_only" and not detector_warmup:
         raise ValueError("positive classification comparison requires detector warmup")
+    if regression_normalization not in ("positive_point_mean", "assigned_object_mean"):
+        raise ValueError("unsupported regression normalization")
+    if regression_normalization != "positive_point_mean" and not detector_warmup:
+        raise ValueError("regression normalization comparison requires detector warmup")
     if class_negative_normalization not in ("sum", "positive_budget"):
         raise ValueError("unsupported class negative normalization")
     if class_negative_normalization != "sum" and not detector_warmup:
@@ -322,6 +327,10 @@ def prepare(
             )
         if small_object_crop:
             config["data"]["datasets"][1]["small_object_crop"] = True
+        if regression_normalization != "positive_point_mean":
+            config["model"]["heads"]["detection"]["loss"]["regression_normalization"] = (
+                regression_normalization
+            )
         if fixed_epochs is not None:
             config["train"].update(epochs=fixed_epochs, early_stop_patience=0)
         check_config(config)
@@ -351,6 +360,7 @@ def prepare(
             "small_object_crop": small_object_crop,
             "fixed_epochs": fixed_epochs,
             "positive_classification": positive_classification,
+            "regression_normalization": regression_normalization,
             "instance_counts": instance_counts,
             "git_commit": git,
             "held_out": held_out,
@@ -629,6 +639,11 @@ def main():
         "--class-negative-normalization", choices=("sum", "positive_budget"), default="sum"
     )
     parser.add_argument(
+        "--regression-normalization",
+        choices=("positive_point_mean", "assigned_object_mean"),
+        default="positive_point_mean",
+    )
+    parser.add_argument(
         "--held-out", default="Tao-Hsin", choices=("Tao-Hsin", "Taichung", "Kaohsiung")
     )
     args = parser.parse_args()
@@ -646,6 +661,7 @@ def main():
             args.small_object_crop,
             args.fixed_epochs,
             args.positive_classification,
+            args.regression_normalization,
         )
     else:
         out = args.out.resolve()

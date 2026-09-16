@@ -1,0 +1,21 @@
+{
+  "status": "predeclared before training",
+  "parent_plan": "docs/reviews/studioa_object_regression_plan_20260916.json",
+  "parent_plan_sha256": "879803e203e8f756da6ee352603812690880e559a725e920a2d4295421efd906",
+  "arms": {
+    "control": "runs/studioa_detector_regression_20260916_control",
+    "object": "runs/studioa_detector_regression_20260916_object"
+  },
+  "analysis": "runs/studioa_object_regression_20260916_v1",
+  "control_reproduction_reference": "runs/studioa_detector_competition_20260916_v2_assigned",
+  "classification_for_both": "assigned_object",
+  "epochs_each": 25,
+  "optimizer_updates_each": 425,
+  "only_config_difference": "model.heads.detection.loss.regression_normalization",
+  "diagnostics": "source-train only best/last decomposition, source-val selected checkpoint replay and phone raw candidates; no test inference",
+  "preflight_tests": {
+    "training_related_cuda": 197
+  },
+  "promotion": "unchanged from parent plan; strictly exceed same-budget control; total>7,phone>=1,person>=5,poster>=1,emptyFP<=0,scene unchanged",
+  "deployment": false
+}

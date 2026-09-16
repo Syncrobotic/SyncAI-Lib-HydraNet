@@ -128,7 +128,9 @@ def sigmoid_focal_loss(logits, targets_onehot, alpha=0.25, gamma=2.0, channel_ma
     return loss.sum()
 
 
-def giou_loss(pred_ltrb: torch.Tensor, target_ltrb: torch.Tensor) -> torch.Tensor:
+def giou_loss(
+    pred_ltrb: torch.Tensor, target_ltrb: torch.Tensor, reduction: str = "sum"
+) -> torch.Tensor:
     """GIoU on (l, t, r, b) distance form; valid because both share an anchor point."""
     pl, pt, pr, pb = pred_ltrb.unbind(-1)
     tl, tt, tr, tb = target_ltrb.unbind(-1)
@@ -143,7 +145,33 @@ def giou_loss(pred_ltrb: torch.Tensor, target_ltrb: torch.Tensor) -> torch.Tenso
     ch = torch.max(pt, tt) + torch.max(pb, tb)
     c_area = (cw * ch).clamp(min=1e-6)
     giou = iou - (c_area - union) / c_area
+    if reduction == "none":
+        return 1.0 - giou
+    if reduction != "sum":
+        raise ValueError("unsupported GIoU reduction")
     return (1.0 - giou).sum()
+
+
+def object_mean_giou(pred_ltrb, target_ltrb, object_ids):
+    """Mean within each assigned object, then across objects in the whole batch.
+
+    GT indices are local to each image. Objects with no assigned points do not
+    invent targets or dilute the denominator. Classification/centerness are separate.
+    """
+    terms = []
+    num_objects = 0
+    for pred, target, ids in zip(pred_ltrb, target_ltrb, object_ids, strict=True):
+        pos = ids >= 0
+        if pos.any():
+            unique, inverse, counts = torch.unique(
+                ids[pos], return_inverse=True, return_counts=True
+            )
+            weights = counts[inverse].float().reciprocal()
+            terms.append(giou_loss(pred[pos], target[pos], reduction="none") * weights)
+            num_objects += unique.numel()
+    if not terms:
+        return pred_ltrb.sum() * 0.0
+    return torch.cat(terms).sum() / num_objects
 
 
 def class_negative_weights(selected, positive, existing):
@@ -194,6 +222,7 @@ class FCOSLoss(nn.Module):
         centerness_weight=1.0,
         class_negative_normalization="sum",
         positive_classification="positive_only",
+        regression_normalization="positive_point_mean",
     ):
         super().__init__()
         self.num_classes = num_classes
@@ -204,6 +233,9 @@ class FCOSLoss(nn.Module):
         if positive_classification not in ("positive_only", "assigned_object"):
             raise ValueError("unsupported positive_classification")
         self.positive_classification = positive_classification
+        if regression_normalization not in ("positive_point_mean", "assigned_object_mean"):
+            raise ValueError("unsupported regression_normalization")
+        self.regression_normalization = regression_normalization
 
     def forward(
         self,
@@ -232,7 +264,15 @@ class FCOSLoss(nn.Module):
         """
         device = cls_out[0].device
         shapes = [c.shape[-2:] for c in cls_out]
-        points, cls_t, reg_t, ctr_t = head.get_targets(shapes, boxes_list, labels_list, device)
+        object_ids = None
+        if self.regression_normalization == "assigned_object_mean":
+            points, cls_t, reg_t, ctr_t, object_ids = head.get_targets_with_ids(
+                shapes, boxes_list, labels_list, device
+            )
+        else:
+            points, cls_t, reg_t, ctr_t = head.get_targets(
+                shapes, boxes_list, labels_list, device
+            )
         from .heads.detection import flatten_levels
 
         flat_cls, flat_reg, flat_ctr = flatten_levels(
@@ -320,7 +360,11 @@ class FCOSLoss(nn.Module):
             class_mask = partial_mask if class_mask is None else partial_mask * class_mask
         cls_loss = sigmoid_focal_loss(flat_cls, onehot, channel_mask=class_mask) / num_pos
         if pos.any():
-            reg_loss = giou_loss(flat_reg[pos], reg_t[pos]) / num_pos
+            reg_loss = (
+                giou_loss(flat_reg[pos], reg_t[pos]) / num_pos
+                if object_ids is None
+                else object_mean_giou(flat_reg, reg_t, object_ids)
+            )
             ctr_loss = (
                 F.binary_cross_entropy_with_logits(flat_ctr[pos], ctr_t[pos], reduction="sum")
                 / num_pos

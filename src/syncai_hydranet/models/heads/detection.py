@@ -174,14 +174,26 @@ class FCOSHead(nn.Module):
     @torch.no_grad()
     def get_targets(self, feats_shapes, boxes_list, labels_list, device):
         """boxes: ``[N,4]`` xyxy in input-image coordinates; labels: ``[N]``, 0-based."""
+        return self.get_targets_with_ids(feats_shapes, boxes_list, labels_list, device)[:4]
+
+    @torch.no_grad()
+    def get_targets_with_ids(self, feats_shapes, boxes_list, labels_list, device):
+        """Also return per-image GT indices; -1 means unassigned, not a background object."""
         points, level_ids = self._grid_points(feats_shapes, device)
-        cls_t, reg_t, ctr_t = [], [], []
+        cls_t, reg_t, ctr_t, object_ids = [], [], [], []
         for boxes, labels in zip(boxes_list, labels_list, strict=True):
-            c, r, ct = self._assign_single(points, level_ids, boxes, labels)
+            c, r, ct, ids = self._assign_single_with_ids(points, level_ids, boxes, labels)
             cls_t.append(c)
             reg_t.append(r)
             ctr_t.append(ct)
-        return points, torch.stack(cls_t), torch.stack(reg_t), torch.stack(ctr_t)
+            object_ids.append(ids)
+        return (
+            points,
+            torch.stack(cls_t),
+            torch.stack(reg_t),
+            torch.stack(ctr_t),
+            torch.stack(object_ids),
+        )
 
     def _grid_points(self, shapes, device):
         pts, lids = [], []
@@ -195,12 +207,16 @@ class FCOSHead(nn.Module):
         return torch.cat(pts), torch.cat(lids)
 
     def _assign_single(self, points, level_ids, boxes, labels):
+        return self._assign_single_with_ids(points, level_ids, boxes, labels)[:3]
+
+    def _assign_single_with_ids(self, points, level_ids, boxes, labels):
         n_pts = points.shape[0]
         cls_t = torch.full((n_pts,), self.num_classes, device=points.device, dtype=torch.long)
         reg_t = points.new_zeros((n_pts, 4))
         ctr_t = points.new_zeros((n_pts,))
+        object_ids = torch.full_like(cls_t, -1)
         if boxes.numel() == 0:
-            return cls_t, reg_t, ctr_t
+            return cls_t, reg_t, ctr_t, object_ids
         xs, ys = points[:, 0:1], points[:, 1:2]
         left = xs - boxes[:, 0]
         top = ys - boxes[:, 1]
@@ -216,6 +232,7 @@ class FCOSHead(nn.Module):
         areas[~(inside & in_range)] = INF
         min_area, min_idx = areas.min(dim=1)
         pos = min_area < INF
+        object_ids[pos] = min_idx[pos]
         cls_t[pos] = labels[min_idx[pos]]
         reg_t[pos] = ltrb[pos, min_idx[pos]]
         lr = reg_t[pos][:, [0, 2]]
@@ -226,7 +243,7 @@ class FCOSHead(nn.Module):
             (lr.min(-1).values / lr.max(-1).values.clamp(min=1e-6))
             * (tb.min(-1).values / tb.max(-1).values.clamp(min=1e-6))
         )
-        return cls_t, reg_t, ctr_t
+        return cls_t, reg_t, ctr_t, object_ids
 
     # ---------------- decode + NMS (inference post-processing) -------------------
 
