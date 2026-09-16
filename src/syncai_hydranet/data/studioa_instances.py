@@ -68,6 +68,8 @@ def class_negative_regions(item: dict, size, boxes, labels, split: str) -> dict:
 def export_instances(source: Path, reviews: Path, out: Path) -> dict:
     """Export only source train/val frames explicitly inspected by the AI reviewer."""
     manifest = check_supervision(source)
+    if manifest.get("semantic_review"):
+        raise ValueError("semantic interiors cannot be exported as instance annotations")
     review = json.loads(reviews.read_text())
     if review.get("reviewer_kind") != "ai" or review.get("source_manifest_sha256") != digest(
         source / "manifest.json"

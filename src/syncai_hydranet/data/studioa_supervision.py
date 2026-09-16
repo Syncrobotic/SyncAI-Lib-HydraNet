@@ -225,6 +225,10 @@ def check_supervision(root: Path) -> dict:
                 frame["store"], frame["original_split"], store
             ):
                 raise ValueError("fold assignment changed")
+    if manifest.get("semantic_review"):
+        from .studioa_semantic_review import check_review
+
+        check_review(root, manifest)
     return manifest
 
 
@@ -246,6 +250,8 @@ class StudioAPartialDataset(Dataset):
             raise ValueError("evaluation partitions cannot use training augmentation")
         if held_out not in STORES or split not in ("train", "val", "test"):
             raise ValueError("explicit store and train/val/test split required")
+        if held_out not in manifest["folds"]:
+            raise ValueError("semantic review is restricted to its audited fold")
         self.root = root
         fold = manifest["folds"][held_out]
         self.frames = [f for f in manifest["frames"] if fold["assignments"][f["id"]] == split]
