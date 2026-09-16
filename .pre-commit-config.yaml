@@ -84,7 +84,7 @@ repos:
   # The type ratchet, which until now ran nowhere a commit could see.
   #
   # The reason it has to be here and not only in CI is structural: `ci.yml` triggers on
-  # `pull_request`, and this project's work goes straight onto `dev`. **A gate that only a
+  # `pull_request` at the time, and work went straight onto `dev`. **A gate that only a
   # PR can run is not a gate on a branch nobody opens a PR against** -- `src/` once sat
   # over its baseline for a full day, every commit landing on a red tree.
   #
@@ -122,21 +122,21 @@ repos:
         args: ["src/"]
         language: system
         pass_filenames: false
-        files: ^(src/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml)$
+        files: ^(src/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml|uv\.lock)$
       - id: ty-ratchet-scripts
         name: ty ratchet (scripts/)
         entry: scripts/ty_ratchet.sh
         args: ["scripts/"]
         language: system
         pass_filenames: false
-        files: ^((src|scripts)/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml)$
+        files: ^((src|scripts)/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml|uv\.lock)$
       - id: ty-ratchet-tools
         name: ty ratchet (tools/)
         entry: scripts/ty_ratchet.sh
         args: ["tools/"]
         language: system
         pass_filenames: false
-        files: ^((src|tools)/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml)$
+        files: ^((src|tools)/.*\.py|scripts/ty_ratchet\.sh|pyproject\.toml|uv\.lock)$
 
       # The script/tool import ratchet, here for a reason the ty ratchets do not have.
       #

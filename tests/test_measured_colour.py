@@ -75,11 +75,12 @@ def _store(tmp_path, monkeypatch, *, plate=True, ghost_offset_m=0.0):
         plate_file=plate_file,
     ).save(commission / f"{CAMERA}.camera.json")
 
-    def load(path, _cf):
+    def load(path, _cf, *, plate_path=None):
+        assert plate_path == (root / _cf.plate_file if _cf.plate_file else None)
         with np.load(path) as cache:
             return {key: cache[key] for key in cache.files}
 
-    monkeypatch.setattr(scene_mesh, "load_geometry_cache", load, raising=False)
+    monkeypatch.setattr(scene_mesh, "load_geometry_cache", load)
     return root
 
 

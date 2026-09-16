@@ -26,9 +26,8 @@ existing pairs are deliberate and its directory is in flux. This set is empty as
 2026-08-27 and there is no legitimate member of it: anything two test modules share is a
 helper, and naming it `test_*.py` is what makes it unreachable.
 
-`CI cannot be relied on to catch the next one`: `ci.yml` triggers on `pull_request` and
-this project's work lands straight on `dev`, which is why `e2dfb3d` reached `dev` red.
-This test runs wherever the suite runs, which is the only place that is true of.
+At the time of `e2dfb3d`, CI only ran on pull requests. It now also runs on pushes
+to `dev`; this test protects both routes and direct local invocations.
 
 pytest tests/test_tests_do_not_import_each_other.py -v
 """

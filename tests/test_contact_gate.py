@@ -103,14 +103,14 @@ def _store(tmp_path, monkeypatch, *, ghost_offset_m):
         mask_files={"wall": "wall.png", "walkable": "walkable.png"},
     ).save(commission / f"{CAMERA}.camera.json")
 
-    def load(path, _cf):
+    def load(path, _cf, *, plate_path=None):
+        assert plate_path == (root / _cf.plate_file if _cf.plate_file else None)
         with np.load(path) as cache:
             return {key: cache[key] for key in cache.files}
 
-    # `raising=False`: at HEAD `cell_grids` reads the npz directly and the name does not
-    # exist; on the branch that adds `load_geometry_cache` it validates the cache against
-    # the camera, which a synthetic lattice cannot pass. Either way the file is the cache.
-    monkeypatch.setattr(scene_mesh, "load_geometry_cache", load, raising=False)
+    # These tests isolate rasterisation from calibration: the synthetic orthographic
+    # lattice is intentional. Check the plate argument instead of ignoring API drift.
+    monkeypatch.setattr(scene_mesh, "load_geometry_cache", load)
     return root, gz[59, 0]
 
 
@@ -171,11 +171,12 @@ def test_a_pillar_whose_face_was_lowered_away_still_stands_at_its_foot(tmp_path,
         mask_files={"column": "column.png", "walkable": "walkable.png"},
     ).save(commission / f"{CAMERA}.camera.json")
 
-    def load(path, _cf):
+    def load(path, _cf, *, plate_path=None):
+        assert plate_path == (root / _cf.plate_file if _cf.plate_file else None)
         with np.load(path) as cache:
             return {key: cache[key] for key in cache.files}
 
-    monkeypatch.setattr(scene_mesh, "load_geometry_cache", load, raising=False)
+    monkeypatch.setattr(scene_mesh, "load_geometry_cache", load)
     _cf, items, _h, shapes = scene_mesh.build_scene_regular(CAMERA, root)
     columns = [(m, k) for m, k, _a, _s in items if k == "column"]
     assert len(columns) == 1, shapes

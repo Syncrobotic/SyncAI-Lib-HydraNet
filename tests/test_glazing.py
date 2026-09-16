@@ -6,11 +6,11 @@ import numpy as np
 import pytest
 import torch
 
+from _surface_fixture import evidence
 from syncai_bev3d.object_assets import glass_door_meshes
 from syncai_bev3d.surfaces import scene_surfaces
 from syncai_hydranet.data.trans10k import RGB_TO_GLAZING, glazing_labels
 from syncai_hydranet.models.glazing import GlazingHead, confusion_scores, glazing_loss
-from test_surfaces import evidence
 
 
 def test_palette_uses_colours_not_an_unrelated_numeric_class_order():

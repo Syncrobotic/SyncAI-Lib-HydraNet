@@ -83,9 +83,9 @@ def test_empty_duplicate_or_unreasoned_acceptance_is_rejected():
 def test_extension_keeps_all_prior_masks_and_splits_and_adds_only_train(tmp_path):
     from PIL import Image
 
+    from _studioa_fixture import source_package
     from syncai_hydranet.data.studioa_review import digest, write_json
     from syncai_hydranet.data.studioa_supervision import check_supervision, export_supervision
-    from test_studioa_supervision import source_package
 
     source, base, media = tmp_path / "source", tmp_path / "base", tmp_path / "media"
     source_package(source)

@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from _studioa_fixture import source_package
 from syncai_hydranet.data.studioa_instances import export_instances
 from syncai_hydranet.data.studioa_review import digest, write_json
 from syncai_hydranet.data.studioa_semantic_review import (
@@ -21,7 +22,6 @@ from syncai_hydranet.data.studioa_supervision import (
     check_supervision,
     export_supervision,
 )
-from test_studioa_supervision import source_package
 
 pytestmark = pytest.mark.filterwarnings(
     "ignore:__array__ implementation doesn't accept a copy keyword:DeprecationWarning"

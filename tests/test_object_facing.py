@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from _object_fixture import camera, observed
 from syncai_bev3d.object_facing import (
     apply_observation,
     describe_orientation,
@@ -15,7 +16,6 @@ from syncai_bev3d.object_facing import (
 )
 from syncai_bev3d.object_instances import ObjectInstance, image_digest, save_instances
 from syncai_bev3d.object_placement import Silhouette, scene_objects
-from test_object_placement import camera, observed
 
 
 def fixture():

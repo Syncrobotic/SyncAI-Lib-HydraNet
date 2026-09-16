@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from _studioa_fixture import source_package
 from syncai_hydranet.data.studioa_autolabel import Candidate, annotate, encode
 from syncai_hydranet.data.studioa_review import digest, write_json
 from syncai_hydranet.data.studioa_supervision import (
@@ -55,47 +56,6 @@ def test_same_class_overlap_survives_but_three_way_conflicts_stay_ignored():
     assert semantic_target(data)[0][8, 8] == CLASSES["floor"]
     data["entities"] += [row("person", (5, 5, 15, 15)), row("floor", (0, 0, 20, 20))]
     assert semantic_target(data)[0][8, 8] == IGNORE
-
-
-def source_package(root):
-    (root / "frames").mkdir(parents=True)
-    (root / "images").mkdir()
-    frames = []
-    for store in ("Kaohsiung", "Taichung", "Tao-Hsin"):
-        for index, split in enumerate(("train", "val", "test"), 1):
-            identity = f"{len(frames):04d}-{store}-cam{index:02d}"
-            name = f"images/{identity}.png"
-            Image.new("RGB", (40, 32), color=(len(frames) * 20, 50, 80)).save(root / name)
-            frames.append(
-                {
-                    "id": identity,
-                    "image": name,
-                    "image_sha256": digest(root / name),
-                    "store": store,
-                    "camera": f"{store}-cam{index:02d}",
-                    "original_split": split,
-                    "image_size_px": [40, 32],
-                }
-            )
-    write_json(root / "job.json", {"frames": frames})
-    outputs = {}
-    for frame in frames:
-        mask = np.zeros((32, 40), dtype=bool)
-        mask[:24, :30] = True
-        data = annotate([Candidate("floor", mask, 0.9)], mask.shape)
-        data.update(
-            frame_id=frame["id"],
-            job_sha256=digest(root / "job.json"),
-            image_sha256=frame["image_sha256"],
-        )
-        name = f"frames/{frame['id']}.json"
-        write_json(root / name, data)
-        outputs[name] = digest(root / name)
-    write_json(
-        root / "report.json",
-        {"status": "completed", "outputs": outputs, "job_sha256": digest(root / "job.json")},
-    )
-    return frames
 
 
 def test_reviewed_instances_export_transform_factory_and_boundaries(tmp_path):
