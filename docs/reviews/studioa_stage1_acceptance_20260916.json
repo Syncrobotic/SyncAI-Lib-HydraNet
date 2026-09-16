@@ -1,0 +1,324 @@
+{
+  "status": "coverage and capability audit completed; Stage1 acceptance not passed",
+  "retained_reference": "runs/studioa_detector_warmup_20260916_v1",
+  "candidate": "runs/studioa_detector_regression_20260916_object",
+  "semantic_evaluation_frames": 33,
+  "instance_evaluation_frames": 6,
+  "instance_evaluation_positives": 31,
+  "validation_targets_identical": true,
+  "rows": [
+    {
+      "entity": "floor",
+      "zh": "地面",
+      "semantic_train_pixels": 25243222,
+      "semantic_val_pixels_source_resolution": 19800807,
+      "source_val_teacher_iou": 0.8475501763747278,
+      "raw_reported_iou": 0.8475501763747278,
+      "semantic_status": "partial_AI_agreement_only",
+      "instance_status": "no_dedicated_detector_class",
+      "independently_accepted": false
+    },
+    {
+      "entity": "wall",
+      "zh": "牆壁",
+      "semantic_train_pixels": 12673905,
+      "semantic_val_pixels_source_resolution": 8540767,
+      "source_val_teacher_iou": 0.5538695016172261,
+      "raw_reported_iou": 0.5538695016172261,
+      "semantic_status": "partial_AI_agreement_only",
+      "instance_status": "no_dedicated_detector_class",
+      "independently_accepted": false
+    },
+    {
+      "entity": "ceiling",
+      "zh": "天花板",
+      "semantic_train_pixels": 76814,
+      "semantic_val_pixels_source_resolution": 36670,
+      "source_val_teacher_iou": 0.20195056989542126,
+      "raw_reported_iou": 0.20195056989542126,
+      "semantic_status": "partial_AI_agreement_only",
+      "instance_status": "no_dedicated_detector_class",
+      "independently_accepted": false
+    },
+    {
+      "entity": "column",
+      "zh": "柱子",
+      "semantic_train_pixels": 1492236,
+      "semantic_val_pixels_source_resolution": 0,
+      "source_val_teacher_iou": null,
+      "raw_reported_iou": 0.0,
+      "semantic_status": "no_positive_validation_support",
+      "instance_status": "no_dedicated_detector_class",
+      "independently_accepted": false
+    },
+    {
+      "entity": "door",
+      "zh": "門",
+      "semantic_train_pixels": 428653,
+      "semantic_val_pixels_source_resolution": 1608698,
+      "source_val_teacher_iou": 0.0,
+      "raw_reported_iou": 0.0,
+      "semantic_status": "zero_overlap_with_AI_labels",
+      "instance_status": "no_dedicated_detector_class",
+      "independently_accepted": false
+    },
+    {
+      "entity": "glass_panel",
+      "zh": "固定玻璃",
+      "semantic_train_pixels": 1463510,
+      "semantic_val_pixels_source_resolution": 391272,
+      "source_val_teacher_iou": 0.0,
+      "raw_reported_iou": 0.0,
+      "semantic_status": "zero_overlap_with_AI_labels",
+      "instance_status": "no_dedicated_detector_class",
+      "independently_accepted": false
+    },
+    {
+      "entity": "display_cabinet",
+      "zh": "展示櫃",
+      "semantic_train_pixels": 9071675,
+      "semantic_val_pixels_source_resolution": 6440465,
+      "source_val_teacher_iou": 0.668173439430597,
+      "raw_reported_iou": 0.668173439430597,
+      "semantic_status": "partial_AI_agreement_only",
+      "instance_status": "no_dedicated_detector_class",
+      "independently_accepted": false
+    },
+    {
+      "entity": "display_table",
+      "zh": "展示桌",
+      "semantic_train_pixels": 10988248,
+      "semantic_val_pixels_source_resolution": 8294039,
+      "source_val_teacher_iou": 0.5075394711143058,
+      "raw_reported_iou": 0.5075394711143058,
+      "semantic_status": "partial_AI_agreement_only",
+      "instance_status": "no_dedicated_detector_class",
+      "independently_accepted": false
+    },
+    {
+      "entity": "counter",
+      "zh": "櫃檯",
+      "semantic_train_pixels": 1462965,
+      "semantic_val_pixels_source_resolution": 673270,
+      "source_val_teacher_iou": 0.12176168291628645,
+      "raw_reported_iou": 0.12176168291628645,
+      "semantic_status": "partial_AI_agreement_only",
+      "instance_status": "no_dedicated_detector_class",
+      "independently_accepted": false
+    },
+    {
+      "entity": "laptop",
+      "zh": "筆電",
+      "semantic_train_pixels": 163015,
+      "semantic_val_pixels_source_resolution": 277928,
+      "source_val_teacher_iou": 0.18731306874827652,
+      "raw_reported_iou": 0.18731306874827652,
+      "semantic_status": "partial_AI_agreement_only",
+      "instance_status": "partial_positive_evaluation_only",
+      "independently_accepted": false,
+      "reference_instance_support": 5,
+      "reference_instance_matched": 0,
+      "candidate_instance_support": 5,
+      "candidate_instance_matched": 0
+    },
+    {
+      "entity": "phone",
+      "zh": "手機",
+      "semantic_train_pixels": 84129,
+      "semantic_val_pixels_source_resolution": 35870,
+      "source_val_teacher_iou": 0.0,
+      "raw_reported_iou": 0.0,
+      "semantic_status": "zero_overlap_with_AI_labels",
+      "instance_status": "partial_positive_evaluation_only",
+      "independently_accepted": false,
+      "reference_instance_support": 4,
+      "reference_instance_matched": 1,
+      "candidate_instance_support": 4,
+      "candidate_instance_matched": 0
+    },
+    {
+      "entity": "tablet",
+      "zh": "平板",
+      "semantic_train_pixels": 226300,
+      "semantic_val_pixels_source_resolution": 25004,
+      "source_val_teacher_iou": 0.042982875076755134,
+      "raw_reported_iou": 0.042982875076755134,
+      "semantic_status": "partial_AI_agreement_only",
+      "instance_status": "partial_positive_evaluation_only",
+      "independently_accepted": false,
+      "reference_instance_support": 1,
+      "reference_instance_matched": 0,
+      "candidate_instance_support": 1,
+      "candidate_instance_matched": 0
+    },
+    {
+      "entity": "boxed_stock",
+      "zh": "盒裝物品",
+      "semantic_train_pixels": 1422738,
+      "semantic_val_pixels_source_resolution": 388634,
+      "source_val_teacher_iou": 0.2726900739176346,
+      "raw_reported_iou": 0.2726900739176346,
+      "semantic_status": "partial_AI_agreement_only",
+      "instance_status": "partial_positive_evaluation_only",
+      "independently_accepted": false,
+      "reference_instance_support": 1,
+      "reference_instance_matched": 0,
+      "candidate_instance_support": 1,
+      "candidate_instance_matched": 1
+    },
+    {
+      "entity": "cardboard_box",
+      "zh": "紙箱",
+      "semantic_train_pixels": 79078,
+      "semantic_val_pixels_source_resolution": 39600,
+      "source_val_teacher_iou": 0.08172541743970316,
+      "raw_reported_iou": 0.08172541743970316,
+      "semantic_status": "partial_AI_agreement_only",
+      "instance_status": "partial_positive_evaluation_only",
+      "independently_accepted": false,
+      "reference_instance_support": 2,
+      "reference_instance_matched": 0,
+      "candidate_instance_support": 2,
+      "candidate_instance_matched": 0
+    },
+    {
+      "entity": "speaker",
+      "zh": "喇叭",
+      "semantic_train_pixels": 59325,
+      "semantic_val_pixels_source_resolution": 30142,
+      "source_val_teacher_iou": 0.058279506752789194,
+      "raw_reported_iou": 0.058279506752789194,
+      "semantic_status": "partial_AI_agreement_only",
+      "instance_status": "partial_positive_evaluation_only",
+      "independently_accepted": false,
+      "reference_instance_support": 1,
+      "reference_instance_matched": 0,
+      "candidate_instance_support": 1,
+      "candidate_instance_matched": 0
+    },
+    {
+      "entity": "poster",
+      "zh": "海報",
+      "semantic_train_pixels": 578637,
+      "semantic_val_pixels_source_resolution": 189146,
+      "source_val_teacher_iou": 0.44716382986753217,
+      "raw_reported_iou": 0.44716382986753217,
+      "semantic_status": "partial_AI_agreement_only",
+      "instance_status": "partial_positive_evaluation_only",
+      "independently_accepted": false,
+      "reference_instance_support": 2,
+      "reference_instance_matched": 1,
+      "candidate_instance_support": 2,
+      "candidate_instance_matched": 1
+    },
+    {
+      "entity": "fire_equipment",
+      "zh": "消防設備",
+      "semantic_train_pixels": 164552,
+      "semantic_val_pixels_source_resolution": 9661,
+      "source_val_teacher_iou": 0.0,
+      "raw_reported_iou": 0.0,
+      "semantic_status": "zero_overlap_with_AI_labels",
+      "instance_status": "partial_positive_evaluation_only",
+      "independently_accepted": false,
+      "reference_instance_support": 1,
+      "reference_instance_matched": 0,
+      "candidate_instance_support": 1,
+      "candidate_instance_matched": 0
+    },
+    {
+      "entity": "chair",
+      "zh": "椅子",
+      "semantic_train_pixels": 221105,
+      "semantic_val_pixels_source_resolution": 296563,
+      "source_val_teacher_iou": 0.0791052417396327,
+      "raw_reported_iou": 0.0791052417396327,
+      "semantic_status": "partial_AI_agreement_only",
+      "instance_status": "partial_positive_evaluation_only",
+      "independently_accepted": false,
+      "reference_instance_support": 5,
+      "reference_instance_matched": 0,
+      "candidate_instance_support": 5,
+      "candidate_instance_matched": 0
+    },
+    {
+      "entity": "person",
+      "zh": "人物",
+      "semantic_train_pixels": 5099646,
+      "semantic_val_pixels_source_resolution": 3102333,
+      "source_val_teacher_iou": 0.6923161002433967,
+      "raw_reported_iou": 0.6923161002433967,
+      "semantic_status": "partial_AI_agreement_only",
+      "instance_status": "partial_positive_evaluation_only",
+      "independently_accepted": false,
+      "reference_instance_support": 9,
+      "reference_instance_matched": 5,
+      "candidate_instance_support": 9,
+      "candidate_instance_matched": 5
+    }
+  ],
+  "derived_views": {
+    "glass_door": "door + glazed attribute; door semantic alone does not establish glass-door recall or geometry",
+    "checkout_counter": "counter + checkout role; semantic counter alone does not establish role",
+    "round_and_long_tables": "included in display_table; subtype-specific quality not measured",
+    "upright_display_racks": "included in current display_cabinet training scope; old unresolved shelf proposals remain unresolved",
+    "void": "ignore255, not a physical object or missing predicted class"
+  },
+  "data_gaps": {
+    "no_semantic_val_positive": [
+      "column"
+    ],
+    "zero_semantic_iou_with_positive_support": [
+      "door",
+      "glass_panel",
+      "phone",
+      "fire_equipment"
+    ],
+    "retained_detector_zero_matches": [
+      "laptop",
+      "tablet",
+      "boxed_stock",
+      "cardboard_box",
+      "speaker",
+      "fire_equipment",
+      "chair"
+    ],
+    "candidate_detector_zero_matches": [
+      "laptop",
+      "phone",
+      "tablet",
+      "cardboard_box",
+      "speaker",
+      "fire_equipment",
+      "chair"
+    ],
+    "semantic_missing_train_classes_by_fold": {
+      "Kaohsiung": [
+        "column",
+        "door",
+        "cardboard_box"
+      ],
+      "Taichung": [
+        "fire_equipment"
+      ],
+      "Tao-Hsin": []
+    }
+  },
+  "evaluation_limits": [
+    "AI partial labels; not independent accuracy; unknown predictions do not establish precision.",
+    "Current19-class semantic backbone is frozen at its existing checkpoint; added semantic frames have not retrained that checkpoint.",
+    "Current source validation reused across model choices.",
+    "Scene pilot previously reported Tao-Hsin test results; these assets cannot now be renamed a fresh blind test.",
+    "Step3 requires separately reserved unseen evaluation assets and lineage checks before inference."
+  ],
+  "next_ordered_action": "Finish Stage1 class and instance readiness before consuming a new sealed test set or claiming 3D/Stage2-4 acceptance. First audit localization scale representation and AI label quality; material/role and geometry need separate checks.",
+  "artifacts": {
+    "runs/studioa_gcs_training_extension_20260916_v1/semantic/manifest.json": "0139eaccc00c6cf2fd841c7cfbd3a231c9b744a624b9c8ec95f82bc6e7a7b1ee",
+    "runs/studioa_detector_warmup_20260916_v1/validation.json": "a9e3b29410192b1f6bf8d49f583bd8b641f583c09f5b5558767cfd4a9171fa5a",
+    "runs/studioa_detector_regression_20260916_object/validation.json": "241e3e99a7ab22b238778fbfbbc6159555cafe88cbf7f59776c2f6bde9f018a9",
+    "runs/studioa_detector_warmup_20260916_v1/instances/manifest.json": "f74f99103a841bd4553d41cc8ce85e1257486de0cb065a108dbc077dfb643367",
+    "runs/studioa_detector_regression_20260916_object/instances/manifest.json": "eba13055187110a16c211fd2e76b7cd93fc437e76f711266a1f6c8b022b96428",
+    "runs/studioa_scene_pilot_20260916_v2/report.json": "7713b0a11726d72e41ecf692d7c0b9e6823e2d29106b9bd36d47d283e777f684",
+    "docs/STUDIOA_TRAINING_DATA.md": "6ca08b2628e3e0daa22d0d231d35339cb5921748be567ff3bbfec96691939f33"
+  }
+}

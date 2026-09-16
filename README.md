@@ -14,6 +14,9 @@ tracked in [STUDIOA_PARTIAL_DETECTION.md](docs/STUDIOA_PARTIAL_DETECTION.md), se
 from the existing retail presets and demonstration checkpoints below. See
 [tooling status](docs/TOOLING_STATUS.md) for the historical FTI snapshot and the distinct
 roles of 2D BEV, perspective diagnostics and commissioned 3D meshes.
+The [ordered execution status](docs/STUDIOA_EXECUTION_PROGRESS.md) and
+[per-class acceptance audit](docs/STUDIOA_STAGE1_ACCEPTANCE.md) distinguish completed
+experiments from the remaining Stage1–4 acceptance work.
 
 ![Kaohsiung-cam04: detections and tracks on the left, the metric 3D scene on the right](assets/demo_Kaohsiung-cam04.gif)
 

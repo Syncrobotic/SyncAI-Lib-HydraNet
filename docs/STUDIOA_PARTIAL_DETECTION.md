@@ -657,3 +657,66 @@ lint、型別及提交檢查通過。原場景、Stage2–4與保留模型均未
 [原圖與模型輸入診斷圖](../runs/studioa_detector_diagnosis_20260916_v1/train_review.jpg) ·
 [完整診斷紀錄](reviews/studioa_detector_bottlenecks_20260916.json) ·
 [下一輪回歸比較計畫](reviews/studioa_object_regression_plan_20260916.json)。
+
+## 2026-09-16：每物件平均的回歸比較完成
+
+程式commit `f339cca`。新增選用
+`loss.regression_normalization=assigned_object_mean`：從FCOS實際最小面積指派
+保留每張圖的GT索引，先對每個有指派點的物件平均GIoU，再對整個batch的物件
+平均。同類不同物件與不同影像的同索引不合併；無指派點的物件不製造target，
+全無正例時回歸loss仍為可微分的0。預設保持原positive point mean。
+
+兩組均固定assigned_object分類、positive_budget、instances v5、scene初始化、
+seed42、整圖512×896、25輪／425次更新，無early stopping；只差回歸平均方式。
+兩組806個非設定輸入完全一致。分類與centerness公式／權重、解碼與門檻皆未改。
+
+| 固定 source val | 保留基準 v1 | 本輪point mean對照 | 本輪object mean候選 |
+| --- | ---: | ---: | ---: |
+| best輪次／更新 | 20／260 | 5／85 | 7／119 |
+| best命中／31 | 7 | 8 | 7 |
+| 人物／9 | 5 | 6 | 5 |
+| 手機／4 | 1 | 0 | 0 |
+| 平板／1 | 0 | 0 | 0 |
+| 海報／2 | 1 | 1 | 1 |
+| 盒裝商品／1 | 0 | 1 | 1 |
+| 其他五類 | 0 | 0 | 0 |
+| best覆核空白誤報 | 0 | 0 | 0 |
+| best未配對、真偽未定預測 | 593 | 170 | 451 |
+| 第25輪命中／31 | 不適用 | 6 | 6 |
+
+**候選未超過對照，且手機仍為0，不升級、不部署；保留原v1實驗基準。**
+best是每組固定25輪內選出的checkpoint，並非同更新位置；因此另以兩組第25輪
+比較train診斷，不拿best輪次差異當定位改進的證據。
+
+| 同425次更新的train物件覆蓋 | point mean | object mean |
+| --- | ---: | ---: |
+| 手機有IoU≥0.50原始框／33 | 10 | 24 |
+| 平板有IoU≥0.50原始框／31 | 21 | 26 |
+| 筆電有IoU≥0.50原始框／9 | 9 | 9 |
+| 手機原解碼後覆蓋／33 | 2 | 4 |
+| 平板原解碼後覆蓋／31 | 16 | 15 |
+| 筆電原解碼後覆蓋／9 | 7 | 4 |
+
+訓練定位改善沒有完整轉化為解碼覆蓋或跨鏡頭結果。候選last手機剩9個沒有
+合格框、14個可在假設centerness=1時進NMS、4個類別競爭、1個分類機率不足、
+1個被NMS／cap移除、4個原解碼後覆蓋。這些是逐物件覆蓋，不是一對一recall。
+
+另有一個6.5px短邊手機只有1個實際指派點，其target centerness約0.1767。
+若完全擬合該target，即使分類機率為1，該點也過不了score>0.20；這說明重新
+加權不會補出影像細節或新的採樣點。但它不是所有未指派預測的上界，也不能
+解釋其餘手機漏檢。候選best的四個val手機仍是2個無合格框，另2個最高組合
+score約0.0586、0.0402；本輪沒有調低門檻。
+
+197項訓練相關測試在CUDA通過，包含bf16／fp16、確定性反向與空正例；另12項
+head／解碼測試通過。兩組各807個凍結輸入、8個正式輸出及best／last job綁定
+完整核對；194個共享tensors與33張scene logits不變。對照精確重現上輪assigned
+候選的全部best／last模型tensors、metrics歷程與validation；儲存預測均可重算
+官方指標，訓練／診斷服務正常退出，沒有test推論。
+
+接續已完成[19類驗收盤點](STUDIOA_STAGE1_ACCEPTANCE.md)，但完整Stage1尚未通過。
+缺類與無正例的驗證盲點必須分開處理；順序及進度見
+[執行進度](STUDIOA_EXECUTION_PROGRESS.md)。
+
+[執行前設定](reviews/studioa_object_regression_execution_20260916.json) ·
+[完整比較與核對](reviews/studioa_object_regression_results_20260916.json) ·
+[候選逐圖對照](../runs/studioa_detector_regression_20260916_object/review/selected_val_review.jpg)。
