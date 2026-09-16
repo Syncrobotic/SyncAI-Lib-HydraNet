@@ -1,12 +1,13 @@
 """Prepare source-bound annotation work, never manufacture a human acceptance set."""
-# ruff: noqa: RUF001
 
 from __future__ import annotations
 
 import hashlib
 import html
 import json
+import os
 import shutil
+import tempfile
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -36,7 +37,21 @@ def digest(path: Path) -> str:
 
 
 def write_json(path: Path, data: dict) -> None:
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
+    """Publish complete JSON in one replacement; readers never see a partial write."""
+    text = json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", delete=False
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def index_source(root: Path, scheme: str) -> list[dict]:
@@ -391,8 +406,8 @@ def prepare_package(sources: list[tuple[Path, str]], out: Path, per_camera: int 
         "<style>body{font-family:sans-serif;margin:2rem}main{display:grid;"
         "grid-template-columns:repeat(auto-fit,minmax(min(400px,100%),1fr));gap:1rem}"
         "img{width:100%}article{border:1px solid #ddd;padding:1rem}</style>"
-        "<h1>StudioA 分類標註準備</h1><p>這是既有資料的待標註包，不是模型成果或盲測真值。"
-        "原標籤與遷移遮罩僅供另行參考；請依原圖標註。完成後執行 check 更新審核狀態。</p>"
+        "<h1>StudioA 分類標註準備</h1><p>這是既有資料的待標註包, 不是模型成果或盲測真值。"
+        "原標籤與遷移遮罩僅供另行參考; 請依原圖標註。完成後執行 check 更新審核狀態。</p>"
         "<main>" + "".join(cards) + "</main></html>\n"
     )
     return {

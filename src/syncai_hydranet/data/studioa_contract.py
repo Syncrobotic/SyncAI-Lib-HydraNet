@@ -11,11 +11,12 @@ import json
 
 import numpy as np
 
+from syncai_hydranet.labels import IGNORE
+
 from .label_maps_retail_objects import RETAIL_OBJECTS, RETAIL_SURFACES
 from .label_maps_site30k import SITE30K
 
 VERSION = "studioa.scene.v1"
-IGNORE = 255
 # IDs are stable annotation IDs, not existing student output channels. Zero is reserved.
 ENTITY_NAMES = (
     "floor",

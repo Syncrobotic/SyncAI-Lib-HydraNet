@@ -81,3 +81,73 @@ def test_weights_are_explicit_not_derived_from_evaluation_pixels(tmp_path):
     cfg["train"]["grad_accum_steps"] = 2
     with pytest.raises(ValueError, match="one batch"):
         worker.scene_comparison_config(cfg, 62, 495, 165, given)
+
+
+@pytest.mark.filterwarnings(
+    "ignore:__array__ implementation doesn't accept a copy keyword:DeprecationWarning"
+)
+def test_real_comparison_worker_trains_and_selects_without_building_test_data(
+    tmp_path, monkeypatch
+):
+    import json
+
+    import torch
+
+    from _studioa_fixture import source_package
+    from syncai_hydranet.data import datasets
+    from syncai_hydranet.data.studioa_review import digest, write_json
+    from syncai_hydranet.data.studioa_supervision import check_supervision, export_supervision
+    from syncai_hydranet.engine import trainer
+    from syncai_hydranet.utils.checkpoint import load_checkpoint
+
+    source_package(tmp_path / "annotations")
+    out = tmp_path / "run"
+    out.mkdir()
+    data = out / "data"
+    export_supervision(tmp_path / "annotations", data)
+    manifest = check_supervision(data)
+    cfg = worker.pilot_config(data, out, manifest, "Tao-Hsin")
+    cfg["device"] = "cpu"
+    cfg["model"]["backbone"]["pretrained"] = False
+    cfg["data"].update(input_size=[32, 64], workers=0)
+    cfg["train"].update(batch_size=2, amp=False, warmup_iters=1)
+    # The scheduler deliberately starts at zero LR; the second step must update.
+    cfg = worker.scene_comparison_config(cfg, 2, 2, 1, [1.0] * 19)
+    write_json(out / "config.json", cfg)
+    write_json(
+        out / "job.json",
+        {
+            "scene_comparison": True,
+            "git_commit": "synthetic-worker-test",
+            "counts": manifest["folds"]["Tao-Hsin"]["counts"],
+            "files": {
+                str(p.relative_to(out)): digest(p) for p in out.rglob("*") if p.is_file()
+            },
+        },
+    )
+    # Exercise the actual worker on CPU, bypassing only its hardware admission check.
+    hardware_admission = iter([True])
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: next(hardware_admission, False))
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda _index: "CPU test fixture")
+    original = datasets.build_dataset
+    splits = []
+
+    def guarded(config, size, split, **kwargs):
+        assert split != "test", "comparison must never build the held-out test dataset"
+        splits.append(split)
+        return original(config, size, split, **kwargs)
+
+    monkeypatch.setattr(datasets, "build_dataset", guarded)
+    monkeypatch.setattr(trainer, "build_dataset", guarded)
+    worker.run(out)
+    report = json.loads((out / "report.json").read_text())
+    assert set(splits) == {"train", "val"}
+    assert report["status"] == "completed" and report["test_evaluated"] is False
+    assert report["last_epoch"] == 2 and not (out / "test.json").exists()
+    assert "initial_state.pt" in report["outputs"] and "validation.json" in report["outputs"]
+    assert load_checkpoint(out / "model/last.pt")["global_step"] == 2
+    initial = torch.load(out / "initial_state.pt", weights_only=True)
+    last = load_checkpoint(out / "model/last.pt")["model"]
+    assert not torch.equal(
+        initial["seg_heads.scene.classifier.weight"], last["seg_heads.scene.classifier.weight"]
+    )

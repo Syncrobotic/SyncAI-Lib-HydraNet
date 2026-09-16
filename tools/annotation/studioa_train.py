@@ -21,7 +21,7 @@ import yaml
 
 from syncai_hydranet.config_schema import check_config
 from syncai_hydranet.data.studioa_review import digest, write_json
-from syncai_hydranet.data.studioa_supervision import CLASSES, check_supervision
+from syncai_hydranet.data.studioa_supervision import CLASSES, _relative, check_supervision
 
 ROOT = Path(__file__).resolve().parents[2]
 DET_METRIC = "partial_det/studioa_instances/recall50_at_020"
@@ -471,6 +471,35 @@ def verify(out: Path) -> dict:
     return job
 
 
+def verify_completed(out: Path, job: dict) -> dict:
+    """A completed marker is reusable only while every required output is intact."""
+    report = json.loads((out / "report.json").read_text())
+    if report.get("status") != "completed" or report.get("job_sha256") != digest(
+        out / "job.json"
+    ):
+        raise ValueError("completed pilot report has foreign or incomplete job provenance")
+    source_only = job.get("joint", False) or job.get("scene_comparison", False)
+    evaluation = "validation" if source_only else "test"
+    required = {
+        "model/best.pt",
+        "model/last.pt",
+        "model/metrics.jsonl",
+        "baseline_val.json",
+        f"{evaluation}.json",
+    }
+    if job.get("scene_comparison"):
+        required.add("initial_state.pt")
+    if job.get("detector_warmup"):
+        required.update(("scene_before.json", "warmup_evidence.json"))
+    outputs = report.get("outputs", {})
+    if not required <= outputs.keys() or report.get("test_evaluated") != (not source_only):
+        raise ValueError("completed pilot report omits required outputs or evaluation scope")
+    for name, expected in outputs.items():
+        if digest(_relative(out, name)) != expected:
+            raise ValueError(f"completed pilot output changed: {name}")
+    return report
+
+
 def run(out: Path) -> None:
     import torch
     from PIL import Image
@@ -493,13 +522,14 @@ def run(out: Path) -> None:
     def stopped(_signal, _frame):
         raise InterruptedError("pilot stopped; last complete epoch can resume")
 
-    signal.signal(signal.SIGTERM, stopped)
+    previous_handler = signal.signal(signal.SIGTERM, stopped)
     trainer = None
     try:
         status("verifying")
         job = verify(out)
         job_hash = digest(out / "job.json")
         if (out / "report.json").exists():
+            verify_completed(out, job)
             status("completed", report="report.json")
             return
         if not torch.cuda.is_available():
@@ -571,7 +601,14 @@ def run(out: Path) -> None:
                 # Keep epoch zero eligible: adding a head must not silently promote
                 # a checkpoint whose scene agreement regressed below its warm start.
                 trainer.record_epoch(0, baseline)
-        if not (out / "training_finished.json").exists():
+        finished_path = out / "training_finished.json"
+        if finished_path.exists():
+            finished = json.loads(finished_path.read_text())
+            if finished.get("job_sha256") != job_hash or finished.get("best_sha256") != digest(
+                out / "model/best.pt"
+            ):
+                raise ValueError("training completion marker or best checkpoint changed")
+        else:
             status("training")
             trainer.train()
             write_json(
@@ -683,6 +720,7 @@ def run(out: Path) -> None:
             },
         }
         write_json(out / "report.json", report)
+        verify_completed(out, job)
         status(
             "completed",
             best_epoch=best["epoch"],
@@ -694,6 +732,7 @@ def run(out: Path) -> None:
     finally:
         if trainer is not None and trainer.tb:
             trainer.tb.close()
+        signal.signal(signal.SIGTERM, previous_handler)
         lock.close()
 
 

@@ -12,6 +12,8 @@ import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
 
+from syncai_hydranet.labels import IGNORE
+
 from .store_split import STORES, camera_store, fold_split, validate_fold
 from .studioa_autolabel import decode, validate_annotation
 from .studioa_contract import ENTITY_NAMES
@@ -20,7 +22,6 @@ from .transforms import Sample, build_transforms
 
 SCHEMA = "studioa.partial-semantic.v1"
 CLASSES = {name: index for index, name in enumerate(ENTITY_NAMES)}
-IGNORE = 255
 
 
 def supervision_policy() -> dict:
