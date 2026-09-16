@@ -153,16 +153,27 @@ class FCOSLoss(nn.Module):
         self.w = (cls_weight, reg_weight, centerness_weight)
 
     def forward(
-        self, head, cls_out, reg_out, ctr_out, boxes_list, labels_list, class_mask=None
+        self,
+        head,
+        cls_out,
+        reg_out,
+        ctr_out,
+        boxes_list,
+        labels_list,
+        class_mask=None,
+        negative_mask=None,
     ):
         """``class_mask`` is [B, C] or [C]: which channels this batch's dataset can label.
 
-        None means "all of them", which is the single-source case and every run before
-        the retail+security vocabulary existed.
+        ``negative_mask`` opts into partial instance supervision: [B,H,W], 1 means
+        explicitly reviewed empty for all detection classes, 0/255 means unknown.
+        Only the assigned positive channel is supervised at a labelled box; other
+        channels and unlabelled locations are unknown, not false negatives. None
+        preserves exhaustive-box training, including its ordinary background loss.
         """
         device = cls_out[0].device
         shapes = [c.shape[-2:] for c in cls_out]
-        _, cls_t, reg_t, ctr_t = head.get_targets(shapes, boxes_list, labels_list, device)
+        points, cls_t, reg_t, ctr_t = head.get_targets(shapes, boxes_list, labels_list, device)
         from .heads.detection import flatten_levels
 
         flat_cls, flat_reg, flat_ctr = flatten_levels(
@@ -177,12 +188,42 @@ class FCOSLoss(nn.Module):
         # only fires when the detection head is actually supervised on CUDA, which
         # is why it survived every seg-only run.
         onehot[pos] = F.one_hot(cls_t[pos], self.num_classes).to(onehot.dtype)
+        partial_mask = None
+        if negative_mask is not None:
+            if negative_mask.ndim != 3 or negative_mask.shape[0] != flat_cls.shape[0]:
+                raise ValueError("partial detection negative_mask must be [B,H,W]")
+            negative_mask = negative_mask.to(device)
+            if not ((negative_mask == 0) | (negative_mask == 1) | (negative_mask == 255)).all():
+                raise ValueError("partial detection negative_mask supports only 0/1/255")
+            h, w = negative_mask.shape[-2:]
+            if min(h, w) < 1:
+                raise ValueError("empty partial detection mask")
+            xy = points.long()
+            inside = (xy[:, 0] < w) & (xy[:, 1] < h)
+            negative = (
+                negative_mask[:, xy[:, 1].clamp(max=h - 1), xy[:, 0].clamp(max=w - 1)] == 1
+            )
+            negative &= inside[None]
+            for b, boxes in enumerate(boxes_list):
+                # A box can be out of this level's regression range while containing
+                # the point. Never teach it as background on another pyramid level.
+                if boxes.numel():
+                    in_box = (
+                        (points[:, None, 0] >= boxes[None, :, 0])
+                        & (points[:, None, 0] <= boxes[None, :, 2])
+                        & (points[:, None, 1] >= boxes[None, :, 1])
+                        & (points[:, None, 1] <= boxes[None, :, 3])
+                    ).any(dim=1)
+                    negative[b] &= ~in_box
+            partial_mask = torch.maximum(onehot, negative[..., None].to(onehot.dtype))
         if class_mask is not None:
             # [B, C] -> [B, 1, C] against flat_cls's [B, points, C]; a [C] mask
             # broadcasts as it is. Cast rather than assume: under autocast flat_cls is
             # bf16/fp16 and the mask arrives from the collate as float32.
             mask = class_mask.to(flat_cls.dtype)
             class_mask = mask[:, None, :] if mask.dim() == 2 else mask
+        if partial_mask is not None:
+            class_mask = partial_mask if class_mask is None else partial_mask * class_mask
         cls_loss = sigmoid_focal_loss(flat_cls, onehot, channel_mask=class_mask) / num_pos
         if pos.any():
             reg_loss = giou_loss(flat_reg[pos], reg_t[pos]) / num_pos

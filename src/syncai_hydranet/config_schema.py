@@ -210,6 +210,7 @@ DATASET = {
             "rendered_depth",
             "pose_keypoints",
             "studioa_partial",
+            "studioa_instances",
         ),
     ),
     "root": Spec((str,), required=True),
@@ -646,13 +647,16 @@ def _check_one_dataset(rep: _Report, ds: dict, path: str, head_names: set[str]) 
                 f"Declared: {', '.join(sorted(head_names))}"
             )
         supervised.add(head)
-    if ds.get("type") == "studioa_partial":
+    if ds.get("type") in ("studioa_partial", "studioa_instances"):
         if ds.get("held_out") not in ("Kaohsiung", "Taichung", "Tao-Hsin"):
             rep.errors.append(
                 f"{path}.held_out: an explicit StudioA held-out store is required"
             )
-        if ds.get("supervises") != ["scene"] or ds.get("label_map"):
-            rep.errors.append(f"{path}: StudioA provides scene IDs directly; no remapping")
+        expected_head = "scene" if ds["type"] == "studioa_partial" else "detection"
+        if ds.get("supervises") != [expected_head] or ds.get("label_map"):
+            rep.errors.append(
+                f"{path}: StudioA provides {expected_head} IDs directly; no remapping"
+            )
         for split in ("train", "val", "test"):
             if ds.get(f"split_{split}", split) != split:
                 rep.errors.append(f"{path}: StudioA partition roles cannot be remapped")
@@ -806,6 +810,26 @@ def _check_detection_head_classes(rep: _Report, cfg: dict) -> None:
     `detection_class_names` was written to prevent.
     """
     heads = (cfg.get("model") or {}).get("heads") or {}
+    for ds in (cfg.get("data") or {}).get("datasets") or []:
+        if not isinstance(ds, dict) or ds.get("type") != "studioa_instances":
+            continue
+        from .data.studioa_instances import CLASSES
+
+        head = heads.get("detection") or {}
+        if (
+            head.get("type") != "fcos"
+            or head.get("num_classes") != len(CLASSES)
+            or head.get("classes") != list(CLASSES)
+        ):
+            rep.errors.append(
+                "StudioA instances require the exact ten-class detection head order"
+            )
+        if ds.get("classes") is not None or ds.get("det_vocab") is not None:
+            rep.errors.append("StudioA instance IDs cannot be remapped with classes/det_vocab")
+        if ds.get("split_val") or ds.get("split_test"):
+            rep.errors.append(
+                "StudioA partial instances cannot provide exhaustive COCO evaluation"
+            )
     for name, head in heads.items():
         if not isinstance(head, dict) or head.get("type") != "fcos":
             continue

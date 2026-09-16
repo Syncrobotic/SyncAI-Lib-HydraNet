@@ -98,6 +98,84 @@ def source_package(root):
     return frames
 
 
+def test_reviewed_instances_export_transform_factory_and_boundaries(tmp_path):
+    from syncai_hydranet.data.datasets import build_dataset, split_leaks
+    from syncai_hydranet.data.fingerprint import fingerprint_dataset
+    from syncai_hydranet.data.studioa_instances import check_instances, export_instances
+
+    source = tmp_path / "source"
+    frames = source_package(source)
+    f = frames[0]
+    mask = np.zeros((32, 40), dtype=bool)
+    mask[:24, :30] = True
+    data = annotate([Candidate("phone", mask, 0.9)], mask.shape)
+    data.update(
+        frame_id=f["id"], job_sha256=digest(source / "job.json"), image_sha256=f["image_sha256"]
+    )
+    path = source / "frames" / (f["id"] + ".json")
+    write_json(path, data)
+    report = json.loads((source / "report.json").read_text())
+    report["outputs"][str(path.relative_to(source))] = digest(path)
+    write_json(source / "report.json", report)
+    semantic = tmp_path / "semantic"
+    export_supervision(source, semantic)
+    m = check_supervision(semantic)
+    review = {
+        "reviewer_kind": "ai",
+        "source_manifest_sha256": digest(semantic / "manifest.json"),
+        "held_out": "Tao-Hsin",
+        "frames": [
+            {
+                "frame_id": f["id"],
+                "image_sha256": f["image_sha256"],
+                "companion_sha256": digest(semantic / m["frames"][0]["companion"]),
+                "positives": [
+                    {"id": data["entities"][0]["id"], "entity": "phone", "reason": "fixture"}
+                ],
+                "negative_rects": [{"xyxy": [32, 0, 40, 8], "reason": "fixture empty patch"}],
+            }
+        ],
+    }
+    reviews = tmp_path / "reviews.json"
+    write_json(reviews, review)
+    out = tmp_path / "instances"
+    export_instances(semantic, reviews, out)
+    assert check_instances(out)["instances_by_class"]["phone"] == 1
+    cfg = {
+        "type": "studioa_instances",
+        "root": str(out),
+        "held_out": "Tao-Hsin",
+        "supervises": ["detection"],
+        "split_train": "train",
+    }
+    ds = build_dataset(
+        cfg,
+        (32, 40),
+        "train",
+        letterbox=True,
+        augment={"scale_range": [1.0, 1.0], "flip_p": 1.0},
+    )
+    sample = ds[0]
+    assert sample["targets"]["boxes"].tolist() == [[10.0, 0.0, 40.0, 24.0]]
+    assert (sample["targets"]["det_negative_mask"][:8, :8] == 1).all()
+    assert sample["targets"]["labels"].tolist() == [1]
+    assert fingerprint_dataset(cfg)["splits"]["train"]["frames"] == [f["id"]]
+    assert split_leaks([cfg]) == []
+    with pytest.raises(ValueError, match="unchanged splits"):
+        build_dataset({**cfg, "split_train": "val"}, (32, 40), "train", letterbox=True)
+    with pytest.raises(ValueError, match="invalid instance"):
+        build_dataset({**cfg, "split_test": "test"}, (32, 40), "test", letterbox=True)
+    # A hash-bound review cannot move an excluded source test camera into training.
+    review["frames"][0]["frame_id"] = frames[2]["id"]
+    write_json(reviews, review)
+    with pytest.raises(ValueError, match="held-out/excluded"):
+        export_instances(semantic, reviews, tmp_path / "invalid")
+    # Input tampering is rejected by the reader before any labels can be consumed.
+    (out / m["frames"][0]["image"]).write_bytes(b"changed")
+    with pytest.raises(ValueError, match="package changed"):
+        check_instances(out)
+
+
 def test_real_export_reader_preserves_folds_source_labels_and_ignore(tmp_path):
     source, out = tmp_path / "source", tmp_path / "out"
     frames = source_package(source)

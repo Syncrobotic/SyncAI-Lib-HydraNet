@@ -1,0 +1,192 @@
+{
+  "reviewer_kind": "ai",
+  "reviewer": "assistant_visual_analysis",
+  "held_out": "Tao-Hsin",
+  "source_manifest_sha256": "9149f9850dbf08ec42619a6f33b58f10036adb992b818dd127d7551bff9a4210",
+  "scope": "Six source-train frames only; reviewed instance subset and empty patches, not exhaustive labels or human verification",
+  "frames": [
+    {
+      "frame_id": "0050-Kaohsiung-cam04",
+      "image_sha256": "7b1e1be2cf234ab9d881fef37b49789f4f1b64eff655758b2e674d6819ee6bac",
+      "companion_sha256": "bb7f61d54a5ddd1a6fba4706f3c73683e4dc08ba8dfb3bbd9e59ca5a5b65e0fe",
+      "positives": [
+        {
+          "id": "ai-0005",
+          "entity": "laptop",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0007",
+          "entity": "cardboard_box",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0008",
+          "entity": "cardboard_box",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0010",
+          "entity": "cardboard_box",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0017",
+          "entity": "laptop",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        }
+      ],
+      "negative_rects": [
+        {
+          "xyxy": [
+            1650,
+            400,
+            1800,
+            650
+          ],
+          "reason": "Assistant inspected source image: empty floor patch, no visible object from the declared ten detection classes; not inferred from missing labels."
+        }
+      ]
+    },
+    {
+      "frame_id": "0030-Taichung-cam08",
+      "image_sha256": "e95523bd8f92ab2fbb7ed5fa672e25b7cf01d531ed94711a016572351d1b1ea4",
+      "companion_sha256": "ea729e61ec658085612e0f7536d738ec24a583556a37edb32b05ed29d6d11f08",
+      "positives": [
+        {
+          "id": "ai-0003",
+          "entity": "tablet",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0004",
+          "entity": "tablet",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0005",
+          "entity": "tablet",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        }
+      ],
+      "negative_rects": [
+        {
+          "xyxy": [
+            1000,
+            960,
+            1500,
+            1050
+          ],
+          "reason": "Assistant inspected source image: empty floor patch, no visible object from the declared ten detection classes; not inferred from missing labels."
+        }
+      ]
+    },
+    {
+      "frame_id": "0112-Taichung-cam11",
+      "image_sha256": "3353277f188293dba730eefd1f3f42ddbd4e6b50ee87e38d4c954f22d8495355",
+      "companion_sha256": "71a8144bfcb1a27c050208376a08c065e5731edf0fa2203d7d72f691f8b114e2",
+      "positives": [
+        {
+          "id": "ai-0003",
+          "entity": "speaker",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        }
+      ],
+      "negative_rects": [
+        {
+          "xyxy": [
+            1100,
+            650,
+            1250,
+            850
+          ],
+          "reason": "Assistant inspected source image: empty floor patch, no visible object from the declared ten detection classes; not inferred from missing labels."
+        }
+      ]
+    },
+    {
+      "frame_id": "0078-Taichung-cam09",
+      "image_sha256": "30918a1a840d0e54a4d88dd8c34bb2907a0b7931f25ce60f7f4e878b5528f6b2",
+      "companion_sha256": "ff336435fc1c744ea48a6291011397a5a0c2ea8576643b0888094da5343e81ad",
+      "positives": [
+        {
+          "id": "ai-0002",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0003",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        }
+      ],
+      "negative_rects": [
+        {
+          "xyxy": [
+            1500,
+            850,
+            1800,
+            1000
+          ],
+          "reason": "Assistant inspected source image: empty floor patch, no visible object from the declared ten detection classes; not inferred from missing labels."
+        }
+      ]
+    },
+    {
+      "frame_id": "0025-Taichung-cam05",
+      "image_sha256": "08b398cb45b48e99021b07d5247539c8138805cfb043c7d86421c6bfd2fe24a4",
+      "companion_sha256": "0fdd66f2ff86924e9a733d17b1d817af63e40251bb706e4e09a74725732c6b66",
+      "positives": [
+        {
+          "id": "ai-0009",
+          "entity": "phone",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        }
+      ],
+      "negative_rects": [
+        {
+          "xyxy": [
+            1730,
+            760,
+            1810,
+            930
+          ],
+          "reason": "Assistant inspected source image: empty floor patch, no visible object from the declared ten detection classes; not inferred from missing labels."
+        }
+      ]
+    },
+    {
+      "frame_id": "0031-Taichung-cam08",
+      "image_sha256": "ddd3f30a15b4b527c8dc5a025b7e9a5c5cf21561936b3e98fa17bbcd8d411b4c",
+      "companion_sha256": "7038261ed02603821d2c384e25f914cd75bf48047988a322a2ad76afa266683a",
+      "positives": [
+        {
+          "id": "ai-0005",
+          "entity": "phone",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0007",
+          "entity": "phone",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        },
+        {
+          "id": "ai-0008",
+          "entity": "phone",
+          "reason": "Assistant inspected original scene and isolated candidate mask; visible single object supports this class. Partial review only."
+        }
+      ],
+      "negative_rects": [
+        {
+          "xyxy": [
+            200,
+            920,
+            450,
+            1030
+          ],
+          "reason": "Assistant inspected source image: empty floor patch, no visible object from the declared ten detection classes; not inferred from missing labels."
+        }
+      ]
+    }
+  ]
+}

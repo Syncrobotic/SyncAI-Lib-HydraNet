@@ -598,6 +598,12 @@ def evaluate(
     # Restore whatever mode the caller had it in. Training passes the EMA copy, which
     # lives in eval mode; leaving it in train mode would let a stray forward pass move
     # its BatchNorm statistics, and hydranet-eval would return a model set to train.
+    for _, ds in val_sets:
+        if getattr(ds, "partial_detection", False) and model.det_head_name in ds.supervises:
+            raise ValueError(
+                "partial detection labels cannot be scored with exhaustive COCO mAP; "
+                "use an explicitly reviewed evaluation set"
+            )
     was_training = model.training
     model.eval()
     metrics: dict[str, float] = {}

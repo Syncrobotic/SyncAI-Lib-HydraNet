@@ -22,6 +22,7 @@ from . import label_maps
 from .label_maps_retail_security import get_det_vocab
 from .nyu_depth import NyuDepthDataset, RenderedDepthDataset
 from .pose_keypoints import PoseKeypointsDataset
+from .studioa_instances import StudioAInstanceDataset, check_instances
 from .studioa_supervision import StudioAPartialDataset, check_supervision
 from .transforms import GEOM_IDENTITY, Sample, build_transforms
 
@@ -400,6 +401,21 @@ def build_dataset(
     folder = resolve_split(dcfg, split)
     train = split == "train"
     sup = dcfg["supervises"]
+    if dcfg["type"] == "studioa_instances":
+        if dcfg.get("classes") is not None or dcfg.get("det_vocab") is not None:
+            raise ValueError("StudioA instance IDs cannot be remapped")
+        if folder != split or sup != ["detection"] or not letterbox or dcfg.get("label_map"):
+            raise ValueError(
+                "StudioA instances require unchanged splits, detection and letterbox"
+            )
+        return StudioAInstanceDataset(
+            Path(dcfg["root"]),
+            dcfg["held_out"],
+            split,
+            input_size,
+            train=train,
+            augment=augment,
+        )
     if dcfg["type"] == "studioa_partial":
         if folder != split or sup != ["scene"] or not letterbox or dcfg.get("label_map"):
             raise ValueError("StudioA requires unchanged splits, scene targets and letterbox")
@@ -498,8 +514,9 @@ def _session_cameras(root: Path, split: str) -> set[str]:
 
 
 def _configured_cameras(dataset: dict, split: str) -> set[str]:
-    if dataset.get("type") == "studioa_partial":
-        manifest = check_supervision(Path(dataset["root"]))
+    if dataset.get("type") in ("studioa_partial", "studioa_instances"):
+        check = check_instances if dataset["type"] == "studioa_instances" else check_supervision
+        manifest = check(Path(dataset["root"]))
         assignments = manifest["folds"][dataset["held_out"]]["assignments"]
         return {f["camera"] for f in manifest["frames"] if assignments[f["id"]] == split}
     return _session_cameras(Path(dataset["root"]), split)

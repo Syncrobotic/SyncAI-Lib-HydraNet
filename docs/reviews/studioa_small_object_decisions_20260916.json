@@ -1,0 +1,46 @@
+{
+  "reviewer_kind": "ai",
+  "reviewer": "assistant_visual_analysis",
+  "scope": "Tao-Hsin holdout source train only; preserve prior group 10/11 deferrals; no target-store changes",
+  "frames": [
+    {
+      "frame_id": "0031-Taichung-cam08",
+      "raw_sha256": "c66783cc62a46dda2dc98cd04fc4e7f07966f888378f5696bffe4ff871aacccc",
+      "image_sha256": "ddd3f30a15b4b527c8dc5a025b7e9a5c5cf21561936b3e98fa17bbcd8d411b4c",
+      "decisions": [
+        {
+          "group": 10,
+          "entity": "unknown",
+          "reason": "Target is partial, ambiguous or not supported as the proposed class in the inspected image.",
+          "source_candidate_id": "ai-0010",
+          "source_annotation_sha256": "7bb87c428082feb2d6134de71b1a3d7546ebdfcc489870630f673b9e325d5e52"
+        },
+        {
+          "group": 11,
+          "entity": "unknown",
+          "reason": "Target is partial, ambiguous or not supported as the proposed class in the inspected image.",
+          "source_candidate_id": "ai-0012",
+          "source_annotation_sha256": "7bb87c428082feb2d6134de71b1a3d7546ebdfcc489870630f673b9e325d5e52"
+        },
+        {
+          "group": 5,
+          "entity": "phone",
+          "reason": "Assistant inspected full source and isolated mask: a smartphone with dark screen, rounded device frame and attached security/cable hardware on the lower table mat.",
+          "review_source": "assistant_visual_group_review"
+        },
+        {
+          "group": 8,
+          "entity": "phone",
+          "reason": "Assistant inspected full source and isolated mask: a handheld folding smartphone; screen and hinge/device boundary visible above the left side of the table.",
+          "review_source": "assistant_visual_group_review"
+        },
+        {
+          "group": 14,
+          "entity": "unknown",
+          "reason": "Visible physical numeric buttons and navigation ring identify a remote control, not a smartphone; the current entity vocabulary has no remote-control class.",
+          "review_source": "assistant_visual_group_review"
+        }
+      ]
+    }
+  ]
+}
