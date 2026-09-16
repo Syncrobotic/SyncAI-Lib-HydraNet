@@ -161,6 +161,20 @@ def parse_answer(raw: str) -> dict:
 
 def constrain_decision(group: list[dict], decision: dict) -> dict:
     """Do not let a tiny product mask become furniture based on nearby context."""
+    deferred = [
+        reason
+        for row in group
+        for reason in row.get("reasons", [])
+        if reason.startswith("ai_visual_review:")
+    ]
+    if deferred:
+        return {
+            **decision,
+            "entity": "unknown",
+            "model_entity": decision["entity"],
+            "constraint": "preserve prior source-bound AI visual deferral",
+            "reason": "; ".join(deferred),
+        }
     surfaces = {row["entity"] for row in group}
     if (
         len(surfaces) == 1

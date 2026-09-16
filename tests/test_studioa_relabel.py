@@ -185,3 +185,11 @@ def test_repeated_furniture_answer_cannot_resolve_competing_product_family():
     assert result["entity"] == "unknown" and result["model_entity"] == "display_cabinet"
     supported = {"entity": "laptop", "reason": "Visible screen and keyboard"}
     assert constrain_isolated_recheck(group, supported) == supported
+
+
+def test_prior_visual_printer_deferral_cannot_be_promoted_by_vlm():
+    group = [{"entity": "counter", "reasons": ["ai_visual_review: This is a printer"]}]
+    answer = {"entity": "counter", "reason": "VLM repeats counter"}
+    result = constrain_decision(group, answer)
+    assert result["entity"] == "unknown"
+    assert "printer" in result["reason"]
