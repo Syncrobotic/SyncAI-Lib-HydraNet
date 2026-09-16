@@ -1,0 +1,1685 @@
+{
+  "date": "2026-09-16",
+  "main_commit": "600fbaef05c3cc063cd3b4928584088ab34552e7",
+  "snapshot": "/home/paul/hydranet_fti_stage0",
+  "snapshot_has_git": false,
+  "snapshot_readme": "/home/paul/hydranet_fti_stage0/runs/REVIEW.md",
+  "snapshot_readme_sha256": "2ca53b6b67bc6983c02308145babdb2ddbba2eb077fa86c44b3b32de37f334ba",
+  "snapshot_purpose": "2026-09-10 FTI isolated Stage0 trial; REVIEW.md records copied code, dataset alias and checkpoint links",
+  "groups": {
+    "src": {
+      "counts": {
+        "same": 117,
+        "different": 15,
+        "snapshot_only": 0
+      },
+      "files": [
+        {
+          "path": "src/syncai_bev3d/__init__.py",
+          "snapshot_sha256": "001bcafe239c44a91ada6b85a253e6c25fa301ecbb34acf5062ad642f87a30f3",
+          "main_sha256": "001bcafe239c44a91ada6b85a253e6c25fa301ecbb34acf5062ad642f87a30f3",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/bev.py",
+          "snapshot_sha256": "a6dbff3d6f16b971868e95d25af94d0f6e056d251abe7a7b1ae54d73ebc4226a",
+          "main_sha256": "a6dbff3d6f16b971868e95d25af94d0f6e056d251abe7a7b1ae54d73ebc4226a",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/bev3d.py",
+          "snapshot_sha256": "317d2a5aa9c7925865df1b384add209d1ad4763853cdc801e05a36e69f53371d",
+          "main_sha256": "317d2a5aa9c7925865df1b384add209d1ad4763853cdc801e05a36e69f53371d",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/calibrate.py",
+          "snapshot_sha256": "b095d4bc303a03075127633cadf3088f055e7f1fc12db316d1fb87369ec24356",
+          "main_sha256": "b095d4bc303a03075127633cadf3088f055e7f1fc12db316d1fb87369ec24356",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/commissioning.py",
+          "snapshot_sha256": "bf97b9bf15ee0bea8999bb67b05d7acbb724211c91143645d3b1c38faff3c3c7",
+          "main_sha256": "bf97b9bf15ee0bea8999bb67b05d7acbb724211c91143645d3b1c38faff3c3c7",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/depth_scene.py",
+          "snapshot_sha256": "a412854b8bda01e3cc9c54f558399cd8b13958a92052ea161f780ce56c712ffb",
+          "main_sha256": "a412854b8bda01e3cc9c54f558399cd8b13958a92052ea161f780ce56c712ffb",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/figures.py",
+          "snapshot_sha256": "f90fcc52dc366f533f84767d943ace8abd8f60391bb8f30013b99635e7953d94",
+          "main_sha256": "f90fcc52dc366f533f84767d943ace8abd8f60391bb8f30013b99635e7953d94",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/floor_axis.py",
+          "snapshot_sha256": "dd1c146084960ba02aad50a897f1658ac670308d2ed24286938e9939fd3b6835",
+          "main_sha256": "dd1c146084960ba02aad50a897f1658ac670308d2ed24286938e9939fd3b6835",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/floorplan.py",
+          "snapshot_sha256": "822b0a5a254a9a1344dd3ed69db7ec3ad27fdcd0f0054b7ae18bd12116e90ba3",
+          "main_sha256": "822b0a5a254a9a1344dd3ed69db7ec3ad27fdcd0f0054b7ae18bd12116e90ba3",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/footprints.py",
+          "snapshot_sha256": "737316920ed4b2556e4114c445ef168028fb0d89564cdee475af83ad6c546d80",
+          "main_sha256": "150d0a2b7b43dc6e94a2938d47926822bf7ee7ed208ee793cb618459b566999b",
+          "status": "different"
+        },
+        {
+          "path": "src/syncai_bev3d/geometry_cache.py",
+          "snapshot_sha256": "cb8579c3dabaa135465fbaf34c7641105f928189e28e336f549e0860d5bd0d1c",
+          "main_sha256": "53f4068cda3b0ad06e6afdf762fae978634023e4ab88d273c99552d167aa1443",
+          "status": "different"
+        },
+        {
+          "path": "src/syncai_bev3d/geometry_review.py",
+          "snapshot_sha256": "6c1ccde3fafcc76151929cafb67820f2d0cfa2a70745a61cfa00e68164c36f9b",
+          "main_sha256": "61dca40e23c4684d09809bbcdcea5be0b9fc94662a8953644fb4abb931126b92",
+          "status": "different"
+        },
+        {
+          "path": "src/syncai_bev3d/geometry_teachers.py",
+          "snapshot_sha256": "042a0cfb8911b9d9f8cad1d41169ed5935111e89ab85e366f08533fb539554a6",
+          "main_sha256": "042a0cfb8911b9d9f8cad1d41169ed5935111e89ab85e366f08533fb539554a6",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/ground_control.py",
+          "snapshot_sha256": "343be680955f04feab5331b1b919909e6851b15346d6f98dfca0db10582244e1",
+          "main_sha256": "343be680955f04feab5331b1b919909e6851b15346d6f98dfca0db10582244e1",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/heatmap.py",
+          "snapshot_sha256": "32aa146d88665730a3da62ae49399cbea0ce5f653c1e17869821c1d6f6f64d8d",
+          "main_sha256": "32aa146d88665730a3da62ae49399cbea0ce5f653c1e17869821c1d6f6f64d8d",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/meshes.py",
+          "snapshot_sha256": "522f6a2ad7101debd07b56cc831ec3f966c1fc1ca07b27711fc9b8db3a8c1286",
+          "main_sha256": "ccbb1c81d3c4e3c696c24c858d37de8331cb8c800b19a904feba728feff0faa1",
+          "status": "different"
+        },
+        {
+          "path": "src/syncai_bev3d/plate_calibration.py",
+          "snapshot_sha256": "def0a91eed63b10679a9151691b0b88cca05d208f5942e9b9c0c99c9241b11cd",
+          "main_sha256": "1c58005222209d1e8a2801043f75d614517ea77c466bd36fbe4145cca50876e3",
+          "status": "different"
+        },
+        {
+          "path": "src/syncai_bev3d/py.typed",
+          "snapshot_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "main_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/rulers.py",
+          "snapshot_sha256": "0cb65d5ae6b407e594d20c64bc59aa8e1c98a463f40c536ec1c8eb556539bcb3",
+          "main_sha256": "0cb65d5ae6b407e594d20c64bc59aa8e1c98a463f40c536ec1c8eb556539bcb3",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/scene_mesh.py",
+          "snapshot_sha256": "c63775eef745dbbd20b6c0f13b424f3b16c29989819e21ead31a49bebd601d83",
+          "main_sha256": "b8e7d38dbd5776f72199688955d2d477700eb6bca64b2020e7bb69847aa318e3",
+          "status": "different"
+        },
+        {
+          "path": "src/syncai_bev3d/scene_types.py",
+          "snapshot_sha256": "2ca7cb3efc26dba154c0d4b396a189cf89850cd8b36d3d4a27471c4f479c58d6",
+          "main_sha256": "2ca7cb3efc26dba154c0d4b396a189cf89850cd8b36d3d4a27471c4f479c58d6",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/shading.py",
+          "snapshot_sha256": "72b82abbbbef55a196c73c4f3309b94fb9980ea6929ff121f94830067802fedc",
+          "main_sha256": "72b82abbbbef55a196c73c4f3309b94fb9980ea6929ff121f94830067802fedc",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/teachers/__init__.py",
+          "snapshot_sha256": "c2e5e234d1a1f858a3a505e1142ffdbc95426c74c3cffed478c27aafd3c50e9b",
+          "main_sha256": "c2e5e234d1a1f858a3a505e1142ffdbc95426c74c3cffed478c27aafd3c50e9b",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/teachers/boxes.py",
+          "snapshot_sha256": "b61450a858b3c391be59239fdf868fb874beb41e184dd207e6b75db285b1231b",
+          "main_sha256": "b61450a858b3c391be59239fdf868fb874beb41e184dd207e6b75db285b1231b",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/teachers/gdino.py",
+          "snapshot_sha256": "ee88da8c1f347e8f095b0b4cad47cfd8d5fb07f8a7655a860ecd5dc3c7871b91",
+          "main_sha256": "ee88da8c1f347e8f095b0b4cad47cfd8d5fb07f8a7655a860ecd5dc3c7871b91",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/teachers/photometry.py",
+          "snapshot_sha256": "7d5e9777f926913fa8bb29351bf3797ae177ac21f24759b5515e048aac102f60",
+          "main_sha256": "7d5e9777f926913fa8bb29351bf3797ae177ac21f24759b5515e048aac102f60",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_bev3d/teachers/sam3.py",
+          "snapshot_sha256": "fea953fd1c11372ddff32ba38e87cdcbbefbbaf28fc58a696c2decaabdf39196",
+          "main_sha256": "fea953fd1c11372ddff32ba38e87cdcbbefbbaf28fc58a696c2decaabdf39196",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/__init__.py",
+          "snapshot_sha256": "cba89ad3a49a29ab1d9e9aa81dc21fc316903c2c4e029ef6b015496b76cb20f7",
+          "main_sha256": "cba89ad3a49a29ab1d9e9aa81dc21fc316903c2c4e029ef6b015496b76cb20f7",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/__init__.py",
+          "snapshot_sha256": "bc89857c600222a4413d31d4c732fd985506ff5ef1f1efc098d5643f78173dd9",
+          "main_sha256": "bc89857c600222a4413d31d4c732fd985506ff5ef1f1efc098d5643f78173dd9",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/appearance.py",
+          "snapshot_sha256": "accea4589f7415bcfdafef30a4a2972d96051c960b66b6bf9e1a09946af9a3e2",
+          "main_sha256": "accea4589f7415bcfdafef30a4a2972d96051c960b66b6bf9e1a09946af9a3e2",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/bytetrack.py",
+          "snapshot_sha256": "7a205e96053cd61323ed63d884a6c95ba0ed882354d76ed6024e3b9ff5be894d",
+          "main_sha256": "7a205e96053cd61323ed63d884a6c95ba0ed882354d76ed6024e3b9ff5be894d",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/clip_tracks.py",
+          "snapshot_sha256": "d81b1ad81e9aca508f8849e2ec36ed56e40f454436d9478ce4d1780bd7643a15",
+          "main_sha256": "d81b1ad81e9aca508f8849e2ec36ed56e40f454436d9478ce4d1780bd7643a15",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/delivery.py",
+          "snapshot_sha256": "66e44a54d90bf2605c8a40a3c8858a3be9fbe98f30433a6044f3bd3c9abfc11c",
+          "main_sha256": "66e44a54d90bf2605c8a40a3c8858a3be9fbe98f30433a6044f3bd3c9abfc11c",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/dwell.py",
+          "snapshot_sha256": "b7cde516a697c0da5384d8f9c093611fd089ed2069395cf07c1dfd32b1878a1b",
+          "main_sha256": "b7cde516a697c0da5384d8f9c093611fd089ed2069395cf07c1dfd32b1878a1b",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/events/__init__.py",
+          "snapshot_sha256": "141fd322aeb703b3098f5c91f5e8a9bfbe515ea05c4f91d7df24b8d8d402ad87",
+          "main_sha256": "141fd322aeb703b3098f5c91f5e8a9bfbe515ea05c4f91d7df24b8d8d402ad87",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/events/_geometry.py",
+          "snapshot_sha256": "73dd34ffe0a3abadd53408d317a921a3efea5ded89a2e0adf9fb8c2b6fa8eecf",
+          "main_sha256": "73dd34ffe0a3abadd53408d317a921a3efea5ded89a2e0adf9fb8c2b6fa8eecf",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/events/_types.py",
+          "snapshot_sha256": "8ece5d32f5270803a0f725d5075eb8010e86f990dfd0e338d01309208ac14f8a",
+          "main_sha256": "8ece5d32f5270803a0f725d5075eb8010e86f990dfd0e338d01309208ac14f8a",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/events/behaviour.py",
+          "snapshot_sha256": "37d1d225e716f2be9e974b4ab9c6b492964ec49a11990cbf3e76f4fe37684173",
+          "main_sha256": "37d1d225e716f2be9e974b4ab9c6b492964ec49a11990cbf3e76f4fe37684173",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/events/live.py",
+          "snapshot_sha256": "5cdd3d212bfd7432b049947b222b0f15e929fa6d95bacd8dac9f89e9888323a6",
+          "main_sha256": "5cdd3d212bfd7432b049947b222b0f15e929fa6d95bacd8dac9f89e9888323a6",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/events/pose.py",
+          "snapshot_sha256": "59dd4e78749e14e158d7d139716c61cf346014db79050ab9c4e548533aa99100",
+          "main_sha256": "59dd4e78749e14e158d7d139716c61cf346014db79050ab9c4e548533aa99100",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/events/zones.py",
+          "snapshot_sha256": "dd489a9abed90e595160c76cee7de867f812c463f4d94772bb006c276574cf51",
+          "main_sha256": "dd489a9abed90e595160c76cee7de867f812c463f4d94772bb006c276574cf51",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/journey.py",
+          "snapshot_sha256": "8cc285e277030aa2bdac9a4b680ba06abfff326099971d87e0d2250d3f0bffb2",
+          "main_sha256": "8cc285e277030aa2bdac9a4b680ba06abfff326099971d87e0d2250d3f0bffb2",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/person_head.py",
+          "snapshot_sha256": "79aa7bde5af9582d6dd3df383d981115b64faa57a9a534cdb26a7920a2f71c2d",
+          "main_sha256": "79aa7bde5af9582d6dd3df383d981115b64faa57a9a534cdb26a7920a2f71c2d",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/policy.py",
+          "snapshot_sha256": "e53b02edd9b73104bc619990e4e5eafa5636a2133ae274f77659a92d6ae5901e",
+          "main_sha256": "e53b02edd9b73104bc619990e4e5eafa5636a2133ae274f77659a92d6ae5901e",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/pose_sequence.py",
+          "snapshot_sha256": "fa4bbb0e4a734ffae9ab9e7417d5a632c76996a15d076257cdd20532d7be5ecc",
+          "main_sha256": "fa4bbb0e4a734ffae9ab9e7417d5a632c76996a15d076257cdd20532d7be5ecc",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/reid_metrics.py",
+          "snapshot_sha256": "29037d567ea1459337d0a5860259d5ef4d541a2d33c02e3b7b49349d18ad5ad0",
+          "main_sha256": "29037d567ea1459337d0a5860259d5ef4d541a2d33c02e3b7b49349d18ad5ad0",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/staff.py",
+          "snapshot_sha256": "a11ddb792c6902af47dc2b3f63bf43cf77895fe386b7efce66783171df0a26d3",
+          "main_sha256": "a11ddb792c6902af47dc2b3f63bf43cf77895fe386b7efce66783171df0a26d3",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/stage.py",
+          "snapshot_sha256": "7b7b08fc1755606ab0b76bd0f3f2bbb027c51e7fc951f4f67ea8d3ee16ea1bb0",
+          "main_sha256": "7b7b08fc1755606ab0b76bd0f3f2bbb027c51e7fc951f4f67ea8d3ee16ea1bb0",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/track_attributes.py",
+          "snapshot_sha256": "d3c5c8294d6f068902be1497e65ea8b38e1c48775f0c2bc8535fa1dd147c8bb9",
+          "main_sha256": "d3c5c8294d6f068902be1497e65ea8b38e1c48775f0c2bc8535fa1dd147c8bb9",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/tracker.py",
+          "snapshot_sha256": "dd205085a025136ca27ace12190b190e6051af22a5435e3724f8816432c790fe",
+          "main_sha256": "dd205085a025136ca27ace12190b190e6051af22a5435e3724f8816432c790fe",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/analytics/world.py",
+          "snapshot_sha256": "6d634237f269662a2c068af784c34b46b5e3558ab0f3a989241cdbcce6b711c5",
+          "main_sha256": "6d634237f269662a2c068af784c34b46b5e3558ab0f3a989241cdbcce6b711c5",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/cli/__init__.py",
+          "snapshot_sha256": "fc17b8a4d86a23bf1bd0c4d96e9b6c319c8158a8f0506303601ed73a2ebf1137",
+          "main_sha256": "fc17b8a4d86a23bf1bd0c4d96e9b6c319c8158a8f0506303601ed73a2ebf1137",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/cli/annotation.py",
+          "snapshot_sha256": "f4ad6f6bfac7cb386cffb0aa73af195c19da5d5f552c1b4626e4dd81689156a9",
+          "main_sha256": "f4ad6f6bfac7cb386cffb0aa73af195c19da5d5f552c1b4626e4dd81689156a9",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/cli/evaluate.py",
+          "snapshot_sha256": "5462843478fd23c3e95d712d32eb3a568ef5eab2992791781e149427d18a6ea1",
+          "main_sha256": "5462843478fd23c3e95d712d32eb3a568ef5eab2992791781e149427d18a6ea1",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/cli/export_onnx.py",
+          "snapshot_sha256": "a4483551cb21c03e08be0203d84b67cc3278aecf83903d0ceeb8ab6fdb669b8e",
+          "main_sha256": "a4483551cb21c03e08be0203d84b67cc3278aecf83903d0ceeb8ab6fdb669b8e",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/cli/infer_image.py",
+          "snapshot_sha256": "b424562fad97f5ee8dc9496db8b6aed58dd6a3711629ac874f6b5747166169d4",
+          "main_sha256": "b424562fad97f5ee8dc9496db8b6aed58dd6a3711629ac874f6b5747166169d4",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/cli/infer_video.py",
+          "snapshot_sha256": "b56a3fe83b2bf2e029ffb487404cbd627bdc2174ba39e592759b124dd035846d",
+          "main_sha256": "b56a3fe83b2bf2e029ffb487404cbd627bdc2174ba39e592759b124dd035846d",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/cli/prepare_ade20k.py",
+          "snapshot_sha256": "2b6b48be6cfa7d6f84dd871bdc510ebd6e0519e4f71942f76bed3bc376a2cd4f",
+          "main_sha256": "2b6b48be6cfa7d6f84dd871bdc510ebd6e0519e4f71942f76bed3bc376a2cd4f",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/cli/prepare_cocostuff.py",
+          "snapshot_sha256": "7ab9060e32f47c846c3b83a3fbb45e703f91befc89c636f1c52226c8504b5492",
+          "main_sha256": "7ab9060e32f47c846c3b83a3fbb45e703f91befc89c636f1c52226c8504b5492",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/cli/report.py",
+          "snapshot_sha256": "4f7b0f0f97020d2582d07c47676a96dfa1b85a96874b9893eaa662b9c49216e2",
+          "main_sha256": "4f7b0f0f97020d2582d07c47676a96dfa1b85a96874b9893eaa662b9c49216e2",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/cli/scene.py",
+          "snapshot_sha256": "fc2f48e30625cdf9c193579e1719c2ad8b9d8aabbb0099efbfe5039b4eacd56f",
+          "main_sha256": "fc2f48e30625cdf9c193579e1719c2ad8b9d8aabbb0099efbfe5039b4eacd56f",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/cli/train.py",
+          "snapshot_sha256": "1d2f19ee3c96ae2950a10fd865ad4d7d29e8390b238d3562138aae5cd8458068",
+          "main_sha256": "1d2f19ee3c96ae2950a10fd865ad4d7d29e8390b238d3562138aae5cd8458068",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/config.py",
+          "snapshot_sha256": "9402766e5a391d5915edd9daa97924fede39111450f30cd86c32999c7b20c041",
+          "main_sha256": "9402766e5a391d5915edd9daa97924fede39111450f30cd86c32999c7b20c041",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/config_schema.py",
+          "snapshot_sha256": "e3f4aadf38104d59bcd9de717435396d5a3df82e3567449de76dc5f50f22e730",
+          "main_sha256": "f80bbd08db51e5af2404b761d92bbb522c1fe55e3fd581a97d66eec4fff9e1a0",
+          "status": "different"
+        },
+        {
+          "path": "src/syncai_hydranet/data/__init__.py",
+          "snapshot_sha256": "07cff5146bd38afd9591c6b6e4ba70ba3af28cc6d5eb0cb02b7065b77fe32b92",
+          "main_sha256": "07cff5146bd38afd9591c6b6e4ba70ba3af28cc6d5eb0cb02b7065b77fe32b92",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/attributes.py",
+          "snapshot_sha256": "9b6181c91ed814fcb836ad391aaaafc1922489f42b89cc3cb3dd428ed375c002",
+          "main_sha256": "9b6181c91ed814fcb836ad391aaaafc1922489f42b89cc3cb3dd428ed375c002",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/coco_subsets.py",
+          "snapshot_sha256": "82ab3ef453c84d1fd6b4e94d84bfc63036c2d89e0d94b3676a07d8dd91108aff",
+          "main_sha256": "82ab3ef453c84d1fd6b4e94d84bfc63036c2d89e0d94b3676a07d8dd91108aff",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/datasets.py",
+          "snapshot_sha256": "b5ab1a4271fba21108dbf7600a7723f068db6b3589874ead41d33b0f5912bde5",
+          "main_sha256": "fa6a5269c82055cb3de460faa56c71e1ed5e4bfcb236cf20ae76c6c3b7682cda",
+          "status": "different"
+        },
+        {
+          "path": "src/syncai_hydranet/data/fingerprint.py",
+          "snapshot_sha256": "f6866f4ee229824e179ee7fe38d161f87016af85dd584c59434fdca1d66c4010",
+          "main_sha256": "42646703099580e837af7dfeddf9a936bbf28b57f96f0677355caed895b1e967",
+          "status": "different"
+        },
+        {
+          "path": "src/syncai_hydranet/data/frame_selection.py",
+          "snapshot_sha256": "07d696d5c54c8c15a013fbc6c6ef62a5d29e7b5d4d361dd5bd5e1b89e29177e3",
+          "main_sha256": "07d696d5c54c8c15a013fbc6c6ef62a5d29e7b5d4d361dd5bd5e1b89e29177e3",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/label_maps.py",
+          "snapshot_sha256": "396c72d38130d62a36ca0aaaeab9c6ed86939cf2c7ced5056538341b5f1c875e",
+          "main_sha256": "396c72d38130d62a36ca0aaaeab9c6ed86939cf2c7ced5056538341b5f1c875e",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/label_maps_cocostuff.py",
+          "snapshot_sha256": "9bd2c2a2d6709c8d82c1e79a306faa392555b6dadd1ee9921e26597890ed4e28",
+          "main_sha256": "9bd2c2a2d6709c8d82c1e79a306faa392555b6dadd1ee9921e26597890ed4e28",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/label_maps_indoor.py",
+          "snapshot_sha256": "fc0ac127c56355cc4df2f7731f414c4176260b27c4038ffd12406a523d7156b4",
+          "main_sha256": "fc0ac127c56355cc4df2f7731f414c4176260b27c4038ffd12406a523d7156b4",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/label_maps_retail.py",
+          "snapshot_sha256": "f4b8d0a81d53be779ddc3b24a7f0c32c58d4e7720333521cf67e5ea7891209ee",
+          "main_sha256": "f4b8d0a81d53be779ddc3b24a7f0c32c58d4e7720333521cf67e5ea7891209ee",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/label_maps_retail_objects.py",
+          "snapshot_sha256": "9e4cd9616391aa9f9dc22952702fd951a4f093e7fd1cf21e9a476a1e8e0bc586",
+          "main_sha256": "9e4cd9616391aa9f9dc22952702fd951a4f093e7fd1cf21e9a476a1e8e0bc586",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/label_maps_retail_security.py",
+          "snapshot_sha256": "3f1780848cf4e69062b27adbc1e35fca018c06c4cb3bd69bb1f192a74199f713",
+          "main_sha256": "3f1780848cf4e69062b27adbc1e35fca018c06c4cb3bd69bb1f192a74199f713",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/label_maps_site30k.py",
+          "snapshot_sha256": "4313876f7eadccaebb7f3acc49d003a0bf20d9a233a5a1b434af2155fe647022",
+          "main_sha256": "4313876f7eadccaebb7f3acc49d003a0bf20d9a233a5a1b434af2155fe647022",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/multitask.py",
+          "snapshot_sha256": "733d76ed26b21360953dfb4b37620fa732ee735c43089bb504051d7fe9c08acb",
+          "main_sha256": "733d76ed26b21360953dfb4b37620fa732ee735c43089bb504051d7fe9c08acb",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/night_person.py",
+          "snapshot_sha256": "aec2377b49f431434b8119b7c7f42872f5d16857535d862495700a3e25f3829c",
+          "main_sha256": "aec2377b49f431434b8119b7c7f42872f5d16857535d862495700a3e25f3829c",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/ntu_skeletons.py",
+          "snapshot_sha256": "6b577a6f6ca9561eb1f8b75f531178003317749f9a5b046f4798fc2c9e609b6b",
+          "main_sha256": "6b577a6f6ca9561eb1f8b75f531178003317749f9a5b046f4798fc2c9e609b6b",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/nyu_depth.py",
+          "snapshot_sha256": "c49476398811f53186840c5c685d8e41652922abb8a81be1deeda8a7f07d4295",
+          "main_sha256": "c49476398811f53186840c5c685d8e41652922abb8a81be1deeda8a7f07d4295",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/pose_keypoints.py",
+          "snapshot_sha256": "44d5cbf8d55d9e2a214053452fe62d2aa7a2e60811b3cdb85ad7585b9ba89e88",
+          "main_sha256": "44d5cbf8d55d9e2a214053452fe62d2aa7a2e60811b3cdb85ad7585b9ba89e88",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/sam3_prompts.py",
+          "snapshot_sha256": "47c41dee756d6bba1158ef8e21e6b6e98ed1b0aa2d2c5d17ac701e6c13053a8b",
+          "main_sha256": "47c41dee756d6bba1158ef8e21e6b6e98ed1b0aa2d2c5d17ac701e6c13053a8b",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/sam3_prompts_objects.py",
+          "snapshot_sha256": "a789e350cad1d9725b3b06e3c707e8794b7c638160984d5bc3c54210e21d215f",
+          "main_sha256": "a789e350cad1d9725b3b06e3c707e8794b7c638160984d5bc3c54210e21d215f",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/transforms.py",
+          "snapshot_sha256": "a711fc5855c8c287e54bea616c0c1aa5c85b310b004fa8704af34ed8f17a38dd",
+          "main_sha256": "a711fc5855c8c287e54bea616c0c1aa5c85b310b004fa8704af34ed8f17a38dd",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/data/video.py",
+          "snapshot_sha256": "a8b5866d7bfd31d8add2e22dfc9a2c58d779d61ca0038f3aaf595cb5e00246ed",
+          "main_sha256": "a8b5866d7bfd31d8add2e22dfc9a2c58d779d61ca0038f3aaf595cb5e00246ed",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/engine/__init__.py",
+          "snapshot_sha256": "a307646a4dbeb58e1d8eaf9b63f759b7c0b04e458877dd858665d058d44900ff",
+          "main_sha256": "a307646a4dbeb58e1d8eaf9b63f759b7c0b04e458877dd858665d058d44900ff",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/engine/confusion.py",
+          "snapshot_sha256": "19a8dea3b0295d3834c891c15baaf9d5d938891231e1872c2dc0d44000462f4b",
+          "main_sha256": "19a8dea3b0295d3834c891c15baaf9d5d938891231e1872c2dc0d44000462f4b",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/engine/consensus.py",
+          "snapshot_sha256": "eb822a4856e0423ae2d14ca8e261917416bf4f4a31cc6e0caeb72e5c9628bdc4",
+          "main_sha256": "eb822a4856e0423ae2d14ca8e261917416bf4f4a31cc6e0caeb72e5c9628bdc4",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/engine/ema.py",
+          "snapshot_sha256": "24ab46f9e9a39dfe61c5dc0688adecc28aa3a7b6cc48a2953c5201a522a90cd7",
+          "main_sha256": "24ab46f9e9a39dfe61c5dc0688adecc28aa3a7b6cc48a2953c5201a522a90cd7",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/engine/evaluator.py",
+          "snapshot_sha256": "a072073eb8f2235f0dd231af4ec3ac2a1edad474b5f9541a918ae531144e0f30",
+          "main_sha256": "3bb5c31fb4489314b88bc06d95f0d91034c65876dd46cce97c492c108da0079d",
+          "status": "different"
+        },
+        {
+          "path": "src/syncai_hydranet/engine/optim.py",
+          "snapshot_sha256": "793e8ef13c06e079ea236791872fe9c119952cfd64bcba1976198f71e8c7d2e9",
+          "main_sha256": "793e8ef13c06e079ea236791872fe9c119952cfd64bcba1976198f71e8c7d2e9",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/engine/trainer.py",
+          "snapshot_sha256": "f62afc7425d6b060640f6db81717c7d6ab16b888dba83955438ba0ff4d6a1dc2",
+          "main_sha256": "235e2cb445240b4f5bcfabda3f9a768ca2045910a32e7b7d8f8049f1e76709cc",
+          "status": "different"
+        },
+        {
+          "path": "src/syncai_hydranet/geometry/__init__.py",
+          "snapshot_sha256": "7e0391dccb2907b6bb2f9ea81111c400845ab93c7e674effbe406c94c1141015",
+          "main_sha256": "7e0391dccb2907b6bb2f9ea81111c400845ab93c7e674effbe406c94c1141015",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/geometry/bands.py",
+          "snapshot_sha256": "229b2d0d1f633e4debea68a42b8ed327daedbfaa4733c15c18a4436a1c86d48d",
+          "main_sha256": "229b2d0d1f633e4debea68a42b8ed327daedbfaa4733c15c18a4436a1c86d48d",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/geometry/camera_json.py",
+          "snapshot_sha256": "7b69c61a64147b3a9f8e9602d9511d283eda72d655eafc82b310b19c8f07ef7b",
+          "main_sha256": "7b69c61a64147b3a9f8e9602d9511d283eda72d655eafc82b310b19c8f07ef7b",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/geometry/ground.py",
+          "snapshot_sha256": "1b090013e58d2d50bde29e55be1d43240a47785f615e85210f07da2e9520aafa",
+          "main_sha256": "1b090013e58d2d50bde29e55be1d43240a47785f615e85210f07da2e9520aafa",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/labels.py",
+          "snapshot_sha256": "830f3993a449e8548f3e243410c9aba00cc20a9005a834140db74a2aa7e8c55d",
+          "main_sha256": "830f3993a449e8548f3e243410c9aba00cc20a9005a834140db74a2aa7e8c55d",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/models/__init__.py",
+          "snapshot_sha256": "dad54336a90d265aa3ca60904650370011f3ef4851548bf5677a26b772fdcc40",
+          "main_sha256": "dad54336a90d265aa3ca60904650370011f3ef4851548bf5677a26b772fdcc40",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/models/backbone.py",
+          "snapshot_sha256": "1e1dea94e6857a47030d88ba47a5d37c0f67422d384470b42f944c749be38ee5",
+          "main_sha256": "1e1dea94e6857a47030d88ba47a5d37c0f67422d384470b42f944c749be38ee5",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/models/crop_encoder.py",
+          "snapshot_sha256": "9a2b35711ae42dffb8f771893bda568062877f562c61b42f18ce1b0fc2a26aa4",
+          "main_sha256": "9a2b35711ae42dffb8f771893bda568062877f562c61b42f18ce1b0fc2a26aa4",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/models/heads/__init__.py",
+          "snapshot_sha256": "ae44f2b3a06d18678821f11c3711b95aad69e0962173123d1e36d275020de3e1",
+          "main_sha256": "ae44f2b3a06d18678821f11c3711b95aad69e0962173123d1e36d275020de3e1",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/models/heads/depth.py",
+          "snapshot_sha256": "682ed107137f2d625a25a804fe775b23ca6358f0c59f3fc4e2b9f892a821491f",
+          "main_sha256": "682ed107137f2d625a25a804fe775b23ca6358f0c59f3fc4e2b9f892a821491f",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/models/heads/detection.py",
+          "snapshot_sha256": "27555eb42ca9b35b7b087308670439cca37b3fa7355a500ad2e911640717b369",
+          "main_sha256": "27555eb42ca9b35b7b087308670439cca37b3fa7355a500ad2e911640717b369",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/models/heads/pose.py",
+          "snapshot_sha256": "76857e473c81cc12297a80e7c64f42950a524005574fa4da2992875e0418d0de",
+          "main_sha256": "76857e473c81cc12297a80e7c64f42950a524005574fa4da2992875e0418d0de",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/models/heads/registry.py",
+          "snapshot_sha256": "a2ea3698062760697e1be8fa1d0a09654765410df7f7be5cf48bc2db0dd7f80e",
+          "main_sha256": "443d16c6bfdd72ca36b5184c8d6e48ab74425baf116c443688ce5607132b46b3",
+          "status": "different"
+        },
+        {
+          "path": "src/syncai_hydranet/models/heads/segmentation.py",
+          "snapshot_sha256": "3bca8cd314e29220f22be64f5190498de0c4f5e3432e58a94076cc6dbfe6e8bf",
+          "main_sha256": "3bca8cd314e29220f22be64f5190498de0c4f5e3432e58a94076cc6dbfe6e8bf",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/models/heads/text_classifier.py",
+          "snapshot_sha256": "33dc508afe7c5447e7e6888b7b79b4b367e9af34c740051cce78de10c0517375",
+          "main_sha256": "33dc508afe7c5447e7e6888b7b79b4b367e9af34c740051cce78de10c0517375",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/models/hydranet.py",
+          "snapshot_sha256": "c5021e28ccb40634b077b7cb5eb7d744762638db7d4da5426bb0a0dde846fe96",
+          "main_sha256": "3269f1404f2befd765eae28e53ba998741f8b82262b467e206aeba532b199ba4",
+          "status": "different"
+        },
+        {
+          "path": "src/syncai_hydranet/models/losses.py",
+          "snapshot_sha256": "e9ca1371b307eeae8e64868f30c4c1cda89847fea5271193642ea660a11056e6",
+          "main_sha256": "71376b891eaddfaa2e7d976f5be6292815624c59c31a1002b66c23b5e3f1224c",
+          "status": "different"
+        },
+        {
+          "path": "src/syncai_hydranet/models/neck.py",
+          "snapshot_sha256": "476df49aa588b5868c2080f03515fdc18496532d3d38f2ea414ced41c7bb78d8",
+          "main_sha256": "476df49aa588b5868c2080f03515fdc18496532d3d38f2ea414ced41c7bb78d8",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/preprocessing.py",
+          "snapshot_sha256": "45acbacff1d4295d476a73d2af63415e99d65dd512691a7c1b108ac97db5d092",
+          "main_sha256": "45acbacff1d4295d476a73d2af63415e99d65dd512691a7c1b108ac97db5d092",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/py.typed",
+          "snapshot_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "main_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/serving/__init__.py",
+          "snapshot_sha256": "c00eb0edccb6f8b2c8beaae8b3e4838f0a0601ef63d18d25f569746a78e12296",
+          "main_sha256": "c00eb0edccb6f8b2c8beaae8b3e4838f0a0601ef63d18d25f569746a78e12296",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/serving/alerts.py",
+          "snapshot_sha256": "41d6711556e0ea98d6a763333431f66f393e8086a11c291e12ecdd58e15c2665",
+          "main_sha256": "41d6711556e0ea98d6a763333431f66f393e8086a11c291e12ecdd58e15c2665",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/serving/camera.py",
+          "snapshot_sha256": "4f25b72d989587a8216e425ebd90e703ad504a0358b17a7124be9d035cd223f1",
+          "main_sha256": "4f25b72d989587a8216e425ebd90e703ad504a0358b17a7124be9d035cd223f1",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/serving/decode.py",
+          "snapshot_sha256": "742204605c15e32d2461112b261e73c5cf7ea71385c93904268dc7afaaddd074",
+          "main_sha256": "742204605c15e32d2461112b261e73c5cf7ea71385c93904268dc7afaaddd074",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/serving/dispositions.py",
+          "snapshot_sha256": "8dff52bc4d3651a0241900209aa65f8221245679ebee345d9e2bbf3523aeae5d",
+          "main_sha256": "8dff52bc4d3651a0241900209aa65f8221245679ebee345d9e2bbf3523aeae5d",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/serving/engine.py",
+          "snapshot_sha256": "83cbd2df0e0313e6e05444eac2db87855d0042f53a52e60869f1ecdacafab919",
+          "main_sha256": "83cbd2df0e0313e6e05444eac2db87855d0042f53a52e60869f1ecdacafab919",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/serving/ingest.py",
+          "snapshot_sha256": "73603a56bacae106bf060a9d634fb626ed4c124d29b31ae93badff93b6ca662b",
+          "main_sha256": "73603a56bacae106bf060a9d634fb626ed4c124d29b31ae93badff93b6ca662b",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/serving/scheduler.py",
+          "snapshot_sha256": "ef87b18d96c4bcaee8fcb63ca98aadb802c22f1f6de11e57ca7f68b53678ea9f",
+          "main_sha256": "ef87b18d96c4bcaee8fcb63ca98aadb802c22f1f6de11e57ca7f68b53678ea9f",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/serving/uint8_input.py",
+          "snapshot_sha256": "a1b3e35f783602d0b2351e35608eff88da7b266cb877c6f084e5d70ad6db822d",
+          "main_sha256": "a1b3e35f783602d0b2351e35608eff88da7b266cb877c6f084e5d70ad6db822d",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/shipped.py",
+          "snapshot_sha256": "ef7413dfd35fe7091275bdde1ab10f4e03410b188ac57553c36c59f90a52c943",
+          "main_sha256": "ef7413dfd35fe7091275bdde1ab10f4e03410b188ac57553c36c59f90a52c943",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/utils/__init__.py",
+          "snapshot_sha256": "a93a2d7c0809ded55e0d67114c5256470f1cfbaef6d6771af1c858ed4168e976",
+          "main_sha256": "a93a2d7c0809ded55e0d67114c5256470f1cfbaef6d6771af1c858ed4168e976",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/utils/checkpoint.py",
+          "snapshot_sha256": "e1d34661248af771d9154b60826b74b644e8c6a18217beaa4c706d52c9913d31",
+          "main_sha256": "e1d34661248af771d9154b60826b74b644e8c6a18217beaa4c706d52c9913d31",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/utils/device.py",
+          "snapshot_sha256": "4cff290c590859a5835eccff2d48272bc292211866d1e644ac221bf96b1d8607",
+          "main_sha256": "4cff290c590859a5835eccff2d48272bc292211866d1e644ac221bf96b1d8607",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/utils/face_blur.py",
+          "snapshot_sha256": "95ac2b3a334d0f833083db23a87a827d1f81bb544175b3fcb90efc75cf0d095b",
+          "main_sha256": "95ac2b3a334d0f833083db23a87a827d1f81bb544175b3fcb90efc75cf0d095b",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/utils/logger.py",
+          "snapshot_sha256": "a257c5e3d2cac1fb1ed9f8719469f2fab983b6dd0e1dbde12bf31e8bd1845236",
+          "main_sha256": "a257c5e3d2cac1fb1ed9f8719469f2fab983b6dd0e1dbde12bf31e8bd1845236",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/utils/runmeta.py",
+          "snapshot_sha256": "eb979c05fb2fb43729027c9d164d387936e16cccd87033f9bd5d23e97ccd3020",
+          "main_sha256": "eb979c05fb2fb43729027c9d164d387936e16cccd87033f9bd5d23e97ccd3020",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/utils/seeding.py",
+          "snapshot_sha256": "976f36f5f6d695351c858a730f609b4de91bf923a6a47f276c634148f90e30e6",
+          "main_sha256": "976f36f5f6d695351c858a730f609b4de91bf923a6a47f276c634148f90e30e6",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/utils/temporal.py",
+          "snapshot_sha256": "5750743be96aec7b7b0ec9bf364e17ad1b03076dba230ccfb4ca4a2b958e7ed7",
+          "main_sha256": "5750743be96aec7b7b0ec9bf364e17ad1b03076dba230ccfb4ca4a2b958e7ed7",
+          "status": "same"
+        },
+        {
+          "path": "src/syncai_hydranet/utils/visualize.py",
+          "snapshot_sha256": "1b9b16a75b5dbe84d87c707d60d2e664853957fd154a97c474d764e06a2edf7e",
+          "main_sha256": "4a3d7ca54ddf4f68a8a8b5132026a2981158449ac9ec22ccc89b473a9bbc51b7",
+          "status": "different"
+        }
+      ]
+    },
+    "tools": {
+      "counts": {
+        "same": 39,
+        "different": 11,
+        "snapshot_only": 0
+      },
+      "files": [
+        {
+          "path": "tools/README.md",
+          "snapshot_sha256": "bb188e62c9ea3dd2005cb7411fbf0b68096c0a24df559072d902e09331723b50",
+          "main_sha256": "cf93c8865b147a1af69f59293cee61c708fae3840c0749fcd94769784ed531d6",
+          "status": "different"
+        },
+        {
+          "path": "tools/annotation/cvat.env",
+          "snapshot_sha256": "73ee861d759505d9e6df1e263e5a991fb481ab108472cc35b35d0b92e273059a",
+          "main_sha256": "73ee861d759505d9e6df1e263e5a991fb481ab108472cc35b35d0b92e273059a",
+          "status": "same"
+        },
+        {
+          "path": "tools/annotation/cvat.sh",
+          "snapshot_sha256": "37b31f63c2952db26f99ac167357b45cd34e4a1c9119e9021f0f8432c3274931",
+          "main_sha256": "37b31f63c2952db26f99ac167357b45cd34e4a1c9119e9021f0f8432c3274931",
+          "status": "same"
+        },
+        {
+          "path": "tools/annotation/docker-compose.override.yml",
+          "snapshot_sha256": "0d65fd3874165c11b0fdc7f15b54382304a4a2362302dd01b2411dabd901cd6a",
+          "main_sha256": "0d65fd3874165c11b0fdc7f15b54382304a4a2362302dd01b2411dabd901cd6a",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/appearance_calibrate.py",
+          "snapshot_sha256": "4173b86c95589d26f1dfecb1d8ef378ba4698260485f860f23bc190046087a7c",
+          "main_sha256": "4173b86c95589d26f1dfecb1d8ef378ba4698260485f860f23bc190046087a7c",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/cluster_rules.py",
+          "snapshot_sha256": "d6f19747e53a98f56233d498403a50cdb0980b013ff909c824efb73cf95e240d",
+          "main_sha256": "d6f19747e53a98f56233d498403a50cdb0980b013ff909c824efb73cf95e240d",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/commission_camera.py",
+          "snapshot_sha256": "aaf4877060feac32b654bc4b7b3bb391edd4101b1939fb2d173755a321e8a89e",
+          "main_sha256": "af11c0b84425a32d2c9298c9b8b95733c6f4a9169f307e9a1d1060a3f06a286c",
+          "status": "different"
+        },
+        {
+          "path": "tools/commissioning/demo_gif.py",
+          "snapshot_sha256": "d2eb5597bf00273c73cd641994cf614f35f9ed533dc91d2dcba4d61f01333d7d",
+          "main_sha256": "ab05e1c65399a69579c677f5948289de97d80bb22dea16a8af5f1c25390e154c",
+          "status": "different"
+        },
+        {
+          "path": "tools/commissioning/demo_video.py",
+          "snapshot_sha256": "db38379971abaeb226b43586c5e1d2e54722db54b159987f17b93b3f7a541497",
+          "main_sha256": "7bd61d1b8f2973536342818a77f708e524eac3572bb2544ab3c2ed1773091ce1",
+          "status": "different"
+        },
+        {
+          "path": "tools/commissioning/depth_complete.py",
+          "snapshot_sha256": "b955466291689314e5a85585b98b3dab82a1e7f4a5b316a1bb17a38b5ec3062c",
+          "main_sha256": "b955466291689314e5a85585b98b3dab82a1e7f4a5b316a1bb17a38b5ec3062c",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/extras_pass.py",
+          "snapshot_sha256": "6fe641e70857553b3116ca2aeac924eae675a5eb7c25a240701ec4dd97656b46",
+          "main_sha256": "229e2cf454f804e6d60de09f9004758e647755f0d0126f4cea73d15ad0f28359",
+          "status": "different"
+        },
+        {
+          "path": "tools/commissioning/floor_calibrate.py",
+          "snapshot_sha256": "1fde8e8a90e8aa9da5687fdaff3da89228ea231942c8c5fe1b1e55504f56dd3e",
+          "main_sha256": "81489c59978f9dd04ac3cd898eaf0a7764c2881f51a338bb874778f4f27c7dd4",
+          "status": "different"
+        },
+        {
+          "path": "tools/commissioning/footprints_from_masks.py",
+          "snapshot_sha256": "a788f01c5eb47b5b53eec4a728c6f4f814e96941e3c3bf594a5d7c59c1087320",
+          "main_sha256": "a788f01c5eb47b5b53eec4a728c6f4f814e96941e3c3bf594a5d7c59c1087320",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/fp_polygons.py",
+          "snapshot_sha256": "4738cc43b2299ab88855faacdf1ceee8005c4bb24717526435d7cae6e72e0379",
+          "main_sha256": "4738cc43b2299ab88855faacdf1ceee8005c4bb24717526435d7cae6e72e0379",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/geometry_bench.py",
+          "snapshot_sha256": "25fe721440da0527757476003c91382b119a2219e565ac06362e8aec4fa83b82",
+          "main_sha256": "25fe721440da0527757476003c91382b119a2219e565ac06362e8aec4fa83b82",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/heads_video.py",
+          "snapshot_sha256": "2283643c244eb41e06d79696c9f797820da8493b90b59be8c183358cffb29852",
+          "main_sha256": "2283643c244eb41e06d79696c9f797820da8493b90b59be8c183358cffb29852",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/heatmap3d.py",
+          "snapshot_sha256": "563fc31a70a9a294bc3a9ac8f771ffe08d6cdbd27d0c89b30a73657b1582434c",
+          "main_sha256": "563fc31a70a9a294bc3a9ac8f771ffe08d6cdbd27d0c89b30a73657b1582434c",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/map_anything_eval.py",
+          "snapshot_sha256": "744df0e74dff70e8e369de0b27c94789ecb0b7c4b8b9c5342518fb270ef0dc17",
+          "main_sha256": "744df0e74dff70e8e369de0b27c94789ecb0b7c4b8b9c5342518fb270ef0dc17",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/masks_diagnose.py",
+          "snapshot_sha256": "6e89a125de382b186d861c88c4341884be08d1698b058c167413af1e78dbdea4",
+          "main_sha256": "6e89a125de382b186d861c88c4341884be08d1698b058c167413af1e78dbdea4",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/masks_pass.py",
+          "snapshot_sha256": "ebe7072f969f80ace8aada1a6953351aa6b9a618bcb8aa1027555a0404b544d9",
+          "main_sha256": "2b428f6cd33a32522a6a986c680aac1e78aa0608f73690f892c32ccc66f6aa38",
+          "status": "different"
+        },
+        {
+          "path": "tools/commissioning/rebuild_geometry.py",
+          "snapshot_sha256": "84c3888dac8b4d7aaafcf9c8f69c577eab4d58d3e5a6f5dbaab2613ed86f0674",
+          "main_sha256": "0c4ab938878744649c45015bc8795f1e8a8f48555ba9824a523bc2bc826c8001",
+          "status": "different"
+        },
+        {
+          "path": "tools/commissioning/scale_rulers.py",
+          "snapshot_sha256": "9566e7f224634728a4a4711ba016640a93c43c5be229b89599f87dc31c256cf8",
+          "main_sha256": "9566e7f224634728a4a4711ba016640a93c43c5be229b89599f87dc31c256cf8",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/scene3d.py",
+          "snapshot_sha256": "cbbc59feec13b9eb5c0883a9d3e72bad2d081c7d854b011ce87dc3485a1b0455",
+          "main_sha256": "cbbc59feec13b9eb5c0883a9d3e72bad2d081c7d854b011ce87dc3485a1b0455",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/scene_mesh.py",
+          "snapshot_sha256": "dc3b497a0832456905c82fce38a34a09072e4fa905cd4f963f78cf2095124b66",
+          "main_sha256": "baa417917ebb27b4623ef2a17b97b5de15f1ee337c4e3a7826f246c3a0be91fc",
+          "status": "different"
+        },
+        {
+          "path": "tools/commissioning/scene_overlay.py",
+          "snapshot_sha256": "2e05d4721b69600694d9993f09982ccf0f3acfb40f5c1641dd1429131d8cd8c8",
+          "main_sha256": "105d043a74e81f114046f113251905fa1b7254a01c27f632235963e3fe2e4db4",
+          "status": "different"
+        },
+        {
+          "path": "tools/commissioning/service_zones.py",
+          "snapshot_sha256": "38c644914c2d6d54b531d4b9f7afa034388e6baebcbf0f0d9c40367dbe05b4d6",
+          "main_sha256": "38c644914c2d6d54b531d4b9f7afa034388e6baebcbf0f0d9c40367dbe05b4d6",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/social_card.py",
+          "snapshot_sha256": "ae60f3c4c21bf66f3f6e3b7e4884ccbbac043f5b4976d19ec8096ae44e4a0ee9",
+          "main_sha256": "ae60f3c4c21bf66f3f6e3b7e4884ccbbac043f5b4976d19ec8096ae44e4a0ee9",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/tile_ruler.py",
+          "snapshot_sha256": "bc84903718a2a2670c831fc681a9352b8c82211b6f903b86bfbde0b6570e9e86",
+          "main_sha256": "bc84903718a2a2670c831fc681a9352b8c82211b6f903b86bfbde0b6570e9e86",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/zone_draw.py",
+          "snapshot_sha256": "e9633d03ee56f8d828b3405a8031f9d6d423ef3757a25a8f84684d67c987fbdc",
+          "main_sha256": "e9633d03ee56f8d828b3405a8031f9d6d423ef3757a25a8f84684d67c987fbdc",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/zones_apply.py",
+          "snapshot_sha256": "1b26e3a9df69f1883d02d7da8899b26c2c69cb58c2383c360e5b2293cd452734",
+          "main_sha256": "1b26e3a9df69f1883d02d7da8899b26c2c69cb58c2383c360e5b2293cd452734",
+          "status": "same"
+        },
+        {
+          "path": "tools/commissioning/zones_confirm.py",
+          "snapshot_sha256": "7e9945bdbfea63979e48590ce3258bfb2ae940e650eed3e87aeb26c527689390",
+          "main_sha256": "7e9945bdbfea63979e48590ce3258bfb2ae940e650eed3e87aeb26c527689390",
+          "status": "same"
+        },
+        {
+          "path": "tools/pose/dense_vs_box.py",
+          "snapshot_sha256": "9434668b43ba631eaa4d5ed6adb186b28d04ba8903087c0715521c67522a4836",
+          "main_sha256": "9434668b43ba631eaa4d5ed6adb186b28d04ba8903087c0715521c67522a4836",
+          "status": "same"
+        },
+        {
+          "path": "tools/pose/eval_student.py",
+          "snapshot_sha256": "76fdbec23b1fbab6d89c67b799fb43799a2a0578cab377f24519aaa60335e479",
+          "main_sha256": "76fdbec23b1fbab6d89c67b799fb43799a2a0578cab377f24519aaa60335e479",
+          "status": "same"
+        },
+        {
+          "path": "tools/pose/pose_overlay.py",
+          "snapshot_sha256": "cea3472b1659eccf66557a83ffe08b35a59f9a3f568e0974f3da369bc30d5cfc",
+          "main_sha256": "cea3472b1659eccf66557a83ffe08b35a59f9a3f568e0974f3da369bc30d5cfc",
+          "status": "same"
+        },
+        {
+          "path": "tools/pose/vitpose_teacher.py",
+          "snapshot_sha256": "d357379fdb6f88bd6396df817f6e8ed65d60f4d2e3389a62f228eb9c6e80da45",
+          "main_sha256": "d357379fdb6f88bd6396df817f6e8ed65d60f4d2e3389a62f228eb9c6e80da45",
+          "status": "same"
+        },
+        {
+          "path": "tools/site30k/box_pass.py",
+          "snapshot_sha256": "6db5dc649202020932a40a1030e57755cd0de71d5e051bb35f96ff134cafd6c1",
+          "main_sha256": "6db5dc649202020932a40a1030e57755cd0de71d5e051bb35f96ff134cafd6c1",
+          "status": "same"
+        },
+        {
+          "path": "tools/site30k/boxes.py",
+          "snapshot_sha256": "3b818ebc41f4c66c7df147fc8c83460c6ab97afa0095d93fd152b9475c46a833",
+          "main_sha256": "3b818ebc41f4c66c7df147fc8c83460c6ab97afa0095d93fd152b9475c46a833",
+          "status": "same"
+        },
+        {
+          "path": "tools/site30k/check_dataset.py",
+          "snapshot_sha256": "4fcfaec1d30ef8d3c436865e6cf3b8c7907292127268fe9beb85ad5065d6a416",
+          "main_sha256": "4fcfaec1d30ef8d3c436865e6cf3b8c7907292127268fe9beb85ad5065d6a416",
+          "status": "same"
+        },
+        {
+          "path": "tools/site30k/compare_masks.py",
+          "snapshot_sha256": "6b58557b56b5f16fcf45909d8eed60b576bd1cac4bb189797008e16ee2e01a16",
+          "main_sha256": "6b58557b56b5f16fcf45909d8eed60b576bd1cac4bb189797008e16ee2e01a16",
+          "status": "same"
+        },
+        {
+          "path": "tools/site30k/materialize_splits.py",
+          "snapshot_sha256": "e826ff37fd10f333f53f4518b461560752aa45f30ce7a9f8dafc4e6296730090",
+          "main_sha256": "e826ff37fd10f333f53f4518b461560752aa45f30ce7a9f8dafc4e6296730090",
+          "status": "same"
+        },
+        {
+          "path": "tools/site30k/plan.py",
+          "snapshot_sha256": "74eaf5fb30d35d24967233d595daee9eb89b98f6c130d9780f0cc05a858248fd",
+          "main_sha256": "74eaf5fb30d35d24967233d595daee9eb89b98f6c130d9780f0cc05a858248fd",
+          "status": "same"
+        },
+        {
+          "path": "tools/site30k/recipe.py",
+          "snapshot_sha256": "8c433379d265b3bf0b41470c0dcb48907e34f501e8c94a9899f6e8579b2625b1",
+          "main_sha256": "020cc6a91a4b06f4c0cf4aaa2029dca744fe2b54ec0a58b539169ce4f8f21dca",
+          "status": "different"
+        },
+        {
+          "path": "tools/site30k/review_page.py",
+          "snapshot_sha256": "22baf0bb0b00c6aa388247902f04b482e9c8a6d56fc4ed5033d2bb5c6677b7d3",
+          "main_sha256": "22baf0bb0b00c6aa388247902f04b482e9c8a6d56fc4ed5033d2bb5c6677b7d3",
+          "status": "same"
+        },
+        {
+          "path": "tools/site30k/run_campaign.py",
+          "snapshot_sha256": "04da5201bb039d33169817b169473a4a0590cc280f03114f0f1d76eb417f9d10",
+          "main_sha256": "04da5201bb039d33169817b169473a4a0590cc280f03114f0f1d76eb417f9d10",
+          "status": "same"
+        },
+        {
+          "path": "tools/site30k/stamp_zones.py",
+          "snapshot_sha256": "1276adb75ef8face5d3586783d0c82ce0177eefb69035117d7390c7081fd7c3a",
+          "main_sha256": "1276adb75ef8face5d3586783d0c82ce0177eefb69035117d7390c7081fd7c3a",
+          "status": "same"
+        },
+        {
+          "path": "tools/site30k/zones.json",
+          "snapshot_sha256": "d787313658964c863f518adbd8138e0fc65b2ea152046afce1bdcf56c27c7f47",
+          "main_sha256": "d787313658964c863f518adbd8138e0fc65b2ea152046afce1bdcf56c27c7f47",
+          "status": "same"
+        },
+        {
+          "path": "tools/temporal/ntu_fall_discriminator.py",
+          "snapshot_sha256": "c78e7e99ccf471661cb5463848b3e7b6c4817846cd9c09a50a6582caebdfb441",
+          "main_sha256": "c78e7e99ccf471661cb5463848b3e7b6c4817846cd9c09a50a6582caebdfb441",
+          "status": "same"
+        },
+        {
+          "path": "tools/temporal/ntu_project.py",
+          "snapshot_sha256": "7706cc4e4b0e44984e2335c55984e58328560dcca6aa0763656d1ace33451a93",
+          "main_sha256": "7706cc4e4b0e44984e2335c55984e58328560dcca6aa0763656d1ace33451a93",
+          "status": "same"
+        },
+        {
+          "path": "tools/temporal/ntu_survey.py",
+          "snapshot_sha256": "64fd2729db1d9ab3eff58909941f51ff4463559bb05fd4e8988700ddd98fc3d3",
+          "main_sha256": "64fd2729db1d9ab3eff58909941f51ff4463559bb05fd4e8988700ddd98fc3d3",
+          "status": "same"
+        },
+        {
+          "path": "tools/temporal/train_posture.py",
+          "snapshot_sha256": "476ab4ad6e72b7ac9ddc93ce389a511a1a9d569fad074b3a239df56ed0675288",
+          "main_sha256": "476ab4ad6e72b7ac9ddc93ce389a511a1a9d569fad074b3a239df56ed0675288",
+          "status": "same"
+        }
+      ]
+    },
+    "scripts": {
+      "counts": {
+        "same": 48,
+        "different": 0,
+        "snapshot_only": 0
+      },
+      "files": [
+        {
+          "path": "scripts/annotation_batch.py",
+          "snapshot_sha256": "4a9e3a58fd9542fd7c4eec9534181496c8b02568fe25865fe12036e46642866a",
+          "main_sha256": "4a9e3a58fd9542fd7c4eec9534181496c8b02568fe25865fe12036e46642866a",
+          "status": "same"
+        },
+        {
+          "path": "scripts/bench_e2e.py",
+          "snapshot_sha256": "473626f205b9ba765115cee6664d5f06ca4d6d856eeeaa408393731288aaa00c",
+          "main_sha256": "473626f205b9ba765115cee6664d5f06ca4d6d856eeeaa408393731288aaa00c",
+          "status": "same"
+        },
+        {
+          "path": "scripts/bench_pro6000.sh",
+          "snapshot_sha256": "607c9a8fd0fe5c06e5a7f076aac1cd015a2b1b0dd67dbef4ff22eb9dc3aaad5b",
+          "main_sha256": "607c9a8fd0fe5c06e5a7f076aac1cd015a2b1b0dd67dbef4ff22eb9dc3aaad5b",
+          "status": "same"
+        },
+        {
+          "path": "scripts/bench_trt.py",
+          "snapshot_sha256": "ff0c3c921b6f14b65e4abfbf7dd502fea7df65cac63059f123351c7034091a27",
+          "main_sha256": "ff0c3c921b6f14b65e4abfbf7dd502fea7df65cac63059f123351c7034091a27",
+          "status": "same"
+        },
+        {
+          "path": "scripts/campaign_site30k.py",
+          "snapshot_sha256": "cdbaed2ebceb8ec1bdbff0e236d2382de289d08743f7307cff299eb7812ff232",
+          "main_sha256": "cdbaed2ebceb8ec1bdbff0e236d2382de289d08743f7307cff299eb7812ff232",
+          "status": "same"
+        },
+        {
+          "path": "scripts/coverage_ratchet.sh",
+          "snapshot_sha256": "4b5e4cc3908d9b7a307e7b7ffd461ccfe68219653c2bbc0605e5f232f0459702",
+          "main_sha256": "4b5e4cc3908d9b7a307e7b7ffd461ccfe68219653c2bbc0605e5f232f0459702",
+          "status": "same"
+        },
+        {
+          "path": "scripts/death_strips.py",
+          "snapshot_sha256": "b4d8958c9e1c6e80909f49fa80cdc381cac5f4508009d68b6e00aa6ae89f6932",
+          "main_sha256": "b4d8958c9e1c6e80909f49fa80cdc381cac5f4508009d68b6e00aa6ae89f6932",
+          "status": "same"
+        },
+        {
+          "path": "scripts/eval_attributes.py",
+          "snapshot_sha256": "71f00c1ae363785e14a3a7504ae8c0bee32c8b60ab79eb2a0a2b0c86cade217c",
+          "main_sha256": "71f00c1ae363785e14a3a7504ae8c0bee32c8b60ab79eb2a0a2b0c86cade217c",
+          "status": "same"
+        },
+        {
+          "path": "scripts/flicker_baseline.py",
+          "snapshot_sha256": "bf47458c2c17d3a164013dd5ef1791d96f671891492c59cab69368594720e19a",
+          "main_sha256": "bf47458c2c17d3a164013dd5ef1791d96f671891492c59cab69368594720e19a",
+          "status": "same"
+        },
+        {
+          "path": "scripts/gdino_person_boxes.py",
+          "snapshot_sha256": "63f8c393ae83495d75300e0d929edd61035704f9c3f69d153f5b54bdc19ce66e",
+          "main_sha256": "63f8c393ae83495d75300e0d929edd61035704f9c3f69d153f5b54bdc19ce66e",
+          "status": "same"
+        },
+        {
+          "path": "scripts/hm3d_render.py",
+          "snapshot_sha256": "67eecb78faf7283f942f2a488968c956aad5998444f9a599b2003c96a7463dda",
+          "main_sha256": "67eecb78faf7283f942f2a488968c956aad5998444f9a599b2003c96a7463dda",
+          "status": "same"
+        },
+        {
+          "path": "scripts/make_text_embeddings.py",
+          "snapshot_sha256": "8062e7669cba2907d58e2369d6775c500083ee3ccbe7a559a440c1ab01963b86",
+          "main_sha256": "8062e7669cba2907d58e2369d6775c500083ee3ccbe7a559a440c1ab01963b86",
+          "status": "same"
+        },
+        {
+          "path": "scripts/mine_fall_candidates.py",
+          "snapshot_sha256": "ca0c86a70d64a413325f62e98fac48ba1c8568d809a0be7173aa66d18dc727d8",
+          "main_sha256": "ca0c86a70d64a413325f62e98fac48ba1c8568d809a0be7173aa66d18dc727d8",
+          "status": "same"
+        },
+        {
+          "path": "scripts/mlflow_sync.py",
+          "snapshot_sha256": "b04decd4aebf694cd8efc7b895620e6414492e048a83d1691edcc0a5733907f9",
+          "main_sha256": "b04decd4aebf694cd8efc7b895620e6414492e048a83d1691edcc0a5733907f9",
+          "status": "same"
+        },
+        {
+          "path": "scripts/night_ghosts.py",
+          "snapshot_sha256": "21f4924d1f9e8ba2e794b150ed6f7996e6fe775a57465df5e06aacd0d9f39e95",
+          "main_sha256": "21f4924d1f9e8ba2e794b150ed6f7996e6fe775a57465df5e06aacd0d9f39e95",
+          "status": "same"
+        },
+        {
+          "path": "scripts/offline_tracks.py",
+          "snapshot_sha256": "506d5709ac68645a4b8dcc595448d24a16ebf370aeaff875cdd1718654a99a42",
+          "main_sha256": "506d5709ac68645a4b8dcc595448d24a16ebf370aeaff875cdd1718654a99a42",
+          "status": "same"
+        },
+        {
+          "path": "scripts/onboard_camera.py",
+          "snapshot_sha256": "db5a37bc5ec937eec166c6e67d061241b1a35dc8915dcd9f4fc8d6e3c7ff7f33",
+          "main_sha256": "db5a37bc5ec937eec166c6e67d061241b1a35dc8915dcd9f4fc8d6e3c7ff7f33",
+          "status": "same"
+        },
+        {
+          "path": "scripts/person_score_probe.py",
+          "snapshot_sha256": "2a1d723548fcc0fe9635a9b3698ba009c3ab56620e6d2f8cb07dee6e9914efa5",
+          "main_sha256": "2a1d723548fcc0fe9635a9b3698ba009c3ab56620e6d2f8cb07dee6e9914efa5",
+          "status": "same"
+        },
+        {
+          "path": "scripts/prep_rapv2.py",
+          "snapshot_sha256": "20055029747eec997d54fdb06858d817b8af98a70dcc2654cba697a95965338a",
+          "main_sha256": "20055029747eec997d54fdb06858d817b8af98a70dcc2654cba697a95965338a",
+          "status": "same"
+        },
+        {
+          "path": "scripts/propose_zones.py",
+          "snapshot_sha256": "ad5d2018c779f394e9c25729297979832f440e0d2ec323fb735941ca32b49dd3",
+          "main_sha256": "ad5d2018c779f394e9c25729297979832f440e0d2ec323fb735941ca32b49dd3",
+          "status": "same"
+        },
+        {
+          "path": "scripts/pull_studioa.py",
+          "snapshot_sha256": "9244c899fe35653bac6a45adbeba669ce5be1ae84dc428523fd1966797ee8d6d",
+          "main_sha256": "9244c899fe35653bac6a45adbeba669ce5be1ae84dc428523fd1966797ee8d6d",
+          "status": "same"
+        },
+        {
+          "path": "scripts/release_bundle.sh",
+          "snapshot_sha256": "87aecff09a1984fe6a7975abdc81a7aba1dc18e16f384fd3d3c6a1efe0c1d9fa",
+          "main_sha256": "87aecff09a1984fe6a7975abdc81a7aba1dc18e16f384fd3d3c6a1efe0c1d9fa",
+          "status": "same"
+        },
+        {
+          "path": "scripts/resplit_selling_floor.py",
+          "snapshot_sha256": "d70f24b3d1949f11f70854d2653a27917f73530bf758925167b50ed30d97217a",
+          "main_sha256": "d70f24b3d1949f11f70854d2653a27917f73530bf758925167b50ed30d97217a",
+          "status": "same"
+        },
+        {
+          "path": "scripts/retail_flow.py",
+          "snapshot_sha256": "3d82260232d74c855dc0a8edfb6e66bb7ddb6959ee6be9edd40b5d2ef3430d40",
+          "main_sha256": "3d82260232d74c855dc0a8edfb6e66bb7ddb6959ee6be9edd40b5d2ef3430d40",
+          "status": "same"
+        },
+        {
+          "path": "scripts/retention_sweep.py",
+          "snapshot_sha256": "28699e644d63434c9a17e284aaa677e93563d6d748db766f0bbbd442eaeb4a90",
+          "main_sha256": "28699e644d63434c9a17e284aaa677e93563d6d748db766f0bbbd442eaeb4a90",
+          "status": "same"
+        },
+        {
+          "path": "scripts/sam3_person_boxes.py",
+          "snapshot_sha256": "44265ac4617d8d01e21e50d1ba92300fc67d00e52d4eecc1b6b15734a4316479",
+          "main_sha256": "44265ac4617d8d01e21e50d1ba92300fc67d00e52d4eecc1b6b15734a4316479",
+          "status": "same"
+        },
+        {
+          "path": "scripts/sam3_prelabel.py",
+          "snapshot_sha256": "68daac92ac276c66e06719ea0d10ea7ea1087ec1210596859c4b7862aa0e6f12",
+          "main_sha256": "68daac92ac276c66e06719ea0d10ea7ea1087ec1210596859c4b7862aa0e6f12",
+          "status": "same"
+        },
+        {
+          "path": "scripts/serve_pilot.py",
+          "snapshot_sha256": "2233cd6da4275e4015c4e67830728f00b5969704520339bda2849134e0ef1fff",
+          "main_sha256": "2233cd6da4275e4015c4e67830728f00b5969704520339bda2849134e0ef1fff",
+          "status": "same"
+        },
+        {
+          "path": "scripts/site_confusion.py",
+          "snapshot_sha256": "fbdd8ca702bef9b1c64cacaed30f9d0ef02132a4d03f4f8c70e7cb9d1ba28485",
+          "main_sha256": "fbdd8ca702bef9b1c64cacaed30f9d0ef02132a4d03f4f8c70e7cb9d1ba28485",
+          "status": "same"
+        },
+        {
+          "path": "scripts/site_events.py",
+          "snapshot_sha256": "766b5dda0333dfadaa0e2764f8d092ce1d8ddaae2e17c65eaac0f5b79c1f8aa5",
+          "main_sha256": "766b5dda0333dfadaa0e2764f8d092ce1d8ddaae2e17c65eaac0f5b79c1f8aa5",
+          "status": "same"
+        },
+        {
+          "path": "scripts/site_journeys.py",
+          "snapshot_sha256": "3309e0e5a9ab94bae4c519abf83ec26f3e0eca92e6e9548d64da503556139b20",
+          "main_sha256": "3309e0e5a9ab94bae4c519abf83ec26f3e0eca92e6e9548d64da503556139b20",
+          "status": "same"
+        },
+        {
+          "path": "scripts/site_split_report.py",
+          "snapshot_sha256": "bd7d1aba138ed2a4e7212626b71f8b7a4d44c25ceddc263b421c9c55da250564",
+          "main_sha256": "bd7d1aba138ed2a4e7212626b71f8b7a4d44c25ceddc263b421c9c55da250564",
+          "status": "same"
+        },
+        {
+          "path": "scripts/stable_infer.py",
+          "snapshot_sha256": "c0bd93a85cffce2efbdc78e374b31c535ef2e32f2638ef79c19de7860618e9d1",
+          "main_sha256": "c0bd93a85cffce2efbdc78e374b31c535ef2e32f2638ef79c19de7860618e9d1",
+          "status": "same"
+        },
+        {
+          "path": "scripts/staff_crops.py",
+          "snapshot_sha256": "2833576fdc191682c56a474219d0513548480022bfec7a6d2d690f7481990988",
+          "main_sha256": "2833576fdc191682c56a474219d0513548480022bfec7a6d2d690f7481990988",
+          "status": "same"
+        },
+        {
+          "path": "scripts/staff_probe.py",
+          "snapshot_sha256": "5a1954d0fd2ab2b77e01c5170c6adcd5563405def23f97df92ff602d59db1fd2",
+          "main_sha256": "5a1954d0fd2ab2b77e01c5170c6adcd5563405def23f97df92ff602d59db1fd2",
+          "status": "same"
+        },
+        {
+          "path": "scripts/static_person_filter.py",
+          "snapshot_sha256": "e4d69d6dec1fa7ef092a1adaeec1f358e14210d608a2f2c0b2de6039a1ef28f5",
+          "main_sha256": "e4d69d6dec1fa7ef092a1adaeec1f358e14210d608a2f2c0b2de6039a1ef28f5",
+          "status": "same"
+        },
+        {
+          "path": "scripts/static_plates.py",
+          "snapshot_sha256": "63c35d710a194d9871bc1fbe709d38e0f0b69f49ea3c37dac29ab34ccca792d1",
+          "main_sha256": "63c35d710a194d9871bc1fbe709d38e0f0b69f49ea3c37dac29ab34ccca792d1",
+          "status": "same"
+        },
+        {
+          "path": "scripts/step6_events.py",
+          "snapshot_sha256": "47606b14da30221fead0533a1813e91c0388acdb35102965c439a2a434d20af8",
+          "main_sha256": "47606b14da30221fead0533a1813e91c0388acdb35102965c439a2a434d20af8",
+          "status": "same"
+        },
+        {
+          "path": "scripts/step6_reread.py",
+          "snapshot_sha256": "7fd28b26272208555cc278f80823128225ec79ee5d392302a68645ca0dc7cacc",
+          "main_sha256": "7fd28b26272208555cc278f80823128225ec79ee5d392302a68645ca0dc7cacc",
+          "status": "same"
+        },
+        {
+          "path": "scripts/track_endings.py",
+          "snapshot_sha256": "57a0b6aed0b50f31b811198e33cb25724d821e0c822c596208404976a3e07d8c",
+          "main_sha256": "57a0b6aed0b50f31b811198e33cb25724d821e0c822c596208404976a3e07d8c",
+          "status": "same"
+        },
+        {
+          "path": "scripts/track_identity.py",
+          "snapshot_sha256": "f852182dbd1716bf472f8cd3fa8aee8b16aa870a7dcffb8af6e61bb039c5b54b",
+          "main_sha256": "f852182dbd1716bf472f8cd3fa8aee8b16aa870a7dcffb8af6e61bb039c5b54b",
+          "status": "same"
+        },
+        {
+          "path": "scripts/track_idf1.py",
+          "snapshot_sha256": "895535b26d43a2e697d24fc060094dc58123601229b85d556379d84e7a84988d",
+          "main_sha256": "895535b26d43a2e697d24fc060094dc58123601229b85d556379d84e7a84988d",
+          "status": "same"
+        },
+        {
+          "path": "scripts/track_review.py",
+          "snapshot_sha256": "58e519dfa1828ad04a37571defdd2ecac7356d7c66caa22381644975cdf4e19f",
+          "main_sha256": "58e519dfa1828ad04a37571defdd2ecac7356d7c66caa22381644975cdf4e19f",
+          "status": "same"
+        },
+        {
+          "path": "scripts/train_attributes.py",
+          "snapshot_sha256": "1f9e17b2d4047375e588a1cc8acacae91561fb8d026ee913df46a60d4b3c7bd5",
+          "main_sha256": "1f9e17b2d4047375e588a1cc8acacae91561fb8d026ee913df46a60d4b3c7bd5",
+          "status": "same"
+        },
+        {
+          "path": "scripts/ty_ratchet.sh",
+          "snapshot_sha256": "7bdf594443f97fac0862d479bffc65ef27abb3204d5572dbff3271856c8860a6",
+          "main_sha256": "7bdf594443f97fac0862d479bffc65ef27abb3204d5572dbff3271856c8860a6",
+          "status": "same"
+        },
+        {
+          "path": "scripts/val_sampling_error.py",
+          "snapshot_sha256": "91a89b439eb1046b8d80617b797a5bd64f1c5db9f1567ef1fcc0d6f49b2129ea",
+          "main_sha256": "91a89b439eb1046b8d80617b797a5bd64f1c5db9f1567ef1fcc0d6f49b2129ea",
+          "status": "same"
+        },
+        {
+          "path": "scripts/wildtrack_ground_eval.py",
+          "snapshot_sha256": "cee69946abf90f3a537dd357287ae4235deb8828c1815bcbeb4a4ce74335c3b7",
+          "main_sha256": "cee69946abf90f3a537dd357287ae4235deb8828c1815bcbeb4a4ce74335c3b7",
+          "status": "same"
+        },
+        {
+          "path": "scripts/zone_dwell.py",
+          "snapshot_sha256": "c091cfb296c38370f6c900d6a74a4164237d54b87d396ecadd4dbec9dedf8980",
+          "main_sha256": "c091cfb296c38370f6c900d6a74a4164237d54b87d396ecadd4dbec9dedf8980",
+          "status": "same"
+        }
+      ]
+    },
+    "configs": {
+      "counts": {
+        "same": 38,
+        "different": 0,
+        "snapshot_only": 0
+      },
+      "files": [
+        {
+          "path": "configs/_base/hydranet.yaml",
+          "snapshot_sha256": "a717ce5f8a02ba989c90fef0961ab75db5f4d4586bd6bf2e59a91783fd2d5d80",
+          "main_sha256": "a717ce5f8a02ba989c90fef0961ab75db5f4d4586bd6bf2e59a91783fd2d5d80",
+          "status": "same"
+        },
+        {
+          "path": "configs/eval_indoor25.yaml",
+          "snapshot_sha256": "ba45ba9c1a884013a73cb6c15d63e02b1e3712991b966ca56a0ff273c113ea0f",
+          "main_sha256": "ba45ba9c1a884013a73cb6c15d63e02b1e3712991b966ca56a0ff273c113ea0f",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_hm3d_cctv.yaml",
+          "snapshot_sha256": "5c6743e707b0d199af2ef4cf1f63e20b92e6278f571d4d1b1b4d0bca804d77d1",
+          "main_sha256": "5c6743e707b0d199af2ef4cf1f63e20b92e6278f571d4d1b1b4d0bca804d77d1",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_indoor.yaml",
+          "snapshot_sha256": "7bb4ee9b6c80412dd0b8f52498611287c341166cd9c17cd1bb4e15fd6f559192",
+          "main_sha256": "7bb4ee9b6c80412dd0b8f52498611287c341166cd9c17cd1bb4e15fd6f559192",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail.yaml",
+          "snapshot_sha256": "b8aad4704258bb843f338a278c009710923f04f6f4ec5f648d027ff8eda94e92",
+          "main_sha256": "b8aad4704258bb843f338a278c009710923f04f6f4ec5f648d027ff8eda94e92",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_cctv.yaml",
+          "snapshot_sha256": "39154168bc300f82c53b9c760a5c670b81f316bfce2a411a104cde762507e44f",
+          "main_sha256": "39154168bc300f82c53b9c760a5c670b81f316bfce2a411a104cde762507e44f",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_cocostuff.yaml",
+          "snapshot_sha256": "b75cda593d62fe5392f5bc8bbf825292a79b3771501ebecc2866b57a2ef9b464",
+          "main_sha256": "b75cda593d62fe5392f5bc8bbf825292a79b3771501ebecc2866b57a2ef9b464",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_objects.yaml",
+          "snapshot_sha256": "3b29220d053c600de5fc6fa2ad9ff72c9e61394b9ea0a9f9b23075e790fb953f",
+          "main_sha256": "3b29220d053c600de5fc6fa2ad9ff72c9e61394b9ea0a9f9b23075e790fb953f",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_objects_nc2.yaml",
+          "snapshot_sha256": "4996a1ba22e0dcd1c97c47fc783ec8b478e6d30b7bf93ce929f8c730d19c3426",
+          "main_sha256": "4996a1ba22e0dcd1c97c47fc783ec8b478e6d30b7bf93ce929f8c730d19c3426",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_objects_site.yaml",
+          "snapshot_sha256": "c2d16572155946db9af129e07fd8c9c9670f33c2a615d7d21cc8fac984bfc879",
+          "main_sha256": "c2d16572155946db9af129e07fd8c9c9670f33c2a615d7d21cc8fac984bfc879",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_objects_site_balanced.yaml",
+          "snapshot_sha256": "8d140dc8ea52d4841fb967ecf992dc48d53881132114bfa9e8ea06145ec2238b",
+          "main_sha256": "8d140dc8ea52d4841fb967ecf992dc48d53881132114bfa9e8ea06145ec2238b",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_objects_site_batch02.yaml",
+          "snapshot_sha256": "8f1e4d8881434ef121bd979aaf790aa1e711aa55bf6192179bd971154dacb75b",
+          "main_sha256": "8f1e4d8881434ef121bd979aaf790aa1e711aa55bf6192179bd971154dacb75b",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_openvocab.yaml",
+          "snapshot_sha256": "9c2445627f513a2a6988718c4404938c8e1c5cb32a82e3ef018b9b05f31b7c53",
+          "main_sha256": "9c2445627f513a2a6988718c4404938c8e1c5cb32a82e3ef018b9b05f31b7c53",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_openvocab02.yaml",
+          "snapshot_sha256": "98a3cd93b6a0762a1ea2139d2f045ed31140e0a180dab07b5400f753c8117a1b",
+          "main_sha256": "98a3cd93b6a0762a1ea2139d2f045ed31140e0a180dab07b5400f753c8117a1b",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_person01.yaml",
+          "snapshot_sha256": "3d5574b0f3c62af20ed381ff009cbdf09c78dc891310fe39fbdc17bef661f4a8",
+          "main_sha256": "3d5574b0f3c62af20ed381ff009cbdf09c78dc891310fe39fbdc17bef661f4a8",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_pose01.yaml",
+          "snapshot_sha256": "3b03ae930d9c1151278e3c44aa28688bd78814bdc1dcbffea5ed86a45b15e14e",
+          "main_sha256": "3b03ae930d9c1151278e3c44aa28688bd78814bdc1dcbffea5ed86a45b15e14e",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_pose02.yaml",
+          "snapshot_sha256": "d96dd850235b989307525828f2e740410fee0b27880d1a8ab144b2c2e303b081",
+          "main_sha256": "d96dd850235b989307525828f2e740410fee0b27880d1a8ab144b2c2e303b081",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_products.yaml",
+          "snapshot_sha256": "0c13cf052c498d010e4742f63e2109f9bc4ffb1646c021778e8036dfb06f3d85",
+          "main_sha256": "0c13cf052c498d010e4742f63e2109f9bc4ffb1646c021778e8036dfb06f3d85",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_products_seed13.yaml",
+          "snapshot_sha256": "0c964bba598d890c657b2c4fba2310cd8594e57a6f6f474c674bbe94ab07f5e9",
+          "main_sha256": "0c964bba598d890c657b2c4fba2310cd8594e57a6f6f474c674bbe94ab07f5e9",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_products_seed7.yaml",
+          "snapshot_sha256": "2c118f8a2886e66b871bd6601570e1db1fe47d60cd3323f98b848afcd63c228d",
+          "main_sha256": "2c118f8a2886e66b871bd6601570e1db1fe47d60cd3323f98b848afcd63c228d",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_security.yaml",
+          "snapshot_sha256": "281271a094123f37923c6449f98baaed3a8c20ead71fcf238df2761b1b4a4134",
+          "main_sha256": "281271a094123f37923c6449f98baaed3a8c20ead71fcf238df2761b1b4a4134",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_security_b03.yaml",
+          "snapshot_sha256": "7decbe0486153bb3b925ff0d9febc98b01795ac91fad74240c00dff91d718428",
+          "main_sha256": "7decbe0486153bb3b925ff0d9febc98b01795ac91fad74240c00dff91d718428",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_security_b03_cw.yaml",
+          "snapshot_sha256": "a36e0f1ce2b51f58fc3f4bd55211929d75831e374fc8dafc5002fb83ad28eeef",
+          "main_sha256": "a36e0f1ce2b51f58fc3f4bd55211929d75831e374fc8dafc5002fb83ad28eeef",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_security_b03_cw_hires.yaml",
+          "snapshot_sha256": "2ae0f2004895a0a0ae918fe6589b2a29225bee16457414774a2f557d6b549c83",
+          "main_sha256": "2ae0f2004895a0a0ae918fe6589b2a29225bee16457414774a2f557d6b549c83",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_security_b03_cw_hires_seed13.yaml",
+          "snapshot_sha256": "14e907a4efe9d32c47949c436bebacc9802ace76019ca5889395c6d5f5f439e8",
+          "main_sha256": "14e907a4efe9d32c47949c436bebacc9802ace76019ca5889395c6d5f5f439e8",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_security_b03_cw_xl.yaml",
+          "snapshot_sha256": "5d780d3d410a512fe5b5db27241b0262754925da496a293343bef83f0ab2495e",
+          "main_sha256": "5d780d3d410a512fe5b5db27241b0262754925da496a293343bef83f0ab2495e",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_security_b03_gdino.yaml",
+          "snapshot_sha256": "8c35a02e30cda1f86c1e123d80c6927d47b076ffc289546998de4bf3e712f2c1",
+          "main_sha256": "8c35a02e30cda1f86c1e123d80c6927d47b076ffc289546998de4bf3e712f2c1",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_security_seed13.yaml",
+          "snapshot_sha256": "6167bdd24e65d7b5dc24dfeae843d5d6e50a010940a0178fbdee0e0fd08a2dcd",
+          "main_sha256": "6167bdd24e65d7b5dc24dfeae843d5d6e50a010940a0178fbdee0e0fd08a2dcd",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_security_seed7.yaml",
+          "snapshot_sha256": "09608bc8c9683852937c302d47e336960e456c30d4de524d1fb46c65b820ae76",
+          "main_sha256": "09608bc8c9683852937c302d47e336960e456c30d4de524d1fb46c65b820ae76",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_surfaces.yaml",
+          "snapshot_sha256": "c398f9333fd5ce49c2ee163f77c07877db04e464b612e31ce9fb619808744dc3",
+          "main_sha256": "c398f9333fd5ce49c2ee163f77c07877db04e464b612e31ce9fb619808744dc3",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_surfaces_columns.yaml",
+          "snapshot_sha256": "fe4756d8d0d4b997d831071948265e43d6d99c3bc4c1203235a237a427410a31",
+          "main_sha256": "fe4756d8d0d4b997d831071948265e43d6d99c3bc4c1203235a237a427410a31",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_surfaces_columns_seed13.yaml",
+          "snapshot_sha256": "898b10964b4c3d0a6f5360164b8b38198140c610fb8e27f3d50af2bc8562e9f4",
+          "main_sha256": "898b10964b4c3d0a6f5360164b8b38198140c610fb8e27f3d50af2bc8562e9f4",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_surfaces_columns_seed7.yaml",
+          "snapshot_sha256": "0f8299347b928662f7face306dc8dee420a5e29481247b7097cf6eea1b25b76d",
+          "main_sha256": "0f8299347b928662f7face306dc8dee420a5e29481247b7097cf6eea1b25b76d",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_surfaces_seed13.yaml",
+          "snapshot_sha256": "0559ce1faef360e4328cb49568a71554d59f2faf38200c03535bdc11ad540853",
+          "main_sha256": "0559ce1faef360e4328cb49568a71554d59f2faf38200c03535bdc11ad540853",
+          "status": "same"
+        },
+        {
+          "path": "configs/hydranet_retail_surfaces_seed7.yaml",
+          "snapshot_sha256": "718cb2a4e8d37fbf60a1f5c6135d6f6b366fefb2e096fdf6c607119b9592dac7",
+          "main_sha256": "718cb2a4e8d37fbf60a1f5c6135d6f6b366fefb2e096fdf6c607119b9592dac7",
+          "status": "same"
+        },
+        {
+          "path": "configs/policy/demo.yaml",
+          "snapshot_sha256": "d7d67a24f96c42b07bf8fa177e6f5ae7c590e8e1eeee5f05c7af3b2bf35454f0",
+          "main_sha256": "d7d67a24f96c42b07bf8fa177e6f5ae7c590e8e1eeee5f05c7af3b2bf35454f0",
+          "status": "same"
+        },
+        {
+          "path": "configs/serving/thresholds_retail_security.json",
+          "snapshot_sha256": "2687844a05345fd64ba636e9bcf012d032d5b76cf66e0f569e1620167ccb5ccd",
+          "main_sha256": "2687844a05345fd64ba636e9bcf012d032d5b76cf66e0f569e1620167ccb5ccd",
+          "status": "same"
+        },
+        {
+          "path": "configs/sweep_clips.json",
+          "snapshot_sha256": "8d33e8707402a42914d6d8ad44523a98b1a5187c08212fdb4ce16931fa561c84",
+          "main_sha256": "8d33e8707402a42914d6d8ad44523a98b1a5187c08212fdb4ce16931fa561c84",
+          "status": "same"
+        }
+      ]
+    }
+  },
+  "active_source_exact_path_references": [],
+  "snapshot_studioa_static_resolves_to": "/home/paul/hydranet_fti_stage0/datasets/fti_static",
+  "snapshot_checkpoint_links": {
+    "hydranet_retail_person01": "/home/paul/SyncAI-Lib-HydraNet/runs/hydranet_retail_person01",
+    "hydranet_retail_security_b03_gdino": "/home/paul/SyncAI-Lib-HydraNet/runs/hydranet_retail_security_b03_gdino"
+  },
+  "main_camera_json_files": [
+    "Kaohsiung-cam04.camera.json",
+    "Taichung-cam01.camera.json",
+    "Taichung-cam04.camera.json",
+    "Taichung-cam07.camera.json",
+    "Taichung-cam10.camera.json",
+    "Taichung-cam11.camera.json",
+    "Tao-Hsin-cam03.camera.json",
+    "Tao-Hsin-cam04.camera.json",
+    "Tao-Hsin-cam15.camera.json",
+    "test1.camera.json"
+  ],
+  "snapshot_camera_json_files": [
+    "FTI-MDF-cam632.camera.json",
+    "FTI-MDF-cam821.camera.json",
+    "FTI-SMT-cam815.camera.json",
+    "FTI-SMT-cam903.camera.json",
+    "FTI-SMT-cam912.camera.json"
+  ],
+  "limits": [
+    "Read-only host/repo audit; no external data removed or migrated.",
+    "No assertion that every external scheduler or another user environment has been examined.",
+    "File divergence alone does not prove a snapshot has no remaining archival value."
+  ]
+}

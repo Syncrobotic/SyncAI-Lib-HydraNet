@@ -9,6 +9,12 @@ One camera, one model, two readings: **loss prevention** (who entered where, wha
 do, did stock leave unpaid) and **retail analytics** (footfall, dwell, paths, queues) from
 the fixed CCTV already on the ceiling. No LiDAR, no new hardware.
 
+**Current StudioA experiments:** the 19-class scene / 10-class partial detector work is
+tracked in [STUDIOA_PARTIAL_DETECTION.md](docs/STUDIOA_PARTIAL_DETECTION.md), separately
+from the existing retail presets and demonstration checkpoints below. See
+[tooling status](docs/TOOLING_STATUS.md) for the historical FTI snapshot and the distinct
+roles of 2D BEV, perspective diagnostics and commissioned 3D meshes.
+
 ![Kaohsiung-cam04: detections and tracks on the left, the metric 3D scene on the right](assets/demo_Kaohsiung-cam04.gif)
 
 *Left: person boxes and confirmed tracks, with this camera's false-positive polygons
@@ -89,8 +95,9 @@ fixtures, so `terrain_mIoU/site_seg03` is the metric a checkpoint for this produ
 chosen on as much as its detection mAP is. Everything above that
 is rules, a tiny temporal model, and a VLM on trigger.
 
-**Anything constant on a fixed camera is cached, never learned; only what changes
-frame-to-frame spends the GPU.** The boundary is enforced rather than remembered:
+**Commissioned geometry for a fixed camera is cached for serving.** Offline scene
+perception training can propose new commissioning inputs; a prediction does not itself
+establish metric scale or replace reviewed geometry. The serving boundary is enforced:
 `tests/test_package_boundaries.py` fails if a serving-path module ever imports
 `syncai_bev3d`.
 

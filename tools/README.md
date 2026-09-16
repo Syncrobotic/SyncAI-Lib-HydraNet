@@ -1,23 +1,19 @@
-# tools/ — data production and dev tooling (upstream of training)
+# tools/ — offline data, commissioning and bounded training experiments
 
-Everything here sits *upstream* of training: it makes the data and checks the inputs a run
-depends on. It is not a deployment surface — that is [`../deploy/`](../deploy/), the
-downstream end. Filing these under `deploy/` would confuse an input with an output.
+These tools produce and review data, commission cameras, and run bounded experiments.
+Deployment entry points live under [`../deploy/`](../deploy/).
 
-**"Training" there means `hydranet-train`**, the wheel's entry point that fits the shipped
-network. One tool here does fit a model — `temporal/train_posture.py`, the step-8 posture
-model, under 100K parameters — and it is not an exception to the sentence above so much as
-a reminder of what that sentence is about: it consumes a `.npz` the other three temporal
-tools produce, it ships nothing, and it is here rather than in `src/` for the same reason
-everything else is.
+`hydranet-train` is the general training entry point. Experiment workers also include
+`commissioning/stage0_train.py`, `annotation/studioa_train.py`,
+`commissioning/train_glazing.py` and `temporal/train_posture.py`. A completed experiment
+does not automatically replace a deployed model. See [tool status and historical
+snapshots](../docs/TOOLING_STATUS.md) for the FTI copy, BEV diagnostics and current routes.
 
 ## [`commissioning/`](commissioning/) — the per-camera pipeline (PLAN §2.1)
 
 Everything that turns one camera's plates into its `camera.json`, its zones, and its 3D
 scene. Each is idempotent from the caches; re-runs cost no GPU except the two teacher
-passes. Twenty-one tools, in the five groups they actually fall into — this section listed
-six of them until 2026-08-29, and the whole figure pipeline, which is where the face-blur
-work lives, was among the twelve it did not mention.
+passes. The groups below distinguish production of evidence from its review and display.
 
 **Build the artefacts.** `masks_pass.py` (structure vote), `extras_pass.py` (door /
 product subclasses / the SAM 3 floor source), `depth_complete.py` (geometry fills what the
@@ -33,14 +29,17 @@ proposals back into the commissioning artefacts.
 
 **Two 3D panels, and neither replaced the other.** `syncai_bev3d/scene_mesh.py` takes a
 camera *name* and draws what commissioning measured for it -- solid geometry, GLB/OBJ
-export -- so it can only draw the **8 of 48** cameras that have a `camera.json`.
+export -- so it needs an existing `camera.json` and its commissioning artefacts.
 `syncai_bev3d/bev3d.py` takes arrays from a live forward pass and draws what the network
 sees in the frame, needing no commissioning at all, which makes it the only 3D panel
-available for the other 40. The README's figures moved to the mesh panel on 2026-08-25 and
+available without those artefacts. Its assumed geometry is not a metric acceptance
+result. The README's figures moved to the mesh panel on 2026-08-25 and
 the perspective one has looked superseded ever since; the commit that introduced the mesh
 scene does not mention it, and nothing said otherwise until 2026-08-30. Retiring either
 removes an answer rather than a duplicate. `tests/test_renderer_generations.py` holds the
-distinction.
+distinction. The underlying 2D `bev.py` grid remains in use for floor projection;
+`hydranet-scene` is an optional assumed-geometry diagnostic. Neither is the current
+StudioA mesh reconstruction acceptance route.
 
 **Look at what was built.** `scene3d.py` and `scene_mesh.py` (the flat diagnostic panel
 and the solid-mesh scene, with GLB/OBJ export), `scene_overlay.py` (project the
