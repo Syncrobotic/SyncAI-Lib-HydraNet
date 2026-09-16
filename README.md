@@ -150,6 +150,8 @@ service need end-to-end acceptance. The new-store Stage0–4 target and the Sept
 whole-store training protocol are in [STUDIOA_STAGE0_4.md](docs/STUDIOA_STAGE0_4.md).
 The latest requested Stage1 scene-understanding scope, class coverage gaps, and proposed
 Stage2–4 responsibilities are audited in [STUDIOA_CAPABILITY_AUDIT.md](docs/STUDIOA_CAPABILITY_AUDIT.md).
+The [v1 scene annotation contract](docs/STUDIOA_SCENE_CONTRACT.md) now defines the
+requested classes and source-bound human review workflow; it does not change trained heads.
 These product stage names differ from the historical command workflow below.
 
 ### Stage 0 — once per camera (commissioning)

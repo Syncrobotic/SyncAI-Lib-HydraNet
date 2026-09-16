@@ -188,3 +188,15 @@ merchandise and the fixture holding it is the hardest one in the taxonomy and ca
 guessed back. So annotating at the finer level and deriving the coarser is strictly better
 than the reverse, and a `retail_surfaces` scheme would let someone draw the lossy version
 by mistake.
+
+### StudioA scene review preparation
+
+`annotation/studioa_review.py prepare --source DATASET NATIVE_SCHEME --out NEW_DIR`
+freezes candidate frames, original masks, conservative entity proposals and empty human
+review tasks. Repeat `--source` for multiple datasets. `--per-camera` defaults to three
+sessions per source/camera. Merged shell/fixture labels remain ignore rather than being
+guessed into new classes. `check --out DIR` validates frozen sources and reviewed
+annotations, returning 2 while human review is pending. Prospective store folds do not
+make previously used data a blind test set. See the
+[StudioA scene contract](../docs/STUDIOA_SCENE_CONTRACT.md) for class boundaries,
+annotation format, commands and acceptance limits.

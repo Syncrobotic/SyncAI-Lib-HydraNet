@@ -1,0 +1,156 @@
+{
+  "date": "2026-09-16",
+  "run": "runs/studioa_contract_review_20260916_v1",
+  "manifest_sha256": "8dc52547a335ec8af6a12d7fea1f8a4e0920922b472f55c6c8031a08d890c08b",
+  "contract_sha256": "542937b8bd854a847c7aadc76975d0a2a202c738bede012783a96ac4e4d7ac7b",
+  "producer_files": {
+    "studioa_review.py": "f3bb249d72e8d9a9337750025877b0d872cfecc7b9b6ad61fdaabe114b3732b3",
+    "studioa_contract.py": "f6550ab759263d959224d2702b6e2a6c381e2c7557c1bb337aaec91c46beb4fa"
+  },
+  "scope": "Initial annotation bootstrap snapshot; candidate pixels are not human truth or model accuracy.",
+  "indexed_pairs": 29867,
+  "indexed_pairs_by_source": {
+    "retail_objects_batch02": 288,
+    "retail_objects_batch03": 368,
+    "site30k_v1": 29211
+  },
+  "selected_frames": 121,
+  "cameras": [
+    "Kaohsiung-cam03",
+    "Kaohsiung-cam04",
+    "Kaohsiung-cam05",
+    "Kaohsiung-cam06",
+    "Kaohsiung-cam07",
+    "Kaohsiung-cam08",
+    "Kaohsiung-cam11",
+    "Kaohsiung-cam12",
+    "Taichung-cam01",
+    "Taichung-cam02",
+    "Taichung-cam03",
+    "Taichung-cam04",
+    "Taichung-cam05",
+    "Taichung-cam06",
+    "Taichung-cam07",
+    "Taichung-cam08",
+    "Taichung-cam09",
+    "Taichung-cam10",
+    "Taichung-cam11",
+    "Tao-Hsin-cam01",
+    "Tao-Hsin-cam02",
+    "Tao-Hsin-cam03",
+    "Tao-Hsin-cam04",
+    "Tao-Hsin-cam15"
+  ],
+  "unique_selected_pixel_hashes": 121,
+  "candidate_pixels_in_selected_frames": {
+    "floor": 64479993,
+    "column": 7581732,
+    "person": 10850215,
+    "display_table": 9829643,
+    "laptop": 769819,
+    "tablet": 95363,
+    "phone": 173952,
+    "boxed_stock": 3308941
+  },
+  "relabel_pixels_in_selected_frames": {
+    "wall": 47844106,
+    "fixture": 44353098,
+    "product": 23676024,
+    "shelf": 4270823
+  },
+  "prospective_folds": {
+    "Kaohsiung": {
+      "status": "structurally_valid",
+      "counts": {
+        "train": 38,
+        "val": 29,
+        "test": 35
+      },
+      "reason": null,
+      "scope": "selected frames only; prospective, not blind for existing models"
+    },
+    "Taichung": {
+      "status": "structurally_valid",
+      "counts": {
+        "train": 22,
+        "val": 20,
+        "test": 60
+      },
+      "reason": null,
+      "scope": "selected frames only; prospective, not blind for existing models"
+    },
+    "Tao-Hsin": {
+      "status": "structurally_valid",
+      "counts": {
+        "train": 46,
+        "val": 33,
+        "test": 26
+      },
+      "reason": null,
+      "scope": "selected frames only; prospective, not blind for existing models"
+    }
+  },
+  "initial_review_status": {
+    "status": "pending_review",
+    "frames": 121,
+    "reviewed_frames": 0,
+    "reviewed_instances_by_view": {
+      "floor": 0,
+      "wall": 0,
+      "ceiling": 0,
+      "column": 0,
+      "door": 0,
+      "display_cabinet": 0,
+      "display_table": 0,
+      "laptop": 0,
+      "phone": 0,
+      "tablet": 0,
+      "boxed_stock": 0,
+      "cardboard_box": 0,
+      "speaker": 0,
+      "poster": 0,
+      "fire_equipment": 0,
+      "chair": 0,
+      "person": 0,
+      "glass": 0,
+      "glass_door": 0,
+      "checkout_counter": 0
+    },
+    "reviewed_coverage": {
+      "floor": {},
+      "wall": {},
+      "ceiling": {},
+      "column": {},
+      "door": {},
+      "display_cabinet": {},
+      "display_table": {},
+      "laptop": {},
+      "phone": {},
+      "tablet": {},
+      "boxed_stock": {},
+      "cardboard_box": {},
+      "speaker": {},
+      "poster": {},
+      "fire_equipment": {},
+      "chair": {},
+      "person": {},
+      "glass": {},
+      "glass_door": {},
+      "checkout_counter": {}
+    },
+    "acceptance": "not established; requires independent split, coverage and metric gates"
+  },
+  "validation": {
+    "relevant_tests_passed": 90,
+    "new_tests_passed": 19,
+    "ruff": "passed",
+    "changed_file_types": "passed",
+    "pending_cli_exit_code": 2
+  },
+  "limits": [
+    "Not a blind evaluation set for existing checkpoints.",
+    "Fold checks cover selected frames; full dataset pixel leakage was not checked.",
+    "Class presence in the real scene is not established by a teacher proposal.",
+    "No new model head, training export or temporal event truth has been produced."
+  ]
+}

@@ -1727,3 +1727,34 @@ for all 33 changed Python files. This is targeted validation, not the entire CI
 suite or an independent real-world accuracy measurement. Next work starts with
 class/instance/material/role contracts and human-reviewed acceptance data, before
 changing output heads or starting another training run.
+
+### 10.19 StudioA taxonomy contract and annotation bootstrap — 2026-09-16
+
+Implemented `studioa.scene.v1` as an annotation contract with 19 base entities,
+20 query views covering the requested physical classes plus floor/person, and void
+as ignore. Glass doors are door instances with observed glazing; checkout is an
+evidence-backed counter role. Existing model heads and label schemes are unchanged.
+The [annotation guide](STUDIOA_SCENE_CONTRACT.md) fixes class boundaries, visible
+multi-polygons, uncertain attributes, stage responsibilities and supervision limits.
+
+Conservative migration retains only native distinctions and records merged wall,
+fixture, product and shelf regions for relabelling. Source-bound review packages
+keep teacher proposals separate from empty human tasks. Validation refuses changed
+images/contracts, incomplete coverage, contradictory negatives and invalid polygons;
+unknown door material/counter role cannot become a negative subtype label. Completed
+review still does not establish independent accuracy or sufficient class coverage.
+
+The first package is `runs/studioa_contract_review_20260916_v1/`: **29,867** indexed
+image/mask pairs across SITE30K v1 and retail_objects batches 02/03; **121 distinct
+selected images from 24 cameras**, **0 human-reviewed frames**. All three prospective
+whole-store folds pass selected-frame camera/content checks. Source-store test samples
+remain excluded; these are previously used data, not a blind holdout for old models.
+The [tracked initial report](reviews/studioa_contract_review_20260916_v1.json) binds
+the run manifest and producer files, with per-source counts and migration totals.
+
+Validation: **90 relevant tests passed**, including **19 new tests**. Changed-file
+Ruff/format/type checks passed. The real CLI prepares the bundle and returns exit 2
+from `check` while review is pending. No GPU training, label export or scene promotion
+is started. Next: complete per-class human annotation and independently reserved data;
+then build head-specific supervision and a continuous person/table/product interaction
+review sequence. Three isolated scene frames do not establish temporal event truth.
