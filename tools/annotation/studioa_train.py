@@ -102,6 +102,9 @@ def pilot_config(data: Path, out: Path, manifest: dict, held_out: str) -> dict:
 
 
 def prepare(source: Path, out: Path, held_out: str) -> None:
+    from syncai_hydranet.utils.visualize import terrain_palette
+
+    terrain_palette(list(CLASSES), len(CLASSES))
     manifest = check_supervision(source)
     if manifest["folds"][held_out]["missing_train_classes"]:
         raise ValueError("pilot requires positive train support for every class")

@@ -21,6 +21,30 @@ from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD, PAD_COLOR, letterbox_re
 # deployments, so it needs no selection.
 TRAV_COLORS = np.array([[220, 40, 40], [250, 200, 40], [40, 200, 80]], dtype=np.uint8)
 
+# StudioA partial semantics has no void class: floor is ID 0. Match the complete
+# vocabulary and look up by name so palette indices cannot silently change meaning.
+STUDIOA_SCENE_COLORS = {
+    "floor": (139, 90, 43),
+    "wall": (130, 130, 130),
+    "ceiling": (180, 210, 240),
+    "column": (70, 90, 150),
+    "door": (245, 220, 60),
+    "glass_panel": (70, 200, 235),
+    "display_cabinet": (120, 80, 200),
+    "display_table": (30, 180, 120),
+    "counter": (190, 120, 70),
+    "laptop": (40, 110, 230),
+    "phone": (220, 40, 190),
+    "tablet": (130, 40, 130),
+    "boxed_stock": (255, 170, 30),
+    "cardboard_box": (170, 140, 100),
+    "speaker": (70, 70, 100),
+    "poster": (170, 220, 60),
+    "fire_equipment": (230, 40, 40),
+    "chair": (80, 150, 70),
+    "person": (255, 100, 180),
+}
+
 
 # configs/hydranet_indoor.yaml. Taken from scripts/live_view_orin.py, which had been
 # carrying the only indoor palette in the repo -- under a comment claiming it matched
@@ -145,6 +169,10 @@ def terrain_palette(classes, n_classes: int | None = None) -> np.ndarray:
     other taxonomy's palette, which is what this function exists to stop.
     """
     names = list(classes or [])
+    if len(names) == len(STUDIOA_SCENE_COLORS) and set(names) == set(STUDIOA_SCENE_COLORS):
+        if n_classes is not None and n_classes != len(names):
+            raise ValueError("StudioA class names and model class count disagree")
+        return np.array([STUDIOA_SCENE_COLORS[name] for name in names], dtype=np.uint8)
     if not names:
         if n_classes is None:
             raise ValueError("terrain_palette needs either class names or n_classes")

@@ -33,6 +33,28 @@ from syncai_hydranet.utils.visualize import (
 CONFIGS = Path(__file__).resolve().parents[1] / "configs"
 
 
+def test_studioa_scene_grid_preserves_floor_and_ignore():
+    import torch
+
+    from syncai_hydranet.data.studioa_supervision import CLASSES
+    from syncai_hydranet.utils.visualize import prediction_grid
+
+    names = list(CLASSES)
+    palette = terrain_palette(names, len(names))
+    assert palette.shape == (19, 3)
+    assert (palette[0] != 0).any()  # floor is not void
+    assert len(np.unique(palette, axis=0)) == 19
+    assert np.array_equal(terrain_palette(names[::-1]), palette[::-1])
+    with pytest.raises(ValueError, match="class count"):
+        terrain_palette(names, 7)
+    labels = torch.tensor([[[*range(19), 255]]])
+    predictions = labels.clamp(max=18)
+    grid = prediction_grid(torch.zeros(1, 3, 1, 20), predictions, labels, palette, gap=1)
+    assert grid.shape == (1, 62, 3)
+    assert (grid[0, 42] != 0).any()  # labelled floor stays coloured
+    assert (grid[0, -1] == 0).all()  # unknown remains black
+
+
 def classes_of(name):
     raw = yaml.safe_load((CONFIGS / name).read_text())
     return raw["data"]["terrain_classes"]
