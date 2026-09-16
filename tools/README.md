@@ -206,7 +206,8 @@ annotation format, commands and acceptance limits.
 This is the current StudioA annotation route; manual task completion is optional.
 The [execution status](../docs/STUDIOA_EXECUTION_PROGRESS.md) identifies current data
 and retained models. [Semantic review](../docs/STUDIOA_SEMANTIC_REVIEW.md) documents
-train-only AI corrections; its interiors cannot be used as full object instances.
+train-only corrections and explicit source-validation revisions; test data stays immutable
+and semantic interiors cannot be used as full object instances.
 
 `annotation/studioa_autolabel.py prepare --bundle REVIEW_DIR --out NEW_DIR` freezes
 images, teacher revision, policy and worker code. `run --out NEW_DIR` runs the frozen

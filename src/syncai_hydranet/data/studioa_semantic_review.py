@@ -1,4 +1,4 @@
-"""Replayable AI semantic corrections, restricted to one fold's training frames."""
+"""Replayable AI semantic revisions with explicit split scope and immutable test data."""
 
 from __future__ import annotations
 
@@ -15,10 +15,60 @@ from .studioa_review import digest, write_json
 from .studioa_supervision import CLASSES, IGNORE, _relative, check_supervision
 
 REVIEW_SCHEMA = "studioa.semantic-review.v1"
+REVISION_SCHEMA = "studioa.semantic-review.v2"
+
+
+def review_splits(review: dict) -> tuple[str, ...]:
+    """Legacy reviews are train-only; evaluation revisions require explicit provenance."""
+    if review.get("schema") == REVIEW_SCHEMA:
+        if any(f.get("quarantine_regions") for f in review["frames"]):
+            raise ValueError("regional quarantine requires a v2 review")
+        return ("train",)
+    if (
+        review.get("schema") == REVISION_SCHEMA
+        and review.get("revision_kind") == "source_train_val_correction"
+        and review.get("evaluation_exposure") == "previously_inspected_not_blind"
+        and review.get("evaluation_revision_reason")
+    ):
+        return ("train", "val")
+    raise ValueError("unknown review schema or missing evaluation revision provenance")
+
+
+def validate_item_scope(item: dict, split: str | None, review: dict) -> None:
+    if split not in review_splits(review):
+        raise ValueError("non-train correction or protected evaluation data")
+    if review["schema"] == REVISION_SCHEMA and item.get("split") != split:
+        raise ValueError("review item split binding mismatch")
+
+
+def polygon_mask(region: dict, shape: tuple[int, ...]) -> np.ndarray:
+    """Rasterize a reasoned, bounded interior using original image coordinates."""
+    if region.get("scope") != "semantic_interior" or not region.get("reason"):
+        raise ValueError("region must be a reasoned semantic interior")
+    h, w = shape
+    points = region["polygon_xy"]
+    if len(points) < 3 or any(
+        len(p) != 2
+        or any(type(v) is not int for v in p)
+        or not (0 <= p[0] < w and 0 <= p[1] < h)
+        for p in points
+    ):
+        raise ValueError("polygon outside image or noninteger coordinates")
+    area = abs(
+        sum(
+            a[0] * b[1] - b[0] * a[1]
+            for a, b in zip(points, points[1:] + points[:1], strict=True)
+        )
+    )
+    if not area:
+        raise ValueError("degenerate polygon")
+    canvas = Image.new("L", (w, h))
+    ImageDraw.Draw(canvas).polygon([tuple(p) for p in points], fill=1)
+    return np.asarray(canvas, dtype=bool)
 
 
 def check_review(root: Path, manifest: dict) -> None:
-    """Replay from embedded parent masks; require byte-identical evaluation data."""
+    """Replay corrections; require byte-identical test and unreviewed data."""
     directory = root / "semantic_review"
     meta = manifest["semantic_review"]
     parent = json.loads((directory / "parent_manifest.json").read_text())
@@ -26,7 +76,7 @@ def check_review(root: Path, manifest: dict) -> None:
     review = json.loads((directory / "review.json").read_text())
     results = json.loads((directory / "results.json").read_text())
     if (
-        meta["schema"] != REVIEW_SCHEMA
+        meta["schema"] != review["schema"]
         or digest(directory / "review.json") != meta["review_sha256"]
         or digest(directory / "parent_manifest.json") != meta["source_manifest_sha256"]
         or review["source_manifest_sha256"] != meta["source_manifest_sha256"]
@@ -35,6 +85,7 @@ def check_review(root: Path, manifest: dict) -> None:
         or set(manifest["folds"]) != {meta["held_out"]}
     ):
         raise ValueError("semantic review provenance mismatch")
+    review_splits(review)
     items = {row["frame_id"]: row for row in review["frames"]}
     if len(items) != len(review["frames"]) or set(results) != set(items):
         raise ValueError("semantic review frame mismatch")
@@ -62,9 +113,8 @@ def check_review(root: Path, manifest: dict) -> None:
             ):
                 raise ValueError("unreviewed frame changed")
             continue
-        if fold["assignments"][fid] != "train":
-            raise ValueError("semantic review changed evaluation data")
         item = items[fid]
+        validate_item_scope(item, fold["assignments"][fid], review)
         parent_mask = directory / "parent_masks" / f"{fid}.png"
         if (
             digest(parent_mask) != parent_report["outputs"][previous["mask"]]
@@ -94,8 +144,8 @@ def check_review(root: Path, manifest: dict) -> None:
 def apply_correction(target: np.ndarray, item: dict) -> tuple[np.ndarray, dict]:
     """Quarantine old positives, then label reviewed interiors of unknown regions.
 
-    Polygons explicitly resolve prior uncertainty inside their bounds. They never
-    overwrite other positive classes or constitute complete object instances.
+    Regional quarantines explicitly name the mistaken source classes. Other positive
+    classes remain protected. These interiors are not complete object instances.
     """
     if target.ndim != 2 or not np.isin(target, [*CLASSES.values(), IGNORE]).all():
         raise ValueError("invalid semantic target")
@@ -106,34 +156,19 @@ def apply_correction(target: np.ndarray, item: dict) -> tuple[np.ndarray, dict]:
         if entity not in CLASSES:
             raise ValueError("unknown quarantine class")
         result[result == CLASSES[entity]] = IGNORE
+    for region in item.get("quarantine_regions", []):
+        classes = region["classes"]
+        if not classes or any(entity not in CLASSES for entity in classes):
+            raise ValueError("unknown or empty regional quarantine classes")
+        mask = polygon_mask(region, target.shape)
+        result[mask & np.isin(result, [CLASSES[entity] for entity in classes])] = IGNORE
     quarantined = int(np.count_nonzero(result != target))
     proposals = np.full(target.shape, IGNORE, dtype=np.uint8)
-    h, w = target.shape
     blocked = np.zeros(target.shape, dtype=bool)
     for region in item["positive_interiors"]:
-        if region.get("scope") != "semantic_interior" or not region.get("reason"):
-            raise ValueError("positive must be a reasoned semantic interior")
         if region["entity"] not in CLASSES:
             raise ValueError("unknown positive class")
-        points = region["polygon_xy"]
-        if len(points) < 3 or any(
-            len(p) != 2
-            or any(type(v) is not int for v in p)
-            or not (0 <= p[0] < w and 0 <= p[1] < h)
-            for p in points
-        ):
-            raise ValueError("polygon outside image or noninteger coordinates")
-        area = abs(
-            sum(
-                a[0] * b[1] - b[0] * a[1]
-                for a, b in zip(points, points[1:] + points[:1], strict=True)
-            )
-        )
-        if not area:
-            raise ValueError("degenerate polygon")
-        canvas = Image.new("L", (w, h))
-        ImageDraw.Draw(canvas).polygon([tuple(p) for p in points], fill=1)
-        mask = np.asarray(canvas, dtype=bool)
+        mask = polygon_mask(region, target.shape)
         cid = CLASSES[region["entity"]]
         if np.any(mask & (proposals != IGNORE) & (proposals != cid)):
             raise ValueError("contradictory reviewed polygons")
@@ -162,20 +197,20 @@ def export_review(source: Path, reviews: Path, out: Path) -> dict:
     review = json.loads(reviews.read_text())
     if manifest.get("semantic_review"):
         raise ValueError("review chaining requires a new explicit source audit")
-    if (
-        review.get("schema") != REVIEW_SCHEMA
-        or review.get("reviewer_kind") != "ai"
-        or review.get("source_manifest_sha256") != digest(source / "manifest.json")
+    if review.get("reviewer_kind") != "ai" or review.get("source_manifest_sha256") != digest(
+        source / "manifest.json"
     ):
         raise ValueError("review requires source binding and AI provenance")
+    review_splits(review)
     held_out = review["held_out"]
     assignments = manifest["folds"][held_out]["assignments"]
     frames = {f["id"]: f for f in manifest["frames"]}
     prepared, seen = {}, set()
     for item in review["frames"]:
         fid = item["frame_id"]
-        if fid in seen or fid not in frames or assignments[fid] != "train":
-            raise ValueError("duplicate, unknown or non-train correction")
+        if fid in seen or fid not in frames:
+            raise ValueError("duplicate or unknown correction")
+        validate_item_scope(item, assignments[fid], review)
         seen.add(fid)
         frame = frames[fid]
         for field in ("image", "mask"):
@@ -227,22 +262,29 @@ def export_review(source: Path, reviews: Path, out: Path) -> dict:
             for name in ("pixels_by_class", "valid_pixels", "ignore_pixels"):
                 frame[name] = stats[name]
             results[fid] = stats
-        # A train-only correction is not transferable to other held-out folds.
+        # Revisions never transfer reviewed source frames to another held-out fold.
         updated["folds"] = {held_out: updated["folds"][held_out]}
         fold = updated["folds"][held_out]
-        counts = Counter(dict.fromkeys(CLASSES, 0))
-        for frame in updated["frames"]:
-            if assignments[frame["id"]] == "train":
-                counts.update(frame["pixels_by_class"])
-        fold["pixels_by_split"]["train"] = dict(counts)
-        fold["missing_train_classes"] = [k for k, n in counts.items() if not n]
+        for split in ("train", "val", "test"):
+            counts = Counter(dict.fromkeys(CLASSES, 0))
+            for frame in updated["frames"]:
+                if assignments[frame["id"]] == split:
+                    counts.update(frame["pixels_by_class"])
+            fold["pixels_by_split"][split] = dict(counts)
+        fold["missing_train_classes"] = [
+            k for k, n in fold["pixels_by_split"]["train"].items() if not n
+        ]
         updated["semantic_review"] = {
-            "schema": REVIEW_SCHEMA,
+            "schema": review["schema"],
             "held_out": held_out,
             "review_sha256": digest(reviews),
             "source_manifest_sha256": digest(source / "manifest.json"),
             "source": str(source.resolve()),
-            "scope": "train-only semantic interiors; not instance annotations",
+            "scope": (
+                "train-only semantic interiors; not instance annotations"
+                if review["schema"] == REVIEW_SCHEMA
+                else "source train/val revision; test immutable; not instance annotations"
+            ),
             "companion_role": "parent evidence only; replay review for corrected targets",
             "uncertainty": "explicit reviewed interiors resolve parent ignore pixels",
             "independent_accuracy": False,
@@ -252,7 +294,8 @@ def export_review(source: Path, reviews: Path, out: Path) -> dict:
         report = {
             "status": "completed",
             "frames": len(frames),
-            "corrected_train_frames": len(prepared),
+            "corrected_train_frames": sum(assignments[fid] == "train" for fid in prepared),
+            "corrected_val_frames": sum(assignments[fid] == "val" for fid in prepared),
             "classes": CLASSES,
             "valid_pixels": sum(f["valid_pixels"] for f in updated["frames"]),
             "ignore_pixels": sum(f["ignore_pixels"] for f in updated["frames"]),
