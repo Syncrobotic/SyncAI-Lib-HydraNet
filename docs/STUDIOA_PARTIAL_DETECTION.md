@@ -508,3 +508,33 @@ score約0.275與0.227，超過0.20，但對應點的其他類別勝出，因而�
 
 [裁切候選逐圖對照](../runs/studioa_detector_crop_20260916_focused/review/selected_val_review.jpg) ·
 [等預算比較與完整核對](reviews/studioa_focused_crop_results_20260916.json)。
+
+## 2026-09-16：已指派正例的分類競爭
+
+先對35張source train做整圖、不增強、float32診斷；沒有利用val選新參數。
+上輪整圖對照的手機344個FCOS指派點中，正確類別只在7點勝出；其餘337點
+的勝出錯誤類別梯度全部為0。平板0／885、筆電0／442正確勝出，其勝出錯誤
+類別梯度亦全部為0。錯誤主要是海報及人物。這是逐圖logit梯度，不是歷史
+batch梯度、參數梯度或真實準確率；但與程式契約一致：原loss只拉高指派類別，
+其餘通道未知，解碼卻只讓最高分類分數的類別取得該候選框。
+
+新增可選 `loss.positive_classification=assigned_object`，預設仍為
+`positive_only`。僅在FCOS已指派給覆核正物件的點，將其他類別納入one-hot
+focal分類監督，使分類與該點回歸的物件身分一致；這不是宣稱其他物件在畫面中
+不存在。若另一個已覆核類別的框也涵蓋此點，則保護該類別通道，跨所有金字塔
+層級，不把重疊物件互判為負例。未指派位置、未知區、padding保持原監督；
+原本逐類負項budget先計算，再合併新mask，不改回歸與centerness loss公式。
+部分標註仍可能漏掉重疊物件，因此此假設與影響必須由實驗檢查，不能當作
+新增的整圖absence標註。
+
+只跑一組整圖對照及一組候選；兩組同instances v5、同初始化、seed42、
+positive_budget、25輪／425次更新、無early stopping、關閉局部裁切。
+固定原score>0.20／IoU≥0.50／NMS0.6／max_det100，選best且另報last。
+候選須通過原升級條件且嚴格超過等預算對照。另要求對照精確重現上輪整圖
+對照的best/last模型tensors與驗證指標，驗證預設行為未改。
+
+178項測試、lint、型別檢查通過。新增測試驗證只抑制正指派點的競爭通道、
+正確類別及box/centerness梯度不變、未知／padding／其他層級不增梯度、
+重疊覆核物件與資料集未知類別受到保護，以及bfloat16／完整標註相容性。
+
+[執行前計畫及訓練診斷](reviews/studioa_positive_competition_plan_20260916.json)。

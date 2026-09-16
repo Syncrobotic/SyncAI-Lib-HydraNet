@@ -248,3 +248,101 @@ def test_partial_instance_config_refuses_wrong_class_order_and_coco_eval():
     _check_detection_head_classes(report, cfg)
     assert any("class detection head order" in e for e in report.errors)
     assert any("COCO evaluation" in e for e in report.errors)
+
+
+def test_assigned_object_competition_changes_only_rivals_at_positive_points():
+    gradients = []
+    for mode in ("positive_only", "assigned_object"):
+        head, cls, reg, ctr, boxes, labels, negative = batch()
+        FCOSLoss(3, positive_classification=mode)(
+            head, cls, reg, ctr, boxes, labels, negative_mask=negative
+        )[0].backward()
+        gradients.append(([x.grad.clone() for x in cls], [x.grad.clone() for x in reg + ctr]))
+    before, after = gradients
+    torch.testing.assert_close(before[1], after[1], rtol=0, atol=0)
+    for old, new in zip(before[0], after[0], strict=True):
+        torch.testing.assert_close(old[:, 1], new[:, 1], rtol=0, atol=0)
+    assert (before[0][0][0, [0, 2], 1:3, 1:3] == 0).all()
+    assert (after[0][0][0, [0, 2], 1:3, 1:3] > 0).all()
+    # No added signal on unknown, padding, explicit empty, or unassigned pyramid levels.
+    diff = after[0][0] - before[0][0]
+    diff[:, :, 1:3, 1:3] = 0
+    assert (diff == 0).all()
+    torch.testing.assert_close(before[0][1], after[0][1], rtol=0, atol=0)
+
+
+def test_assigned_object_protects_other_reviewed_overlap_and_dataset_unknown_channels():
+    head, cls, reg, ctr, boxes, labels, negative = batch()
+    boxes[0] = torch.cat([boxes[0], torch.tensor([[0.0, 0.0, 32.0, 32.0]])])
+    labels[0] = torch.tensor([1, 2])
+    FCOSLoss(3, positive_classification="assigned_object")(
+        head,
+        cls,
+        reg,
+        ctr,
+        boxes,
+        labels,
+        negative_mask=negative,
+    )[0].backward()
+    assert cls[0].grad[0, 1, 1, 1] < 0  # smaller assigned object remains positive
+    assert cls[0].grad[0, 2, 1, 1] == 0  # overlapping object remains unknown here
+    assert cls[0].grad[0, 0, 1, 1] > 0  # unrelated rival is suppressed
+    assert (cls[1].grad == 0).all()  # no assignment at this pyramid level
+    head, cls, reg, ctr, boxes, labels, negative = batch()
+    FCOSLoss(3, positive_classification="assigned_object")(
+        head,
+        cls,
+        reg,
+        ctr,
+        boxes,
+        labels,
+        negative_mask=negative,
+        class_mask=torch.tensor([0.0, 1.0, 1.0]),
+    )[0].backward()
+    assert all((x.grad[:, 0] == 0).all() for x in cls)
+    assert cls[0].grad[0, 2, 1, 1] > 0
+
+
+def test_assigned_object_does_not_label_unknown_empty_image():
+    head, cls, reg, ctr, _, _, negative = batch()
+    negative.zero_()
+    loss, _ = FCOSLoss(3, positive_classification="assigned_object")(
+        head,
+        cls,
+        reg,
+        ctr,
+        [torch.zeros(0, 4)],
+        [torch.zeros(0, dtype=torch.long)],
+        negative_mask=negative,
+    )
+    loss.backward()
+    assert all((x.grad == 0).all() for x in cls + reg + ctr)
+
+
+def test_assigned_object_bfloat16_and_exhaustive_compatibility():
+    head, cls, reg, ctr, boxes, labels, negative = batch()
+    cls = [x.detach().to(torch.bfloat16).requires_grad_(True) for x in cls]
+    loss, _ = FCOSLoss(3, positive_classification="assigned_object")(
+        head,
+        cls,
+        reg,
+        ctr,
+        boxes,
+        labels,
+        negative_mask=negative,
+    )
+    loss.backward()
+    assert torch.isfinite(loss)
+    assert all(torch.isfinite(x.grad).all() for x in cls)
+    plain = FCOSLoss(3)(head, cls, reg, ctr, boxes, labels)[0]
+    assigned = FCOSLoss(3, positive_classification="assigned_object")(
+        head,
+        cls,
+        reg,
+        ctr,
+        boxes,
+        labels,
+    )[0]
+    torch.testing.assert_close(plain, assigned, rtol=0, atol=0)
+    with pytest.raises(ValueError, match="positive_classification"):
+        FCOSLoss(3, positive_classification="invalid")

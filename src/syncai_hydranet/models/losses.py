@@ -161,6 +161,27 @@ def class_negative_weights(selected, positive, existing):
     return novel.float() * scale[None, None, :]
 
 
+def assigned_object_class_mask(points, onehot, boxes_list, labels_list):
+    """Classify the reviewed object assigned to a point, not absence in the scene.
+
+    Only positive assignment points gain competing-class supervision. If another
+    reviewed class covers the point, protect its channel on every pyramid level:
+    overlapping objects are not evidence against each other. Outside assigned
+    positives, unknown channels remain unknown.
+    """
+    mask = onehot.sum(-1, keepdim=True).expand_as(onehot).clone()
+    for b, (boxes, labels) in enumerate(zip(boxes_list, labels_list, strict=True)):
+        for box, label in zip(boxes, labels, strict=True):
+            inside = (
+                (points[:, 0] >= box[0])
+                & (points[:, 0] <= box[2])
+                & (points[:, 1] >= box[1])
+                & (points[:, 1] <= box[3])
+            )
+            mask[b, inside, label] = onehot[b, inside, label]
+    return mask
+
+
 class FCOSLoss(nn.Module):
     def __init__(
         self,
@@ -169,6 +190,7 @@ class FCOSLoss(nn.Module):
         reg_weight=1.0,
         centerness_weight=1.0,
         class_negative_normalization="sum",
+        positive_classification="positive_only",
     ):
         super().__init__()
         self.num_classes = num_classes
@@ -176,6 +198,9 @@ class FCOSLoss(nn.Module):
         if class_negative_normalization not in ("sum", "positive_budget"):
             raise ValueError("unsupported class_negative_normalization")
         self.class_negative_normalization = class_negative_normalization
+        if positive_classification not in ("positive_only", "assigned_object"):
+            raise ValueError("unsupported positive_classification")
+        self.positive_classification = positive_classification
 
     def forward(
         self,
@@ -198,6 +223,9 @@ class FCOSLoss(nn.Module):
         preserves exhaustive-box training, including its ordinary background loss.
         ``class_negative_mask`` is optional [B,C,H,W] reviewed absence per class;
         it never turns the other channels into background.
+        ``assigned_object`` optionally supervises competing classes at positive
+        assignment points, while protecting other overlapping reviewed classes.
+        It labels the assigned object's identity, not whole-image class absence.
         """
         device = cls_out[0].device
         shapes = [c.shape[-2:] for c in cls_out]
@@ -274,6 +302,11 @@ class FCOSLoss(nn.Module):
                     else selected.to(onehot.dtype)
                 )
                 partial_mask = torch.maximum(partial_mask, weight)
+            if self.positive_classification == "assigned_object":
+                partial_mask = torch.maximum(
+                    partial_mask,
+                    assigned_object_class_mask(points, onehot, boxes_list, labels_list),
+                )
         if class_mask is not None:
             # [B, C] -> [B, 1, C] against flat_cls's [B, points, C]; a [C] mask
             # broadcasts as it is. Cast rather than assume: under autocast flat_cls is

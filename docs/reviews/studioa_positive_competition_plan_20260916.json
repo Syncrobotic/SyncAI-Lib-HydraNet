@@ -1,0 +1,303 @@
+{
+  "status": "predeclared before either comparison arm trains",
+  "question": "Does supervised competition for the assigned reviewed object repair the positive-only loss / winner-takes-one decoder mismatch?",
+  "data": "runs/studioa_partial_instances_20260916_v5",
+  "manifest_sha256": "eba13055187110a16c211fd2e76b7cd93fc437e76f711266a1f6c8b022b96428",
+  "initial_checkpoint": "runs/studioa_scene_pilot_20260916_v2/model/best.pt",
+  "arms": {
+    "control": "runs/studioa_detector_competition_20260916_control",
+    "assigned": "runs/studioa_detector_competition_20260916_assigned"
+  },
+  "only_comparison_config_difference": "model.heads.detection.loss.positive_classification, omitted positive_only vs assigned_object",
+  "assigned_object_contract": [
+    "Only FCOS points actually assigned to a reviewed positive object gain other-class focal supervision.",
+    "The label describes the object whose box the point regresses; it does not assert whole-image or per-pixel class absence.",
+    "If any other reviewed class box contains that point, its channel is protected across all pyramid levels.",
+    "Unknown points, points on unassigned levels, padding, regression and centerness loss formula unchanged.",
+    "Existing empty/per-class negative supervision and its positive_budget calculation unchanged; new positive classification mask is combined afterward.",
+    "Dataset-level unknown class channels retain zero gradient.",
+    "Requires reliable single-class object labels; overlapping unreviewed objects cannot be completely audited by partial labels."
+  ],
+  "fixed": {
+    "seed": 42,
+    "input_size": [
+      512,
+      896
+    ],
+    "batch_size": 2,
+    "lr": 0.0002,
+    "warmup_iters": 26,
+    "epochs": 25,
+    "early_stop_patience": 0,
+    "detector_only": true,
+    "scene_eval_frames": 33,
+    "detector_val_frames": 6,
+    "detector_val_positives": 31,
+    "score_strictly_greater_than": 0.2,
+    "iou_at_least": 0.5,
+    "nms": 0.6,
+    "max_det": 100,
+    "test_inference": false,
+    "no_threshold_sweep": true,
+    "optimizer_updates_per_arm": 425,
+    "updates_per_epoch": 17
+  },
+  "class_negative_normalization": "positive_budget",
+  "small_object_crop": false,
+  "upgrade_criteria": {
+    "reference_run": "runs/studioa_detector_warmup_20260916_v1",
+    "total_matched_strictly_greater_than": 7,
+    "matched_person_at_least": 5,
+    "matched_phone_at_least": 1,
+    "matched_poster_at_least": 1,
+    "reviewed_empty_fp_at_most": 0,
+    "all_33_scene_logits_byte_identical": true,
+    "deployment_claim": false
+  },
+  "additional_upgrade_criterion": "assigned candidate selected recall strictly exceeds same-budget control",
+  "expected_control_reproduction": "runs/studioa_detector_crop_20260916_control best/last model tensors and metrics bit-identical, because omitted option preserves operations/config",
+  "diagnostic_scope": "35 source-train full-frame no-augmentation float32 views, each image normalized independently; gradients of existing loss w.r.t. logits, not historical batch gradients or parameter gradients",
+  "training_competition_summary": {
+    "control": {
+      "laptop": {
+        "assigned_points": 442,
+        "correct_winner_points": 0,
+        "own_gradient_abs_l1": 0.07828418724238873,
+        "wrong_winner_points": 442,
+        "wrong_winner_zero_gradient_points": 442,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_poster": 362,
+        "winner_chair": 7,
+        "winner_person": 73
+      },
+      "phone": {
+        "assigned_points": 344,
+        "correct_winner_points": 7,
+        "own_gradient_abs_l1": 0.2500955305295065,
+        "wrong_winner_points": 337,
+        "wrong_winner_zero_gradient_points": 337,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_person": 68,
+        "winner_poster": 252,
+        "winner_chair": 14,
+        "winner_phone": 7,
+        "winner_cardboard_box": 3
+      },
+      "tablet": {
+        "assigned_points": 885,
+        "correct_winner_points": 0,
+        "own_gradient_abs_l1": 0.3601328237418784,
+        "wrong_winner_points": 885,
+        "wrong_winner_zero_gradient_points": 885,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_poster": 831,
+        "winner_person": 31,
+        "winner_fire_equipment": 2,
+        "winner_cardboard_box": 18,
+        "winner_chair": 3
+      },
+      "boxed_stock": {
+        "assigned_points": 290,
+        "correct_winner_points": 11,
+        "own_gradient_abs_l1": 0.027220389762078412,
+        "wrong_winner_points": 279,
+        "wrong_winner_zero_gradient_points": 279,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_poster": 269,
+        "winner_person": 10,
+        "winner_boxed_stock": 11
+      },
+      "cardboard_box": {
+        "assigned_points": 160,
+        "correct_winner_points": 13,
+        "own_gradient_abs_l1": 0.027257036417722702,
+        "wrong_winner_points": 147,
+        "wrong_winner_zero_gradient_points": 147,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_cardboard_box": 13,
+        "winner_poster": 107,
+        "winner_person": 33,
+        "winner_phone": 1,
+        "winner_chair": 6
+      },
+      "speaker": {
+        "assigned_points": 143,
+        "correct_winner_points": 1,
+        "own_gradient_abs_l1": 0.07322973338887095,
+        "wrong_winner_points": 142,
+        "wrong_winner_zero_gradient_points": 142,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_speaker": 1,
+        "winner_poster": 133,
+        "winner_phone": 9
+      },
+      "poster": {
+        "assigned_points": 901,
+        "correct_winner_points": 733,
+        "own_gradient_abs_l1": 0.1788925884757191,
+        "wrong_winner_points": 168,
+        "wrong_winner_zero_gradient_points": 168,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_poster": 733,
+        "winner_fire_equipment": 3,
+        "winner_person": 146,
+        "winner_chair": 13,
+        "winner_cardboard_box": 6
+      },
+      "fire_equipment": {
+        "assigned_points": 115,
+        "correct_winner_points": 0,
+        "own_gradient_abs_l1": 0.046553698666684795,
+        "wrong_winner_points": 115,
+        "wrong_winner_zero_gradient_points": 115,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_poster": 100,
+        "winner_person": 15
+      },
+      "chair": {
+        "assigned_points": 350,
+        "correct_winner_points": 115,
+        "own_gradient_abs_l1": 0.09127161325886846,
+        "wrong_winner_points": 235,
+        "wrong_winner_zero_gradient_points": 235,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_chair": 115,
+        "winner_person": 99,
+        "winner_poster": 132,
+        "winner_fire_equipment": 4
+      },
+      "person": {
+        "assigned_points": 720,
+        "correct_winner_points": 704,
+        "own_gradient_abs_l1": 0.11626999289728701,
+        "wrong_winner_points": 16,
+        "wrong_winner_zero_gradient_points": 16,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_poster": 16,
+        "winner_person": 704
+      }
+    },
+    "focused": {
+      "laptop": {
+        "assigned_points": 442,
+        "correct_winner_points": 0,
+        "own_gradient_abs_l1": 0.06087006349116564,
+        "wrong_winner_points": 442,
+        "wrong_winner_zero_gradient_points": 442,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_poster": 331,
+        "winner_person": 111
+      },
+      "phone": {
+        "assigned_points": 344,
+        "correct_winner_points": 16,
+        "own_gradient_abs_l1": 0.23271478249807842,
+        "wrong_winner_points": 328,
+        "wrong_winner_zero_gradient_points": 328,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_person": 145,
+        "winner_poster": 182,
+        "winner_phone": 16,
+        "winner_cardboard_box": 1
+      },
+      "tablet": {
+        "assigned_points": 885,
+        "correct_winner_points": 0,
+        "own_gradient_abs_l1": 0.24511281630520898,
+        "wrong_winner_points": 885,
+        "wrong_winner_zero_gradient_points": 885,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_poster": 776,
+        "winner_fire_equipment": 1,
+        "winner_person": 103,
+        "winner_phone": 5
+      },
+      "boxed_stock": {
+        "assigned_points": 290,
+        "correct_winner_points": 0,
+        "own_gradient_abs_l1": 0.05265221244189888,
+        "wrong_winner_points": 290,
+        "wrong_winner_zero_gradient_points": 290,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_poster": 180,
+        "winner_person": 110
+      },
+      "cardboard_box": {
+        "assigned_points": 160,
+        "correct_winner_points": 0,
+        "own_gradient_abs_l1": 0.06602893769741058,
+        "wrong_winner_points": 160,
+        "wrong_winner_zero_gradient_points": 160,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_poster": 91,
+        "winner_person": 49,
+        "winner_phone": 20
+      },
+      "speaker": {
+        "assigned_points": 143,
+        "correct_winner_points": 0,
+        "own_gradient_abs_l1": 0.11379664950072765,
+        "wrong_winner_points": 143,
+        "wrong_winner_zero_gradient_points": 143,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_phone": 28,
+        "winner_poster": 115
+      },
+      "poster": {
+        "assigned_points": 901,
+        "correct_winner_points": 636,
+        "own_gradient_abs_l1": 0.23772872181143612,
+        "wrong_winner_points": 265,
+        "wrong_winner_zero_gradient_points": 265,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_poster": 636,
+        "winner_person": 248,
+        "winner_chair": 11,
+        "winner_fire_equipment": 6
+      },
+      "fire_equipment": {
+        "assigned_points": 115,
+        "correct_winner_points": 0,
+        "own_gradient_abs_l1": 0.054361559508834034,
+        "wrong_winner_points": 115,
+        "wrong_winner_zero_gradient_points": 115,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_poster": 100,
+        "winner_person": 15
+      },
+      "chair": {
+        "assigned_points": 350,
+        "correct_winner_points": 17,
+        "own_gradient_abs_l1": 0.13407629518769681,
+        "wrong_winner_points": 333,
+        "wrong_winner_zero_gradient_points": 333,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_poster": 211,
+        "winner_chair": 17,
+        "winner_person": 111,
+        "winner_fire_equipment": 11
+      },
+      "person": {
+        "assigned_points": 720,
+        "correct_winner_points": 706,
+        "own_gradient_abs_l1": 0.11089159728726372,
+        "wrong_winner_points": 14,
+        "wrong_winner_zero_gradient_points": 14,
+        "wrong_winner_gradient_abs_l1": 0.0,
+        "winner_person": 706,
+        "winner_poster": 14
+      }
+    }
+  },
+  "tests_passed": 178,
+  "limits": [
+    "Single seed and reused six-frame source-validation set are exploratory, not independent accuracy.",
+    "No extra threshold search, new labels or test inference.",
+    "This changes the positive-anchor classification objective; it does not by itself repair missing localization candidates."
+  ],
+  "artifacts": {
+    "runs/studioa_positive_competition_20260916_v1/train_competition.json": "cc9759d5c796b4411cd43e0e9db782f5f72c1cb6ca4200c1f1731f404cf86cad",
+    "runs/studioa_positive_competition_20260916_v1/probe.log": "dc529209920c6655d3478844e5129f975a671b2bf4921bcc95fc23da2bca1bf0",
+    "runs/studioa_positive_competition_20260916_v1/diagnose.py": "1d126da657725d4392c21c79471832e43df93acb3e466808383b1f0bb2f4cd9b"
+  }
+}

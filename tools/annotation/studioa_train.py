@@ -234,6 +234,7 @@ def prepare(
     class_negative_normalization: str = "sum",
     small_object_crop: bool = False,
     fixed_epochs: int | None = None,
+    positive_classification: str = "positive_only",
 ) -> None:
     from syncai_hydranet.utils.visualize import terrain_palette
 
@@ -249,6 +250,10 @@ def prepare(
         raise ValueError("crop/fixed-epoch comparison requires detector warmup")
     if fixed_epochs is not None and not 1 <= fixed_epochs <= 60:
         raise ValueError("fixed epochs must be between 1 and 60")
+    if positive_classification not in ("positive_only", "assigned_object"):
+        raise ValueError("unsupported positive classification")
+    if positive_classification != "positive_only" and not detector_warmup:
+        raise ValueError("positive classification comparison requires detector warmup")
     if class_negative_normalization not in ("sum", "positive_budget"):
         raise ValueError("unsupported class negative normalization")
     if class_negative_normalization != "sum" and not detector_warmup:
@@ -311,6 +316,10 @@ def prepare(
         config["model"]["heads"]["detection"]["loss"] = {
             "class_negative_normalization": class_negative_normalization
         }
+        if positive_classification != "positive_only":
+            config["model"]["heads"]["detection"]["loss"]["positive_classification"] = (
+                positive_classification
+            )
         if small_object_crop:
             config["data"]["datasets"][1]["small_object_crop"] = True
         if fixed_epochs is not None:
@@ -341,6 +350,7 @@ def prepare(
             "class_negative_normalization": class_negative_normalization,
             "small_object_crop": small_object_crop,
             "fixed_epochs": fixed_epochs,
+            "positive_classification": positive_classification,
             "instance_counts": instance_counts,
             "git_commit": git,
             "held_out": held_out,
@@ -611,6 +621,11 @@ def main():
     parser.add_argument("--small-object-crop", action="store_true")
     parser.add_argument("--fixed-epochs", type=int)
     parser.add_argument(
+        "--positive-classification",
+        choices=("positive_only", "assigned_object"),
+        default="positive_only",
+    )
+    parser.add_argument(
         "--class-negative-normalization", choices=("sum", "positive_budget"), default="sum"
     )
     parser.add_argument(
@@ -630,6 +645,7 @@ def main():
             args.class_negative_normalization,
             args.small_object_crop,
             args.fixed_epochs,
+            args.positive_classification,
         )
     else:
         out = args.out.resolve()

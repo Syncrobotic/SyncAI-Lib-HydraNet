@@ -163,6 +163,7 @@ LOSS_BY_TYPE = {
         "reg_weight": Spec(NUMBER),
         "centerness_weight": Spec(NUMBER),
         "class_negative_normalization": Spec((str,), choices=("sum", "positive_budget")),
+        "positive_classification": Spec((str,), choices=("positive_only", "assigned_object")),
     },
     "pose_p3": {},
     "depth_fpn": {
