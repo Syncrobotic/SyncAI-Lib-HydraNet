@@ -110,3 +110,19 @@ v3 的 121 張都有地板保留遮罩，但不代表邊界完整或正確；展
 蓋住著色。原圖與每張候選數一起提供；未上色不表示物件不存在。
 此命令驗證來源 hash、保留原標註包，另存預覽程式與輸出 hash。
 這是顯示改善，展示櫃的 AI 重判與缺漏補標仍待處理，尚未開始新訓練。
+
+使用者進一步指定「展示櫃」包括擺放 boxed-stock 的直立展示架。
+整合預覽把 `display_cabinet` 與原先範圍外的 `other_shelf` 候選一起顯示為櫃架，
+與地板、圓桌／長桌、盒裝商品疊在同一張圖上：
+
+```bash
+.venv/bin/python tools/annotation/studioa_autolabel.py focus-preview \
+  --source runs/studioa_ai_labels_20260916_v3 \
+  --out runs/studioa_ai_labels_20260916_combined_v1 --combined
+```
+
+綠色為地板、藍色為展示桌、桃紅色為櫃架、黃色為 boxed-stock。
+實色為保留的 AI 標籤，同色斜線為該類未決候選，可在網頁切換隱藏。
+圖例直接附在每張圖上。重疊按地板、桌、櫃架、商品順序顯示，
+這只是視覺順序，不代表跨類別衝突已解決；既有 `other_shelf` 仍維持未決來源。
+本次依使用者用語新增顯示分組，沒有把舊標籤直接升格成新的訓練真值。

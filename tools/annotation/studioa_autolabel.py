@@ -116,7 +116,47 @@ def overlay(image: Image.Image, annotation: dict, dest: Path) -> None:
     preview.save(dest, quality=85)
 
 
-def focus_preview(source: Path, out: Path) -> None:
+SCENE_LAYERS = (
+    ("Floor", ("floor",), (0, 255, 80)),
+    ("Round / long tables", ("display_table",), (0, 200, 255)),
+    ("Cabinets / upright racks", ("display_cabinet", "other_shelf"), (255, 0, 210)),
+    ("Boxed stock", ("boxed_stock",), (255, 220, 0)),
+)
+
+
+def scene_overlay(rgb: np.ndarray, annotation: dict, include_uncertain: bool) -> Image.Image:
+    """Combine requested display fixtures; hatching does not resolve their classes."""
+    shape = rgb.shape[:2]
+    yy, xx = np.ogrid[: shape[0], : shape[1]]
+    stripes = (xx + yy) % 16 < 7
+    result = rgb.copy()
+    for _label, entities, color in SCENE_LAYERS:
+        positive = np.zeros(shape, dtype=bool)
+        uncertain = np.zeros(shape, dtype=bool)
+        for key, mask in (("entities", positive), ("unresolved_candidates", uncertain)):
+            for row in annotation[key]:
+                if row["entity"] in entities:
+                    mask |= decode(row["segmentation"])
+        if include_uncertain:
+            hatched = uncertain & ~positive & stripes
+            result[hatched] = (0.2 * rgb[hatched] + 0.8 * np.array(color)).astype(np.uint8)
+        result[positive] = (0.35 * rgb[positive] + 0.65 * np.array(color)).astype(np.uint8)
+    preview = Image.fromarray(result)
+    preview.thumbnail((1280, 720))
+    canvas = Image.new("RGB", (max(640, preview.width), preview.height + 78), "#171717")
+    canvas.paste(preview, (0, 78))
+    draw = ImageDraw.Draw(canvas)
+    for index, (label, _entities, color) in enumerate(SCENE_LAYERS):
+        x, y = 8 + (index % 2) * (canvas.width // 2), 6 + (index // 2) * 22
+        draw.rectangle((x, y, x + 14, y + 14), fill=color)
+        draw.text((x + 21, y), label, fill="white")
+    draw.text(
+        (8, 55), "Solid: retained AI labels | Hatched: unresolved candidates", fill="white"
+    )
+    return canvas
+
+
+def focus_preview(source: Path, out: Path, combined: bool = False) -> None:
     """Render floor/table/cabinet masks without changing annotation decisions."""
     parent = json.loads((source / "report.json").read_text())
     job = json.loads((source / "job.json").read_text())
@@ -137,6 +177,22 @@ def focus_preview(source: Path, out: Path) -> None:
         data = json.loads((source / "frames" / (frame["id"] + ".json")).read_text())
         with Image.open(original) as image:
             rgb = np.asarray(image.convert("RGB"))
+        if combined:
+            name = html.escape(frame["id"])
+            for mode in ("positive", "uncertain"):
+                scene_overlay(rgb, data, mode == "uncertain").save(
+                    out / "frames" / f"{frame['id']}-scene-{mode}.jpg", quality=92
+                )
+            cards.append(
+                f'<article><h2>{name}</h2><a href="{html.escape(frame["image"])}">原圖</a>'
+                + "".join(
+                    f'<a class="{mode}" href="frames/{name}-scene-{mode}.jpg">'
+                    f'<img loading="lazy" src="frames/{name}-scene-{mode}.jpg"></a>'
+                    for mode in ("positive", "uncertain")
+                )
+                + "</article>"
+            )
+            continue
         shape = rgb.shape[:2]
         yy, xx = np.ogrid[: shape[0], : shape[1]]
         stripes = (xx + yy) % 16 < 7
@@ -182,17 +238,23 @@ def focus_preview(source: Path, out: Path) -> None:
     (out / "index.html").write_text(
         '<!doctype html><html lang="zh-Hant"><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        "<title>StudioA 地板 / 展示桌 / 展示櫃遮罩檢查</title><style>"
+        "<title>StudioA 展示設備遮罩檢查</title><style>"
         "body{font-family:sans-serif;margin:1rem;background:#171717;color:#eee}"
         "a{color:#8cd5ff}.panels{display:grid;grid-template-columns:"
         "repeat(auto-fit,minmax(min(550px,100%),1fr));gap:1rem}img{width:100%}"
         ".positive{display:none}body.clean .positive{display:block}"
         "body.clean .uncertain{display:none}article{border-top:1px solid #555}"
-        "</style><body><h1>地板 / 展示桌 / 展示櫃遮罩檢查</h1>"
+        "</style><body><h1>地板 / 展示桌 / 展示櫃與直立架 / 盒裝商品</h1>"
         "<p>圓桌、長桌屬於展示桌。本頁一起呈現展示桌與展示櫃。</p>"
         "<p>綠色 = 地板保留標籤; 藍色 = 展示桌保留標籤; "
-        "桃紅色 = 展示櫃保留標籤; 橘色斜線 = 未決候選。"
-        "未上色不代表不存在。未決候選尚未確認類別, 可能和其他物件衝突。"
+        + (
+            "桃紅色 = 展示櫃與直立架; 黃色 = boxed-stock。各類同色斜線 = 未決候選。"
+            "直立架包含既有 other_shelf 候選, 此顯示分組不會修改原始標籤。"
+            "重疊區域依地板、桌、櫃架、商品順序顯示, 不代表已解決分類衝突。"
+            if combined
+            else "桃紅色 = 展示櫃保留標籤; 橘色斜線 = 未決候選。"
+        )
+        + "未上色不代表不存在。未決候選尚未確認類別, 可能和其他物件衝突。"
         "本頁只改善顯示, 沒有新增、補全或確認標註。</p>"
         '<label><input type="checkbox" checked '
         "onchange=\"document.body.classList.toggle('clean',!this.checked)\">顯示未決候選</label>"
@@ -208,6 +270,8 @@ def focus_preview(source: Path, out: Path) -> None:
             "source": str(source.resolve()),
             "source_report_sha256": digest(source / "report.json"),
             "annotations_changed": False,
+            "combined": combined,
+            "display_layers": SCENE_LAYERS if combined else None,
             "outputs": {
                 str(p.relative_to(out)): digest(p)
                 for p in sorted(out.rglob("*"))
@@ -578,6 +642,7 @@ def main() -> None:
     p = sub.add_parser("focus-preview")
     p.add_argument("--source", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--combined", action="store_true")
     args = parser.parse_args()
     if args.action == "prepare":
         prepare(args.bundle, args.out, args.limit)
@@ -586,7 +651,7 @@ def main() -> None:
     elif args.action == "visual-review":
         visual_review(args.source, args.decisions, args.out)
     elif args.action == "focus-preview":
-        focus_preview(args.source, args.out)
+        focus_preview(args.source, args.out, args.combined)
     else:
         expected = args.out.resolve() / "snapshot/tools/annotation/studioa_autolabel.py"
         if Path(__file__).resolve() != expected:
