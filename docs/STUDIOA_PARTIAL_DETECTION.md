@@ -207,3 +207,42 @@ best 選擇最大 reviewed-positive recall（沿用 score >0.20／IoU ≥0.50）
 紙箱仍只有 3 個 train 觀測；負樣本仍僅已覆核空地板，尚無物品間類別混淆的
 負向監督。暖身結果只能回答「固定既有場景特徵，這批部分監督能否學出偵測」，
 不能回答真實整店精度、3D 尺寸或顧客行為是否正確。
+
+## 暖身結果：場景保留成功，偵測仍不足以使用
+
+`runs/studioa_detector_warmup_20260916_v1/` 完成，程式版本 `562532d`；
+第 40 輪因連續 20 輪無嚴格改善停止，共 520 次偵測 optimizer 更新。
+選定第 20 輪（260 次更新），systemd 正常退出，test 未推論。
+
+| 檢查項目 | 結果 |
+| --- | --- |
+| 已覆核正實例召回 | 初始 0/31 → 選定 7/31（22.58%） |
+| 命中類別 | person 5/9、phone 1/4、poster 1/2；其他七類 0 |
+| 覆核空白區誤報 | 0 → 0；僅覆蓋 51,761 個輸入像素 |
+| 未配對、真偽未定預測 | 593；六張影像每張均達 100 框上限 |
+| 凍結參數及 buffers | 194 個 tensors；每次儲存皆核對，best/last 與原模型完全相同 |
+| 33 張來源 val 場景 logits | 訓練前後 SHA256 完全相同 |
+| 場景 AI 標籤 mIoU | 40 輪均為 0.2506537344807518 |
+
+通過的是「固定場景後，偵測頭得到有限學習」這項暖身契約。重疊框與類別混淆
+仍明顯，593 個未知預測不能當作真陽性，也不能據此計算 precision。相比前次
+聯合 pilot，本輪同時改了資料量與訓練隔離，不能把改善全歸因於其中一項。
+本輪關閉 TF32 並固定 deterministic 設定，mIoU 與較早 pilot 的微小差異也不能
+當成場景改善；直接證據是相同設定下完整 logits 和原場景 tensors 不變。
+
+[六張逐圖對照](../runs/studioa_detector_warmup_20260916_v1/review/selected_val_review.jpg)
+左側是 AI 覆核子集，右側只顯示前 20 框；評估仍用固定上限 100 框。
+[逐框 JSON](../runs/studioa_detector_warmup_20260916_v1/review/selected_diagnostics.json)
+可完整重算並精確重現所有偵測驗證指標。
+[可追溯結果](reviews/studioa_detector_warmup_20260916.json) 記錄設定、檢查和 hashes。
+
+757 個凍結輸入、8 個正式輸出 hash 核對通過；best/last 無非有限 tensor，
+job 身分正確，原始 scene checkpoint 沒有改寫。主要測試批次 171 項通過，
+資料與契約追加批次 20 項通過（兩批有重疊）；lint、型別與提交 hook 通過。
+metadata 的 dirty 警示來自既有無關未追蹤檔，訓練程式使用已提交且逐檔凍結
+的 snapshot；語意資料記為 train_size=0、val_size=33。
+
+下一步優先補逐類混淆負樣本的資料契約：例如確認價牌不是手機，只否定 phone
+通道，不能將實際物品整片畫成十類共同背景。紙箱三個 train 觀測全部來自同一
+張影像與同一鏡頭，應由其他允許的 source-train 鏡頭補充。所有新增覆核由 AI
+執行，val/test 分配及 score／NMS 門檻保持固定。尚不推進 Stage 2–4 的效果宣稱。
