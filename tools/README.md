@@ -200,3 +200,15 @@ annotations, returning 2 while human review is pending. Prospective store folds 
 make previously used data a blind test set. See the
 [StudioA scene contract](../docs/STUDIOA_SCENE_CONTRACT.md) for class boundaries,
 annotation format, commands and acceptance limits.
+
+### StudioA AI annotation
+
+`annotation/studioa_autolabel.py prepare --bundle REVIEW_DIR --out NEW_DIR` freezes
+images, teacher revision, policy and worker code. `run --out NEW_DIR` runs the frozen
+SAM3 worker and resumes completed image checkpoints after source validation.
+`refine --source COMPLETED_AI_DIR --out NEW_DIR` retains nonconflicting structural
+pixels without repeating inference. Outputs include instance RLEs, unresolved
+candidates, positive COCO pseudo-labels, overlays, progress and a source-bound report.
+AI completion does not require human review. See the
+[AI annotation guide](../docs/STUDIOA_AI_ANNOTATION.md) for commands and supervision
+limits; the COCO file alone must not turn uncertain/unlabelled regions into negatives.

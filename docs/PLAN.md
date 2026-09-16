@@ -1758,3 +1758,43 @@ from `check` while review is pending. No GPU training, label export or scene pro
 is started. Next: complete per-class human annotation and independently reserved data;
 then build head-specific supervision and a continuous person/table/product interaction
 review sequence. Three isolated scene frames do not establish temporal event truth.
+
+### 10.20 AI-only scene annotation and visual deferrals — 2026-09-16
+
+The user explicitly requested AI annotation instead of human labelling. The new
+[AI annotation workflow](STUDIOA_AI_ANNOTATION.md) completes labels without the old
+human review forms. All **121 selected images from 24 cameras** were processed by
+locally cached SAM3 revision `3c879f39826c281e95690f02c7821c4de09afae7`, using 38
+prompts and one image encoding per frame. The inference worker ran as a bounded
+systemd user service with frozen code/images, atomic per-image checkpoints, logs,
+source validation and explicit failure/resume states. No images were sent externally.
+
+`runs/studioa_ai_labels_20260916_v1/` retains the raw inference policy/output boundary.
+`v2/` reuses its instance masks to retain nonconflicting floor/wall/ceiling pixels,
+instead of rejecting an entire semantic region for a local door/glass overlap. The
+assistant inspected representative source images/overlays and recorded four deferrals
+on Kaohsiung-cam05: an apparent printer/device labelled checkout counter, and three
+fixed-glass candidates without established glass boundaries. `v3/` preserves every
+mask and the other 120 annotation files unchanged, moving those four positives to
+unresolved with separate AI-review provenance. This is AI review, not human truth.
+
+The final `runs/studioa_ai_labels_20260916_v3/` contains **4,687 positive semantic
+regions/instance candidates** and **4,817 unresolved candidates**, exact COCO RLEs,
+source images, per-image JSON, positive COCO pseudo-labels, overlays and index.html.
+These counts are per-frame annotations, not unique physical objects or an error rate.
+All 19 base entity categories have positive candidates; door/glazing and counter/role
+views remain attributes of the same objects. Detection failure is never labelled
+absence. Teachers' scores and multi-prompt agreement are not independent accuracy.
+
+Validation: **100 relevant tests passed**, changed-module lint/format/types and commit
+ratchets passed. Real outputs passed input/output/snapshot hashes, COCO image/annotation
+identity checks and mask/area/bbox validation. The AI visual step changed one frame,
+only deferred four candidates and preserved every mask. The
+[tracked report](reviews/studioa_ai_labels_20260916.json) binds all three completed
+versions and the [AI decisions](reviews/studioa_ai_visual_decisions_20260916.json).
+
+No human labels are required to deliver this batch. Next training work needs an
+explicit partial-supervision exporter that carries unresolved masks and per-class
+coverage, rather than treating incomplete positives as exhaustive COCO truth. No
+student training, independent metric-accuracy claim or commissioned scene promotion
+was performed in this step.

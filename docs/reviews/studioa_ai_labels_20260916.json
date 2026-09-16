@@ -1,0 +1,98 @@
+{
+  "date": "2026-09-16",
+  "final_run": "runs/studioa_ai_labels_20260916_v3",
+  "report_sha256": "3c9a39228faf2e959b132542cd752f1da519b30cfb6d0d7fe2b1ebc13ebf69ff",
+  "base_job_sha256": "c39d9d0b7b8accb29328c7d4d643cea76de4ee1d8229d2b4c4c01a2e0244035f",
+  "annotation_kind": "ai_generated",
+  "human_reviewed": false,
+  "frames": 121,
+  "cameras": 24,
+  "labels": 4687,
+  "label_count_scope": "Semantic regions and per-frame instance candidates; not unique real-world objects.",
+  "unresolved_candidates": 4817,
+  "labels_by_entity": {
+    "laptop": 88,
+    "phone": 334,
+    "speaker": 285,
+    "display_table": 101,
+    "poster": 346,
+    "glass_panel": 50,
+    "boxed_stock": 1913,
+    "person": 388,
+    "wall": 121,
+    "floor": 121,
+    "column": 26,
+    "door": 491,
+    "ceiling": 39,
+    "counter": 14,
+    "tablet": 72,
+    "chair": 238,
+    "fire_equipment": 42,
+    "display_cabinet": 12,
+    "cardboard_box": 6
+  },
+  "query_view_counts": {
+    "person": 388,
+    "floor": 121,
+    "display_table": 101,
+    "phone": 334,
+    "glass": 50,
+    "boxed_stock": 1913,
+    "wall": 121,
+    "poster": 346,
+    "ceiling": 39,
+    "chair": 238,
+    "speaker": 285,
+    "door": 491,
+    "display_cabinet": 12,
+    "tablet": 72,
+    "laptop": 88,
+    "fire_equipment": 42,
+    "column": 26,
+    "glass_door": 15,
+    "checkout_counter": 8,
+    "cardboard_box": 6
+  },
+  "teacher": {
+    "model": "facebook/sam3",
+    "revision": "3c879f39826c281e95690f02c7821c4de09afae7"
+  },
+  "ai_visual_review": {
+    "parent_run": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_ai_labels_20260916_v2",
+    "parent_report_sha256": "f3c913384b83b256104273e4dc43177e1ceaea8f9bcf76147b3f1542e6930fb3",
+    "frames_checked": 1,
+    "decision_count": 4,
+    "reviewer_kind": "ai",
+    "decisions_sha256": "7994f6c034522fd0857d62edb5e72eac474250e505e1fb259c5e5e2b455a9faf",
+    "worker_sha256": "4494004b964a6b8dce862dfca1efec3fc22662295e8ba00f7a8250929569c065",
+    "rules_sha256": "3ed818b42ccdd1fc59706a2354c20c2d05c67e684904b49de66b0263c56c8c42"
+  },
+  "validation": {
+    "relevant_tests_passed": 100,
+    "committed_hooks": "passed",
+    "frozen_source_output_hashes": "passed",
+    "coco_image_annotation_ids": "passed",
+    "AI_visual_changes_preserve_every_mask": "passed",
+    "unchanged_frames_after_visual_review": 120
+  },
+  "versions": {
+    "v1": {
+      "report_sha256": "e565f4e0cb3780d9204262d6f2691740be54fcaf7a8ac595738513922976b0a2",
+      "status": "completed"
+    },
+    "v2": {
+      "report_sha256": "f3c913384b83b256104273e4dc43177e1ceaea8f9bcf76147b3f1542e6930fb3",
+      "status": "completed"
+    },
+    "v3": {
+      "report_sha256": "3c9a39228faf2e959b132542cd752f1da519b30cfb6d0d7fe2b1ebc13ebf69ff",
+      "status": "completed"
+    }
+  },
+  "limits": [
+    "Scores are teacher outputs, not accuracy.",
+    "No human annotation is required for this AI labelling workflow.",
+    "Unresolved masks and per-class supervision must be carried into a training exporter.",
+    "Existing images are not a blind accuracy set; no student training or 3D scene promotion was performed."
+  ]
+}

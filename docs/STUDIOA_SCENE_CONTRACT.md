@@ -4,6 +4,11 @@
 [能力審查](STUDIOA_CAPABILITY_AUDIT.md) 的下一步，供標註包與驗證器共同使用。
 主要模型的輸出頭、既有標籤 ID 和部署模型尚未切換；不能拿新 ID 直接餵舊模型。
 
+**標註方式更新：依使用者要求，由 AI 完成標註，不要求人工標註。**
+[AI 自動標註流程](STUDIOA_AI_ANNOTATION.md) 直接產出逐物件遮罩與 AI 完成狀態。
+以下人工工作單保留為可選流程；其 pending 狀態不阻擋 AI 標註的交付。
+AI 標籤可用於後續弱監督訓練，但不作為獨立人工精度真值。
+
 機器可讀定義在 [studioa_contract.py](../src/syncai_hydranet/data/studioa_contract.py)，
 標註包會輸出其 `contract.json` 與內容 SHA-256。改動分類或遷移規則會使舊包檢查失敗，
 必須明確遷移，不能默默沿用。
