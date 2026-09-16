@@ -1,0 +1,135 @@
+{
+  "schema": "studioa.partial-supervision.result.v1",
+  "dataset": "runs/studioa_partial_supervision_20260916_v1",
+  "dataset_report_sha256": "ad146a4cc44bfd7cc56df0fefce9851c1a10c38942dc88373fec57e797aa770f",
+  "manifest_sha256": "9d309e1edae75889d64c41464c3af52bda686ef04c0e2f66eae0e527f134c7e3",
+  "frames": 121,
+  "valid_pixels": 128112723,
+  "ignore_pixels": 115343277,
+  "valid_pixel_fraction": 0.5262253672121451,
+  "folds": {
+    "Kaohsiung": {
+      "counts": {
+        "train": 38,
+        "val": 29,
+        "test": 35
+      },
+      "missing_train_classes": [],
+      "train_pixels_by_class": {
+        "floor": 20996705,
+        "wall": 10393205,
+        "ceiling": 40288,
+        "column": 267764,
+        "door": 454446,
+        "glass_panel": 446927,
+        "display_cabinet": 1129,
+        "display_table": 65422,
+        "counter": 87,
+        "laptop": 77376,
+        "phone": 87225,
+        "tablet": 30636,
+        "boxed_stock": 44624,
+        "cardboard_box": 16541,
+        "speaker": 178705,
+        "poster": 1312819,
+        "fire_equipment": 67593,
+        "chair": 174316,
+        "person": 3097960
+      }
+    },
+    "Taichung": {
+      "counts": {
+        "train": 22,
+        "val": 20,
+        "test": 60
+      },
+      "missing_train_classes": [
+        "display_cabinet",
+        "counter"
+      ],
+      "train_pixels_by_class": {
+        "floor": 10013569,
+        "wall": 8515230,
+        "ceiling": 36526,
+        "column": 1145286,
+        "door": 750118,
+        "glass_panel": 37744,
+        "display_cabinet": 0,
+        "display_table": 5933,
+        "counter": 0,
+        "laptop": 29767,
+        "phone": 77685,
+        "tablet": 39199,
+        "boxed_stock": 1987428,
+        "cardboard_box": 1995,
+        "speaker": 53840,
+        "poster": 684033,
+        "fire_equipment": 19,
+        "chair": 21510,
+        "person": 2085699
+      }
+    },
+    "Tao-Hsin": {
+      "counts": {
+        "train": 46,
+        "val": 33,
+        "test": 26
+      },
+      "missing_train_classes": [],
+      "train_pixels_by_class": {
+        "floor": 25235748,
+        "wall": 12703809,
+        "ceiling": 76814,
+        "column": 880634,
+        "door": 1202722,
+        "glass_panel": 427505,
+        "display_cabinet": 1129,
+        "display_table": 70585,
+        "counter": 87,
+        "laptop": 62539,
+        "phone": 134062,
+        "tablet": 46909,
+        "boxed_stock": 2031516,
+        "cardboard_box": 18536,
+        "speaker": 124865,
+        "poster": 1277596,
+        "fire_equipment": 67574,
+        "chair": 152806,
+        "person": 4407873
+      }
+    }
+  },
+  "smoke": {
+    "path": "runs/studioa_partial_smoke_20260916_v1",
+    "report_sha256": "6d9ae49da104e7469a89a36e4b5f5124d1be4480dc40c706ee1eb614ad4eed5f",
+    "status": "passed",
+    "kind": "one_step_wiring_check_not_trained_model",
+    "dataset_manifest_sha256": "9d309e1edae75889d64c41464c3af52bda686ef04c0e2f66eae0e527f134c7e3",
+    "held_out_store": "Taichung",
+    "partition": "train",
+    "seed": 42,
+    "frames": [
+      "0002-Kaohsiung-cam04",
+      "0003-Kaohsiung-cam04"
+    ],
+    "input_size": [
+      128,
+      192
+    ],
+    "device": "cpu",
+    "torch": "2.13.0+cu130",
+    "loss": 4.674478054046631,
+    "classifier_update_norm": 0.003656859276816249,
+    "valid_pixels": 26410,
+    "ignored_pixels": 22742,
+    "ignored_logit_gradients_nonzero": 0,
+    "accuracy_claim": false,
+    "checkpoint_written": false
+  },
+  "limits": [
+    "AI partial supervision, not independent annotation accuracy.",
+    "Straightforward detection training remains unsupported.",
+    "Missing display-cabinet/counter supervision in Taichung-held-out training requires AI relabelling.",
+    "No formal training or deployable checkpoint produced."
+  ]
+}

@@ -31,6 +31,9 @@ AI 與人工來源分開記錄；AI 完成狀態是 `ai_labeled`，不是人工�
 避免把沒偵測到的商品當背景。`training_ready=false` 表示尚未完成這個 exporter，
 不是要求使用者改做人工標註。
 
+後續已新增[部分監督語意匯出與接線檢查](STUDIOA_TRAINING_DATA.md)，會保留未知與
+衝突的 ignore 像素；這不會讓原始正向 COCO 自動具備完整偵測監督。
+
 ## 執行及續跑
 
 ```bash

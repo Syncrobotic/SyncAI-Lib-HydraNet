@@ -212,3 +212,11 @@ candidates, positive COCO pseudo-labels, overlays, progress and a source-bound r
 AI completion does not require human review. See the
 [AI annotation guide](../docs/STUDIOA_AI_ANNOTATION.md) for commands and supervision
 limits; the COCO file alone must not turn uncertain/unlabelled regions into negatives.
+
+`annotation/studioa_supervision.py export --source COMPLETED_AI_DIR --out NEW_DIR`
+builds partial 19-class semantic targets, preserving unresolved/overlapping pixels as
+ignore. `check --data NEW_DIR` verifies hashes and whole-store folds.
+`smoke --data NEW_DIR --held-out Taichung --out NEW_SMOKE_DIR` checks one real train
+batch through HydraNet forward/backward/SGD on CPU, without saving a model or claiming
+accuracy. See [training-data limits](../docs/STUDIOA_TRAINING_DATA.md); instance detection
+supervision and formal training remain separate work.

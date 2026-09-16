@@ -1798,3 +1798,38 @@ explicit partial-supervision exporter that carries unresolved masks and per-clas
 coverage, rather than treating incomplete positives as exhaustive COCO truth. No
 student training, independent metric-accuracy claim or commissioned scene promotion
 was performed in this step.
+
+### 10.21 Partial StudioA supervision and real-batch wiring check — 2026-09-16
+
+User clarified that display equipment includes round/long display tables and upright
+boxed-stock racks. Combined previews now show floor, tables, cabinets/racks and stock,
+while hatching unresolved candidates. This display grouping does not promote old
+`other_shelf` candidates into accepted training truth.
+
+The [partial-supervision exporter](STUDIOA_TRAINING_DATA.md) produces 19-class auxiliary
+semantic targets with explicit contiguous IDs 0–18 and ignore 255. Unknown pixels,
+cross-class positive overlaps and all unresolved masks are excluded from loss. Exact
+companions retain original instance masks, materials/roles and uncertainty. A dedicated
+dataset reader feeds existing PyTorch collation/model interfaces; generic Trainer config
+integration and partially supervised FCOS remain outstanding.
+
+`runs/studioa_partial_supervision_20260916_v1/` completed **121 images, 24 cameras**:
+128,112,723 valid and 115,343,277 ignored pixels (52.62% supervision coverage, not accuracy).
+All three whole-store folds pass camera and decoded-image-content checks. Crucially,
+the Taichung-held-out train split contains **zero display_cabinet/counter pixels**;
+the other folds retain only 1,129 cabinet pixels and 87 counter pixels each. Formal
+training must not hide this missing supervision behind a successful data conversion.
+
+`runs/studioa_partial_smoke_20260916_v1/` checks two train-only source images through a
+randomly initialised ResNet18/FPN/19-class scene head on CPU, one forward/backward/SGD
+step. Loss and gradients are finite, ignored-logit gradients are zero, and classifier
+weights change. No checkpoint, learned accuracy, GPU training or deployment is claimed.
+SegLoss now returns differentiable zero for all-ignore targets instead of NaN, while
+retaining weighted-mean CE and valid-pixel Dice for ordinary batches.
+
+Validation: **82 relevant tests passed**, including seven new supervision/loss cases;
+lint/format/type checks passed. Artifact checks verify export hashes, fold boundaries
+and the real-batch loss path. The [tracked report](reviews/studioa_partial_supervision_20260916.json)
+binds source/export/smoke evidence. Next: AI reclassification and additional labels for
+tables, cabinets/upright racks and counters, plus floor-reflection correction; then
+partial instance-detection loss/loader and a frozen pilot training configuration.
