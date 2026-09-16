@@ -36,14 +36,18 @@ from syncai_hydranet.data.studioa_autolabel import (
 from syncai_hydranet.data.studioa_contract import ENTITY_IDS, contract
 from syncai_hydranet.data.studioa_relabel import (
     EXTRA_PROMPTS,
+    FIXTURE_PROMPT,
     LocalReviewer,
     ReviewCache,
+    apply_visual_decision,
     candidate_groups,
     constrain_decision,
     reannotate,
     relabel_policy,
     review_panel,
+    validate_visual_decisions,
 )
+from syncai_hydranet.data.studioa_relabel import PROMPT as REVIEW_PROMPT
 from syncai_hydranet.data.studioa_review import check_package, digest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -632,7 +636,7 @@ def run(out: Path, device: str) -> None:
         lock.close()
 
 
-def relabel_prepare(source: Path, out: Path) -> None:
+def relabel_prepare(source: Path, out: Path, decisions_path: Path | None = None) -> None:
     parent = json.loads((source / "report.json").read_text())
     original = json.loads((source / "job.json").read_text())
     if parent["status"] != "completed" or digest(source / "job.json") != parent["job_sha256"]:
@@ -657,10 +661,24 @@ def relabel_prepare(source: Path, out: Path) -> None:
         name = f"sources/{frame['id']}.json"
         shutil.copyfile(source / "frames" / (frame["id"] + ".json"), out / name)
         frames.append({**frame, "annotation": name, "annotation_sha256": digest(out / name)})
+    visual = None
+    if decisions_path is not None:
+        document = json.loads(decisions_path.read_text())
+        validate_visual_decisions(
+            document,
+            frames,
+            {f["id"]: json.loads((out / f["annotation"]).read_text()) for f in frames},
+        )
+        shutil.copyfile(decisions_path, out / "ai_visual_decisions.json")
+        visual = {
+            "path": "ai_visual_decisions.json",
+            "sha256": digest(out / "ai_visual_decisions.json"),
+        }
     write(
         out / "job.json",
         {
             "schema": "studioa.ai.relabel.v1",
+            "visual_decisions": visual,
             "frames": frames,
             "teacher": original["teacher"],
             "parent_run": str(source.resolve()),
@@ -682,6 +700,15 @@ def relabel_run(out: Path, device: str) -> None:
     for name, expected in job["code"].items():
         if digest(out / name) != expected:
             raise ValueError("frozen relabel code changed")
+    overrides = {}
+    if visual := job.get("visual_decisions"):
+        if digest(out / visual["path"]) != visual["sha256"]:
+            raise ValueError("frozen visual decisions changed")
+        overrides = validate_visual_decisions(
+            json.loads((out / visual["path"]).read_text()),
+            job["frames"],
+            {f["id"]: json.loads((out / f["annotation"]).read_text()) for f in job["frames"]},
+        )
     lock = (out / "worker.lock").open("w")
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     completed = 0
@@ -776,6 +803,9 @@ def relabel_run(out: Path, device: str) -> None:
                 )
                 write(raw_path, raw)
             groups = raw["groups"]
+            frame_overrides = overrides.get(identity, {})
+            if not set(frame_overrides) <= {row["id"] for group in groups for row in group}:
+                raise ValueError("visual decision target missing from review groups")
             batch_size = job["relabel_policy"]["batch_size"]
             for first in range(len(raw["decisions"]), len(groups), batch_size):
                 status(
@@ -786,11 +816,20 @@ def relabel_run(out: Path, device: str) -> None:
                 )
                 batch_groups = groups[first : first + batch_size]
                 panels = [review_panel(image, group[0]) for group in batch_groups]
-                decisions = reviewer.classify(panels)
+                prompts = [
+                    FIXTURE_PROMPT
+                    if group[0]["entity"]
+                    in {"display_table", "display_cabinet", "counter", "other_shelf"}
+                    else REVIEW_PROMPT
+                    for group in batch_groups
+                ]
+                decisions = reviewer.classify(panels, prompts)
                 if len(decisions) != len(panels):
                     raise ValueError("review batch length mismatch")
                 raw["decisions"].extend(
-                    constrain_decision(group, decision)
+                    apply_visual_decision(
+                        group, constrain_decision(group, decision), frame_overrides
+                    )
                     for group, decision in zip(batch_groups, decisions, strict=True)
                 )
                 write(raw_path, raw)
@@ -860,6 +899,7 @@ def main() -> None:
     p = sub.add_parser("relabel-prepare")
     p.add_argument("--source", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--decisions", type=Path)
     p = sub.add_parser("relabel-run")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--device", default="cuda", choices=("cuda", "cpu"))
@@ -873,7 +913,7 @@ def main() -> None:
     elif args.action == "focus-preview":
         focus_preview(args.source, args.out, args.combined)
     elif args.action == "relabel-prepare":
-        relabel_prepare(args.source, args.out)
+        relabel_prepare(args.source, args.out, args.decisions)
     else:
         expected = args.out.resolve() / "snapshot/tools/annotation/studioa_autolabel.py"
         if Path(__file__).resolve() != expected:

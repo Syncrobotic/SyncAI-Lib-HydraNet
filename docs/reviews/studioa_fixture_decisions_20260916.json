@@ -1,0 +1,270 @@
+{
+  "reviewer_kind": "ai",
+  "review_method": "Assistant inspected source-bound mask overlays across 22 frames; no human annotation.",
+  "frames": [
+    {
+      "frame_id": "0002-Kaohsiung-cam04",
+      "image_sha256": "a7339928d2e72363cefb35a8f6e25d8b1784ceaf747f87b815293dfdc53257bb",
+      "annotation_sha256": "681d45f15156cacc04245a58b3ad7b8b8edfff3fa1dbcb117f33d8a36eb3149e",
+      "decisions": [
+        {
+          "candidate_id": "ai-0002",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0003-Kaohsiung-cam04",
+      "image_sha256": "01038e5534d3cb2cf966dcad92629082e6185feae32d613aec1706cdfffec026",
+      "annotation_sha256": "2b4863396650fb01fe781bb9d412dcc322107adf86ed6a908092f22928089a9e",
+      "decisions": [
+        {
+          "candidate_id": "ai-0011",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0004-Kaohsiung-cam05",
+      "image_sha256": "ff5cc5e03988f11b8709d95f7bb8e7fdc9dc70a9e6f9a3b438b33ea7ba842e73",
+      "annotation_sha256": "d8180222ca38d7e3ed8b466a57680c7969eb979c732c5fc4611018e7144ced2f",
+      "decisions": [
+        {
+          "candidate_id": "ai-0004",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0005-Kaohsiung-cam05",
+      "image_sha256": "4f050a6ba2b192ebe6294d7253c27143487c4cf43ffb5f6e07192a7ad47b91d1",
+      "annotation_sha256": "4336074217402e2c9a927c9f7afad0c9d9f2d17057e9ef01cea58cb6e2c3b06c",
+      "decisions": [
+        {
+          "candidate_id": "ai-0007",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0042-Tao-Hsin-cam03",
+      "image_sha256": "37a171f6c2581cc7b68bed68cdd622a26e07dd665bde1896cc504b090b1b8955",
+      "annotation_sha256": "42319eba01a7b36b529e9d29dc3f371f31f3b29ffc56abe43104eae78fba86fb",
+      "decisions": [
+        {
+          "candidate_id": "ai-0003",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0043-Tao-Hsin-cam03",
+      "image_sha256": "e29752e6862c2f1065d1755d9c2a82cf6cf2b6df261e7554953374723a7d4d63",
+      "annotation_sha256": "fa9a99f877e4c8b81a56c9b420b5453a0213da85a25f6147c23668f65db0dfd1",
+      "decisions": [
+        {
+          "candidate_id": "ai-0025",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0046-Tao-Hsin-cam15",
+      "image_sha256": "b7b4488d140b6777063d6ad2b49b3fa3f5dcdbcc9f64dc76477478ff9f57cf5a",
+      "annotation_sha256": "7fc9d5e05918f3e58a9ee52f9b046f4557a7cdcd08aee135f9e883ac9fac78de",
+      "decisions": [
+        {
+          "candidate_id": "ai-0075",
+          "entity": "display_table",
+          "reason": "Foreground demo table supports tethered headphones and demonstration devices."
+        }
+      ]
+    },
+    {
+      "frame_id": "0047-Tao-Hsin-cam15",
+      "image_sha256": "1ace98e3e49c18503b3144d80cff3cac25c8e2fe94812e8ef6e9199c46ddcf99",
+      "annotation_sha256": "b215df3227113573af8b215505c3f23c7f83f57ffdab13d0955fb2b577f73a9f",
+      "decisions": [
+        {
+          "candidate_id": "ai-0035",
+          "entity": "display_table",
+          "reason": "Foreground demo table supports tethered headphones and demonstration devices."
+        }
+      ]
+    },
+    {
+      "frame_id": "0050-Kaohsiung-cam04",
+      "image_sha256": "7b1e1be2cf234ab9d881fef37b49789f4f1b64eff655758b2e674d6819ee6bac",
+      "annotation_sha256": "9d868eb2d4a458403d228d7528438b251162a30dc5c9cfffb0994af125a2fe32",
+      "decisions": [
+        {
+          "candidate_id": "ai-0009",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0051-Kaohsiung-cam04",
+      "image_sha256": "ed21956c0073550452669f186b8ef00060650b49bc97eb1165f0ee13e6a97709",
+      "annotation_sha256": "f7f16a813d7c2b439370c5c4753bc203e37142aadddba279acac5298c678be19",
+      "decisions": [
+        {
+          "candidate_id": "ai-0015",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0052-Kaohsiung-cam05",
+      "image_sha256": "bd6a4009be23df524f1d96f38dadf5d0f19fbe828426dc1e1831619b46e9aec2",
+      "annotation_sha256": "29181949312a5a693c3fa9d247e890541b8dbf78b4fffb49356b28263744a9c0",
+      "decisions": [
+        {
+          "candidate_id": "ai-0005",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0053-Kaohsiung-cam05",
+      "image_sha256": "68440d495ad4d190d7b68b046d64707339105fa7c5290b36b2c46abd3a1f4e8a",
+      "annotation_sha256": "78ff2c835f9e58605c71bebc9d88ae0de292e296ea649258a8e877345a0eff42",
+      "decisions": [
+        {
+          "candidate_id": "ai-0013",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0088-Tao-Hsin-cam03",
+      "image_sha256": "04ddc58299a2e5e9abbfdfb8c473a3a27b27d65893f35925a399ddb39598d77d",
+      "annotation_sha256": "efd249e0d7f030c45a8c5e6e2d47beae70eac57e4505606b3819c84a483a033a",
+      "decisions": [
+        {
+          "candidate_id": "ai-0009",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0089-Tao-Hsin-cam03",
+      "image_sha256": "c74b0ff3764f867d81fde54f147e23360d7a44289d5b6075259e4f4d974d2db2",
+      "annotation_sha256": "1d3179b89df4456e288a1d53145648d27c2226ee29ca3c6e8fc1361c0d180fd8",
+      "decisions": [
+        {
+          "candidate_id": "ai-0009",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0092-Tao-Hsin-cam15",
+      "image_sha256": "0abe668030dd1f67f33689d4bf4d637a3b7165e8257f69b7eaea830de22bfb1d",
+      "annotation_sha256": "c22b5e7329fefe0dbf980f56d887329279bcc22aee7d80ab8edc1f6e930fefc6",
+      "decisions": [
+        {
+          "candidate_id": "ai-0083",
+          "entity": "display_table",
+          "reason": "Foreground demo table supports tethered headphones and demonstration devices."
+        }
+      ]
+    },
+    {
+      "frame_id": "0093-Tao-Hsin-cam15",
+      "image_sha256": "6c115f5cc5364fa1a47cc00c8ad8b73c9f2c99f29f044d0a52d639a2ad4204c0",
+      "annotation_sha256": "8be8ca3fbe1cd3e708d727059a3b69a651d8bc2c0e70708a14133a5544a73dde",
+      "decisions": [
+        {
+          "candidate_id": "ai-0012",
+          "entity": "display_table",
+          "reason": "Foreground demo table supports tethered headphones and demonstration devices."
+        }
+      ]
+    },
+    {
+      "frame_id": "0094-Kaohsiung-cam04",
+      "image_sha256": "1f1c06d47761fc7053a62f981631dd92681dd21c045b5c4f2406a1e52ee64ff8",
+      "annotation_sha256": "6e02530568ad3acc0b5b5e3f7974fc8e231779583e9466b002adb7d17296671c",
+      "decisions": [
+        {
+          "candidate_id": "ai-0002",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0095-Kaohsiung-cam04",
+      "image_sha256": "9061daaf8608b100494e4f5bf6ce588a5978accb1504170e04d68ab3318ac774",
+      "annotation_sha256": "2aead33e0573a5b46a515a84f03010d20556e7001a594eba68d143d3d535ee95",
+      "decisions": [
+        {
+          "candidate_id": "ai-0004",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0096-Kaohsiung-cam04",
+      "image_sha256": "57a68d94ff898f5933938b3d367395fed3be5aaa5983001070cc85844c7950c4",
+      "annotation_sha256": "c6dc99ce47c5a41454ebf59cb9742c2a9977a45eeee4c9eefaf1fac98ba1a3e0",
+      "decisions": [
+        {
+          "candidate_id": "ai-0001",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0115-Tao-Hsin-cam03",
+      "image_sha256": "d64c457dbe2ffb8a9ddecb2f8903b9702bb456047167931a62991c8303e219b7",
+      "annotation_sha256": "944b460433b60ffe1d86cf11f9a47eec0e563ac3354ce4a74d5f3f484cf4909d",
+      "decisions": [
+        {
+          "candidate_id": "ai-0019",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0116-Tao-Hsin-cam03",
+      "image_sha256": "4dad1448688e8eba7886d66b59c1dae8c3c987004ac75cac552917eeef3a7e12",
+      "annotation_sha256": "7c4540c766f74dcc43ca8cc13456e102a29d4630db4f361be3e71687aeafab4f",
+      "decisions": [
+        {
+          "candidate_id": "ai-0030",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    },
+    {
+      "frame_id": "0117-Tao-Hsin-cam03",
+      "image_sha256": "f477d89c96b95596584a3c0761eefd9596099123d6f22332db0c3c1bde015937",
+      "annotation_sha256": "2d88ac8bfacb2f5550c9403dc21702ea9af9a9b44c51bd69c93cc45682ffa042",
+      "decisions": [
+        {
+          "candidate_id": "ai-0025",
+          "entity": "counter",
+          "reason": "Service desk has staff workspace, paperwork and checkout equipment; distinct from nearby demo tables."
+        }
+      ]
+    }
+  ]
+}

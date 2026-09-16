@@ -190,7 +190,7 @@ def test_worker_freezes_writes_resumes_and_rejects_foreign_checkpoints(tmp_path,
     assert json.loads(refined_target.read_text())["entities"]
 
     class FakeReviewer:
-        def classify(self, panels):
+        def classify(self, panels, _prompts=None):
             return [{"entity": "floor", "reason": "synthetic floor"} for _ in panels]
 
     monkeypatch.setattr(worker, "LocalReviewer", lambda _device: FakeReviewer())

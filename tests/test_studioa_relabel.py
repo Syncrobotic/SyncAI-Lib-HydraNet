@@ -57,11 +57,15 @@ def test_vlm_malformed_unknown_and_unsupported_class_abstain():
 
 def test_context_cannot_turn_person_or_small_product_into_counter():
     answer = {"entity": "counter", "reason": "white service desk", "raw": "fixture"}
-    for entity in ("person", "boxed_stock", "floor", "wall"):
+    for entity in ("person", "boxed_stock"):
         group = rows([(entity, (5, 5, 25, 25))])
         result = constrain_decision(group, answer)
         assert result["entity"] == "unknown" and result["model_entity"] == "counter"
     assert constrain_decision(rows([("display_table", (5, 5, 25, 25))]), answer) == answer
+    for entity in ("floor", "wall", "ceiling"):
+        result = constrain_decision(rows([(entity, (5, 5, 25, 25))]), answer)
+        assert result["entity"] == entity
+        assert result["basis"] == "source_semantic_preservation"
 
 
 def test_grouping_merges_alternative_names_but_not_nested_merchandise():
@@ -121,3 +125,35 @@ def test_review_panel_is_bound_to_mask_context_and_does_not_mutate_image():
     assert source.tobytes() == original
     with pytest.raises(ValueError, match="count mismatch"):
         reannotate([], [{"entity": "floor", "reason": "x"}], (60, 80))
+
+
+def test_visual_decisions_bind_sources_reject_duplicates_and_preserve_model_answer():
+    from syncai_hydranet.data.studioa_relabel import (
+        apply_visual_decision,
+        validate_visual_decisions,
+    )
+
+    source = rows([("display_table", (5, 5, 50, 55))])
+    frame = {"id": "f", "image_sha256": "image", "annotation_sha256": "annotation"}
+    decision = {"candidate_id": source[0]["id"], "entity": "counter", "reason": "Register"}
+    item = {
+        "frame_id": "f",
+        "image_sha256": "image",
+        "annotation_sha256": "annotation",
+        "decisions": [decision],
+    }
+    document = {"reviewer_kind": "ai", "frames": [item]}
+    annotations = {"f": {"entities": source, "unresolved_candidates": []}}
+    overrides = validate_visual_decisions(document, [frame], annotations)
+    model = {"entity": "display_table", "reason": "model", "raw": "display_table"}
+    actual = apply_visual_decision(source, model, overrides["f"])
+    assert actual["entity"] == "counter" and actual["model_entity"] == "display_table"
+    assert actual["raw"] == "display_table" and actual["basis"] == "assistant_visual_review"
+    item["image_sha256"] = "changed"
+    with pytest.raises(ValueError, match="source hash"):
+        validate_visual_decisions(document, [frame], annotations)
+    item["image_sha256"] = "image"
+    item["decisions"].append(decision)
+    with pytest.raises(ValueError, match="duplicate"):
+        validate_visual_decisions(document, [frame], annotations)
+    assert parse_answer("display_table")["response_format"] == "class_only"
