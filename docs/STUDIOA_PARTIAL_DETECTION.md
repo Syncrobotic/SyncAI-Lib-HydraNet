@@ -312,3 +312,27 @@ tensors 與原模型相同。33 張 scene logits SHA256 完全一致，所有 te
 [本輪逐圖對照](../runs/studioa_detector_warmup_20260916_v2/review/selected_val_review.jpg) ·
 [解碼前手機診斷](../runs/studioa_detector_warmup_20260916_v2/review/phone_candidate_probe.json) ·
 [完整可追溯結果](reviews/studioa_class_negative_warmup_20260916.json)。
+
+## 2026-09-16：逐類負項正規化的固定比較
+
+先對 28 張 source train、不增強、float32、逐張影像做分類 loss 與 logit 梯度
+分解。v1 模型的 phone 正向梯度 L1 合計約 0.0271，新增逐類負項約 9.631；
+其中一張沒有 phone 正例的桌面影像，610 個 phone 負向點貢獻約 7.168。
+這說明新增負項會受到覆核區面積與每張正例數影響，但不是原先 batch 2 增強
+訓練的梯度重播，也不是模型參數梯度；不能單憑比例就判定退步原因。
+130 個 train 正框均有可分配的特徵點；「無原始框達 IoU 0.50」和「無訓練
+指派點」是不同問題，仍需另外衡量小物件框回歸品質。
+
+只比較一個變因 `class_negative_normalization`：`sum` 保留原行為；
+`positive_budget` 將每個 batch/class 新增負項權重總和限制在
+`max(該類正向指派點數, 1)`，每個負點權重最多 1。已有正項、全類空白負項、
+regression、centerness 與未知通道均不改；缺少該類正例的 batch 仍可提供
+最多一個等效負向點。這限制的是監督權重總量，不是梯度範數。
+
+兩組從同一 scene checkpoint、同 seed、同 instances v4 開始；所有訓練與
+驗證條件沿用 v2。固定 score >0.20／IoU ≥0.50／NMS 0.6／每圖 100 框，
+不得看結果後調門檻。只有候選超過 v1 的 7/31、人物至少 5、手機至少 1、
+海報至少 1、覆核空白誤報不增加且 scene logits 完全一致，才更新實驗基準。
+本次只有這兩組，不依此 val 分數追加參數搜尋。
+
+[執行前比較計畫與診斷](reviews/studioa_negative_balance_plan_20260916.json)。

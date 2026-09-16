@@ -1,0 +1,202 @@
+{
+  "status": "predeclared before either comparison arm runs",
+  "question": "Does capping the added per-class negative mask mass preserve source-val positive recall while scene outputs remain fixed?",
+  "data": "runs/studioa_partial_instances_20260916_v4",
+  "data_manifest_sha256": "e12339ea28db97a8a59c839ad095bf58d961f92af46b0758d6343ebc83475fc1",
+  "initial_checkpoint": "runs/studioa_scene_pilot_20260916_v2/model/best.pt",
+  "arms": {
+    "control": "sum",
+    "candidate": "positive_budget"
+  },
+  "only_training_change": "model.heads.detection.loss.class_negative_normalization",
+  "normalization": "For each batch/class, newly supervised negative points exclude existing positive/empty supervision; multiply by min(1, max(positive_count,1)/max(new_negative_count,1)). Counts independent of logits. This bounds effective mask mass, not gradient norm.",
+  "fixed": {
+    "seed": 42,
+    "input_size": [
+      512,
+      896
+    ],
+    "batch_size": 2,
+    "lr": 0.0002,
+    "warmup_iters": 26,
+    "epochs": 60,
+    "early_stop_patience": 20,
+    "detector_only": true,
+    "scene_eval_frames": 33,
+    "detector_val_frames": 6,
+    "detector_val_positives": 31,
+    "score_strictly_greater_than": 0.2,
+    "iou_at_least": 0.5,
+    "nms": 0.6,
+    "max_det": 100,
+    "test_inference": false,
+    "no_threshold_sweep": true
+  },
+  "upgrade_criteria": {
+    "reference_run": "runs/studioa_detector_warmup_20260916_v1",
+    "total_matched_strictly_greater_than": 7,
+    "matched_person_at_least": 5,
+    "matched_phone_at_least": 1,
+    "matched_poster_at_least": 1,
+    "reviewed_empty_fp_at_most": 0,
+    "all_33_scene_logits_byte_identical": true,
+    "deployment_claim": false
+  },
+  "diagnostic_scope": "28 source-train images, deterministic no augmentation, single image normalization, float32; logit gradient L1 is not model parameter gradient or deployment accuracy",
+  "diagnostic_summary": {
+    "v1": {
+      "laptop": {
+        "positive": 0.012918037129566073,
+        "empty": 0.0003741828104466549,
+        "class_negative": 3.4755482971668243,
+        "positive_points": 442,
+        "class_negative_points": 1092
+      },
+      "phone": {
+        "positive": 0.027144994597620098,
+        "empty": 0.0011384378412913065,
+        "class_negative": 9.630970358848572,
+        "positive_points": 249,
+        "class_negative_points": 1174
+      },
+      "tablet": {
+        "positive": 0.009524137155267454,
+        "empty": 0.0015294674449251033,
+        "class_negative": 7.666859656572342,
+        "positive_points": 578,
+        "class_negative_points": 1119
+      },
+      "boxed_stock": {
+        "positive": 0.007861402924618233,
+        "empty": 0.0006191605880303541,
+        "class_negative": 0.0,
+        "positive_points": 290,
+        "class_negative_points": 0
+      },
+      "cardboard_box": {
+        "positive": 0.10530798323452473,
+        "empty": 0.00014953502613934688,
+        "class_negative": 0.1007998138666153,
+        "positive_points": 160,
+        "class_negative_points": 106
+      },
+      "speaker": {
+        "positive": 0.007214011835458223,
+        "empty": 0.00023646760564588476,
+        "class_negative": 0.13119319081306458,
+        "positive_points": 143,
+        "class_negative_points": 27
+      },
+      "poster": {
+        "positive": 0.07255605278413668,
+        "empty": 0.0036417511128092883,
+        "class_negative": 0.0,
+        "positive_points": 901,
+        "class_negative_points": 0
+      },
+      "fire_equipment": {
+        "positive": 0.010544058675591828,
+        "empty": 0.0023294030424949597,
+        "class_negative": 0.0,
+        "positive_points": 115,
+        "class_negative_points": 0
+      },
+      "chair": {
+        "positive": 0.024498611608578358,
+        "empty": 0.0010922043438768014,
+        "class_negative": 0.0,
+        "positive_points": 350,
+        "class_negative_points": 0
+      },
+      "person": {
+        "positive": 0.0603497300617164,
+        "empty": 0.008183579477190506,
+        "class_negative": 0.22365543246269226,
+        "positive_points": 720,
+        "class_negative_points": 25
+      }
+    },
+    "v2": {
+      "laptop": {
+        "positive": 0.21216800808906555,
+        "empty": 0.00010892083173530409,
+        "class_negative": 0.03900669398717582,
+        "positive_points": 442,
+        "class_negative_points": 1092
+      },
+      "phone": {
+        "positive": 0.5927745196968317,
+        "empty": 0.00010077359479510051,
+        "class_negative": 0.06103876978158951,
+        "positive_points": 249,
+        "class_negative_points": 1174
+      },
+      "tablet": {
+        "positive": 0.4205053150653839,
+        "empty": 0.0001715062435323489,
+        "class_negative": 0.10881199990399182,
+        "positive_points": 578,
+        "class_negative_points": 1119
+      },
+      "boxed_stock": {
+        "positive": 0.2133826856734231,
+        "empty": 0.0001516974407422822,
+        "class_negative": 0.0,
+        "positive_points": 290,
+        "class_negative_points": 0
+      },
+      "cardboard_box": {
+        "positive": 0.17267386615276337,
+        "empty": 0.00024281461901409784,
+        "class_negative": 0.0030626498628407717,
+        "positive_points": 160,
+        "class_negative_points": 106
+      },
+      "speaker": {
+        "positive": 0.25613438803702593,
+        "empty": 6.87338163061213e-05,
+        "class_negative": 0.011610515415668488,
+        "positive_points": 143,
+        "class_negative_points": 27
+      },
+      "poster": {
+        "positive": 0.4980439506471157,
+        "empty": 0.00047163556337181944,
+        "class_negative": 0.0,
+        "positive_points": 901,
+        "class_negative_points": 0
+      },
+      "fire_equipment": {
+        "positive": 0.11960204120259732,
+        "empty": 0.0004438365522219101,
+        "class_negative": 0.0,
+        "positive_points": 115,
+        "class_negative_points": 0
+      },
+      "chair": {
+        "positive": 0.2698142668232322,
+        "empty": 0.00014771780251976452,
+        "class_negative": 0.0,
+        "positive_points": 350,
+        "class_negative_points": 0
+      },
+      "person": {
+        "positive": 0.32032438833266497,
+        "empty": 0.0020131336023041513,
+        "class_negative": 0.07633097469806671,
+        "positive_points": 720,
+        "class_negative_points": 25
+      }
+    }
+  },
+  "diagnostic_limits": [
+    "Per-image float32 no-augmentation logit-gradient L1 is not the historical batch-2 augmented training gradient.",
+    "A well-fit positive can have a small focal gradient, so a large negative/positive ratio alone does not prove the cause of the validation regression.",
+    "All 130 train boxes have at least one assignable grid point in the unaugmented inputs; regression quality may still be insufficient."
+  ],
+  "diagnostic_artifacts": {
+    "runs/studioa_negative_balance_20260916_v1/diagnose.py": "8b7823c9ec02abe2cdda9cf852b2cedcf1ba14325c8cdc21f2dc44fda05bd371",
+    "runs/studioa_negative_balance_20260916_v1/loss_diagnosis.json": "3c5fe8da9fb69ae9f03a4d81828c5ff46417a66e9dd8500a560f5202ed30a53b",
+    "runs/studioa_negative_balance_20260916_v1/diagnose.log": "43a23f0fe14ec609efb9525229b6d76e1a842ec20155e9b23da5e188b160a551"
+  }
+}

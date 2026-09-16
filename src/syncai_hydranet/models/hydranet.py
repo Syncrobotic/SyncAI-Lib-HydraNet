@@ -93,6 +93,9 @@ class HydraNet(nn.Module):
                     cls_weight=lcfg.get("cls_weight", 1.0),
                     reg_weight=lcfg.get("reg_weight", 1.0),
                     centerness_weight=lcfg.get("centerness_weight", 1.0),
+                    class_negative_normalization=lcfg.get(
+                        "class_negative_normalization", "sum"
+                    ),
                 )
             elif hcfg["type"] == "depth_fpn":
                 self.depth_heads[name] = build_depth_head(hcfg, ch)

@@ -231,6 +231,7 @@ def prepare(
     instances: Path | None = None,
     initial_checkpoint: Path | None = None,
     detector_warmup: bool = False,
+    class_negative_normalization: str = "sum",
 ) -> None:
     from syncai_hydranet.utils.visualize import terrain_palette
 
@@ -242,6 +243,10 @@ def prepare(
         raise ValueError("joint pilot requires both instances and initial checkpoint")
     if detector_warmup and instances is None:
         raise ValueError("detector warmup requires instances and initial checkpoint")
+    if class_negative_normalization not in ("sum", "positive_budget"):
+        raise ValueError("unsupported class negative normalization")
+    if class_negative_normalization != "sum" and not detector_warmup:
+        raise ValueError("class negative normalization comparison requires detector warmup")
     instance_counts = {}
     if instances is not None:
         from collections import Counter
@@ -297,6 +302,10 @@ def prepare(
         config = joint_config(config, out / "instances", held_out)
     if detector_warmup:
         config = detector_warmup_config(config)
+        config["model"]["heads"]["detection"]["loss"] = {
+            "class_negative_normalization": class_negative_normalization
+        }
+        check_config(config)
     write_json(out / "config.json", config)
     git = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
@@ -319,6 +328,7 @@ def prepare(
             else "studioa.semantic-pilot.v1",
             "joint": instances is not None,
             "detector_warmup": detector_warmup,
+            "class_negative_normalization": class_negative_normalization,
             "instance_counts": instance_counts,
             "git_commit": git,
             "held_out": held_out,
@@ -587,6 +597,9 @@ def main():
     parser.add_argument("--initial-checkpoint", type=Path)
     parser.add_argument("--detector-warmup", action="store_true")
     parser.add_argument(
+        "--class-negative-normalization", choices=("sum", "positive_budget"), default="sum"
+    )
+    parser.add_argument(
         "--held-out", default="Tao-Hsin", choices=("Tao-Hsin", "Taichung", "Kaohsiung")
     )
     args = parser.parse_args()
@@ -600,6 +613,7 @@ def main():
             args.instances,
             args.initial_checkpoint,
             args.detector_warmup,
+            args.class_negative_normalization,
         )
     else:
         out = args.out.resolve()

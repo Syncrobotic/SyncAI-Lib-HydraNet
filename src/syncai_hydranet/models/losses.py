@@ -146,11 +146,36 @@ def giou_loss(pred_ltrb: torch.Tensor, target_ltrb: torch.Tensor) -> torch.Tenso
     return (1.0 - giou).sum()
 
 
+def class_negative_weights(selected, positive, existing):
+    """Cap added negative mass per batch/class; large reviewed areas are not more labels.
+
+    Positive and existing empty supervision retain their original weights. For a
+    class absent from this batch, allow one effective negative point so negative-only
+    examples still teach absence. Counts and scales are detached supervision, not a
+    function of model confidence. This bounds mask mass, not the gradient norm.
+    """
+    novel = selected & (existing == 0)
+    budget = positive.float().sum(dim=(0, 1)).clamp(min=1)
+    count = novel.sum(dim=(0, 1)).clamp(min=1)
+    scale = (budget / count).clamp(max=1)
+    return novel.float() * scale[None, None, :]
+
+
 class FCOSLoss(nn.Module):
-    def __init__(self, num_classes: int, cls_weight=1.0, reg_weight=1.0, centerness_weight=1.0):
+    def __init__(
+        self,
+        num_classes: int,
+        cls_weight=1.0,
+        reg_weight=1.0,
+        centerness_weight=1.0,
+        class_negative_normalization="sum",
+    ):
         super().__init__()
         self.num_classes = num_classes
         self.w = (cls_weight, reg_weight, centerness_weight)
+        if class_negative_normalization not in ("sum", "positive_budget"):
+            raise ValueError("unsupported class_negative_normalization")
+        self.class_negative_normalization = class_negative_normalization
 
     def forward(
         self,
@@ -243,7 +268,12 @@ class FCOSLoss(nn.Module):
                             & (points[:, 1] <= box[3])
                         )
                         selected[b, inside_box, label] = False
-                partial_mask = torch.maximum(partial_mask, selected.to(onehot.dtype))
+                weight = (
+                    class_negative_weights(selected, onehot, partial_mask)
+                    if self.class_negative_normalization == "positive_budget"
+                    else selected.to(onehot.dtype)
+                )
+                partial_mask = torch.maximum(partial_mask, weight)
         if class_mask is not None:
             # [B, C] -> [B, 1, C] against flat_cls's [B, points, C]; a [C] mask
             # broadcasts as it is. Cast rather than assume: under autocast flat_cls is
