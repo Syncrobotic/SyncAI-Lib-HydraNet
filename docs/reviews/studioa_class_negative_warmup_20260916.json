@@ -1,0 +1,404 @@
+{
+  "status": "completed AI-reviewed data/loss extension; candidate not promoted",
+  "git_commit": "c274cb2fadb44df8d31e1731ff224a1b42ed842b",
+  "data": {
+    "root": "runs/studioa_partial_instances_20260916_v4",
+    "source_train_frames_visually_screened": 62,
+    "class_negative_frames": 5,
+    "reviewed_image_regions": 19,
+    "class_negative_decisions": 47,
+    "class_negative_pixels": {
+      "phone": 263044,
+      "tablet": 251789,
+      "laptop": 245839,
+      "person": 4875,
+      "speaker": 5950,
+      "cardboard_box": 22440
+    },
+    "train_frames": 28,
+    "train_positive_observations": 130,
+    "train_by_class": {
+      "laptop": 9,
+      "cardboard_box": 4,
+      "tablet": 15,
+      "speaker": 9,
+      "fire_equipment": 8,
+      "phone": 17,
+      "boxed_stock": 10,
+      "poster": 20,
+      "person": 23,
+      "chair": 15
+    },
+    "cardboard_train_cameras": 2,
+    "new_cardboard_frame": "0058-Kaohsiung-cam08",
+    "new_cardboard_source_id": "vlm-unknown-0016",
+    "combined_two_box_proposal_rejected": "vlm-unknown-0013",
+    "new_gcs_download_bytes": 0,
+    "old_images_targets_empty_masks_companions_preserved": 33,
+    "val_frames": 6,
+    "val_positive_observations": 31,
+    "semantic_data_unchanged": true,
+    "all_old_split_assignments_unchanged": true
+  },
+  "validation": {
+    "tests_passed": 79,
+    "ruff_ty_and_commit_hooks_passed": true,
+    "gpu_smoke_frames": 28,
+    "gpu_smoke_steps": 14,
+    "unknown_gradient_channels_checked": 2457821,
+    "unknown_gradient_nonzero": 0,
+    "smoke_frozen_files_verified": 319,
+    "training_frozen_files_verified": 779,
+    "training_outputs_verified": 8,
+    "best_last_shared_tensors_equal_original": true,
+    "checkpoint_tensors_finite": true,
+    "per_image_predictions_reproduce_official_metrics": true,
+    "both_services_exit_status": 0
+  },
+  "training": {
+    "run": "runs/studioa_detector_warmup_20260916_v2",
+    "last_epoch": 25,
+    "best_epoch": 5,
+    "optimizer_steps": 350,
+    "best_optimizer_steps": 70,
+    "early_stop_patience": 20,
+    "scene_invariance": {
+      "frozen_state_tensors": 194,
+      "frozen_state_equal": true,
+      "scene_before": {
+        "frames": 33,
+        "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+      },
+      "scene_after": {
+        "frames": 33,
+        "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+      },
+      "scene_logits_equal": true,
+      "baseline_recall": 0.0,
+      "selected_recall": 0.1935483870967742,
+      "baseline_empty_fp": 0.0,
+      "selected_empty_fp": 0.0,
+      "accepted": true
+    },
+    "worker_accepted_means": "random-initialization baseline only; see promotion decision for comparison to previous trained detector"
+  },
+  "comparison": {
+    "reference_run": "runs/studioa_detector_warmup_20260916_v1",
+    "candidate_run": "runs/studioa_detector_warmup_20260916_v2",
+    "reference_recall": 0.22580645161290322,
+    "candidate_recall": 0.1935483870967742,
+    "accepted_for_upgrade": false,
+    "reason": "Candidate recall 6/31 is below reference 7/31; zero empty-region FP and unchanged scene do not compensate.",
+    "retained_reference_checkpoint": "runs/studioa_detector_warmup_20260916_v1/model/best.pt",
+    "worker_acceptance_scope": "report.json warmup.accepted is relative to random detector epoch 0 only, not this reference comparison.",
+    "deployment_ready": false
+  },
+  "selected_validation": {
+    "matched": 6,
+    "support": 31,
+    "recall": 0.1935483870967742,
+    "empty_fp": 0,
+    "empty_pixels": 51761,
+    "unknown_predictions": 594,
+    "every_image_hits_100_prediction_cap": true,
+    "per_class": {
+      "laptop": {
+        "support": 5,
+        "matched": 0
+      },
+      "phone": {
+        "support": 4,
+        "matched": 0
+      },
+      "tablet": {
+        "support": 1,
+        "matched": 0
+      },
+      "boxed_stock": {
+        "support": 1,
+        "matched": 0
+      },
+      "cardboard_box": {
+        "support": 2,
+        "matched": 0
+      },
+      "speaker": {
+        "support": 1,
+        "matched": 0
+      },
+      "poster": {
+        "support": 2,
+        "matched": 1
+      },
+      "fire_equipment": {
+        "support": 1,
+        "matched": 0
+      },
+      "chair": {
+        "support": 5,
+        "matched": 0
+      },
+      "person": {
+        "support": 9,
+        "matched": 5
+      }
+    }
+  },
+  "train_negative_response_probe": {
+    "scope": "five training images; pre-NMS grid-class scores in explicitly reviewed negative regions; not held-out accuracy, not object false positive count",
+    "frames": [
+      "gcs-20260910-Kaohsiung-cam07-t030",
+      "gcs-20260910-Kaohsiung-cam08-t030",
+      "gcs-20260910-Taichung-cam05-t030",
+      "gcs-20260910-Taichung-cam08-t030",
+      "gcs-20260912-Taichung-cam08-t330"
+    ],
+    "results": {
+      "v1": {
+        "checkpoint_sha256": "8381ff3ab6d97a86d9c2896568867971991805288c9f847d6f09d3928aa2c3f5",
+        "reviewed_grid_class_pairs": 3543,
+        "score_over_020": 1776,
+        "mean_cls_times_centerness": 0.2296547035626476,
+        "per_class": {
+          "laptop": {
+            "grid_points": 1092,
+            "score_over_020": 357,
+            "mean_score": 0.17110549139742476
+          },
+          "phone": {
+            "grid_points": 1174,
+            "score_over_020": 763,
+            "mean_score": 0.2740117663944384
+          },
+          "tablet": {
+            "grid_points": 1119,
+            "score_over_020": 600,
+            "mean_score": 0.24573806704582116
+          },
+          "cardboard_box": {
+            "grid_points": 106,
+            "score_over_020": 15,
+            "mean_score": 0.11761251121829704
+          },
+          "speaker": {
+            "grid_points": 27,
+            "score_over_020": 20,
+            "mean_score": 0.3011369218842851
+          },
+          "person": {
+            "grid_points": 25,
+            "score_over_020": 21,
+            "mean_score": 0.3820433706045151
+          }
+        }
+      },
+      "v2": {
+        "checkpoint_sha256": "7c1d23f263bc1a1b18936c46e3226dba9c666c4585ac9ad931b5bb5560a9642a",
+        "reviewed_grid_class_pairs": 3543,
+        "score_over_020": 15,
+        "mean_cls_times_centerness": 0.030960009247288024,
+        "per_class": {
+          "laptop": {
+            "grid_points": 1092,
+            "score_over_020": 1,
+            "mean_score": 0.022852739354598955
+          },
+          "phone": {
+            "grid_points": 1174,
+            "score_over_020": 0,
+            "mean_score": 0.02824464823167733
+          },
+          "tablet": {
+            "grid_points": 1119,
+            "score_over_020": 1,
+            "mean_score": 0.03571344299077109
+          },
+          "cardboard_box": {
+            "grid_points": 106,
+            "score_over_020": 0,
+            "mean_score": 0.037260681531339324
+          },
+          "speaker": {
+            "grid_points": 27,
+            "score_over_020": 0,
+            "mean_score": 0.10272153511781383
+          },
+          "person": {
+            "grid_points": 25,
+            "score_over_020": 13,
+            "mean_score": 0.19561791867017747
+          }
+        }
+      }
+    }
+  },
+  "phone_failure_diagnosis": {
+    "scope": "source-val phone geometric diagnostics at existing score >0.20 and IoU >=0.50; no tuning or test inference; not one-to-one recall",
+    "results": {
+      "v1": [
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            540.86669921875,
+            399.26666259765625,
+            566.066650390625,
+            439.8666687011719
+          ],
+          "localized_grid_candidates": 11,
+          "localized_phone_score_over_020": 10,
+          "eligible_before_nms_and_cap": 5,
+          "retained": true,
+          "max_phone_score_on_localized_boxes": 0.40896254777908325,
+          "reason": "retained"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            494.6666564941406,
+            403.0,
+            516.5999755859375,
+            445.0
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            572.5999755859375,
+            375.0,
+            600.5999755859375,
+            412.79998779296875
+          ],
+          "localized_grid_candidates": 7,
+          "localized_phone_score_over_020": 6,
+          "eligible_before_nms_and_cap": 4,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": 0.3057223856449127,
+          "reason": "removed_by_nms_or_top100"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            457.3333435058594,
+            385.73333740234375,
+            482.0666809082031,
+            425.8666687011719
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        }
+      ],
+      "v2": [
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            540.86669921875,
+            399.26666259765625,
+            566.066650390625,
+            439.8666687011719
+          ],
+          "localized_grid_candidates": 1,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": 0.02521689049899578,
+          "reason": "phone_score_below_threshold"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            494.6666564941406,
+            403.0,
+            516.5999755859375,
+            445.0
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            572.5999755859375,
+            375.0,
+            600.5999755859375,
+            412.79998779296875
+          ],
+          "localized_grid_candidates": 5,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": 0.023917578160762787,
+          "reason": "phone_score_below_threshold"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            457.3333435058594,
+            385.73333740234375,
+            482.0666809082031,
+            425.8666687011719
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        }
+      ]
+    }
+  },
+  "limits": [
+    "All labels and reviews are AI-produced; no independent accuracy claim.",
+    "Negative-region probe is on training images and different selected epochs, not evidence of held-out precision or isolated causal improvement.",
+    "V2 phone: two reviewed boxes have no raw candidate at IoU >=0.50; two have localized candidates but max phone score approximately 0.024-0.025, below unchanged 0.20 threshold. Raising max_det alone cannot repair those four misses.",
+    "Same validation set was used for checkpoint selection; it is not a fresh independent test."
+  ],
+  "next_step": "Measure per-class positive/negative loss balance and bound class-negative influence before another predeclared comparison; improve small-object positive localization support. Preserve fixed thresholds and original test isolation.",
+  "test_evaluated": false,
+  "independent_accuracy": false,
+  "deployment_ready": false,
+  "artifacts": {
+    "runs/studioa_detector_warmup_20260916_v2/job.json": "c042b7471bbc3f608725404948f53f670505913b7c816ad17aba3abd5d12f07e",
+    "runs/studioa_detector_warmup_20260916_v2/report.json": "bda6ba29c40ba2f71fc3228755aae58ebe3cb0bb7d315d839d83befde6adc228",
+    "runs/studioa_detector_warmup_20260916_v2/promotion_decision.json": "1224a16aa6f37c4f47f74abdec814554e7deac9bd20f49cdda3982e8cc0e3eba",
+    "runs/studioa_detector_warmup_20260916_v2/status.json": "8d5d32f512ef2b1d787f6cb713204c17daf773748812261a3dd736258adb33ef",
+    "runs/studioa_class_negative_smoke_20260916_v1/job.json": "ba72688fec6f61819486fafb4cb09f81feebb7d97dae5386bcad2180dae4947d",
+    "runs/studioa_class_negative_smoke_20260916_v1/report.json": "ba4e6894d3e0f767434549214fc9229b14330ce889e26ff283144babc12d58a8",
+    "runs/studioa_class_negative_smoke_20260916_v1/status.json": "3214ab26ed45b60457e62581fb64b8ee09bfc5f5b85a9ea6c6bbbca928062729",
+    "runs/studioa_partial_instances_20260916_v4/manifest.json": "e12339ea28db97a8a59c839ad095bf58d961f92af46b0758d6343ebc83475fc1",
+    "runs/studioa_partial_instances_20260916_v4/report.json": "2c17a48f9772030eee957fd24027830a711b768eaa64cf964408d646c6529dd6",
+    "docs/reviews/studioa_class_negative_decisions_20260916.json": "c647a5e13f533363af44465da22b424a8441c6b89e385703acac402b51b1e932",
+    "runs/studioa_confusers_20260916_v1/class_negative_contact.jpg": "9c5657ca1b5298a269336646fa67634e2694d64e847d881cb6336e50ce1ae55e",
+    "runs/studioa_confusers_20260916_v1/vlm-unknown-0016.jpg": "4c596e0c887859948e47fb2cc55c95fd1e64bf743364081b965f4535ba7198b1",
+    "runs/studioa_detector_warmup_20260916_v2/model/best.pt": "7c1d23f263bc1a1b18936c46e3226dba9c666c4585ac9ad931b5bb5560a9642a",
+    "runs/studioa_detector_warmup_20260916_v2/model/last.pt": "cc9213a6996d915bed67d1bdccf8dfb1b956719de150d509c427b8ecc10cef39",
+    "runs/studioa_detector_warmup_20260916_v2/validation.json": "6950b3e1e5ac11d506131bc7e33b6f40bd6e14051ce705dd4ce1f40ca58fdf97",
+    "runs/studioa_detector_warmup_20260916_v2/baseline_val.json": "445010c860040e87a677a984948f275e120f3f0f9bd6c85c070820efe7831962",
+    "runs/studioa_detector_warmup_20260916_v2/model/metrics.jsonl": "e9c2012e73bb114c4faea57117851039b26c649a05976a079aa64da60bc220ae",
+    "runs/studioa_detector_warmup_20260916_v2/validation_scene_preview.jpg": "e1798a2a38d0cab2eb1b06b75d18d29a8d66ad69cecb3082cc7c9bad25b78b57",
+    "runs/studioa_detector_warmup_20260916_v2/scene_before.json": "d7c9e18e014bb4e47b0a6acbae3e56ead9448a44e7dffe79097eeb4221d527a4",
+    "runs/studioa_detector_warmup_20260916_v2/warmup_evidence.json": "2e90f6e5b4e97f471fd2a99f1de143153801a87a1262024410fefeec30002c3c",
+    "runs/studioa_detector_warmup_20260916_v2/review/probe_phone_candidates.py": "3047e7c151d125504dd6c49a0cc8ac28ff80b043572fda8bf73ba58c01284161",
+    "runs/studioa_detector_warmup_20260916_v2/review/inspect_selected.py": "eae0fb3f94338de83abfe586b430b753a028abed44564355a95a82bdd5462e91",
+    "runs/studioa_detector_warmup_20260916_v2/review/probe_train_negatives.py": "c8de43945061d229f7ec3e30c3f10a8ee988014418d4c1f525b69302b496181d",
+    "runs/studioa_detector_warmup_20260916_v2/review/train_negative_probe.json": "a05f1b19ad42e34344ad341d05764a040f987ce13ecb3aaef931270bff260dc3",
+    "runs/studioa_detector_warmup_20260916_v2/review/phone_candidate_probe.json": "632416d4446caa8d1314b532dc2c49fdbf3d10810caa5d5f98df714ad904b454",
+    "runs/studioa_detector_warmup_20260916_v2/review/retained_prediction_error_analysis.json": "07e66d8c4e6431a144b7e90565d56da092fcc589216d8ec4ed2e85c4d36edd20",
+    "runs/studioa_detector_warmup_20260916_v2/review/selected_diagnostics.json": "cd3cf1c69d5de3e29339691a7e80a567a886a29a337da69b71d140c11b92c739",
+    "runs/studioa_detector_warmup_20260916_v2/review/selected_val_review.jpg": "14c2e2db2da562358270df87d313ed6f08a33c1f1ec9189c5796ce5bfcc48b17"
+  }
+}

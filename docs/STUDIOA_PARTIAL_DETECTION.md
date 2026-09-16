@@ -273,3 +273,42 @@ centerness。相同類別的正框在所有金字塔尺度都有優先權；匯�
 重訓沿用固定場景 warmup 設定與原始 scene 初始化，score／NMS／max_det 不調整。
 本輪完整資料變更與前版 7/31 比較；不把資料增補與 loss 修改當成單因素因果實驗。
 未知預測數減少不等於 precision 改善；僅通過隨機初始化基準也不等於超過前版。
+
+### 第二輪結果：不升級模型
+
+`runs/studioa_detector_warmup_20260916_v2/` 使用 commit `c274cb2`，第 25 輪
+觸發 20 輪無改善停止（350 次更新），選定第 5 輪（70 次更新）。
+
+| 同一來源 val、同一評估契約 | 前版 v1 | 本輪 v2 |
+| --- | ---: | ---: |
+| 覆核正例召回 | 7/31（22.58%） | 6/31（19.35%） |
+| person / phone / poster 命中 | 5 / 1 / 1 | 5 / 0 / 1 |
+| 覆核空白區誤報 | 0 | 0 |
+| 未配對、真偽未定預測 | 593 | 594 |
+| 場景輸出 | 與原模型一致 | 與原模型一致 |
+
+因此 **保留 v1 作為較佳實驗基準，v2 不升級**。worker `warmup.accepted=true`
+只代表超過第 0 輪隨機偵測頭，不代表超過 v1；明確決定另見
+[promotion_decision.json](../runs/studioa_detector_warmup_20260916_v2/promotion_decision.json)。
+兩版都未達部署條件；新程式與 AI 資料保留，沒有改寫任何舊 checkpoint。
+
+五張已訓練負樣本影像中的 3,543 個 grid/class 對，score >0.20 的數量由
+1,776 降至 15，說明選定模型在這些訓練區域的反應較低。這是訓練區診斷，
+且兩版選定 epoch 不同，不能當作驗證 precision 改善或單因素因果證明。
+val 六張影像仍全數達 100 框上限，尚未改善其他鏡頭的混淆。
+
+固定門檻下的解碼前手機診斷進一步區分：v2 四個 val 手機中，兩個完全沒有
+IoU ≥0.50 的原始候選框；另外兩個雖有定位候選，phone score 最高只有約
+0.024–0.025，低於原定 0.20。這四個漏檢不能單靠提高 max_det 解決。
+下一步先量化每類正負 loss 比例、限制逐類負項影響，再進行預先設定的比較，
+並補充小物件的定位正例；不利用這組 val 調門檻掩蓋問題。
+
+79 項測試、lint、型別、提交 hook 通過。GPU smoke 對 28 張 train 做 14 次
+更新，2,457,821 個未知分類輸出梯度均為 0。319 個 smoke 輸入、779 個訓練
+輸入及 8 個正式輸出 hashes 核對；best/last 有限、job 身分正確，194 個共享
+tensors 與原模型相同。33 張 scene logits SHA256 完全一致，所有 test 未推論。
+兩個 systemd 工作正常退出。儲存的逐框結果能完整重算官方偵測指標。
+
+[本輪逐圖對照](../runs/studioa_detector_warmup_20260916_v2/review/selected_val_review.jpg) ·
+[解碼前手機診斷](../runs/studioa_detector_warmup_20260916_v2/review/phone_candidate_probe.json) ·
+[完整可追溯結果](reviews/studioa_class_negative_warmup_20260916.json)。
