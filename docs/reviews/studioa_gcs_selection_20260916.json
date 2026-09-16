@@ -1,0 +1,170 @@
+{
+  "reviewer_kind": "ai",
+  "source_manifest_sha256": "a59a572a41e29dc42e6b8113c00f3a8a581abee341993aff964fe3a82fa59d0d",
+  "scope": "source train only; visual camera identity and scene diversity screening; not object-label acceptance",
+  "frames": [
+    {
+      "id": "gcs-20260910-Kaohsiung-cam04-t330",
+      "camera_match_confirmed": true,
+      "reason": "Assistant compared original frame against legacy camera reference: fixed view matches. Retain for visible merchandise, changed arrangement, lighting or people/occlusion; candidate labels still require review."
+    },
+    {
+      "id": "gcs-20260910-Kaohsiung-cam07-t030",
+      "camera_match_confirmed": true,
+      "reason": "Assistant compared original frame against legacy camera reference: fixed view matches. Retain for visible merchandise, changed arrangement, lighting or people/occlusion; candidate labels still require review."
+    },
+    {
+      "id": "gcs-20260910-Kaohsiung-cam08-t030",
+      "camera_match_confirmed": true,
+      "reason": "Assistant compared original frame against legacy camera reference: fixed view matches. Retain for visible merchandise, changed arrangement, lighting or people/occlusion; candidate labels still require review."
+    },
+    {
+      "id": "gcs-20260910-Taichung-cam03-t030",
+      "camera_match_confirmed": true,
+      "reason": "Assistant compared original frame against legacy camera reference: fixed view matches. Retain for visible merchandise, changed arrangement, lighting or people/occlusion; candidate labels still require review."
+    },
+    {
+      "id": "gcs-20260910-Taichung-cam04-t330",
+      "camera_match_confirmed": true,
+      "reason": "Assistant compared original frame against legacy camera reference: fixed view matches. Retain for visible merchandise, changed arrangement, lighting or people/occlusion; candidate labels still require review."
+    },
+    {
+      "id": "gcs-20260910-Taichung-cam05-t030",
+      "camera_match_confirmed": true,
+      "reason": "Assistant compared original frame against legacy camera reference: fixed view matches. Retain for visible merchandise, changed arrangement, lighting or people/occlusion; candidate labels still require review."
+    },
+    {
+      "id": "gcs-20260910-Taichung-cam08-t030",
+      "camera_match_confirmed": true,
+      "reason": "Assistant compared original frame against legacy camera reference: fixed view matches. Retain for visible merchandise, changed arrangement, lighting or people/occlusion; candidate labels still require review."
+    },
+    {
+      "id": "gcs-20260910-Taichung-cam09-t030",
+      "camera_match_confirmed": true,
+      "reason": "Assistant compared original frame against legacy camera reference: fixed view matches. Retain for visible merchandise, changed arrangement, lighting or people/occlusion; candidate labels still require review."
+    },
+    {
+      "id": "gcs-20260910-Taichung-cam11-t330",
+      "camera_match_confirmed": true,
+      "reason": "Assistant compared original frame against legacy camera reference: fixed view matches. Retain for visible merchandise, changed arrangement, lighting or people/occlusion; candidate labels still require review."
+    },
+    {
+      "id": "gcs-20260912-Kaohsiung-cam04-t030",
+      "camera_match_confirmed": true,
+      "reason": "Assistant compared original frame against legacy camera reference: fixed view matches. Retain for visible merchandise, changed arrangement, lighting or people/occlusion; candidate labels still require review."
+    },
+    {
+      "id": "gcs-20260912-Taichung-cam03-t330",
+      "camera_match_confirmed": true,
+      "reason": "Assistant compared original frame against legacy camera reference: fixed view matches. Retain for visible merchandise, changed arrangement, lighting or people/occlusion; candidate labels still require review."
+    },
+    {
+      "id": "gcs-20260912-Taichung-cam04-t030",
+      "camera_match_confirmed": true,
+      "reason": "Assistant compared original frame against legacy camera reference: fixed view matches. Retain for visible merchandise, changed arrangement, lighting or people/occlusion; candidate labels still require review."
+    },
+    {
+      "id": "gcs-20260912-Taichung-cam05-t330",
+      "camera_match_confirmed": true,
+      "reason": "Assistant compared original frame against legacy camera reference: fixed view matches. Retain for visible merchandise, changed arrangement, lighting or people/occlusion; candidate labels still require review."
+    },
+    {
+      "id": "gcs-20260912-Taichung-cam08-t030",
+      "camera_match_confirmed": true,
+      "reason": "Assistant compared original frame against legacy camera reference: fixed view matches. Retain for visible merchandise, changed arrangement, lighting or people/occlusion; candidate labels still require review."
+    },
+    {
+      "id": "gcs-20260912-Taichung-cam08-t330",
+      "camera_match_confirmed": true,
+      "reason": "Assistant compared original frame against legacy camera reference: fixed view matches. Retain for visible merchandise, changed arrangement, lighting or people/occlusion; candidate labels still require review."
+    },
+    {
+      "id": "gcs-20260912-Taichung-cam11-t330",
+      "camera_match_confirmed": true,
+      "reason": "Assistant compared original frame against legacy camera reference: fixed view matches. Retain for visible merchandise, changed arrangement, lighting or people/occlusion; candidate labels still require review."
+    }
+  ],
+  "excluded": [
+    {
+      "id": "gcs-20260910-Kaohsiung-cam04-t030",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260910-Kaohsiung-cam07-t330",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260910-Kaohsiung-cam08-t330",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260910-Taichung-cam03-t330",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260910-Taichung-cam04-t030",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260910-Taichung-cam05-t330",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260910-Taichung-cam08-t330",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260910-Taichung-cam09-t330",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260910-Taichung-cam11-t030",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260912-Kaohsiung-cam04-t330",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260912-Kaohsiung-cam07-t030",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260912-Kaohsiung-cam07-t330",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260912-Kaohsiung-cam08-t030",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260912-Kaohsiung-cam08-t330",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260912-Taichung-cam03-t030",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260912-Taichung-cam04-t330",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260912-Taichung-cam05-t030",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260912-Taichung-cam09-t030",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260912-Taichung-cam09-t330",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    },
+    {
+      "id": "gcs-20260912-Taichung-cam11-t030",
+      "reason": "Near-static alternative or redundant adjacent sample; keep representative view rather than count duplicate frames as coverage."
+    }
+  ],
+  "clock_note": "Selected day-slot frames show approx 12:00/12:05 or 18:50/18:55 in burnt-in clocks. Separate 11:50 probe showed clock offset; exact event synchronization is not established."
+}

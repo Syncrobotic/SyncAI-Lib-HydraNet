@@ -1,0 +1,1368 @@
+{
+  "reviewer_kind": "ai",
+  "source_job_sha256": "2c48f8697a173d8bc4460d2960806d6e620ee98c5871a19ef4eff7006984b13d",
+  "scope": "Manually inspected by assistant using original context and isolated candidate masks; source train only; all unselected proposals/pixels unknown. No independent accuracy claim.",
+  "candidate_gallery_sha256": "5b138b3c30ec3a2326a181bfa3ca688daef7c805849f3b453ab17c7b5f072c52",
+  "frames": [
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam04-t330",
+      "annotation_sha256": "fc310a3646e24ad1a6d954405f92b0aeafb10d594315e496e0b70a3afee35dee",
+      "positives": [
+        {
+          "id": "ai-0005",
+          "entity": "laptop",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 0
+        },
+        {
+          "id": "ai-0011",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 3
+        },
+        {
+          "id": "ai-0019",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 4
+        },
+        {
+          "id": "ai-0009",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 5
+        },
+        {
+          "id": "ai-0006",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 6
+        },
+        {
+          "id": "ai-0031",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 12
+        },
+        {
+          "id": "ai-0001",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 13
+        },
+        {
+          "id": "ai-0000",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 14
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam07-t030",
+      "annotation_sha256": "1a51adcb004b8fc2228be56bad5d7f67cc6f9ef39e21343e3494c16934af4527",
+      "positives": [
+        {
+          "id": "ai-0080",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 19
+        },
+        {
+          "id": "ai-0017",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 21
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam08-t030",
+      "annotation_sha256": "6d6b5153ffc1fe22c77d30df35c826fa696eae5012bcd3258f557c5129dbbeb7",
+      "positives": [
+        {
+          "id": "ai-0023",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 27
+        },
+        {
+          "id": "ai-0025",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 28
+        },
+        {
+          "id": "ai-0018",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 29
+        },
+        {
+          "id": "ai-0042",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 31
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam03-t030",
+      "annotation_sha256": "2403dee6f25ae83d9029515b479fd0f921f580cf63a75cf60032eaa8051e71db",
+      "positives": [
+        {
+          "id": "ai-0005",
+          "entity": "laptop",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 32
+        },
+        {
+          "id": "ai-0006",
+          "entity": "laptop",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 33
+        },
+        {
+          "id": "ai-0014",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 35
+        },
+        {
+          "id": "ai-0011",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 36
+        },
+        {
+          "id": "ai-0008",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 37
+        },
+        {
+          "id": "ai-0020",
+          "entity": "speaker",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 40
+        },
+        {
+          "id": "ai-0057",
+          "entity": "speaker",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 41
+        },
+        {
+          "id": "ai-0010",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 42
+        },
+        {
+          "id": "ai-0003",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 43
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam04-t330",
+      "annotation_sha256": "0c1fd83a5ca31bb9279d9f9acf01c6bf0b196d682d213a423a868b8df60ecd6c",
+      "positives": [
+        {
+          "id": "ai-0054",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 50
+        },
+        {
+          "id": "ai-0057",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 51
+        },
+        {
+          "id": "ai-0050",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 53
+        },
+        {
+          "id": "ai-0009",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 55
+        },
+        {
+          "id": "ai-0028",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 56
+        },
+        {
+          "id": "ai-0016",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 58
+        },
+        {
+          "id": "ai-0000",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 59
+        },
+        {
+          "id": "ai-0012",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 60
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam05-t030",
+      "annotation_sha256": "14faf107591d61b56c42eb74d5176b93835e30368c3b1e69f34fc177e9cba53e",
+      "positives": [
+        {
+          "id": "ai-0036",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 64
+        },
+        {
+          "id": "ai-0005",
+          "entity": "speaker",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 66
+        },
+        {
+          "id": "ai-0061",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 68
+        },
+        {
+          "id": "ai-0014",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 69
+        },
+        {
+          "id": "ai-0011",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 70
+        },
+        {
+          "id": "ai-0009",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 71
+        },
+        {
+          "id": "ai-0055",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 73
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam08-t030",
+      "annotation_sha256": "fae2c31b9af6e7a7450479aaf106e147ed11f63dee1363eca9cb0f39c14cf92e",
+      "positives": [
+        {
+          "id": "ai-0002",
+          "entity": "tablet",
+          "reason": "Assistant corrected phone proposal to tablet: full-size physical iPad with tether and stand on tabletop, compared with the surrounding counter and power sockets; not the adjacent black desk mats.",
+          "review_index": 76
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam09-t030",
+      "annotation_sha256": "7a743bef832a3d46dd00a7e1cc9263e56549161e830f0eb931172e9a17df0a33",
+      "positives": [
+        {
+          "id": "ai-0066",
+          "entity": "boxed_stock",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 82
+        },
+        {
+          "id": "ai-0028",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 83
+        },
+        {
+          "id": "ai-0026",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 84
+        },
+        {
+          "id": "ai-0002",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 85
+        },
+        {
+          "id": "ai-0005",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 86
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam11-t330",
+      "annotation_sha256": "04d1a05643923f79ce05a26cf5223a51854197c0a5dd9da3ff21b815b29d097a",
+      "positives": [
+        {
+          "id": "ai-0017",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 91
+        },
+        {
+          "id": "ai-0030",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 92
+        },
+        {
+          "id": "ai-0011",
+          "entity": "speaker",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 93
+        },
+        {
+          "id": "ai-0028",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 95
+        },
+        {
+          "id": "ai-0002",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 96
+        },
+        {
+          "id": "ai-0006",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 97
+        },
+        {
+          "id": "ai-0000",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 98
+        },
+        {
+          "id": "ai-0001",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 99
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260912-Kaohsiung-cam04-t030",
+      "annotation_sha256": "422f013b11a67ac786a11129c544d93ae06d6d931a55efe4702c2b9f965b0eb1",
+      "positives": [
+        {
+          "id": "ai-0006",
+          "entity": "laptop",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 100
+        },
+        {
+          "id": "ai-0039",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 102
+        },
+        {
+          "id": "ai-0010",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 103
+        },
+        {
+          "id": "ai-0020",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 105
+        },
+        {
+          "id": "ai-0008",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 106
+        },
+        {
+          "id": "ai-0074",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 113
+        },
+        {
+          "id": "ai-0068",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 114
+        },
+        {
+          "id": "ai-0002",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 115
+        },
+        {
+          "id": "ai-0001",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 116
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam03-t330",
+      "annotation_sha256": "e901b8526c8e1c2ec797916403f11f5a21f08ac28d728a3f2bf859aa652a7626",
+      "positives": [
+        {
+          "id": "ai-0011",
+          "entity": "laptop",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 117
+        },
+        {
+          "id": "ai-0010",
+          "entity": "laptop",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 118
+        },
+        {
+          "id": "ai-0017",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 120
+        },
+        {
+          "id": "ai-0019",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 121
+        },
+        {
+          "id": "ai-0015",
+          "entity": "speaker",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 125
+        },
+        {
+          "id": "ai-0005",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 126
+        },
+        {
+          "id": "ai-0006",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 127
+        },
+        {
+          "id": "ai-0008",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 129
+        },
+        {
+          "id": "ai-0000",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 130
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam04-t030",
+      "annotation_sha256": "9c5b6a3bb23b9a2f4a18466c7439b7b1e280d81103d66afb5ffc269b838c4df8",
+      "positives": [
+        {
+          "id": "ai-0016",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 139
+        },
+        {
+          "id": "ai-0033",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 140
+        },
+        {
+          "id": "ai-0020",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 141
+        },
+        {
+          "id": "ai-0038",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 142
+        },
+        {
+          "id": "ai-0000",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 143
+        },
+        {
+          "id": "ai-0003",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 144
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam05-t330",
+      "annotation_sha256": "506c1b9481e550298d36ab1a9d4a811a39928a86f7f2246d823de8d67fc8fd02",
+      "positives": [
+        {
+          "id": "ai-0014",
+          "entity": "speaker",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 151
+        },
+        {
+          "id": "ai-0081",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 154
+        },
+        {
+          "id": "ai-0020",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 155
+        },
+        {
+          "id": "ai-0019",
+          "entity": "fire_equipment",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 156
+        },
+        {
+          "id": "ai-0010",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 157
+        },
+        {
+          "id": "ai-0024",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 158
+        },
+        {
+          "id": "ai-0000",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 159
+        },
+        {
+          "id": "ai-0004",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 160
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam08-t030",
+      "annotation_sha256": "dd1113f89dd7be29ae1e655c62a62c997fde061c2a147262aff26dbb0fbbba16",
+      "positives": [
+        {
+          "id": "ai-0002",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 161
+        },
+        {
+          "id": "ai-0003",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 162
+        },
+        {
+          "id": "ai-0001",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 164
+        },
+        {
+          "id": "ai-0005",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 165
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam08-t330",
+      "annotation_sha256": "9441c667efad81fa0af368724b6f72cfb2522883e241480cee80ea6c18cfc4b4",
+      "positives": [
+        {
+          "id": "ai-0007",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 167
+        },
+        {
+          "id": "ai-0001",
+          "entity": "phone",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 168
+        },
+        {
+          "id": "ai-0002",
+          "entity": "tablet",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 169
+        },
+        {
+          "id": "ai-0005",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 173
+        },
+        {
+          "id": "ai-0004",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 174
+        }
+      ],
+      "negative_rects": []
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam11-t330",
+      "annotation_sha256": "89bb8cdb7cdfdaf8863b5560f07674350b61a6aa3aadb4cdb1df1e63b11b760e",
+      "positives": [
+        {
+          "id": "ai-0003",
+          "entity": "speaker",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 176
+        },
+        {
+          "id": "ai-0016",
+          "entity": "poster",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 178
+        },
+        {
+          "id": "ai-0000",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 179
+        },
+        {
+          "id": "ai-0011",
+          "entity": "chair",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 180
+        },
+        {
+          "id": "ai-0001",
+          "entity": "person",
+          "reason": "Assistant inspected full camera context and isolated mask: one visible physical instance supports this class; partial AI review, not exhaustive labels.",
+          "review_index": 181
+        }
+      ],
+      "negative_rects": []
+    }
+  ],
+  "deferred_candidates": [
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam04-t330",
+      "id": "ai-0059",
+      "proposed_entity": "phone",
+      "review_index": 1,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam04-t330",
+      "id": "ai-0037",
+      "proposed_entity": "phone",
+      "review_index": 2,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam04-t330",
+      "id": "ai-0007",
+      "proposed_entity": "boxed_stock",
+      "review_index": 7,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam04-t330",
+      "id": "ai-0016",
+      "proposed_entity": "boxed_stock",
+      "review_index": 8,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam04-t330",
+      "id": "ai-0060",
+      "proposed_entity": "boxed_stock",
+      "review_index": 9,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam04-t330",
+      "id": "ai-0027",
+      "proposed_entity": "boxed_stock",
+      "review_index": 10,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam04-t330",
+      "id": "ai-0049",
+      "proposed_entity": "speaker",
+      "review_index": 11,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam07-t030",
+      "id": "ai-0138",
+      "proposed_entity": "laptop",
+      "review_index": 15,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam07-t030",
+      "id": "ai-0133",
+      "proposed_entity": "tablet",
+      "review_index": 16,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam07-t030",
+      "id": "ai-0126",
+      "proposed_entity": "tablet",
+      "review_index": 17,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam07-t030",
+      "id": "ai-0074",
+      "proposed_entity": "boxed_stock",
+      "review_index": 18,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam07-t030",
+      "id": "ai-0006",
+      "proposed_entity": "boxed_stock",
+      "review_index": 20,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam07-t030",
+      "id": "ai-0134",
+      "proposed_entity": "person",
+      "review_index": 22,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam07-t030",
+      "id": "ai-0120",
+      "proposed_entity": "person",
+      "review_index": 23,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam08-t030",
+      "id": "ai-0038",
+      "proposed_entity": "laptop",
+      "review_index": 24,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam08-t030",
+      "id": "ai-0005",
+      "proposed_entity": "laptop",
+      "review_index": 25,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam08-t030",
+      "id": "ai-0033",
+      "proposed_entity": "boxed_stock",
+      "review_index": 26,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam08-t030",
+      "id": "ai-0037",
+      "proposed_entity": "cardboard_box",
+      "review_index": 30,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam03-t030",
+      "id": "ai-0045",
+      "proposed_entity": "phone",
+      "review_index": 34,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam03-t030",
+      "id": "ai-0049",
+      "proposed_entity": "tablet",
+      "review_index": 38,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam03-t030",
+      "id": "ai-0047",
+      "proposed_entity": "tablet",
+      "review_index": 39,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam03-t030",
+      "id": "ai-0064",
+      "proposed_entity": "person",
+      "review_index": 44,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam03-t030",
+      "id": "ai-0066",
+      "proposed_entity": "person",
+      "review_index": 45,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam04-t330",
+      "id": "ai-0005",
+      "proposed_entity": "laptop",
+      "review_index": 46,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam04-t330",
+      "id": "ai-0019",
+      "proposed_entity": "laptop",
+      "review_index": 47,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam04-t330",
+      "id": "ai-0073",
+      "proposed_entity": "phone",
+      "review_index": 48,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam04-t330",
+      "id": "ai-0056",
+      "proposed_entity": "phone",
+      "review_index": 49,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam04-t330",
+      "id": "ai-0043",
+      "proposed_entity": "boxed_stock",
+      "review_index": 52,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam04-t330",
+      "id": "ai-0060",
+      "proposed_entity": "speaker",
+      "review_index": 54,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam04-t330",
+      "id": "ai-0072",
+      "proposed_entity": "chair",
+      "review_index": 57,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam05-t030",
+      "id": "ai-0069",
+      "proposed_entity": "laptop",
+      "review_index": 61,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam05-t030",
+      "id": "ai-0025",
+      "proposed_entity": "laptop",
+      "review_index": 62,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam05-t030",
+      "id": "ai-0057",
+      "proposed_entity": "tablet",
+      "review_index": 63,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam05-t030",
+      "id": "ai-0047",
+      "proposed_entity": "boxed_stock",
+      "review_index": 65,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam05-t030",
+      "id": "ai-0073",
+      "proposed_entity": "speaker",
+      "review_index": 67,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam05-t030",
+      "id": "ai-0087",
+      "proposed_entity": "chair",
+      "review_index": 72,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam05-t030",
+      "id": "ai-0028",
+      "proposed_entity": "person",
+      "review_index": 74,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam05-t030",
+      "id": "ai-0018",
+      "proposed_entity": "person",
+      "review_index": 75,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam08-t030",
+      "id": "ai-0005",
+      "proposed_entity": "tablet",
+      "review_index": 77,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam08-t030",
+      "id": "ai-0006",
+      "proposed_entity": "tablet",
+      "review_index": 78,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam09-t030",
+      "id": "ai-0073",
+      "proposed_entity": "boxed_stock",
+      "review_index": 79,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam09-t030",
+      "id": "ai-0070",
+      "proposed_entity": "boxed_stock",
+      "review_index": 80,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam09-t030",
+      "id": "ai-0030",
+      "proposed_entity": "boxed_stock",
+      "review_index": 81,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam09-t030",
+      "id": "ai-0009",
+      "proposed_entity": "person",
+      "review_index": 87,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam11-t330",
+      "id": "ai-0020",
+      "proposed_entity": "phone",
+      "review_index": 88,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam11-t330",
+      "id": "ai-0023",
+      "proposed_entity": "phone",
+      "review_index": 89,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam11-t330",
+      "id": "ai-0036",
+      "proposed_entity": "phone",
+      "review_index": 90,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam11-t330",
+      "id": "ai-0029",
+      "proposed_entity": "speaker",
+      "review_index": 94,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Kaohsiung-cam04-t030",
+      "id": "ai-0017",
+      "proposed_entity": "laptop",
+      "review_index": 101,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Kaohsiung-cam04-t030",
+      "id": "ai-0054",
+      "proposed_entity": "phone",
+      "review_index": 104,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Kaohsiung-cam04-t030",
+      "id": "ai-0050",
+      "proposed_entity": "tablet",
+      "review_index": 107,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Kaohsiung-cam04-t030",
+      "id": "ai-0009",
+      "proposed_entity": "boxed_stock",
+      "review_index": 108,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Kaohsiung-cam04-t030",
+      "id": "ai-0016",
+      "proposed_entity": "boxed_stock",
+      "review_index": 109,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Kaohsiung-cam04-t030",
+      "id": "ai-0027",
+      "proposed_entity": "boxed_stock",
+      "review_index": 110,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Kaohsiung-cam04-t030",
+      "id": "ai-0061",
+      "proposed_entity": "boxed_stock",
+      "review_index": 111,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Kaohsiung-cam04-t030",
+      "id": "ai-0029",
+      "proposed_entity": "speaker",
+      "review_index": 112,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam03-t330",
+      "id": "ai-0044",
+      "proposed_entity": "phone",
+      "review_index": 119,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam03-t330",
+      "id": "ai-0051",
+      "proposed_entity": "phone",
+      "review_index": 122,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam03-t330",
+      "id": "ai-0069",
+      "proposed_entity": "tablet",
+      "review_index": 123,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam03-t330",
+      "id": "ai-0074",
+      "proposed_entity": "tablet",
+      "review_index": 124,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam03-t330",
+      "id": "ai-0062",
+      "proposed_entity": "chair",
+      "review_index": 128,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam04-t030",
+      "id": "ai-0010",
+      "proposed_entity": "laptop",
+      "review_index": 131,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam04-t030",
+      "id": "ai-0034",
+      "proposed_entity": "laptop",
+      "review_index": 132,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam04-t030",
+      "id": "ai-0079",
+      "proposed_entity": "phone",
+      "review_index": 133,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam04-t030",
+      "id": "ai-0069",
+      "proposed_entity": "phone",
+      "review_index": 134,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam04-t030",
+      "id": "ai-0045",
+      "proposed_entity": "phone",
+      "review_index": 135,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam04-t030",
+      "id": "ai-0065",
+      "proposed_entity": "phone",
+      "review_index": 136,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam04-t030",
+      "id": "ai-0081",
+      "proposed_entity": "tablet",
+      "review_index": 137,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam04-t030",
+      "id": "ai-0060",
+      "proposed_entity": "tablet",
+      "review_index": 138,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam05-t330",
+      "id": "ai-0059",
+      "proposed_entity": "laptop",
+      "review_index": 145,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam05-t330",
+      "id": "ai-0030",
+      "proposed_entity": "laptop",
+      "review_index": 146,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam05-t330",
+      "id": "ai-0087",
+      "proposed_entity": "tablet",
+      "review_index": 147,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam05-t330",
+      "id": "ai-0055",
+      "proposed_entity": "tablet",
+      "review_index": 148,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam05-t330",
+      "id": "ai-0054",
+      "proposed_entity": "boxed_stock",
+      "review_index": 149,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam05-t330",
+      "id": "ai-0095",
+      "proposed_entity": "boxed_stock",
+      "review_index": 150,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam05-t330",
+      "id": "ai-0066",
+      "proposed_entity": "speaker",
+      "review_index": 152,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam05-t330",
+      "id": "ai-0093",
+      "proposed_entity": "poster",
+      "review_index": 153,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam08-t030",
+      "id": "ai-0007",
+      "proposed_entity": "speaker",
+      "review_index": 163,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam08-t330",
+      "id": "ai-0011",
+      "proposed_entity": "phone",
+      "review_index": 166,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam08-t330",
+      "id": "ai-0010",
+      "proposed_entity": "cardboard_box",
+      "review_index": 170,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam08-t330",
+      "id": "ai-0006",
+      "proposed_entity": "speaker",
+      "review_index": 171,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam08-t330",
+      "id": "ai-0009",
+      "proposed_entity": "speaker",
+      "review_index": 172,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam11-t330",
+      "id": "ai-0014",
+      "proposed_entity": "phone",
+      "review_index": 175,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam11-t330",
+      "id": "ai-0017",
+      "proposed_entity": "speaker",
+      "review_index": 177,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam11-t330",
+      "id": "ai-0005",
+      "proposed_entity": "person",
+      "review_index": 182,
+      "reason": "Not accepted after context/mask inspection: depiction, object part, ambiguous class, grouped objects or contaminated mask; remains unknown, not a negative label."
+    }
+  ],
+  "specific_failure_modes": {
+    "depictions": [
+      15,
+      16,
+      17,
+      22,
+      23,
+      24,
+      34,
+      44,
+      45,
+      48,
+      61,
+      119,
+      122,
+      134,
+      137,
+      145,
+      147
+    ],
+    "laptop_screen_only": [
+      38,
+      39,
+      63,
+      123,
+      124,
+      148
+    ],
+    "desk_mats": [
+      77,
+      78
+    ],
+    "headphones_not_speaker": [
+      94,
+      177
+    ],
+    "remote_not_phone": [
+      89,
+      175
+    ],
+    "table_not_chair": [
+      57,
+      72
+    ],
+    "multi_package_or_contaminated": [
+      7,
+      8,
+      18,
+      20,
+      26,
+      52,
+      79,
+      80,
+      81,
+      104,
+      108,
+      109,
+      110,
+      111,
+      150
+    ]
+  },
+  "new_negative_regions": false
+}
