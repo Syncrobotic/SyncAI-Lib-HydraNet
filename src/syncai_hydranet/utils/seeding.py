@@ -5,9 +5,9 @@ augmentation in ``data/transforms.py``, and each DataLoader worker is a separate
 process with its own interpreter state, so what a run actually sees depends on worker
 count and start order unless the seeds are derived explicitly.
 
-Full determinism is a separate, expensive request: it disables the cuDNN autotuner and
-forces slower deterministic kernels. It belongs behind ``train.deterministic``, off by
-default, for when a result has to be bit-reproducible rather than merely repeatable.
+Deterministic mode disables the cuDNN autotuner and requests deterministic kernels.
+Unsupported operations emit warnings, so this mode alone does not guarantee bitwise
+reproducibility. It belongs behind ``train.deterministic``, off by default.
 """
 
 from __future__ import annotations
@@ -64,17 +64,19 @@ def configure_backends(
     this precision.
     """
     log = logger.info if logger else (lambda _m: None)
+    if device.type == "cuda":
+        torch.backends.cuda.matmul.allow_tf32 = tf32
+        torch.backends.cudnn.allow_tf32 = tf32
+        log(f"cuda precision: tf32={tf32}")
     if deterministic:
         torch.use_deterministic_algorithms(True, warn_only=True)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-        log("deterministic mode: cuDNN autotuning off, deterministic kernels forced")
+        log("deterministic mode: cuDNN autotuning off; unsupported kernels warn")
         return
 
     if device.type == "cuda":
         torch.backends.cudnn.benchmark = cudnn_benchmark
-        torch.backends.cuda.matmul.allow_tf32 = tf32
-        torch.backends.cudnn.allow_tf32 = tf32
         log(f"cuda backends: cudnn_benchmark={cudnn_benchmark}, tf32={tf32}")
 
 

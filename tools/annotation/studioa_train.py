@@ -620,6 +620,21 @@ def run(out: Path) -> None:
 
         last = out / "model/last.pt"
         trainer = PilotTrainer(cfg, resuming=last.exists())
+        if job.get("scene_comparison"):
+            backend = {
+                "device": trainer.device.type,
+                "deterministic": torch.are_deterministic_algorithms_enabled(),
+                "warn_only": torch.is_deterministic_algorithms_warn_only_enabled(),
+                "cudnn_benchmark": torch.backends.cudnn.benchmark,
+                "cudnn_tf32": torch.backends.cudnn.allow_tf32,
+                "matmul_tf32": torch.backends.cuda.matmul.allow_tf32,
+            }
+            if trainer.device.type == "cuda" and (
+                backend["cudnn_tf32"] != cfg["train"]["tf32"]
+                or backend["matmul_tf32"] != cfg["train"]["tf32"]
+            ):
+                raise ValueError("runtime TF32 flags differ from frozen comparison config")
+            write_json(out / "backend.json", backend)
         if job.get("scene_comparison") and not last.exists():
             torch.save(trainer.model.state_dict(), out / "initial_state.pt")
         if warmup:
@@ -774,6 +789,7 @@ def run(out: Path) -> None:
                     *out.glob("scene_before.json"),
                     *out.glob("warmup_evidence.json"),
                     *out.glob("initial_state.pt"),
+                    *out.glob("backend.json"),
                 ]
             },
         }
