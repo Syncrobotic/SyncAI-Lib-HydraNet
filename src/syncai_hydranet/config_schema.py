@@ -203,7 +203,14 @@ DATASET = {
     "type": Spec(
         (str,),
         required=True,
-        choices=("seg_folder", "coco", "nyu_depth", "rendered_depth", "pose_keypoints"),
+        choices=(
+            "seg_folder",
+            "coco",
+            "nyu_depth",
+            "rendered_depth",
+            "pose_keypoints",
+            "studioa_partial",
+        ),
     ),
     "root": Spec((str,), required=True),
     "split_train": Spec((str,), required=True),
@@ -215,6 +222,7 @@ DATASET = {
     # nyu_depth only: which head this dataset's depth target is addressed to. The target
     # dict is keyed by head name, so a config that renames the head must say so here or
     # the head is declared supervised and receives nothing.
+    "held_out": Spec((str,), choices=("Kaohsiung", "Taichung", "Tao-Hsin")),
     "head_name": Spec((str,)),
     # nyu_depth only: returns beyond this are zeroed as invalid rather than clipped.
     # Must match the head's `max_depth` or the dataset masks away depths the head is
@@ -638,6 +646,16 @@ def _check_one_dataset(rep: _Report, ds: dict, path: str, head_names: set[str]) 
                 f"Declared: {', '.join(sorted(head_names))}"
             )
         supervised.add(head)
+    if ds.get("type") == "studioa_partial":
+        if ds.get("held_out") not in ("Kaohsiung", "Taichung", "Tao-Hsin"):
+            rep.errors.append(
+                f"{path}.held_out: an explicit StudioA held-out store is required"
+            )
+        if ds.get("supervises") != ["scene"] or ds.get("label_map"):
+            rep.errors.append(f"{path}: StudioA provides scene IDs directly; no remapping")
+        for split in ("train", "val", "test"):
+            if ds.get(f"split_{split}", split) != split:
+                rep.errors.append(f"{path}: StudioA partition roles cannot be remapped")
     label_map = ds.get("label_map")
     if label_map is not None and label_map not in SCHEMES:
         rep.errors.append(

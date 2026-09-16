@@ -231,16 +231,28 @@ def check_supervision(root: Path) -> dict:
 class StudioAPartialDataset(Dataset):
     """Explicit whole-store selection; auxiliary 19-class semantic masks only."""
 
-    def __init__(self, root: Path, held_out: str, split: str, input_size=(256, 384)):
+    def __init__(
+        self,
+        root: Path,
+        held_out: str,
+        split: str,
+        input_size=(256, 384),
+        *,
+        train: bool = False,
+        augment: dict | None = None,
+    ):
         manifest = check_supervision(root)
+        if train and split != "train":
+            raise ValueError("evaluation partitions cannot use training augmentation")
         if held_out not in STORES or split not in ("train", "val", "test"):
             raise ValueError("explicit store and train/val/test split required")
         self.root = root
         fold = manifest["folds"][held_out]
         self.frames = [f for f in manifest["frames"] if fold["assignments"][f["id"]] == split]
         self.supervises = ["scene"]
-        # A deterministic reader for the first wiring check; augmentation is a later policy.
-        self.transform = build_transforms(input_size, train=False, letterbox=True)
+        self.transform = build_transforms(
+            input_size, train=train, letterbox=True, augment=augment
+        )
         if not self.frames:
             raise ValueError("empty partition")
 

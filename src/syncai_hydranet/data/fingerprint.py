@@ -82,6 +82,30 @@ def fingerprint_dataset(dcfg: dict, splits: tuple[str, ...] = ("train", "val")) 
     single ``annotations/instances_<split>.json``.
     """
     root = Path(dcfg["root"])
+    if dcfg.get("type") == "studioa_partial":
+        from .studioa_review import digest
+        from .studioa_supervision import check_supervision
+
+        manifest = check_supervision(root)
+        fold = manifest["folds"][dcfg["held_out"]]
+        return {
+            "name": dcfg.get("name"),
+            "root": str(root),
+            "held_out": dcfg["held_out"],
+            "manifest_sha256": digest(root / "manifest.json"),
+            "report_sha256": digest(root / "report.json"),
+            "splits": {
+                split: {
+                    "frames": [
+                        f["id"]
+                        for f in manifest["frames"]
+                        if fold["assignments"][f["id"]] == split
+                    ]
+                }
+                for split in splits
+                if dcfg.get(f"split_{split}")
+            },
+        }
     out: dict[str, Any] = {"name": dcfg.get("name"), "root": str(root), "splits": {}}
     for split in splits:
         folder = dcfg.get(f"split_{split}")

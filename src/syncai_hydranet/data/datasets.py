@@ -22,6 +22,7 @@ from . import label_maps
 from .label_maps_retail_security import get_det_vocab
 from .nyu_depth import NyuDepthDataset, RenderedDepthDataset
 from .pose_keypoints import PoseKeypointsDataset
+from .studioa_supervision import StudioAPartialDataset, check_supervision
 from .transforms import GEOM_IDENTITY, Sample, build_transforms
 
 IMG_EXTS = {".png", ".jpg", ".jpeg", ".bmp"}
@@ -399,6 +400,17 @@ def build_dataset(
     folder = resolve_split(dcfg, split)
     train = split == "train"
     sup = dcfg["supervises"]
+    if dcfg["type"] == "studioa_partial":
+        if folder != split or sup != ["scene"] or not letterbox or dcfg.get("label_map"):
+            raise ValueError("StudioA requires unchanged splits, scene targets and letterbox")
+        return StudioAPartialDataset(
+            Path(dcfg["root"]),
+            dcfg["held_out"],
+            split,
+            input_size,
+            train=train,
+            augment=augment,
+        )
     if dcfg["type"] == "seg_folder":
         return SegFolderDataset(
             dcfg["root"],
@@ -485,6 +497,14 @@ def _session_cameras(root: Path, split: str) -> set[str]:
     return cameras
 
 
+def _configured_cameras(dataset: dict, split: str) -> set[str]:
+    if dataset.get("type") == "studioa_partial":
+        manifest = check_supervision(Path(dataset["root"]))
+        assignments = manifest["folds"][dataset["held_out"]]["assignments"]
+        return {f["camera"] for f in manifest["frames"] if assignments[f["id"]] == split}
+    return _session_cameras(Path(dataset["root"]), split)
+
+
 def split_leaks(datasets: list[dict]) -> list[tuple[str, str, str, list[str]]]:
     """Cameras one dataset trains on that another dataset scores on.
 
@@ -514,7 +534,7 @@ def split_leaks(datasets: list[dict]) -> list[tuple[str, str, str, list[str]]]:
     out: list[tuple[str, str, str, list[str]]] = []
     segs = [d for d in datasets if d.get("root")]
     for a in segs:
-        trained = _session_cameras(Path(a["root"]), a.get("split_train", "train"))
+        trained = _configured_cameras(a, a.get("split_train", "train"))
         if not trained:
             continue
         for b in segs:
@@ -524,7 +544,7 @@ def split_leaks(datasets: list[dict]) -> list[tuple[str, str, str, list[str]]]:
                     continue
                 if a is b and a.get("split_train") == split:
                     continue
-                shared = trained & _session_cameras(Path(b["root"]), split)
+                shared = trained & _configured_cameras(b, split)
                 if shared:
                     out.append((a["name"], b["name"], split_key[6:], sorted(shared)))
     return out
