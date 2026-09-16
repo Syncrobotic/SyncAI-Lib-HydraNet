@@ -68,8 +68,23 @@ class SegLoss(nn.Module):
             )
 
     def forward(self, logits: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        loss = self.ce_weight * F.cross_entropy(
-            logits, target, weight=self.class_weights, ignore_index=self.ignore_index
+        # Partial masks or a crop can contain no supervised pixels. Mean CE returns
+        # NaN there; sum/valid-weight is equivalent elsewhere and gives zero here.
+        valid = target != self.ignore_index
+        denominator = valid.sum()
+        if self.class_weights is not None:
+            denominator = (self.class_weights[target.masked_fill(~valid, 0)] * valid).sum()
+        denominator = torch.where(denominator > 0, denominator, 1)
+        loss = (
+            self.ce_weight
+            * F.cross_entropy(
+                logits,
+                target,
+                weight=self.class_weights,
+                ignore_index=self.ignore_index,
+                reduction="sum",
+            )
+            / denominator
         )
         if self.dice_weight > 0:
             loss = loss + self.dice_weight * self._dice(logits, target)
