@@ -188,6 +188,26 @@ def test_worker_freezes_writes_resumes_and_rejects_foreign_checkpoints(tmp_path,
     assert review_report["instances"] == 0
     assert review_report["ai_visual_review"]["decision_count"] == 1
     assert json.loads(refined_target.read_text())["entities"]
+
+    class FakeReviewer:
+        def classify(self, panels):
+            return [{"entity": "floor", "reason": "synthetic floor"} for _ in panels]
+
+    monkeypatch.setattr(worker, "LocalReviewer", lambda _device: FakeReviewer())
+    relabeled = tmp_path / "relabeled"
+    worker.relabel_prepare(refined, relabeled)
+    worker.relabel_run(relabeled, "cpu")
+    relabeled_target = relabeled / "frames" / target.name
+    relabeled_bytes = relabeled_target.read_bytes()
+    assert json.loads((relabeled / "report.json").read_text())["instances_by_entity"] == {
+        "floor": 1
+    }
+    worker.relabel_run(relabeled, "cpu")
+    assert relabeled_target.read_bytes() == relabeled_bytes
+    raw_path = relabeled / "raw" / target.name
+    raw_path.write_text("{}")
+    with pytest.raises(ValueError, match="changed relabel checkpoint"):
+        worker.relabel_run(relabeled, "cpu")
     data = json.loads(previous)
     data["job_sha256"] = "other-policy"
     worker.write(target, data)

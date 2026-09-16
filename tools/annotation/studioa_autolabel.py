@@ -34,6 +34,15 @@ from syncai_hydranet.data.studioa_autolabel import (
     validate_annotation,
 )
 from syncai_hydranet.data.studioa_contract import ENTITY_IDS, contract
+from syncai_hydranet.data.studioa_relabel import (
+    EXTRA_PROMPTS,
+    LocalReviewer,
+    ReviewCache,
+    candidate_groups,
+    reannotate,
+    relabel_policy,
+    review_panel,
+)
 from syncai_hydranet.data.studioa_review import check_package, digest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -622,6 +631,205 @@ def run(out: Path, device: str) -> None:
         lock.close()
 
 
+def relabel_prepare(source: Path, out: Path) -> None:
+    parent = json.loads((source / "report.json").read_text())
+    original = json.loads((source / "job.json").read_text())
+    if parent["status"] != "completed" or digest(source / "job.json") != parent["job_sha256"]:
+        raise ValueError("relabel requires a completed bound source run")
+    for name, expected in parent["outputs"].items():
+        if digest(source / name) != expected:
+            raise ValueError("source annotation changed")
+    out.mkdir(parents=True, exist_ok=False)
+    for folder in ("frames", "sources", "raw"):
+        (out / folder).mkdir()
+    shutil.copytree(source / "images", out / "images")
+    snapshot = out / "snapshot"
+    shutil.copytree(
+        ROOT / "src", snapshot / "src", ignore=shutil.ignore_patterns("__pycache__", "*.pyc")
+    )
+    (snapshot / "tools/annotation").mkdir(parents=True)
+    shutil.copyfile(__file__, snapshot / "tools/annotation/studioa_autolabel.py")
+    frames = []
+    for frame in original["frames"]:
+        if digest(out / frame["image"]) != frame["image_sha256"]:
+            raise ValueError("source image changed")
+        name = f"sources/{frame['id']}.json"
+        shutil.copyfile(source / "frames" / (frame["id"] + ".json"), out / name)
+        frames.append({**frame, "annotation": name, "annotation_sha256": digest(out / name)})
+    write(
+        out / "job.json",
+        {
+            "schema": "studioa.ai.relabel.v1",
+            "frames": frames,
+            "teacher": original["teacher"],
+            "parent_run": str(source.resolve()),
+            "parent_report_sha256": digest(source / "report.json"),
+            "relabel_policy": relabel_policy(),
+            "code": {
+                str(p.relative_to(out)): digest(p) for p in sorted(snapshot.rglob("*.py"))
+            },
+        },
+    )
+    write(out / "status.json", {"status": "prepared", "completed": 0, "total": len(frames)})
+
+
+def relabel_run(out: Path, device: str) -> None:
+    job = json.loads((out / "job.json").read_text())
+    job_hash = digest(out / "job.json")
+    if job["relabel_policy"] != relabel_policy():
+        raise ValueError("relabel policy changed")
+    for name, expected in job["code"].items():
+        if digest(out / name) != expected:
+            raise ValueError("frozen relabel code changed")
+    lock = (out / "worker.lock").open("w")
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    completed = 0
+    started = time.monotonic()
+
+    def status(state, **kw):
+        write(
+            out / "status.json",
+            {
+                "status": state,
+                "completed": completed,
+                "total": len(job["frames"]),
+                "elapsed_s": time.monotonic() - started,
+                **kw,
+            },
+        )
+
+    def stopped(_signum, _frame):
+        raise InterruptedError("relabel stopped; source-bound batch decisions remain resumable")
+
+    signal.signal(signal.SIGTERM, stopped)
+    try:
+        status("loading_teachers")
+        write(
+            out / "environment.json",
+            {
+                "python": sys.version,
+                "device": device,
+                "packages": {
+                    name: importlib.metadata.version(name)
+                    for name in ("torch", "transformers", "numpy", "pillow", "pycocotools")
+                },
+            },
+        )
+        reviewer = LocalReviewer(device)
+        proc, model = sam3.load_sam3(sam3.MODEL_ID, device)
+        for frame in job["frames"]:
+            identity = frame["id"]
+            target = out / "frames" / (identity + ".json")
+            raw_path = out / "raw" / (identity + ".json")
+            shape = tuple(frame["image_size_px"][::-1])
+            if (
+                digest(out / frame["image"]) != frame["image_sha256"]
+                or digest(out / frame["annotation"]) != frame["annotation_sha256"]
+            ):
+                raise ValueError("frozen relabel input changed")
+            if target.exists():
+                data = json.loads(target.read_text())
+                if (
+                    data.get("job_sha256") != job_hash
+                    or data.get("frame_id") != identity
+                    or data.get("decisions_sha256") != digest(raw_path)
+                ):
+                    raise ValueError("foreign or changed relabel checkpoint")
+                validate_annotation(data, frame["image_sha256"], shape)
+                completed += 1
+                continue
+            with Image.open(out / frame["image"]) as source:
+                image = source.convert("RGB")
+            status("supplementing", frame_id=identity)
+            if raw_path.exists():
+                raw: ReviewCache = json.loads(raw_path.read_text())
+                if raw.get("job_sha256") != job_hash or raw.get("frame_id") != identity:
+                    raise ValueError("foreign relabel decision cache")
+            else:
+                previous = json.loads((out / frame["annotation"]).read_text())
+                validate_annotation(previous, frame["image_sha256"], shape)
+                embeds = sam3.vision_features(proc, model, image, device)
+                extras = []
+                for entity, prompts in EXTRA_PROMPTS.items():
+                    for prompt in prompts:
+                        extras.extend(
+                            Candidate(entity, mask, score, [prompt])
+                            for mask, score in sam3.segment(
+                                proc, model, image, prompt, MIN_SCORE, device, embeds
+                            )
+                        )
+                extra = annotate(extras, shape)
+                extra_rows = extra["entities"] + extra["unresolved_candidates"]
+                for row in extra_rows:
+                    row["id"] = "extra-" + row["id"]
+                groups = candidate_groups(
+                    previous["entities"] + previous["unresolved_candidates"] + extra_rows
+                )
+                raw = ReviewCache(
+                    job_sha256=job_hash,
+                    frame_id=identity,
+                    groups=groups,
+                    decisions=[],
+                    source_annotation_sha256=frame["annotation_sha256"],
+                    extra_candidates=len(extra_rows),
+                )
+                write(raw_path, raw)
+            groups = raw["groups"]
+            for first in range(len(raw["decisions"]), len(groups), 8):
+                status(
+                    "classifying",
+                    frame_id=identity,
+                    reviewed_groups=first,
+                    total_groups=len(groups),
+                )
+                panels = [review_panel(image, group[0]) for group in groups[first : first + 8]]
+                decisions = reviewer.classify(panels)
+                if len(decisions) != len(panels):
+                    raise ValueError("review batch length mismatch")
+                raw["decisions"].extend(decisions)
+                write(raw_path, raw)
+            data = reannotate(groups, raw["decisions"], shape)
+            data.update(
+                frame_id=identity,
+                image_sha256=frame["image_sha256"],
+                teacher=job["teacher"],
+                job_sha256=job_hash,
+                decisions_sha256=digest(raw_path),
+                parent_annotation_sha256=frame["annotation_sha256"],
+            )
+            validate_annotation(data, frame["image_sha256"], shape)
+            write(target, data)
+            overlay(image, data, target.with_suffix(".jpg"))
+            completed += 1
+            print(
+                f"{completed}/{len(job['frames'])} {identity}: {len(data['entities'])} labels, "
+                f"{len(data['unresolved_candidates'])} unresolved, "
+                f"{len(groups)} reviewed groups",
+                flush=True,
+            )
+            status("running", frame_id=identity)
+        status("summarising")
+        report = summarise(out, job)
+        report["outputs"].update(
+            {str(p.relative_to(out)): digest(p) for p in sorted((out / "raw").glob("*.json"))}
+        )
+        report["ai_reclassification"] = {
+            "policy": relabel_policy(),
+            "parent_report_sha256": job["parent_report_sha256"],
+        }
+        write(out / "report.json", report)
+        status(
+            "completed",
+            instances=report["instances"],
+            unresolved_candidates=report["unresolved_candidates"],
+        )
+    except BaseException:
+        status("failed", error=traceback.format_exc())
+        raise
+    finally:
+        lock.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="action", required=True)
@@ -643,6 +851,12 @@ def main() -> None:
     p.add_argument("--source", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--combined", action="store_true")
+    p = sub.add_parser("relabel-prepare")
+    p.add_argument("--source", type=Path, required=True)
+    p.add_argument("--out", type=Path, required=True)
+    p = sub.add_parser("relabel-run")
+    p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--device", default="cuda", choices=("cuda", "cpu"))
     args = parser.parse_args()
     if args.action == "prepare":
         prepare(args.bundle, args.out, args.limit)
@@ -652,6 +866,8 @@ def main() -> None:
         visual_review(args.source, args.decisions, args.out)
     elif args.action == "focus-preview":
         focus_preview(args.source, args.out, args.combined)
+    elif args.action == "relabel-prepare":
+        relabel_prepare(args.source, args.out)
     else:
         expected = args.out.resolve() / "snapshot/tools/annotation/studioa_autolabel.py"
         if Path(__file__).resolve() != expected:
@@ -661,7 +877,7 @@ def main() -> None:
                 [
                     sys.executable,
                     str(expected),
-                    "run",
+                    args.action,
                     "--out",
                     str(args.out.resolve()),
                     "--device",
@@ -669,7 +885,10 @@ def main() -> None:
                 ],
                 env,
             )
-        run(args.out, args.device)
+        if args.action == "relabel-run":
+            relabel_run(args.out, args.device)
+        else:
+            run(args.out, args.device)
 
 
 if __name__ == "__main__":
