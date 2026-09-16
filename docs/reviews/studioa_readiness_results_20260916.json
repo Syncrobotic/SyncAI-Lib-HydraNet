@@ -1,0 +1,538 @@
+{
+  "status": "ready_for_controlled_semantic_comparison_not_deployment",
+  "source": "runs/studioa_gcs_training_extension_20260916_v1/semantic",
+  "previous_train_revision": "runs/studioa_semantic_glass_review_20260916_v1",
+  "dataset": "runs/studioa_semantic_ready_20260916_v1",
+  "manifest_sha256": "f005f5e8b2f736fca6ebb7ffa5d4966fcac1c9d4b997f796f9395c3cd38fbb15",
+  "report_sha256": "7d54c03afe42b9577e1152c7612607a30ef74a49b39db378ae01c142c779c5af",
+  "review": "docs/reviews/studioa_readiness_review_20260916.json",
+  "review_sha256": "1fc476314124bd4e8b561a118dff9ebcc2b45c33babc964052bc76ed71d56d04",
+  "held_out": "Tao-Hsin",
+  "frames": 137,
+  "fold_counts": {
+    "train": 62,
+    "val": 33,
+    "test": 26
+  },
+  "excluded_frames": 16,
+  "changed_masks_vs_previous_train_revision": {
+    "excluded": 0,
+    "train": 12,
+    "val": 29,
+    "test": 0
+  },
+  "unchanged_protected_masks": {
+    "excluded": 16,
+    "test": 26
+  },
+  "all_images_and_companions_unchanged": true,
+  "all_histograms_and_corrections_replayed": true,
+  "coverage": {
+    "train": {
+      "floor": {
+        "frames": 46,
+        "cameras": [
+          "Kaohsiung-cam04",
+          "Kaohsiung-cam07",
+          "Kaohsiung-cam08",
+          "Taichung-cam03",
+          "Taichung-cam04",
+          "Taichung-cam05",
+          "Taichung-cam08",
+          "Taichung-cam09",
+          "Taichung-cam11"
+        ],
+        "pixels": 25243222
+      },
+      "wall": {
+        "frames": 46,
+        "cameras": [
+          "Kaohsiung-cam04",
+          "Kaohsiung-cam07",
+          "Kaohsiung-cam08",
+          "Taichung-cam03",
+          "Taichung-cam04",
+          "Taichung-cam05",
+          "Taichung-cam08",
+          "Taichung-cam09",
+          "Taichung-cam11"
+        ],
+        "pixels": 12673750
+      },
+      "ceiling": {
+        "frames": 25,
+        "cameras": [
+          "Kaohsiung-cam04",
+          "Kaohsiung-cam08",
+          "Taichung-cam03",
+          "Taichung-cam05",
+          "Taichung-cam09",
+          "Taichung-cam11"
+        ],
+        "pixels": 76814
+      },
+      "column": {
+        "frames": 10,
+        "cameras": [
+          "Kaohsiung-cam04",
+          "Kaohsiung-cam08"
+        ],
+        "pixels": 1492236
+      },
+      "door": {
+        "frames": 9,
+        "cameras": [
+          "Kaohsiung-cam04",
+          "Taichung-cam09"
+        ],
+        "pixels": 475248
+      },
+      "glass_panel": {
+        "frames": 11,
+        "cameras": [
+          "Kaohsiung-cam08",
+          "Taichung-cam03"
+        ],
+        "pixels": 1004380
+      },
+      "display_cabinet": {
+        "frames": 40,
+        "cameras": [
+          "Kaohsiung-cam04",
+          "Kaohsiung-cam07",
+          "Kaohsiung-cam08",
+          "Taichung-cam04",
+          "Taichung-cam05",
+          "Taichung-cam09",
+          "Taichung-cam11"
+        ],
+        "pixels": 9071675
+      },
+      "display_table": {
+        "frames": 42,
+        "cameras": [
+          "Kaohsiung-cam04",
+          "Kaohsiung-cam08",
+          "Taichung-cam03",
+          "Taichung-cam04",
+          "Taichung-cam05",
+          "Taichung-cam08",
+          "Taichung-cam09",
+          "Taichung-cam11"
+        ],
+        "pixels": 10988248
+      },
+      "counter": {
+        "frames": 15,
+        "cameras": [
+          "Kaohsiung-cam04",
+          "Taichung-cam04",
+          "Taichung-cam05",
+          "Taichung-cam11"
+        ],
+        "pixels": 1462965
+      },
+      "laptop": {
+        "frames": 26,
+        "cameras": [
+          "Kaohsiung-cam04",
+          "Kaohsiung-cam08",
+          "Taichung-cam03",
+          "Taichung-cam04",
+          "Taichung-cam05"
+        ],
+        "pixels": 163015
+      },
+      "phone": {
+        "frames": 12,
+        "cameras": [
+          "Kaohsiung-cam04",
+          "Taichung-cam03",
+          "Taichung-cam05",
+          "Taichung-cam08"
+        ],
+        "pixels": 84129
+      },
+      "tablet": {
+        "frames": 14,
+        "cameras": [
+          "Kaohsiung-cam04",
+          "Taichung-cam04",
+          "Taichung-cam05",
+          "Taichung-cam08",
+          "Taichung-cam11"
+        ],
+        "pixels": 226300
+      },
+      "boxed_stock": {
+        "frames": 21,
+        "cameras": [
+          "Kaohsiung-cam04",
+          "Kaohsiung-cam07",
+          "Kaohsiung-cam08",
+          "Taichung-cam04",
+          "Taichung-cam09"
+        ],
+        "pixels": 1422738
+      },
+      "cardboard_box": {
+        "frames": 3,
+        "cameras": [
+          "Kaohsiung-cam04",
+          "Kaohsiung-cam07"
+        ],
+        "pixels": 79078
+      },
+      "speaker": {
+        "frames": 15,
+        "cameras": [
+          "Taichung-cam03",
+          "Taichung-cam04",
+          "Taichung-cam05",
+          "Taichung-cam11"
+        ],
+        "pixels": 59325
+      },
+      "poster": {
+        "frames": 16,
+        "cameras": [
+          "Kaohsiung-cam04",
+          "Kaohsiung-cam08",
+          "Taichung-cam03",
+          "Taichung-cam04",
+          "Taichung-cam05",
+          "Taichung-cam09",
+          "Taichung-cam11"
+        ],
+        "pixels": 578637
+      },
+      "fire_equipment": {
+        "frames": 11,
+        "cameras": [
+          "Taichung-cam05",
+          "Taichung-cam09"
+        ],
+        "pixels": 164552
+      },
+      "chair": {
+        "frames": 20,
+        "cameras": [
+          "Taichung-cam04",
+          "Taichung-cam05",
+          "Taichung-cam08",
+          "Taichung-cam09",
+          "Taichung-cam11"
+        ],
+        "pixels": 221105
+      },
+      "person": {
+        "frames": 47,
+        "cameras": [
+          "Kaohsiung-cam04",
+          "Kaohsiung-cam08",
+          "Taichung-cam03",
+          "Taichung-cam04",
+          "Taichung-cam05",
+          "Taichung-cam08",
+          "Taichung-cam09",
+          "Taichung-cam11"
+        ],
+        "pixels": 5099646
+      }
+    },
+    "val": {
+      "floor": {
+        "frames": 33,
+        "cameras": [
+          "Kaohsiung-cam05",
+          "Kaohsiung-cam06",
+          "Kaohsiung-cam11",
+          "Taichung-cam01",
+          "Taichung-cam07",
+          "Taichung-cam10"
+        ],
+        "pixels": 19800807
+      },
+      "wall": {
+        "frames": 29,
+        "cameras": [
+          "Kaohsiung-cam05",
+          "Kaohsiung-cam06",
+          "Kaohsiung-cam11",
+          "Taichung-cam01",
+          "Taichung-cam07",
+          "Taichung-cam10"
+        ],
+        "pixels": 8454575
+      },
+      "ceiling": {
+        "frames": 11,
+        "cameras": [
+          "Kaohsiung-cam06",
+          "Kaohsiung-cam11",
+          "Taichung-cam10"
+        ],
+        "pixels": 36670
+      },
+      "column": {
+        "frames": 14,
+        "cameras": [
+          "Taichung-cam01",
+          "Taichung-cam10"
+        ],
+        "pixels": 393088
+      },
+      "door": {
+        "frames": 11,
+        "cameras": [
+          "Kaohsiung-cam05",
+          "Taichung-cam07"
+        ],
+        "pixels": 766641
+      },
+      "glass_panel": {
+        "frames": 4,
+        "cameras": [
+          "Kaohsiung-cam11"
+        ],
+        "pixels": 44752
+      },
+      "display_cabinet": {
+        "frames": 31,
+        "cameras": [
+          "Kaohsiung-cam05",
+          "Kaohsiung-cam06",
+          "Kaohsiung-cam11",
+          "Taichung-cam01",
+          "Taichung-cam07",
+          "Taichung-cam10"
+        ],
+        "pixels": 6440465
+      },
+      "display_table": {
+        "frames": 33,
+        "cameras": [
+          "Kaohsiung-cam05",
+          "Kaohsiung-cam06",
+          "Kaohsiung-cam11",
+          "Taichung-cam01",
+          "Taichung-cam07",
+          "Taichung-cam10"
+        ],
+        "pixels": 8294039
+      },
+      "counter": {
+        "frames": 8,
+        "cameras": [
+          "Kaohsiung-cam05",
+          "Taichung-cam01",
+          "Taichung-cam10"
+        ],
+        "pixels": 673270
+      },
+      "laptop": {
+        "frames": 22,
+        "cameras": [
+          "Kaohsiung-cam06",
+          "Kaohsiung-cam11",
+          "Taichung-cam01",
+          "Taichung-cam07",
+          "Taichung-cam10"
+        ],
+        "pixels": 277928
+      },
+      "phone": {
+        "frames": 10,
+        "cameras": [
+          "Kaohsiung-cam05",
+          "Kaohsiung-cam06",
+          "Kaohsiung-cam11",
+          "Taichung-cam10"
+        ],
+        "pixels": 35870
+      },
+      "tablet": {
+        "frames": 6,
+        "cameras": [
+          "Kaohsiung-cam06",
+          "Taichung-cam07"
+        ],
+        "pixels": 25004
+      },
+      "boxed_stock": {
+        "frames": 17,
+        "cameras": [
+          "Kaohsiung-cam05",
+          "Kaohsiung-cam11",
+          "Taichung-cam01",
+          "Taichung-cam10"
+        ],
+        "pixels": 388634
+      },
+      "cardboard_box": {
+        "frames": 1,
+        "cameras": [
+          "Kaohsiung-cam05"
+        ],
+        "pixels": 39600
+      },
+      "speaker": {
+        "frames": 3,
+        "cameras": [
+          "Kaohsiung-cam06"
+        ],
+        "pixels": 30142
+      },
+      "poster": {
+        "frames": 5,
+        "cameras": [
+          "Kaohsiung-cam06",
+          "Taichung-cam07"
+        ],
+        "pixels": 189146
+      },
+      "fire_equipment": {
+        "frames": 4,
+        "cameras": [
+          "Taichung-cam01",
+          "Taichung-cam10"
+        ],
+        "pixels": 9661
+      },
+      "chair": {
+        "frames": 18,
+        "cameras": [
+          "Taichung-cam01",
+          "Taichung-cam07",
+          "Taichung-cam10"
+        ],
+        "pixels": 296563
+      },
+      "person": {
+        "frames": 31,
+        "cameras": [
+          "Kaohsiung-cam05",
+          "Kaohsiung-cam06",
+          "Kaohsiung-cam11",
+          "Taichung-cam01",
+          "Taichung-cam07",
+          "Taichung-cam10"
+        ],
+        "pixels": 3102333
+      }
+    }
+  },
+  "resized_pixels_256x384": {
+    "train": {
+      "floor": 1009030,
+      "wall": 506444,
+      "ceiling": 3106,
+      "column": 59738,
+      "door": 19021,
+      "glass_panel": 40134,
+      "display_cabinet": 362883,
+      "display_table": 439717,
+      "counter": 58511,
+      "laptop": 6507,
+      "phone": 3379,
+      "tablet": 9052,
+      "boxed_stock": 56865,
+      "cardboard_box": 3159,
+      "speaker": 2369,
+      "poster": 23146,
+      "fire_equipment": 6568,
+      "chair": 8857,
+      "person": 203949
+    },
+    "val": {
+      "floor": 791594,
+      "wall": 337563,
+      "ceiling": 1463,
+      "column": 15688,
+      "door": 30657,
+      "glass_panel": 1800,
+      "display_cabinet": 257345,
+      "display_table": 331714,
+      "counter": 26902,
+      "laptop": 11045,
+      "phone": 1433,
+      "tablet": 993,
+      "boxed_stock": 15564,
+      "cardboard_box": 1590,
+      "speaker": 1205,
+      "poster": 7569,
+      "fire_equipment": 381,
+      "chair": 11851,
+      "person": 124112
+    }
+  },
+  "pixel_changes_vs_original_source": {
+    "train": {
+      "quarantined_pixels": 1463665,
+      "added_positive_pixels": 1050975,
+      "changed_pixels": 2504473,
+      "preserved_other_positive_pixels": 0
+    },
+    "val": {
+      "quarantined_pixels": 2086162,
+      "added_positive_pixels": 1204481,
+      "changed_pixels": 1645430,
+      "preserved_other_positive_pixels": 123
+    }
+  },
+  "new_images_downloaded": 0,
+  "new_model_training_started": false,
+  "new_test_inference": false,
+  "model_promoted": false,
+  "limitations": [
+    "Only targeted partial AI semantic labels were completed, not full annotations or independent ground truth.",
+    "Fixed glass training covers two cameras: a storefront window and a stair balustrade. Validation glass covers one camera.",
+    "Repeated frames and cameras from the same store are correlated; this is not a sufficient-diversity certification.",
+    "The source validation set was previously inspected. Re-evaluate both compared models on this same revised version; never compare directly with old-label scores.",
+    "Instance detection data, metric 3D geometry and Stage2-4 are outside this readiness result."
+  ],
+  "producer_commit": "20e6b2d3e1f2a92f95797fc0cd7767c2019cb28f",
+  "python": "3.11.15 (main, Aug  7 2026, 02:25:55) [Clang 22.1.3 ]",
+  "verification_command": "OMP_NUM_THREADS=2 .venv/bin/python runs/studioa_readiness_completion_20260916_v1/verify_readiness.py",
+  "verification_script_sha256": "68ed05446d8a7e1a7a8304854393b9e14f7fea53c6b7faf359efbd1539e17174",
+  "checks": {
+    "related_regression": {
+      "passed": 634,
+      "failed": 0,
+      "exit_code": 0
+    },
+    "ruff": "passed",
+    "modified_module_ty": "passed",
+    "precommit_type_ratchets": "passed",
+    "full_cpu_regression": {
+      "tests": 4184,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 12,
+      "passed": 4172,
+      "exit_code": 0,
+      "service_result": "success",
+      "git_commit": "20e6b2d3e1f2a92f95797fc0cd7767c2019cb28f"
+    }
+  },
+  "evidence": {
+    "runs/studioa_readiness_completion_20260916_v1/tests.log": "7fadc20e8d78fb38528fddee5f1cd7072859a75bfce17af5c52fb61013a51a6c",
+    "runs/studioa_readiness_completion_20260916_v1/regression.log": "c56860063ad4633441ae53311fea69aa7f6fe495737c317653ea2ead7cc9149d",
+    "runs/studioa_readiness_completion_20260916_v1/verification.log": "b3ec48807bff246c46b0119281b81da63fce0face940532c2b313a8106ca884f",
+    "runs/studioa_readiness_completion_20260916_v1/verification.json": "a8f65f6c6259840bd2917e01f282d2e0f1f6908a2427ded1c656e9ce8e0c24ef",
+    "runs/studioa_readiness_completion_20260916_v1/verify_readiness.py": "68ed05446d8a7e1a7a8304854393b9e14f7fea53c6b7faf359efbd1539e17174",
+    "runs/studioa_readiness_completion_20260916_v1/export.log": "66b1a05430c8709a189b456be834513b9ec56c9cafe797a889fd103e786a3ed6",
+    "runs/studioa_readiness_completion_20260916_v1/index.html": "25f0cb97e954457675d061877413b02e6caf3ca9c8a555d301124872097a79b6",
+    "runs/studioa_readiness_completion_20260916_v1/summary.jpg": "24af05417cc2c42cebac34df9250a49b788794576c302cd525c2caa680550ce0",
+    "runs/studioa_readiness_completion_20260916_v1/annotated_0.jpg": "4ee32880e64c33352bfc1851f47308d7329f3e051a77b98fabf5aee91e9bf9a2",
+    "runs/studioa_readiness_completion_20260916_v1/annotated_1.jpg": "b678d545bde023376f3636111f0e647b8a3fb82ecb0022e45434e661e82b668a",
+    "runs/studioa_readiness_completion_20260916_v1/annotated_2.jpg": "7559391f44d0ec27b093ed932c83eeaf4562bb927a3704269bf74b1383e8da55",
+    "runs/studioa_readiness_completion_20260916_v1/annotated_3.jpg": "8eff6ab599d97639be4fdf16f56777015a94ee6b5085e279c14f1f66aeb878b6",
+    "runs/studioa_readiness_completion_20260916_v1/annotated_4.jpg": "511d34460fa3c7c7d1e81207f0ab1597748a28598e75ece76e34575ced0fa67a",
+    "runs/studioa_readiness_completion_20260916_v1/annotated_5.jpg": "f0852239e9742deb27115b2bf1b1c5261e298974a8d17ed4ea1e3c54032f357e",
+    "runs/studioa_readiness_completion_20260916_v1/annotated_6.jpg": "4cb0ccdaed6490f6158b0dd868daf95ce010f9c1ea1035d78000e25d275dc932",
+    "runs/studioa_readiness_completion_20260916_v1/annotated_7.jpg": "3fe1c1866267b40a4339fd5daa12aa0bc202ae3dd027ae9dd228d1f55084a1d9",
+    "runs/studioa_readiness_completion_20260916_v1/junit.xml": "f1a5a61f15c6dcc2c880068270cd1a5ac96ad5956f7e98ddd918e3450fc96005",
+    "runs/studioa_readiness_completion_20260916_v1/full_regression.log": "e00fb29cb4fc78c1106eb3cce65b74481c99e0276910c7caca2c5c0a306d53b8"
+  }
+}

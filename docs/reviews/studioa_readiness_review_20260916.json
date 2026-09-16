@@ -1,0 +1,3558 @@
+{
+  "schema": "studioa.semantic-review.v2",
+  "reviewer_kind": "ai",
+  "held_out": "Tao-Hsin",
+  "revision_kind": "source_train_val_correction",
+  "evaluation_exposure": "previously_inspected_not_blind",
+  "evaluation_revision_reason": "Separate fixed glass from handled/opening doors and add missing column positives before a new equal-budget source-validation comparison. No predictions were used to select these regions.",
+  "source": "runs/studioa_gcs_training_extension_20260916_v1/semantic",
+  "source_manifest_sha256": "0139eaccc00c6cf2fd841c7cfbd3a231c9b744a624b9c8ec95f82bc6e7a7b1ee",
+  "incorporates_review": "docs/reviews/studioa_semantic_glass_review_20260916.json",
+  "incorporates_review_sha256": "82115b5df0fcd3b145080cba5f10289e263d3efb70d361a13cda9fff1a0a26a2",
+  "review_basis": "AI visually inspected all 33 source-val frames and all 62 source-train frames as contact sheets, plus detailed original images and entrance crops. Targeted partial interiors only; prior train glass quarantine is retained.",
+  "limitations": [
+    "Partial semantic interiors, not full masks or instance annotations.",
+    "AI-reviewed labels are not independent ground truth.",
+    "Train glass now includes a fixed stair balustrade; window and balustrade are both fixed glass_panel under this ontology.",
+    "Views from the same physical store and repeated frames are not independent scenes.",
+    "Uncertain glass/door boundaries remain ignored; test and excluded source frames are unchanged.",
+    "Val has been inspected previously; old and revised label scores are not directly comparable."
+  ],
+  "frames": [
+    {
+      "frame_id": "0004-Kaohsiung-cam05",
+      "split": "val",
+      "image_sha256": "ff5cc5e03988f11b8709d95f7bb8e7fdc9dc70a9e6f9a3b438b33ea7ba842e73",
+      "mask_sha256": "db7ac997d9fee3ef003420e723dc5ae6bd8bcb3033e6902cddb602e903264f53",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "door",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1850,
+              395
+            ],
+            [
+              1900,
+              385
+            ],
+            [
+              1900,
+              455
+            ],
+            [
+              1850,
+              465
+            ]
+          ],
+          "reason": "Interior of entrance glass door leaf identified by its handle; this movable pane is door, not fixed glass. Avoid people, leaf edges and handle."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1850,
+              395
+            ],
+            [
+              1900,
+              385
+            ],
+            [
+              1900,
+              455
+            ],
+            [
+              1850,
+              465
+            ]
+          ],
+          "reason": "Interior of entrance glass door leaf identified by its handle; this movable pane is door, not fixed glass. Avoid people, leaf edges and handle.",
+          "classes": [
+            "wall",
+            "floor"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0005-Kaohsiung-cam05",
+      "split": "val",
+      "image_sha256": "4f050a6ba2b192ebe6294d7253c27143487c4cf43ffb5f6e07192a7ad47b91d1",
+      "mask_sha256": "79a413aa230bb43a2533748e3a9b37edeb9998d81f2e19d73cf1471025378452",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "door",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1850,
+              395
+            ],
+            [
+              1900,
+              385
+            ],
+            [
+              1900,
+              455
+            ],
+            [
+              1850,
+              465
+            ]
+          ],
+          "reason": "Interior of entrance glass door leaf identified by its handle; this movable pane is door, not fixed glass. Avoid people, leaf edges and handle."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1850,
+              395
+            ],
+            [
+              1900,
+              385
+            ],
+            [
+              1900,
+              455
+            ],
+            [
+              1850,
+              465
+            ]
+          ],
+          "reason": "Interior of entrance glass door leaf identified by its handle; this movable pane is door, not fixed glass. Avoid people, leaf edges and handle.",
+          "classes": [
+            "wall",
+            "floor"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0010-Kaohsiung-cam08",
+      "split": "train",
+      "image_sha256": "88463880db5e8eb24808bab9b23170dc65bcf7b14c29d5c0204654714ff6ce08",
+      "mask_sha256": "d0eb8ffbf0e642293516ed4f67d08714f83f81b39ebe9db7131cf573b339fbfb",
+      "reason": "AI reviewed this image for the targeted glass, door and column completion before training.",
+      "quarantine_classes": [],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              220,
+              935
+            ],
+            [
+              400,
+              1020
+            ],
+            [
+              410,
+              1060
+            ],
+            [
+              250,
+              1060
+            ],
+            [
+              190,
+              1030
+            ]
+          ],
+          "reason": "Fixed glass stair balustrade below the metal rail; interior avoids rail, panel joints and foreground people. Floor is visible through the pane."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              220,
+              935
+            ],
+            [
+              400,
+              1020
+            ],
+            [
+              410,
+              1060
+            ],
+            [
+              250,
+              1060
+            ],
+            [
+              190,
+              1030
+            ]
+          ],
+          "reason": "Fixed glass stair balustrade below the metal rail; interior avoids rail, panel joints and foreground people. Floor is visible through the pane.",
+          "classes": [
+            "floor",
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0011-Kaohsiung-cam08",
+      "split": "train",
+      "image_sha256": "54bf949059afdf834d1f79e74742febbc4439be27504174039797e6d52bfbded",
+      "mask_sha256": "c1e347a9e66a14b91d4c11eee039b2fb60f780bd76309a280425b45c0e94ce64",
+      "reason": "AI reviewed this image for the targeted glass, door and column completion before training.",
+      "quarantine_classes": [],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              220,
+              935
+            ],
+            [
+              400,
+              1020
+            ],
+            [
+              410,
+              1060
+            ],
+            [
+              250,
+              1060
+            ],
+            [
+              190,
+              1030
+            ]
+          ],
+          "reason": "Fixed glass stair balustrade below the metal rail; interior avoids rail, panel joints and foreground people. Floor is visible through the pane."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              220,
+              935
+            ],
+            [
+              400,
+              1020
+            ],
+            [
+              410,
+              1060
+            ],
+            [
+              250,
+              1060
+            ],
+            [
+              190,
+              1030
+            ]
+          ],
+          "reason": "Fixed glass stair balustrade below the metal rail; interior avoids rail, panel joints and foreground people. Floor is visible through the pane.",
+          "classes": [
+            "floor",
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0012-Kaohsiung-cam11",
+      "split": "val",
+      "image_sha256": "278c4870a4ed52622e6383af74d391b503710375d7058689bffce85980e79cf5",
+      "mask_sha256": "121eff4e34cb73effc9ce5ec9cdbad7f478d76d2e0b8a83ed9834b8cecb384ca",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              190,
+              100
+            ],
+            [
+              245,
+              75
+            ],
+            [
+              275,
+              190
+            ],
+            [
+              215,
+              220
+            ]
+          ],
+          "reason": "Fixed storefront window with outdoor foliage seen through glazing; avoids the attached dark poster, mullions and display."
+        },
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              12,
+              245
+            ],
+            [
+              50,
+              224
+            ],
+            [
+              70,
+              284
+            ],
+            [
+              12,
+              317
+            ]
+          ],
+          "reason": "Fixed storefront window with outdoor foliage seen through glazing; avoids the attached dark poster, mullions and display."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              190,
+              100
+            ],
+            [
+              245,
+              75
+            ],
+            [
+              275,
+              190
+            ],
+            [
+              215,
+              220
+            ]
+          ],
+          "reason": "Fixed storefront window with outdoor foliage seen through glazing; avoids the attached dark poster, mullions and display.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              12,
+              245
+            ],
+            [
+              50,
+              224
+            ],
+            [
+              70,
+              284
+            ],
+            [
+              12,
+              317
+            ]
+          ],
+          "reason": "Fixed storefront window with outdoor foliage seen through glazing; avoids the attached dark poster, mullions and display.",
+          "classes": [
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0013-Kaohsiung-cam11",
+      "split": "val",
+      "image_sha256": "4c19e17cad632f5551e2280b514e76884e74658d62841354e3ddfcc1c73a6f19",
+      "mask_sha256": "e3c2ded1d96375eadead14626cb178fd79cc37bbad1e6ae5f2f77d3ce45796e5",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              190,
+              100
+            ],
+            [
+              245,
+              75
+            ],
+            [
+              275,
+              190
+            ],
+            [
+              215,
+              220
+            ]
+          ],
+          "reason": "Fixed storefront window with outdoor foliage seen through glazing; avoids the attached dark poster, mullions and display."
+        },
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              12,
+              245
+            ],
+            [
+              50,
+              224
+            ],
+            [
+              70,
+              284
+            ],
+            [
+              12,
+              317
+            ]
+          ],
+          "reason": "Fixed storefront window with outdoor foliage seen through glazing; avoids the attached dark poster, mullions and display."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              190,
+              100
+            ],
+            [
+              245,
+              75
+            ],
+            [
+              275,
+              190
+            ],
+            [
+              215,
+              220
+            ]
+          ],
+          "reason": "Fixed storefront window with outdoor foliage seen through glazing; avoids the attached dark poster, mullions and display.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              12,
+              245
+            ],
+            [
+              50,
+              224
+            ],
+            [
+              70,
+              284
+            ],
+            [
+              12,
+              317
+            ]
+          ],
+          "reason": "Fixed storefront window with outdoor foliage seen through glazing; avoids the attached dark poster, mullions and display.",
+          "classes": [
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0016-Taichung-cam01",
+      "split": "val",
+      "image_sha256": "fb3086c1ff8ed11a485226d69bacacb33ea4d534d0708096c80526f348230784",
+      "mask_sha256": "ffdc779b0d6bacda591630a4e44ad1a475b72e0548b12a282872e372a8467ac1",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "column",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              275,
+              45
+            ],
+            [
+              385,
+              45
+            ],
+            [
+              403,
+              210
+            ],
+            [
+              281,
+              210
+            ]
+          ],
+          "reason": "Visible freestanding white column front face; upper interior avoids merchandise, adjacent wall, people and edges."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              275,
+              45
+            ],
+            [
+              385,
+              45
+            ],
+            [
+              403,
+              210
+            ],
+            [
+              281,
+              210
+            ]
+          ],
+          "reason": "Visible freestanding white column front face; upper interior avoids merchandise, adjacent wall, people and edges.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "classes": [
+            "wall"
+          ],
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              245,
+              0
+            ],
+            [
+              420,
+              0
+            ],
+            [
+              470,
+              440
+            ],
+            [
+              427,
+              488
+            ],
+            [
+              394,
+              281
+            ],
+            [
+              268,
+              255
+            ]
+          ],
+          "reason": "Withdraw contradictory wall labels on this visible freestanding column; restore only the conservative column interior. Person and merchandise labels remain protected."
+        }
+      ]
+    },
+    {
+      "frame_id": "0017-Taichung-cam01",
+      "split": "val",
+      "image_sha256": "2a419c0027d3917e3298ac8a13bc886341dfb50e3ab822edfd570c23bf60086a",
+      "mask_sha256": "68f1f2037f5ce2a5ac19caace3c1d02c530ff1aca933dffa01d2e1ee12da0c85",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "column",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              275,
+              45
+            ],
+            [
+              385,
+              45
+            ],
+            [
+              403,
+              210
+            ],
+            [
+              281,
+              210
+            ]
+          ],
+          "reason": "Visible freestanding white column front face; upper interior avoids merchandise, adjacent wall, people and edges."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              275,
+              45
+            ],
+            [
+              385,
+              45
+            ],
+            [
+              403,
+              210
+            ],
+            [
+              281,
+              210
+            ]
+          ],
+          "reason": "Visible freestanding white column front face; upper interior avoids merchandise, adjacent wall, people and edges.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "classes": [
+            "wall"
+          ],
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              245,
+              0
+            ],
+            [
+              420,
+              0
+            ],
+            [
+              470,
+              440
+            ],
+            [
+              427,
+              488
+            ],
+            [
+              394,
+              281
+            ],
+            [
+              268,
+              255
+            ]
+          ],
+          "reason": "Withdraw contradictory wall labels on this visible freestanding column; restore only the conservative column interior. Person and merchandise labels remain protected."
+        }
+      ]
+    },
+    {
+      "frame_id": "0020-Taichung-cam03",
+      "image_sha256": "dd930dcd190dad74a8752dff87b8c5ef087ac2f1be978cfc0e5024936a28741a",
+      "mask_sha256": "07e5382689af4d9626464f5d120c95d7d49cbe312d59bb0fbbcf3c7a4ffe10a5",
+      "reason": "Accepted glass masks cover frame edges and sign-stand fragments rather than a clean fixed pane. Quarantine the old label; add only visually reviewed interiors of the fixed storefront window left of the central wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              100,
+              150
+            ],
+            [
+              270,
+              115
+            ],
+            [
+              312,
+              415
+            ],
+            [
+              150,
+              440
+            ]
+          ],
+          "reason": "AI visually inspected this frame: interior of the fixed left storefront pane; avoids seam, frames, foreground objects and right entrance doors. Outdoor objects are viewed through glazing."
+        },
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              360,
+              90
+            ],
+            [
+              620,
+              45
+            ],
+            [
+              664,
+              440
+            ],
+            [
+              390,
+              454
+            ]
+          ],
+          "reason": "AI visually inspected this frame: interior of the fixed left storefront pane; avoids seam, frames, foreground objects and right entrance doors. Outdoor objects are viewed through glazing."
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "frame_id": "0021-Taichung-cam03",
+      "image_sha256": "925ee9ddbb923c69bdbb4a33709990e21e433cdf6a22f67e2de7a1a8950dbbf7",
+      "mask_sha256": "5be3c8f7a967c0ae81f450c78084fca4d2eb5a7a9e8493c88ee422738eb91f7f",
+      "reason": "Accepted glass masks cover frame edges and sign-stand fragments rather than a clean fixed pane. Quarantine the old label; add only visually reviewed interiors of the fixed storefront window left of the central wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              100,
+              150
+            ],
+            [
+              270,
+              115
+            ],
+            [
+              312,
+              415
+            ],
+            [
+              150,
+              440
+            ]
+          ],
+          "reason": "AI visually inspected this frame: interior of the fixed left storefront pane; avoids seam, frames, foreground objects and right entrance doors. Outdoor objects are viewed through glazing."
+        },
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              360,
+              90
+            ],
+            [
+              620,
+              45
+            ],
+            [
+              664,
+              440
+            ],
+            [
+              390,
+              454
+            ]
+          ],
+          "reason": "AI visually inspected this frame: interior of the fixed left storefront pane; avoids seam, frames, foreground objects and right entrance doors. Outdoor objects are viewed through glazing."
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "frame_id": "0022-Taichung-cam04",
+      "image_sha256": "ad8f01fb6860896c9bbd1e3ff9bf86c10515013c23f4e8c2de87802fcea2d07b",
+      "mask_sha256": "7ea48e4367c8c0468b831b8a31d21fe6558089fd90e813197d7fd8ed4da74433",
+      "reason": "Large glass mask is a solid white access panel; tiny additional fragments are not confirmed glazing. Quarantine, without guessing whether the opaque panel is a door or wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [],
+      "split": "train"
+    },
+    {
+      "frame_id": "0023-Taichung-cam04",
+      "image_sha256": "6f57491428dd6262480a26e72d8636659b62444b4b282ab1e442396d36b226b4",
+      "mask_sha256": "c215ccb95185d458d9d8f5adbdc36338af34777b16a3feee6464abb49d8ff771",
+      "reason": "Large glass mask is a solid white access panel; tiny additional fragments are not confirmed glazing. Quarantine, without guessing whether the opaque panel is a door or wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [],
+      "split": "train"
+    },
+    {
+      "frame_id": "0028-Taichung-cam07",
+      "split": "val",
+      "image_sha256": "72937be1b43c42ad0831454b56c008be520a95ac1a641289506289437b64fb52",
+      "mask_sha256": "fcbc8709b69539a6b6f10b339660158d9c5c9f37c281acc29255669fca80197f",
+      "reason": "AI reviewed this image for the targeted glass, door and column completion before training.",
+      "quarantine_classes": [
+        "door"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "door",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1475,
+              170
+            ],
+            [
+              1675,
+              185
+            ],
+            [
+              1660,
+              780
+            ],
+            [
+              1510,
+              715
+            ]
+          ],
+          "reason": "Visible opaque door leaf with handle and hinges; polygon follows this frame (including the open-door frame), avoiding people and surrounding wall."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1475,
+              170
+            ],
+            [
+              1675,
+              185
+            ],
+            [
+              1660,
+              780
+            ],
+            [
+              1510,
+              715
+            ]
+          ],
+          "reason": "Visible opaque door leaf with handle and hinges; polygon follows this frame (including the open-door frame), avoiding people and surrounding wall.",
+          "classes": [
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0029-Taichung-cam07",
+      "split": "val",
+      "image_sha256": "825b9d0be52ead8f3ab18b6c98d7ac1d4e0b552c8ee5edef42749771acc2ad42",
+      "mask_sha256": "7dbb744491aa4080b4084d717bbc953b6e801b8aebeff5dc8cbb360cb9121972",
+      "reason": "AI reviewed this image for the targeted glass, door and column completion before training.",
+      "quarantine_classes": [
+        "door"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "door",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1475,
+              170
+            ],
+            [
+              1675,
+              185
+            ],
+            [
+              1660,
+              780
+            ],
+            [
+              1510,
+              715
+            ]
+          ],
+          "reason": "Visible opaque door leaf with handle and hinges; polygon follows this frame (including the open-door frame), avoiding people and surrounding wall."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1475,
+              170
+            ],
+            [
+              1675,
+              185
+            ],
+            [
+              1660,
+              780
+            ],
+            [
+              1510,
+              715
+            ]
+          ],
+          "reason": "Visible opaque door leaf with handle and hinges; polygon follows this frame (including the open-door frame), avoiding people and surrounding wall.",
+          "classes": [
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0032-Taichung-cam09",
+      "image_sha256": "004ea89d05db559376d665d483de2c5de540a1caba6a6bb261befd55e7a7f5e5",
+      "mask_sha256": "a9ba525462df487fefb30d6ed14412a0a186519838056f14e8778a8abf69d07d",
+      "reason": "Broad glass mask mixes entrance door leaves with visible long handles, fixed side glazing and frame fragments. Fixed-glass taxonomy is unsupported for this mixed mask; do not relabel the whole mask as door.",
+      "quarantine_classes": [
+        "door",
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "door",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              755,
+              35
+            ],
+            [
+              810,
+              35
+            ],
+            [
+              820,
+              205
+            ],
+            [
+              768,
+              205
+            ]
+          ],
+          "reason": "Upper interior of handled glass entrance leaf, visible in each reviewed frame; not a fixed-pane claim. Keep door hardware and adjacent frame outside."
+        }
+      ],
+      "split": "train",
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              755,
+              35
+            ],
+            [
+              810,
+              35
+            ],
+            [
+              820,
+              205
+            ],
+            [
+              768,
+              205
+            ]
+          ],
+          "reason": "Upper interior of handled glass entrance leaf, visible in each reviewed frame; not a fixed-pane claim. Keep door hardware and adjacent frame outside.",
+          "classes": [
+            "floor",
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0033-Taichung-cam09",
+      "image_sha256": "c5b1f42f5025b4479295913c3c41c9cfa324fbc5b4200bc6a2994efa52220b3d",
+      "mask_sha256": "8006e21dd294cf224016b85712f916c8b49bf7897b57880d8d049e998137d695",
+      "reason": "Broad glass mask mixes entrance door leaves with visible long handles, fixed side glazing and frame fragments. Fixed-glass taxonomy is unsupported for this mixed mask; do not relabel the whole mask as door.",
+      "quarantine_classes": [
+        "door",
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "door",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              755,
+              35
+            ],
+            [
+              810,
+              35
+            ],
+            [
+              820,
+              205
+            ],
+            [
+              768,
+              205
+            ]
+          ],
+          "reason": "Upper interior of handled glass entrance leaf, visible in each reviewed frame; not a fixed-pane claim. Keep door hardware and adjacent frame outside."
+        }
+      ],
+      "split": "train",
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              755,
+              35
+            ],
+            [
+              810,
+              35
+            ],
+            [
+              820,
+              205
+            ],
+            [
+              768,
+              205
+            ]
+          ],
+          "reason": "Upper interior of handled glass entrance leaf, visible in each reviewed frame; not a fixed-pane claim. Keep door hardware and adjacent frame outside.",
+          "classes": [
+            "floor",
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0034-Taichung-cam10",
+      "split": "val",
+      "image_sha256": "28c5c9e5a09f55a473bda61d0d84de4a8f679ebc3db43f892358a6a56d0c57fd",
+      "mask_sha256": "43da1aaccaddbbdef5868b76b0eb48a04de6bc2b826d316c7cf3339a094850f0",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "column",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              465,
+              35
+            ],
+            [
+              555,
+              35
+            ],
+            [
+              628,
+              470
+            ],
+            [
+              552,
+              472
+            ]
+          ],
+          "reason": "Freestanding structural column between displays; conservative front-face interior avoids furniture and the side-face boundary."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              465,
+              35
+            ],
+            [
+              555,
+              35
+            ],
+            [
+              628,
+              470
+            ],
+            [
+              552,
+              472
+            ]
+          ],
+          "reason": "Freestanding structural column between displays; conservative front-face interior avoids furniture and the side-face boundary.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "classes": [
+            "wall"
+          ],
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              438,
+              0
+            ],
+            [
+              622,
+              0
+            ],
+            [
+              693,
+              488
+            ],
+            [
+              530,
+              500
+            ]
+          ],
+          "reason": "Withdraw contradictory wall labels on this visible freestanding column; restore only the conservative column interior. Person and merchandise labels remain protected."
+        }
+      ]
+    },
+    {
+      "frame_id": "0035-Taichung-cam10",
+      "split": "val",
+      "image_sha256": "7a7436cb151e39c41d778a239c44e0f625a91153ccdf1afe745c5906e72facea",
+      "mask_sha256": "4b0bae501ac1c56a42809e0dce0fc02272f8c911ed7b883da791c528a57e8d4b",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "column",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              465,
+              35
+            ],
+            [
+              555,
+              35
+            ],
+            [
+              628,
+              470
+            ],
+            [
+              552,
+              472
+            ]
+          ],
+          "reason": "Freestanding structural column between displays; conservative front-face interior avoids furniture and the side-face boundary."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              465,
+              35
+            ],
+            [
+              555,
+              35
+            ],
+            [
+              628,
+              470
+            ],
+            [
+              552,
+              472
+            ]
+          ],
+          "reason": "Freestanding structural column between displays; conservative front-face interior avoids furniture and the side-face boundary.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "classes": [
+            "wall"
+          ],
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              438,
+              0
+            ],
+            [
+              622,
+              0
+            ],
+            [
+              693,
+              488
+            ],
+            [
+              530,
+              500
+            ]
+          ],
+          "reason": "Withdraw contradictory wall labels on this visible freestanding column; restore only the conservative column interior. Person and merchandise labels remain protected."
+        }
+      ]
+    },
+    {
+      "frame_id": "0051-Kaohsiung-cam04",
+      "image_sha256": "ed21956c0073550452669f186b8ef00060650b49bc97eb1165f0ee13e6a97709",
+      "mask_sha256": "12c210349abf18158e9cb837195408a6809d20e62e63d3da7edaacf541058e3d",
+      "reason": "Tiny accepted fragments around people/display objects have no reliable fixed-pane boundary. Quarantine uncertain glass positives.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [],
+      "split": "train"
+    },
+    {
+      "frame_id": "0052-Kaohsiung-cam05",
+      "split": "val",
+      "image_sha256": "bd6a4009be23df524f1d96f38dadf5d0f19fbe828426dc1e1831619b46e9aec2",
+      "mask_sha256": "85a3eca4060a8707a010c1ff1fb112dd0510a0f2076cd74f7eedf1af8d4b3090",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "door",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1850,
+              395
+            ],
+            [
+              1900,
+              385
+            ],
+            [
+              1900,
+              455
+            ],
+            [
+              1850,
+              465
+            ]
+          ],
+          "reason": "Interior of entrance glass door leaf identified by its handle; this movable pane is door, not fixed glass. Avoid people, leaf edges and handle."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1850,
+              395
+            ],
+            [
+              1900,
+              385
+            ],
+            [
+              1900,
+              455
+            ],
+            [
+              1850,
+              465
+            ]
+          ],
+          "reason": "Interior of entrance glass door leaf identified by its handle; this movable pane is door, not fixed glass. Avoid people, leaf edges and handle.",
+          "classes": [
+            "wall",
+            "floor"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0053-Kaohsiung-cam05",
+      "split": "val",
+      "image_sha256": "68440d495ad4d190d7b68b046d64707339105fa7c5290b36b2c46abd3a1f4e8a",
+      "mask_sha256": "d6f380b24867e81a53b10b29356cccd5c2749805dff7df847368d3dea3469673",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "door",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1850,
+              395
+            ],
+            [
+              1900,
+              385
+            ],
+            [
+              1900,
+              455
+            ],
+            [
+              1850,
+              465
+            ]
+          ],
+          "reason": "Interior of entrance glass door leaf identified by its handle; this movable pane is door, not fixed glass. Avoid people, leaf edges and handle."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1850,
+              395
+            ],
+            [
+              1900,
+              385
+            ],
+            [
+              1900,
+              455
+            ],
+            [
+              1850,
+              465
+            ]
+          ],
+          "reason": "Interior of entrance glass door leaf identified by its handle; this movable pane is door, not fixed glass. Avoid people, leaf edges and handle.",
+          "classes": [
+            "wall",
+            "floor"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0056-Kaohsiung-cam07",
+      "image_sha256": "90365c01875a2581922ff382cb99a2c810b4ab9652089cc92658e0c0cdf85aba",
+      "mask_sha256": "2c51f8585adc5d93a80c45cbb2b8728dbd9d3c7ff5a7ce262e6d8baa6823ba9b",
+      "reason": "Lower-left floor/wall-edge sliver lacks visible fixed-glass evidence. Quarantine uncertain positive.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [],
+      "split": "train"
+    },
+    {
+      "frame_id": "0058-Kaohsiung-cam08",
+      "split": "train",
+      "image_sha256": "58dbfa809ad611de31ccc2bd1e2ba07b00377974702513e0bde6cef7e8cacd06",
+      "mask_sha256": "d9b2500cf3e310c215cfbf97b71e9e44399c546145f91ccc194ed13def173564",
+      "reason": "AI reviewed this image for the targeted glass, door and column completion before training.",
+      "quarantine_classes": [],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              220,
+              935
+            ],
+            [
+              400,
+              1020
+            ],
+            [
+              410,
+              1060
+            ],
+            [
+              250,
+              1060
+            ],
+            [
+              190,
+              1030
+            ]
+          ],
+          "reason": "Fixed glass stair balustrade below the metal rail; interior avoids rail, panel joints and foreground people. Floor is visible through the pane."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              220,
+              935
+            ],
+            [
+              400,
+              1020
+            ],
+            [
+              410,
+              1060
+            ],
+            [
+              250,
+              1060
+            ],
+            [
+              190,
+              1030
+            ]
+          ],
+          "reason": "Fixed glass stair balustrade below the metal rail; interior avoids rail, panel joints and foreground people. Floor is visible through the pane.",
+          "classes": [
+            "floor",
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0059-Kaohsiung-cam08",
+      "split": "train",
+      "image_sha256": "9d07a0264f527443aea45cc967a7785b5d1655e059e0f87a6622565b38e52b4e",
+      "mask_sha256": "a2614a9c3adc96be785f3e2613d50b7a50ebfe9e3da19283f553723312721e36",
+      "reason": "AI reviewed this image for the targeted glass, door and column completion before training.",
+      "quarantine_classes": [],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              220,
+              935
+            ],
+            [
+              400,
+              1020
+            ],
+            [
+              410,
+              1060
+            ],
+            [
+              250,
+              1060
+            ],
+            [
+              190,
+              1030
+            ]
+          ],
+          "reason": "Fixed glass stair balustrade below the metal rail; interior avoids rail, panel joints and foreground people. Floor is visible through the pane."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              220,
+              935
+            ],
+            [
+              400,
+              1020
+            ],
+            [
+              410,
+              1060
+            ],
+            [
+              250,
+              1060
+            ],
+            [
+              190,
+              1030
+            ]
+          ],
+          "reason": "Fixed glass stair balustrade below the metal rail; interior avoids rail, panel joints and foreground people. Floor is visible through the pane.",
+          "classes": [
+            "floor",
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0060-Kaohsiung-cam11",
+      "split": "val",
+      "image_sha256": "70f09751ff1d18d59f0db0a9017a8266b8a611d7895b00d3c7e6e41885cf93b8",
+      "mask_sha256": "a29ff5bff025addb4ed8b9cbb19b335979213117d92c424ba541b4ad6ce1ff58",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              190,
+              100
+            ],
+            [
+              245,
+              75
+            ],
+            [
+              275,
+              190
+            ],
+            [
+              215,
+              220
+            ]
+          ],
+          "reason": "Fixed storefront window with outdoor foliage seen through glazing; avoids the attached dark poster, mullions and display."
+        },
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              12,
+              245
+            ],
+            [
+              50,
+              224
+            ],
+            [
+              70,
+              284
+            ],
+            [
+              12,
+              317
+            ]
+          ],
+          "reason": "Fixed storefront window with outdoor foliage seen through glazing; avoids the attached dark poster, mullions and display."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              190,
+              100
+            ],
+            [
+              245,
+              75
+            ],
+            [
+              275,
+              190
+            ],
+            [
+              215,
+              220
+            ]
+          ],
+          "reason": "Fixed storefront window with outdoor foliage seen through glazing; avoids the attached dark poster, mullions and display.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              12,
+              245
+            ],
+            [
+              50,
+              224
+            ],
+            [
+              70,
+              284
+            ],
+            [
+              12,
+              317
+            ]
+          ],
+          "reason": "Fixed storefront window with outdoor foliage seen through glazing; avoids the attached dark poster, mullions and display.",
+          "classes": [
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0061-Kaohsiung-cam11",
+      "split": "val",
+      "image_sha256": "8ec9e3058f3bc3e749e5abb996c31407bdc985e9da9e756cb587eebcdd5a0c75",
+      "mask_sha256": "8f427045fa9dd99048186bf0006c80b221fed0adfbfce73a23695e48035a3930",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              190,
+              100
+            ],
+            [
+              245,
+              75
+            ],
+            [
+              275,
+              190
+            ],
+            [
+              215,
+              220
+            ]
+          ],
+          "reason": "Fixed storefront window with outdoor foliage seen through glazing; avoids the attached dark poster, mullions and display."
+        },
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              12,
+              245
+            ],
+            [
+              50,
+              224
+            ],
+            [
+              70,
+              284
+            ],
+            [
+              12,
+              317
+            ]
+          ],
+          "reason": "Fixed storefront window with outdoor foliage seen through glazing; avoids the attached dark poster, mullions and display."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              190,
+              100
+            ],
+            [
+              245,
+              75
+            ],
+            [
+              275,
+              190
+            ],
+            [
+              215,
+              220
+            ]
+          ],
+          "reason": "Fixed storefront window with outdoor foliage seen through glazing; avoids the attached dark poster, mullions and display.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              12,
+              245
+            ],
+            [
+              50,
+              224
+            ],
+            [
+              70,
+              284
+            ],
+            [
+              12,
+              317
+            ]
+          ],
+          "reason": "Fixed storefront window with outdoor foliage seen through glazing; avoids the attached dark poster, mullions and display.",
+          "classes": [
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0064-Taichung-cam01",
+      "split": "val",
+      "image_sha256": "6f4ff377069b180efda817c7b2c76ffcdc04c8115ad519e96052690db6e15e8e",
+      "mask_sha256": "0a8bd73a033df9965daaa906d5f7341ae7bcfa49e2a628f25accff4589b1a010",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "column",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              275,
+              45
+            ],
+            [
+              385,
+              45
+            ],
+            [
+              403,
+              210
+            ],
+            [
+              281,
+              210
+            ]
+          ],
+          "reason": "Visible freestanding white column front face; upper interior avoids merchandise, adjacent wall, people and edges."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              275,
+              45
+            ],
+            [
+              385,
+              45
+            ],
+            [
+              403,
+              210
+            ],
+            [
+              281,
+              210
+            ]
+          ],
+          "reason": "Visible freestanding white column front face; upper interior avoids merchandise, adjacent wall, people and edges.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "classes": [
+            "wall"
+          ],
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              245,
+              0
+            ],
+            [
+              420,
+              0
+            ],
+            [
+              470,
+              440
+            ],
+            [
+              427,
+              488
+            ],
+            [
+              394,
+              281
+            ],
+            [
+              268,
+              255
+            ]
+          ],
+          "reason": "Withdraw contradictory wall labels on this visible freestanding column; restore only the conservative column interior. Person and merchandise labels remain protected."
+        }
+      ]
+    },
+    {
+      "frame_id": "0065-Taichung-cam01",
+      "split": "val",
+      "image_sha256": "9dcafdd643c583516a2529dfbad5937d79da595242ad2d81221e6cf4d1d6b86a",
+      "mask_sha256": "35e5b17d30357ded83e418e94b19877eff53cc323d53daf3bfd96768fb8ff80a",
+      "reason": "AI reviewed this image for the targeted glass, door and column completion before training.",
+      "quarantine_classes": [],
+      "positive_interiors": [
+        {
+          "entity": "column",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              275,
+              45
+            ],
+            [
+              385,
+              45
+            ],
+            [
+              403,
+              210
+            ],
+            [
+              281,
+              210
+            ]
+          ],
+          "reason": "Visible freestanding white column front face; upper interior avoids merchandise, adjacent wall, people and edges."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              275,
+              45
+            ],
+            [
+              385,
+              45
+            ],
+            [
+              403,
+              210
+            ],
+            [
+              281,
+              210
+            ]
+          ],
+          "reason": "Visible freestanding white column front face; upper interior avoids merchandise, adjacent wall, people and edges.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "classes": [
+            "wall"
+          ],
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              245,
+              0
+            ],
+            [
+              420,
+              0
+            ],
+            [
+              470,
+              440
+            ],
+            [
+              427,
+              488
+            ],
+            [
+              394,
+              281
+            ],
+            [
+              268,
+              255
+            ]
+          ],
+          "reason": "Withdraw contradictory wall labels on this visible freestanding column; restore only the conservative column interior. Person and merchandise labels remain protected."
+        }
+      ]
+    },
+    {
+      "frame_id": "0068-Taichung-cam03",
+      "image_sha256": "ae2a348ba8b41c9632e0cfb270aad69c81dd660ddddab12b4004c085d6a1b029",
+      "mask_sha256": "7528bf95d1a593f005bbdffee92ec3f9db3333679c2014276df4ea776d7fbf1e",
+      "reason": "Accepted glass masks cover frame edges and sign-stand fragments rather than a clean fixed pane. Quarantine the old label; add only visually reviewed interiors of the fixed storefront window left of the central wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              100,
+              150
+            ],
+            [
+              270,
+              115
+            ],
+            [
+              312,
+              415
+            ],
+            [
+              150,
+              440
+            ]
+          ],
+          "reason": "AI visually inspected this frame: interior of the fixed left storefront pane; avoids seam, frames, foreground objects and right entrance doors. Outdoor objects are viewed through glazing."
+        },
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              360,
+              90
+            ],
+            [
+              620,
+              45
+            ],
+            [
+              664,
+              440
+            ],
+            [
+              390,
+              454
+            ]
+          ],
+          "reason": "AI visually inspected this frame: interior of the fixed left storefront pane; avoids seam, frames, foreground objects and right entrance doors. Outdoor objects are viewed through glazing."
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "frame_id": "0069-Taichung-cam03",
+      "image_sha256": "de58b4cd8c7dda92c9238a91a15e0c93bc1a25204a155b9781a60289bb699c81",
+      "mask_sha256": "a14fcdda8e6e476edd48355c840c59d02dbb0fd81553451529cb070e421a57dd",
+      "reason": "Accepted glass masks cover frame edges and sign-stand fragments rather than a clean fixed pane. Quarantine the old label; add only visually reviewed interiors of the fixed storefront window left of the central wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              100,
+              150
+            ],
+            [
+              270,
+              115
+            ],
+            [
+              312,
+              415
+            ],
+            [
+              150,
+              440
+            ]
+          ],
+          "reason": "AI visually inspected this frame: interior of the fixed left storefront pane; avoids seam, frames, foreground objects and right entrance doors. Outdoor objects are viewed through glazing."
+        },
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              360,
+              90
+            ],
+            [
+              620,
+              45
+            ],
+            [
+              664,
+              440
+            ],
+            [
+              390,
+              454
+            ]
+          ],
+          "reason": "AI visually inspected this frame: interior of the fixed left storefront pane; avoids seam, frames, foreground objects and right entrance doors. Outdoor objects are viewed through glazing."
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "frame_id": "0070-Taichung-cam04",
+      "image_sha256": "978dbb7a4383407b2ca1173b29a9526e7451b2dd628eae91dc901f59c647a7ad",
+      "mask_sha256": "f6753b852314657d487ac9393c195a8caf8de8299b884c5a03dbfbb1f2d90e08",
+      "reason": "Large glass mask is a solid white access panel; tiny additional fragments are not confirmed glazing. Quarantine, without guessing whether the opaque panel is a door or wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [],
+      "split": "train"
+    },
+    {
+      "frame_id": "0071-Taichung-cam04",
+      "image_sha256": "ce219dc81ed111591682f3860cf677a5127fc0e2e682a48528c761b0da7a7347",
+      "mask_sha256": "dabbca74d7a5f6342da59ca659883893e947091de0fdead1f726ba2dabe4db73",
+      "reason": "Large glass mask is a solid white access panel; tiny additional fragments are not confirmed glazing. Quarantine, without guessing whether the opaque panel is a door or wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [],
+      "split": "train"
+    },
+    {
+      "frame_id": "0072-Taichung-cam05",
+      "image_sha256": "a8aad01c1ab1801c2c46c45f422ea6d9ce5ad822478e04474a2ba762c17976ac",
+      "mask_sha256": "e0eb1c9d3e5158dba108bd2a092cad96194c9ee9e381b848dc33dc9b085bb719",
+      "reason": "Tiny isolated accepted fragments lack a visible fixed-glass surface. Quarantine uncertain positive.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [],
+      "split": "train"
+    },
+    {
+      "frame_id": "0076-Taichung-cam07",
+      "split": "val",
+      "image_sha256": "a7e42db0b7ac8ebae37bc90da01b090b7de169b9cf0bf1b06088d049add3f83e",
+      "mask_sha256": "d538c7a66ba10f594b0f6699b6576d62775c9ee7e49c9d4eec793441a105cd85",
+      "reason": "AI reviewed this image for the targeted glass, door and column completion before training.",
+      "quarantine_classes": [
+        "door"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "door",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1475,
+              170
+            ],
+            [
+              1675,
+              185
+            ],
+            [
+              1660,
+              780
+            ],
+            [
+              1510,
+              715
+            ]
+          ],
+          "reason": "Visible opaque door leaf with handle and hinges; polygon follows this frame (including the open-door frame), avoiding people and surrounding wall."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1475,
+              170
+            ],
+            [
+              1675,
+              185
+            ],
+            [
+              1660,
+              780
+            ],
+            [
+              1510,
+              715
+            ]
+          ],
+          "reason": "Visible opaque door leaf with handle and hinges; polygon follows this frame (including the open-door frame), avoiding people and surrounding wall.",
+          "classes": [
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0077-Taichung-cam07",
+      "split": "val",
+      "image_sha256": "1b51d620cd2088bbf8a83dea03a7df58ad5b12052e2ebfd7b2ca69e7a4b2e23c",
+      "mask_sha256": "5da3bc8f58bda188ae457f479b75744277a595996e4c9c6ca78c834b44b8925c",
+      "reason": "AI reviewed this image for the targeted glass, door and column completion before training.",
+      "quarantine_classes": [
+        "door"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "door",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1475,
+              170
+            ],
+            [
+              1675,
+              185
+            ],
+            [
+              1660,
+              780
+            ],
+            [
+              1510,
+              715
+            ]
+          ],
+          "reason": "Visible opaque door leaf with handle and hinges; polygon follows this frame (including the open-door frame), avoiding people and surrounding wall."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1475,
+              170
+            ],
+            [
+              1675,
+              185
+            ],
+            [
+              1660,
+              780
+            ],
+            [
+              1510,
+              715
+            ]
+          ],
+          "reason": "Visible opaque door leaf with handle and hinges; polygon follows this frame (including the open-door frame), avoiding people and surrounding wall.",
+          "classes": [
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0078-Taichung-cam09",
+      "image_sha256": "30918a1a840d0e54a4d88dd8c34bb2907a0b7931f25ce60f7f4e878b5528f6b2",
+      "mask_sha256": "86e161a04205cf3cfea4f24382feea8539a9af929e5527acb8a5027072fb975c",
+      "reason": "Broad glass mask mixes entrance door leaves with visible long handles, fixed side glazing and frame fragments. Fixed-glass taxonomy is unsupported for this mixed mask; do not relabel the whole mask as door.",
+      "quarantine_classes": [
+        "door",
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "door",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              755,
+              35
+            ],
+            [
+              810,
+              35
+            ],
+            [
+              820,
+              205
+            ],
+            [
+              768,
+              205
+            ]
+          ],
+          "reason": "Upper interior of handled glass entrance leaf, visible in each reviewed frame; not a fixed-pane claim. Keep door hardware and adjacent frame outside."
+        }
+      ],
+      "split": "train",
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              755,
+              35
+            ],
+            [
+              810,
+              35
+            ],
+            [
+              820,
+              205
+            ],
+            [
+              768,
+              205
+            ]
+          ],
+          "reason": "Upper interior of handled glass entrance leaf, visible in each reviewed frame; not a fixed-pane claim. Keep door hardware and adjacent frame outside.",
+          "classes": [
+            "floor",
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0079-Taichung-cam09",
+      "image_sha256": "b21592a2dec8b55865d9b0097f1e705791ec3f223c668fc2398f16ff1187aebc",
+      "mask_sha256": "e3d6ccdec94428b52e37a663f3e5770f46675dc6f23aa1fb1639e115eda5c612",
+      "reason": "Broad glass mask mixes entrance door leaves with visible long handles, fixed side glazing and frame fragments. Fixed-glass taxonomy is unsupported for this mixed mask; do not relabel the whole mask as door.",
+      "quarantine_classes": [
+        "door",
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "door",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              755,
+              35
+            ],
+            [
+              810,
+              35
+            ],
+            [
+              820,
+              205
+            ],
+            [
+              768,
+              205
+            ]
+          ],
+          "reason": "Upper interior of handled glass entrance leaf, visible in each reviewed frame; not a fixed-pane claim. Keep door hardware and adjacent frame outside."
+        }
+      ],
+      "split": "train",
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              755,
+              35
+            ],
+            [
+              810,
+              35
+            ],
+            [
+              820,
+              205
+            ],
+            [
+              768,
+              205
+            ]
+          ],
+          "reason": "Upper interior of handled glass entrance leaf, visible in each reviewed frame; not a fixed-pane claim. Keep door hardware and adjacent frame outside.",
+          "classes": [
+            "floor",
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0080-Taichung-cam10",
+      "split": "val",
+      "image_sha256": "0fc1ab9b651bf72617250ce0f88c9cfae79c0ad4837ffce572a53774b1d41a6c",
+      "mask_sha256": "b1da01a27c4abe565d967961a4e5ebf3b990f2a68556f1eb98621fe5b755f1c1",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "column",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              465,
+              35
+            ],
+            [
+              555,
+              35
+            ],
+            [
+              628,
+              470
+            ],
+            [
+              552,
+              472
+            ]
+          ],
+          "reason": "Freestanding structural column between displays; conservative front-face interior avoids furniture and the side-face boundary."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              465,
+              35
+            ],
+            [
+              555,
+              35
+            ],
+            [
+              628,
+              470
+            ],
+            [
+              552,
+              472
+            ]
+          ],
+          "reason": "Freestanding structural column between displays; conservative front-face interior avoids furniture and the side-face boundary.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "classes": [
+            "wall"
+          ],
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              438,
+              0
+            ],
+            [
+              622,
+              0
+            ],
+            [
+              693,
+              488
+            ],
+            [
+              530,
+              500
+            ]
+          ],
+          "reason": "Withdraw contradictory wall labels on this visible freestanding column; restore only the conservative column interior. Person and merchandise labels remain protected."
+        }
+      ]
+    },
+    {
+      "frame_id": "0081-Taichung-cam10",
+      "split": "val",
+      "image_sha256": "7ef814e925548fb6ca0d5dd542d9df9cd54133a78dee5d9b329a15292fe8e5f9",
+      "mask_sha256": "927b78feabb473b85e8b474299ae2d2c528fce3d49df6790f063ffdca74df4dc",
+      "reason": "AI reviewed this image for the targeted glass, door and column completion before training.",
+      "quarantine_classes": [],
+      "positive_interiors": [
+        {
+          "entity": "column",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              465,
+              35
+            ],
+            [
+              555,
+              35
+            ],
+            [
+              628,
+              470
+            ],
+            [
+              552,
+              472
+            ]
+          ],
+          "reason": "Freestanding structural column between displays; conservative front-face interior avoids furniture and the side-face boundary."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              465,
+              35
+            ],
+            [
+              555,
+              35
+            ],
+            [
+              628,
+              470
+            ],
+            [
+              552,
+              472
+            ]
+          ],
+          "reason": "Freestanding structural column between displays; conservative front-face interior avoids furniture and the side-face boundary.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "classes": [
+            "wall"
+          ],
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              438,
+              0
+            ],
+            [
+              622,
+              0
+            ],
+            [
+              693,
+              488
+            ],
+            [
+              530,
+              500
+            ]
+          ],
+          "reason": "Withdraw contradictory wall labels on this visible freestanding column; restore only the conservative column interior. Person and merchandise labels remain protected."
+        }
+      ]
+    },
+    {
+      "frame_id": "0094-Kaohsiung-cam04",
+      "image_sha256": "1f1c06d47761fc7053a62f981631dd92681dd21c045b5c4f2406a1e52ee64ff8",
+      "mask_sha256": "82a8b57a7883d028cd7f5a105ab08b0997e150fc2461046248486681a5ae77e1",
+      "reason": "Tiny accepted fragments around people/display objects have no reliable fixed-pane boundary. Quarantine uncertain glass positives.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [],
+      "split": "train"
+    },
+    {
+      "frame_id": "0097-Taichung-cam01",
+      "split": "val",
+      "image_sha256": "2b5b74bd6caf91eea724aeed779eff630e4219a82562ed536e705e4ae0ff1c73",
+      "mask_sha256": "e312873e40198c476adbbbaf41e4eae0d8759ee2bbc5285425b24d315aa12214",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "column",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              275,
+              45
+            ],
+            [
+              385,
+              45
+            ],
+            [
+              403,
+              210
+            ],
+            [
+              281,
+              210
+            ]
+          ],
+          "reason": "Visible freestanding white column front face; upper interior avoids merchandise, adjacent wall, people and edges."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              275,
+              45
+            ],
+            [
+              385,
+              45
+            ],
+            [
+              403,
+              210
+            ],
+            [
+              281,
+              210
+            ]
+          ],
+          "reason": "Visible freestanding white column front face; upper interior avoids merchandise, adjacent wall, people and edges.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "classes": [
+            "wall"
+          ],
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              245,
+              0
+            ],
+            [
+              420,
+              0
+            ],
+            [
+              470,
+              440
+            ],
+            [
+              427,
+              488
+            ],
+            [
+              394,
+              281
+            ],
+            [
+              268,
+              255
+            ]
+          ],
+          "reason": "Withdraw contradictory wall labels on this visible freestanding column; restore only the conservative column interior. Person and merchandise labels remain protected."
+        }
+      ]
+    },
+    {
+      "frame_id": "0098-Taichung-cam01",
+      "split": "val",
+      "image_sha256": "446ba7caf0634510fcb28ff18d2231f397028c26bc87bedfadadda6886406849",
+      "mask_sha256": "d76b8b05c9a2a0637f136ebd41d32e5be2a02cbb4076b2cd844d7ba4866da2a2",
+      "reason": "AI reviewed this image for the targeted glass, door and column completion before training.",
+      "quarantine_classes": [],
+      "positive_interiors": [
+        {
+          "entity": "column",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              275,
+              45
+            ],
+            [
+              385,
+              45
+            ],
+            [
+              403,
+              210
+            ],
+            [
+              281,
+              210
+            ]
+          ],
+          "reason": "Visible freestanding white column front face; upper interior avoids merchandise, adjacent wall, people and edges."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              275,
+              45
+            ],
+            [
+              385,
+              45
+            ],
+            [
+              403,
+              210
+            ],
+            [
+              281,
+              210
+            ]
+          ],
+          "reason": "Visible freestanding white column front face; upper interior avoids merchandise, adjacent wall, people and edges.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "classes": [
+            "wall"
+          ],
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              245,
+              0
+            ],
+            [
+              420,
+              0
+            ],
+            [
+              470,
+              440
+            ],
+            [
+              427,
+              488
+            ],
+            [
+              394,
+              281
+            ],
+            [
+              268,
+              255
+            ]
+          ],
+          "reason": "Withdraw contradictory wall labels on this visible freestanding column; restore only the conservative column interior. Person and merchandise labels remain protected."
+        }
+      ]
+    },
+    {
+      "frame_id": "0099-Taichung-cam01",
+      "split": "val",
+      "image_sha256": "252454473310dc9092840f00898d623e294aee83bfc6b6af86c05d450f51c8bf",
+      "mask_sha256": "4ca46383c508bae6671d108f4aca3b4e41b1dba9e8d321c7fc62a6780d17e4bc",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "column",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              275,
+              45
+            ],
+            [
+              385,
+              45
+            ],
+            [
+              403,
+              210
+            ],
+            [
+              281,
+              210
+            ]
+          ],
+          "reason": "Visible freestanding white column front face; upper interior avoids merchandise, adjacent wall, people and edges."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              275,
+              45
+            ],
+            [
+              385,
+              45
+            ],
+            [
+              403,
+              210
+            ],
+            [
+              281,
+              210
+            ]
+          ],
+          "reason": "Visible freestanding white column front face; upper interior avoids merchandise, adjacent wall, people and edges.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "classes": [
+            "wall"
+          ],
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              245,
+              0
+            ],
+            [
+              420,
+              0
+            ],
+            [
+              470,
+              440
+            ],
+            [
+              427,
+              488
+            ],
+            [
+              394,
+              281
+            ],
+            [
+              268,
+              255
+            ]
+          ],
+          "reason": "Withdraw contradictory wall labels on this visible freestanding column; restore only the conservative column interior. Person and merchandise labels remain protected."
+        }
+      ]
+    },
+    {
+      "frame_id": "0100-Taichung-cam04",
+      "image_sha256": "c4d3a1a63200801e8d1e53ee521371328bda26c48b1787252f7e6e3e47ee9a8d",
+      "mask_sha256": "b6ea16d9caa8c0462dc5b4b2b15d9c038c9b9c5a25ec47797e1f219d04d5985a",
+      "reason": "Large glass mask is a solid white access panel; tiny additional fragments are not confirmed glazing. Quarantine, without guessing whether the opaque panel is a door or wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [],
+      "split": "train"
+    },
+    {
+      "frame_id": "0101-Taichung-cam04",
+      "image_sha256": "ff5337bedecac9323493d848ca13470ceaed0ee92b9e1d51303ceffd6a0b6ed3",
+      "mask_sha256": "fe3b8813c66f8f19ff94f438f4d6b409f4b1808f500e3cedd6ac6fc60a6312b4",
+      "reason": "Large glass mask is a solid white access panel; tiny additional fragments are not confirmed glazing. Quarantine, without guessing whether the opaque panel is a door or wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [],
+      "split": "train"
+    },
+    {
+      "frame_id": "0102-Taichung-cam04",
+      "image_sha256": "0b356757c1c1345d723a3de4ce96507e4bf83d4002b5074b0a88310dbd0f7b0a",
+      "mask_sha256": "6ef6d2810a2b63b29623aac97af4efc4cbf43c0c631312fd5b5d0d6a0800f368",
+      "reason": "Large glass mask is a solid white access panel; tiny additional fragments are not confirmed glazing. Quarantine, without guessing whether the opaque panel is a door or wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [],
+      "split": "train"
+    },
+    {
+      "frame_id": "0104-Taichung-cam05",
+      "image_sha256": "69b8be91ba8758ea69b398e3cc90d9a884b0cc82c68abaca707a32fcad9f3e42",
+      "mask_sha256": "fef52934824a3a0d8c2c103f809e5599ae2aa881711e55c4a5c0d85c79826b2a",
+      "reason": "Tiny isolated accepted fragments lack a visible fixed-glass surface. Quarantine uncertain positive.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [],
+      "split": "train"
+    },
+    {
+      "frame_id": "0106-Taichung-cam07",
+      "split": "val",
+      "image_sha256": "b95eeaeeec22e2a97eb417c9e9e3179b450f1fffb26b7b6894cf7221c9f76aed",
+      "mask_sha256": "36c0667738849afdc2d7710b26e422808afe9b6297add6f49fd083368be6e5d4",
+      "reason": "AI reviewed this image for the targeted glass, door and column completion before training.",
+      "quarantine_classes": [
+        "door"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "door",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1440,
+              160
+            ],
+            [
+              1675,
+              155
+            ],
+            [
+              1660,
+              830
+            ],
+            [
+              1440,
+              820
+            ]
+          ],
+          "reason": "Visible opaque door leaf with handle and hinges; polygon follows this frame (including the open-door frame), avoiding people and surrounding wall."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1440,
+              160
+            ],
+            [
+              1675,
+              155
+            ],
+            [
+              1660,
+              830
+            ],
+            [
+              1440,
+              820
+            ]
+          ],
+          "reason": "Visible opaque door leaf with handle and hinges; polygon follows this frame (including the open-door frame), avoiding people and surrounding wall.",
+          "classes": [
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0107-Taichung-cam07",
+      "split": "val",
+      "image_sha256": "6c4a4f8d2ef096938b71e30f884c8bcf5d0c494f51dbd39729320c7ba6946e49",
+      "mask_sha256": "370e6a74e072a45b2f738f9b64307b708471407de7b1cdec72847bc20af9b771",
+      "reason": "AI reviewed this image for the targeted glass, door and column completion before training.",
+      "quarantine_classes": [
+        "door"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "door",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1475,
+              170
+            ],
+            [
+              1675,
+              185
+            ],
+            [
+              1660,
+              780
+            ],
+            [
+              1510,
+              715
+            ]
+          ],
+          "reason": "Visible opaque door leaf with handle and hinges; polygon follows this frame (including the open-door frame), avoiding people and surrounding wall."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1475,
+              170
+            ],
+            [
+              1675,
+              185
+            ],
+            [
+              1660,
+              780
+            ],
+            [
+              1510,
+              715
+            ]
+          ],
+          "reason": "Visible opaque door leaf with handle and hinges; polygon follows this frame (including the open-door frame), avoiding people and surrounding wall.",
+          "classes": [
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0108-Taichung-cam07",
+      "split": "val",
+      "image_sha256": "cb7ef1562576b66da182a1419b2efd734692cc90059f72eaf84df6ab8ba488e2",
+      "mask_sha256": "473a5b63fe8b59e380579816c3c609130a771ebc21beab75d9d7cb8f67b9e735",
+      "reason": "AI reviewed this image for the targeted glass, door and column completion before training.",
+      "quarantine_classes": [
+        "door"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "door",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1475,
+              170
+            ],
+            [
+              1675,
+              185
+            ],
+            [
+              1660,
+              780
+            ],
+            [
+              1510,
+              715
+            ]
+          ],
+          "reason": "Visible opaque door leaf with handle and hinges; polygon follows this frame (including the open-door frame), avoiding people and surrounding wall."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              1475,
+              170
+            ],
+            [
+              1675,
+              185
+            ],
+            [
+              1660,
+              780
+            ],
+            [
+              1510,
+              715
+            ]
+          ],
+          "reason": "Visible opaque door leaf with handle and hinges; polygon follows this frame (including the open-door frame), avoiding people and surrounding wall.",
+          "classes": [
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "0109-Taichung-cam10",
+      "split": "val",
+      "image_sha256": "17216a2bdd5ab2eb19c76248b20568be36724792296f0792e66d18bb0e3ce95e",
+      "mask_sha256": "8473bd57c9c617d2ae0df987a03467fd3f6fbb5425b84f783573eb9099ee7ef5",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "column",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              465,
+              35
+            ],
+            [
+              555,
+              35
+            ],
+            [
+              628,
+              470
+            ],
+            [
+              552,
+              472
+            ]
+          ],
+          "reason": "Freestanding structural column between displays; conservative front-face interior avoids furniture and the side-face boundary."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              465,
+              35
+            ],
+            [
+              555,
+              35
+            ],
+            [
+              628,
+              470
+            ],
+            [
+              552,
+              472
+            ]
+          ],
+          "reason": "Freestanding structural column between displays; conservative front-face interior avoids furniture and the side-face boundary.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "classes": [
+            "wall"
+          ],
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              438,
+              0
+            ],
+            [
+              622,
+              0
+            ],
+            [
+              693,
+              488
+            ],
+            [
+              530,
+              500
+            ]
+          ],
+          "reason": "Withdraw contradictory wall labels on this visible freestanding column; restore only the conservative column interior. Person and merchandise labels remain protected."
+        }
+      ]
+    },
+    {
+      "frame_id": "0110-Taichung-cam10",
+      "split": "val",
+      "image_sha256": "09334d25192eaa6a22a95116ff45be30904297544eac4f0c8255d1d6482e3f06",
+      "mask_sha256": "a4461b55979027dac3af03b65107774e9ce733acbc0b5c0bee99f71de4ae0b1f",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "column",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              465,
+              35
+            ],
+            [
+              555,
+              35
+            ],
+            [
+              628,
+              470
+            ],
+            [
+              552,
+              472
+            ]
+          ],
+          "reason": "Freestanding structural column between displays; conservative front-face interior avoids furniture and the side-face boundary."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              465,
+              35
+            ],
+            [
+              555,
+              35
+            ],
+            [
+              628,
+              470
+            ],
+            [
+              552,
+              472
+            ]
+          ],
+          "reason": "Freestanding structural column between displays; conservative front-face interior avoids furniture and the side-face boundary.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "classes": [
+            "wall"
+          ],
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              438,
+              0
+            ],
+            [
+              622,
+              0
+            ],
+            [
+              693,
+              488
+            ],
+            [
+              530,
+              500
+            ]
+          ],
+          "reason": "Withdraw contradictory wall labels on this visible freestanding column; restore only the conservative column interior. Person and merchandise labels remain protected."
+        }
+      ]
+    },
+    {
+      "frame_id": "0111-Taichung-cam10",
+      "split": "val",
+      "image_sha256": "a86d13188331aeac2bbfdda30c6e4c1805a7f4b438d25fba42b26c8c32db6cb8",
+      "mask_sha256": "ce3b7d85e38591a0739755f1c8b7ef66ec1aaa0fe8649e98aec03f41cbcf3196",
+      "reason": "AI reviewed old glass positives: remove mixed entrance-door labels, opaque-panel labels or unconfirmed fragments; restore only confirmed fixed-window interiors.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "column",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              465,
+              35
+            ],
+            [
+              555,
+              35
+            ],
+            [
+              628,
+              470
+            ],
+            [
+              552,
+              472
+            ]
+          ],
+          "reason": "Freestanding structural column between displays; conservative front-face interior avoids furniture and the side-face boundary."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              465,
+              35
+            ],
+            [
+              555,
+              35
+            ],
+            [
+              628,
+              470
+            ],
+            [
+              552,
+              472
+            ]
+          ],
+          "reason": "Freestanding structural column between displays; conservative front-face interior avoids furniture and the side-face boundary.",
+          "classes": [
+            "wall"
+          ]
+        },
+        {
+          "classes": [
+            "wall"
+          ],
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              438,
+              0
+            ],
+            [
+              622,
+              0
+            ],
+            [
+              693,
+              488
+            ],
+            [
+              530,
+              500
+            ]
+          ],
+          "reason": "Withdraw contradictory wall labels on this visible freestanding column; restore only the conservative column interior. Person and merchandise labels remain protected."
+        }
+      ]
+    },
+    {
+      "frame_id": "gcs-20260910-Kaohsiung-cam08-t030",
+      "split": "train",
+      "image_sha256": "facae65b929ba40c46bf9bb671e1b158c3e9edd392734e6cdea2b4fb69717462",
+      "mask_sha256": "cc48f0251ea0528027313b530d431ec473f036bf939cfa11ccfa2eaef2814187",
+      "reason": "AI reviewed this image for the targeted glass, door and column completion before training.",
+      "quarantine_classes": [],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              220,
+              935
+            ],
+            [
+              400,
+              1020
+            ],
+            [
+              410,
+              1060
+            ],
+            [
+              250,
+              1060
+            ],
+            [
+              190,
+              1030
+            ]
+          ],
+          "reason": "Fixed glass stair balustrade below the metal rail; interior avoids rail, panel joints and foreground people. Floor is visible through the pane."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              220,
+              935
+            ],
+            [
+              400,
+              1020
+            ],
+            [
+              410,
+              1060
+            ],
+            [
+              250,
+              1060
+            ],
+            [
+              190,
+              1030
+            ]
+          ],
+          "reason": "Fixed glass stair balustrade below the metal rail; interior avoids rail, panel joints and foreground people. Floor is visible through the pane.",
+          "classes": [
+            "floor",
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam03-t030",
+      "split": "train",
+      "image_sha256": "e4dc5e1e322ad6b43c802169a816c06fd0b1f6cb8c399e87d4215cd5056e1f82",
+      "mask_sha256": "321668acaec8732d774d370a71894d8755de7abc4c1f2ed333d8148379d4e27b",
+      "reason": "AI inspected this GCS frame: the same fixed left storefront panes are visible with a different date and lighting; source train only.",
+      "quarantine_classes": [],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              100,
+              150
+            ],
+            [
+              270,
+              115
+            ],
+            [
+              312,
+              415
+            ],
+            [
+              150,
+              440
+            ]
+          ],
+          "reason": "AI inspected this GCS frame; fixed left storefront pane interior, excluding seam, display and entrance doors. Night/day appearance differs but pane geometry is unchanged."
+        },
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              360,
+              90
+            ],
+            [
+              620,
+              45
+            ],
+            [
+              664,
+              440
+            ],
+            [
+              390,
+              454
+            ]
+          ],
+          "reason": "AI inspected this GCS frame; fixed left storefront pane interior, excluding seam, display and entrance doors. Night/day appearance differs but pane geometry is unchanged."
+        }
+      ]
+    },
+    {
+      "frame_id": "gcs-20260910-Taichung-cam09-t030",
+      "split": "train",
+      "image_sha256": "c989bfe1f6a7998834c79588b000dd24f869b96bfc93c14055b9a2b8d2995828",
+      "mask_sha256": "934382a97108aa2463ced0ecd31b0bcfcf436e6f87affc36cc29548ff155d879",
+      "reason": "AI reviewed this image for the targeted glass, door and column completion before training.",
+      "quarantine_classes": [
+        "door",
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "door",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              755,
+              35
+            ],
+            [
+              810,
+              35
+            ],
+            [
+              820,
+              205
+            ],
+            [
+              768,
+              205
+            ]
+          ],
+          "reason": "Upper interior of handled glass entrance leaf, visible in each reviewed frame; not a fixed-pane claim. Keep door hardware and adjacent frame outside."
+        }
+      ],
+      "quarantine_regions": [
+        {
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              755,
+              35
+            ],
+            [
+              810,
+              35
+            ],
+            [
+              820,
+              205
+            ],
+            [
+              768,
+              205
+            ]
+          ],
+          "reason": "Upper interior of handled glass entrance leaf, visible in each reviewed frame; not a fixed-pane claim. Keep door hardware and adjacent frame outside.",
+          "classes": [
+            "floor",
+            "wall"
+          ]
+        }
+      ]
+    },
+    {
+      "frame_id": "gcs-20260912-Taichung-cam03-t330",
+      "split": "train",
+      "image_sha256": "6f696165a74ce3d833e6fc59a868213f3f261d6b904e2964553abd3107513c52",
+      "mask_sha256": "4eda071a625d9bfec47d390410cbed30bb8fdc364ed86cd75ad29004c63621f9",
+      "reason": "AI inspected this GCS frame: the same fixed left storefront panes are visible with a different date and lighting; source train only.",
+      "quarantine_classes": [],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              100,
+              150
+            ],
+            [
+              270,
+              115
+            ],
+            [
+              312,
+              415
+            ],
+            [
+              150,
+              440
+            ]
+          ],
+          "reason": "AI inspected this GCS frame; fixed left storefront pane interior, excluding seam, display and entrance doors. Night/day appearance differs but pane geometry is unchanged."
+        },
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              360,
+              90
+            ],
+            [
+              620,
+              45
+            ],
+            [
+              664,
+              440
+            ],
+            [
+              390,
+              454
+            ]
+          ],
+          "reason": "AI inspected this GCS frame; fixed left storefront pane interior, excluding seam, display and entrance doors. Night/day appearance differs but pane geometry is unchanged."
+        }
+      ]
+    }
+  ]
+}
