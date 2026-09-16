@@ -70,8 +70,8 @@ dependencies = [
 # 3.11" and the floor has moved.
 export = ["onnx>=1.15", "onnxsim>=0.4", "onnxruntime>=1.17"]
 # SAM 3 pre-labelling (scripts/sam3_prelabel.py). An annotation-time tool, never a
-# runtime dependency: nothing under src/ imports transformers, and an inference box must
-# not carry a 6.5 GB checkpoint it never runs. `facebook/sam3` is a gated repo, so this
+# runtime dependency: offline teacher and relabel modules import transformers lazily;
+# the serving path does not require teacher checkpoints. `facebook/sam3` is a gated repo, so this
 # installs the code and leaves the weights to `hf auth login`.
 annotate = ["transformers>=5.0"]
 # Benchmarking on an NVIDIA box. Two of these were installed by hand and imported by
@@ -373,3 +373,9 @@ markers = [
 [tool.coverage.run]
 source = ["src/syncai_hydranet", "src/syncai_bev3d"]
 branch = true
+
+[tool.coverage.report]
+# tools/ subdirectories are intentionally not import packages. Count unexecuted
+# scripts there as zero coverage instead of omitting them from the denominator.
+include_namespace_packages = true
+precision = 2

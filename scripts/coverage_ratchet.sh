@@ -38,30 +38,21 @@ SRC_FLOOR="${COV_SRC_FLOOR:-85}"
 DEV_FLOOR="${COV_DEV_FLOOR:-11}"
 
 if [ -z "${COV_SKIP_RUN:-}" ]; then
-  uv run pytest -q --cov=src --cov=scripts --cov=tools --cov-report=term-missing
+  uv run --frozen pytest -q --cov=src --cov=scripts --cov=tools --cov-report=term-missing
 fi
 
 report() {  # $1 = include glob, $2 = floor, $3 = label
   local out
-  out=$(uv run coverage report --include="$1" 2>&1) || {
-    echo "::error::coverage report failed for $3; the percentage below is not meaningful"
+  # Let coverage enforce its own threshold with two decimal places. Parsing its
+  # default integer display admitted 84.6% through an 85% floor. Missing/empty
+  # data and tool errors must also fail, rather than being interpreted as zero.
+  out=$(uv run --frozen coverage report --include="$1" --precision=2 \
+    --format=total --fail-under="$2" 2>&1) || {
+    echo "::error::$3 coverage gate failed (floor ${2}%)"
     printf '%s\n' "$out"
     return 1
   }
-  local pct
-  pct=$(printf '%s\n' "$out" | awk '/^TOTAL/ {gsub("%","",$NF); print $NF}')
-  # An empty percentage means the include matched nothing -- a moved directory, a typo --
-  # which `awk` would otherwise turn into a silent pass at "0 >= 0".
-  if [ -z "$pct" ]; then
-    echo "::error::$3: no TOTAL line; the include pattern '$1' matched no files"
-    printf '%s\n' "$out"
-    return 1
-  fi
-  echo "$3 coverage: ${pct}% (floor ${2}%)"
-  if [ "$pct" -lt "$2" ]; then
-    echo "::error::$3 coverage fell to ${pct}% (floor ${2}%)"
-    return 1
-  fi
+  echo "$3 coverage: ${out}% (floor ${2}%)"
 }
 
 rc=0

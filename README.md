@@ -18,7 +18,12 @@ The [ordered execution status](docs/STUDIOA_EXECUTION_PROGRESS.md) and
 [per-class acceptance audit](docs/STUDIOA_STAGE1_ACCEPTANCE.md) distinguish completed
 experiments from the remaining Stage1–4 acceptance work.
 
-![Kaohsiung-cam04: detections and tracks on the left, the metric 3D scene on the right](assets/demo_Kaohsiung-cam04.gif)
+**Historical demo (2026-09-11): Kaohsiung-cam04.** Frozen illustration of the earlier
+retail detector and commissioned scene; it does not show today's scene code or the
+current 19-class StudioA candidate. The [history record](docs/reviews/published_figure_history.json)
+binds the original GIF and audit without rewriting their provenance.
+
+![Kaohsiung-cam04: detections and tracks on the left, the estimated 3D scene on the right](assets/demo_Kaohsiung-cam04.gif)
 
 *Left: person boxes and confirmed tracks, with this camera's false-positive polygons
 applied — **staff blue, everything else green**, one verdict per person from nine
@@ -54,13 +59,16 @@ staff**, 2,144 against 34.*
 
 **A second store**, the same code, and a camera whose colours had to be earned twice:
 
-![Taichung-cam10: detections and tracks on the left, the metric 3D scene on the right](assets/demo_Taichung-cam10.gif)
+**Historical demo (2026-09-11): Taichung-cam10.** The same frozen demonstration scope;
+not current model acceptance or independently measured geometry.
+
+![Taichung-cam10: detections and tracks on the left, the estimated 3D scene on the right](assets/demo_Taichung-cam10.gif)
 
 *Taichung-cam10 **is** coloured, and what it took is the point. It had 15 labelled crops,
 all 15 staff and 0 customers, so a model held out on it scored a clean 1.000 that measured
 only whether it calls staff staff — an accuracy that cannot be wrong about customers cannot
-license colouring them, and the gate refused it (PLAN §7.23). It has 127 crops now — 47
-staff, 65 customer, 6 unclear — and the model reads **0.874** held out on them. That is
+license colouring them, and the gate refused it (PLAN §7.23). The recorded model was
+evaluated on 127 held-out crops and reads **0.874** on them. That is
 below the derived 0.90 floor, so the exception is stated at the call site with
 `--staff-min-accuracy 0.85`, printed on the figure, and recorded in its verdict: a figure
 never carries a threshold nobody can see. **Metres remain estimates**: camera calibration
@@ -68,16 +76,17 @@ and class priors determine scale, and these figures have no new independent floo
 measurements. Better silhouette alignment does not establish absolute dimensions or
 resolve every object's front/back orientation.*
 
-Both figures were rebuilt on **2026-09-11** with the current Stage0 furniture and device
+Both figures were rebuilt on **2026-09-11** with that snapshot's Stage0 furniture and device
 placement: cam04's round table and refined counter support, cam10's longer shelf and
 individually fitted laptops and stools. Each figure's audit records the render hash,
 scene source hashes (including uncommitted changes), input hashes and detector checkpoint:
 [cam04 audit](assets/demo_Kaohsiung-cam04.audit.json),
 [cam10 audit](assets/demo_Taichung-cam10.audit.json).
 
-The whole plan — architecture, data strategy, build order, and the measurements behind
-every decision — lives in **one document: [docs/PLAN.md](docs/PLAN.md)**. Everything the
-project previously documented is in git history (`git show b7457c2:docs/<file>`).
+[docs/PLAN.md](docs/PLAN.md) records the earlier architecture and experiments. Current
+StudioA work is indexed by [execution progress](docs/STUDIOA_EXECUTION_PROGRESS.md);
+dated reports retain their original version scope. Earlier removed documents remain
+in git history (`git show b7457c2:docs/<file>`).
 
 ## The design in one paragraph
 
@@ -174,7 +183,7 @@ all cached. Every later stage reads the result for free.
 ```bash
 # 0-1  footage: wide across cameras, thin within each one (the bucket is ~3 TB)
 python3 scripts/pull_studioa.py --date 2026-08-16 --times 11:30 16:00 --out datasets/studioa_clips
-# 0-2  the empty store: a temporal median removes every moving person by construction
+# 0-2  static estimate: a temporal median reduces transient objects; inspect persistent ones
 python3 scripts/static_plates.py --root datasets/studioa_clips --out datasets/studioa_static
 # 0-3  geometry: undistort -> DA-V2 once -> RANSAC ground plane -> person-height scale
 nice -n 10 .venv/bin/python scripts/onboard_camera.py --camera <camera> --out runs/onboard01

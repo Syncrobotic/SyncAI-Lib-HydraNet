@@ -4,8 +4,6 @@ Run under a persistent user service for SSH-independent execution. This tool nev
 installs candidates into the source checkout. Each subprocess imports the frozen src/.
 """
 
-# ruff: noqa: RUF001 -- Traditional Chinese progress text uses Chinese punctuation.
-
 import argparse
 import json
 import os
@@ -30,12 +28,12 @@ def save(out, state):
     lines = [
         "# Stage0 九鏡頭背景驗證",
         "",
-        f"狀態：{state['status']}；目前：{state.get('current_camera', '準備快照')}",
-        f"更新：{state['updated_at']}；PID：{state['pid']}",
+        f"狀態: {state['status']}; 目前: {state.get('current_camera', '準備快照')}",
+        f"更新: {state['updated_at']}; PID: {state['pid']}",
         "",
-        "使用凍結程式與輸入，CPU 四執行緒。輸出為 review 候選，不安裝到正式場景。",
+        "使用凍結程式與輸入, CPU 四執行緒。輸出為 review 候選, 不安裝到正式場景。",
         "",
-        "| 相機 | 狀態 | 個別物件步驟 | 已放置 | 最終開口／牆片 |",
+        "| 相機 | 狀態 | 個別物件步驟 | 已放置 | 最終開口/牆片 |",
         "|---|---|---|---:|---:|",
     ]
     for row in state["cameras"]:
@@ -46,10 +44,10 @@ def save(out, state):
     lines += [
         "",
         "每台 candidates/<相機>/ 含原圖回投、GLB、逐項報告與來源 manifest。",
-        "分數是既有遮罩的一致性，不是現場公尺精度；未執行的步驟不算零偵測。",
+        "分數是既有遮罩的一致性, 不是現場公尺精度; 未執行的步驟不算零偵測。",
     ]
     if state.get("error"):
-        lines += ["", "錯誤：", "```", state["error"], "```"]
+        lines += ["", "錯誤: ", "```", state["error"], "```"]
     report = out / "REPORT.tmp"
     report.write_text("\n".join(lines) + "\n")
     report.replace(out / "REPORT.zh-TW.md")

@@ -175,7 +175,7 @@ an earlier version of this paragraph called it a gap on the strength of a claim 
 annotation session that turned out to be wrong, and the correction is worth keeping
 because the wrong version is the intuitive one.
 
-Nothing is ever annotated in six classes. Masks are drawn in the seven-class
+For these legacy retail presets, masks are drawn in the seven-class
 `retail_objects` taxonomy, gated as `retail_objects`, and read down to six at load time by
 the `retail_surfaces_from_objects` label map — which has **seven** entries, because it is a
 reader of object masks rather than a taxonomy anything authors. `hydranet_retail_surfaces`
@@ -189,7 +189,7 @@ guessed back. So annotating at the finer level and deriving the coarser is stric
 than the reverse, and a `retail_surfaces` scheme would let someone draw the lossy version
 by mistake.
 
-### StudioA scene review preparation
+### Optional manual StudioA review preparation
 
 `annotation/studioa_review.py prepare --source DATASET NATIVE_SCHEME --out NEW_DIR`
 freezes candidate frames, original masks, conservative entity proposals and empty human
@@ -202,6 +202,11 @@ make previously used data a blind test set. See the
 annotation format, commands and acceptance limits.
 
 ### StudioA AI annotation
+
+This is the current StudioA annotation route; manual task completion is optional.
+The [execution status](../docs/STUDIOA_EXECUTION_PROGRESS.md) identifies current data
+and retained models. [Semantic review](../docs/STUDIOA_SEMANTIC_REVIEW.md) documents
+train-only AI corrections; its interiors cannot be used as full object instances.
 
 `annotation/studioa_autolabel.py prepare --bundle REVIEW_DIR --out NEW_DIR` freezes
 images, teacher revision, policy and worker code. `run --out NEW_DIR` runs the frozen

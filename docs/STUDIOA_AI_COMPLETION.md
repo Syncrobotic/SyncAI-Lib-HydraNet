@@ -116,12 +116,12 @@ IoU 分組不會把桌面和桌體等不同範圍的遮罩合為一組。因此�
 
 50 項相關測試通過。兩張 train 影像再做一次 CPU 前向／反向／SGD 接線檢查：
 loss 4.528347，30,627 個有效像素、18,525 個忽略像素；忽略位置的 logit 梯度全零。
-未寫入 checkpoint，未開始正式訓練，未宣稱偵測 loss 或 3D 幾何已完成。
+上述補標接線檢查未寫入checkpoint；其後的語意試訓練、偵測對照與最新玻璃修正
+見[執行進度](STUDIOA_EXECUTION_PROGRESS.md)。本頁不是目前模型訓練狀態。
 
-已嘗試讀取使用者提供的 `gs://studioa` 補找新素材，但目前主要帳號需要重新驗證；
-其他已存帳號分別沒有物件讀取權限或登入失效。本輪沒有下載新雲端影片，也沒有
-變更預設帳號。需要在本機執行 `gcloud auth login`，登入可讀取該 bucket 的帳號，
-才能接續補抓資料。**本機補標批次完成，整體資料完整性尚未完成。**
+此補標批次曾因GCS登入失效而沒有下載新雲端影片。該歷史阻塞後來已解除，
+並完成[第一批GCS擴充](STUDIOA_GCS_EXPANSION.md)；不能從這份舊紀錄推論
+目前需要重新登入。資料完整性與模型驗收仍以[執行進度](STUDIOA_EXECUTION_PROGRESS.md)為準。
 
 - 全類別標註瀏覽：`runs/studioa_ai_relabel_20260916_v4/index.html`。
 - 地板／展示設備／盒裝商品合併預覽：`runs/studioa_ai_relabel_combined_20260916_v4/index.html`。

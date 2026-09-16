@@ -91,7 +91,7 @@ logit 梯度全為零。此 loss 是隨機初始化單步數值，不是學習�
 
 ## 補標後匯出結果（v2）
 
-最新來源是 `runs/studioa_ai_relabel_20260916_v4/`，訓練資料為
+該v2批次來源是 `runs/studioa_ai_relabel_20260916_v4/`，訓練資料為
 `runs/studioa_partial_supervision_20260916_v2/`。仍為 121 張、24 支鏡頭；
 177,318,087 個可監督像素、66,137,913 個忽略像素，覆蓋率 72.83%（不是準確率）。
 整店分割不變，三個方案的展示櫃／架、展示桌與櫃檯均已有有效監督。
@@ -106,7 +106,7 @@ logit 梯度全為零。此 loss 是隨機初始化單步數值，不是學習�
 非零監督，但非零不等於數量足夠或正確率已驗收。正式全類別跨店訓練仍需補資料。
 完整 hash／鏡頭與影像隔離檢查、50 項相關測試及新資料的 CPU 單步接線檢查通過；
 該次 smoke 未儲存 checkpoint；後續獨立 GPU pilot 見上述試訓練文件。
-見 [AI 補查方法與雲端登入阻塞](STUDIOA_AI_COMPLETION.md)及
+見 [AI 補查方法與歷史雲端登入紀錄](STUDIOA_AI_COMPLETION.md)及
 [結果記錄](reviews/studioa_ai_completion_20260916.json)。
 
 ## 小商品修正與部分偵測接線（v3）
@@ -117,5 +117,6 @@ logit 梯度全為零。此 loss 是隨機初始化單步數值，不是學習�
 
 原始正向 COCO 仍不是完整實例真值。另有明確 AI 覆核的 `studioa_instances`
 資料集與 FCOS 部分監督損失，首批 6 張、15 個實例及 6 塊空白區已完成 GPU
-三步接線檢查，未知位置梯度為零。尚未完成全類別偵測資料或正式偵測訓練。
+三步接線檢查，未知位置梯度為零。這是當時v3接線結果；後續擴充與偵測訓練
+已有獨立實驗，仍未通過完整驗收。最新版本見[執行進度](STUDIOA_EXECUTION_PROGRESS.md)。
 見 [小商品修正、資料契約與驗證](STUDIOA_PARTIAL_DETECTION.md)。

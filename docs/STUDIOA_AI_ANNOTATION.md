@@ -28,8 +28,8 @@ AI 與人工來源分開記錄；AI 完成狀態是 `ai_labeled`，不是人工�
 `instances_ai.json` 彙整正向實例／語意區域標籤。它是 AI 偽標籤的交換格式，
 不是可以忽略缺漏直接拿來算完整偵測 loss 的 COCO 真值。
 後續訓練需一起消費 companion JSON 的未決區域、逐類監督狀態與模型 head 對應，
-避免把沒偵測到的商品當背景。`training_ready=false` 表示尚未完成這個 exporter，
-不是要求使用者改做人工標註。
+避免把沒偵測到的商品當背景。`training_ready=false`表示這份原始正向COCO
+不能直接供完整偵測監督；後續已有部分監督exporter，也不是要求使用者人工標註。
 
 後續已新增[部分監督語意匯出與接線檢查](STUDIOA_TRAINING_DATA.md)，會保留未知與
 衝突的 ignore 像素；這不會讓原始正向 COCO 自動具備完整偵測監督。
@@ -114,7 +114,8 @@ v3 的 121 張都有地板保留遮罩，但不代表邊界完整或正確；展
 三類分開顯示，避免其他物件遮罩
 蓋住著色。原圖與每張候選數一起提供；未上色不表示物件不存在。
 此命令驗證來源 hash、保留原標註包，另存預覽程式與輸出 hash。
-這是顯示改善，展示櫃的 AI 重判與缺漏補標仍待處理，尚未開始新訓練。
+這段記錄當時的顯示改善；後續展示櫃重判、補標與試訓練見
+[AI補查](STUDIOA_AI_COMPLETION.md)及[目前執行進度](STUDIOA_EXECUTION_PROGRESS.md)。
 
 使用者進一步指定「展示櫃」包括擺放 boxed-stock 的直立展示架。
 整合預覽把 `display_cabinet` 與原先範圍外的 `other_shelf` 候選一起顯示為櫃架，

@@ -1,0 +1,20 @@
+{
+  "assets/demo_Kaohsiung-cam04.gif": {
+    "camera": "Kaohsiung-cam04",
+    "render_date": "2026-09-11",
+    "gif_sha256": "eb8745c1c1c3269570dc28ca40a12b37ac353a4f4b7898d85c2873cc07745665",
+    "audit_sha256": "10f614b691aedc7a08af328de4e3a971592e6db277684877c6e75a57c3d7e4e4",
+    "represents_current_code": false,
+    "reason": "Scene code changed after this render. Preserve the original demonstration with a visible dated historical notice; it is not current StudioA model or metric geometry acceptance.",
+    "source_scope": "Original audit records source/input hashes, including uncommitted scene changes; no claim that it exactly reproduces from the named git commit."
+  },
+  "assets/demo_Taichung-cam10.gif": {
+    "camera": "Taichung-cam10",
+    "render_date": "2026-09-11",
+    "gif_sha256": "9c257a3eef51acc1434ee2e5752b550a12b3723a5b1c4ea38f9055a9308a305d",
+    "audit_sha256": "c46b045f61fb67c436bad463b0d7f751a6adf73ee804d832904d20c8b5c77fee",
+    "represents_current_code": false,
+    "reason": "Scene code changed after this render. Preserve the original demonstration with a visible dated historical notice; it is not current StudioA model or metric geometry acceptance.",
+    "source_scope": "Original audit records source/input hashes, including uncommitted scene changes; no claim that it exactly reproduces from the named git commit."
+  }
+}

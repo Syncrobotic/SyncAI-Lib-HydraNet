@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# ruff: noqa: RUF001
 """Prepare and run a finite, frozen Stage 0 whole-store segmentation experiment.
 
 prepare copies selected data, remaps masks using the existing taxonomy, and fixes all
@@ -318,13 +317,13 @@ class Worker:
         lines = [
             "# Stage 0 新店泛化背景訓練",
             "",
-            "狀態：" + self.state["status"],
-            "截止時間：" + self.plan["deadline"],
+            "狀態: " + self.state["status"],
+            "截止時間: " + self.plan["deadline"],
             "",
-            "整店留出；ImageNet 初始化；來源店 test 鏡頭不參與訓練或選模。",
-            "分割數字是教師標註一致性，不能當作人工準確率或空間公尺誤差。",
-            "單種子對照屬探索結果；玻璃門、實測尺度及即時端到端驗收尚未完成。",
-            "目前 checkout 有未提交變更；凍結副本及雜湊保留重現依據，候選不自動部署。",
+            "整店留出; ImageNet 初始化; 來源店 test 鏡頭不參與訓練或選模。",
+            "分割數字是教師標註一致性, 不能當作人工準確率或空間公尺誤差。",
+            "單種子對照屬探索結果; 玻璃門、實測尺度及即時端到端驗收尚未完成。",
+            "目前 checkout 有未提交變更; 凍結副本及雜湊保留重現依據, 候選不自動部署。",
             "",
             "| 組別 | 留出店 | 狀態 | test mIoU |",
             "|---|---|---|---|",
@@ -340,18 +339,18 @@ class Worker:
             if len(results) == len(STORES):
                 lines += [
                     "",
-                    f"{arm} 三店等權平均：{sum(results.values()) / len(STORES):.4f}；"
-                    f"最差店：{min(results.values()):.4f}。",
+                    f"{arm} 三店等權平均: {sum(results.values()) / len(STORES):.4f}; "
+                    f"最差店: {min(results.values()):.4f}。",
                 ]
         lines += [
             "",
-            "逐類別 IoU 與像素支援量：evaluations/*/test.json。",
-            "員工／顧客整店留出探針：staff_probe/report.json（若完成）。",
+            "逐類別 IoU 與像素支援量: evaluations/*/test.json。",
+            "員工/顧客整店留出探針: staff_probe/report.json(若完成)。",
             "不解除既有 unknown 門檻。",
-            "資料、設定、權重來源：plan.json；各步驟日誌：logs/。",
+            "資料、設定、權重來源: plan.json; 各步驟日誌: logs/。",
         ]
         if self.state.get("error"):
-            lines += ["", "失敗原因：", "```", self.state["error"], "```"]
+            lines += ["", "失敗原因: ", "```", self.state["error"], "```"]
         temp = self.out / "REPORT.tmp"
         temp.write_text("\n".join(lines) + "\n")
         temp.replace(self.out / "REPORT.zh-TW.md")

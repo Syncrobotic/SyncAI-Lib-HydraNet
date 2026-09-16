@@ -1,30 +1,20 @@
-"""Source comments are English, and this is what keeps them so.
+"""Keep implementation comments, docstrings and identifiers readable in English.
 
-Two scripts carried complete Traditional Chinese docstrings, comments and console output,
-and one declared it deliberately in a header: "this file's prose, comments and output are
-Traditional Chinese; the full-width punctuation is correct typesetting, not a typo", with
-`# ruff: noqa: RUF001, RUF002, RUF003` to silence the ambiguous-unicode rules. That is an
-honest way to hold a position and it is not the project's position, so both files were
-translated and both exemptions removed.
-
-**Not a rule about characters.** It is about who can maintain a file. A comment explains a
-decision to whoever changes the code next, and this repository's comments carry most of
-what it knows -- the measurements behind a default, the failure a check exists for. A
-reader who cannot read them gets the code without any of that, which is the part that took
-the longest to learn.
-
-Docs are exempt. `docs/` is prose for people, and where ARCHITECTURE.md quotes the product
-ask in the language it was asked in, that quotation is evidence of what was said -- not an
-instruction to whoever maintains the code.
-
-Tracked files only, for the reason `test_scripts_are_not_libraries.py` gives: this measures
-what the gate blocking a merge measures, and an untracked file is still being written.
+Localized UI strings, annotation class names and generated user reports are data.
+The user requested Traditional Chinese outputs; banning every CJK code point had
+incorrectly rejected those outputs as if they were implementation comments.
+Python is parsed so localization does not require file exemptions or escaped text.
+Non-Python configuration and source files retain the original whole-file check.
+Tracked files only: this checks the same source set as CI.
 """
 
 from __future__ import annotations
 
+import ast
+import io
 import re
 import subprocess
+import tokenize
 from pathlib import Path
 
 import pytest
@@ -63,15 +53,31 @@ def _sources() -> list[Path]:
     ]
 
 
+def _implementation_text(text: str, suffix: str):
+    if suffix not in {".py", ".pyi"}:
+        return list(enumerate(text.splitlines(), 1))
+    rows = [
+        (token.start[0], token.string)
+        for token in tokenize.generate_tokens(io.StringIO(text).readline)
+        if token.type in {tokenize.COMMENT, tokenize.NAME}
+    ]
+    for node in ast.walk(ast.parse(text)):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            doc = ast.get_docstring(node, clean=False)
+            if doc is not None:
+                rows.append((node.body[0].lineno, doc))
+    return rows
+
+
 @pytest.mark.parametrize("path", _sources(), ids=lambda p: str(p.relative_to(REPO)))
-def test_no_cjk_in_source(path: Path):
+def test_no_cjk_in_implementation_prose(path: Path):
     try:
         text = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         pytest.skip("not utf-8 text")
     hits = [
         f"{i}: {line.strip()[:70]}"
-        for i, line in enumerate(text.splitlines(), 1)
+        for i, line in _implementation_text(text, path.suffix)
         if CJK.search(line)
     ]
     assert not hits, (
@@ -102,3 +108,23 @@ def test_no_file_re_exempts_itself_from_the_ambiguous_unicode_rules():
         and marker.search(p.read_text("utf-8"))
     ]
     assert not offenders, f"these exempt themselves from the unicode rules: {offenders}"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "# " + "\u5b57",
+        '"""' + "\u5b57" + '"""',
+        'def f():\n    """' + "\u5b57" + '"""\n    pass',
+        "\u5b57" + " = 1",
+    ],
+)
+def test_implementation_guard_rejects_comments_docs_and_names(source):
+    assert any(CJK.search(text) for _, text in _implementation_text(source, ".py"))
+
+
+def test_localized_output_is_data_but_inline_comments_are_still_checked():
+    source = 'label = "' + "\u5b57" + '" # English explanation\n'
+    assert not any(CJK.search(text) for _, text in _implementation_text(source, ".py"))
+    source += "# " + "\u5b57"
+    assert any(CJK.search(text) for _, text in _implementation_text(source, ".py"))

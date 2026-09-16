@@ -78,6 +78,28 @@ uv run ruff format .
 uv run pytest -q
 ```
 
+For a repository-wide maintenance review, run `scripts/coverage_ratchet.sh` and all
+three `scripts/ty_ratchet.sh` targets (`src/`, `scripts/`, `tools/`) as well. Coverage
+includes unexecuted tool subdirectories and gates source/tooling separately; a focused
+test pass does not replace the full suite. Keep test builders in non-`test_` helper
+modules, and match mocked public signatures explicitly instead of swallowing keywords.
+
+Implementation comments, docstrings and identifiers are English. Localized UI text,
+annotation display names and generated reports may use the requested language; the
+Python language guard distinguishes these literals from implementation prose. Do not
+disable ambiguous-Unicode checks for a whole file to add localized output.
+
+Published figures must retain their original audit. A figure representing current code
+must match its renderer sources. A frozen historical demonstration instead requires a
+dated notice immediately before its README image and a GIF/audit hash binding in
+`docs/reviews/published_figure_history.json`; all face-blur gates still apply. Never
+update an old audit's source hashes to make it look newly rendered.
+
+Current StudioA data, retained checkpoints and pending acceptance work belong in
+[execution progress](docs/STUDIOA_EXECUTION_PROGRESS.md). Older reports describe their
+named run/version; link to the current index instead of calling each historical batch
+"latest". Links into ignored `runs/` are local evidence, not files supplied by a clone.
+
 ### Green here is not green on CI, and the three reasons are all environment
 
 A local pass is necessary and it is not sufficient. On 2026-08-28 `CI (dev)` had been red

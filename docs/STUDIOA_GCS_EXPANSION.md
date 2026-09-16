@@ -1,5 +1,8 @@
 # StudioA GCS 補資料 — 2026-09-16
 
+本頁記錄第一批擴充的歷史結果；目前資料與模型狀態以
+[執行進度](STUDIOA_EXECUTION_PROGRESS.md)為準，後續已進行偵測對照及玻璃標籤修正。
+
 已完成第一批 GCS 下載、抽幀、AI 覆核及訓練包擴充。偵測 train 從 **11 張／31 個
 實例／7 支鏡頭**增加到 **27 張／129 個實例／9 支鏡頭**。本輪沒有重訓或替換模型。
 
@@ -51,7 +54,9 @@ teacher proposals 保留在 `unreviewed_proposals` 供追查，不會自動升�
 - 語意包：`runs/studioa_gcs_training_extension_20260916_v1/semantic/`，共 137 張。
   Tao-Hsin fold 為 62 train／33 val／26 test，另 16 張來源 test 仍排除。
 - 實例包：`runs/studioa_partial_instances_20260916_v3/`，27 train／6 val。
-- 原本 **121 張語意遮罩逐檔完全相同**，所有 fold 指派不變。
+- 相對 `studioa_partial_supervision_20260916_v3`，**121 張語意遮罩逐檔完全相同**，
+  所有 fold 指派不變。相對先前語意模型訓練使用的 v2，則為120張不變；
+  `0031-Taichung-cam08`已在v3更正手機遮罩，因此不能稱為相對v2純新增16張。
 - 原本 **17 張實例影像、正框／類別 target、空白區 mask 逐檔完全相同**。
 - 本輪沒有執行 test 推論或計算新準確率。
 
@@ -74,7 +79,7 @@ train 執行 14 次更新，512×896、batch 2、bf16。loss／梯度有限，�
 多類只有 1 個。相同鏡頭／實物的跨日期觀測也不是獨立樣本。所有標註由 AI 產生及
 覆核，不能解讀為人工真值、獨立準確率、完整 3D 或顧客分析能力。
 
-下一步固定共享場景特徵及 normalization，暖身偵測 head，同時補紙箱與明確的
+該批次當時的下一步是固定共享場景特徵及 normalization，暖身偵測 head，同時補紙箱與明確的
 類別混淆負樣本；之後才比較來源 val 的偵測改善與語意保持。不要直接延長前次
 已失敗的完全聯合訓練設定。
 

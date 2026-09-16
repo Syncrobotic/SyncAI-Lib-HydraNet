@@ -30,6 +30,7 @@ from __future__ import annotations
 import ast
 import json
 import subprocess
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -91,6 +92,47 @@ def _verdict(figure: str) -> dict:
     return json.loads(path.read_text())
 
 
+def _history() -> dict:
+    return json.loads((REPO / "docs/reviews/published_figure_history.json").read_text())
+
+
+def _check_historical(figure, record, readme, image_hash, audit_hash):
+    """History is explicitly labelled and bound to immutable image/audit bytes."""
+    assert record["gif_sha256"] == image_hash, f"historical figure changed: {figure}"
+    assert record["audit_sha256"] == audit_hash, f"historical audit changed: {figure}"
+    date.fromisoformat(record["render_date"])
+    notice = f"Historical demo ({record['render_date']}): {record['camera']}"
+    assert notice in readme, f"historical figure has no visible dated notice: {figure}"
+    following = readme.split(notice, 1)[1]
+    assert f"]({figure})" in following[:500], "notice must precede its own figure"
+    assert record["reason"] and record["represents_current_code"] is False
+
+
+def test_figure_history_only_names_published_figures():
+    assert set(_history()) <= set(_figures())
+
+
+@pytest.mark.parametrize("defect", ["image", "audit", "notice", "current"])
+def test_historical_label_cannot_hide_changed_bytes_or_a_current_claim(defect):
+    record = {
+        "gif_sha256": "image",
+        "audit_sha256": "audit",
+        "render_date": "2026-09-11",
+        "camera": "cam",
+        "reason": "Frozen demonstration",
+        "represents_current_code": False,
+    }
+    prose = "Historical demo (2026-09-11): cam\n![demo](assets/demo_cam.gif)"
+    if defect in ("image", "audit"):
+        record["gif_sha256" if defect == "image" else "audit_sha256"] = "changed"
+    elif defect == "notice":
+        prose = "Current demo\n![demo](assets/demo_cam.gif)"
+    else:
+        record["represents_current_code"] = True
+    with pytest.raises(AssertionError):
+        _check_historical("assets/demo_cam.gif", record, prose, "image", "audit")
+
+
 @pytest.mark.parametrize("figure", _figures())
 def test_a_figures_verdict_says_no_face_was_readable(figure: str):
     v = _verdict(figure)
@@ -142,7 +184,7 @@ SCENE_PATHS = (
 
 
 @pytest.mark.parametrize("figure", _figures())
-def test_a_figure_is_not_older_than_the_code_that_drew_it(figure: str):
+def test_a_figure_matches_current_code_or_declares_frozen_history(figure: str):
     """A verdict records the commit it was rendered at, and nothing was reading it.
 
     The defect this catches, from 2026-08-29: both README figures were cut at `ef60573`,
@@ -157,6 +199,15 @@ def test_a_figure_is_not_older_than_the_code_that_drew_it(figure: str):
     noise that somebody would then ignore.
     """
     v = _verdict(figure)
+    if figure in _history():
+        _check_historical(
+            figure,
+            _history()[figure],
+            (REPO / "README.md").read_text(),
+            sha256(REPO / figure),
+            sha256(REPO / figure.replace(".gif", ".audit.json")),
+        )
+        return
     provenance = v.get("provenance")
     if provenance:
         assert v.get("gif_sha256") == sha256(REPO / figure), (

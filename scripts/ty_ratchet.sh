@@ -54,17 +54,16 @@ TARGET="${1:-src/}"
 # by annotating.
 case "$TARGET" in
   scripts/|scripts) DEFAULT_BASELINE=14 ;;
-  tools/|tools)     DEFAULT_BASELINE=73 ;;
+  tools/|tools)     DEFAULT_BASELINE=70 ;;
   *)                DEFAULT_BASELINE=8 ;;
 esac
 BASELINE="${TY_BASELINE:-$DEFAULT_BASELINE}"
 
-# 3.12 rather than the 3.11 floor because it is what a fresh `uv sync` resolves today and
-# what the test matrix's upper row uses, so the gate measures the environment contributors
-# actually get.
+# Keep this interpreter fixed for comparable diagnostics. CI separately tests
+# Python 3.11, 3.12 and 3.13; 3.12 is the type gate's reference, not its newest row.
 TY_PYTHON="${TY_PYTHON:-3.12}"
 # `--isolated` is load-bearing -- warning 1 says why. Do not drop it.
-RUNNER=(uv run --isolated --python "$TY_PYTHON" ty check "$TARGET" --output-format=concise)
+RUNNER=(uv run --frozen --isolated --python "$TY_PYTHON" ty check "$TARGET" --output-format=concise)
 
 # ty exits 0 clean, 1 with diagnostics, 2 when it could not run at all -- a broken
 # [tool.ty] table, an unreadable tree. Only 0 and 1 mean the count below is real, so 2
