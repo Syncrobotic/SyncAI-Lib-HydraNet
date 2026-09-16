@@ -66,6 +66,49 @@ def prepare(bundle: Path, out: Path, limit: int | None) -> None:
         raise ValueError("limit must be positive")
     source = json.loads((bundle / "manifest.json").read_text())
     frames = source["frames"][:limit]
+    freeze_frames(bundle, out, frames)
+
+
+def prepare_media(source: Path, selection: Path, out: Path) -> None:
+    """AI-selected raw media needs no fake semantic masks or human acceptance labels."""
+    report = json.loads((source / "report.json").read_text())
+    manifest = json.loads((source / "manifest.json").read_text())
+    review = json.loads(selection.read_text())
+    if report["status"] != "completed" or manifest["schema"] != "studioa.gcs-intake.v1":
+        raise ValueError("requires completed GCS intake")
+    for name, expected in report["outputs"].items():
+        if digest(source / name) != expected:
+            raise ValueError("GCS intake file changed")
+    if review.get("reviewer_kind") != "ai" or review.get("source_manifest_sha256") != digest(
+        source / "manifest.json"
+    ):
+        raise ValueError("media selection requires bound AI review")
+    selected, seen = [], set()
+    candidates = {frame["id"]: frame for frame in manifest["frames"]}
+    for decision in review["frames"]:
+        frame = candidates[decision["id"]]
+        if (
+            frame["id"] in seen
+            or frame["original_split"] != "train"
+            or not decision.get("camera_match_confirmed")
+            or not decision.get("reason")
+        ):
+            raise ValueError("selection needs unique train frames and camera confirmation")
+        seen.add(frame["id"])
+        selected.append({**frame, "files": {frame["image"]: frame["image_sha256"]}})
+    if not selected:
+        raise ValueError("empty AI media selection")
+    freeze_frames(
+        source,
+        out,
+        selected,
+        {"media_selection_sha256": digest(selection), "media_selection": review},
+    )
+
+
+def freeze_frames(
+    bundle: Path, out: Path, frames: list[dict], extra: dict | None = None
+) -> None:
     out.mkdir(parents=True, exist_ok=False)
     (out / "images").mkdir()
     (out / "frames").mkdir()
@@ -103,6 +146,7 @@ def prepare(bundle: Path, out: Path, limit: int | None) -> None:
             "policy": policy(),
             "contract": contract(),
             "frames": selected,
+            **(extra or {}),
             "code": {
                 str(p.relative_to(out)): digest(p) for p in sorted(snapshot.rglob("*.py"))
             },
@@ -975,6 +1019,10 @@ def main() -> None:
     p.add_argument("--bundle", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--limit", type=int)
+    p = sub.add_parser("prepare-media")
+    p.add_argument("--source", type=Path, required=True)
+    p.add_argument("--selection", type=Path, required=True)
+    p.add_argument("--out", type=Path, required=True)
     p = sub.add_parser("run")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--device", default="cuda", choices=("cuda", "cpu"))
@@ -1003,6 +1051,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.action == "prepare":
         prepare(args.bundle, args.out, args.limit)
+    elif args.action == "prepare-media":
+        prepare_media(args.source, args.selection, args.out)
     elif args.action == "refine":
         refine(args.source, args.out)
     elif args.action == "visual-review":
