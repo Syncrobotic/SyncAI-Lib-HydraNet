@@ -1,7 +1,7 @@
 """StudioA annotation vocabulary; deliberately not a deployed model-head label map.
 
-Entity IDs belong to review proposals. A human-approved annotation and an explicit
-head-specific export are required before they can become training supervision.
+Entity IDs belong to annotation proposals. Explicit AI/human provenance, uncertainty
+handling and a head-specific export are required before training supervision.
 """
 
 from __future__ import annotations
