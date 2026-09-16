@@ -282,3 +282,45 @@ def test_a_door_sized_door_is_still_a_door(tmp_path):
     _cf, _items, _h, shapes = scene_mesh.build_scene_regular(CAMERA, root)
     names = [n for n, *_ in shapes]
     assert "door" in names and "glazing" not in names, names
+
+
+@pytest.mark.parametrize(
+    ("name", "cid"),
+    [
+        ("product_boxed_stock", 8),
+        ("product_macbook", 9),
+        ("product_ipad", 10),
+        ("product_iphone", 11),
+    ],
+)
+@pytest.mark.parametrize("product_height, should_place", [(0.57, True), (1.3, False)])
+def test_typed_products_keep_height_and_require_a_support(
+    tmp_path, name, cid, product_height, should_place
+):
+    low_table = (*TABLE[:3], 0.55)
+    root = a_store(tmp_path, fixtures=(low_table,), wall=False)
+    mask = np.zeros((PLATE_H, PLATE_W), bool)
+    mask[195:225, 140:170] = True
+    _png(root / f"runs/commission01/{CAMERA}/masks/{name}.png", mask)
+    table_mask = np.zeros_like(mask)
+    table_mask[TABLE[1], TABLE[2]] = True
+    table_mask &= ~mask  # Product pixels must not raise the synthetic table itself.
+    _png(root / "runs/commission01/display_table.png", table_mask)
+    cache_path = root / f"runs/site30k_qa/geometry_cache/{CAMERA}.npz"
+    with np.load(cache_path) as cache:
+        arrays = {k: cache[k] for k in cache.files}
+    arrays["height"][mask] = product_height
+    np.savez(cache_path, **arrays)
+    _, grids, _, grid_h = scene_mesh.cell_grids(CAMERA, root)
+    assert cid in grid_h
+    assert np.median(grid_h[cid][grids[cid]]) == pytest.approx(product_height, abs=1e-5)
+    items, _ = _built(root)
+    products = [mesh for mesh, kind, *_ in items if kind == name]
+    assert bool(products) == should_place
+    if not should_place:
+        return
+    tables = [mesh for mesh, kind, *_ in items if kind == "display_table"]
+    assert tables
+    table_top = max(mesh[0][:, 1].max() for mesh in tables)
+    for vertices, _ in products:
+        assert vertices[:, 1].min() == pytest.approx(table_top)

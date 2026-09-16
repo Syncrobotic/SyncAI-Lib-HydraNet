@@ -545,7 +545,9 @@ def cell_grids(
         m = np.asarray(Image.open(f).resize((fw, fh), Image.Resampling.NEAREST)) > 127
         sel = m & z["geom_ok"]
         xs[cid], zs[cid] = z["lx"][sel], z["lz"][sel]
-        if name == "product":
+        # Typed merchandise also needs its observed height. Otherwise support checks
+        # silently substitute 0.9 m for laptops/tablets/phones/stock on lower fixtures.
+        if name == "product" or name.startswith("product_"):
             hts[cid] = z["height"][sel]
     grids = {}
     grid_h = {}
