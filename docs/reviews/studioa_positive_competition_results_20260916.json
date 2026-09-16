@@ -1,0 +1,3743 @@
+{
+  "status": "completed; no upgrade",
+  "plan": "docs/reviews/studioa_positive_competition_plan_20260916.json",
+  "plan_sha256": "fc154da4d538bc1bef0273f898cf929ee0060b11d64222c681669dae96128994",
+  "recovery_plan_sha256": "e9a004f0997dcab2370d69ecc5f84cf083a8adbc2bcc7edc857bccc374d78499",
+  "comparison_preflight": {
+    "normalized_configs_equal_except_positive_classification": true,
+    "control_config_matches_previous_control": true,
+    "differing_input_files": [
+      "config.json"
+    ],
+    "shared_input_files": 806,
+    "job_sha256": {
+      "control": "c642c7529f51cc52dca7014d7301523eef062f8330f6ec69beb8201bd44dcf56",
+      "assigned": "c02da9245922fb439981c24909237ef21d350caf8f4d8e000895edda497b0e67"
+    },
+    "plan_sha256": "fc154da4d538bc1bef0273f898cf929ee0060b11d64222c681669dae96128994",
+    "steps_per_epoch": 17,
+    "epochs": 25,
+    "total_updates": 425,
+    "early_stopping": false,
+    "recovery_plan_sha256": "e9a004f0997dcab2370d69ecc5f84cf083a8adbc2bcc7edc857bccc374d78499",
+    "failed_attempt_artifacts_unchanged": true
+  },
+  "source_commit": "919644b049d1719aa0e9d2a8facc15c2e72a46a7",
+  "arms": {
+    "reference": {
+      "run": "runs/studioa_detector_warmup_20260916_v1",
+      "job_sha256": "be9412eb64d286d129ef79c794c6da36b6df7d2b163851f12bc8f686ff66cbe6",
+      "checkpoints": {
+        "best.pt": {
+          "epoch": 20,
+          "global_step": 260,
+          "sha256": "8381ff3ab6d97a86d9c2896568867971991805288c9f847d6f09d3928aa2c3f5"
+        },
+        "last.pt": {
+          "epoch": 40,
+          "global_step": 520,
+          "sha256": "c9337234b942d950591c9f2ab49b35c0976bed05294ab432918b033ed54d68a2"
+        }
+      },
+      "matched": 7,
+      "support": 31,
+      "recall": 0.22580645161290322,
+      "empty_fp": 0,
+      "empty_pixels": 51761,
+      "unknown_predictions": 593,
+      "per_class_matches": {
+        "laptop": 0,
+        "phone": 1,
+        "tablet": 0,
+        "boxed_stock": 0,
+        "cardboard_box": 0,
+        "speaker": 0,
+        "poster": 1,
+        "fire_equipment": 0,
+        "chair": 0,
+        "person": 5
+      },
+      "last_epoch_metrics": {
+        "epoch": 40,
+        "global_step": 520,
+        "partial_det/studioa_instances/images": 6.0,
+        "partial_det/studioa_instances/support": 31.0,
+        "partial_det/studioa_instances/matched": 6.0,
+        "partial_det/studioa_instances/empty_fp": 0.0,
+        "partial_det/studioa_instances/empty_pixels": 51761.0,
+        "partial_det/studioa_instances/unknown_predictions": 594.0,
+        "partial_det/studioa_instances/recall50_at_020": 0.1935483870967742,
+        "partial_det/studioa_instances/empty_fp_per_megapixel": 0.0,
+        "partial_det/studioa_instances/laptop/support": 5.0,
+        "partial_det/studioa_instances/laptop/matched": 0.0,
+        "partial_det/studioa_instances/laptop/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/phone/support": 4.0,
+        "partial_det/studioa_instances/phone/matched": 0.0,
+        "partial_det/studioa_instances/phone/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/tablet/support": 1.0,
+        "partial_det/studioa_instances/tablet/matched": 0.0,
+        "partial_det/studioa_instances/tablet/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/boxed_stock/support": 1.0,
+        "partial_det/studioa_instances/boxed_stock/matched": 0.0,
+        "partial_det/studioa_instances/boxed_stock/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/cardboard_box/support": 2.0,
+        "partial_det/studioa_instances/cardboard_box/matched": 0.0,
+        "partial_det/studioa_instances/cardboard_box/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/speaker/support": 1.0,
+        "partial_det/studioa_instances/speaker/matched": 0.0,
+        "partial_det/studioa_instances/speaker/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/poster/support": 2.0,
+        "partial_det/studioa_instances/poster/matched": 1.0,
+        "partial_det/studioa_instances/poster/recall50_at_020": 0.5,
+        "partial_det/studioa_instances/fire_equipment/support": 1.0,
+        "partial_det/studioa_instances/fire_equipment/matched": 0.0,
+        "partial_det/studioa_instances/fire_equipment/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/chair/support": 5.0,
+        "partial_det/studioa_instances/chair/matched": 0.0,
+        "partial_det/studioa_instances/chair/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/person/support": 9.0,
+        "partial_det/studioa_instances/person/matched": 5.0,
+        "partial_det/studioa_instances/person/recall50_at_020": 0.5555555555555556
+      },
+      "scene": {
+        "frozen_state_tensors": 194,
+        "frozen_state_equal": true,
+        "scene_before": {
+          "frames": 33,
+          "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+        },
+        "scene_after": {
+          "frames": 33,
+          "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+        },
+        "scene_logits_equal": true,
+        "baseline_recall": 0.0,
+        "selected_recall": 0.22580645161290322,
+        "baseline_empty_fp": 0.0,
+        "selected_empty_fp": 0.0,
+        "accepted": true
+      }
+    },
+    "control": {
+      "run": "runs/studioa_detector_competition_20260916_v2_control",
+      "job_sha256": "c642c7529f51cc52dca7014d7301523eef062f8330f6ec69beb8201bd44dcf56",
+      "checkpoints": {
+        "best.pt": {
+          "epoch": 11,
+          "global_step": 187,
+          "sha256": "4e7b6a915ad4bc04e5d8629a0a8b3d51f7a609afbfe738a6ffb005eb958f4759"
+        },
+        "last.pt": {
+          "epoch": 25,
+          "global_step": 425,
+          "sha256": "918609bb997b02a085f13d3ec835997426189de7b01e611ef17bbb327e92a53c"
+        }
+      },
+      "matched": 7,
+      "support": 31,
+      "recall": 0.22580645161290322,
+      "empty_fp": 0,
+      "empty_pixels": 51761,
+      "unknown_predictions": 593,
+      "per_class_matches": {
+        "laptop": 0,
+        "phone": 0,
+        "tablet": 0,
+        "boxed_stock": 0,
+        "cardboard_box": 0,
+        "speaker": 0,
+        "poster": 1,
+        "fire_equipment": 0,
+        "chair": 0,
+        "person": 6
+      },
+      "last_epoch_metrics": {
+        "epoch": 25,
+        "global_step": 425,
+        "partial_det/studioa_instances/images": 6.0,
+        "partial_det/studioa_instances/support": 31.0,
+        "partial_det/studioa_instances/matched": 6.0,
+        "partial_det/studioa_instances/empty_fp": 0.0,
+        "partial_det/studioa_instances/empty_pixels": 51761.0,
+        "partial_det/studioa_instances/unknown_predictions": 594.0,
+        "partial_det/studioa_instances/recall50_at_020": 0.1935483870967742,
+        "partial_det/studioa_instances/empty_fp_per_megapixel": 0.0,
+        "partial_det/studioa_instances/laptop/support": 5.0,
+        "partial_det/studioa_instances/laptop/matched": 0.0,
+        "partial_det/studioa_instances/laptop/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/phone/support": 4.0,
+        "partial_det/studioa_instances/phone/matched": 0.0,
+        "partial_det/studioa_instances/phone/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/tablet/support": 1.0,
+        "partial_det/studioa_instances/tablet/matched": 0.0,
+        "partial_det/studioa_instances/tablet/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/boxed_stock/support": 1.0,
+        "partial_det/studioa_instances/boxed_stock/matched": 0.0,
+        "partial_det/studioa_instances/boxed_stock/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/cardboard_box/support": 2.0,
+        "partial_det/studioa_instances/cardboard_box/matched": 0.0,
+        "partial_det/studioa_instances/cardboard_box/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/speaker/support": 1.0,
+        "partial_det/studioa_instances/speaker/matched": 0.0,
+        "partial_det/studioa_instances/speaker/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/poster/support": 2.0,
+        "partial_det/studioa_instances/poster/matched": 1.0,
+        "partial_det/studioa_instances/poster/recall50_at_020": 0.5,
+        "partial_det/studioa_instances/fire_equipment/support": 1.0,
+        "partial_det/studioa_instances/fire_equipment/matched": 0.0,
+        "partial_det/studioa_instances/fire_equipment/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/chair/support": 5.0,
+        "partial_det/studioa_instances/chair/matched": 0.0,
+        "partial_det/studioa_instances/chair/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/person/support": 9.0,
+        "partial_det/studioa_instances/person/matched": 5.0,
+        "partial_det/studioa_instances/person/recall50_at_020": 0.5555555555555556
+      },
+      "scene": {
+        "frozen_state_tensors": 194,
+        "frozen_state_equal": true,
+        "scene_before": {
+          "frames": 33,
+          "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+        },
+        "scene_after": {
+          "frames": 33,
+          "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+        },
+        "scene_logits_equal": true,
+        "baseline_recall": 0.0,
+        "selected_recall": 0.22580645161290322,
+        "baseline_empty_fp": 0.0,
+        "selected_empty_fp": 0.0,
+        "accepted": true
+      }
+    },
+    "assigned": {
+      "run": "runs/studioa_detector_competition_20260916_v2_assigned",
+      "job_sha256": "c02da9245922fb439981c24909237ef21d350caf8f4d8e000895edda497b0e67",
+      "checkpoints": {
+        "best.pt": {
+          "epoch": 5,
+          "global_step": 85,
+          "sha256": "c434e8aa48dda71aca932fd78f63a3fb35a44d957d5bdb0224c180aa32e1a55d"
+        },
+        "last.pt": {
+          "epoch": 25,
+          "global_step": 425,
+          "sha256": "70dd3ba8ce2fb571ee1016624a70b9146bb74465aabc0a235b58463bf6be8a7f"
+        }
+      },
+      "matched": 8,
+      "support": 31,
+      "recall": 0.25806451612903225,
+      "empty_fp": 0,
+      "empty_pixels": 51761,
+      "unknown_predictions": 170,
+      "per_class_matches": {
+        "laptop": 0,
+        "phone": 0,
+        "tablet": 0,
+        "boxed_stock": 1,
+        "cardboard_box": 0,
+        "speaker": 0,
+        "poster": 1,
+        "fire_equipment": 0,
+        "chair": 0,
+        "person": 6
+      },
+      "last_epoch_metrics": {
+        "epoch": 25,
+        "global_step": 425,
+        "partial_det/studioa_instances/images": 6.0,
+        "partial_det/studioa_instances/support": 31.0,
+        "partial_det/studioa_instances/matched": 6.0,
+        "partial_det/studioa_instances/empty_fp": 0.0,
+        "partial_det/studioa_instances/empty_pixels": 51761.0,
+        "partial_det/studioa_instances/unknown_predictions": 384.0,
+        "partial_det/studioa_instances/recall50_at_020": 0.1935483870967742,
+        "partial_det/studioa_instances/empty_fp_per_megapixel": 0.0,
+        "partial_det/studioa_instances/laptop/support": 5.0,
+        "partial_det/studioa_instances/laptop/matched": 0.0,
+        "partial_det/studioa_instances/laptop/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/phone/support": 4.0,
+        "partial_det/studioa_instances/phone/matched": 0.0,
+        "partial_det/studioa_instances/phone/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/tablet/support": 1.0,
+        "partial_det/studioa_instances/tablet/matched": 0.0,
+        "partial_det/studioa_instances/tablet/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/boxed_stock/support": 1.0,
+        "partial_det/studioa_instances/boxed_stock/matched": 1.0,
+        "partial_det/studioa_instances/boxed_stock/recall50_at_020": 1.0,
+        "partial_det/studioa_instances/cardboard_box/support": 2.0,
+        "partial_det/studioa_instances/cardboard_box/matched": 0.0,
+        "partial_det/studioa_instances/cardboard_box/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/speaker/support": 1.0,
+        "partial_det/studioa_instances/speaker/matched": 0.0,
+        "partial_det/studioa_instances/speaker/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/poster/support": 2.0,
+        "partial_det/studioa_instances/poster/matched": 1.0,
+        "partial_det/studioa_instances/poster/recall50_at_020": 0.5,
+        "partial_det/studioa_instances/fire_equipment/support": 1.0,
+        "partial_det/studioa_instances/fire_equipment/matched": 0.0,
+        "partial_det/studioa_instances/fire_equipment/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/chair/support": 5.0,
+        "partial_det/studioa_instances/chair/matched": 0.0,
+        "partial_det/studioa_instances/chair/recall50_at_020": 0.0,
+        "partial_det/studioa_instances/person/support": 9.0,
+        "partial_det/studioa_instances/person/matched": 4.0,
+        "partial_det/studioa_instances/person/recall50_at_020": 0.4444444444444444
+      },
+      "scene": {
+        "frozen_state_tensors": 194,
+        "frozen_state_equal": true,
+        "scene_before": {
+          "frames": 33,
+          "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+        },
+        "scene_after": {
+          "frames": 33,
+          "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+        },
+        "scene_logits_equal": true,
+        "baseline_recall": 0.0,
+        "selected_recall": 0.25806451612903225,
+        "baseline_empty_fp": 0.0,
+        "selected_empty_fp": 0.0,
+        "accepted": true
+      }
+    }
+  },
+  "verification": {
+    "reference": {
+      "frozen_inputs_verified": 757,
+      "outputs_verified": 8,
+      "checkpoint_job_binding": true,
+      "best_last_finite": true,
+      "original_shared_tensors_equal": 194,
+      "scene_logits_equal": true,
+      "test_evaluated": false
+    },
+    "control": {
+      "frozen_inputs_verified": 807,
+      "outputs_verified": 8,
+      "checkpoint_job_binding": true,
+      "best_last_finite": true,
+      "original_shared_tensors_equal": 194,
+      "scene_logits_equal": true,
+      "test_evaluated": false,
+      "saved_predictions_reproduce_metrics": true
+    },
+    "assigned": {
+      "frozen_inputs_verified": 807,
+      "outputs_verified": 8,
+      "checkpoint_job_binding": true,
+      "best_last_finite": true,
+      "original_shared_tensors_equal": 194,
+      "scene_logits_equal": true,
+      "test_evaluated": false,
+      "saved_predictions_reproduce_metrics": true
+    }
+  },
+  "control_reproduction": {
+    "best.pt": {
+      "all_model_tensors_bit_identical": true,
+      "epoch": 11,
+      "global_step": 187
+    },
+    "last.pt": {
+      "all_model_tensors_bit_identical": true,
+      "epoch": 25,
+      "global_step": 425
+    }
+  },
+  "promotion": {
+    "upgrade": false,
+    "criteria": {
+      "total_matches_exceed_7": true,
+      "strictly_exceeds_equal_budget_control": true,
+      "person_at_least_5": true,
+      "phone_at_least_1": false,
+      "poster_at_least_1": true,
+      "reviewed_empty_fp_at_most_0": true,
+      "scene_logits_byte_identical": true
+    },
+    "retained_reference": "runs/studioa_detector_warmup_20260916_v1",
+    "deployment": false,
+    "worker_acceptance_is_against_random_epoch0_only": true
+  },
+  "train_competition_before": {
+    "scope": "35 source-train full-frame no-augmentation float32 views, each image normalized independently; gradients of existing loss w.r.t. logits, not historical batch gradients or parameter gradients",
+    "manifest_sha256": "eba13055187110a16c211fd2e76b7cd93fc437e76f711266a1f6c8b022b96428",
+    "results": {
+      "control": {
+        "checkpoint_sha256": "b84027b88bea88e52bed01a29f5f99c0c183d04977f555d85d418ee064b44af1",
+        "summary": {
+          "laptop": {
+            "assigned_points": 442,
+            "correct_winner_points": 0,
+            "own_gradient_abs_l1": 0.07828418724238873,
+            "wrong_winner_points": 442,
+            "wrong_winner_zero_gradient_points": 442,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 362,
+            "winner_chair": 7,
+            "winner_person": 73
+          },
+          "phone": {
+            "assigned_points": 344,
+            "correct_winner_points": 7,
+            "own_gradient_abs_l1": 0.2500955305295065,
+            "wrong_winner_points": 337,
+            "wrong_winner_zero_gradient_points": 337,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_person": 68,
+            "winner_poster": 252,
+            "winner_chair": 14,
+            "winner_phone": 7,
+            "winner_cardboard_box": 3
+          },
+          "tablet": {
+            "assigned_points": 885,
+            "correct_winner_points": 0,
+            "own_gradient_abs_l1": 0.3601328237418784,
+            "wrong_winner_points": 885,
+            "wrong_winner_zero_gradient_points": 885,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 831,
+            "winner_person": 31,
+            "winner_fire_equipment": 2,
+            "winner_cardboard_box": 18,
+            "winner_chair": 3
+          },
+          "boxed_stock": {
+            "assigned_points": 290,
+            "correct_winner_points": 11,
+            "own_gradient_abs_l1": 0.027220389762078412,
+            "wrong_winner_points": 279,
+            "wrong_winner_zero_gradient_points": 279,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 269,
+            "winner_person": 10,
+            "winner_boxed_stock": 11
+          },
+          "cardboard_box": {
+            "assigned_points": 160,
+            "correct_winner_points": 13,
+            "own_gradient_abs_l1": 0.027257036417722702,
+            "wrong_winner_points": 147,
+            "wrong_winner_zero_gradient_points": 147,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_cardboard_box": 13,
+            "winner_poster": 107,
+            "winner_person": 33,
+            "winner_phone": 1,
+            "winner_chair": 6
+          },
+          "speaker": {
+            "assigned_points": 143,
+            "correct_winner_points": 1,
+            "own_gradient_abs_l1": 0.07322973338887095,
+            "wrong_winner_points": 142,
+            "wrong_winner_zero_gradient_points": 142,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_speaker": 1,
+            "winner_poster": 133,
+            "winner_phone": 9
+          },
+          "poster": {
+            "assigned_points": 901,
+            "correct_winner_points": 733,
+            "own_gradient_abs_l1": 0.1788925884757191,
+            "wrong_winner_points": 168,
+            "wrong_winner_zero_gradient_points": 168,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 733,
+            "winner_fire_equipment": 3,
+            "winner_person": 146,
+            "winner_chair": 13,
+            "winner_cardboard_box": 6
+          },
+          "fire_equipment": {
+            "assigned_points": 115,
+            "correct_winner_points": 0,
+            "own_gradient_abs_l1": 0.046553698666684795,
+            "wrong_winner_points": 115,
+            "wrong_winner_zero_gradient_points": 115,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 100,
+            "winner_person": 15
+          },
+          "chair": {
+            "assigned_points": 350,
+            "correct_winner_points": 115,
+            "own_gradient_abs_l1": 0.09127161325886846,
+            "wrong_winner_points": 235,
+            "wrong_winner_zero_gradient_points": 235,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_chair": 115,
+            "winner_person": 99,
+            "winner_poster": 132,
+            "winner_fire_equipment": 4
+          },
+          "person": {
+            "assigned_points": 720,
+            "correct_winner_points": 704,
+            "own_gradient_abs_l1": 0.11626999289728701,
+            "wrong_winner_points": 16,
+            "wrong_winner_zero_gradient_points": 16,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 16,
+            "winner_person": 704
+          }
+        },
+        "device_boxes": [
+          {
+            "frame": "0050-Kaohsiung-cam04",
+            "class": "laptop",
+            "localized_candidates": 90,
+            "correct_score_over_020": 63,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 57,
+              "person": 6
+            }
+          },
+          {
+            "frame": "0050-Kaohsiung-cam04",
+            "class": "laptop",
+            "localized_candidates": 9,
+            "correct_score_over_020": 9,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 7,
+              "person": 2
+            }
+          },
+          {
+            "frame": "0030-Taichung-cam08",
+            "class": "tablet",
+            "localized_candidates": 63,
+            "correct_score_over_020": 58,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 58
+            }
+          },
+          {
+            "frame": "0030-Taichung-cam08",
+            "class": "tablet",
+            "localized_candidates": 59,
+            "correct_score_over_020": 37,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 37
+            }
+          },
+          {
+            "frame": "0030-Taichung-cam08",
+            "class": "tablet",
+            "localized_candidates": 27,
+            "correct_score_over_020": 5,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 5
+            }
+          },
+          {
+            "frame": "0025-Taichung-cam05",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0031-Taichung-cam08",
+            "class": "phone",
+            "localized_candidates": 17,
+            "correct_score_over_020": 7,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 7
+            }
+          },
+          {
+            "frame": "0031-Taichung-cam08",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0031-Taichung-cam08",
+            "class": "phone",
+            "localized_candidates": 7,
+            "correct_score_over_020": 6,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 2,
+              "person": 4
+            }
+          },
+          {
+            "frame": "0002-Kaohsiung-cam04",
+            "class": "laptop",
+            "localized_candidates": 28,
+            "correct_score_over_020": 22,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 22
+            }
+          },
+          {
+            "frame": "0022-Taichung-cam04",
+            "class": "tablet",
+            "localized_candidates": 4,
+            "correct_score_over_020": 4,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 4
+            }
+          },
+          {
+            "frame": "0022-Taichung-cam04",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0022-Taichung-cam04",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0022-Taichung-cam04",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0082-Taichung-cam11",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "laptop",
+            "localized_candidates": 24,
+            "correct_score_over_020": 19,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 19
+            }
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "phone",
+            "localized_candidates": 2,
+            "correct_score_over_020": 2,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 2
+            }
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "tablet",
+            "localized_candidates": 39,
+            "correct_score_over_020": 28,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 28
+            }
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "tablet",
+            "localized_candidates": 39,
+            "correct_score_over_020": 29,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 29
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "laptop",
+            "localized_candidates": 25,
+            "correct_score_over_020": 15,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 15
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "laptop",
+            "localized_candidates": 19,
+            "correct_score_over_020": 17,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 7,
+              "person": 10
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam04-t330",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam04-t330",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam05-t030",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam08-t030",
+            "class": "tablet",
+            "localized_candidates": 58,
+            "correct_score_over_020": 45,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 45
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam11-t330",
+            "class": "tablet",
+            "localized_candidates": 26,
+            "correct_score_over_020": 21,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 21
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam11-t330",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "laptop",
+            "localized_candidates": 14,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "tablet",
+            "localized_candidates": 17,
+            "correct_score_over_020": 17,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 17
+            }
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam03-t330",
+            "class": "laptop",
+            "localized_candidates": 26,
+            "correct_score_over_020": 17,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 17
+            }
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam03-t330",
+            "class": "laptop",
+            "localized_candidates": 25,
+            "correct_score_over_020": 19,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 19
+            }
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam03-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam03-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t030",
+            "class": "phone",
+            "localized_candidates": 10,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t030",
+            "class": "tablet",
+            "localized_candidates": 20,
+            "correct_score_over_020": 9,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 5,
+              "cardboard_box": 4
+            }
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t330",
+            "class": "phone",
+            "localized_candidates": 8,
+            "correct_score_over_020": 8,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 8
+            }
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t330",
+            "class": "phone",
+            "localized_candidates": 1,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t330",
+            "class": "tablet",
+            "localized_candidates": 29,
+            "correct_score_over_020": 26,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "cardboard_box": 9,
+              "poster": 17
+            }
+          },
+          {
+            "frame": "0010-Kaohsiung-cam08",
+            "class": "tablet",
+            "localized_candidates": 34,
+            "correct_score_over_020": 28,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 28
+            }
+          },
+          {
+            "frame": "0010-Kaohsiung-cam08",
+            "class": "tablet",
+            "localized_candidates": 24,
+            "correct_score_over_020": 21,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 21
+            }
+          },
+          {
+            "frame": "0011-Kaohsiung-cam08",
+            "class": "tablet",
+            "localized_candidates": 20,
+            "correct_score_over_020": 15,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 15
+            }
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 1,
+            "correct_score_over_020": 1,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 1
+            }
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "tablet",
+            "localized_candidates": 14,
+            "correct_score_over_020": 14,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 14
+            }
+          },
+          {
+            "frame": "0024-Taichung-cam05",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0024-Taichung-cam05",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0024-Taichung-cam05",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0024-Taichung-cam05",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0037-Taichung-cam11",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0037-Taichung-cam11",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "tablet",
+            "localized_candidates": 18,
+            "correct_score_over_020": 15,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 15
+            }
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "tablet",
+            "localized_candidates": 3,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "tablet",
+            "localized_candidates": 16,
+            "correct_score_over_020": 14,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 14
+            }
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "tablet",
+            "localized_candidates": 21,
+            "correct_score_over_020": 21,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 21
+            }
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 1,
+            "correct_score_over_020": 1,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 1
+            }
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          }
+        ]
+      },
+      "focused": {
+        "checkpoint_sha256": "e7566d9f36567fc612136cdeabf82551577514d933228359759667b503e2c568",
+        "summary": {
+          "laptop": {
+            "assigned_points": 442,
+            "correct_winner_points": 0,
+            "own_gradient_abs_l1": 0.06087006349116564,
+            "wrong_winner_points": 442,
+            "wrong_winner_zero_gradient_points": 442,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 331,
+            "winner_person": 111
+          },
+          "phone": {
+            "assigned_points": 344,
+            "correct_winner_points": 16,
+            "own_gradient_abs_l1": 0.23271478249807842,
+            "wrong_winner_points": 328,
+            "wrong_winner_zero_gradient_points": 328,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_person": 145,
+            "winner_poster": 182,
+            "winner_phone": 16,
+            "winner_cardboard_box": 1
+          },
+          "tablet": {
+            "assigned_points": 885,
+            "correct_winner_points": 0,
+            "own_gradient_abs_l1": 0.24511281630520898,
+            "wrong_winner_points": 885,
+            "wrong_winner_zero_gradient_points": 885,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 776,
+            "winner_fire_equipment": 1,
+            "winner_person": 103,
+            "winner_phone": 5
+          },
+          "boxed_stock": {
+            "assigned_points": 290,
+            "correct_winner_points": 0,
+            "own_gradient_abs_l1": 0.05265221244189888,
+            "wrong_winner_points": 290,
+            "wrong_winner_zero_gradient_points": 290,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 180,
+            "winner_person": 110
+          },
+          "cardboard_box": {
+            "assigned_points": 160,
+            "correct_winner_points": 0,
+            "own_gradient_abs_l1": 0.06602893769741058,
+            "wrong_winner_points": 160,
+            "wrong_winner_zero_gradient_points": 160,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 91,
+            "winner_person": 49,
+            "winner_phone": 20
+          },
+          "speaker": {
+            "assigned_points": 143,
+            "correct_winner_points": 0,
+            "own_gradient_abs_l1": 0.11379664950072765,
+            "wrong_winner_points": 143,
+            "wrong_winner_zero_gradient_points": 143,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_phone": 28,
+            "winner_poster": 115
+          },
+          "poster": {
+            "assigned_points": 901,
+            "correct_winner_points": 636,
+            "own_gradient_abs_l1": 0.23772872181143612,
+            "wrong_winner_points": 265,
+            "wrong_winner_zero_gradient_points": 265,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 636,
+            "winner_person": 248,
+            "winner_chair": 11,
+            "winner_fire_equipment": 6
+          },
+          "fire_equipment": {
+            "assigned_points": 115,
+            "correct_winner_points": 0,
+            "own_gradient_abs_l1": 0.054361559508834034,
+            "wrong_winner_points": 115,
+            "wrong_winner_zero_gradient_points": 115,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 100,
+            "winner_person": 15
+          },
+          "chair": {
+            "assigned_points": 350,
+            "correct_winner_points": 17,
+            "own_gradient_abs_l1": 0.13407629518769681,
+            "wrong_winner_points": 333,
+            "wrong_winner_zero_gradient_points": 333,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 211,
+            "winner_chair": 17,
+            "winner_person": 111,
+            "winner_fire_equipment": 11
+          },
+          "person": {
+            "assigned_points": 720,
+            "correct_winner_points": 706,
+            "own_gradient_abs_l1": 0.11089159728726372,
+            "wrong_winner_points": 14,
+            "wrong_winner_zero_gradient_points": 14,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_person": 706,
+            "winner_poster": 14
+          }
+        },
+        "device_boxes": [
+          {
+            "frame": "0050-Kaohsiung-cam04",
+            "class": "laptop",
+            "localized_candidates": 85,
+            "correct_score_over_020": 66,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 61,
+              "person": 5
+            }
+          },
+          {
+            "frame": "0050-Kaohsiung-cam04",
+            "class": "laptop",
+            "localized_candidates": 11,
+            "correct_score_over_020": 11,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "person": 10,
+              "poster": 1
+            }
+          },
+          {
+            "frame": "0030-Taichung-cam08",
+            "class": "tablet",
+            "localized_candidates": 46,
+            "correct_score_over_020": 46,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 46
+            }
+          },
+          {
+            "frame": "0030-Taichung-cam08",
+            "class": "tablet",
+            "localized_candidates": 59,
+            "correct_score_over_020": 56,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 56
+            }
+          },
+          {
+            "frame": "0030-Taichung-cam08",
+            "class": "tablet",
+            "localized_candidates": 30,
+            "correct_score_over_020": 2,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 2
+            }
+          },
+          {
+            "frame": "0025-Taichung-cam05",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0031-Taichung-cam08",
+            "class": "phone",
+            "localized_candidates": 16,
+            "correct_score_over_020": 13,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 13
+            }
+          },
+          {
+            "frame": "0031-Taichung-cam08",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0031-Taichung-cam08",
+            "class": "phone",
+            "localized_candidates": 8,
+            "correct_score_over_020": 6,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "person": 5,
+              "poster": 1
+            }
+          },
+          {
+            "frame": "0002-Kaohsiung-cam04",
+            "class": "laptop",
+            "localized_candidates": 21,
+            "correct_score_over_020": 17,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "person": 3,
+              "poster": 14
+            }
+          },
+          {
+            "frame": "0022-Taichung-cam04",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0022-Taichung-cam04",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0022-Taichung-cam04",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0022-Taichung-cam04",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0082-Taichung-cam11",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "laptop",
+            "localized_candidates": 19,
+            "correct_score_over_020": 11,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 11
+            }
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "tablet",
+            "localized_candidates": 30,
+            "correct_score_over_020": 22,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 22
+            }
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "tablet",
+            "localized_candidates": 32,
+            "correct_score_over_020": 29,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 28,
+              "person": 1
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "laptop",
+            "localized_candidates": 13,
+            "correct_score_over_020": 12,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 12
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "laptop",
+            "localized_candidates": 15,
+            "correct_score_over_020": 13,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "person": 11,
+              "poster": 2
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam04-t330",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam04-t330",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam05-t030",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam08-t030",
+            "class": "tablet",
+            "localized_candidates": 51,
+            "correct_score_over_020": 48,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 48
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam11-t330",
+            "class": "tablet",
+            "localized_candidates": 22,
+            "correct_score_over_020": 19,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 19
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam11-t330",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "laptop",
+            "localized_candidates": 12,
+            "correct_score_over_020": 5,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "person": 2,
+              "poster": 3
+            }
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "tablet",
+            "localized_candidates": 15,
+            "correct_score_over_020": 14,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 14
+            }
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam03-t330",
+            "class": "laptop",
+            "localized_candidates": 27,
+            "correct_score_over_020": 25,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 25
+            }
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam03-t330",
+            "class": "laptop",
+            "localized_candidates": 23,
+            "correct_score_over_020": 20,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 20
+            }
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam03-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam03-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t030",
+            "class": "phone",
+            "localized_candidates": 6,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t030",
+            "class": "tablet",
+            "localized_candidates": 11,
+            "correct_score_over_020": 4,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 4
+            }
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t330",
+            "class": "phone",
+            "localized_candidates": 5,
+            "correct_score_over_020": 5,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 5
+            }
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t330",
+            "class": "tablet",
+            "localized_candidates": 23,
+            "correct_score_over_020": 19,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 18,
+              "phone": 1
+            }
+          },
+          {
+            "frame": "0010-Kaohsiung-cam08",
+            "class": "tablet",
+            "localized_candidates": 24,
+            "correct_score_over_020": 23,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 23
+            }
+          },
+          {
+            "frame": "0010-Kaohsiung-cam08",
+            "class": "tablet",
+            "localized_candidates": 8,
+            "correct_score_over_020": 8,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 8
+            }
+          },
+          {
+            "frame": "0011-Kaohsiung-cam08",
+            "class": "tablet",
+            "localized_candidates": 1,
+            "correct_score_over_020": 1,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 1
+            }
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "tablet",
+            "localized_candidates": 17,
+            "correct_score_over_020": 17,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 17
+            }
+          },
+          {
+            "frame": "0024-Taichung-cam05",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0024-Taichung-cam05",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0024-Taichung-cam05",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0024-Taichung-cam05",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0037-Taichung-cam11",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0037-Taichung-cam11",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "tablet",
+            "localized_candidates": 18,
+            "correct_score_over_020": 14,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "person": 13,
+              "poster": 1
+            }
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "tablet",
+            "localized_candidates": 2,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "tablet",
+            "localized_candidates": 15,
+            "correct_score_over_020": 15,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 13,
+              "person": 2
+            }
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "tablet",
+            "localized_candidates": 24,
+            "correct_score_over_020": 24,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 19,
+              "person": 5
+            }
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          }
+        ]
+      }
+    }
+  },
+  "train_competition_after": {
+    "scope": "35 source-train full-frame no-augmentation float32 views, each image normalized independently; gradients of existing loss w.r.t. logits, not historical batch gradients or parameter gradients",
+    "manifest_sha256": "eba13055187110a16c211fd2e76b7cd93fc437e76f711266a1f6c8b022b96428",
+    "results": {
+      "control": {
+        "checkpoint_sha256": "4e7b6a915ad4bc04e5d8629a0a8b3d51f7a609afbfe738a6ffb005eb958f4759",
+        "summary": {
+          "laptop": {
+            "assigned_points": 442,
+            "correct_winner_points": 0,
+            "own_gradient_abs_l1": 0.07828418724238873,
+            "wrong_winner_points": 442,
+            "wrong_winner_zero_gradient_points": 442,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 362,
+            "winner_chair": 7,
+            "winner_person": 73
+          },
+          "phone": {
+            "assigned_points": 344,
+            "correct_winner_points": 7,
+            "own_gradient_abs_l1": 0.2500955305295065,
+            "wrong_winner_points": 337,
+            "wrong_winner_zero_gradient_points": 337,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_person": 68,
+            "winner_poster": 252,
+            "winner_chair": 14,
+            "winner_phone": 7,
+            "winner_cardboard_box": 3
+          },
+          "tablet": {
+            "assigned_points": 885,
+            "correct_winner_points": 0,
+            "own_gradient_abs_l1": 0.3601328237418784,
+            "wrong_winner_points": 885,
+            "wrong_winner_zero_gradient_points": 885,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 831,
+            "winner_person": 31,
+            "winner_fire_equipment": 2,
+            "winner_cardboard_box": 18,
+            "winner_chair": 3
+          },
+          "boxed_stock": {
+            "assigned_points": 290,
+            "correct_winner_points": 11,
+            "own_gradient_abs_l1": 0.027220389762078412,
+            "wrong_winner_points": 279,
+            "wrong_winner_zero_gradient_points": 279,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 269,
+            "winner_person": 10,
+            "winner_boxed_stock": 11
+          },
+          "cardboard_box": {
+            "assigned_points": 160,
+            "correct_winner_points": 13,
+            "own_gradient_abs_l1": 0.027257036417722702,
+            "wrong_winner_points": 147,
+            "wrong_winner_zero_gradient_points": 147,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_cardboard_box": 13,
+            "winner_poster": 107,
+            "winner_person": 33,
+            "winner_phone": 1,
+            "winner_chair": 6
+          },
+          "speaker": {
+            "assigned_points": 143,
+            "correct_winner_points": 1,
+            "own_gradient_abs_l1": 0.07322973338887095,
+            "wrong_winner_points": 142,
+            "wrong_winner_zero_gradient_points": 142,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_speaker": 1,
+            "winner_poster": 133,
+            "winner_phone": 9
+          },
+          "poster": {
+            "assigned_points": 901,
+            "correct_winner_points": 733,
+            "own_gradient_abs_l1": 0.1788925884757191,
+            "wrong_winner_points": 168,
+            "wrong_winner_zero_gradient_points": 168,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 733,
+            "winner_fire_equipment": 3,
+            "winner_person": 146,
+            "winner_chair": 13,
+            "winner_cardboard_box": 6
+          },
+          "fire_equipment": {
+            "assigned_points": 115,
+            "correct_winner_points": 0,
+            "own_gradient_abs_l1": 0.046553698666684795,
+            "wrong_winner_points": 115,
+            "wrong_winner_zero_gradient_points": 115,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 100,
+            "winner_person": 15
+          },
+          "chair": {
+            "assigned_points": 350,
+            "correct_winner_points": 115,
+            "own_gradient_abs_l1": 0.09127161325886846,
+            "wrong_winner_points": 235,
+            "wrong_winner_zero_gradient_points": 235,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_chair": 115,
+            "winner_person": 99,
+            "winner_poster": 132,
+            "winner_fire_equipment": 4
+          },
+          "person": {
+            "assigned_points": 720,
+            "correct_winner_points": 704,
+            "own_gradient_abs_l1": 0.11626999289728701,
+            "wrong_winner_points": 16,
+            "wrong_winner_zero_gradient_points": 16,
+            "wrong_winner_gradient_abs_l1": 0.0,
+            "winner_poster": 16,
+            "winner_person": 704
+          }
+        },
+        "device_boxes": [
+          {
+            "frame": "0050-Kaohsiung-cam04",
+            "class": "laptop",
+            "localized_candidates": 90,
+            "correct_score_over_020": 63,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 57,
+              "person": 6
+            }
+          },
+          {
+            "frame": "0050-Kaohsiung-cam04",
+            "class": "laptop",
+            "localized_candidates": 9,
+            "correct_score_over_020": 9,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 7,
+              "person": 2
+            }
+          },
+          {
+            "frame": "0030-Taichung-cam08",
+            "class": "tablet",
+            "localized_candidates": 63,
+            "correct_score_over_020": 58,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 58
+            }
+          },
+          {
+            "frame": "0030-Taichung-cam08",
+            "class": "tablet",
+            "localized_candidates": 59,
+            "correct_score_over_020": 37,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 37
+            }
+          },
+          {
+            "frame": "0030-Taichung-cam08",
+            "class": "tablet",
+            "localized_candidates": 27,
+            "correct_score_over_020": 5,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 5
+            }
+          },
+          {
+            "frame": "0025-Taichung-cam05",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0031-Taichung-cam08",
+            "class": "phone",
+            "localized_candidates": 17,
+            "correct_score_over_020": 7,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 7
+            }
+          },
+          {
+            "frame": "0031-Taichung-cam08",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0031-Taichung-cam08",
+            "class": "phone",
+            "localized_candidates": 7,
+            "correct_score_over_020": 6,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 2,
+              "person": 4
+            }
+          },
+          {
+            "frame": "0002-Kaohsiung-cam04",
+            "class": "laptop",
+            "localized_candidates": 28,
+            "correct_score_over_020": 22,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 22
+            }
+          },
+          {
+            "frame": "0022-Taichung-cam04",
+            "class": "tablet",
+            "localized_candidates": 4,
+            "correct_score_over_020": 4,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 4
+            }
+          },
+          {
+            "frame": "0022-Taichung-cam04",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0022-Taichung-cam04",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0022-Taichung-cam04",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0082-Taichung-cam11",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "laptop",
+            "localized_candidates": 24,
+            "correct_score_over_020": 19,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 19
+            }
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "phone",
+            "localized_candidates": 2,
+            "correct_score_over_020": 2,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 2
+            }
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "tablet",
+            "localized_candidates": 39,
+            "correct_score_over_020": 28,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 28
+            }
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "tablet",
+            "localized_candidates": 39,
+            "correct_score_over_020": 29,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 29
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "laptop",
+            "localized_candidates": 25,
+            "correct_score_over_020": 15,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 15
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "laptop",
+            "localized_candidates": 19,
+            "correct_score_over_020": 17,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 7,
+              "person": 10
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam04-t330",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam04-t330",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam05-t030",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam08-t030",
+            "class": "tablet",
+            "localized_candidates": 58,
+            "correct_score_over_020": 45,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 45
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam11-t330",
+            "class": "tablet",
+            "localized_candidates": 26,
+            "correct_score_over_020": 21,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 21
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam11-t330",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "laptop",
+            "localized_candidates": 14,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "tablet",
+            "localized_candidates": 17,
+            "correct_score_over_020": 17,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 17
+            }
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam03-t330",
+            "class": "laptop",
+            "localized_candidates": 26,
+            "correct_score_over_020": 17,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 17
+            }
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam03-t330",
+            "class": "laptop",
+            "localized_candidates": 25,
+            "correct_score_over_020": 19,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 19
+            }
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam03-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam03-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t030",
+            "class": "phone",
+            "localized_candidates": 10,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t030",
+            "class": "tablet",
+            "localized_candidates": 20,
+            "correct_score_over_020": 9,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 5,
+              "cardboard_box": 4
+            }
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t330",
+            "class": "phone",
+            "localized_candidates": 8,
+            "correct_score_over_020": 8,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 8
+            }
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t330",
+            "class": "phone",
+            "localized_candidates": 1,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t330",
+            "class": "tablet",
+            "localized_candidates": 29,
+            "correct_score_over_020": 26,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "cardboard_box": 9,
+              "poster": 17
+            }
+          },
+          {
+            "frame": "0010-Kaohsiung-cam08",
+            "class": "tablet",
+            "localized_candidates": 34,
+            "correct_score_over_020": 28,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 28
+            }
+          },
+          {
+            "frame": "0010-Kaohsiung-cam08",
+            "class": "tablet",
+            "localized_candidates": 24,
+            "correct_score_over_020": 21,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 21
+            }
+          },
+          {
+            "frame": "0011-Kaohsiung-cam08",
+            "class": "tablet",
+            "localized_candidates": 20,
+            "correct_score_over_020": 15,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 15
+            }
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 1,
+            "correct_score_over_020": 1,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 1
+            }
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "tablet",
+            "localized_candidates": 14,
+            "correct_score_over_020": 14,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 14
+            }
+          },
+          {
+            "frame": "0024-Taichung-cam05",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0024-Taichung-cam05",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0024-Taichung-cam05",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0024-Taichung-cam05",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0037-Taichung-cam11",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0037-Taichung-cam11",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "tablet",
+            "localized_candidates": 18,
+            "correct_score_over_020": 15,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 15
+            }
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "tablet",
+            "localized_candidates": 3,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "tablet",
+            "localized_candidates": 16,
+            "correct_score_over_020": 14,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 14
+            }
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "tablet",
+            "localized_candidates": 21,
+            "correct_score_over_020": 21,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 21
+            }
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 1,
+            "correct_score_over_020": 1,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {
+              "poster": 1
+            }
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          }
+        ]
+      },
+      "assigned": {
+        "checkpoint_sha256": "c434e8aa48dda71aca932fd78f63a3fb35a44d957d5bdb0224c180aa32e1a55d",
+        "summary": {
+          "laptop": {
+            "assigned_points": 442,
+            "correct_winner_points": 107,
+            "own_gradient_abs_l1": 0.43678928911685944,
+            "wrong_winner_points": 335,
+            "wrong_winner_zero_gradient_points": 17,
+            "wrong_winner_gradient_abs_l1": 0.06733941240236163,
+            "winner_laptop": 107,
+            "winner_tablet": 218,
+            "winner_poster": 30,
+            "winner_chair": 39,
+            "winner_person": 44,
+            "winner_phone": 4
+          },
+          "phone": {
+            "assigned_points": 344,
+            "correct_winner_points": 102,
+            "own_gradient_abs_l1": 1.1581256967037916,
+            "wrong_winner_points": 242,
+            "wrong_winner_zero_gradient_points": 6,
+            "wrong_winner_gradient_abs_l1": 0.16211692185606807,
+            "winner_cardboard_box": 4,
+            "winner_person": 21,
+            "winner_phone": 102,
+            "winner_tablet": 151,
+            "winner_poster": 55,
+            "winner_chair": 3,
+            "winner_speaker": 4,
+            "winner_laptop": 4
+          },
+          "tablet": {
+            "assigned_points": 885,
+            "correct_winner_points": 824,
+            "own_gradient_abs_l1": 1.5418850649148226,
+            "wrong_winner_points": 61,
+            "wrong_winner_zero_gradient_points": 2,
+            "wrong_winner_gradient_abs_l1": 0.0038786427285231184,
+            "winner_tablet": 824,
+            "winner_laptop": 10,
+            "winner_phone": 5,
+            "winner_poster": 16,
+            "winner_person": 24,
+            "winner_chair": 4,
+            "winner_cardboard_box": 2
+          },
+          "boxed_stock": {
+            "assigned_points": 290,
+            "correct_winner_points": 256,
+            "own_gradient_abs_l1": 0.4199622794985771,
+            "wrong_winner_points": 34,
+            "wrong_winner_zero_gradient_points": 0,
+            "wrong_winner_gradient_abs_l1": 0.017065280117094517,
+            "winner_boxed_stock": 256,
+            "winner_poster": 27,
+            "winner_tablet": 6,
+            "winner_person": 1
+          },
+          "cardboard_box": {
+            "assigned_points": 160,
+            "correct_winner_points": 59,
+            "own_gradient_abs_l1": 0.35810387134552,
+            "wrong_winner_points": 101,
+            "wrong_winner_zero_gradient_points": 0,
+            "wrong_winner_gradient_abs_l1": 0.044704125029966235,
+            "winner_laptop": 11,
+            "winner_tablet": 13,
+            "winner_boxed_stock": 22,
+            "winner_cardboard_box": 59,
+            "winner_poster": 8,
+            "winner_chair": 22,
+            "winner_person": 25
+          },
+          "speaker": {
+            "assigned_points": 143,
+            "correct_winner_points": 122,
+            "own_gradient_abs_l1": 0.1847890168428421,
+            "wrong_winner_points": 21,
+            "wrong_winner_zero_gradient_points": 0,
+            "wrong_winner_gradient_abs_l1": 0.0013708118349313736,
+            "winner_speaker": 122,
+            "winner_phone": 5,
+            "winner_tablet": 5,
+            "winner_poster": 11
+          },
+          "poster": {
+            "assigned_points": 901,
+            "correct_winner_points": 391,
+            "own_gradient_abs_l1": 1.0428079757839441,
+            "wrong_winner_points": 510,
+            "wrong_winner_zero_gradient_points": 0,
+            "wrong_winner_gradient_abs_l1": 0.0885704216780141,
+            "winner_phone": 21,
+            "winner_poster": 391,
+            "winner_tablet": 236,
+            "winner_laptop": 3,
+            "winner_person": 109,
+            "winner_chair": 28,
+            "winner_speaker": 89,
+            "winner_boxed_stock": 24
+          },
+          "fire_equipment": {
+            "assigned_points": 115,
+            "correct_winner_points": 19,
+            "own_gradient_abs_l1": 0.3702070526778698,
+            "wrong_winner_points": 96,
+            "wrong_winner_zero_gradient_points": 0,
+            "wrong_winner_gradient_abs_l1": 0.05122289604332764,
+            "winner_poster": 77,
+            "winner_fire_equipment": 19,
+            "winner_person": 9,
+            "winner_tablet": 8,
+            "winner_boxed_stock": 1,
+            "winner_cardboard_box": 1
+          },
+          "chair": {
+            "assigned_points": 350,
+            "correct_winner_points": 189,
+            "own_gradient_abs_l1": 0.45722769014537334,
+            "wrong_winner_points": 161,
+            "wrong_winner_zero_gradient_points": 0,
+            "wrong_winner_gradient_abs_l1": 0.014829162857495248,
+            "winner_chair": 189,
+            "winner_person": 53,
+            "winner_tablet": 50,
+            "winner_cardboard_box": 10,
+            "winner_poster": 38,
+            "winner_phone": 3,
+            "winner_fire_equipment": 7
+          },
+          "person": {
+            "assigned_points": 720,
+            "correct_winner_points": 686,
+            "own_gradient_abs_l1": 0.4870308581739664,
+            "wrong_winner_points": 34,
+            "wrong_winner_zero_gradient_points": 1,
+            "wrong_winner_gradient_abs_l1": 0.00037205057651590323,
+            "winner_poster": 11,
+            "winner_person": 686,
+            "winner_phone": 16,
+            "winner_tablet": 3,
+            "winner_fire_equipment": 1,
+            "winner_chair": 1,
+            "winner_cardboard_box": 2
+          }
+        },
+        "device_boxes": [
+          {
+            "frame": "0050-Kaohsiung-cam04",
+            "class": "laptop",
+            "localized_candidates": 57,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0050-Kaohsiung-cam04",
+            "class": "laptop",
+            "localized_candidates": 8,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0030-Taichung-cam08",
+            "class": "tablet",
+            "localized_candidates": 35,
+            "correct_score_over_020": 34,
+            "correct_winner_over_020": 34,
+            "rivals_when_score_passes": {
+              "tablet": 34
+            }
+          },
+          {
+            "frame": "0030-Taichung-cam08",
+            "class": "tablet",
+            "localized_candidates": 40,
+            "correct_score_over_020": 32,
+            "correct_winner_over_020": 32,
+            "rivals_when_score_passes": {
+              "tablet": 32
+            }
+          },
+          {
+            "frame": "0030-Taichung-cam08",
+            "class": "tablet",
+            "localized_candidates": 19,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0025-Taichung-cam05",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0031-Taichung-cam08",
+            "class": "phone",
+            "localized_candidates": 10,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0031-Taichung-cam08",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0031-Taichung-cam08",
+            "class": "phone",
+            "localized_candidates": 6,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0002-Kaohsiung-cam04",
+            "class": "laptop",
+            "localized_candidates": 14,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0022-Taichung-cam04",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0022-Taichung-cam04",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0022-Taichung-cam04",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0022-Taichung-cam04",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0082-Taichung-cam11",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "laptop",
+            "localized_candidates": 21,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "tablet",
+            "localized_candidates": 26,
+            "correct_score_over_020": 5,
+            "correct_winner_over_020": 5,
+            "rivals_when_score_passes": {
+              "tablet": 5
+            }
+          },
+          {
+            "frame": "gcs-20260910-Kaohsiung-cam04-t330",
+            "class": "tablet",
+            "localized_candidates": 23,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "laptop",
+            "localized_candidates": 8,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "laptop",
+            "localized_candidates": 12,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam03-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam04-t330",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam04-t330",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam05-t030",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam08-t030",
+            "class": "tablet",
+            "localized_candidates": 39,
+            "correct_score_over_020": 20,
+            "correct_winner_over_020": 20,
+            "rivals_when_score_passes": {
+              "tablet": 20
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam11-t330",
+            "class": "tablet",
+            "localized_candidates": 25,
+            "correct_score_over_020": 6,
+            "correct_winner_over_020": 6,
+            "rivals_when_score_passes": {
+              "tablet": 6
+            }
+          },
+          {
+            "frame": "gcs-20260910-Taichung-cam11-t330",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "laptop",
+            "localized_candidates": 8,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Kaohsiung-cam04-t030",
+            "class": "tablet",
+            "localized_candidates": 15,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam03-t330",
+            "class": "laptop",
+            "localized_candidates": 14,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam03-t330",
+            "class": "laptop",
+            "localized_candidates": 19,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam03-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam03-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t030",
+            "class": "phone",
+            "localized_candidates": 6,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t030",
+            "class": "tablet",
+            "localized_candidates": 15,
+            "correct_score_over_020": 6,
+            "correct_winner_over_020": 6,
+            "rivals_when_score_passes": {
+              "tablet": 6
+            }
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t330",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "gcs-20260912-Taichung-cam08-t330",
+            "class": "tablet",
+            "localized_candidates": 23,
+            "correct_score_over_020": 13,
+            "correct_winner_over_020": 13,
+            "rivals_when_score_passes": {
+              "tablet": 13
+            }
+          },
+          {
+            "frame": "0010-Kaohsiung-cam08",
+            "class": "tablet",
+            "localized_candidates": 18,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0010-Kaohsiung-cam08",
+            "class": "tablet",
+            "localized_candidates": 20,
+            "correct_score_over_020": 2,
+            "correct_winner_over_020": 2,
+            "rivals_when_score_passes": {
+              "tablet": 2
+            }
+          },
+          {
+            "frame": "0011-Kaohsiung-cam08",
+            "class": "tablet",
+            "localized_candidates": 14,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0020-Taichung-cam03",
+            "class": "tablet",
+            "localized_candidates": 9,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0024-Taichung-cam05",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0024-Taichung-cam05",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0024-Taichung-cam05",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0024-Taichung-cam05",
+            "class": "tablet",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0037-Taichung-cam11",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0037-Taichung-cam11",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "tablet",
+            "localized_candidates": 10,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "tablet",
+            "localized_candidates": 3,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0094-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "tablet",
+            "localized_candidates": 11,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "tablet",
+            "localized_candidates": 23,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          },
+          {
+            "frame": "0096-Kaohsiung-cam04",
+            "class": "phone",
+            "localized_candidates": 0,
+            "correct_score_over_020": 0,
+            "correct_winner_over_020": 0,
+            "rivals_when_score_passes": {}
+          }
+        ]
+      }
+    }
+  },
+  "phone_diagnostics": {
+    "scope": "source-val phone geometric diagnostics at existing score >0.20 and IoU >=0.50; no tuning or test inference; not one-to-one recall",
+    "results": {
+      "studioa_detector_warmup_20260916_v1": [
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            540.86669921875,
+            399.26666259765625,
+            566.066650390625,
+            439.8666687011719
+          ],
+          "localized_grid_candidates": 11,
+          "localized_phone_score_over_020": 10,
+          "eligible_before_nms_and_cap": 5,
+          "retained": true,
+          "max_phone_score_on_localized_boxes": 0.40896254777908325,
+          "reason": "retained"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            494.6666564941406,
+            403.0,
+            516.5999755859375,
+            445.0
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            572.5999755859375,
+            375.0,
+            600.5999755859375,
+            412.79998779296875
+          ],
+          "localized_grid_candidates": 7,
+          "localized_phone_score_over_020": 6,
+          "eligible_before_nms_and_cap": 4,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": 0.3057223856449127,
+          "reason": "removed_by_nms_or_top100"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            457.3333435058594,
+            385.73333740234375,
+            482.0666809082031,
+            425.8666687011719
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        }
+      ],
+      "studioa_detector_competition_20260916_v2_control": [
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            540.86669921875,
+            399.26666259765625,
+            566.066650390625,
+            439.8666687011719
+          ],
+          "localized_grid_candidates": 8,
+          "localized_phone_score_over_020": 4,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": 0.24350395798683167,
+          "reason": "other_class_wins"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            494.6666564941406,
+            403.0,
+            516.5999755859375,
+            445.0
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            572.5999755859375,
+            375.0,
+            600.5999755859375,
+            412.79998779296875
+          ],
+          "localized_grid_candidates": 9,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": 0.17739534378051758,
+          "reason": "phone_score_below_threshold"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            457.3333435058594,
+            385.73333740234375,
+            482.0666809082031,
+            425.8666687011719
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        }
+      ],
+      "studioa_detector_competition_20260916_v2_assigned": [
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            540.86669921875,
+            399.26666259765625,
+            566.066650390625,
+            439.8666687011719
+          ],
+          "localized_grid_candidates": 4,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": 0.02832622081041336,
+          "reason": "phone_score_below_threshold"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            494.6666564941406,
+            403.0,
+            516.5999755859375,
+            445.0
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            572.5999755859375,
+            375.0,
+            600.5999755859375,
+            412.79998779296875
+          ],
+          "localized_grid_candidates": 7,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": 0.021903738379478455,
+          "reason": "phone_score_below_threshold"
+        },
+        {
+          "frame_id": "0013-Kaohsiung-cam11",
+          "box": [
+            457.3333435058594,
+            385.73333740234375,
+            482.0666809082031,
+            425.8666687011719
+          ],
+          "localized_grid_candidates": 0,
+          "localized_phone_score_over_020": 0,
+          "eligible_before_nms_and_cap": 0,
+          "retained": false,
+          "max_phone_score_on_localized_boxes": null,
+          "reason": "no_box_localized_at_iou_050"
+        }
+      ]
+    }
+  },
+  "tests": {
+    "training_related": 180,
+    "lint_type_commit_hooks": "passed"
+  },
+  "limits": [
+    "AI reviewed partial source-validation subset, not independent accuracy or precision.",
+    "Single seed; reused six-frame source validation; phone4 fromone camera and tablet1.",
+    "Same425 optimizer updates and data exposure per arm; only assigned positive class supervision differs.",
+    "No threshold sweep or held-out test inference; scene/3D geometry and Stage2-4 unchanged."
+  ],
+  "service": {
+    "unit": "studioa-competition-comparison-20260916-v2",
+    "Result": "success",
+    "ExecMainStatus": 0,
+    "ActiveState": "inactive"
+  },
+  "recovery": {
+    "status": "predeclared corrected rerun; no scientific protocol change",
+    "parent_plan": "docs/reviews/studioa_positive_competition_plan_20260916.json",
+    "parent_plan_sha256": "fc154da4d538bc1bef0273f898cf929ee0060b11d64222c681669dae96128994",
+    "failed_attempt": "runs/studioa_detector_competition_20260916_assigned",
+    "failed_attempt_status": {
+      "status": "failed",
+      "epoch": 0,
+      "pid": 4132283,
+      "elapsed_s": 5.8540967660956085,
+      "gpu": "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",
+      "global_step": 0,
+      "validation_teacher_miou": 0.2506537344807518,
+      "primary_metric": "partial_det/studioa_instances/recall50_at_020",
+      "best_primary_metric": 0.0,
+      "error": "Traceback (most recent call last):\n  File \"/home/paul/SyncAI-Lib-HydraNet/runs/studioa_detector_competition_20260916_assigned/snapshot/tools/annotation/studioa_train.py\", line 492, in run\n    trainer.train()\n  File \"/home/paul/SyncAI-Lib-HydraNet/runs/studioa_detector_competition_20260916_assigned/snapshot/src/syncai_hydranet/engine/trainer.py\", line 493, in train\n    self.train_one_epoch(epoch)\n  File \"/home/paul/SyncAI-Lib-HydraNet/runs/studioa_detector_competition_20260916_assigned/snapshot/src/syncai_hydranet/engine/trainer.py\", line 564, in train_one_epoch\n    loss, logs = self.model.compute_losses(outputs, targets, batch[\"supervises\"])\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/paul/SyncAI-Lib-HydraNet/runs/studioa_detector_competition_20260916_assigned/snapshot/src/syncai_hydranet/models/hydranet.py\", line 225, in compute_losses\n    loss, extra = head.loss(outputs, targets)\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/paul/SyncAI-Lib-HydraNet/runs/studioa_detector_competition_20260916_assigned/snapshot/src/syncai_hydranet/models/heads/registry.py\", line 142, in loss\n    return self.loss_fn(\n           ^^^^^^^^^^^^^\n  File \"/home/paul/SyncAI-Lib-HydraNet/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/paul/SyncAI-Lib-HydraNet/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/paul/SyncAI-Lib-HydraNet/runs/studioa_detector_competition_20260916_assigned/snapshot/src/syncai_hydranet/models/losses.py\", line 308, in forward\n    assigned_object_class_mask(points, onehot, boxes_list, labels_list),\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/paul/SyncAI-Lib-HydraNet/runs/studioa_detector_competition_20260916_assigned/snapshot/src/syncai_hydranet/models/losses.py\", line 181, in assigned_object_class_mask\n    mask[b, inside, label] = onehot[b, inside, label]\n    ~~~~^^^^^^^^^^^^^^^^^^\nRuntimeError: expected scalar type BFloat16 but found Float\n"
+    },
+    "failure": "CUDA autocast promotes onehot.sum tofloat32 while indexed RHS remains bfloat16; deterministic index_put requires matching dtypes.",
+    "minimal_reproduction": "Same helper fails on CUDA deterministic/autocast withbf16 onehot; passes withfloat32.",
+    "fix": "Convert supervision onehot tofloat32 inside assigned_object_class_mask, so reduction and index writes share dtype. Does not alter labels, masks weights or selection rules.",
+    "tests": "180 related tests passed onCUDA including newbf16 andfp16 deterministic backward regression tests.",
+    "arms": {
+      "control": "runs/studioa_detector_competition_20260916_v2_control",
+      "assigned": "runs/studioa_detector_competition_20260916_v2_assigned"
+    },
+    "budgets_unchanged": {
+      "epochs": 25,
+      "steps_per_arm": 425,
+      "early_stop": false
+    },
+    "no_candidate_learning_before_failure": true,
+    "no_threshold_or_hyperparameter_change": true,
+    "old_outputs_preserved": true,
+    "failed_service": {
+      "unit": "studioa-competition-comparison-20260916-v1",
+      "Result": "exit-code",
+      "ExecMainStatus": 1
+    },
+    "failed_artifacts": {
+      "runs/studioa_detector_competition_20260916_assigned/job.json": "daa97f189a8e924020bde765e31e668565bfd6a953fe66e9ae522c741af985ff",
+      "runs/studioa_detector_competition_20260916_assigned/status.json": "4f4c065b09013432fac1bb28369c90955d8c78685deaa9a12c42ae31cae13ad2",
+      "runs/studioa_detector_competition_20260916_assigned/baseline_val.json": "445010c860040e87a677a984948f275e120f3f0f9bd6c85c070820efe7831962",
+      "runs/studioa_detector_competition_20260916_assigned/service.log": "e1e4f6fbdddd25c519fb57f4cc0cf3e0a6b82bf0f91f9fa3a8c465f79894eb1d",
+      "runs/studioa_detector_competition_20260916_assigned/model/best.pt": "4a01cbb76bdf3622d23f693478f0ad26a69426604804cd7ea1bf6da83d71bcc7"
+    }
+  },
+  "conclusion": "Candidate matched8/31 vs control7/31 but phone0/4 fails predeclared promotion; retain original v1. Train assigned-point winners improve, but this is not held-out accuracy. Unknown predictions170 vs593 are not verified false positives.",
+  "next_step": "Train-only decomposition of localization coverage, correct-class probability and centerness; then assess camera/scale coverage for AI review before deciding the next training intervention. No validation threshold search.",
+  "artifacts": {
+    "runs/studioa_detector_competition_20260916_v2_assigned/job.json": "c02da9245922fb439981c24909237ef21d350caf8f4d8e000895edda497b0e67",
+    "runs/studioa_detector_competition_20260916_v2_assigned/report.json": "8b6e2ce88c48ec2d3ea42a1dba8fef2cbab7f92df39ad67bcae136704a6d5367",
+    "runs/studioa_detector_competition_20260916_v2_assigned/review/inspect_selected.py": "8342ed6922ddf5ffd0951d313246c8bd6cada77a548136b3fe2fa9537fd02342",
+    "runs/studioa_detector_competition_20260916_v2_assigned/review/phone_candidate_probe.json": "87ac97a690699f572ea06d56d63693226c9d1ad539f6064e0652309236e68812",
+    "runs/studioa_detector_competition_20260916_v2_assigned/review/probe_phone_candidates.py": "8eb8b4f660d5fd7c344000b02df73d7e96a46f656fa603c15a02f8b7bb31eb80",
+    "runs/studioa_detector_competition_20260916_v2_assigned/review/selected_diagnostics.json": "b9bf23c8a598f0d12e261bd86817171199e685ceb70cd1f3985b90c9703ebb69",
+    "runs/studioa_detector_competition_20260916_v2_assigned/review/selected_val_review.jpg": "f7bc8fa275c1bd5a84d44d4ccb946bfd561ecfb5f82e7f37ff8e14fb53b2831f",
+    "runs/studioa_detector_competition_20260916_v2_assigned/service.log": "24692cc5f3a1785c06eb220325ab60311f5c78e1f14809bfddaee9a544eb3027",
+    "runs/studioa_detector_competition_20260916_v2_assigned/status.json": "fa536579b15021f2333b1ffd9ed881e4f3eb9290c4a241ee14ee8edc52292152",
+    "runs/studioa_detector_competition_20260916_v2_control/job.json": "c642c7529f51cc52dca7014d7301523eef062f8330f6ec69beb8201bd44dcf56",
+    "runs/studioa_detector_competition_20260916_v2_control/report.json": "4e1e3ac9fe2cbde1035dacf7e55dfd1611a0be36fa67c2d522d38fd086dca485",
+    "runs/studioa_detector_competition_20260916_v2_control/review/inspect_selected.py": "9979a9029a8746e65fb8a5029ccd0962f4302ae5b2256c2f8aa6d842903178f5",
+    "runs/studioa_detector_competition_20260916_v2_control/review/selected_diagnostics.json": "c54fa1b2595c7c3b87355601faa57ecc45210ad912ec1a07f3feaf0e6a9e2d62",
+    "runs/studioa_detector_competition_20260916_v2_control/review/selected_val_review.jpg": "d410eade090518b51a0021a16653f9072eaa7f6ffa04d8b8b4dcf1a9897af3c2",
+    "runs/studioa_detector_competition_20260916_v2_control/service.log": "2a2b1601eb092ff23b0dca90065555424d7c50d8e746bbf850f3c042492cabbf",
+    "runs/studioa_detector_competition_20260916_v2_control/status.json": "700d7e478e6cf4a2c6dede0ad2c0272f8b3513584e8156d9da9057e7a91df0f1",
+    "runs/studioa_positive_competition_20260916_v2/comparison_preflight.json": "2e58c99fd34858bd30e394423eb6426ef93ee8f19e40f38001fa135e26d281e9",
+    "runs/studioa_positive_competition_20260916_v2/control_reproduction.json": "2dab466cc0df8e4322075eef1450addb91b0090b0dca18da5e3376aa9131ee0b",
+    "runs/studioa_positive_competition_20260916_v2/diagnose.py": "f483789cd330fe423f1d3c30da1e4d986ccefdd2736e7da2f2f2d599df0b2910",
+    "runs/studioa_positive_competition_20260916_v2/diagnose_after.py": "89066f2ccc48ee82a82defc026c93b0f9a7dacc8b5cdaa07b919918427577992",
+    "runs/studioa_positive_competition_20260916_v2/prepare_comparison.py": "ebdd025fbf7f02bb0938d687ec3f5d0b47e1bf702ec69e9a67698c5251a8e80e",
+    "runs/studioa_positive_competition_20260916_v2/promotion_decision.json": "29d258d89d17f56853582d753ee8be036eac4e50abdfc1323e123d717c161a3c",
+    "runs/studioa_positive_competition_20260916_v2/results_core.json": "fe6ce8e28cd3fcbeec73f01275f71f2e0e9cd4cdba2871b658881b71c5f9ddc8",
+    "runs/studioa_positive_competition_20260916_v2/run_comparison.sh": "e87a73dde4625d3659ed7ee89d8772d79d672101128b77070a5497151579cefd",
+    "runs/studioa_positive_competition_20260916_v2/service.log": "e008636e8801d57f072cb09cfb749cf101a9359d993188f5470f8b9999e20c5b",
+    "runs/studioa_positive_competition_20260916_v2/train_competition.json": "cc9759d5c796b4411cd43e0e9db782f5f72c1cb6ca4200c1f1731f404cf86cad",
+    "runs/studioa_positive_competition_20260916_v2/train_competition_after.json": "d628e70533095db3e119ee2d01ebf6e030c4570cfbebd7d105e5317949160315",
+    "runs/studioa_positive_competition_20260916_v2/verification.json": "487792ec367632a7c4290b62ff9d541bc7bfa8f37c75d53c6ad0c5f2ede00fd6",
+    "runs/studioa_positive_competition_20260916_v2/verification.log": "ae31b8f0c08d752589fdc2b50c982da33820e958c49a834115e10cf824423ec1",
+    "runs/studioa_positive_competition_20260916_v2/verify_results.py": "91df228da84b4ee898fa970f89d5750300874885cafd7d9e3fa11d5beacb8447"
+  }
+}
