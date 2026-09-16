@@ -1,7 +1,7 @@
 # StudioA 部分監督訓練資料
 
-這一步將 AI 標註轉成可讀取的語意目標，驗證資料到模型損失的接線。
-不是完成正式訓練，也不表示分類正確率已通過驗收。
+這份資料將 AI 標註轉成可讀取的語意目標，並接入既有 Trainer 進行有限試訓練。
+訓練狀態與結果見 [首輪試訓練](STUDIOA_PILOT_TRAINING.md)，不表示分類正確率已通過驗收。
 不需要使用者人工標註；缺漏與衝突仍由後續 AI 重判、補標處理。
 
 ## 類別與監督規則
@@ -54,8 +54,9 @@ status。拒絕覆寫既有目錄；來源 job、逐張標註與影像 hash 必�
 ```
 
 `StudioAPartialDataset` 明確指定留出店與分割，使用既有等比縮放／padding。
-此 reader 可由 PyTorch DataLoader 與現有 `collate` 消費；尚未加入通用 Trainer
-的設定檔資料集工廠，避免它被誤當作正式訓練方案。
+此 reader 可由 PyTorch DataLoader 與現有 `collate` 消費；目前也已加入通用 Trainer
+的資料集工廠，設定 type 為 `studioa_partial`，只監督 19 類 `scene`。
+工廠禁止 label_map、分割角色重映射與驗證／測試增強，並檢查跨資料集鏡頭洩漏。
 
 smoke 僅取兩張 train 影像，使用隨機初始化的 ResNet18 + FPN + 19 類 scene
 語意分支，CPU 做一次前向、反向與 SGD 更新。確認有限損失／梯度、忽略像素對
@@ -104,6 +105,6 @@ logit 梯度全為零。此 loss 是隨機初始化單步數值，不是學習�
 高雄留出仍缺柱子、門、紙箱，台中留出仍缺消防；桃新留出 train 的 19 類都有
 非零監督，但非零不等於數量足夠或正確率已驗收。正式全類別跨店訓練仍需補資料。
 完整 hash／鏡頭與影像隔離檢查、50 項相關測試及新資料的 CPU 單步接線檢查通過；
-未儲存 checkpoint，未開始正式訓練。
+該次 smoke 未儲存 checkpoint；後續獨立 GPU pilot 見上述試訓練文件。
 見 [AI 補查方法與雲端登入阻塞](STUDIOA_AI_COMPLETION.md)及
 [結果記錄](reviews/studioa_ai_completion_20260916.json)。

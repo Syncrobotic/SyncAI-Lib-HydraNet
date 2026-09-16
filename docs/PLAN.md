@@ -1863,3 +1863,40 @@ credentials require reauthentication, other cached credentials cannot read the o
 No downloads or default-account changes. User was asked to run `gcloud auth login`.
 Next: restore cloud read access, select new source-bound examples for the four missing
 fold/class combinations, AI-label them, and recheck split isolation before formal training.
+
+### 10.23 StudioA 19-class partial-semantic GPU pilot — 2026-09-16
+
+User authorized continuing into the first finite training pilot. `studioa_partial` now
+integrates with the existing Trainer while preserving 19 scene classes, ignore 255,
+manifest split roles and cross-dataset camera isolation. Tao-Hsin whole-store holdout
+uses 46 train / 33 val / 26 test images; all train classes have positive support.
+
+`runs/studioa_scene_pilot_20260916_v2/` completed 40 epochs / 440 optimizer steps on GPU,
+using frozen data/code/config/pretrained weights and a persistent systemd service.
+Source-camera val selected epoch 32; test was evaluated only after selection. Validation
+teacher mIoU rose from 0.29% to 25.06%; held-out test teacher mIoU is 17.89%, both over
+19 classes. These are retained AI-label agreement metrics, not independent accuracy.
+
+Test floor IoU 73.33%, display_table 57.03%, display_cabinet 38.82%, boxed_stock 16.97%.
+Door/phone/tablet/cardboard_box/chair have test support but zero IoU; fire equipment has
+no positive test support and cannot establish recall. Most small classes have under 1%
+labelled-pixel support. The two-frame preview shows fixture/product confusion and an
+entrance beam misclassified as a cabinet. No deployment, 3D or customer-analysis claim.
+
+The v1 attempt failed during epoch-1 preview logging because the palette lacked this
+taxonomy, before saving a checkpoint or evaluating test. The fix adds a named 19-class
+palette and prepare preflight; v2 restarted from the same fixed model/hyperparameters.
+Failed artifacts are retained. Training commits: `e1b3323`, palette fix `6837660`.
+
+Validation: 216 related tests before the palette fix, 26 palette/data tests after it;
+lint/types/commit checks passed. All 570 frozen input hashes and completed output hashes
+verified; checkpoints match job/epoch and contain finite model tensors. Systemd exited
+successfully. Dirty workspace entries were documentation and unrelated `:memory:.ses`;
+weight-bearing code was committed and frozen, and no release was made.
+
+[Pilot settings, results and limitations](STUDIOA_PILOT_TRAINING.md),
+[tracked evidence](reviews/studioa_scene_pilot_20260916.json).
+Next: diagnose rare-class and small-product failures using source-store train/val,
+AI-supplement missing supervision and implement partial instance-detection supervision.
+Any model revision informed by this test needs fresh reserved evaluation data before a
+new independent generalization claim. Cloud expansion still needs restored credentials.

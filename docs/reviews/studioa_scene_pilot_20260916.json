@@ -1,0 +1,294 @@
+{
+  "status": "completed_pilot_not_deployment_ready",
+  "run": "runs/studioa_scene_pilot_20260916_v2",
+  "training_commit": "68376601aa5a998972c038096ce919a38ed358c7",
+  "held_out": "Tao-Hsin",
+  "counts": {
+    "train": 46,
+    "val": 33,
+    "test": 26
+  },
+  "epochs_completed": 40,
+  "optimizer_steps": 440,
+  "best_epoch": 32,
+  "baseline_validation_teacher_miou": 0.0028529148258677997,
+  "best_validation_teacher_miou": 0.25062362567793556,
+  "test_teacher_miou": 0.1788927356432689,
+  "val_miou_class_count": 19.0,
+  "test_miou_class_count": 19.0,
+  "per_class": [
+    {
+      "name": "floor",
+      "zh": "地面",
+      "validation_teacher_iou": 0.8475529427106064,
+      "test_teacher_iou": 0.7333258554173079,
+      "validation_labelled_pixel_fraction": 0.3946067169043236,
+      "test_labelled_pixel_fraction": 0.27397423987892155
+    },
+    {
+      "name": "wall",
+      "zh": "牆壁",
+      "validation_teacher_iou": 0.5538612754504098,
+      "test_teacher_iou": 0.6047550990592704,
+      "validation_labelled_pixel_fraction": 0.17030355284673704,
+      "test_labelled_pixel_fraction": 0.22000801080980295
+    },
+    {
+      "name": "ceiling",
+      "zh": "天花板",
+      "validation_teacher_iou": 0.20210848095312745,
+      "test_teacher_iou": 0.027489916227117592,
+      "validation_labelled_pixel_fraction": 0.0007274473705274954,
+      "test_labelled_pixel_fraction": 0.0002330037748576767
+    },
+    {
+      "name": "column",
+      "zh": "柱子",
+      "validation_teacher_iou": 0.0,
+      "test_teacher_iou": 0.025798525798525797,
+      "validation_labelled_pixel_fraction": 0.0,
+      "test_labelled_pixel_fraction": 0.00893778897473303
+    },
+    {
+      "name": "door",
+      "zh": "門",
+      "validation_teacher_iou": 0.0,
+      "test_teacher_iou": 0.0,
+      "validation_labelled_pixel_fraction": 0.032043910304055984,
+      "test_labelled_pixel_fraction": 0.008734386628310093
+    },
+    {
+      "name": "glass_panel",
+      "zh": "固定玻璃",
+      "validation_teacher_iou": 0.0,
+      "test_teacher_iou": 0.09942162676623471,
+      "validation_labelled_pixel_fraction": 0.007799933677144915,
+      "test_labelled_pixel_fraction": 0.06505239391419197
+    },
+    {
+      "name": "display_cabinet",
+      "zh": "展示櫃",
+      "validation_teacher_iou": 0.6681721499994824,
+      "test_teacher_iou": 0.38821233798342025,
+      "validation_labelled_pixel_fraction": 0.12837570753907904,
+      "test_labelled_pixel_fraction": 0.063010877972226
+    },
+    {
+      "name": "display_table",
+      "zh": "展示桌",
+      "validation_teacher_iou": 0.5075516605149709,
+      "test_teacher_iou": 0.5702712622413822,
+      "validation_labelled_pixel_fraction": 0.16519815668202764,
+      "test_labelled_pixel_fraction": 0.260650526395692
+    },
+    {
+      "name": "counter",
+      "zh": "櫃檯",
+      "validation_teacher_iou": 0.12176291472153382,
+      "test_teacher_iou": 0.07389502072616491,
+      "validation_labelled_pixel_fraction": 0.013419171879109444,
+      "test_labelled_pixel_fraction": 0.017101027710007703
+    },
+    {
+      "name": "laptop",
+      "zh": "筆電",
+      "validation_teacher_iou": 0.1874336996647855,
+      "test_teacher_iou": 0.05439485721349981,
+      "validation_labelled_pixel_fraction": 0.005526111765445793,
+      "test_labelled_pixel_fraction": 0.003667260783302927
+    },
+    {
+      "name": "phone",
+      "zh": "手機",
+      "validation_teacher_iou": 0.0,
+      "test_teacher_iou": 0.0,
+      "validation_labelled_pixel_fraction": 0.0007123532035082504,
+      "test_labelled_pixel_fraction": 0.0007975189826836557
+    },
+    {
+      "name": "tablet",
+      "zh": "平板",
+      "validation_teacher_iou": 0.04284835645458894,
+      "test_teacher_iou": 0.0,
+      "validation_labelled_pixel_fraction": 0.0004981075116350871,
+      "test_labelled_pixel_fraction": 0.0008326476487929311
+    },
+    {
+      "name": "boxed_stock",
+      "zh": "盒裝物品",
+      "validation_teacher_iou": 0.27267027041297875,
+      "test_teacher_iou": 0.16968512919970338,
+      "validation_labelled_pixel_fraction": 0.007740105887868635,
+      "test_labelled_pixel_fraction": 0.0032767921484729043
+    },
+    {
+      "name": "cardboard_box",
+      "zh": "紙箱",
+      "validation_teacher_iou": 0.08112874779541446,
+      "test_teacher_iou": 0.0,
+      "validation_labelled_pixel_fraction": 0.0007901110336073915,
+      "test_labelled_pixel_fraction": 0.0017502919302698435
+    },
+    {
+      "name": "speaker",
+      "zh": "喇叭",
+      "validation_teacher_iou": 0.058288063426809575,
+      "test_teacher_iou": 0.02400853636848657,
+      "validation_labelled_pixel_fraction": 0.0006000160089650204,
+      "test_labelled_pixel_fraction": 0.001066756871185515
+    },
+    {
+      "name": "poster",
+      "zh": "海報",
+      "validation_teacher_iou": 0.4470754716981132,
+      "test_teacher_iou": 0.003220096414582706,
+      "validation_labelled_pixel_fraction": 0.003768510365804851,
+      "test_labelled_pixel_fraction": 0.005691949357237531
+    },
+    {
+      "name": "fire_equipment",
+      "zh": "消防設備",
+      "validation_teacher_iou": 0.0,
+      "test_teacher_iou": 0.0,
+      "validation_labelled_pixel_fraction": 0.00019027798424260442,
+      "test_labelled_pixel_fraction": 0.0
+    },
+    {
+      "name": "chair",
+      "zh": "椅子",
+      "validation_teacher_iou": 0.07902647780826233,
+      "test_teacher_iou": 0.0,
+      "validation_labelled_pixel_fraction": 0.005899440829721787,
+      "test_labelled_pixel_fraction": 0.004215439933113054
+    },
+    {
+      "name": "person",
+      "zh": "人物",
+      "validation_teacher_iou": 0.6923683762696927,
+      "test_teacher_iou": 0.6244837138064132,
+      "validation_labelled_pixel_fraction": 0.06180036820619547,
+      "test_labelled_pixel_fraction": 0.06099908628619865
+    }
+  ],
+  "preview_frame_ids": [
+    "0038-Tao-Hsin-cam01",
+    "0039-Tao-Hsin-cam01"
+  ],
+  "source_manifest_sha256": "3721c824a93b8dc8aa7444ec410ae0fef09675a95f10fb5e2c5c0ad9b5442876",
+  "job_sha256": "c6c71a9a6cbf1081814245dd500461d296c3aa0424d4186103ac98dc561b6c2c",
+  "config": {
+    "input_size": [
+      512,
+      896
+    ],
+    "train": {
+      "epochs": 40,
+      "batch_size": 4,
+      "optimizer": "adamw",
+      "lr": 0.0002,
+      "backbone_lr_mult": 0.1,
+      "weight_decay": 0.05,
+      "warmup_iters": 22,
+      "scheduler": "cosine",
+      "amp": true,
+      "amp_dtype": "bfloat16",
+      "grad_clip": 10.0,
+      "ema": false,
+      "ema_decay": 0.9998,
+      "log_interval": 5,
+      "val_interval": 1,
+      "primary_metric": "scene_mIoU",
+      "early_stop_patience": 10,
+      "compile": false
+    },
+    "model": {
+      "backbone": {
+        "name": "resnet18",
+        "pretrained": true,
+        "frozen_stages": 1
+      },
+      "neck": {
+        "name": "fpn",
+        "out_channels": 64,
+        "num_levels": 5
+      },
+      "heads": {
+        "scene": {
+          "type": "semantic_fpn",
+          "num_classes": 19,
+          "channels": 64,
+          "dropout": 0.1,
+          "loss": {
+            "ce_weight": 1.0,
+            "dice_weight": 0.5,
+            "ignore_index": 255,
+            "class_weights": [
+              0.25,
+              0.25,
+              2.362287452883381,
+              0.5359622198817471,
+              1.0,
+              0.5411966337856632,
+              0.25,
+              0.25,
+              0.5412974306949581,
+              2.1093984805726533,
+              3.272720868255068,
+              1.9520726440856035,
+              0.5563118700823413,
+              2.328225788467917,
+              3.501054796796511,
+              1.9950378101093564,
+              1.9923110404062343,
+              2.114695364997108,
+              0.32461138135303674
+            ]
+          }
+        }
+      },
+      "loss_balancing": "fixed",
+      "fixed_weights": {
+        "scene": 1.0
+      }
+    }
+  },
+  "verification": {
+    "frozen_input_files_checked": 570,
+    "output_hashes_checked": 6,
+    "checkpoints_have_correct_job_hash_epoch_and_finite_model_tensors": true,
+    "epochs_contiguous": true,
+    "related_tests_before_palette_fix": 216,
+    "palette_and_dataset_tests_after_fix": 26
+  },
+  "limitations": [
+    "AI labels only; no independent accuracy",
+    "19 output classes do not mean all classes learned",
+    "test fire_equipment has no positive support; IoU zero includes false-positive predictions",
+    "many small classes have less than 1% labelled-pixel support",
+    "camera/content isolation does not make previously inspected scenes blind",
+    "partial instance detection, metric 3D and customer attributes/behaviour are not implemented by this pilot",
+    "workspace was dirty only due to docs and unrelated :memory:.ses; training code, inputs and config were frozen and verified",
+    "shared Python environment is recorded but not container-frozen"
+  ],
+  "failed_attempt": {
+    "run": "runs/studioa_scene_pilot_20260916_v1",
+    "cause": "19-class visualization palette missing during epoch-1 validation logging; no checkpoint or test evaluation",
+    "correction_commit": "68376601aa5a998972c038096ce919a38ed358c7",
+    "status_sha256": "f17ca2ba04c3e990ac83e728e52c8e3ebef9d9d83f430dd2ac43b57ec98abd3e"
+  },
+  "artifacts": {
+    "report.json": "7713b0a11726d72e41ecf692d7c0b9e6823e2d29106b9bd36d47d283e777f684",
+    "job.json": "c6c71a9a6cbf1081814245dd500461d296c3aa0424d4186103ac98dc561b6c2c",
+    "config.json": "52a3cc5b37b6d6b83ccc05d8983bd354d3f57993b738566429d0294cf116c793",
+    "status.json": "32106bd5b0238ff02569316f6b792375dd58690bfc14f18b8eeb0535b9bebbc3",
+    "baseline_val.json": "a844515da0f86c27a023cd2ffda755c9ea68a4a62bc2e758c6ef102228cbbfc7",
+    "test.json": "607e57e4ff4cb1e956ce306720e78a69223656dceeb3e30a380e15601c0b3b39",
+    "model/meta.json": "4253a76876a56facc9e52841680cac36aec97172a7c3a6d45da451c1cb7536a4",
+    "model/best.pt": "e0775eee8de02e51f975ce4e25a5f17f92be406bdef32adf954d4affd6aa579d",
+    "model/last.pt": "cb4252b896aa8a4fa5eb1ba7f1033a7210860d3a4021bcf012e4861d44b7f7ef",
+    "model/metrics.jsonl": "5ede6cef0a48663d23acf448ee5812ccecadc87cb21ce8529d47f5a4de8c5887",
+    "test_scene_preview.jpg": "396139e8b29b881bf3b7d7e6e2aa69da70e5cc1caec76885d56dc5c71689b256",
+    "learning_review.png": "79e9f74f9bf28355e9562f2af30a7a63427535abf8b8ba153ec864bd2ddad079",
+    "index.html": "5e0beae3dcfb7cf7ac64646e6decb1007d5356083b3dfbfb78bf6a16f21cc938"
+  }
+}
