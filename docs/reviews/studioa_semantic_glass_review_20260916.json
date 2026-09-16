@@ -1,0 +1,404 @@
+{
+  "schema": "studioa.semantic-review.v1",
+  "reviewer_kind": "ai",
+  "held_out": "Tao-Hsin",
+  "source_manifest_sha256": "0139eaccc00c6cf2fd841c7cfbd3a231c9b744a624b9c8ec95f82bc6e7a7b1ee",
+  "source": "runs/studioa_gcs_training_extension_20260916_v1/semantic",
+  "review_basis": "AI visual inspection of all 20 train frames with accepted glass positives and fixed-pane polygon overlays for all four cam03 frames, before any new training or inference.",
+  "limitations": [
+    "Partial semantic interiors, not full object masks or 3D planes.",
+    "No independent label accuracy claim.",
+    "Only one confirmed fixed-glass training camera after correction.",
+    "Source validation labels remain unchanged and require a separate taxonomy audit."
+  ],
+  "frames": [
+    {
+      "frame_id": "0020-Taichung-cam03",
+      "image_sha256": "dd930dcd190dad74a8752dff87b8c5ef087ac2f1be978cfc0e5024936a28741a",
+      "mask_sha256": "07e5382689af4d9626464f5d120c95d7d49cbe312d59bb0fbbcf3c7a4ffe10a5",
+      "reason": "Accepted glass masks cover frame edges and sign-stand fragments rather than a clean fixed pane. Quarantine the old label; add only visually reviewed interiors of the fixed storefront window left of the central wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              100,
+              150
+            ],
+            [
+              270,
+              115
+            ],
+            [
+              312,
+              415
+            ],
+            [
+              150,
+              440
+            ]
+          ],
+          "reason": "AI visually inspected this frame: interior of the fixed left storefront pane; avoids seam, frames, foreground objects and right entrance doors. Outdoor objects are viewed through glazing."
+        },
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              360,
+              90
+            ],
+            [
+              620,
+              45
+            ],
+            [
+              664,
+              440
+            ],
+            [
+              390,
+              454
+            ]
+          ],
+          "reason": "AI visually inspected this frame: interior of the fixed left storefront pane; avoids seam, frames, foreground objects and right entrance doors. Outdoor objects are viewed through glazing."
+        }
+      ]
+    },
+    {
+      "frame_id": "0021-Taichung-cam03",
+      "image_sha256": "925ee9ddbb923c69bdbb4a33709990e21e433cdf6a22f67e2de7a1a8950dbbf7",
+      "mask_sha256": "5be3c8f7a967c0ae81f450c78084fca4d2eb5a7a9e8493c88ee422738eb91f7f",
+      "reason": "Accepted glass masks cover frame edges and sign-stand fragments rather than a clean fixed pane. Quarantine the old label; add only visually reviewed interiors of the fixed storefront window left of the central wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              100,
+              150
+            ],
+            [
+              270,
+              115
+            ],
+            [
+              312,
+              415
+            ],
+            [
+              150,
+              440
+            ]
+          ],
+          "reason": "AI visually inspected this frame: interior of the fixed left storefront pane; avoids seam, frames, foreground objects and right entrance doors. Outdoor objects are viewed through glazing."
+        },
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              360,
+              90
+            ],
+            [
+              620,
+              45
+            ],
+            [
+              664,
+              440
+            ],
+            [
+              390,
+              454
+            ]
+          ],
+          "reason": "AI visually inspected this frame: interior of the fixed left storefront pane; avoids seam, frames, foreground objects and right entrance doors. Outdoor objects are viewed through glazing."
+        }
+      ]
+    },
+    {
+      "frame_id": "0022-Taichung-cam04",
+      "image_sha256": "ad8f01fb6860896c9bbd1e3ff9bf86c10515013c23f4e8c2de87802fcea2d07b",
+      "mask_sha256": "7ea48e4367c8c0468b831b8a31d21fe6558089fd90e813197d7fd8ed4da74433",
+      "reason": "Large glass mask is a solid white access panel; tiny additional fragments are not confirmed glazing. Quarantine, without guessing whether the opaque panel is a door or wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": []
+    },
+    {
+      "frame_id": "0023-Taichung-cam04",
+      "image_sha256": "6f57491428dd6262480a26e72d8636659b62444b4b282ab1e442396d36b226b4",
+      "mask_sha256": "c215ccb95185d458d9d8f5adbdc36338af34777b16a3feee6464abb49d8ff771",
+      "reason": "Large glass mask is a solid white access panel; tiny additional fragments are not confirmed glazing. Quarantine, without guessing whether the opaque panel is a door or wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": []
+    },
+    {
+      "frame_id": "0032-Taichung-cam09",
+      "image_sha256": "004ea89d05db559376d665d483de2c5de540a1caba6a6bb261befd55e7a7f5e5",
+      "mask_sha256": "a9ba525462df487fefb30d6ed14412a0a186519838056f14e8778a8abf69d07d",
+      "reason": "Broad glass mask mixes entrance door leaves with visible long handles, fixed side glazing and frame fragments. Fixed-glass taxonomy is unsupported for this mixed mask; do not relabel the whole mask as door.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": []
+    },
+    {
+      "frame_id": "0033-Taichung-cam09",
+      "image_sha256": "c5b1f42f5025b4479295913c3c41c9cfa324fbc5b4200bc6a2994efa52220b3d",
+      "mask_sha256": "8006e21dd294cf224016b85712f916c8b49bf7897b57880d8d049e998137d695",
+      "reason": "Broad glass mask mixes entrance door leaves with visible long handles, fixed side glazing and frame fragments. Fixed-glass taxonomy is unsupported for this mixed mask; do not relabel the whole mask as door.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": []
+    },
+    {
+      "frame_id": "0051-Kaohsiung-cam04",
+      "image_sha256": "ed21956c0073550452669f186b8ef00060650b49bc97eb1165f0ee13e6a97709",
+      "mask_sha256": "12c210349abf18158e9cb837195408a6809d20e62e63d3da7edaacf541058e3d",
+      "reason": "Tiny accepted fragments around people/display objects have no reliable fixed-pane boundary. Quarantine uncertain glass positives.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": []
+    },
+    {
+      "frame_id": "0056-Kaohsiung-cam07",
+      "image_sha256": "90365c01875a2581922ff382cb99a2c810b4ab9652089cc92658e0c0cdf85aba",
+      "mask_sha256": "2c51f8585adc5d93a80c45cbb2b8728dbd9d3c7ff5a7ce262e6d8baa6823ba9b",
+      "reason": "Lower-left floor/wall-edge sliver lacks visible fixed-glass evidence. Quarantine uncertain positive.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": []
+    },
+    {
+      "frame_id": "0068-Taichung-cam03",
+      "image_sha256": "ae2a348ba8b41c9632e0cfb270aad69c81dd660ddddab12b4004c085d6a1b029",
+      "mask_sha256": "7528bf95d1a593f005bbdffee92ec3f9db3333679c2014276df4ea776d7fbf1e",
+      "reason": "Accepted glass masks cover frame edges and sign-stand fragments rather than a clean fixed pane. Quarantine the old label; add only visually reviewed interiors of the fixed storefront window left of the central wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              100,
+              150
+            ],
+            [
+              270,
+              115
+            ],
+            [
+              312,
+              415
+            ],
+            [
+              150,
+              440
+            ]
+          ],
+          "reason": "AI visually inspected this frame: interior of the fixed left storefront pane; avoids seam, frames, foreground objects and right entrance doors. Outdoor objects are viewed through glazing."
+        },
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              360,
+              90
+            ],
+            [
+              620,
+              45
+            ],
+            [
+              664,
+              440
+            ],
+            [
+              390,
+              454
+            ]
+          ],
+          "reason": "AI visually inspected this frame: interior of the fixed left storefront pane; avoids seam, frames, foreground objects and right entrance doors. Outdoor objects are viewed through glazing."
+        }
+      ]
+    },
+    {
+      "frame_id": "0069-Taichung-cam03",
+      "image_sha256": "de58b4cd8c7dda92c9238a91a15e0c93bc1a25204a155b9781a60289bb699c81",
+      "mask_sha256": "a14fcdda8e6e476edd48355c840c59d02dbb0fd81553451529cb070e421a57dd",
+      "reason": "Accepted glass masks cover frame edges and sign-stand fragments rather than a clean fixed pane. Quarantine the old label; add only visually reviewed interiors of the fixed storefront window left of the central wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": [
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              100,
+              150
+            ],
+            [
+              270,
+              115
+            ],
+            [
+              312,
+              415
+            ],
+            [
+              150,
+              440
+            ]
+          ],
+          "reason": "AI visually inspected this frame: interior of the fixed left storefront pane; avoids seam, frames, foreground objects and right entrance doors. Outdoor objects are viewed through glazing."
+        },
+        {
+          "entity": "glass_panel",
+          "scope": "semantic_interior",
+          "polygon_xy": [
+            [
+              360,
+              90
+            ],
+            [
+              620,
+              45
+            ],
+            [
+              664,
+              440
+            ],
+            [
+              390,
+              454
+            ]
+          ],
+          "reason": "AI visually inspected this frame: interior of the fixed left storefront pane; avoids seam, frames, foreground objects and right entrance doors. Outdoor objects are viewed through glazing."
+        }
+      ]
+    },
+    {
+      "frame_id": "0070-Taichung-cam04",
+      "image_sha256": "978dbb7a4383407b2ca1173b29a9526e7451b2dd628eae91dc901f59c647a7ad",
+      "mask_sha256": "f6753b852314657d487ac9393c195a8caf8de8299b884c5a03dbfbb1f2d90e08",
+      "reason": "Large glass mask is a solid white access panel; tiny additional fragments are not confirmed glazing. Quarantine, without guessing whether the opaque panel is a door or wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": []
+    },
+    {
+      "frame_id": "0071-Taichung-cam04",
+      "image_sha256": "ce219dc81ed111591682f3860cf677a5127fc0e2e682a48528c761b0da7a7347",
+      "mask_sha256": "dabbca74d7a5f6342da59ca659883893e947091de0fdead1f726ba2dabe4db73",
+      "reason": "Large glass mask is a solid white access panel; tiny additional fragments are not confirmed glazing. Quarantine, without guessing whether the opaque panel is a door or wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": []
+    },
+    {
+      "frame_id": "0072-Taichung-cam05",
+      "image_sha256": "a8aad01c1ab1801c2c46c45f422ea6d9ce5ad822478e04474a2ba762c17976ac",
+      "mask_sha256": "e0eb1c9d3e5158dba108bd2a092cad96194c9ee9e381b848dc33dc9b085bb719",
+      "reason": "Tiny isolated accepted fragments lack a visible fixed-glass surface. Quarantine uncertain positive.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": []
+    },
+    {
+      "frame_id": "0078-Taichung-cam09",
+      "image_sha256": "30918a1a840d0e54a4d88dd8c34bb2907a0b7931f25ce60f7f4e878b5528f6b2",
+      "mask_sha256": "86e161a04205cf3cfea4f24382feea8539a9af929e5527acb8a5027072fb975c",
+      "reason": "Broad glass mask mixes entrance door leaves with visible long handles, fixed side glazing and frame fragments. Fixed-glass taxonomy is unsupported for this mixed mask; do not relabel the whole mask as door.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": []
+    },
+    {
+      "frame_id": "0079-Taichung-cam09",
+      "image_sha256": "b21592a2dec8b55865d9b0097f1e705791ec3f223c668fc2398f16ff1187aebc",
+      "mask_sha256": "e3d6ccdec94428b52e37a663f3e5770f46675dc6f23aa1fb1639e115eda5c612",
+      "reason": "Broad glass mask mixes entrance door leaves with visible long handles, fixed side glazing and frame fragments. Fixed-glass taxonomy is unsupported for this mixed mask; do not relabel the whole mask as door.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": []
+    },
+    {
+      "frame_id": "0094-Kaohsiung-cam04",
+      "image_sha256": "1f1c06d47761fc7053a62f981631dd92681dd21c045b5c4f2406a1e52ee64ff8",
+      "mask_sha256": "82a8b57a7883d028cd7f5a105ab08b0997e150fc2461046248486681a5ae77e1",
+      "reason": "Tiny accepted fragments around people/display objects have no reliable fixed-pane boundary. Quarantine uncertain glass positives.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": []
+    },
+    {
+      "frame_id": "0100-Taichung-cam04",
+      "image_sha256": "c4d3a1a63200801e8d1e53ee521371328bda26c48b1787252f7e6e3e47ee9a8d",
+      "mask_sha256": "b6ea16d9caa8c0462dc5b4b2b15d9c038c9b9c5a25ec47797e1f219d04d5985a",
+      "reason": "Large glass mask is a solid white access panel; tiny additional fragments are not confirmed glazing. Quarantine, without guessing whether the opaque panel is a door or wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": []
+    },
+    {
+      "frame_id": "0101-Taichung-cam04",
+      "image_sha256": "ff5337bedecac9323493d848ca13470ceaed0ee92b9e1d51303ceffd6a0b6ed3",
+      "mask_sha256": "fe3b8813c66f8f19ff94f438f4d6b409f4b1808f500e3cedd6ac6fc60a6312b4",
+      "reason": "Large glass mask is a solid white access panel; tiny additional fragments are not confirmed glazing. Quarantine, without guessing whether the opaque panel is a door or wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": []
+    },
+    {
+      "frame_id": "0102-Taichung-cam04",
+      "image_sha256": "0b356757c1c1345d723a3de4ce96507e4bf83d4002b5074b0a88310dbd0f7b0a",
+      "mask_sha256": "6ef6d2810a2b63b29623aac97af4efc4cbf43c0c631312fd5b5d0d6a0800f368",
+      "reason": "Large glass mask is a solid white access panel; tiny additional fragments are not confirmed glazing. Quarantine, without guessing whether the opaque panel is a door or wall.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": []
+    },
+    {
+      "frame_id": "0104-Taichung-cam05",
+      "image_sha256": "69b8be91ba8758ea69b398e3cc90d9a884b0cc82c68abaca707a32fcad9f3e42",
+      "mask_sha256": "fef52934824a3a0d8c2c103f809e5599ae2aa881711e55c4a5c0d85c79826b2a",
+      "reason": "Tiny isolated accepted fragments lack a visible fixed-glass surface. Quarantine uncertain positive.",
+      "quarantine_classes": [
+        "glass_panel"
+      ],
+      "positive_interiors": []
+    }
+  ]
+}

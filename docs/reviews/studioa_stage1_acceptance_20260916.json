@@ -320,5 +320,11 @@
     "runs/studioa_detector_regression_20260916_object/instances/manifest.json": "eba13055187110a16c211fd2e76b7cd93fc437e76f711266a1f6c8b022b96428",
     "runs/studioa_scene_pilot_20260916_v2/report.json": "7713b0a11726d72e41ecf692d7c0b9e6823e2d29106b9bd36d47d283e777f684",
     "docs/STUDIOA_TRAINING_DATA.md": "6ca08b2628e3e0daa22d0d231d35339cb5921748be567ff3bbfec96691939f33"
+  },
+  "subsequent_label_audit": {
+    "report": "docs/reviews/studioa_semantic_glass_results_20260916.json",
+    "historical_metrics_unchanged": true,
+    "glass_validation_label_quality": "mixed fixed glass/door and unconfirmed fragments; not reliable class-specific acceptance",
+    "new_training_started": false
   }
 }

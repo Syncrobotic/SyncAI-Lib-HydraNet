@@ -1,0 +1,254 @@
+{
+  "status": "completed_train_correction; evaluation_taxonomy_review_required",
+  "annotation_kind": "ai_visual_review",
+  "independent_accuracy": false,
+  "source": "runs/studioa_gcs_training_extension_20260916_v1/semantic",
+  "source_manifest_sha256": "0139eaccc00c6cf2fd841c7cfbd3a231c9b744a624b9c8ec95f82bc6e7a7b1ee",
+  "derivative": "runs/studioa_semantic_glass_review_20260916_v1",
+  "derivative_manifest_sha256": "f97171f4d7f08b76906fa23c4cccc46611105d8adef7f1037ba9998647d7e7e4",
+  "derivative_report_sha256": "ac9e2306c418c31b725f8a43291f62f50e2738f1334f915f0d70471ddb062574",
+  "review": "docs/reviews/studioa_semantic_glass_review_20260916.json",
+  "review_sha256": "82115b5df0fcd3b145080cba5f10289e263d3efb70d361a13cda9fff1a0a26a2",
+  "held_out": "Tao-Hsin",
+  "frames": 137,
+  "fold_counts": {
+    "train": 62,
+    "val": 33,
+    "test": 26
+  },
+  "integrity": {
+    "all_images_and_companions_unchanged": true,
+    "all_frame_pixel_histograms_verified": true,
+    "all_corrections_replayed": true,
+    "train_masks_unchanged": 42,
+    "val_masks_unchanged": 33,
+    "train_masks_changed": 20,
+    "test_masks_unchanged": 26,
+    "excluded_masks_unchanged": 16
+  },
+  "pixel_changes": {
+    "quarantined_pixels": 1463510,
+    "added_positive_pixels": 614000,
+    "changed_pixels": 2076652,
+    "preserved_other_positive_pixels": 0
+  },
+  "glass_train_before": 1463510,
+  "glass_train_after": 614000,
+  "missing_train_classes": [],
+  "corrected_frames": [
+    "0020-Taichung-cam03",
+    "0021-Taichung-cam03",
+    "0022-Taichung-cam04",
+    "0023-Taichung-cam04",
+    "0032-Taichung-cam09",
+    "0033-Taichung-cam09",
+    "0051-Kaohsiung-cam04",
+    "0056-Kaohsiung-cam07",
+    "0068-Taichung-cam03",
+    "0069-Taichung-cam03",
+    "0070-Taichung-cam04",
+    "0071-Taichung-cam04",
+    "0072-Taichung-cam05",
+    "0078-Taichung-cam09",
+    "0079-Taichung-cam09",
+    "0094-Kaohsiung-cam04",
+    "0100-Taichung-cam04",
+    "0101-Taichung-cam04",
+    "0102-Taichung-cam04",
+    "0104-Taichung-cam05"
+  ],
+  "fixed_glass_positive_train_cameras": [
+    "Taichung-cam03"
+  ],
+  "validation_glass_visual_audit": [
+    {
+      "frame_id": "0004-Kaohsiung-cam05",
+      "image_sha256": "ff5cc5e03988f11b8709d95f7bb8e7fdc9dc70a9e6f9a3b438b33ea7ba842e73",
+      "mask_sha256": "db7ac997d9fee3ef003420e723dc5ae6bd8bcb3033e6902cddb602e903264f53",
+      "glass_pixels": 44114,
+      "decision": "taxonomy_review_required",
+      "reason": "Entrance glazing with visible handles; mask includes door leaves and possible fixed side panes. Mixed fixed-glass/door label requires separation."
+    },
+    {
+      "frame_id": "0005-Kaohsiung-cam05",
+      "image_sha256": "4f050a6ba2b192ebe6294d7253c27143487c4cf43ffb5f6e07192a7ad47b91d1",
+      "mask_sha256": "79a413aa230bb43a2533748e3a9b37edeb9998d81f2e19d73cf1471025378452",
+      "glass_pixels": 39332,
+      "decision": "taxonomy_review_required",
+      "reason": "Entrance glazing with visible handles; mask includes door leaves and possible fixed side panes. Mixed fixed-glass/door label requires separation."
+    },
+    {
+      "frame_id": "0012-Kaohsiung-cam11",
+      "image_sha256": "278c4870a4ed52622e6383af74d391b503710375d7058689bffce85980e79cf5",
+      "mask_sha256": "121eff4e34cb73effc9ce5ec9cdbad7f478d76d2e0b8a83ed9834b8cecb384ca",
+      "glass_pixels": 50675,
+      "decision": "plausible_fixed_glass_boundary_review_required",
+      "reason": "Left storefront window is plausible fixed glass. Edge and wall/poster overlap still need pixel-level review; not an independent ground truth."
+    },
+    {
+      "frame_id": "0013-Kaohsiung-cam11",
+      "image_sha256": "4c19e17cad632f5551e2280b514e76884e74658d62841354e3ddfcc1c73a6f19",
+      "mask_sha256": "e3c2ded1d96375eadead14626cb178fd79cc37bbad1e6ae5f2f77d3ce45796e5",
+      "glass_pixels": 55340,
+      "decision": "plausible_fixed_glass_boundary_review_required",
+      "reason": "Left storefront window is plausible fixed glass. Edge and wall/poster overlap still need pixel-level review; not an independent ground truth."
+    },
+    {
+      "frame_id": "0016-Taichung-cam01",
+      "image_sha256": "fb3086c1ff8ed11a485226d69bacacb33ea4d534d0708096c80526f348230784",
+      "mask_sha256": "ffdc779b0d6bacda591630a4e44ad1a475b72e0548b12a282872e372a8467ac1",
+      "glass_pixels": 51,
+      "decision": "unconfirmed_fragments",
+      "reason": "Tiny sparse positives lack reliable fixed-glass evidence in overview; quarantine/review in a separately versioned evaluation package."
+    },
+    {
+      "frame_id": "0017-Taichung-cam01",
+      "image_sha256": "2a419c0027d3917e3298ac8a13bc886341dfb50e3ab822edfd570c23bf60086a",
+      "mask_sha256": "68f1f2037f5ce2a5ac19caace3c1d02c530ff1aca933dffa01d2e1ee12da0c85",
+      "glass_pixels": 332,
+      "decision": "unconfirmed_fragments",
+      "reason": "Tiny sparse positives lack reliable fixed-glass evidence in overview; quarantine/review in a separately versioned evaluation package."
+    },
+    {
+      "frame_id": "0034-Taichung-cam10",
+      "image_sha256": "28c5c9e5a09f55a473bda61d0d84de4a8f679ebc3db43f892358a6a56d0c57fd",
+      "mask_sha256": "43da1aaccaddbbdef5868b76b0eb48a04de6bc2b826d316c7cf3339a094850f0",
+      "glass_pixels": 122,
+      "decision": "unconfirmed_or_opaque_panel",
+      "reason": "Mostly tiny fragments; 0035 includes an opaque-looking wall/access panel at left. Requires explicit relabel review, not a reliable fixed-glass benchmark."
+    },
+    {
+      "frame_id": "0035-Taichung-cam10",
+      "image_sha256": "7a7436cb151e39c41d778a239c44e0f625a91153ccdf1afe745c5906e72facea",
+      "mask_sha256": "4b0bae501ac1c56a42809e0dce0fc02272f8c911ed7b883da791c528a57e8d4b",
+      "glass_pixels": 10065,
+      "decision": "unconfirmed_or_opaque_panel",
+      "reason": "Mostly tiny fragments; 0035 includes an opaque-looking wall/access panel at left. Requires explicit relabel review, not a reliable fixed-glass benchmark."
+    },
+    {
+      "frame_id": "0052-Kaohsiung-cam05",
+      "image_sha256": "bd6a4009be23df524f1d96f38dadf5d0f19fbe828426dc1e1831619b46e9aec2",
+      "mask_sha256": "85a3eca4060a8707a010c1ff1fb112dd0510a0f2076cd74f7eedf1af8d4b3090",
+      "glass_pixels": 51912,
+      "decision": "taxonomy_review_required",
+      "reason": "Entrance glazing with visible handles; mask includes door leaves and possible fixed side panes. Mixed fixed-glass/door label requires separation."
+    },
+    {
+      "frame_id": "0053-Kaohsiung-cam05",
+      "image_sha256": "68440d495ad4d190d7b68b046d64707339105fa7c5290b36b2c46abd3a1f4e8a",
+      "mask_sha256": "d6f380b24867e81a53b10b29356cccd5c2749805dff7df847368d3dea3469673",
+      "glass_pixels": 35538,
+      "decision": "taxonomy_review_required",
+      "reason": "Entrance glazing with visible handles; mask includes door leaves and possible fixed side panes. Mixed fixed-glass/door label requires separation."
+    },
+    {
+      "frame_id": "0060-Kaohsiung-cam11",
+      "image_sha256": "70f09751ff1d18d59f0db0a9017a8266b8a611d7895b00d3c7e6e41885cf93b8",
+      "mask_sha256": "a29ff5bff025addb4ed8b9cbb19b335979213117d92c424ba541b4ad6ce1ff58",
+      "glass_pixels": 50967,
+      "decision": "plausible_fixed_glass_boundary_review_required",
+      "reason": "Left storefront window is plausible fixed glass. Edge and wall/poster overlap still need pixel-level review; not an independent ground truth."
+    },
+    {
+      "frame_id": "0061-Kaohsiung-cam11",
+      "image_sha256": "8ec9e3058f3bc3e749e5abb996c31407bdc985e9da9e756cb587eebcdd5a0c75",
+      "mask_sha256": "8f427045fa9dd99048186bf0006c80b221fed0adfbfce73a23695e48035a3930",
+      "glass_pixels": 50863,
+      "decision": "plausible_fixed_glass_boundary_review_required",
+      "reason": "Left storefront window is plausible fixed glass. Edge and wall/poster overlap still need pixel-level review; not an independent ground truth."
+    },
+    {
+      "frame_id": "0064-Taichung-cam01",
+      "image_sha256": "6f4ff377069b180efda817c7b2c76ffcdc04c8115ad519e96052690db6e15e8e",
+      "mask_sha256": "0a8bd73a033df9965daaa906d5f7341ae7bcfa49e2a628f25accff4589b1a010",
+      "glass_pixels": 131,
+      "decision": "unconfirmed_fragments",
+      "reason": "Tiny sparse positives lack reliable fixed-glass evidence in overview; quarantine/review in a separately versioned evaluation package."
+    },
+    {
+      "frame_id": "0080-Taichung-cam10",
+      "image_sha256": "0fc1ab9b651bf72617250ce0f88c9cfae79c0ad4837ffce572a53774b1d41a6c",
+      "mask_sha256": "b1da01a27c4abe565d967961a4e5ebf3b990f2a68556f1eb98621fe5b755f1c1",
+      "glass_pixels": 149,
+      "decision": "unconfirmed_or_opaque_panel",
+      "reason": "Mostly tiny fragments; 0035 includes an opaque-looking wall/access panel at left. Requires explicit relabel review, not a reliable fixed-glass benchmark."
+    },
+    {
+      "frame_id": "0097-Taichung-cam01",
+      "image_sha256": "2b5b74bd6caf91eea724aeed779eff630e4219a82562ed536e705e4ae0ff1c73",
+      "mask_sha256": "e312873e40198c476adbbbaf41e4eae0d8759ee2bbc5285425b24d315aa12214",
+      "glass_pixels": 266,
+      "decision": "unconfirmed_fragments",
+      "reason": "Tiny sparse positives lack reliable fixed-glass evidence in overview; quarantine/review in a separately versioned evaluation package."
+    },
+    {
+      "frame_id": "0099-Taichung-cam01",
+      "image_sha256": "252454473310dc9092840f00898d623e294aee83bfc6b6af86c05d450f51c8bf",
+      "mask_sha256": "4ca46383c508bae6671d108f4aca3b4e41b1dba9e8d321c7fc62a6780d17e4bc",
+      "glass_pixels": 146,
+      "decision": "unconfirmed_fragments",
+      "reason": "Tiny sparse positives lack reliable fixed-glass evidence in overview; quarantine/review in a separately versioned evaluation package."
+    },
+    {
+      "frame_id": "0109-Taichung-cam10",
+      "image_sha256": "17216a2bdd5ab2eb19c76248b20568be36724792296f0792e66d18bb0e3ce95e",
+      "mask_sha256": "8473bd57c9c617d2ae0df987a03467fd3f6fbb5425b84f783573eb9099ee7ef5",
+      "glass_pixels": 562,
+      "decision": "unconfirmed_or_opaque_panel",
+      "reason": "Mostly tiny fragments; 0035 includes an opaque-looking wall/access panel at left. Requires explicit relabel review, not a reliable fixed-glass benchmark."
+    },
+    {
+      "frame_id": "0110-Taichung-cam10",
+      "image_sha256": "09334d25192eaa6a22a95116ff45be30904297544eac4f0c8255d1d6482e3f06",
+      "mask_sha256": "a4461b55979027dac3af03b65107774e9ce733acbc0b5c0bee99f71de4ae0b1f",
+      "glass_pixels": 288,
+      "decision": "unconfirmed_or_opaque_panel",
+      "reason": "Mostly tiny fragments; 0035 includes an opaque-looking wall/access panel at left. Requires explicit relabel review, not a reliable fixed-glass benchmark."
+    },
+    {
+      "frame_id": "0111-Taichung-cam10",
+      "image_sha256": "a86d13188331aeac2bbfdda30c6e4c1805a7f4b438d25fba42b26c8c32db6cb8",
+      "mask_sha256": "ce3b7d85e38591a0739755f1c8b7ef66ec1aaa0fe8649e98aec03f41cbcf3196",
+      "glass_pixels": 419,
+      "decision": "unconfirmed_or_opaque_panel",
+      "reason": "Mostly tiny fragments; 0035 includes an opaque-looking wall/access panel at left. Requires explicit relabel review, not a reliable fixed-glass benchmark."
+    }
+  ],
+  "new_training_started": false,
+  "model_promoted": false,
+  "new_test_inference": false,
+  "decision": "Do not launch the previously discussed old46/new62 semantic comparison against known mixed glass/door evaluation labels. Version an AI-reviewed evaluation package before freezing the next training plan.",
+  "next": [
+    "AI re-annotate source-val fixed glass and door regions in a separate version, retaining the original benchmark.",
+    "Add source-val column positives from distinct appropriate cameras without moving train/test frames into val.",
+    "Freeze comparison data, shared training budgets and selection protocol; then run persistent training."
+  ],
+  "limitations": [
+    "Only partial semantic interiors added; no complete object/3D annotation.",
+    "All 19 classes positive in train does not establish sufficient diversity.",
+    "Validation glass overview audit covers 19 positive frames, not all classes or absent glass.",
+    "Existing historical test exposure remains; no claim of a new blind evaluation."
+  ],
+  "artifacts": {
+    "runs/studioa_scene_refresh_20260916_v1/glass_correction_before_after.jpg": "f304b1e652d13609fae52bea05e3f3613f9a243f889e935be72df32d5e09708a",
+    "runs/studioa_scene_refresh_20260916_v1/fixed_glass_proposal.jpg": "b0542558f0c853ba51032b07c95826fd8fc88f866ef85217db47a02f4c0a4496",
+    "runs/studioa_scene_refresh_20260916_v1/glass_train_0.jpg": "a872c092e1e9059e440d9196e679b6a43b07825f416003f6bf32baa659d21e7e",
+    "runs/studioa_scene_refresh_20260916_v1/glass_train_1.jpg": "85826f73fe68d3a11a8de90b387482153167d97f4cd620d31311200c1d6aa5f2",
+    "runs/studioa_scene_refresh_20260916_v1/glass_train_2.jpg": "57b1b807cfd4e0204b2d46ba1eb04786e3160e523ff6e349f5a831e8fdc376cc",
+    "runs/studioa_scene_refresh_20260916_v1/glass_train_3.jpg": "4ff40ae8b4ca9b6592ab08ca92a3a142b4e1b42f676b563f8d6126d78601e042",
+    "runs/studioa_scene_refresh_20260916_v1/glass_val_0.jpg": "403cf0cb71649c31ca3bc72443205f0dbd513e0c32b77b296449da33fb4fbd3f",
+    "runs/studioa_scene_refresh_20260916_v1/glass_val_1.jpg": "c92042017d36e6c855ec2bc65c64fc1f23c7d409300ae6393a795a0b534e1dfe",
+    "runs/studioa_scene_refresh_20260916_v1/glass_val_2.jpg": "2e12ee51d04b73c2cfd02ecc2ec130746fd6f56c846559fa5f8c1b69777fba28",
+    "runs/studioa_scene_refresh_20260916_v1/glass_val_3.jpg": "a4746674948b836272157452571bcd0ed1a3a321296e70df76b4bee18057280b"
+  },
+  "verification": {
+    "pytest": "51 passed in 6.81s",
+    "ruff": "passed",
+    "ty": "passed",
+    "visual_output_review": "before/after overlay inspected; erroneous positives removed and reviewed fixed-pane cores retained"
+  },
+  "code_commits": {
+    "semantic_comparison": "9d70da9",
+    "semantic_review": "ebab6a4"
+  }
+}
