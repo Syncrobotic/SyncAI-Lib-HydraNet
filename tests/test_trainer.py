@@ -96,6 +96,25 @@ def _cfg(out_dir, data_root, **train):
     )
 
 
+def test_validation_only_dataset_never_opens_train_and_is_recorded(tmp_path, data_root):
+    cfg = _cfg(tmp_path / "validation_only_run", data_root)
+    validation = dict(cfg["data"]["datasets"][0])
+    validation.update(name="scene_guard", validation_only=True, split_train="must_not_open")
+    cfg["data"]["datasets"].insert(0, validation)
+    trainer = Trainer(cfg)
+    try:
+        assert trainer.steps_per_epoch == 2
+        assert [name for name, _ in trainer.val_sets] == ["scene_guard", "tiny"]
+        meta = json.loads((trainer.out_dir / "meta.json").read_text())
+        assert meta["datasets"][0]["train_size"] == 0
+        assert meta["datasets"][0]["validation_only"]
+        assert meta["datasets"][0]["val_size"] == 2
+        assert meta["datasets"][1]["train_size"] == 4
+    finally:
+        if trainer.tb:
+            trainer.tb.close()
+
+
 @pytest.fixture(scope="module")
 def finished_run(tmp_path_factory, data_root):
     out = tmp_path_factory.mktemp("run") / "exp"

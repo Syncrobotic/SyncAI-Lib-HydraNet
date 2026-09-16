@@ -116,6 +116,23 @@ class HydraNet(nn.Module):
         else:
             self.balancer = FixedWeighting(mcfg.get("fixed_weights", {}))
 
+        self.detection_only_training = bool(mcfg.get("detection_only_training", False))
+        if self.detection_only_training:
+            if self.det_head is None:
+                raise ValueError("detection_only_training requires a detection head")
+            for name, parameter in self.named_parameters():
+                parameter.requires_grad_(name.startswith("det_head."))
+            self.train(self.training)
+
+    def train(self, mode: bool = True):
+        """A frozen scene also needs frozen normalization and disabled dropout."""
+        super().train(mode)
+        if self.detection_only_training:
+            for name, module in self.named_children():
+                if name != "det_head":
+                    module.eval()
+        return self
+
     def forward(self, images: torch.Tensor) -> dict:
         """Pure convolution graph. This is exactly what gets exported to ONNX."""
         feats = self.neck(self.backbone(images))

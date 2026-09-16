@@ -552,6 +552,8 @@ def split_leaks(datasets: list[dict]) -> list[tuple[str, str, str, list[str]]]:
     out: list[tuple[str, str, str, list[str]]] = []
     segs = [d for d in datasets if d.get("root")]
     for a in segs:
+        if a.get("validation_only", False):
+            continue
         trained = _configured_cameras(a, a.get("split_train", "train"))
         if not trained:
             continue

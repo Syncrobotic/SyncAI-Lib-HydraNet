@@ -182,3 +182,28 @@ normalization 漂移可能影響語意表現，但本輪尚未隔離因果，不
 型別 ratchet 與提交 hook 通過。645 個凍結輸入及 6 個輸出 hash 核對，checkpoint
 job 身分／有限 tensor／初始權重保留皆通過。另有低解析度 CPU 全流程檢查，
 只驗證程式連接，沒有把其分數當作模型效果。
+
+## 2026-09-16：固定場景的偵測頭暖身契約
+
+GCS 擴充後 instances v3 有 27 張 train／129 個物件觀測、6 張 val／31 個觀測。
+來源為 `studioa_gcs_training_extension_20260916_v1/semantic`；舊 val 與 test 分配
+不變。同一物品可能跨日期重複出現，129 不代表獨立物品數。
+
+`studioa_train.py prepare --detector-warmup --instances … --initial-checkpoint …`
+從 scene pilot v2 的 best 初始化，只讓 `det_head.*` 參數可訓練。所有其他模組
+固定 eval，包含 BatchNorm running statistics 與 dropout，並在每次儲存前驗證
+凍結 tensor 完全相同。模型 train/eval 切換及 checkpoint 重載均保留此契約。
+scene dataset 設為 `validation_only`，不建立它的 train loader；metadata 明記
+train_size=0。全部 33 張來源 val 的 float32 scene logits 在訓練前和選定模型
+載入後計算 SHA256，必須完全相同。續跑也重新對照原始 scene checkpoint。
+
+預先固定：60 epochs 上限、batch 2、lr 2e-4、26 steps warmup、20 輪無改善停止、
+bf16 training、deterministic、關閉 TF32／cuDNN benchmark、EMA 關閉。
+best 選擇最大 reviewed-positive recall（沿用 score >0.20／IoU ≥0.50），同分
+保留較早 epoch。第 0 輪仍參與選擇。完成後只有 recall 嚴格改善、覆核空白區
+誤報不增加且場景完全一致，才記為通過此次暖身；這不是部署驗收。
+未知區預測持續獨立報告，不視為正確或錯誤；本輪不讀取 test 進行推論。
+
+紙箱仍只有 3 個 train 觀測；負樣本仍僅已覆核空地板，尚無物品間類別混淆的
+負向監督。暖身結果只能回答「固定既有場景特徵，這批部分監督能否學出偵測」，
+不能回答真實整店精度、3D 尺寸或顧客行為是否正確。

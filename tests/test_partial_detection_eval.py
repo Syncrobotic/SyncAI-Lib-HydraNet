@@ -121,6 +121,10 @@ def test_joint_config_never_declares_test_and_warm_start_checks_taxonomy(tmp_pat
 
     cfg = worker.joint_config(copy.deepcopy(original), tmp_path, "Tao-Hsin")
     assert all("split_test" not in ds for ds in cfg["data"]["datasets"])
+    warmup = worker.detector_warmup_config(copy.deepcopy(cfg))
+    assert warmup["model"]["detection_only_training"]
+    assert warmup["data"]["datasets"][0]["validation_only"]
+    assert warmup["train"]["primary_metric"] == worker.DET_METRIC
     model = HydraNet(cfg)
     worker.warm_start(model, {"cfg": original, "model": source.state_dict()}, cfg)
     torch.testing.assert_close(
