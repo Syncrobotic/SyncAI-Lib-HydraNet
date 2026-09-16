@@ -442,3 +442,30 @@ instances v5 訓練影像由 28 增至 35，正例觀測由 130 增至 162：手
 [候選逐圖對照](../runs/studioa_detector_positive_20260916_v1/review/selected_val_review.jpg) ·
 [手機漏檢診斷](../runs/studioa_detector_positive_20260916_v1/review/phone_candidate_probe.json) ·
 [完整資料、驗證與升級判定](reviews/studioa_positive_expansion_results_20260916.json)。
+
+## 2026-09-16：固定更新次數的局部裁切比較
+
+在 instances v5 保留全部資料，以 `data.datasets[].small_object_crop` 啟用僅供
+StudioA 部分偵測訓練的增強：有手機／平板正框的影像，以50%機率均勻選一框，
+使用原 letterbox 比例的2倍（乘原0.9–1.1縮放），限定裁切位置使選中框保持
+完整且離邊至少2px；放不下則回到原整圖增強。其他物件可能被裁掉或截斷。
+影像、所有正框、空白負區及逐類負區共用幾何；padding保持255、未知保持0。
+
+35張 train、每張10次固定種子的純幾何診斷：手機保留觀測321→263，但可分配
+FCOS點3595→4919；平板310→289、點8830→9942。這是放大物件與減少周邊觀測
+的取捨，不是準確率提升。手機仍有2次保留框無可指派點，平板為0。
+六張 val 的輸入影像及所有 target tensors，在開關設定下逐位元一致。
+
+兩組均重新從原scene checkpoint開始，seed42、positive_budget、25輪、
+每輪17次更新，共425次；關閉early stopping，25輪中按既定val指標選best，
+平手保留較早epoch，另保存last。除裁切開關外設定完全相同。原v5跑的是60輪
+排程加early stopping，不能作為這輪等預算對照。推論仍是512×896整图、
+score>0.20、IoU≥0.50、NMS0.6、max_det100，不用val搜尋縮放倍率或門檻。
+候選除原升級條件外，還須嚴格超過本輪對照組，才更新實驗基準。
+
+201項相關測試、lint及型別檢查通過。新增測試涵蓋四角與中央物件完整保留、
+裁切後框與遮罩對齊、負區幾何、padding為未知、無合適類別／過大物件的回退，
+以及拒絕把此設定套用到其他資料集。
+
+[執行前計畫](reviews/studioa_focused_crop_plan_20260916.json) ·
+[訓練裁切圖例](../runs/studioa_focused_crop_20260916_v1/training_views.jpg)。

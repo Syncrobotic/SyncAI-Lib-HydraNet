@@ -521,3 +521,10 @@ def test_the_lacking_side_is_trustworthy_even_when_the_producing_side_is_not():
     found = minority_sourced_terrain_classes(_two_source_cfg())
     _produces, lacks = found["product"]
     assert lacks == [("ade20k", 1.0, False)], "ADE20K genuinely emits no product id"
+
+
+def test_small_object_crop_cannot_silently_apply_to_unrelated_dataset():
+    cfg = _cfg()
+    cfg["data"]["datasets"][0]["small_object_crop"] = True
+    with pytest.raises(ConfigError, match="small_object_crop requires studioa_instances"):
+        check_config(cfg)

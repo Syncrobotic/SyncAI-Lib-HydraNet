@@ -401,6 +401,8 @@ def build_dataset(
     folder = resolve_split(dcfg, split)
     train = split == "train"
     sup = dcfg["supervises"]
+    if dcfg.get("small_object_crop") and dcfg["type"] != "studioa_instances":
+        raise ValueError("small_object_crop requires StudioA partial instances")
     if dcfg["type"] == "studioa_instances":
         if dcfg.get("classes") is not None or dcfg.get("det_vocab") is not None:
             raise ValueError("StudioA instance IDs cannot be remapped")
@@ -416,6 +418,7 @@ def build_dataset(
             train=train,
             augment=augment,
             partial_eval=dcfg.get("partial_eval"),
+            small_object_crop=train and dcfg.get("small_object_crop", False),
         )
     if dcfg["type"] == "studioa_partial":
         if folder != split or sup != ["scene"] or not letterbox or dcfg.get("label_map"):

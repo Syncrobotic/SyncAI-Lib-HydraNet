@@ -16,7 +16,7 @@ from .store_split import camera_store, fold_split
 from .studioa_autolabel import decode
 from .studioa_review import digest, write_json
 from .studioa_supervision import _relative, check_supervision
-from .transforms import Sample, build_transforms
+from .transforms import FocusedLetterboxScaleCrop, Sample, build_transforms
 
 SCHEMA = "studioa.partial-instances.v1"
 CLASSES = (
@@ -262,12 +262,14 @@ class StudioAInstanceDataset(Dataset):
         train=False,
         augment=None,
         partial_eval=None,
+        small_object_crop=False,
     ):
         m = check_instances(root)
         if (
             held_out != m["held_out"]
             or split not in ("train", "val")
             or (train and split != "train")
+            or (small_object_crop and not train)
         ):
             raise ValueError("invalid instance fold/split/augmentation")
         self.root = root
@@ -285,6 +287,12 @@ class StudioAInstanceDataset(Dataset):
         self.transform = build_transforms(
             input_size, train=train, letterbox=True, augment=augment
         )
+        if small_object_crop:
+            self.transform.ts[0] = FocusedLetterboxScaleCrop(
+                input_size,
+                labels=(CLASSES.index("phone"), CLASSES.index("tablet")),
+                scale_range=self.transform.ts[0].scale_range,
+            )
 
     def __len__(self):
         return len(self.frames)

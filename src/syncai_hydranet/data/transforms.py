@@ -6,6 +6,7 @@ environment's dependency surface small.
 
 from __future__ import annotations
 
+import math
 import random
 
 import numpy as np
@@ -229,6 +230,47 @@ class RandomScaleCrop:
             s["boxes"], s["labels"] = b[keep], s["labels"][keep]
         _pose_shift_clip(s, -x0, -y0, w, h)
         return s
+
+
+class FocusedLetterboxScaleCrop:
+    """Train-only 2x views that keep one chosen device box fully inside the canvas.
+
+    Half of eligible samples use a focused view; the rest retain the existing full
+    frame augmentation. Unknown/negative masks share exactly the image/box geometry.
+    Other objects may be clipped, as with ordinary scale-crop augmentation.
+    """
+
+    def __init__(self, size, labels, scale_range=(0.9, 1.1)):
+        self.size = tuple(size)
+        self.labels = tuple(labels)
+        self.scale_range = scale_range
+        self.fallback = LetterboxScaleCrop(size, scale_range)
+
+    def __call__(self, sample: Sample) -> Sample:
+        boxes = sample.get("boxes", np.empty((0, 4)))
+        eligible = np.flatnonzero(np.isin(sample.get("labels", []), self.labels))
+        if not len(eligible) or random.random() >= 0.5:
+            return self.fallback(sample)
+        anchor = boxes[int(random.choice(eligible))]
+        h, w = self.size
+        ow, oh = sample["image"].size
+        factor = min(w / ow, h / oh) * 2.0 * random.uniform(*self.scale_range)
+        sw, sh = max(1, int(ow * factor)), max(1, int(oh * factor))
+        box = anchor * np.array([sw / ow, sh / oh, sw / ow, sh / oh])
+        # Constrain the paste origin to both image coverage and a two-pixel margin
+        # around the chosen object. Fall back before mutation if the object cannot fit.
+        xlo = max(min(0, w - sw), math.ceil(2 - box[0]))
+        xhi = min(max(0, w - sw), math.floor(w - 2 - box[2]))
+        ylo = max(min(0, h - sh), math.ceil(2 - box[1]))
+        yhi = min(max(0, h - sh), math.floor(h - 2 - box[3]))
+        if xlo > xhi or ylo > yhi:
+            return self.fallback(sample)
+        return _paste(
+            _resize(sample, (sh, sw)),
+            self.size,
+            random.randint(xlo, xhi),
+            random.randint(ylo, yhi),
+        )
 
 
 class LetterboxResize:

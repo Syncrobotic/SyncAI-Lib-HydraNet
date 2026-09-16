@@ -1,0 +1,146 @@
+{
+  "status": "predeclared before either fixed-budget training arm",
+  "question": "Does a mixed full-frame/focused device view improve reviewed-positive detection under equal update budgets while preserving all scene outputs?",
+  "data": "runs/studioa_partial_instances_20260916_v5",
+  "manifest_sha256": "eba13055187110a16c211fd2e76b7cd93fc437e76f711266a1f6c8b022b96428",
+  "initial_checkpoint": "runs/studioa_scene_pilot_20260916_v2/model/best.pt",
+  "arms": {
+    "control": "runs/studioa_detector_crop_20260916_control",
+    "focused": "runs/studioa_detector_crop_20260916_focused"
+  },
+  "only_comparison_config_difference": "data.datasets[1].small_object_crop, absent/false versus true",
+  "focused_policy": {
+    "eligible_classes": [
+      "phone",
+      "tablet"
+    ],
+    "probability_given_eligible": 0.5,
+    "zoom_relative_to_base_letterbox": 2.0,
+    "scale_jitter": [
+      0.9,
+      1.1
+    ],
+    "anchor_selection": "uniform over eligible reviewed boxes",
+    "anchor_margin_px": 2,
+    "unfittable_anchor": "fall back to full-frame scale crop before mutation",
+    "other_objects": "may be clipped/omitted outside the crop; no inferred background",
+    "image_and_all_negative_masks": "same resize and paste; nearest-neighbour masks; padding remains255",
+    "val_inference": "unchanged full frame"
+  },
+  "fixed": {
+    "seed": 42,
+    "input_size": [
+      512,
+      896
+    ],
+    "batch_size": 2,
+    "lr": 0.0002,
+    "warmup_iters": 26,
+    "epochs": 25,
+    "early_stop_patience": 0,
+    "detector_only": true,
+    "scene_eval_frames": 33,
+    "detector_val_frames": 6,
+    "detector_val_positives": 31,
+    "score_strictly_greater_than": 0.2,
+    "iou_at_least": 0.5,
+    "nms": 0.6,
+    "max_det": 100,
+    "test_inference": false,
+    "no_threshold_sweep": true,
+    "optimizer_updates_per_arm": 425,
+    "updates_per_epoch": 17
+  },
+  "class_negative_normalization": "positive_budget",
+  "selection": "maximum fixed source-val recall; ties keep earliest; identical25 epochs and425 updates for both arms; also report last checkpoints",
+  "upgrade_criteria": {
+    "reference_run": "runs/studioa_detector_warmup_20260916_v1",
+    "total_matched_strictly_greater_than": 7,
+    "matched_person_at_least": 5,
+    "matched_phone_at_least": 1,
+    "matched_poster_at_least": 1,
+    "reviewed_empty_fp_at_most": 0,
+    "all_33_scene_logits_byte_identical": true,
+    "deployment_claim": false
+  },
+  "additional_upgrade_criterion": "candidate selected recall strictly exceeds equal-budget control",
+  "prior_reference": "runs/studioa_detector_warmup_20260916_v1",
+  "prior_v5_run_not_control": "Previous v5 used60 planned epochs with early stopping; changed schedule means a fresh matched control is required.",
+  "training_geometry_probe": {
+    "scope": "35 source-train frames x10 seeded geometry-only draws per arm, same source masks, no model inference; no val-driven augmentation tuning",
+    "manifest_sha256": "eba13055187110a16c211fd2e76b7cd93fc437e76f711266a1f6c8b022b96428",
+    "summaries": {
+      "control": {
+        "views": 350,
+        "zoomed_views": 0,
+        "counts": {
+          "phone": {
+            "input_boxes": 330,
+            "retained_boxes": 321,
+            "zero_assignment": 2,
+            "assignable_points": 3595
+          },
+          "tablet": {
+            "input_boxes": 310,
+            "retained_boxes": 310,
+            "zero_assignment": 0,
+            "assignable_points": 8830
+          }
+        },
+        "mean_width_height_points": {
+          "tablet": [
+            47.25075432562059,
+            41.24982413015058,
+            28.483870967741936
+          ],
+          "phone": [
+            22.341717966620426,
+            28.075088836693688,
+            11.199376947040498
+          ]
+        }
+      },
+      "focused": {
+        "views": 350,
+        "zoomed_views": 114,
+        "counts": {
+          "phone": {
+            "input_boxes": 330,
+            "retained_boxes": 263,
+            "zero_assignment": 2,
+            "assignable_points": 4919
+          },
+          "tablet": {
+            "input_boxes": 310,
+            "retained_boxes": 289,
+            "zero_assignment": 0,
+            "assignable_points": 9942
+          }
+        },
+        "mean_width_height_points": {
+          "tablet": [
+            66.34303626882163,
+            56.799041748046875,
+            34.40138408304498
+          ],
+          "phone": [
+            30.773723297699323,
+            38.65876090843868,
+            18.70342205323194
+          ]
+        }
+      }
+    },
+    "val_tensors_identical_with_option_enabled": true,
+    "val_frames": 6,
+    "limitations": "Aggregate assignment counts on transformed training boxes do not establish localization accuracy or deployed recall."
+  },
+  "tests_passed": 201,
+  "geometry_tradeoff": "Across350 seeded train views phone boxes retained321 to263 while assignable points3595 to4919; tablet retained310 to289, points8830 to9942. Crop increases pixel support but removes peripheral observations. No claim that more assignment points guarantee better localization.",
+  "scope": "single predeclared pair, no threshold sweep, no test inference, no deployment, no new GCS/labels",
+  "artifacts": {
+    "runs/studioa_focused_crop_20260916_v1/train_view_probe.json": "66182ef5394e449e966dc6028eedafeba8e07d0b7913c84608f8e9519adeee75",
+    "runs/studioa_focused_crop_20260916_v1/probe_training_views.py": "a95d9df8d9ecc5f26aa3624c814a8f2a6d81703352828c271e2a49b8eb8973ab",
+    "runs/studioa_focused_crop_20260916_v1/training_views.jpg": "47d57b7e60e8187c1aefdf6425d56b79c957db27ad52f3a406324d3ba35d10d9"
+  }
+}

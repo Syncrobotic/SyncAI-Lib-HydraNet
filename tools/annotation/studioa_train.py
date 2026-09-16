@@ -232,6 +232,8 @@ def prepare(
     initial_checkpoint: Path | None = None,
     detector_warmup: bool = False,
     class_negative_normalization: str = "sum",
+    small_object_crop: bool = False,
+    fixed_epochs: int | None = None,
 ) -> None:
     from syncai_hydranet.utils.visualize import terrain_palette
 
@@ -243,6 +245,10 @@ def prepare(
         raise ValueError("joint pilot requires both instances and initial checkpoint")
     if detector_warmup and instances is None:
         raise ValueError("detector warmup requires instances and initial checkpoint")
+    if (small_object_crop or fixed_epochs is not None) and not detector_warmup:
+        raise ValueError("crop/fixed-epoch comparison requires detector warmup")
+    if fixed_epochs is not None and not 1 <= fixed_epochs <= 60:
+        raise ValueError("fixed epochs must be between 1 and 60")
     if class_negative_normalization not in ("sum", "positive_budget"):
         raise ValueError("unsupported class negative normalization")
     if class_negative_normalization != "sum" and not detector_warmup:
@@ -305,6 +311,10 @@ def prepare(
         config["model"]["heads"]["detection"]["loss"] = {
             "class_negative_normalization": class_negative_normalization
         }
+        if small_object_crop:
+            config["data"]["datasets"][1]["small_object_crop"] = True
+        if fixed_epochs is not None:
+            config["train"].update(epochs=fixed_epochs, early_stop_patience=0)
         check_config(config)
     write_json(out / "config.json", config)
     git = subprocess.run(
@@ -329,6 +339,8 @@ def prepare(
             "joint": instances is not None,
             "detector_warmup": detector_warmup,
             "class_negative_normalization": class_negative_normalization,
+            "small_object_crop": small_object_crop,
+            "fixed_epochs": fixed_epochs,
             "instance_counts": instance_counts,
             "git_commit": git,
             "held_out": held_out,
@@ -596,6 +608,8 @@ def main():
     parser.add_argument("--instances", type=Path)
     parser.add_argument("--initial-checkpoint", type=Path)
     parser.add_argument("--detector-warmup", action="store_true")
+    parser.add_argument("--small-object-crop", action="store_true")
+    parser.add_argument("--fixed-epochs", type=int)
     parser.add_argument(
         "--class-negative-normalization", choices=("sum", "positive_budget"), default="sum"
     )
@@ -614,6 +628,8 @@ def main():
             args.initial_checkpoint,
             args.detector_warmup,
             args.class_negative_normalization,
+            args.small_object_crop,
+            args.fixed_epochs,
         )
     else:
         out = args.out.resolve()

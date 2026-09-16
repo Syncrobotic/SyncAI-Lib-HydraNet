@@ -201,6 +201,7 @@ AUGMENT = {
 }
 
 DATASET = {
+    "small_object_crop": Spec((bool,)),
     "validation_only": Spec((bool,)),
     "name": Spec((str,), required=True),
     "type": Spec(
@@ -651,6 +652,8 @@ def _check_one_dataset(rep: _Report, ds: dict, path: str, head_names: set[str]) 
                 f"Declared: {', '.join(sorted(head_names))}"
             )
         supervised.add(head)
+    if ds.get("small_object_crop") and ds.get("type") != "studioa_instances":
+        rep.errors.append(f"{path}: small_object_crop requires studioa_instances")
     if ds.get("type") in ("studioa_partial", "studioa_instances"):
         if ds.get("held_out") not in ("Kaohsiung", "Taichung", "Tao-Hsin"):
             rep.errors.append(
