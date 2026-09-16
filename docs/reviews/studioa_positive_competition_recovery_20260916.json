@@ -1,0 +1,46 @@
+{
+  "status": "predeclared corrected rerun; no scientific protocol change",
+  "parent_plan": "docs/reviews/studioa_positive_competition_plan_20260916.json",
+  "parent_plan_sha256": "fc154da4d538bc1bef0273f898cf929ee0060b11d64222c681669dae96128994",
+  "failed_attempt": "runs/studioa_detector_competition_20260916_assigned",
+  "failed_attempt_status": {
+    "status": "failed",
+    "epoch": 0,
+    "pid": 4132283,
+    "elapsed_s": 5.8540967660956085,
+    "gpu": "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",
+    "global_step": 0,
+    "validation_teacher_miou": 0.2506537344807518,
+    "primary_metric": "partial_det/studioa_instances/recall50_at_020",
+    "best_primary_metric": 0.0,
+    "error": "Traceback (most recent call last):\n  File \"/home/paul/SyncAI-Lib-HydraNet/runs/studioa_detector_competition_20260916_assigned/snapshot/tools/annotation/studioa_train.py\", line 492, in run\n    trainer.train()\n  File \"/home/paul/SyncAI-Lib-HydraNet/runs/studioa_detector_competition_20260916_assigned/snapshot/src/syncai_hydranet/engine/trainer.py\", line 493, in train\n    self.train_one_epoch(epoch)\n  File \"/home/paul/SyncAI-Lib-HydraNet/runs/studioa_detector_competition_20260916_assigned/snapshot/src/syncai_hydranet/engine/trainer.py\", line 564, in train_one_epoch\n    loss, logs = self.model.compute_losses(outputs, targets, batch[\"supervises\"])\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/paul/SyncAI-Lib-HydraNet/runs/studioa_detector_competition_20260916_assigned/snapshot/src/syncai_hydranet/models/hydranet.py\", line 225, in compute_losses\n    loss, extra = head.loss(outputs, targets)\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/paul/SyncAI-Lib-HydraNet/runs/studioa_detector_competition_20260916_assigned/snapshot/src/syncai_hydranet/models/heads/registry.py\", line 142, in loss\n    return self.loss_fn(\n           ^^^^^^^^^^^^^\n  File \"/home/paul/SyncAI-Lib-HydraNet/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py\", line 1778, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/paul/SyncAI-Lib-HydraNet/.venv/lib/python3.11/site-packages/torch/nn/modules/module.py\", line 1789, in _call_impl\n    return forward_call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/paul/SyncAI-Lib-HydraNet/runs/studioa_detector_competition_20260916_assigned/snapshot/src/syncai_hydranet/models/losses.py\", line 308, in forward\n    assigned_object_class_mask(points, onehot, boxes_list, labels_list),\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/paul/SyncAI-Lib-HydraNet/runs/studioa_detector_competition_20260916_assigned/snapshot/src/syncai_hydranet/models/losses.py\", line 181, in assigned_object_class_mask\n    mask[b, inside, label] = onehot[b, inside, label]\n    ~~~~^^^^^^^^^^^^^^^^^^\nRuntimeError: expected scalar type BFloat16 but found Float\n"
+  },
+  "failure": "CUDA autocast promotes onehot.sum tofloat32 while indexed RHS remains bfloat16; deterministic index_put requires matching dtypes.",
+  "minimal_reproduction": "Same helper fails on CUDA deterministic/autocast withbf16 onehot; passes withfloat32.",
+  "fix": "Convert supervision onehot tofloat32 inside assigned_object_class_mask, so reduction and index writes share dtype. Does not alter labels, masks weights or selection rules.",
+  "tests": "180 related tests passed onCUDA including newbf16 andfp16 deterministic backward regression tests.",
+  "arms": {
+    "control": "runs/studioa_detector_competition_20260916_v2_control",
+    "assigned": "runs/studioa_detector_competition_20260916_v2_assigned"
+  },
+  "budgets_unchanged": {
+    "epochs": 25,
+    "steps_per_arm": 425,
+    "early_stop": false
+  },
+  "no_candidate_learning_before_failure": true,
+  "no_threshold_or_hyperparameter_change": true,
+  "old_outputs_preserved": true,
+  "failed_service": {
+    "unit": "studioa-competition-comparison-20260916-v1",
+    "Result": "exit-code",
+    "ExecMainStatus": 1
+  },
+  "failed_artifacts": {
+    "runs/studioa_detector_competition_20260916_assigned/job.json": "daa97f189a8e924020bde765e31e668565bfd6a953fe66e9ae522c741af985ff",
+    "runs/studioa_detector_competition_20260916_assigned/status.json": "4f4c065b09013432fac1bb28369c90955d8c78685deaa9a12c42ae31cae13ad2",
+    "runs/studioa_detector_competition_20260916_assigned/baseline_val.json": "445010c860040e87a677a984948f275e120f3f0f9bd6c85c070820efe7831962",
+    "runs/studioa_detector_competition_20260916_assigned/service.log": "e1e4f6fbdddd25c519fb57f4cc0cf3e0a6b82bf0f91f9fa3a8c465f79894eb1d",
+    "runs/studioa_detector_competition_20260916_assigned/model/best.pt": "4a01cbb76bdf3622d23f693478f0ad26a69426604804cd7ea1bf6da83d71bcc7"
+  }
+}

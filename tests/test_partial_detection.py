@@ -346,3 +346,34 @@ def test_assigned_object_bfloat16_and_exhaustive_compatibility():
     torch.testing.assert_close(plain, assigned, rtol=0, atol=0)
     with pytest.raises(ValueError, match="positive_classification"):
         FCOSLoss(3, positive_classification="invalid")
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA autocast")
+@pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16])
+def test_assigned_object_cuda_autocast_with_deterministic_indexing(dtype):
+    deterministic = torch.are_deterministic_algorithms_enabled()
+    try:
+        torch.use_deterministic_algorithms(True)
+        head, cls, reg, ctr, boxes, labels, negative = batch()
+        head = head.cuda()
+        cls = [x.detach().cuda().to(dtype).requires_grad_(True) for x in cls]
+        reg = [x.detach().cuda().to(dtype).requires_grad_(True) for x in reg]
+        ctr = [x.detach().cuda().to(dtype).requires_grad_(True) for x in ctr]
+        with torch.autocast("cuda", dtype=dtype):
+            loss, _ = FCOSLoss(3, positive_classification="assigned_object")(
+                head,
+                cls,
+                reg,
+                ctr,
+                [x.cuda() for x in boxes],
+                [x.cuda() for x in labels],
+                negative_mask=negative.cuda(),
+            )
+        loss.backward()
+        assert torch.isfinite(loss)
+        assert all(torch.isfinite(x.grad).all() for x in cls + reg + ctr)
+        assert cls[0].grad[0, 0, 1, 1] > 0
+        assert cls[0].grad[0, 1, 1, 1] < 0
+        assert (cls[1].grad == 0).all()
+    finally:
+        torch.use_deterministic_algorithms(deterministic)

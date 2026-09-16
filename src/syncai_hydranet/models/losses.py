@@ -169,6 +169,9 @@ def assigned_object_class_mask(points, onehot, boxes_list, labels_list):
     overlapping objects are not evidence against each other. Outside assigned
     positives, unknown channels remain unknown.
     """
+    # CUDA autocast promotes sum to float32, while indexed onehot values can remain
+    # bf16. Deterministic index_put requires matching dtypes on both sides.
+    onehot = onehot.float()
     mask = onehot.sum(-1, keepdim=True).expand_as(onehot).clone()
     for b, (boxes, labels) in enumerate(zip(boxes_list, labels_list, strict=True)):
         for box, label in zip(boxes, labels, strict=True):
