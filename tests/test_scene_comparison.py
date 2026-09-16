@@ -90,6 +90,7 @@ def test_real_comparison_worker_trains_and_selects_without_building_test_data(
     tmp_path, monkeypatch
 ):
     import json
+    import shutil
 
     import torch
 
@@ -113,6 +114,9 @@ def test_real_comparison_worker_trains_and_selects_without_building_test_data(
     cfg["train"].update(batch_size=2, amp=False, warmup_iters=1)
     # The scheduler deliberately starts at zero LR; the second step must update.
     cfg = worker.scene_comparison_config(cfg, 2, 2, 1, [1.0] * 19)
+    validation_root = out / "validation_data"
+    shutil.copytree(data, validation_root)
+    cfg = worker.bind_scene_validation(cfg, manifest, manifest, validation_root, "Tao-Hsin")
     write_json(out / "config.json", cfg)
     write_json(
         out / "job.json",
@@ -134,6 +138,7 @@ def test_real_comparison_worker_trains_and_selects_without_building_test_data(
 
     def guarded(config, size, split, **kwargs):
         assert split != "test", "comparison must never build the held-out test dataset"
+        assert Path(config["root"]) == (validation_root if split == "val" else data)
         splits.append(split)
         return original(config, size, split, **kwargs)
 
@@ -151,3 +156,32 @@ def test_real_comparison_worker_trains_and_selects_without_building_test_data(
     assert not torch.equal(
         initial["seg_heads.scene.classifier.weight"], last["seg_heads.scene.classifier.weight"]
     )
+
+
+@pytest.mark.filterwarnings(
+    "ignore:__array__ implementation doesn't accept a copy keyword:DeprecationWarning"
+)
+@pytest.mark.parametrize("mutation", ["image", "pixels", "camera", "split", "fold", "classes"])
+def test_shared_validation_refuses_changed_images_or_partition(tmp_path, mutation):
+    from _studioa_fixture import source_package
+    from syncai_hydranet.data.studioa_supervision import check_supervision, export_supervision
+
+    source_package(tmp_path / "annotations")
+    export_supervision(tmp_path / "annotations", tmp_path / "data")
+    source = check_supervision(tmp_path / "data")
+    validation = copy.deepcopy(source)
+    frame = next(f for f in validation["frames"] if f["original_split"] == "val")
+    if mutation in ("image", "pixels", "camera"):
+        field = {"image": "image_sha256", "pixels": "pixel_sha256", "camera": "camera"}[
+            mutation
+        ]
+        frame[field] = "changed"
+    elif mutation == "split":
+        validation["folds"]["Tao-Hsin"]["assignments"][frame["id"]] = "train"
+    elif mutation == "fold":
+        validation["folds"].pop("Tao-Hsin")
+    else:
+        validation["policy"]["classes"]["floor"] = 99
+    cfg = worker.pilot_config(tmp_path / "data", tmp_path, source, "Tao-Hsin")
+    with pytest.raises(ValueError, match="validation source"):
+        worker.bind_scene_validation(cfg, source, validation, tmp_path / "val", "Tao-Hsin")

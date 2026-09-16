@@ -258,6 +258,41 @@ def scene_comparison_config(
     return config
 
 
+def bind_scene_validation(
+    config: dict, source: dict, validation: dict, validation_root: Path, held_out: str
+) -> dict:
+    """Use revised masks for the same source-val images without mixing train data."""
+
+    def identities(manifest):
+        if held_out not in manifest["folds"] or manifest["policy"]["classes"] != CLASSES:
+            raise ValueError("validation source fold/classes mismatch")
+        assignments = manifest["folds"][held_out]["assignments"]
+        return {
+            f["id"]: (f["camera"], f["image_sha256"], f["pixel_sha256"])
+            for f in manifest["frames"]
+            if assignments[f["id"]] == "val"
+        }
+
+    expected = identities(source)
+    if not expected or identities(validation) != expected:
+        raise ValueError("validation source must preserve source-val images and cameras")
+    training = config["data"]["datasets"][0]
+    training.pop("split_val", None)
+    training.pop("split_test", None)
+    config["data"]["datasets"] = [
+        training,
+        {
+            **training,
+            "name": "studioa_validation",
+            "root": str(validation_root),
+            "validation_only": True,
+            "split_val": "val",
+        },
+    ]
+    check_config(config)
+    return config
+
+
 def prepare(
     source: Path,
     out: Path,
@@ -273,6 +308,7 @@ def prepare(
     scene_comparison_updates: int | None = None,
     scene_validation_updates: int = 165,
     scene_class_weights_source: Path | None = None,
+    scene_validation_source: Path | None = None,
 ) -> None:
     from syncai_hydranet.utils.visualize import terrain_palette
 
@@ -309,6 +345,18 @@ def prepare(
             raise ValueError("scene comparison weight source is missing train classes")
     elif scene_class_weights_source is not None:
         raise ValueError("scene weight source requires scene comparison updates")
+    validation_manifest = None
+    if scene_validation_source is not None:
+        if scene_comparison_updates is None:
+            raise ValueError("separate validation source requires scene comparison")
+        validation_manifest = check_supervision(scene_validation_source)
+        bind_scene_validation(
+            pilot_config(source, out, manifest, held_out),
+            manifest,
+            validation_manifest,
+            scene_validation_source,
+            held_out,
+        )
     instance_counts = {}
     if instances is not None:
         from collections import Counter
@@ -372,6 +420,13 @@ def prepare(
             weights,
         )
         write_json(out / "class_weights_source_manifest.json", scene_weights_manifest)
+    if validation_manifest is not None:
+        assert scene_validation_source is not None
+        shutil.copytree(scene_validation_source, out / "validation_data")
+        check_supervision(out / "validation_data")
+        config = bind_scene_validation(
+            config, manifest, validation_manifest, out / "validation_data", held_out
+        )
     if instances is not None:
         config = joint_config(config, out / "instances", held_out)
     if detector_warmup:
@@ -434,6 +489,9 @@ def prepare(
             "held_out": held_out,
             "counts": manifest["folds"][held_out]["counts"],
             "source_manifest_sha256": digest(source / "manifest.json"),
+            "scene_validation_source_sha256": digest(scene_validation_source / "manifest.json")
+            if scene_validation_source is not None
+            else None,
             "classes": CLASSES,
             "class_weights": "shared train reference; sqrt median/frequency clipped 0.25..4"
             if scene_comparison_updates is not None
@@ -749,6 +807,7 @@ def main():
     parser.add_argument("--scene-comparison-updates", type=int)
     parser.add_argument("--scene-validation-updates", type=int, default=165)
     parser.add_argument("--scene-class-weights-source", type=Path)
+    parser.add_argument("--scene-validation-source", type=Path)
     parser.add_argument(
         "--positive-classification",
         choices=("positive_only", "assigned_object"),
@@ -784,6 +843,7 @@ def main():
             args.scene_comparison_updates,
             args.scene_validation_updates,
             args.scene_class_weights_source,
+            args.scene_validation_source,
         )
     else:
         out = args.out.resolve()
