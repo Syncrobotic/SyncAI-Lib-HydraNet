@@ -1,0 +1,285 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-16",
+  "scope": "Repository maintenance audit; model acceptance and production training remain paused",
+  "baseline_commit": "abd34da",
+  "tested_code_commit": "db95e6fd454e35adf0a9ca2bc1616a753e639feb",
+  "report_commit_scope": "Following commit changes documentation and comments only; no runtime or config-value change",
+  "environment": {
+    "git_commit": "3509411d7dcf9e52ce34d31b110cec188e1e3752",
+    "python": "3.11.15 (main, Aug  7 2026, 02:25:55) [Clang 22.1.3 ]",
+    "packages": {
+      "torch": "2.13.0",
+      "torchvision": "0.28.0",
+      "numpy": "2.4.6",
+      "pytest": "9.1.1",
+      "coverage": "7.15.4",
+      "ruff": "0.16.5",
+      "ty": "0.0.77"
+    },
+    "scope": "local locked environment; not a new multi-Python CI matrix or dependency advisory audit"
+  },
+  "checks": {
+    "baseline_cpu": {
+      "tests": 4138,
+      "errors": 0,
+      "failures": 25,
+      "skipped": 20,
+      "passed": 4093,
+      "git_commit": "abd34da",
+      "process_exit_code": 1,
+      "junit_path": "runs/project_audit_20260916_v1/junit.xml",
+      "junit_sha256": "908f808c846f050c9ad81c8e4bf613a5e389ec1dadad99154bfb2c8ec2ff92dc"
+    },
+    "full_cpu": {
+      "tests": 4175,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 12,
+      "passed": 4163,
+      "git_commit": "3509411d7dcf9e52ce34d31b110cec188e1e3752",
+      "process_exit_code": 0,
+      "junit_path": "runs/project_audit_20260916_v1/junit_final.xml",
+      "junit_sha256": "b5db09444afa6ee33710d035c263e831718d803ebc04c04e06afcaa6c2883219"
+    },
+    "cuda_paths": {
+      "tests": 60,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0,
+      "passed": 60,
+      "git_commit": "3509411d7dcf9e52ce34d31b110cec188e1e3752",
+      "process_exit_code": 0,
+      "junit_path": "runs/project_audit_20260916_v1/junit_cuda.xml",
+      "junit_sha256": "c57d6dd9e6c00c99a028b050ed8fdeb783d8f5c954fff01a6e618b1f1d1a5d54"
+    },
+    "clean_clone_initial": {
+      "tests": 4175,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 28,
+      "passed": 4147,
+      "git_commit": "3509411d7dcf9e52ce34d31b110cec188e1e3752",
+      "process_exit_code": 1,
+      "junit_path": "runs/project_audit_20260916_v1/junit_clean.xml",
+      "junit_sha256": "bbcc493c0bee637dbaeed4107d102a4ab670531dee071fa86b77760df966888b",
+      "failure_reason": "28 skips exceeded unchanged ceiling of 25 despite no failing test bodies"
+    },
+    "clean_clone_final": {
+      "tests": 4176,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 24,
+      "passed": 4152,
+      "git_commit": "db95e6fd454e35adf0a9ca2bc1616a753e639feb",
+      "process_exit_code": 0,
+      "junit_path": "runs/project_audit_20260916_v1/junit_clean_final.xml",
+      "junit_sha256": "69b35fcb8c451722c15cefe4cf999e5a1b3cffd3be0168471efc91f219fa04f4"
+    },
+    "portable_guards": {
+      "passed": 539,
+      "process_exit_code": 0
+    },
+    "ruff": {
+      "check": "passed",
+      "format_checked_files": 497
+    },
+    "type_ratchets": {
+      "src": 8,
+      "scripts": 14,
+      "tools": 70,
+      "total_existing_diagnostics": 92,
+      "status": "within baselines; not type-clean"
+    },
+    "bandit": {
+      "src_minimum_severity": "medium",
+      "scripts_tools_minimum_severity": "high",
+      "findings": 0,
+      "scan_errors": 0
+    },
+    "coverage_clean": {
+      "src": {
+        "files": 157,
+        "num_statements": 15510,
+        "covered_lines": 13914,
+        "num_branches": 5296,
+        "covered_branches": 4221,
+        "percent": 87.16235701240026
+      },
+      "scripts_tools": {
+        "files": 111,
+        "num_statements": 16474,
+        "covered_lines": 2176,
+        "num_branches": 4836,
+        "covered_branches": 439,
+        "percent": 12.271234162365086
+      }
+    },
+    "coverage_full_cpu": {
+      "src": {
+        "files": 157,
+        "num_statements": 15510,
+        "covered_lines": 13919,
+        "num_branches": 5296,
+        "covered_branches": 4223,
+        "percent": 87.19600115351341
+      },
+      "scripts_tools": {
+        "files": 111,
+        "num_statements": 16474,
+        "covered_lines": 2180,
+        "num_branches": 4836,
+        "covered_branches": 442,
+        "percent": 12.304082590333177
+      }
+    },
+    "coverage_gate": {
+      "src_floor": 85,
+      "scripts_tools_floor": 11,
+      "process_exit_code": 0
+    },
+    "document_links": {
+      "broken_repository_relative_links": 0,
+      "ignored_local_artifact_links": 23
+    }
+  },
+  "integrity": {
+    "artifacts": [
+      {
+        "path": "runs/studioa_semantic_glass_review_20260916_v1",
+        "manifest_sha256": "f97171f4d7f08b76906fa23c4cccc46611105d8adef7f1037ba9998647d7e7e4",
+        "status": "verified"
+      },
+      {
+        "path": "runs/studioa_gcs_training_extension_20260916_v1/semantic",
+        "manifest_sha256": "0139eaccc00c6cf2fd841c7cfbd3a231c9b744a624b9c8ec95f82bc6e7a7b1ee",
+        "status": "verified"
+      },
+      {
+        "path": "runs/studioa_partial_instances_20260916_v5",
+        "manifest_sha256": "eba13055187110a16c211fd2e76b7cd93fc437e76f711266a1f6c8b022b96428",
+        "status": "verified"
+      },
+      {
+        "path": "runs/studioa_scene_pilot_20260916_v2",
+        "report_sha256": "7713b0a11726d72e41ecf692d7c0b9e6823e2d29106b9bd36d47d283e777f684",
+        "output_files_verified": 6,
+        "best_sha256": "e0775eee8de02e51f975ce4e25a5f17f92be406bdef32adf954d4affd6aa579d",
+        "status": "verified"
+      },
+      {
+        "path": "runs/studioa_detector_warmup_20260916_v1",
+        "report_sha256": "e4af368a4221673df7cf6440a52d9eae32bfcabba3f7bac52bb975a17a385921",
+        "output_files_verified": 8,
+        "best_sha256": "8381ff3ab6d97a86d9c2896568867971991805288c9f847d6f09d3928aa2c3f5",
+        "status": "verified"
+      }
+    ]
+  },
+  "limitations": [
+    "Clean checkout shares existing venv and full local Git object history; it is not a fresh dependency install or a shallow clone.",
+    "pytest uses Python 3.11.15; type gates use isolated Python 3.12. No new remote CI or complete Python 3.12/3.13 test matrix was run.",
+    "No new dependency vulnerability advisory audit or complete ONNX export matrix.",
+    "Full CPU and CUDA checks precede the final test-only portability change; clean full suite includes it.",
+    "SHA-256 integrity does not establish annotation correctness, model quality or metric geometry accuracy.",
+    "Raw runs evidence is ignored local data; this committed summary records its hashes, not a public artifact upload."
+  ],
+  "evidence": {
+    "pytest.log": {
+      "path": "runs/project_audit_20260916_v1/pytest.log",
+      "sha256": "d60d2b0326561b9dbc3a97f4d05afa39c9e262690d3104fe3e1da3d62d4e5697"
+    },
+    "junit.xml": {
+      "path": "runs/project_audit_20260916_v1/junit.xml",
+      "sha256": "908f808c846f050c9ad81c8e4bf613a5e389ec1dadad99154bfb2c8ec2ff92dc"
+    },
+    "pytest_final.log": {
+      "path": "runs/project_audit_20260916_v1/pytest_final.log",
+      "sha256": "cf957225a0a042b210884b7c8f6b4a8e0f0501058f053e38b48632a1b65649b9"
+    },
+    "junit_final.xml": {
+      "path": "runs/project_audit_20260916_v1/junit_final.xml",
+      "sha256": "b5db09444afa6ee33710d035c263e831718d803ebc04c04e06afcaa6c2883219"
+    },
+    "coverage_final.json": {
+      "path": "runs/project_audit_20260916_v1/coverage_final.json",
+      "sha256": "1c11436d6154b82a8cf1cb46eb17aeeef74a6c03ae2288582c3c5f637a202de7"
+    },
+    "pytest_cuda.log": {
+      "path": "runs/project_audit_20260916_v1/pytest_cuda.log",
+      "sha256": "b40aec69ebdebfc688436871478c32a302607e0cca902c592c27fa23822833c9"
+    },
+    "junit_cuda.xml": {
+      "path": "runs/project_audit_20260916_v1/junit_cuda.xml",
+      "sha256": "c57d6dd9e6c00c99a028b050ed8fdeb783d8f5c954fff01a6e618b1f1d1a5d54"
+    },
+    "pytest_clean.log": {
+      "path": "runs/project_audit_20260916_v1/pytest_clean.log",
+      "sha256": "12931c37939e0531175a2738c801b5bf0d898801cc82c36e62dc6c25bb85cb63"
+    },
+    "junit_clean.xml": {
+      "path": "runs/project_audit_20260916_v1/junit_clean.xml",
+      "sha256": "bbcc493c0bee637dbaeed4107d102a4ab670531dee071fa86b77760df966888b"
+    },
+    "pytest_clean_final.log": {
+      "path": "runs/project_audit_20260916_v1/pytest_clean_final.log",
+      "sha256": "070ea9c13e5be7d59649f3fd31b92168136b7f142b6c5ce6f623e87c21a3975d"
+    },
+    "junit_clean_final.xml": {
+      "path": "runs/project_audit_20260916_v1/junit_clean_final.xml",
+      "sha256": "69b35fcb8c451722c15cefe4cf999e5a1b3cffd3be0168471efc91f219fa04f4"
+    },
+    "coverage_clean_final.json": {
+      "path": "runs/project_audit_20260916_v1/coverage_clean_final.json",
+      "sha256": "7d8746cacd6f8f09f2093b4519812e17f919380e2fab1c7fc7f281049d8b1570"
+    },
+    "coverage_clean_gates.log": {
+      "path": "runs/project_audit_20260916_v1/coverage_clean_gates.log",
+      "sha256": "78cddc7cd51ee2b7278d611d21050656ec134e60de93379901ad6bc8255d9fa9"
+    },
+    "portable_guards.log": {
+      "path": "runs/project_audit_20260916_v1/portable_guards.log",
+      "sha256": "d5221fed76c84de38b2101f30a42b075515d6771fd3fa5a623a4dbbe5df758da"
+    },
+    "worker_execution.log": {
+      "path": "runs/project_audit_20260916_v1/worker_execution.log",
+      "sha256": "45d989bc55fe27c0e9f3231efe0d82d362c41f183d98063ec5222a5df5ee95f2"
+    },
+    "gates_fixes.log": {
+      "path": "runs/project_audit_20260916_v1/gates_fixes.log",
+      "sha256": "6807f81780c577a16eabf4138e4a1536bc429945325e826d02d4a45399a4ff5a"
+    },
+    "ty_src_final.log": {
+      "path": "runs/project_audit_20260916_v1/ty_src_final.log",
+      "sha256": "cd9e58446ce1422724420eaf64966ce53ebfdf4fcb451add7ba24c57310b8ebc"
+    },
+    "ty_scripts_final.log": {
+      "path": "runs/project_audit_20260916_v1/ty_scripts_final.log",
+      "sha256": "dff6e7444891261657ce1453df164a9d3bdc1b135dce9bb7c582b2b5ec7c31a6"
+    },
+    "ty_tools_final.log": {
+      "path": "runs/project_audit_20260916_v1/ty_tools_final.log",
+      "sha256": "b6f30c4a645b5a8808d674552414fc78c74c7271c1ef174af2820a30cffb1fd9"
+    },
+    "bandit_src_final.json": {
+      "path": "runs/project_audit_20260916_v1/bandit_src_final.json",
+      "sha256": "c10d73de234e85cb8ec36ec66190a41772c0aa751fceaaa8a82410c4e25e6ea9"
+    },
+    "bandit_tools_final.json": {
+      "path": "runs/project_audit_20260916_v1/bandit_tools_final.json",
+      "sha256": "a8fcb181a2355a3c10cc8d282220a2b8df8e5a649ba96c177a3e27ac8b97af8d"
+    },
+    "environment.json": {
+      "path": "runs/project_audit_20260916_v1/environment.json",
+      "sha256": "53dfe20b9570177b50f2b781b9d2bee1f19aca0b19754b44b23ee0101b5d2acd"
+    },
+    "artifact_integrity.json": {
+      "path": "runs/project_audit_20260916_v1/artifact_integrity.json",
+      "sha256": "353ca6fcffdfbe6bda4a5362b6a187e8ff1b7f0699b64ceadcc5b8439546dfc5"
+    },
+    "document_links.json": {
+      "path": "runs/project_audit_20260916_v1/document_links.json",
+      "sha256": "4b08fef9915a72b3b03e0fb46ed3aab0840999be3a35841523a4622b0cf15a2b"
+    }
+  }
+}

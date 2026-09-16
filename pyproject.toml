@@ -238,36 +238,16 @@ quote-style = "double"
 
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
-# Type checking. 89% of functions here already carry annotations; until something
-# reads them they are documentation that cannot go stale loudly, which is the worst
-# kind. `ty` is the same vendor and the same speed class as ruff, so it costs one
-# tool rather than a new toolchain.
-#
-# Wired into CI as a RATCHET, not a pass/fail gate: the `types` job in ci.yml holds src/
-# and scripts/ to baseline counts that may fall and never rise. Run it the same way
-# locally, and run it through the script rather than by hand:
+# Type checking uses a diagnostic-count ratchet for src/, scripts/ and tools/.
+# Existing debt is allowed up to each baseline; increases fail CI. Use the same
+# script locally so interpreter and locked dependency selection match the gate:
 #     ./scripts/ty_ratchet.sh src/
 #
-# **Do not run `uv run ty check src/` and compare the number to the baseline.** The count
-# depends on which interpreter `uv` resolves, because `uv.lock` selects a different numpy
-# per Python version and the checker reports what the *stubs* say. The same tree at the
-# same commit measured 8 on python 3.10 / numpy 2.2 and 12 on python 3.12 / numpy 2.5.
-# `ty_ratchet.sh` pins the interpreter for exactly that reason, and its header carries the
-# three-environment table.
-#
-# The baselines and what is behind them live in that script, not here. An earlier version
-# of this block enumerated the diagnostics by cause and named "src/ sits at 17"; the count
-# had since moved to 8 and then to 12 without anyone touching the prose, which is this
-# project's own recurring failure -- a sentence describing a state with nothing checking
-# it. A count belongs where it is enforced.
-#
-# What survives that deletion, because it is the policy rather than the number: most of
-# this debt is not this project's code. It is torch's stubs (`Module.to(memory_format=)`
-# has no matching overload, `nn.init` and `list.__init__` reject what torch itself hands
-# them), pycocotools, which ships none, and numpy, whose 2.5 stubs reject `arr.min()` on a
-# float64 array. None is a live bug, which is why the set is ratcheted rather than
-# blocking -- turning the gate red on all of it at once is how a checker gets deleted a
-# week later.
+# Interpreter and dependency stubs affect the diagnostic count. The script pins
+# the interpreter and owns the baselines; standalone `ty check` is not equivalent.
+# Diagnostics include third-party stub mismatches and project annotation issues.
+# Passing the ratchet is not a claim that all remaining diagnostics are harmless
+# or that the project is type-clean. Review individual causes when reducing debt.
 # ---------------------------------------------------------------------------
 [tool.ty.rules]
 # onnx, onnxruntime and onnxsim live in the `export` extra, so a base install cannot

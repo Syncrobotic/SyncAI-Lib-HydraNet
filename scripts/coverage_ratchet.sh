@@ -4,37 +4,19 @@
 #   scripts/coverage_ratchet.sh          # runs the suite, then both floors
 #   COV_SKIP_RUN=1 scripts/coverage_ratchet.sh   # reuse an existing .coverage
 #
-# **Why two numbers rather than one.** `--cov-fail-under` takes a single figure, and the
-# combined one would be meaningless here: `src/` is 87% over 10,029 statements and
-# `scripts/` + `tools/` are 9% over 7,453, so a combined floor is dominated by whichever
-# tree grows faster and says nothing about either. Worse, it fails in the direction nobody
-# is watching -- adding an untested script would lower the combined number and the fix
-# would be to lower the floor.
+# Separate floors prevent high runtime coverage from hiding untested CLI code.
+# Count nested tools without __init__.py too (include_namespace_packages in
+# pyproject.toml), including files never imported by the test suite.
 #
-# **Why the dev-side trees get a floor at all.** They are 7,453 statements, more than half
-# the Python in this repository, and until 2026-09-04 nothing measured them. Most of it is
-# CLI entry points that need artefacts a clean checkout does not have, so 9% is the honest
-# reading and not a target -- what the ratchet buys is that it cannot quietly become 4%
-# as new scripts land untested. Same discipline as `scripts/ty_ratchet.sh`: a bound that
-# may fall and must not rise.
-#
-# One pytest run feeds both. Running the suite twice to measure two subsets would cost
-# ~80 s per matrix row for a number `coverage report --include` already has.
+# The dev floor began at 7%, rose to 9%, then 11% in September 2026. Those
+# historical measurements used a smaller tree and are not current coverage.
+# Keep both floors fixed while measuring the full current tree. If an environment
+# falls below a floor, investigate missing tests instead of lowering the threshold.
+# One test run supplies both reports; precise coverage enforcement avoids rounding
+# a subthreshold result up to a pass.
 set -euo pipefail
 
 SRC_FLOOR="${COV_SRC_FLOOR:-85}"
-# 9, which is what BOTH a full box and CI read -- checked rather than assumed. This began
-# at 7 on the reasoning `ci-promote.yml` gives about the src floor, that CI reads a
-# different number than a laptop because the `runs/`- and `datasets/`-guarded tests skip
-# there; run 764961b then printed 9% on the runner, so the headroom bought nothing and a
-# floor below the true value is decoration -- `ci.yml`'s own argument about its 80 -> 83
-# move. If a future environment does read lower, the honest fix is to find out which tests
-# stopped contributing, not to widen the gap.
-#
-# 11 since 2026-09-04, and this one is NOT the two numbers agreeing. A full box reads 12
-# and run 33847687469 printed 11 on the runner -- the skew the paragraph above predicted
-# and did not see the first time. 11 is the true value here, so there is no headroom in
-# this floor either; raising it to a laptop's 12 would fail every CI run.
 DEV_FLOOR="${COV_DEV_FLOOR:-11}"
 
 if [ -z "${COV_SKIP_RUN:-}" ]; then
