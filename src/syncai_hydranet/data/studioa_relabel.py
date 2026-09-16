@@ -251,6 +251,30 @@ def apply_visual_decision(group: list[dict], decision: dict, overrides: dict) ->
     }
 
 
+def revise_group_decisions(raw: dict, reviews: list[dict]) -> list[dict]:
+    """Apply explicit AI inspection decisions; caller verifies the raw file hash."""
+    decisions = deepcopy(raw["decisions"])
+    if len(decisions) != len(raw["groups"]):
+        raise ValueError("cannot review incomplete inference")
+    seen = set()
+    for review in reviews:
+        index = review["group"]
+        if not isinstance(index, int) or not 0 <= index < len(decisions) or index in seen:
+            raise ValueError("invalid or duplicate review group")
+        if review["entity"] not in (*ENTITY_NAMES, "unknown") or not review.get("reason"):
+            raise ValueError("invalid group classification")
+        seen.add(index)
+        previous = decisions[index]
+        decisions[index] = {
+            **previous,
+            "entity": review["entity"],
+            "reason": review["reason"],
+            "basis": "assistant_visual_group_review",
+            "previous_decision": previous,
+        }
+    return decisions
+
+
 def layer(entity: str) -> int:
     if entity == "person":
         return 5

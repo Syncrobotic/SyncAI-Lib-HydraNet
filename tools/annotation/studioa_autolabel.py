@@ -45,6 +45,7 @@ from syncai_hydranet.data.studioa_relabel import (
     reannotate,
     relabel_policy,
     review_panel,
+    revise_group_decisions,
     validate_visual_decisions,
 )
 from syncai_hydranet.data.studioa_relabel import PROMPT as REVIEW_PROMPT
@@ -875,6 +876,98 @@ def relabel_run(out: Path, device: str) -> None:
         lock.close()
 
 
+def relabel_review(source: Path, decisions_path: Path, out: Path) -> None:
+    """Rebuild masks after source-bound AI inspection of full candidate groups."""
+    parent = json.loads((source / "report.json").read_text())
+    job = json.loads((source / "job.json").read_text())
+    document = json.loads(decisions_path.read_text())
+    if parent["status"] != "completed" or document.get("reviewer_kind") != "ai":
+        raise ValueError("group review requires complete inference and AI provenance")
+    if parent["job_sha256"] != digest(source / "job.json"):
+        raise ValueError("group review source job changed")
+    for name, expected in parent["outputs"].items():
+        if digest(source / name) != expected:
+            raise ValueError("group review source output changed")
+    frames = {frame["id"]: frame for frame in job["frames"]}
+    updates = {}
+    for item in document["frames"]:
+        identity = item["frame_id"]
+        if identity not in frames or identity in updates:
+            raise ValueError("invalid or duplicate group review frame")
+        frame = frames[identity]
+        raw_path = source / "raw" / (identity + ".json")
+        if (
+            item["raw_sha256"] != digest(raw_path)
+            or item["image_sha256"] != frame["image_sha256"]
+            or digest(source / frame["image"]) != frame["image_sha256"]
+        ):
+            raise ValueError("group review source hash mismatch")
+        raw = json.loads(raw_path.read_text())
+        revised = revise_group_decisions(raw, item["decisions"])
+        data = reannotate(raw["groups"], revised, tuple(frame["image_size_px"][::-1]))
+        original = json.loads((source / "frames" / (identity + ".json")).read_text())
+        data.update(
+            {
+                key: original[key]
+                for key in (
+                    "frame_id",
+                    "image_sha256",
+                    "teacher",
+                    "job_sha256",
+                    "decisions_sha256",
+                    "parent_annotation_sha256",
+                )
+            }
+        )
+        data["ai_group_review"] = {
+            "reviewer_kind": "ai",
+            "decisions_sha256": digest(decisions_path),
+            "source_annotation_sha256": digest(source / "frames" / (identity + ".json")),
+            "decisions": item["decisions"],
+        }
+        validate_annotation(data, frame["image_sha256"], tuple(frame["image_size_px"][::-1]))
+        updates[identity] = data
+    shutil.copytree(source, out)
+    write(out / "status.json", {"status": "applying_group_review"})
+    shutil.copyfile(decisions_path, out / "ai_group_decisions.json")
+    shutil.copyfile(__file__, out / "ai_group_worker.py")
+    shutil.copyfile(
+        ROOT / "src/syncai_hydranet/data/studioa_relabel.py", out / "ai_group_rules.py"
+    )
+    try:
+        for identity, data in updates.items():
+            target = out / "frames" / (identity + ".json")
+            write(target, data)
+            with Image.open(out / frames[identity]["image"]) as image:
+                overlay(image.convert("RGB"), data, target.with_suffix(".jpg"))
+        report = summarise(out, job)
+        report["outputs"].update(
+            {str(p.relative_to(out)): digest(p) for p in (out / "raw").glob("*.json")}
+        )
+        for name in ("ai_group_decisions.json", "ai_group_worker.py", "ai_group_rules.py"):
+            report["outputs"][name] = digest(out / name)
+        report["ai_group_review"] = {
+            "parent_run": str(source.resolve()),
+            "parent_report_sha256": digest(source / "report.json"),
+            "frames": len(updates),
+            "decisions": sum(len(item["decisions"]) for item in document["frames"]),
+            "reviewer_kind": "ai",
+        }
+        write(out / "report.json", report)
+        write(
+            out / "status.json",
+            {
+                "status": "completed",
+                "completed": len(frames),
+                "total": len(frames),
+                "instances": report["instances"],
+            },
+        )
+    except BaseException:
+        write(out / "status.json", {"status": "failed", "error": traceback.format_exc()})
+        raise
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="action", required=True)
@@ -900,6 +993,10 @@ def main() -> None:
     p.add_argument("--source", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--decisions", type=Path)
+    p = sub.add_parser("relabel-review")
+    p.add_argument("--source", type=Path, required=True)
+    p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--decisions", type=Path, required=True)
     p = sub.add_parser("relabel-run")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--device", default="cuda", choices=("cuda", "cpu"))
@@ -914,6 +1011,8 @@ def main() -> None:
         focus_preview(args.source, args.out, args.combined)
     elif args.action == "relabel-prepare":
         relabel_prepare(args.source, args.out, args.decisions)
+    elif args.action == "relabel-review":
+        relabel_review(args.source, args.decisions, args.out)
     else:
         expected = args.out.resolve() / "snapshot/tools/annotation/studioa_autolabel.py"
         if Path(__file__).resolve() != expected:

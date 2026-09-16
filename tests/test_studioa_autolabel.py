@@ -205,6 +205,37 @@ def test_worker_freezes_writes_resumes_and_rejects_foreign_checkpoints(tmp_path,
     worker.relabel_run(relabeled, "cpu")
     assert relabeled_target.read_bytes() == relabeled_bytes
     raw_path = relabeled / "raw" / target.name
+    group_decisions = tmp_path / "group_decisions.json"
+    worker.write(
+        group_decisions,
+        {
+            "reviewer_kind": "ai",
+            "frames": [
+                {
+                    "frame_id": refined_data["frame_id"],
+                    "image_sha256": refined_data["image_sha256"],
+                    "raw_sha256": worker.digest(raw_path),
+                    "decisions": [
+                        {"group": 0, "entity": "unknown", "reason": "synthetic ambiguity"}
+                    ],
+                }
+            ],
+        },
+    )
+    group_reviewed = tmp_path / "group_reviewed"
+    worker.relabel_review(relabeled, group_decisions, group_reviewed)
+    reviewed = json.loads((group_reviewed / "frames" / target.name).read_text())
+    assert not reviewed["entities"] and reviewed["unresolved_candidates"]
+    assert (
+        json.loads((group_reviewed / "report.json").read_text())["ai_group_review"]["decisions"]
+        == 1
+    )
+    assert relabeled_target.read_bytes() == relabeled_bytes
+    document = json.loads(group_decisions.read_text())
+    document["frames"][0]["raw_sha256"] = "wrong"
+    worker.write(group_decisions, document)
+    with pytest.raises(ValueError, match="source hash mismatch"):
+        worker.relabel_review(relabeled, group_decisions, tmp_path / "bad_group_review")
     raw_path.write_text("{}")
     with pytest.raises(ValueError, match="changed relabel checkpoint"):
         worker.relabel_run(relabeled, "cpu")

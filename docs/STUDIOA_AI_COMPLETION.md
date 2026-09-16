@@ -1,0 +1,72 @@
+# StudioA AI 補查與重判
+
+本流程回應「把資料補齊」：對既有 121 張影像補查容易漏掉的展示設備，再以
+另一個本機視覺模型逐區域判斷類別。結果仍為 AI 標註，不宣稱每個物件均無漏標，
+也不把模型回覆當成獨立正確率。使用者不需要提交人工標註。
+
+## 方法與來源
+
+- 分割模型：本機 SAM3，固定 revision `3c879f39826c281e95690f02c7821c4de09afae7`。
+- 重判模型：本機 Cosmos-Reason1-7B，固定 revision
+  `3210bec0495fdc7a8d3dbb8d58da5711eab4b423`。
+- 增加八個文字查詢，涵蓋直立架、壁面商品架、圓桌、長桌、結帳／服務櫃檯、
+  紙箱及滅火器。新遮罩保留提示文字與分割分數。
+- 舊正向標籤、未決候選及新遮罩全部進入重判；只把 IoU 超過 0.75 的近似
+  遮罩分為同一組，不用包含關係合併桌子和桌上的商品。
+- 小商品提供隔離後的目標近照，遮罩外以灰色取代；家具提供保留桌上設備的局部原圖，
+  協助區分展示用途與服務用途。模型只回覆類別，沒有逐案文字理由；原始回覆全部保留。
+  不支持的物件、混合遮罩、不完整回覆都保留為 unknown。
+- 類別定義明確區分展示桌、直立架、服務櫃檯、建築門和櫃體面板，避免將櫃門
+  算成房門、商品包裝圖案算成真實裝置。
+- 原本已接受的純地板／牆壁／天花板沿用 SAM 語意來源，只扣除前景遮擋，
+  明記 source_semantic_preservation，不能宣稱通過第二模型驗證。商品不能任意
+  改判成其他商品或櫃檯，人物不能改判成桌子；不支持的改類列未決。
+- 接受的前景人物、商品、展示設備與門窗遮罩，依可見遮擋層次從後方遮罩扣除。
+  同層分類衝突仍列未決。完整原遮罩保存在來源與 raw 檔，並記錄扣除前後面積。
+
+這是另一個 AI 儀器的重新判斷，不是人工覆核。SAM 分數不等於重判分類可信度。
+背景反射、透明材質及遮罩形狀仍可能錯誤，需要抽查和後續更正；對尚未看清的
+區域保持忽略，不能為了消除缺類統計而硬補標籤。
+
+## 凍結、執行與續跑
+
+```bash
+.venv/bin/python tools/annotation/studioa_autolabel.py relabel-prepare \
+  --source runs/studioa_ai_labels_20260916_v3 \
+  --out runs/studioa_ai_relabel_20260916_v3 \
+  --decisions docs/reviews/studioa_fixture_decisions_20260916.json
+
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 OMP_NUM_THREADS=4 \
+TOKENIZERS_PARALLELISM=false \
+.venv/bin/python tools/annotation/studioa_autolabel.py relabel-run \
+  --out runs/studioa_ai_relabel_20260916_v3 --device cuda
+```
+
+prepare 凍結影像、來源標註、完整 src、worker、模型 revision、提示與規則。
+run 自動切換到凍結版本。來源／程式變動、另一工作包的 checkpoint，或完成影格
+對應 raw 決定檔被改動時拒絕續跑。每十六組寫入一次決定，每張寫入一次標註；
+`status.json` 包含影格與組數，`worker.log` 記錄結果與錯誤。
+
+正式批次由 `studioa-ai-relabel-20260916-v3.service` 執行，兩小時上限。
+GPU 工作不依賴前景終端存活；沒有向外部服務傳送影像，也不需下載模型。
+
+輸出包括 `sources/` 原標註、`raw/` 全部候選組與模型原始回覆、`frames/` 新標註
+及疊圖、`instances_ai.json`、`index.html`、報告與 hash。
+後續以 [部分監督匯出](STUDIOA_TRAINING_DATA.md)重算每個整店留出分割的有效資料，
+檢查是否仍有缺類；原有 test 影像不會因補標改列 train。
+
+第一版 `studioa_ai_relabel_20260916_v1` 的左右並排原場景／局部輪廓，讓模型
+受到場景中的大型櫃檯干擾，曾將指定的人物、商品或地板誤判為櫃檯。助理在
+前幾張原圖／遮罩抽查時發現，主動停止該 service；第一版不作為可用訓練資料。
+第二版全面灰底隔離，改善大物件干擾，但圓桌失去桌上展示品後被誤判為櫃，
+因此也停止，不作訓練來源。第三版使用上述分物件呈現方式，回覆改成單一類名。
+助理另看過 22 張原圖與指定遮罩：18 個服務櫃檯、4 個耳機展示桌；判讀綁定
+原圖 hash、來源標註 hash、候選 ID，並保留 VLM 原始回覆。
+
+## 同物件的重複遮罩與衝突
+
+IoU 分組不會把桌面和桌體等不同範圍的遮罩合為一組。因此即使已確認一個
+櫃檯，另一個範圍較大的遮罩仍可能被判成展示桌，使整區失去監督。
+`relabel-review` 可用助理逐圖判讀的 group 編號更正類別，再從原遮罩重算
+可見部分、衝突與 coverage。每個更正都綁定原圖和 raw 檔 hash；原始 VLM
+決定不修改，另存 AI 決定檔、程式、父版本 hash。這不等於全部遮罩都已驗證。
