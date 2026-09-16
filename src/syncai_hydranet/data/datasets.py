@@ -403,6 +403,8 @@ def build_dataset(
     sup = dcfg["supervises"]
     if dcfg.get("small_object_crop") and dcfg["type"] != "studioa_instances":
         raise ValueError("small_object_crop requires StudioA partial instances")
+    if dcfg.get("semantic_focus_crop") and dcfg["type"] != "studioa_partial":
+        raise ValueError("semantic_focus_crop requires StudioA partial semantics")
     if dcfg["type"] == "studioa_instances":
         if dcfg.get("classes") is not None or dcfg.get("det_vocab") is not None:
             raise ValueError("StudioA instance IDs cannot be remapped")
@@ -430,6 +432,7 @@ def build_dataset(
             input_size,
             train=train,
             augment=augment,
+            semantic_focus_crop=train and dcfg.get("semantic_focus_crop", False),
         )
     if dcfg["type"] == "seg_folder":
         return SegFolderDataset(

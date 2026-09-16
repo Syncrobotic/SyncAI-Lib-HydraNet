@@ -156,6 +156,30 @@ class Compose:
         return s
 
 
+class SemanticFocusCrop:
+    """Magnify a labelled weak class while retaining its labelled surroundings."""
+
+    def __init__(self, probability=0.5, classes=(3, 4, 5, 9, 10, 11, 13, 14, 16, 17)):
+        self.probability = probability
+        self.classes = classes
+
+    def __call__(self, sample: Sample) -> Sample:
+        if random.random() >= self.probability:
+            return sample
+        target = sample["masks"]["scene"]
+        present = [cid for cid in self.classes if np.any(target == cid)]
+        if not present:
+            return sample
+        rows, cols = np.nonzero(target == random.choice(present))
+        index = random.randrange(len(rows))
+        height, width = target.shape
+        zoom = random.uniform(2.0, 3.0)
+        crop_h, crop_w = max(2, int(height / zoom)), max(2, int(width / zoom))
+        x = int(np.clip(cols[index] - crop_w // 2, 0, width - crop_w))
+        y = int(np.clip(rows[index] - crop_h // 2, 0, height - crop_h))
+        return _paste(sample, (crop_h, crop_w), -x, -y)
+
+
 class Resize:
     """Stretch to ``(H, W)``, ignoring aspect ratio."""
 

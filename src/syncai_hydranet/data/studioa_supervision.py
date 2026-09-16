@@ -18,7 +18,7 @@ from .store_split import STORES, camera_store, fold_split, validate_fold
 from .studioa_autolabel import decode, validate_annotation
 from .studioa_contract import ENTITY_NAMES
 from .studioa_review import digest, write_json
-from .transforms import Sample, build_transforms
+from .transforms import Sample, SemanticFocusCrop, build_transforms
 
 SCHEMA = "studioa.partial-semantic.v1"
 CLASSES = {name: index for index, name in enumerate(ENTITY_NAMES)}
@@ -245,10 +245,14 @@ class StudioAPartialDataset(Dataset):
         *,
         train: bool = False,
         augment: dict | None = None,
+        semantic_focus_crop: bool = False,
     ):
         manifest = check_supervision(root)
         if train and split != "train":
             raise ValueError("evaluation partitions cannot use training augmentation")
+        if semantic_focus_crop and not train:
+            raise ValueError("semantic focus crop is train-only")
+        self.focus_crop = SemanticFocusCrop() if semantic_focus_crop else None
         if held_out not in STORES or split not in ("train", "val", "test"):
             raise ValueError("explicit store and train/val/test split required")
         if held_out not in manifest["folds"]:
@@ -274,7 +278,10 @@ class StudioAPartialDataset(Dataset):
             target = np.array(image)
         if target.ndim != 2 or not set(np.unique(target)) <= {*CLASSES.values(), IGNORE}:
             raise ValueError("invalid semantic target IDs")
-        sample = self.transform(Sample(image=rgb, masks={"scene": target}))
+        sample = Sample(image=rgb, masks={"scene": target})
+        if self.focus_crop is not None:
+            sample = self.focus_crop(sample)
+        sample = self.transform(sample)
         return {
             "image": sample["image"],
             "targets": sample["masks"],

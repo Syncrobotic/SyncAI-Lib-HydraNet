@@ -206,6 +206,7 @@ AUGMENT = {
 
 DATASET = {
     "small_object_crop": Spec((bool,)),
+    "semantic_focus_crop": Spec((bool,)),
     "validation_only": Spec((bool,)),
     "name": Spec((str,), required=True),
     "type": Spec(
@@ -658,6 +659,8 @@ def _check_one_dataset(rep: _Report, ds: dict, path: str, head_names: set[str]) 
         supervised.add(head)
     if ds.get("small_object_crop") and ds.get("type") != "studioa_instances":
         rep.errors.append(f"{path}: small_object_crop requires studioa_instances")
+    if ds.get("semantic_focus_crop") and ds.get("type") != "studioa_partial":
+        rep.errors.append(f"{path}: semantic_focus_crop requires studioa_partial")
     if ds.get("type") in ("studioa_partial", "studioa_instances"):
         if ds.get("held_out") not in ("Kaohsiung", "Taichung", "Tao-Hsin"):
             rep.errors.append(

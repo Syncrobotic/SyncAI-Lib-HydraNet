@@ -309,6 +309,8 @@ def prepare(
     scene_validation_updates: int = 165,
     scene_class_weights_source: Path | None = None,
     scene_validation_source: Path | None = None,
+    scene_focus_crop: bool = False,
+    scene_seed: int = 42,
 ) -> None:
     from syncai_hydranet.utils.visualize import terrain_palette
 
@@ -346,6 +348,8 @@ def prepare(
     elif scene_class_weights_source is not None:
         raise ValueError("scene weight source requires scene comparison updates")
     validation_manifest = None
+    if (scene_focus_crop or scene_seed != 42) and scene_comparison_updates is None:
+        raise ValueError("scene crop/seed options require scene comparison")
     if scene_validation_source is not None:
         if scene_comparison_updates is None:
             raise ValueError("separate validation source requires scene comparison")
@@ -447,6 +451,11 @@ def prepare(
         if fixed_epochs is not None:
             config["train"].update(epochs=fixed_epochs, early_stop_patience=0)
         check_config(config)
+    if scene_comparison_updates is not None:
+        config["seed"] = scene_seed
+        if scene_focus_crop:
+            config["data"]["datasets"][0]["semantic_focus_crop"] = True
+        check_config(config)
     write_json(out / "config.json", config)
     git = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
@@ -475,6 +484,8 @@ def prepare(
             "positive_classification": positive_classification,
             "regression_normalization": regression_normalization,
             "scene_comparison": scene_comparison_updates is not None,
+            "scene_focus_crop": scene_focus_crop,
+            "scene_seed": scene_seed,
             "scene_comparison_updates": scene_comparison_updates,
             "scene_validation_updates": scene_validation_updates
             if scene_comparison_updates is not None
@@ -824,6 +835,8 @@ def main():
     parser.add_argument("--scene-validation-updates", type=int, default=165)
     parser.add_argument("--scene-class-weights-source", type=Path)
     parser.add_argument("--scene-validation-source", type=Path)
+    parser.add_argument("--scene-focus-crop", action="store_true")
+    parser.add_argument("--scene-seed", type=int, default=42)
     parser.add_argument(
         "--positive-classification",
         choices=("positive_only", "assigned_object"),
@@ -860,6 +873,8 @@ def main():
             args.scene_validation_updates,
             args.scene_class_weights_source,
             args.scene_validation_source,
+            args.scene_focus_crop,
+            args.scene_seed,
         )
     else:
         out = args.out.resolve()
