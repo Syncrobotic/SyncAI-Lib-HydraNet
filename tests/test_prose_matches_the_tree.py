@@ -9,9 +9,8 @@ A test cannot check prose in general. It can check the specific claims that have
 rotted once, which is what this file is: each test names the sentence it guards and fails
 when the tree and the sentence disagree again -- in either direction.
 
-`runs/` is gitignored, so these skip on a clean checkout. That is the honest shape: the
-claim is about what this box holds, and on a box that holds nothing there is nothing to
-contradict.
+Source wording and supported zone kinds are checked on every checkout. Only numerical
+comparisons with private `runs/` artifacts skip when those artifacts are absent.
 """
 
 from __future__ import annotations
@@ -22,10 +21,6 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 GT_SETS = sorted(ROOT.glob("runs/gt_*"))
-
-pytestmark = pytest.mark.skipif(
-    not GT_SETS, reason="runs/ is gitignored; nothing here to contradict the prose"
-)
 
 CLAIMED_NO_LABELLED_CLIP = [
     "src/syncai_hydranet/analytics/reid_metrics.py",
@@ -85,7 +80,6 @@ def test_zones_confirm_describes_the_zones_that_exist():
     prose never caught up, which is the failure this file exists for: prose that reads as
     sensible and is false about the tree beneath it.
     """
-    import json
 
     from syncai_hydranet.geometry.camera_json import ZONE_KINDS
 
@@ -99,6 +93,11 @@ def test_zones_confirm_describes_the_zones_that_exist():
             f"the docstring quotes ZONE_KINDS and omits {kind!r}; a quoted set that has "
             "since grown makes the argument built on it read as settled when it is not"
         )
+
+
+def test_commissioned_zones_match_documented_policy_status():
+    """The live fleet comparison is separate from the always-run source contract."""
+    import json
 
     commissioned = sorted((ROOT / "runs/commission01").glob("*.camera.json"))
     if not commissioned:
