@@ -186,10 +186,17 @@ def run(out: Path) -> None:
                         & (points[:, None, 1] >= boxes[None, :, 1])
                         & (points[:, None, 1] <= boxes[None, :, 3])
                     ).any(dim=1)
-                    unknown = ~known_empty & ~in_any_box
+                    unknown = (
+                        (~known_empty & ~in_any_box)[:, None].expand(-1, len(CLASSES)).clone()
+                    )
+                    class_negative = targets.get("det_class_negative_mask")
+                    if class_negative is not None:
+                        reviewed = (class_negative[b, :, safe_y, safe_x] == 1).T
+                        reviewed &= ((x < w) & (y < h))[:, None]
+                        unknown &= ~reviewed
                     if torch.count_nonzero(grads[b, unknown]):
                         raise ValueError("unreviewed region produced background gradient")
-                    unknown_channels += int(unknown.sum()) * len(CLASSES)
+                    unknown_channels += int(unknown.sum())
                 optimizer.step()
                 steps.append(
                     {

@@ -246,3 +246,30 @@ metadata 的 dirty 警示來自既有無關未追蹤檔，訓練程式使用已�
 通道，不能將實際物品整片畫成十類共同背景。紙箱三個 train 觀測全部來自同一
 張影像與同一鏡頭，應由其他允許的 source-train 鏡頭補充。所有新增覆核由 AI
 執行，val/test 分配及 score／NMS 門檻保持固定。尚不推進 Stage 2–4 的效果宣稱。
+
+## 2026-09-16：逐類負樣本與第二支紙箱鏡頭
+
+instances v4 保留 v3 的 33 張影像、正框、空白區 masks、companions 與 split
+逐檔一致；新增 `0058-Kaohsiung-cam08` 中可分離的左側紙箱。相鄰兩箱合併的
+proposal 被拒絕，只接受單箱遮罩。train 現為 28 張／130 個觀測；紙箱 4 個、
+2 支鏡頭，仍十分稀少。val 保持 6 張／31 個正例，語意資料完全不改。
+
+AI 重新查看 62 張來源 train 總覽及候選原圖，在 5 張既有影像選定 19 個保守
+區域、47 項逐類負向決定：桌墊與遙控器不是手機、包裝印刷的平板不是實體平板、
+桌上型螢幕不是筆電、海報上的 HomePod 不是實體喇叭、木椅不是紙箱。
+這批資料重用已下載且分割合法的影像，不需要新增 GCS 下載。
+
+`class_negative_rects` 必須由綁定影像／companion hash 的 AI 覆核提供，且只准
+用於 train。匯出為逐類 0/1 masks；沒有明確否定的類別仍未知。dataset 對每個
+通道共同做縮放、裁切、翻轉與 padding，再組成 `[C,H,W]`，padding 255 忽略。
+FCOS 在對應 grid point 只加入被否定通道的 focal loss，不改 regression 或
+centerness。相同類別的正框在所有金字塔尺度都有優先權；匯出時也拒絕矛盾覆核。
+既有全類空白 mask 與部分驗證指標契約不變。無此欄位的舊資料維持原行為。
+
+[覆核決定](reviews/studioa_class_negative_decisions_20260916.json) ·
+[逐類負樣本總覽](../runs/studioa_confusers_20260916_v1/class_negative_contact.jpg) ·
+[新增單箱遮罩](../runs/studioa_confusers_20260916_v1/vlm-unknown-0016.jpg)。
+
+重訓沿用固定場景 warmup 設定與原始 scene 初始化，score／NMS／max_det 不調整。
+本輪完整資料變更與前版 7/31 比較；不把資料增補與 loss 修改當成單因素因果實驗。
+未知預測數減少不等於 precision 改善；僅通過隨機初始化基準也不等於超過前版。

@@ -133,6 +133,9 @@ def test_reviewed_instances_export_transform_factory_and_boundaries(tmp_path):
                     {"id": data["entities"][0]["id"], "entity": "phone", "reason": "fixture"}
                 ],
                 "negative_rects": [{"xyxy": [32, 0, 40, 8], "reason": "fixture empty patch"}],
+                "class_negative_rects": [
+                    {"entity": "laptop", "xyxy": [0, 0, 8, 8], "reason": "phone is not laptop"}
+                ],
             }
         ],
     }
@@ -159,6 +162,10 @@ def test_reviewed_instances_export_transform_factory_and_boundaries(tmp_path):
     assert sample["targets"]["boxes"].tolist() == [[10.0, 0.0, 40.0, 24.0]]
     assert (sample["targets"]["det_negative_mask"][:8, :8] == 1).all()
     assert sample["targets"]["labels"].tolist() == [1]
+    class_mask = sample["targets"]["det_class_negative_mask"]
+    assert class_mask.shape == (10, 32, 40)
+    assert (class_mask[0, :8, 32:] == 1).all()  # flipped with image and boxes
+    assert (class_mask[1:] == 0).all()
     assert fingerprint_dataset(cfg)["splits"]["train"]["frames"] == [f["id"]]
     assert split_leaks([cfg]) == []
     with pytest.raises(ValueError, match="unchanged splits"):
@@ -174,6 +181,20 @@ def test_reviewed_instances_export_transform_factory_and_boundaries(tmp_path):
     (out / m["frames"][0]["image"]).write_bytes(b"changed")
     with pytest.raises(ValueError, match="package changed"):
         check_instances(out)
+
+
+def test_class_negative_review_rejects_contradiction_and_val():
+    from syncai_hydranet.data.studioa_instances import class_negative_regions
+
+    item = {
+        "class_negative_rects": [{"entity": "phone", "xyxy": [1, 1, 4, 4], "reason": "fixture"}]
+    }
+    with pytest.raises(ValueError, match="contradicts"):
+        class_negative_regions(item, (10, 10), [[0, 0, 5, 5]], [1], "train")
+    with pytest.raises(ValueError, match="train-only"):
+        class_negative_regions(item, (10, 10), [], [], "val")
+    masks = class_negative_regions(item, (10, 10), [[0, 0, 5, 5]], [0], "train")
+    assert list(masks) == ["phone"] and masks["phone"].sum() == 9
 
 
 def test_real_export_reader_preserves_folds_source_labels_and_ignore(tmp_path):

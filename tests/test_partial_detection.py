@@ -44,6 +44,55 @@ def test_partial_focal_unknown_channels_padding_and_regression_gradients():
     assert (cls[1].grad == 0).all()  # small box out of second level's range
 
 
+def test_class_negative_only_affects_reviewed_channel_and_protects_positive_all_levels():
+    head, cls, reg, ctr, boxes, labels, negative = batch()
+    negative.zero_()
+    per_class = torch.zeros(1, 3, 32, 32, dtype=torch.uint8)
+    per_class[:, 0, :8, 8:16] = 1
+    per_class[:, 0, 8:16, 8:16] = 1  # explicit wrong-class negative on another positive
+    per_class[:, 1, 8:24, 8:24] = 1  # contradictory positive is protected at every level
+    per_class[:, 2, 24:] = 255  # padding is not a negative
+    FCOSLoss(3)(
+        head,
+        cls,
+        reg,
+        ctr,
+        boxes,
+        labels,
+        negative_mask=negative,
+        class_negative_mask=per_class,
+    )[0].backward()
+    g = cls[0].grad[0]
+    assert g[0, 0, 1] > 0
+    assert (g[1:, 0, 1] == 0).all()
+    assert g[1, 1, 1] < 0
+    assert g[0, 1, 1] > 0 and g[2, 1, 1] == 0
+    assert (g[:, 3, :] == 0).all()
+    assert (cls[1].grad[:, 1:] == 0).all()
+    assert cls[1].grad[0, 0, 0, 0] > 0
+    assert (reg[0].grad[:, :, 0, :] == 0).all()
+    assert (ctr[0].grad[:, :, 0, :] == 0).all()
+
+
+@pytest.mark.parametrize(
+    "bad", [torch.zeros(1, 32, 32), torch.zeros(1, 2, 32, 32), torch.full((1, 3, 32, 32), 2)]
+)
+def test_invalid_class_negatives_rejected(bad):
+    head, cls, reg, ctr, boxes, labels, negative = batch()
+    with pytest.raises(ValueError, match="class_negative_mask"):
+        FCOSLoss(3)(
+            head, cls, reg, ctr, boxes, labels, negative_mask=negative, class_negative_mask=bad
+        )
+
+
+def test_class_negative_cannot_turn_exhaustive_training_into_partial():
+    head, cls, reg, ctr, boxes, labels, _ = batch()
+    with pytest.raises(ValueError, match="requires partial"):
+        FCOSLoss(3)(
+            head, cls, reg, ctr, boxes, labels, class_negative_mask=torch.zeros(1, 3, 32, 32)
+        )
+
+
 def test_box_never_becomes_negative_on_an_unassigned_level():
     head, cls, reg, ctr, boxes, labels, negative = batch()
     negative.fill_(1)

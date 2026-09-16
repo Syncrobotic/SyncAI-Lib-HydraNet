@@ -162,6 +162,7 @@ class FCOSLoss(nn.Module):
         labels_list,
         class_mask=None,
         negative_mask=None,
+        class_negative_mask=None,
     ):
         """``class_mask`` is [B, C] or [C]: which channels this batch's dataset can label.
 
@@ -170,6 +171,8 @@ class FCOSLoss(nn.Module):
         Only the assigned positive channel is supervised at a labelled box; other
         channels and unlabelled locations are unknown, not false negatives. None
         preserves exhaustive-box training, including its ordinary background loss.
+        ``class_negative_mask`` is optional [B,C,H,W] reviewed absence per class;
+        it never turns the other channels into background.
         """
         device = cls_out[0].device
         shapes = [c.shape[-2:] for c in cls_out]
@@ -189,6 +192,8 @@ class FCOSLoss(nn.Module):
         # is why it survived every seg-only run.
         onehot[pos] = F.one_hot(cls_t[pos], self.num_classes).to(onehot.dtype)
         partial_mask = None
+        if class_negative_mask is not None and negative_mask is None:
+            raise ValueError("class_negative_mask requires partial negative_mask")
         if negative_mask is not None:
             if negative_mask.ndim != 3 or negative_mask.shape[0] != flat_cls.shape[0]:
                 raise ValueError("partial detection negative_mask must be [B,H,W]")
@@ -216,6 +221,29 @@ class FCOSLoss(nn.Module):
                     ).any(dim=1)
                     negative[b] &= ~in_box
             partial_mask = torch.maximum(onehot, negative[..., None].to(onehot.dtype))
+            if class_negative_mask is not None:
+                expected = (flat_cls.shape[0], self.num_classes, h, w)
+                if tuple(class_negative_mask.shape) != expected:
+                    raise ValueError("class_negative_mask must be [B,C,H,W] aligned with image")
+                cm = class_negative_mask.to(device)
+                if not ((cm == 0) | (cm == 1) | (cm == 255)).all():
+                    raise ValueError("class_negative_mask supports only 0/1/255")
+                selected = (
+                    cm[:, :, xy[:, 1].clamp(max=h - 1), xy[:, 0].clamp(max=w - 1)] == 1
+                ).permute(0, 2, 1)
+                selected &= inside[None, :, None]
+                for b, (boxes, labels) in enumerate(zip(boxes_list, labels_list, strict=True)):
+                    # Reviewed positives take precedence on every pyramid level,
+                    # including levels to which their regression was not assigned.
+                    for box, label in zip(boxes, labels, strict=True):
+                        inside_box = (
+                            (points[:, 0] >= box[0])
+                            & (points[:, 0] <= box[2])
+                            & (points[:, 1] >= box[1])
+                            & (points[:, 1] <= box[3])
+                        )
+                        selected[b, inside_box, label] = False
+                partial_mask = torch.maximum(partial_mask, selected.to(onehot.dtype))
         if class_mask is not None:
             # [B, C] -> [B, 1, C] against flat_cls's [B, points, C]; a [C] mask
             # broadcasts as it is. Cast rather than assume: under autocast flat_cls is
