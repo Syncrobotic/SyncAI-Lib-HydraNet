@@ -84,6 +84,32 @@ includes unexecuted tool subdirectories and gates source/tooling separately; a f
 test pass does not replace the full suite. Keep test builders in non-`test_` helper
 modules, and match mocked public signatures explicitly instead of swallowing keywords.
 
+A clean source tree is not a clean dependency environment. The 2026-09-16 CI failure
+came from a mocked annotation worker still querying real `transformers` distribution
+metadata: it passed in the workstation's annotation environment and failed in CI's
+`dev + export` environment. Mock the optional teacher's metadata along with its model;
+keep checks for real required dependencies and worker output integrity intact.
+
+To reproduce the unit-test matrix, use a fresh clone and a separate environment for
+each interpreter, with `ffmpeg` available on PATH:
+
+```bash
+git clone --no-local . /tmp/hydranet-ci-review
+cd /tmp/hydranet-ci-review
+for version in 3.11 3.12 3.13; do
+  export UV_PYTHON="$version"
+  export UV_PROJECT_ENVIRONMENT="$PWD/.venv-$version"
+  uv sync --locked --group dev --extra export
+  ./scripts/coverage_ratchet.sh
+done
+```
+
+Keep `UV_PYTHON` set for both commands: passing `--python` only to `uv sync` lets a
+later `uv run` honor the repository's `.python-version` and recreate the environment
+with another interpreter. Record the actual Python version and installed packages.
+This local matrix does not substitute for the separate export/security jobs or a
+successful remote CI run for the pushed commit.
+
 Implementation comments, docstrings and identifiers are English. Localized UI text,
 annotation display names and generated reports may use the requested language; the
 Python language guard distinguishes these literals from implementation prose. Do not
