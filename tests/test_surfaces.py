@@ -42,6 +42,7 @@ def test_glass_ignores_depth_behind_it_and_recovers_its_contact_plane():
     assert result is not None
     assert np.allclose(result.points[:, 1], 5, atol=0.12)
     assert np.isclose(np.linalg.norm(np.diff(result.points, axis=0)), 3, atol=0.15)
+    assert result.iou is not None
     assert result.bottom == 0 and result.iou > 0.85
 
 
@@ -94,6 +95,26 @@ def test_a_glass_pane_in_front_of_a_wall_cannot_cut_it():
     assert sections == [("u", 5.0, -2.0, 2.0, 0.0, 2.4)]
 
 
+def test_wall_disappearance_records_the_responsible_opening_without_changing_geometry():
+    from syncai_bev3d.surfaces import Surface, wall_sections
+
+    opening = Surface(np.array([[-2.1, 5.0], [2.1, 5.0]]), 0, 2.5, "door", 0.5, "floor")
+    opening.source_id = "door:7"
+    opening.ground_contact_span_m = 1.1
+    report = []
+    walls = [("u", 5.0, -2.0, 2.0, 0.15)]
+    assert (
+        wall_sections(walls, [opening], 0, report=report)
+        == wall_sections(walls, [opening], 0)
+        == []
+    )
+    assert report[0]["decision"] == "fully_removed"
+    assert report[0]["remaining_area_m2"] == 0
+    cut = report[0]["opening_cuts"][0]
+    assert cut["source_id"] == "door:7" and cut["ground_contact_span_m"] == 1.1
+    assert cut["surface_span_m"] == 4.2
+
+
 def test_adjacent_glass_does_not_double_the_reviewed_door_leaf():
     from syncai_bev3d.surfaces import Surface, separate_glazing
 
@@ -105,3 +126,21 @@ def test_adjacent_glass_does_not_double_the_reviewed_door_leaf():
     assert np.allclose(panes[0].points[:, 0], [-2.0, -0.5])
     assert np.allclose(panes[1].points[:, 0], [0.5, 1.0])
     assert any(s is door for s in result)
+
+
+def test_exported_glass_frame_stays_inside_trimmed_endpoints_at_any_heading():
+    from syncai_bev3d.meshes import glass_panel
+    from syncai_bev3d.object_assets import glass_door_meshes
+
+    for yaw in (0.0, 0.3, 1.2, 2.7):
+        along = np.array([np.cos(yaw), np.sin(yaw)])
+        origin = np.array([1.3, 4.1])
+        glass_points = origin + np.array([0.0, 2.0])[:, None] * along
+        door_points = origin + np.array([2.0, 3.0])[:, None] * along
+        vertices, _ = glass_panel(glass_points, 2.4)
+        pane, frame = glass_door_meshes(door_points, 2.4)
+        glass_extent = (vertices[:, [0, 2]] - origin) @ along
+        door_extent = (np.concatenate([pane[0], frame[0]])[:, [0, 2]] - origin) @ along
+        assert glass_extent.min() >= -1e-8
+        assert glass_extent.max() <= 2.0 + 1e-8
+        assert door_extent.min() >= glass_extent.max() - 1e-8

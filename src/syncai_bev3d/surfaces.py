@@ -25,8 +25,10 @@ class Surface:
     bottom: float
     height: float
     kind: str
-    iou: float
+    iou: float | None
     source: str
+    source_id: str = ""
+    ground_contact_span_m: float | None = None
 
 
 def _contact_plane(points):
@@ -90,7 +92,14 @@ def _project(points, cf, shape):
 
 
 def fit_surface(
-    mask, ev, *, kind="door", walls=(), yaw=0.0, support: Surface | None = None
+    mask,
+    ev,
+    *,
+    kind="door",
+    walls=(),
+    yaw=0.0,
+    support: Surface | None = None,
+    limit_support_extent=True,
 ) -> Surface | None:
     """One connected mask -> a grounded door/pane, or a window on a known wall.
 
@@ -117,7 +126,7 @@ def fit_surface(
         along = support.points[1] - support.points[0]
         along = along / np.linalg.norm(along)
         normal = np.array([-along[1], along[0]])
-        extent = tuple(sorted(support.points @ along))
+        extent = tuple(sorted(support.points @ along)) if limit_support_extent else None
         planes.append(
             (along, normal, float(support.points[0] @ normal), "shared glazing plane", extent)
         )
@@ -179,12 +188,27 @@ def fit_surface(
         sil = np.asarray(im, bool)
         score = float((sil & mask).sum() / max((sil | mask).sum(), 1))
         if score >= 0.35:
-            proposals.append(Surface(points, bottom, top - bottom, kind, score, source))
+            candidate = Surface(points, bottom, top - bottom, kind, score, source)
+            if source == "floor contact":
+                supported = g[np.abs(g @ normal - distance) < 0.10] @ along
+                if len(supported) >= 12:
+                    candidate.ground_contact_span_m = float(
+                        np.diff(np.percentile(supported, [1, 99]))[0]
+                    )
+            proposals.append(candidate)
     return max(proposals, key=lambda p: p.iou) if proposals else None
 
 
 def scene_surfaces(
-    camera, ev, root: Path, *, walls=(), yaw=0.0, mask_overrides=None, report=None
+    camera,
+    ev,
+    root: Path,
+    *,
+    walls=(),
+    yaw=0.0,
+    mask_overrides=None,
+    report=None,
+    opening_controls=None,
 ) -> list[Surface]:
     """Read explicit glazing masks first; door masks cannot overwrite them."""
     out = []
@@ -200,11 +224,25 @@ def scene_surfaces(
             )
         filled_ev = replace(ev, walk=ev.walk | filled)
 
-    def fit(mask, *, kind, support=None):
-        surface = fit_surface(mask, ev, kind=kind, walls=walls, yaw=yaw, support=support)
+    def fit(mask, *, kind, support=None, limit_support_extent=True):
+        surface = fit_surface(
+            mask,
+            ev,
+            kind=kind,
+            walls=walls,
+            yaw=yaw,
+            support=support,
+            limit_support_extent=limit_support_extent,
+        )
         if surface is None and filled_ev is not ev:
             surface = fit_surface(
-                mask, filled_ev, kind=kind, walls=walls, yaw=yaw, support=support
+                mask,
+                filled_ev,
+                kind=kind,
+                walls=walls,
+                yaw=yaw,
+                support=support,
+                limit_support_extent=limit_support_extent,
             )
             if surface is not None:
                 surface.source = "completed floor contact; " + surface.source
@@ -249,8 +287,26 @@ def scene_surfaces(
             glazing |= mask
     groups, n_groups = ndimage.label(glazing, np.ones((3, 3)))
     supports = {}
+    controlled, control_rows, controls = [], [], None
+    if opening_controls is not None:
+        from syncai_bev3d.opening_controls import fit_controls, load_controls
+
+        if mask_overrides is not None:
+            raise ValueError("source-bound controls cannot use unbound candidate masks")
+        controls = load_controls(Path(opening_controls), root, camera)
+        controlled, control_rows = fit_controls(controls, ev.cf)
+    control_groups = set()
+    if controlled and controls is not None:
+        replaced_mask = np.zeros_like(glazing)
+        for kind in controls["replaces_kinds"]:
+            replaced_mask |= masks.get(kind, np.zeros_like(glazing))
+        control_groups = set(np.unique(groups[replaced_mask])) - {0}
+        if len(control_groups) != 1:
+            raise ValueError("one opening control plane must bind exactly one glazing group")
     for group in range(1, n_groups + 1):
-        support = fit(groups == group, kind="glass")
+        support = (
+            controlled[0] if group in control_groups else fit(groups == group, kind="glass")
+        )
         if support is not None:
             supports[group] = support
     for kind, mask in masks.items():
@@ -269,7 +325,12 @@ def scene_surfaces(
                     )
                 continue
             group = int(np.argmax(np.bincount(groups[part]), axis=0))
-            surface = fit(part, kind=kind, support=supports.get(group))
+            surface = fit(
+                part,
+                kind=kind,
+                support=supports.get(group),
+                limit_support_extent=group not in control_groups,
+            )
             reason = "no supported plane passes reprojection"
             if (
                 surface is not None
@@ -283,11 +344,13 @@ def scene_surfaces(
             if surface is not None and group in supports:
                 surface.source += "; " + supports[group].source
             if surface is not None:
+                surface.source_id = f"{kind}:{label}"
                 out.append(surface)
             if report is not None:
                 report.append(
                     {
                         "kind": kind,
+                        "source_id": f"{kind}:{label}",
                         "component": label,
                         "mask_pixels": int(part.sum()),
                         "status": "supported" if surface is not None else "rejected",
@@ -295,13 +358,42 @@ def scene_surfaces(
                         "reason": None if surface is not None else reason,
                         "iou": surface.iou if surface is not None else None,
                         "source": surface.source if surface is not None else None,
+                        "ground_contact_span_m": surface.ground_contact_span_m
+                        if surface is not None
+                        else None,
                         "points_m": surface.points.tolist() if surface is not None else None,
                         "bottom_m": surface.bottom if surface is not None else None,
                         "height_m": surface.height if surface is not None else None,
                         "mask_source": sources[kind],
                     }
                 )
-    return separate_glazing(out)
+    if opening_controls is not None:
+        if controlled and controls is not None:
+            replaced = set(controls["replaces_kinds"])
+            out = [s for s in out if s.kind not in replaced] + controlled
+            if report is not None:
+                for row in report:
+                    if row["kind"] in replaced:
+                        row["automatic_fit_status"] = row["status"]
+                        row["status"] = "superseded_by_controls"
+        if report is not None:
+            report.extend(control_rows)
+    final = separate_glazing(out)
+    if report is not None:
+        for row in report:
+            pieces = [s for s in final if s.source_id == row.get("source_id")]
+            row["final_surfaces"] = [
+                {
+                    "surface_id": f"{s.source_id}:{index}",
+                    "points_m": s.points.tolist(),
+                    "bottom_m": s.bottom,
+                    "height_m": s.height,
+                    "geometry_stage": "after coplanar overlap trimming",
+                    "mesh_nodes": [],
+                }
+                for index, s in enumerate(pieces)
+            ]
+    return final
 
 
 def separate_glazing(surfaces: list[Surface]) -> list[Surface]:
@@ -338,7 +430,7 @@ def separate_glazing(surfaces: list[Surface]) -> list[Surface]:
     return out
 
 
-def wall_sections(walls, surfaces, yaw: float, height: float = 2.4):
+def wall_sections(walls, surfaces, yaw: float, height: float = 2.4, *, report=None):
     """Carve supported door/window apertures out of coplanar wall runs.
 
     Returns (axis, perp, lo, hi, bottom, top). A raised window preserves its sill;
@@ -348,6 +440,8 @@ def wall_sections(walls, surfaces, yaw: float, height: float = 2.4):
     out = []
     for axis, perp, lo, hi, _thick in walls:
         cuts = []
+        cut_records = []
+        before = len(out)
         for surface in surfaces:
             points = surface.points
             uv = np.c_[
@@ -359,6 +453,19 @@ def wall_sections(walls, surfaces, yaw: float, height: float = 2.4):
             start, end = max(lo, float(along.min())), min(hi, float(along.max()))
             if end - start > 0.10:
                 cuts.append((start, end, surface.bottom, surface.bottom + surface.height))
+                cut_records.append(
+                    {
+                        "source_id": surface.source_id,
+                        "kind": surface.kind,
+                        "start_m": start,
+                        "end_m": end,
+                        "bottom_m": surface.bottom,
+                        "top_m": surface.bottom + surface.height,
+                        "surface_span_m": float(np.linalg.norm(np.diff(points, axis=0))),
+                        "ground_contact_span_m": surface.ground_contact_span_m,
+                        "scope": "fitted aperture; no independent door-boundary validation",
+                    }
+                )
         boundaries = sorted({lo, hi, *(x for cut in cuts for x in cut[:2])})
         for a, b in pairwise(boundaries):
             if b - a < 0.10:
@@ -378,4 +485,23 @@ def wall_sections(walls, surfaces, yaw: float, height: float = 2.4):
                 bottom = max(bottom, high)
             if height - bottom >= 0.10:
                 out.append((axis, perp, a, b, bottom, height))
+        if report is not None:
+            sections = out[before:]
+            report.append(
+                {
+                    "kind": "wall",
+                    "status": "wall_aperture_audit",
+                    "input_run": {"axis": axis, "perp_m": perp, "lo_m": lo, "hi_m": hi},
+                    "opening_cuts": cut_records,
+                    "remaining_section_count": len(sections),
+                    "remaining_area_m2": sum(
+                        (b - a) * (top - bottom) for _, _, a, b, bottom, top in sections
+                    ),
+                    "decision": "fully_removed"
+                    if not sections
+                    else "carved"
+                    if cuts
+                    else "uncut",
+                }
+            )
     return out

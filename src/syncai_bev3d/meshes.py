@@ -590,12 +590,16 @@ def glass_panel(points, height_m: float, *, frame_t: float = 0.05) -> Mesh:
     (``glass``) is the caller's to state. Separate from `wall()` because a platform
     screen door or a shopfront drawn at wall thickness reads as masonry and hides
     everything behind it in every orbit view, which defeats the reason it was modelled.
+    Endpoints bound the outside of each frame, as for glass_door_meshes. End jambs
+    must stay inside that interval after adjacent door apertures have been trimmed.
     """
     pts = np.asarray(points, float)
     if pts.ndim != 2 or pts.shape[1] != 2 or len(pts) < 2:
         raise ValueError(f"points must be (N>=2, 2) of (x, z), got shape {pts.shape}")
     if not np.isfinite(pts).all() or not np.isfinite(height_m) or height_m <= 0:
         raise ValueError("glass points and height must be finite, with positive height")
+    if not np.isfinite(frame_t) or frame_t <= 0:
+        raise ValueError("glass frame thickness must be finite and positive")
     parts = []
     for a, b in itertools.pairwise(pts):
         d = b - a
@@ -606,13 +610,16 @@ def glass_panel(points, height_m: float, *, frame_t: float = 0.05) -> Mesh:
         parts.append(extrude([a + nrm, b + nrm, b - nrm, a - nrm], height_m))
         # top and bottom rails, slightly proud of the pane, so the run reads as built
         rail_n = np.array([-d[1], d[0]]) / length * (frame_t / 2)
-        for y0, t in ((0.0, frame_t), (height_m - frame_t, frame_t)):
+        rail_height = min(frame_t, height_m / 2)
+        for y0, t in ((0.0, rail_height), (height_m - rail_height, rail_height)):
             rail = extrude([a + rail_n, b + rail_n, b - rail_n, a - rail_n], t)
             parts.append((rail[0] + [0, y0, 0], rail[1]))
         # End jambs make a pane a framed opening rather than an unsupported slab.
-        for x, z in (a, b):
-            jamb = box(frame_t, height_m, frame_t)
-            parts.append((jamb[0] + [x, 0, z], jamb[1]))
+        inset = d / length * min(frame_t, length / 2)
+        for start, end in ((a, a + inset), (b - inset, b)):
+            parts.append(
+                extrude([start + rail_n, end + rail_n, end - rail_n, start - rail_n], height_m)
+            )
     if not parts:
         raise ValueError("every glass segment had zero length")
     return _merge(*parts)

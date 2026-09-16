@@ -1085,6 +1085,7 @@ def build_scene_regular(
     support_report=None,
     surface_masks=None,
     surface_report=None,
+    opening_controls=None,
 ):
     """B-path: every fixture becomes a store-axis-aligned parametric mesh.
 
@@ -1228,7 +1229,19 @@ def build_scene_regular(
     walls: list[tuple[str, float, float, float, float]] = []
     for run in runs:
         axis, perp, lo, hi, _thick = run
-        if floor_both_sides((axis, perp, lo, hi), floor_u, floor_v) > FLOOR_BOTH_SIDES:
+        floor_ratio = floor_both_sides((axis, perp, lo, hi), floor_u, floor_v)
+        if surface_report is not None:
+            surface_report.append(
+                {
+                    "kind": "wall",
+                    "status": "wall_floor_audit",
+                    "input_run": {"axis": axis, "perp_m": perp, "lo_m": lo, "hi_m": hi},
+                    "floor_both_sides_ratio": floor_ratio,
+                    "threshold": FLOOR_BOTH_SIDES,
+                    "decision": "rejected" if floor_ratio > FLOOR_BOTH_SIDES else "passed",
+                }
+            )
+        if floor_ratio > FLOOR_BOTH_SIDES:
             # **Dropped, not re-classified -- and the difference was measured.** A shopper
             # can stand on both sides of this, so it is not a room boundary: that much the
             # relation establishes, and removing it is the whole gain.
@@ -1255,11 +1268,12 @@ def build_scene_regular(
             yaw=yaw,
             mask_overrides=surface_masks,
             report=surface_report,
+            opening_controls=opening_controls,
         )
         if by_object
         else []
     )
-    sections = wall_sections(walls, surfaces, yaw, DRAWN_H["wall"])
+    sections = wall_sections(walls, surfaces, yaw, DRAWN_H["wall"], report=surface_report)
     walls = [
         (axis, perp, lo, hi, 0.15)
         for axis, perp, lo, hi, bottom, _top in sections
@@ -1276,6 +1290,18 @@ def build_scene_regular(
         key = paint.run(axis, perp, lo, hi)
         mesh = wall(pts, top - bottom, thickness_m=0.15)
         items.append(((mesh[0] + [0, bottom, 0], mesh[1]), key, 105, False))
+        if surface_report is not None:
+            surface_report.append(
+                {
+                    "kind": "wall",
+                    "status": "final_wall_section",
+                    "geometry_stage": "after door and window apertures",
+                    "points_m": pts,
+                    "bottom_m": bottom,
+                    "height_m": top - bottom,
+                    "mesh_nodes": [f"{key}_{len(items) - 1}"],
+                }
+            )
 
     # ---- 3. REGULARISE. The step every scan-to-BIM and structured-modelling pipeline
     # has between fitting and meshing, and the one this file did not: two fixtures cannot
@@ -1342,7 +1368,9 @@ def build_scene_regular(
             items.append((place(counter(w, d, h), at), key, 255, True))
 
     if by_object:
+        piece_counts = {}
         for surface in surfaces:
+            first_mesh = len(items)
             length = float(np.linalg.norm(surface.points[1] - surface.points[0]))
             glazed = surface.kind in {"glass", "glass_door", "window"}
             if surface.kind == "glass_door":
@@ -1359,9 +1387,23 @@ def build_scene_regular(
             else:
                 items.append((door_mesh(surface.points, surface.height), "door", 255, True))
                 shapes.append(("door", length, 0.08, surface.height))
-            print(
-                f"  {camera}: {surface.kind} {length:.2f} m from {surface.source}, "
+            if surface_report is not None:
+                index = piece_counts.get(surface.source_id, 0)
+                piece_counts[surface.source_id] = index + 1
+                surface_id = f"{surface.source_id}:{index}"
+                for row in surface_report:
+                    for piece in row.get("final_surfaces", []):
+                        if piece["surface_id"] == surface_id:
+                            piece["mesh_nodes"] = [
+                                f"{items[i][1]}_{i}" for i in range(first_mesh, len(items))
+                            ]
+            fit_score = (
                 f"reprojection IoU {surface.iou:.2f}"
+                if surface.iou is not None
+                else "control fit; see raw boundary residuals"
+            )
+            print(
+                f"  {camera}: {surface.kind} {length:.2f} m from {surface.source}, {fit_score}"
             )
 
     refinements = []

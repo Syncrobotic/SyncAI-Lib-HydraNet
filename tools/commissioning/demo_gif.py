@@ -415,7 +415,7 @@ def main() -> int:
             )
             + "\n"
         )
-        print(f"  verdict -> {verdict.relative_to(ROOT)}")
+        print(f"  verdict -> {verdict}")
         if naked:
             for i, bb, s0, un in naked[:10]:
                 print(

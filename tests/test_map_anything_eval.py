@@ -34,6 +34,7 @@ def _load():
     spec = importlib.util.spec_from_file_location(
         name, REPO / "tools" / "commissioning" / "map_anything_eval.py"
     )
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module  # `@dataclass` resolves string annotations through this
     spec.loader.exec_module(module)
@@ -152,7 +153,7 @@ def test_agreement_is_a_ratio_of_one():
 
 
 def test_the_commissioned_baseline_is_readable_and_plausible():
-    """Eight cameras, heights inside the shop-ceiling range the fit itself uses.
+    """The original baseline remains readable as additional cameras are commissioned.
 
     This does not check they are *right*. Every one is fitted from the 1.70 m person prior
     (PLAN 7.19), so the comparison this tool runs is two estimates meeting -- which the
@@ -172,7 +173,19 @@ def test_the_commissioned_baseline_is_readable_and_plausible():
     base = mae.commissioned()
     if not base:
         pytest.skip("no commissioned cameras in this checkout")
-    assert len(base) == 8, "the eight shipped camera.json"
+    original = {
+        "Kaohsiung-cam04",
+        "Taichung-cam01",
+        "Taichung-cam04",
+        "Taichung-cam07",
+        "Taichung-cam10",
+        "Taichung-cam11",
+        "Tao-Hsin-cam03",
+        "Tao-Hsin-cam04",
+    }
+    assert original <= base.keys(), (
+        f"original commissioned cameras missing: {original - base.keys()}"
+    )
     assert mae.ANCHOR_CAMERA in base, "the only camera with a measured vfov must be there"
     for cam, m in base.items():
         assert 2.0 <= m["height_m"] <= 3.6, f"{cam} outside any shop ceiling"
