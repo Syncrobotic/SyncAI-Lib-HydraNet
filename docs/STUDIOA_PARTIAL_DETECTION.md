@@ -374,3 +374,28 @@ hashes 核對通過，best/last 有限且綁定正確 job；所有非偵測 tens
 [逐圖對照](../runs/studioa_detector_balance_20260916_budget/review/selected_val_review.jpg) ·
 [升級判定](../runs/studioa_negative_balance_20260916_v1/promotion_decision.json) ·
 [完整比較結果](reviews/studioa_negative_balance_results_20260916.json)。
+
+## 2026-09-16：補跨鏡頭手機／平板正例
+
+從已下載且允許訓練的影像中，AI 逐張檢查原圖、局部放大與候選遮罩，覆核
+8 張影像、70 個候選，接受 32 個裝置框（手機／平板各 16）。印刷裝置、
+工作墊、類別不清、遮罩混入其他物件或重複候選仍為未知；沒有自動轉成負例。
+框沿用被接受遮罩的可見邊界，手持遮擋物件不宣稱完整物件範圍。
+
+instances v5 訓練影像由 28 增至 35，正例觀測由 130 增至 162：手機
+17 → 33，鏡頭 4 → 5；平板 15 → 31，鏡頭 5 → 7。其餘八類數量不變。
+同一實體可能跨日期重複出現，不能解讀成 162 件不同物品。所有既有正例、
+空白負區與逐類負區保留，六張 val 的影像、標註與空白遮罩逐位元相同。
+162 個框在固定 512×896、不增強、各框獨立指派時均有 FCOS 特徵點；
+這不保證隨機縮放裁切後每次都保留指派點。
+
+只執行一組補資料候選，沿用 `positive_budget`、原 scene checkpoint、seed42
+及既定訓練與解碼設定；使用已完成的同設定 v4 作對照，執行前核對凍結
+程式、初始化權重、正規化後設定與 val。每輪更新次數因資料增加由 14 變成
+18，因此比較的是補資料後的完整訓練流程，不是等更新次數的純標註因果實驗。
+升級仍須超過原 v1 的 7/31、人物至少5、手機至少1、海報至少1、覆核空白
+誤報不增加、33張 scene logits 完全一致。只有一個候選，不依結果追加搜尋。
+
+[接受框總覽](../runs/studioa_positive_expansion_20260916_v1/accepted_positive_review.jpg) ·
+[AI 決策](reviews/studioa_positive_decisions_20260916.json) ·
+[執行前計畫與資料核對](reviews/studioa_positive_expansion_plan_20260916.json)。

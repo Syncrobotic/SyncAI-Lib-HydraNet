@@ -1,0 +1,226 @@
+{
+  "status": "predeclared before candidate training",
+  "question": "Does expanding AI-reviewed phone/tablet source-train positives improve the fixed detector warmup recipe?",
+  "treatment": "32 additional visible-device boxes (16 phone,16 tablet) across eight reviewed images; seven newly admitted frames, one existing frame extended. No loss, architecture, augmentation or decoder change.",
+  "control_run": "runs/studioa_detector_balance_20260916_budget",
+  "candidate_run": "runs/studioa_detector_positive_20260916_v1",
+  "initial_checkpoint": "runs/studioa_scene_pilot_20260916_v2/model/best.pt",
+  "class_negative_normalization": "positive_budget",
+  "source_manifest_sha256": "0139eaccc00c6cf2fd841c7cfbd3a231c9b744a624b9c8ec95f82bc6e7a7b1ee",
+  "new_instances": "runs/studioa_partial_instances_20260916_v5",
+  "new_manifest_sha256": "eba13055187110a16c211fd2e76b7cd93fc437e76f711266a1f6c8b022b96428",
+  "review": "docs/reviews/studioa_positive_decisions_20260916.json",
+  "review_sha256": "c07ce4eea293a625ab87ab566f077cf8f1a1d594ffffac3305eda4989225294c",
+  "fixed": {
+    "seed": 42,
+    "input_size": [
+      512,
+      896
+    ],
+    "batch_size": 2,
+    "lr": 0.0002,
+    "warmup_iters": 26,
+    "epochs": 60,
+    "early_stop_patience": 20,
+    "detector_only": true,
+    "scene_eval_frames": 33,
+    "detector_val_frames": 6,
+    "detector_val_positives": 31,
+    "score_strictly_greater_than": 0.2,
+    "iou_at_least": 0.5,
+    "nms": 0.6,
+    "max_det": 100,
+    "test_inference": false,
+    "no_threshold_sweep": true
+  },
+  "upgrade_criteria": {
+    "reference_run": "runs/studioa_detector_warmup_20260916_v1",
+    "total_matched_strictly_greater_than": 7,
+    "matched_person_at_least": 5,
+    "matched_phone_at_least": 1,
+    "matched_poster_at_least": 1,
+    "reviewed_empty_fp_at_most": 0,
+    "all_33_scene_logits_byte_identical": true,
+    "deployment_claim": false
+  },
+  "data_preflight": {
+    "schema": "studioa.positive-expansion.preflight.v1",
+    "old_manifest_sha256": "e12339ea28db97a8a59c839ad095bf58d961f92af46b0758d6343ebc83475fc1",
+    "new_manifest_sha256": "eba13055187110a16c211fd2e76b7cd93fc437e76f711266a1f6c8b022b96428",
+    "frames": {
+      "train": 35,
+      "val": 6
+    },
+    "counts": {
+      "train": {
+        "laptop": 9,
+        "cardboard_box": 4,
+        "tablet": 31,
+        "speaker": 9,
+        "fire_equipment": 8,
+        "phone": 33,
+        "boxed_stock": 10,
+        "poster": 20,
+        "person": 23,
+        "chair": 15
+      },
+      "val": {
+        "laptop": 5,
+        "tablet": 1,
+        "speaker": 1,
+        "poster": 2,
+        "person": 9,
+        "boxed_stock": 1,
+        "cardboard_box": 2,
+        "fire_equipment": 1,
+        "chair": 5,
+        "phone": 4
+      }
+    },
+    "cameras": {
+      "train": {
+        "laptop": [
+          "Kaohsiung-cam04",
+          "Taichung-cam03"
+        ],
+        "cardboard_box": [
+          "Kaohsiung-cam04",
+          "Kaohsiung-cam08"
+        ],
+        "tablet": [
+          "Kaohsiung-cam04",
+          "Kaohsiung-cam08",
+          "Taichung-cam03",
+          "Taichung-cam04",
+          "Taichung-cam05",
+          "Taichung-cam08",
+          "Taichung-cam11"
+        ],
+        "speaker": [
+          "Taichung-cam03",
+          "Taichung-cam05",
+          "Taichung-cam11"
+        ],
+        "fire_equipment": [
+          "Taichung-cam05",
+          "Taichung-cam09"
+        ],
+        "phone": [
+          "Kaohsiung-cam04",
+          "Taichung-cam03",
+          "Taichung-cam05",
+          "Taichung-cam08",
+          "Taichung-cam11"
+        ],
+        "boxed_stock": [
+          "Kaohsiung-cam04",
+          "Kaohsiung-cam07",
+          "Kaohsiung-cam08",
+          "Taichung-cam04",
+          "Taichung-cam09"
+        ],
+        "poster": [
+          "Kaohsiung-cam04",
+          "Kaohsiung-cam08",
+          "Taichung-cam03",
+          "Taichung-cam04",
+          "Taichung-cam05",
+          "Taichung-cam09",
+          "Taichung-cam11"
+        ],
+        "person": [
+          "Kaohsiung-cam04",
+          "Taichung-cam03",
+          "Taichung-cam04",
+          "Taichung-cam05",
+          "Taichung-cam08",
+          "Taichung-cam09",
+          "Taichung-cam11"
+        ],
+        "chair": [
+          "Taichung-cam04",
+          "Taichung-cam05",
+          "Taichung-cam08",
+          "Taichung-cam09",
+          "Taichung-cam11"
+        ]
+      },
+      "val": {
+        "laptop": [
+          "Kaohsiung-cam06",
+          "Taichung-cam01",
+          "Taichung-cam07",
+          "Taichung-cam10"
+        ],
+        "tablet": [
+          "Kaohsiung-cam06"
+        ],
+        "speaker": [
+          "Kaohsiung-cam06"
+        ],
+        "poster": [
+          "Kaohsiung-cam06",
+          "Taichung-cam07"
+        ],
+        "person": [
+          "Kaohsiung-cam05",
+          "Kaohsiung-cam06",
+          "Taichung-cam01",
+          "Taichung-cam07",
+          "Taichung-cam10"
+        ],
+        "boxed_stock": [
+          "Kaohsiung-cam05"
+        ],
+        "cardboard_box": [
+          "Kaohsiung-cam05"
+        ],
+        "fire_equipment": [
+          "Taichung-cam01"
+        ],
+        "chair": [
+          "Taichung-cam01",
+          "Taichung-cam07",
+          "Taichung-cam10"
+        ],
+        "phone": [
+          "Kaohsiung-cam11"
+        ]
+      }
+    },
+    "unchanged_old_image_companion_negative_and_val_target_files": 126,
+    "all_old_positives_retained": true,
+    "validation_byte_identical": true,
+    "semantic_source_unchanged": true,
+    "zero_assignment_boxes": [],
+    "geometry": "fixed 512x896 letterbox, no augmentation, each box alone; does not guarantee assignment after augmentation"
+  },
+  "compute_comparability": "Same epoch/patience and optimizer policy, not equal optimizer updates: train frames increase 28 to35, batch2, expected updates per epoch14 to18. This compares the expanded-data training recipe; cannot isolate annotation benefit from changed sample order and training exposure. Reuse completed control only after matching normalized config, snapshot source, checkpoint and unchanged validation hashes.",
+  "limitations": [
+    "AI review is not independent ground truth.",
+    "Partially visible hand-held phone boxes cover visible masks, not full amodal objects.",
+    "Repeated observations across dates are not independent devices.",
+    "Single seed and reused six-frame source validation are exploratory, not an unbiased generalization estimate.",
+    "No val threshold tuning, no test inference, no deployment."
+  ],
+  "artifacts": {
+    "runs/studioa_positive_expansion_20260916_v1/0010-Kaohsiung-cam08_candidates.jpg": "12a7ea738c4171b21f1c841678b0a8ef48603d4b772e83ca26ea15b24c479ff7",
+    "runs/studioa_positive_expansion_20260916_v1/0011-Kaohsiung-cam08_candidates.jpg": "0b0f0210e007a67b1e7fc5331155fcc73378fe9c051faa6813a9657638676cf3",
+    "runs/studioa_positive_expansion_20260916_v1/0020-Taichung-cam03_candidates.jpg": "09bad03007931fc22728d1df3eb3ddb8269e2f8cb0fce59d603d17708ce07fe7",
+    "runs/studioa_positive_expansion_20260916_v1/0022-Taichung-cam04_candidates.jpg": "eb8a4f51cad22fc069dc566f8f139346d5566258a41f2a185ed9756aafff1132",
+    "runs/studioa_positive_expansion_20260916_v1/0022-Taichung-cam04_context.jpg": "061bc227df0c05bb72ab5490e0f97c8485e37fe62fa7a9fb58c8007d818b6300",
+    "runs/studioa_positive_expansion_20260916_v1/0024-Taichung-cam05_candidates.jpg": "497f08c2c2a35b75b835d6e1522717de3e5c9de43ae9f4e6404f6d31ee7a0a79",
+    "runs/studioa_positive_expansion_20260916_v1/0037-Taichung-cam11_candidates.jpg": "3c97ddaa74f9b0fd864384bc06fa3141f8d4a774e1790c21f46b1c2de12f6c55",
+    "runs/studioa_positive_expansion_20260916_v1/0037-Taichung-cam11_context.jpg": "c9b195e0c007f9ea2babd8cb3a7fe1d10347fcf21ce80d1d714ca9492e4c8a34",
+    "runs/studioa_positive_expansion_20260916_v1/0094-Kaohsiung-cam04_candidates.jpg": "01d5f6279e30607a761add39fa7e497f5293f9e03349972973a9e14fca803baf",
+    "runs/studioa_positive_expansion_20260916_v1/0096-Kaohsiung-cam04_candidates.jpg": "896d2c4b60ae057e0829be0e3725ae6975cfa5f26bb5e6b823342cc90940643c",
+    "runs/studioa_positive_expansion_20260916_v1/accepted_positive_review.jpg": "157905acc06901e1f3f84b6a4023fff803fef2fe6d9924a635e01e0cf5cd715f",
+    "runs/studioa_positive_expansion_20260916_v1/build_review.py": "9055280a9a2508ffc7f3c585eb54126020e9fd09e2f7ae69c3c5cddfad2e7453",
+    "runs/studioa_positive_expansion_20260916_v1/candidate_decisions.json": "379c3dfd865b2c345405238f8a54aa883549a5f41b65a57203dc19ce09c064f1",
+    "runs/studioa_positive_expansion_20260916_v1/candidates.json": "c898242c4343aa40a56b2c56e01bb11b64d9450a37b5187112347a6de43edea2",
+    "runs/studioa_positive_expansion_20260916_v1/data_preflight.json": "0a3c961f949f4682f250a190d346c1bf2b5b0f968ca6cbc19d5498b5e70faa2d",
+    "runs/studioa_positive_expansion_20260916_v1/review_candidates.py": "6624486486e92a5f4728945b46600d9181d6363b031bfe4628912eb555cf2a58",
+    "runs/studioa_positive_expansion_20260916_v1/train_geometry.json": "ad856f9bc35d2f06c61542df0fa236ec961b235a0ac1134a0aeb8a94da337874",
+    "runs/studioa_positive_expansion_20260916_v1/verify_data.py": "9cdb6425a6dea3b01256799b3c6c53ecf28669d9b7f46b2ae29d1028b81f21ae"
+  }
+}
