@@ -8,6 +8,7 @@ from collections import Counter
 from pathlib import Path
 
 import numpy as np
+import torch
 from PIL import Image
 from torch.utils.data import Dataset
 
@@ -30,6 +31,38 @@ CLASSES = (
     "chair",
     "person",
 )
+
+
+def class_negative_regions(item: dict, size, boxes, labels, split: str) -> dict:
+    """Only explicit, image-bound AI decisions can negate an individual class."""
+    regions = item.get("class_negative_rects", [])
+    if regions and split != "train":
+        raise ValueError("class negative additions are train-only")
+    w, h = size
+    masks = {}
+    for region in regions:
+        entity, rect = region.get("entity"), region.get("xyxy", [])
+        if (
+            entity not in CLASSES
+            or not region.get("reason")
+            or len(rect) != 4
+            or any(type(v) is not int for v in rect)
+        ):
+            raise ValueError("class negative region needs class, integer bounds and reason")
+        x0, y0, x1, y1 = rect
+        if not (0 <= x0 < x1 <= w and 0 <= y0 < y1 <= h):
+            raise ValueError("class negative region outside image")
+        label = CLASSES.index(entity)
+        for box, positive_label in zip(boxes, labels, strict=True):
+            if (
+                label == positive_label
+                and min(x1, box[2]) > max(x0, box[0])
+                and min(y1, box[3]) > max(y0, box[1])
+            ):
+                raise ValueError("class negative contradicts a reviewed positive box")
+        mask = masks.setdefault(entity, np.zeros((h, w), dtype=np.uint8))
+        mask[y0:y1, x0:x1] = 1
+    return masks
 
 
 def export_instances(source: Path, reviews: Path, out: Path) -> dict:
@@ -90,7 +123,8 @@ def export_instances(source: Path, reviews: Path, out: Path) -> dict:
             negative[y0:y1, x0:x1] = 1
         if (occupied & (negative == 1)).any():
             raise ValueError("reviewed empty region overlaps a reviewed object")
-        prepared.append((frame, boxes, labels, identities, negative))
+        class_negatives = class_negative_regions(item, (w, h), boxes, labels, assignments[fid])
+        prepared.append((frame, boxes, labels, identities, negative, class_negatives))
     if not prepared:
         raise ValueError("empty instance review")
     out.mkdir(parents=True, exist_ok=False)
@@ -100,7 +134,7 @@ def export_instances(source: Path, reviews: Path, out: Path) -> dict:
     shutil.copyfile(__file__, out / "producer.py")
     frames = []
     counts = Counter(dict.fromkeys(CLASSES, 0))
-    for frame, boxes, labels, identities, negative in prepared:
+    for frame, boxes, labels, identities, negative, class_negatives in prepared:
         fid = frame["id"]
         shutil.copyfile(source / frame["image"], out / frame["image"])
         shutil.copyfile(source / frame["companion"], out / frame["companion"])
@@ -109,6 +143,11 @@ def export_instances(source: Path, reviews: Path, out: Path) -> dict:
             out / target_name, {"boxes": boxes, "labels": labels, "source_ids": identities}
         )
         Image.fromarray(negative).save(out / negative_name)
+        class_files = {}
+        for entity, mask in class_negatives.items():
+            name = f"annotations/{fid}.negative-{entity}.png"
+            Image.fromarray(mask).save(out / name)
+            class_files[entity] = name
         counts.update(CLASSES[i] for i in labels)
         frames.append(
             {
@@ -129,6 +168,8 @@ def export_instances(source: Path, reviews: Path, out: Path) -> dict:
                 "targets": target_name,
                 "negative_mask": negative_name,
                 "negative_pixels": int(negative.sum()),
+                "class_negative_masks": class_files,
+                "class_negative_pixels": {k: int(v.sum()) for k, v in class_negatives.items()},
                 "instances": len(labels),
             }
         )
@@ -142,10 +183,12 @@ def export_instances(source: Path, reviews: Path, out: Path) -> dict:
         "review_sha256": digest(reviews),
         "instances_by_class": dict(counts),
         "policy": (
-            "positive assigned channel only; negatives only in AI-reviewed empty regions; "
+            "positive assigned channel; negatives in AI-reviewed empty regions or explicit "
+            "per-class reviewed absence; "
             "unknown and padding ignored"
         ),
         "exhaustive_labels": False,
+        "class_negative_supervision": any(row[-1] for row in prepared),
         "independent_accuracy": False,
     }
     write_json(out / "manifest.json", result)
@@ -184,6 +227,22 @@ def check_instances(root: Path) -> dict:
             f["store"], f["original_split"], m["held_out"]
         ):
             raise ValueError("instance split role changed")
+        for entity, name in f.get("class_negative_masks", {}).items():
+            if (
+                split != "train"
+                or entity not in CLASSES
+                or not m.get("class_negative_supervision")
+            ):
+                raise ValueError("invalid class negative split/class contract")
+            if name not in report["outputs"]:
+                raise ValueError("unbound class negative mask")
+            with Image.open(_relative(root, name)) as image:
+                mask = np.array(image)
+            if (
+                mask.shape != tuple(reversed(f["image_size_px"]))
+                or not np.isin(mask, [0, 1]).all()
+            ):
+                raise ValueError("invalid class negative mask shape/values")
         for mapping, key in ((cameras, f["camera"]), (pixels, f["pixel_sha256"])):
             if mapping.setdefault(key, split) != split:
                 raise ValueError("instance camera/content split leak")
@@ -212,6 +271,7 @@ class StudioAInstanceDataset(Dataset):
         ):
             raise ValueError("invalid instance fold/split/augmentation")
         self.root = root
+        self.class_negative_supervision = bool(m.get("class_negative_supervision", False))
         if partial_eval not in (None, "reviewed_regions_v1"):
             raise ValueError("unsupported partial evaluation protocol")
         self.partial_detection_evaluation = partial_eval
@@ -236,14 +296,30 @@ class StudioAInstanceDataset(Dataset):
             rgb = image.convert("RGB")
         with Image.open(self.root / f["negative_mask"]) as image:
             negative = np.array(image)
+        masks = {"det_negative_mask": negative}
+        if self.class_negative_supervision:
+            for entity in CLASSES:
+                name = f.get("class_negative_masks", {}).get(entity)
+                if name:
+                    with Image.open(self.root / name) as image:
+                        masks[f"negative_{entity}"] = np.array(image)
+                else:
+                    masks[f"negative_{entity}"] = np.zeros_like(negative)
         sample = self.transform(
             Sample(
                 image=rgb,
-                masks={"det_negative_mask": negative},
+                masks=masks,
                 boxes=np.asarray(targets["boxes"], dtype=np.float32).reshape(-1, 4),
                 labels=np.asarray(targets["labels"], dtype=np.int64),
             )
         )
+        if self.class_negative_supervision:
+            sample["masks"]["det_class_negative_mask"] = torch.stack(
+                [
+                    sample["masks"].pop(f"negative_{entity}").to(torch.uint8)
+                    for entity in CLASSES
+                ]
+            )
         return {
             "image": sample["image"],
             "supervises": self.supervises,

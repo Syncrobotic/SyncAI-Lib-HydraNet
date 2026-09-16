@@ -5,6 +5,7 @@ The renderer consumes masks/object_instances.npz automatically on its next build
 """
 
 import argparse
+import os
 from pathlib import Path
 
 from syncai_bev3d.object_instances import OBJECT_PROMPTS
@@ -12,7 +13,7 @@ from syncai_bev3d.teachers import sam3
 from syncai_bev3d.teachers.scene_objects import run_camera
 from syncai_hydranet.utils.device import pick_device
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 
 
 def main():

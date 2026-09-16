@@ -119,6 +119,12 @@ class CameraFile:
     mask_ignore: int = IGNORE
     plate_file: str | None = None
     plate_sha256: str | None = None
+    # (width, height) of the stream the boxes will arrive in. `image_size_px` is the frame
+    # the intrinsics were fitted at -- half the plate's source by convention -- and every
+    # consumer that rescales boxes into it assumed the source was 1920x1080. An FTI
+    # camera commissioned from a 1280x720 stream and another from 3840x2160 both returned
+    # metres, wrong by 3/2 and 1/2, and nothing said so. None: not recorded (a v3 file).
+    source_size_px: tuple[int, int] | None = None
     commissioned_at: str | None = None  # ISO 8601, stamped by the writer
     # Which teacher models produced this file, as `{model_id: revision}`. The plate is
     # hashed (`plate_sha256`) and the models that read it were not, so two camera.jsons
@@ -192,6 +198,11 @@ class CameraFile:
             mask_files=dict(raw.get("mask_files", {})),
             mask_ignore=raw.get("mask_ignore", IGNORE),
             plate_file=raw.get("plate_file"),
+            source_size_px=(
+                (int(raw["source_size_px"][0]), int(raw["source_size_px"][1]))
+                if raw.get("source_size_px")
+                else None
+            ),
             plate_sha256=raw.get("plate_sha256"),
             commissioned_at=raw.get("commissioned_at"),
             teachers=raw.get("teachers"),
@@ -255,6 +266,15 @@ class CameraFile:
         w, h = self.image_size_px
         if w <= 0 or h <= 0:
             problems.append(f"image_size_px {self.image_size_px} is not a size")
+        if self.source_size_px is not None:
+            sw, sh = self.source_size_px
+            if sw <= 0 or sh <= 0:
+                problems.append(f"source_size_px {self.source_size_px} is not a size")
+            elif w > 0 and h > 0 and abs((sw / sh) / (w / h) - 1) > 0.01:
+                problems.append(
+                    f"source_size_px {sw}x{sh} and image_size_px {w}x{h} differ in aspect; "
+                    "a box scaled by width alone lands on the wrong floor pixel"
+                )
         if self.appearance_thr is not None and not self.appearance_thr > 0:
             problems.append(
                 f"appearance_thr {self.appearance_thr!r} is not a positive distance. "

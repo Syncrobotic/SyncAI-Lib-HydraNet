@@ -182,3 +182,157 @@ normalization 漂移可能影響語意表現，但本輪尚未隔離因果，不
 型別 ratchet 與提交 hook 通過。645 個凍結輸入及 6 個輸出 hash 核對，checkpoint
 job 身分／有限 tensor／初始權重保留皆通過。另有低解析度 CPU 全流程檢查，
 只驗證程式連接，沒有把其分數當作模型效果。
+
+## 2026-09-16：固定場景的偵測頭暖身契約
+
+GCS 擴充後 instances v3 有 27 張 train／129 個物件觀測、6 張 val／31 個觀測。
+來源為 `studioa_gcs_training_extension_20260916_v1/semantic`；舊 val 與 test 分配
+不變。同一物品可能跨日期重複出現，129 不代表獨立物品數。
+
+`studioa_train.py prepare --detector-warmup --instances … --initial-checkpoint …`
+從 scene pilot v2 的 best 初始化，只讓 `det_head.*` 參數可訓練。所有其他模組
+固定 eval，包含 BatchNorm running statistics 與 dropout，並在每次儲存前驗證
+凍結 tensor 完全相同。模型 train/eval 切換及 checkpoint 重載均保留此契約。
+scene dataset 設為 `validation_only`，不建立它的 train loader；metadata 明記
+train_size=0。全部 33 張來源 val 的 float32 scene logits 在訓練前和選定模型
+載入後計算 SHA256，必須完全相同。續跑也重新對照原始 scene checkpoint。
+
+預先固定：60 epochs 上限、batch 2、lr 2e-4、26 steps warmup、20 輪無改善停止、
+bf16 training、deterministic、關閉 TF32／cuDNN benchmark、EMA 關閉。
+best 選擇最大 reviewed-positive recall（沿用 score >0.20／IoU ≥0.50），同分
+保留較早 epoch。第 0 輪仍參與選擇。完成後只有 recall 嚴格改善、覆核空白區
+誤報不增加且場景完全一致，才記為通過此次暖身；這不是部署驗收。
+未知區預測持續獨立報告，不視為正確或錯誤；本輪不讀取 test 進行推論。
+
+紙箱仍只有 3 個 train 觀測；負樣本仍僅已覆核空地板，尚無物品間類別混淆的
+負向監督。暖身結果只能回答「固定既有場景特徵，這批部分監督能否學出偵測」，
+不能回答真實整店精度、3D 尺寸或顧客行為是否正確。
+
+## 暖身結果：場景保留成功，偵測仍不足以使用
+
+`runs/studioa_detector_warmup_20260916_v1/` 完成，程式版本 `562532d`；
+第 40 輪因連續 20 輪無嚴格改善停止，共 520 次偵測 optimizer 更新。
+選定第 20 輪（260 次更新），systemd 正常退出，test 未推論。
+
+| 檢查項目 | 結果 |
+| --- | --- |
+| 已覆核正實例召回 | 初始 0/31 → 選定 7/31（22.58%） |
+| 命中類別 | person 5/9、phone 1/4、poster 1/2；其他七類 0 |
+| 覆核空白區誤報 | 0 → 0；僅覆蓋 51,761 個輸入像素 |
+| 未配對、真偽未定預測 | 593；六張影像每張均達 100 框上限 |
+| 凍結參數及 buffers | 194 個 tensors；每次儲存皆核對，best/last 與原模型完全相同 |
+| 33 張來源 val 場景 logits | 訓練前後 SHA256 完全相同 |
+| 場景 AI 標籤 mIoU | 40 輪均為 0.2506537344807518 |
+
+通過的是「固定場景後，偵測頭得到有限學習」這項暖身契約。重疊框與類別混淆
+仍明顯，593 個未知預測不能當作真陽性，也不能據此計算 precision。相比前次
+聯合 pilot，本輪同時改了資料量與訓練隔離，不能把改善全歸因於其中一項。
+本輪關閉 TF32 並固定 deterministic 設定，mIoU 與較早 pilot 的微小差異也不能
+當成場景改善；直接證據是相同設定下完整 logits 和原場景 tensors 不變。
+
+[六張逐圖對照](../runs/studioa_detector_warmup_20260916_v1/review/selected_val_review.jpg)
+左側是 AI 覆核子集，右側只顯示前 20 框；評估仍用固定上限 100 框。
+[逐框 JSON](../runs/studioa_detector_warmup_20260916_v1/review/selected_diagnostics.json)
+可完整重算並精確重現所有偵測驗證指標。
+[可追溯結果](reviews/studioa_detector_warmup_20260916.json) 記錄設定、檢查和 hashes。
+
+757 個凍結輸入、8 個正式輸出 hash 核對通過；best/last 無非有限 tensor，
+job 身分正確，原始 scene checkpoint 沒有改寫。主要測試批次 171 項通過，
+資料與契約追加批次 20 項通過（兩批有重疊）；lint、型別與提交 hook 通過。
+metadata 的 dirty 警示來自既有無關未追蹤檔，訓練程式使用已提交且逐檔凍結
+的 snapshot；語意資料記為 train_size=0、val_size=33。
+
+下一步優先補逐類混淆負樣本的資料契約：例如確認價牌不是手機，只否定 phone
+通道，不能將實際物品整片畫成十類共同背景。紙箱三個 train 觀測全部來自同一
+張影像與同一鏡頭，應由其他允許的 source-train 鏡頭補充。所有新增覆核由 AI
+執行，val/test 分配及 score／NMS 門檻保持固定。尚不推進 Stage 2–4 的效果宣稱。
+
+## 2026-09-16：逐類負樣本與第二支紙箱鏡頭
+
+instances v4 保留 v3 的 33 張影像、正框、空白區 masks、companions 與 split
+逐檔一致；新增 `0058-Kaohsiung-cam08` 中可分離的左側紙箱。相鄰兩箱合併的
+proposal 被拒絕，只接受單箱遮罩。train 現為 28 張／130 個觀測；紙箱 4 個、
+2 支鏡頭，仍十分稀少。val 保持 6 張／31 個正例，語意資料完全不改。
+
+AI 重新查看 62 張來源 train 總覽及候選原圖，在 5 張既有影像選定 19 個保守
+區域、47 項逐類負向決定：桌墊與遙控器不是手機、包裝印刷的平板不是實體平板、
+桌上型螢幕不是筆電、海報上的 HomePod 不是實體喇叭、木椅不是紙箱。
+這批資料重用已下載且分割合法的影像，不需要新增 GCS 下載。
+
+`class_negative_rects` 必須由綁定影像／companion hash 的 AI 覆核提供，且只准
+用於 train。匯出為逐類 0/1 masks；沒有明確否定的類別仍未知。dataset 對每個
+通道共同做縮放、裁切、翻轉與 padding，再組成 `[C,H,W]`，padding 255 忽略。
+FCOS 在對應 grid point 只加入被否定通道的 focal loss，不改 regression 或
+centerness。相同類別的正框在所有金字塔尺度都有優先權；匯出時也拒絕矛盾覆核。
+既有全類空白 mask 與部分驗證指標契約不變。無此欄位的舊資料維持原行為。
+
+[覆核決定](reviews/studioa_class_negative_decisions_20260916.json) ·
+[逐類負樣本總覽](../runs/studioa_confusers_20260916_v1/class_negative_contact.jpg) ·
+[新增單箱遮罩](../runs/studioa_confusers_20260916_v1/vlm-unknown-0016.jpg)。
+
+重訓沿用固定場景 warmup 設定與原始 scene 初始化，score／NMS／max_det 不調整。
+本輪完整資料變更與前版 7/31 比較；不把資料增補與 loss 修改當成單因素因果實驗。
+未知預測數減少不等於 precision 改善；僅通過隨機初始化基準也不等於超過前版。
+
+### 第二輪結果：不升級模型
+
+`runs/studioa_detector_warmup_20260916_v2/` 使用 commit `c274cb2`，第 25 輪
+觸發 20 輪無改善停止（350 次更新），選定第 5 輪（70 次更新）。
+
+| 同一來源 val、同一評估契約 | 前版 v1 | 本輪 v2 |
+| --- | ---: | ---: |
+| 覆核正例召回 | 7/31（22.58%） | 6/31（19.35%） |
+| person / phone / poster 命中 | 5 / 1 / 1 | 5 / 0 / 1 |
+| 覆核空白區誤報 | 0 | 0 |
+| 未配對、真偽未定預測 | 593 | 594 |
+| 場景輸出 | 與原模型一致 | 與原模型一致 |
+
+因此 **保留 v1 作為較佳實驗基準，v2 不升級**。worker `warmup.accepted=true`
+只代表超過第 0 輪隨機偵測頭，不代表超過 v1；明確決定另見
+[promotion_decision.json](../runs/studioa_detector_warmup_20260916_v2/promotion_decision.json)。
+兩版都未達部署條件；新程式與 AI 資料保留，沒有改寫任何舊 checkpoint。
+
+五張已訓練負樣本影像中的 3,543 個 grid/class 對，score >0.20 的數量由
+1,776 降至 15，說明選定模型在這些訓練區域的反應較低。這是訓練區診斷，
+且兩版選定 epoch 不同，不能當作驗證 precision 改善或單因素因果證明。
+val 六張影像仍全數達 100 框上限，尚未改善其他鏡頭的混淆。
+
+固定門檻下的解碼前手機診斷進一步區分：v2 四個 val 手機中，兩個完全沒有
+IoU ≥0.50 的原始候選框；另外兩個雖有定位候選，phone score 最高只有約
+0.024–0.025，低於原定 0.20。這四個漏檢不能單靠提高 max_det 解決。
+下一步先量化每類正負 loss 比例、限制逐類負項影響，再進行預先設定的比較，
+並補充小物件的定位正例；不利用這組 val 調門檻掩蓋問題。
+
+79 項測試、lint、型別、提交 hook 通過。GPU smoke 對 28 張 train 做 14 次
+更新，2,457,821 個未知分類輸出梯度均為 0。319 個 smoke 輸入、779 個訓練
+輸入及 8 個正式輸出 hashes 核對；best/last 有限、job 身分正確，194 個共享
+tensors 與原模型相同。33 張 scene logits SHA256 完全一致，所有 test 未推論。
+兩個 systemd 工作正常退出。儲存的逐框結果能完整重算官方偵測指標。
+
+[本輪逐圖對照](../runs/studioa_detector_warmup_20260916_v2/review/selected_val_review.jpg) ·
+[解碼前手機診斷](../runs/studioa_detector_warmup_20260916_v2/review/phone_candidate_probe.json) ·
+[完整可追溯結果](reviews/studioa_class_negative_warmup_20260916.json)。
+
+## 2026-09-16：逐類負項正規化的固定比較
+
+先對 28 張 source train、不增強、float32、逐張影像做分類 loss 與 logit 梯度
+分解。v1 模型的 phone 正向梯度 L1 合計約 0.0271，新增逐類負項約 9.631；
+其中一張沒有 phone 正例的桌面影像，610 個 phone 負向點貢獻約 7.168。
+這說明新增負項會受到覆核區面積與每張正例數影響，但不是原先 batch 2 增強
+訓練的梯度重播，也不是模型參數梯度；不能單憑比例就判定退步原因。
+130 個 train 正框均有可分配的特徵點；「無原始框達 IoU 0.50」和「無訓練
+指派點」是不同問題，仍需另外衡量小物件框回歸品質。
+
+只比較一個變因 `class_negative_normalization`：`sum` 保留原行為；
+`positive_budget` 將每個 batch/class 新增負項權重總和限制在
+`max(該類正向指派點數, 1)`，每個負點權重最多 1。已有正項、全類空白負項、
+regression、centerness 與未知通道均不改；缺少該類正例的 batch 仍可提供
+最多一個等效負向點。這限制的是監督權重總量，不是梯度範數。
+
+兩組從同一 scene checkpoint、同 seed、同 instances v4 開始；所有訓練與
+驗證條件沿用 v2。固定 score >0.20／IoU ≥0.50／NMS 0.6／每圖 100 框，
+不得看結果後調門檻。只有候選超過 v1 的 7/31、人物至少 5、手機至少 1、
+海報至少 1、覆核空白誤報不增加且 scene logits 完全一致，才更新實驗基準。
+本次只有這兩組，不依此 val 分數追加參數搜尋。
+
+[執行前比較計畫與診斷](reviews/studioa_negative_balance_plan_20260916.json)。

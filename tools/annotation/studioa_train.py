@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import shutil
@@ -23,6 +24,80 @@ from syncai_hydranet.data.studioa_review import digest, write_json
 from syncai_hydranet.data.studioa_supervision import CLASSES, check_supervision
 
 ROOT = Path(__file__).resolve().parents[2]
+DET_METRIC = "partial_det/studioa_instances/recall50_at_020"
+EMPTY_FP = "partial_det/studioa_instances/empty_fp"
+
+
+def detector_warmup_config(config: dict) -> dict:
+    config["experiment"] = "studioa_detector_warmup"
+    config["model"]["detection_only_training"] = True
+    config["model"]["fixed_weights"]["detection"] = 1.0
+    config["data"]["datasets"][0]["validation_only"] = True
+    config["train"].update(
+        epochs=60,
+        lr=2e-4,
+        warmup_iters=26,
+        early_stop_patience=20,
+        primary_metric=DET_METRIC,
+        deterministic=True,
+        cudnn_benchmark=False,
+        tf32=False,
+    )
+    check_config(config)
+    return config
+
+
+def frozen_state(model) -> dict:
+    return {
+        name: value.detach().cpu().clone()
+        for name, value in model.state_dict().items()
+        if not name.startswith("det_head.")
+    }
+
+
+def assert_frozen(model, reference: dict) -> None:
+    import torch
+
+    current = frozen_state(model)
+    if current.keys() != reference.keys():
+        raise ValueError("frozen scene state keys changed")
+    for name, value in reference.items():
+        if not torch.equal(current[name], value):
+            raise ValueError(f"frozen scene state changed: {name}")
+    for name, module in model.named_children():
+        if name != "det_head" and any(m.training for m in module.modules()):
+            raise ValueError(f"frozen scene module in training mode: {name}")
+
+
+def scene_signature(model, loaders, device) -> dict:
+    """Hash every source-validation scene logit, not just a preview or argmax."""
+    import torch
+
+    from syncai_hydranet.engine.evaluator import model_memory_format
+
+    was_training = model.training
+    model.eval()
+    signature = hashlib.sha256()
+    frames = 0
+    try:
+        with torch.inference_mode():
+            for name, loader in loaders:
+                if name != "studioa":
+                    continue
+                for batch in loader:
+                    images = (
+                        batch["image"]
+                        .to(device)
+                        .contiguous(memory_format=model_memory_format(model))
+                    )
+                    logits = model(images)["scene"].contiguous().cpu()
+                    signature.update(logits.numpy().tobytes())
+                    frames += len(images)
+    finally:
+        model.train(was_training)
+    if not frames:
+        raise ValueError("scene invariance requires source validation images")
+    return {"frames": frames, "float32_logits_sha256": signature.hexdigest()}
 
 
 def pilot_config(data: Path, out: Path, manifest: dict, held_out: str) -> dict:
@@ -155,6 +230,8 @@ def prepare(
     held_out: str,
     instances: Path | None = None,
     initial_checkpoint: Path | None = None,
+    detector_warmup: bool = False,
+    class_negative_normalization: str = "sum",
 ) -> None:
     from syncai_hydranet.utils.visualize import terrain_palette
 
@@ -164,6 +241,12 @@ def prepare(
         raise ValueError("pilot requires positive train support for every class")
     if (instances is None) != (initial_checkpoint is None):
         raise ValueError("joint pilot requires both instances and initial checkpoint")
+    if detector_warmup and instances is None:
+        raise ValueError("detector warmup requires instances and initial checkpoint")
+    if class_negative_normalization not in ("sum", "positive_budget"):
+        raise ValueError("unsupported class negative normalization")
+    if class_negative_normalization != "sum" and not detector_warmup:
+        raise ValueError("class negative normalization comparison requires detector warmup")
     instance_counts = {}
     if instances is not None:
         from collections import Counter
@@ -217,6 +300,12 @@ def prepare(
     config = pilot_config(out / "data", out, manifest, held_out)
     if instances is not None:
         config = joint_config(config, out / "instances", held_out)
+    if detector_warmup:
+        config = detector_warmup_config(config)
+        config["model"]["heads"]["detection"]["loss"] = {
+            "class_negative_normalization": class_negative_normalization
+        }
+        check_config(config)
     write_json(out / "config.json", config)
     git = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
@@ -238,6 +327,8 @@ def prepare(
             if instances is not None
             else "studioa.semantic-pilot.v1",
             "joint": instances is not None,
+            "detector_warmup": detector_warmup,
+            "class_negative_normalization": class_negative_normalization,
             "instance_counts": instance_counts,
             "git_commit": git,
             "held_out": held_out,
@@ -245,7 +336,17 @@ def prepare(
             "source_manifest_sha256": digest(source / "manifest.json"),
             "classes": CLASSES,
             "class_weights": "sqrt median/train frequency clipped 0.25..4",
-            "selection": "source-camera val mIoU on retained AI pixels only",
+            "selection": (
+                "maximum reviewed-positive source-val recall at fixed score >0.20 / IoU >=0.50"
+                if detector_warmup
+                else "source-camera val mIoU on retained AI pixels only"
+            ),
+            "acceptance": (
+                "strict recall improvement; no increase in reviewed-empty FP; frozen scene "
+                "parameters/buffers and all source-val float32 logits byte-identical"
+                if detector_warmup
+                else None
+            ),
             "evaluation": (
                 "source val only; partial recall and empty-region alarms; no test evaluation"
                 if instances is not None
@@ -301,6 +402,8 @@ def run(out: Path) -> None:
             raise RuntimeError("CUDA unavailable; refusing accidental CPU pilot training")
         torch.set_num_threads(4)
         cfg = json.loads((out / "config.json").read_text())
+        warmup = job.get("detector_warmup", False)
+        reference = None
 
         class PilotTrainer(Trainer):
             def state_dict(self, epoch):
@@ -309,24 +412,44 @@ def run(out: Path) -> None:
                 return result
 
             def record_epoch(self, epoch, metrics):
+                if warmup:
+                    assert reference is not None
+                    assert_frozen(self.model, reference)
                 improved = super().record_epoch(epoch, metrics)
                 status(
                     "training",
                     epoch=epoch,
                     global_step=self.global_step,
                     validation_teacher_miou=metrics["scene_mIoU"],
-                    best_validation_teacher_miou=self.best_metric,
+                    primary_metric=self.primary_metric,
+                    best_primary_metric=self.best_metric,
                 )
                 return improved
 
         last = out / "model/last.pt"
         trainer = PilotTrainer(cfg, resuming=last.exists())
+        if warmup:
+            warm_start(trainer.model, load_checkpoint(out / "initial.pt"), cfg)
+            reference = frozen_state(trainer.model)
+            initial_signature = scene_signature(
+                trainer.model, trainer.val_loaders, trainer.device
+            )
+            before_path = out / "scene_before.json"
+            if (
+                before_path.exists()
+                and json.loads(before_path.read_text()) != initial_signature
+            ):
+                raise ValueError("resumed scene reference differs from original run")
+            write_json(before_path, initial_signature)
         if last.exists():
             if load_checkpoint(last).get("studioa_job_sha256") != job_hash:
                 raise ValueError("foreign pilot checkpoint")
             trainer.load(str(last), resume=True)
+            if warmup:
+                assert reference is not None
+                assert_frozen(trainer.model, reference)
         else:
-            if job.get("joint"):
+            if job.get("joint") and not warmup:
                 warm_start(trainer.model, load_checkpoint(out / "initial.pt"), cfg)
             status("baseline_validation", gpu=torch.cuda.get_device_name(0))
             baseline = evaluate(
@@ -354,6 +477,24 @@ def run(out: Path) -> None:
         if best.get("studioa_job_sha256") != job_hash:
             raise ValueError("foreign best checkpoint")
         trainer.model.load_state_dict(best["model"])
+        warmup_evidence = {}
+        if warmup:
+            assert reference is not None
+            assert_frozen(trainer.model, reference)
+            final_signature = scene_signature(
+                trainer.model, trainer.val_loaders, trainer.device
+            )
+            if final_signature != initial_signature:
+                raise ValueError(
+                    "source validation scene logits changed during detector warmup"
+                )
+            warmup_evidence = {
+                "frozen_state_tensors": len(reference),
+                "frozen_state_equal": True,
+                "scene_before": initial_signature,
+                "scene_after": final_signature,
+                "scene_logits_equal": True,
+            }
         joint = job.get("joint", False)
         status(
             "source_validation" if joint else "held_out_evaluation", best_epoch=best["epoch"]
@@ -376,19 +517,43 @@ def run(out: Path) -> None:
         )
         evaluation_name = "validation" if joint else "test"
         write_json(out / f"{evaluation_name}.json", test)
+        if warmup:
+            baseline = json.loads((out / "baseline_val.json").read_text())
+            warmup_evidence.update(
+                baseline_recall=baseline[DET_METRIC],
+                selected_recall=test[DET_METRIC],
+                baseline_empty_fp=baseline[EMPTY_FP],
+                selected_empty_fp=test[EMPTY_FP],
+                accepted=(
+                    test[DET_METRIC] > baseline[DET_METRIC]
+                    and test[EMPTY_FP] <= baseline[EMPTY_FP]
+                ),
+            )
+            write_json(out / "warmup_evidence.json", warmup_evidence)
         for head, (images, predictions, targets) in samples.items():
             grid = prediction_grid(images, predictions, targets, terrain_palette(list(CLASSES)))
             Image.fromarray(grid).save(out / f"{evaluation_name}_{head}_preview.jpg")
         verify(out)
         report = {
             "status": "completed",
-            "kind": "AI partial joint pilot" if joint else "AI partial-semantic pilot",
+            "kind": (
+                "AI partial detector warmup"
+                if warmup
+                else "AI partial joint pilot"
+                if joint
+                else "AI partial-semantic pilot"
+            ),
             "job_sha256": job_hash,
             "git_commit": job["git_commit"],
             "counts": job["counts"],
             "best_epoch": best["epoch"],
             "last_epoch": load_checkpoint(last)["epoch"],
-            "best_validation_teacher_miou": best["best_metric"],
+            "primary_metric": trainer.primary_metric,
+            "best_primary_metric": best["best_metric"],
+            "best_validation_teacher_miou": test["scene_mIoU"]
+            if joint
+            else best["best_metric"],
+            "warmup": warmup_evidence,
             "test_evaluated": not joint,
             f"{evaluation_name}_teacher_miou": test["scene_mIoU"],
             "instance_counts": job.get("instance_counts", {}),
@@ -403,6 +568,8 @@ def run(out: Path) -> None:
                     out / "baseline_val.json",
                     out / "model/metrics.jsonl",
                     *out.glob(f"{evaluation_name}_*_preview.jpg"),
+                    *out.glob("scene_before.json"),
+                    *out.glob("warmup_evidence.json"),
                 ]
             },
         }
@@ -428,6 +595,10 @@ def main():
     parser.add_argument("--source", type=Path)
     parser.add_argument("--instances", type=Path)
     parser.add_argument("--initial-checkpoint", type=Path)
+    parser.add_argument("--detector-warmup", action="store_true")
+    parser.add_argument(
+        "--class-negative-normalization", choices=("sum", "positive_budget"), default="sum"
+    )
     parser.add_argument(
         "--held-out", default="Tao-Hsin", choices=("Tao-Hsin", "Taichung", "Kaohsiung")
     )
@@ -435,7 +606,15 @@ def main():
     if args.action == "prepare":
         if args.source is None:
             parser.error("prepare requires --source")
-        prepare(args.source, args.out, args.held_out, args.instances, args.initial_checkpoint)
+        prepare(
+            args.source,
+            args.out,
+            args.held_out,
+            args.instances,
+            args.initial_checkpoint,
+            args.detector_warmup,
+            args.class_negative_normalization,
+        )
     else:
         out = args.out.resolve()
         target = out / "snapshot/tools/annotation/studioa_train.py"

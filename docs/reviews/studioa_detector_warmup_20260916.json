@@ -1,0 +1,158 @@
+{
+  "status": "completed; frozen-scene detector warmup accepted; detector not deployment-ready",
+  "run": "runs/studioa_detector_warmup_20260916_v1",
+  "git_commit": "562532d9c72ead3e7c78ce162c7b66c9666701ae",
+  "job_sha256": "be9412eb64d286d129ef79c794c6da36b6df7d2b163851f12bc8f686ff66cbe6",
+  "training": {
+    "train_frames": 27,
+    "train_observations": 129,
+    "train_cameras": 9,
+    "scene_train_frames_used": 0,
+    "max_epochs": 60,
+    "last_epoch": 40,
+    "best_epoch": 20,
+    "optimizer_steps": 520,
+    "best_optimizer_steps": 260,
+    "stop_reason": "20 validations without strict recall improvement",
+    "systemd_unit": "studioa-detector-warmup-20260916-v1.service",
+    "service_result": "success",
+    "exit_status": 0
+  },
+  "scene_invariance": {
+    "frozen_state_tensors": 194,
+    "frozen_state_equal": true,
+    "scene_before": {
+      "frames": 33,
+      "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+    },
+    "scene_after": {
+      "frames": 33,
+      "float32_logits_sha256": "72b0bc0688abbc2e2a8cbafb9275219300f36dc87ef620cb34b9ffda4acd8867"
+    },
+    "scene_logits_equal": true,
+    "baseline_recall": 0.0,
+    "selected_recall": 0.22580645161290322,
+    "baseline_empty_fp": 0.0,
+    "selected_empty_fp": 0.0,
+    "accepted": true
+  },
+  "evaluation": {
+    "split": "source_val_only",
+    "frames": 6,
+    "reviewed_positives": 31,
+    "matched": 7,
+    "recall": 0.22580645161290322,
+    "reviewed_empty_false_alarms": 0,
+    "reviewed_empty_input_pixels": 51761,
+    "unmatched_truth_unknown_predictions": 593,
+    "each_frame_reached_max_det_100": true,
+    "per_class": {
+      "laptop": {
+        "train_observations": 9,
+        "train_camera_count": 2,
+        "val_support": 5,
+        "val_matched": 0
+      },
+      "phone": {
+        "train_observations": 17,
+        "train_camera_count": 4,
+        "val_support": 4,
+        "val_matched": 1
+      },
+      "tablet": {
+        "train_observations": 15,
+        "train_camera_count": 5,
+        "val_support": 1,
+        "val_matched": 0
+      },
+      "boxed_stock": {
+        "train_observations": 10,
+        "train_camera_count": 5,
+        "val_support": 1,
+        "val_matched": 0
+      },
+      "cardboard_box": {
+        "train_observations": 3,
+        "train_camera_count": 1,
+        "val_support": 2,
+        "val_matched": 0
+      },
+      "speaker": {
+        "train_observations": 9,
+        "train_camera_count": 3,
+        "val_support": 1,
+        "val_matched": 0
+      },
+      "poster": {
+        "train_observations": 20,
+        "train_camera_count": 7,
+        "val_support": 2,
+        "val_matched": 1
+      },
+      "fire_equipment": {
+        "train_observations": 8,
+        "train_camera_count": 2,
+        "val_support": 1,
+        "val_matched": 0
+      },
+      "chair": {
+        "train_observations": 15,
+        "train_camera_count": 5,
+        "val_support": 5,
+        "val_matched": 0
+      },
+      "person": {
+        "train_observations": 23,
+        "train_camera_count": 7,
+        "val_support": 9,
+        "val_matched": 5
+      }
+    }
+  },
+  "verification": {
+    "frozen_input_hashes_verified": 757,
+    "output_hashes_verified": 8,
+    "best_and_last_shared_state_equal_original": true,
+    "checkpoint_tensors_finite": true,
+    "scene_miou_all_40_epochs": 0.2506537344807518,
+    "saved_per_image_predictions_reproduce_all_detection_metrics": true,
+    "main_test_batch_passed": 171,
+    "data_contract_followup_test_batch_passed": 20,
+    "test_batches_overlap": true,
+    "changed_file_ruff_ty_and_commit_hooks_passed": true,
+    "test_evaluated": false
+  },
+  "interpretation": [
+    "Acceptance applies only to preserving scene outputs while improving partial validation recall, not general detection quality.",
+    "All six images reach the fixed 100-prediction cap; 593 unmatched predictions remain unknown under partial supervision and cannot define precision.",
+    "Seven classes have zero matched validation positives.",
+    "Cardboard has only three training observations, all in one frame from one camera.",
+    "Compare scene mIoU to this run baseline: deterministic TF32-disabled settings differ from earlier runs.",
+    "Data quantity and training isolation changed together relative to the joint pilot; no single-factor causal attribution."
+  ],
+  "next_step": [
+    "AI-review source-train confusers and add explicit per-class negative supervision; do not mark real objects as all-class background.",
+    "Seek cardboard in other allowed source-train cameras; preserve val/test assignments.",
+    "Keep score/NMS/max_det fixed; do not tune thresholds on this val split."
+  ],
+  "independent_accuracy": false,
+  "deployment_ready": false,
+  "artifacts": {
+    "runs/studioa_detector_warmup_20260916_v1/job.json": "be9412eb64d286d129ef79c794c6da36b6df7d2b163851f12bc8f686ff66cbe6",
+    "runs/studioa_detector_warmup_20260916_v1/report.json": "e4af368a4221673df7cf6440a52d9eae32bfcabba3f7bac52bb975a17a385921",
+    "runs/studioa_detector_warmup_20260916_v1/status.json": "8d448ee2341364ce4a3fe174d5dff529c8be0b2b29e3f458c12a13951544f614",
+    "runs/studioa_detector_warmup_20260916_v1/service.log": "a717ed6aa1976c5afabb27a61d6fa7e7f9e410c7bba8304d3572a88db9bd73b6",
+    "runs/studioa_detector_warmup_20260916_v1/config.json": "55080088b611308124460203c1a869c736eb0a6d332cc8977a9e084bc778689a",
+    "runs/studioa_detector_warmup_20260916_v1/review/inspect_selected.py": "ceab1f30d937928152d46b946d84a444231f29598f60d487988836d762fe0092",
+    "runs/studioa_detector_warmup_20260916_v1/review/selected_val_review.jpg": "8ce9cee0423fc81d708947c300d75c0e0d55c9e8103ebab0b3165bdbc1d5cd8c",
+    "runs/studioa_detector_warmup_20260916_v1/review/selected_diagnostics.json": "f51ee51464278bdd6193b71390018c7f98d6fa7551cdbffba7583c5f6444a9fa",
+    "runs/studioa_detector_warmup_20260916_v1/model/best.pt": "8381ff3ab6d97a86d9c2896568867971991805288c9f847d6f09d3928aa2c3f5",
+    "runs/studioa_detector_warmup_20260916_v1/model/last.pt": "c9337234b942d950591c9f2ab49b35c0976bed05294ab432918b033ed54d68a2",
+    "runs/studioa_detector_warmup_20260916_v1/validation.json": "a9e3b29410192b1f6bf8d49f583bd8b641f583c09f5b5558767cfd4a9171fa5a",
+    "runs/studioa_detector_warmup_20260916_v1/baseline_val.json": "445010c860040e87a677a984948f275e120f3f0f9bd6c85c070820efe7831962",
+    "runs/studioa_detector_warmup_20260916_v1/model/metrics.jsonl": "00b7e9492f55f7bd5ede40f3fcbba1a114d13e401c0d324126f234148026e846",
+    "runs/studioa_detector_warmup_20260916_v1/validation_scene_preview.jpg": "e1798a2a38d0cab2eb1b06b75d18d29a8d66ad69cecb3082cc7c9bad25b78b57",
+    "runs/studioa_detector_warmup_20260916_v1/scene_before.json": "d7c9e18e014bb4e47b0a6acbae3e56ead9448a44e7dffe79097eeb4221d527a4",
+    "runs/studioa_detector_warmup_20260916_v1/warmup_evidence.json": "93b264b01dfe739bd1ca301060719fb7dbb3dd89d1a33cc27c9a1a8975064641"
+  }
+}

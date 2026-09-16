@@ -93,6 +93,9 @@ class HydraNet(nn.Module):
                     cls_weight=lcfg.get("cls_weight", 1.0),
                     reg_weight=lcfg.get("reg_weight", 1.0),
                     centerness_weight=lcfg.get("centerness_weight", 1.0),
+                    class_negative_normalization=lcfg.get(
+                        "class_negative_normalization", "sum"
+                    ),
                 )
             elif hcfg["type"] == "depth_fpn":
                 self.depth_heads[name] = build_depth_head(hcfg, ch)
@@ -115,6 +118,23 @@ class HydraNet(nn.Module):
             self.balancer = UncertaintyWeighting(head_names)
         else:
             self.balancer = FixedWeighting(mcfg.get("fixed_weights", {}))
+
+        self.detection_only_training = bool(mcfg.get("detection_only_training", False))
+        if self.detection_only_training:
+            if self.det_head is None:
+                raise ValueError("detection_only_training requires a detection head")
+            for name, parameter in self.named_parameters():
+                parameter.requires_grad_(name.startswith("det_head."))
+            self.train(self.training)
+
+    def train(self, mode: bool = True):
+        """A frozen scene also needs frozen normalization and disabled dropout."""
+        super().train(mode)
+        if self.detection_only_training:
+            for name, module in self.named_children():
+                if name != "det_head":
+                    module.eval()
+        return self
 
     def forward(self, images: torch.Tensor) -> dict:
         """Pure convolution graph. This is exactly what gets exported to ONNX."""

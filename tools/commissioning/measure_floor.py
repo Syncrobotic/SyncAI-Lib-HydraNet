@@ -5,13 +5,14 @@ python tools/commissioning/measure_floor.py CAMERA --out runs/scale_measurements
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from PIL import Image
 
 from syncai_hydranet.geometry.camera_json import CameraFile
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("SYNCAI_ROOT", Path(__file__).resolve().parents[2]))
 PAGE = Path(__file__).with_suffix(".html").read_text()
 
 

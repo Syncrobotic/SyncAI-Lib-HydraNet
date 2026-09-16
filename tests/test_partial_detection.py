@@ -7,6 +7,76 @@ from syncai_hydranet.models.heads.detection import FCOSHead
 from syncai_hydranet.models.losses import FCOSLoss
 
 
+def test_class_negative_budget_bounds_mass_and_excludes_existing_supervision():
+    from syncai_hydranet.models.losses import class_negative_weights
+
+    positive = torch.zeros(2, 20, 3)
+    positive[0, :3, 0] = 1
+    existing = positive.clone()
+    existing[:, -2:, :] = 1  # existing empty negatives must not spend the added budget
+    selected = torch.ones_like(positive, dtype=torch.bool)
+    weight = class_negative_weights(selected, positive, existing)
+    torch.testing.assert_close(weight.sum((0, 1)), torch.tensor([3.0, 1.0, 1.0]))
+    assert (weight[existing > 0] == 0).all()
+    assert not weight.requires_grad
+
+
+def test_negative_only_area_replication_keeps_bounded_loss_and_total_gradient():
+    results = []
+    for area in (8, 16):
+        head, cls, reg, ctr, _, _, negative = batch()
+        negative.zero_()
+        cm = torch.zeros(1, 3, 32, 32, dtype=torch.uint8)
+        cm[:, 0, :area, :area] = 1
+        loss, _ = FCOSLoss(3, class_negative_normalization="positive_budget")(
+            head,
+            cls,
+            reg,
+            ctr,
+            [torch.zeros(0, 4)],
+            [torch.zeros(0, dtype=torch.long)],
+            negative_mask=negative,
+            class_negative_mask=cm,
+        )
+        loss.backward()
+        results.append((loss.detach(), sum(x.grad.sum() for x in cls)))
+        assert all((x.grad[:, 1:] == 0).all() for x in cls)
+        assert all((x.grad == 0).all() for x in reg + ctr)
+    torch.testing.assert_close(results[0], results[1])
+
+
+def test_budget_preserves_positive_and_empty_gradients_and_only_scales_added_negatives():
+    gradients = []
+    for mode in ("sum", "positive_budget"):
+        head, cls, reg, ctr, boxes, labels, negative = batch()
+        cm = torch.zeros(1, 3, 32, 32, dtype=torch.uint8)
+        cm[:, 0] = 1
+        cm[:, 1, 8:24, 8:24] = 1  # contradictory same-class signal remains protected
+        cm[:, 2, 24:] = 255
+        FCOSLoss(3, class_negative_normalization=mode)(
+            head,
+            cls,
+            reg,
+            ctr,
+            boxes,
+            labels,
+            negative_mask=negative,
+            class_negative_mask=cm,
+        )[0].backward()
+        gradients.append(([x.grad.clone() for x in cls], [x.grad.clone() for x in reg + ctr]))
+    a, b = gradients
+    torch.testing.assert_close(a[1], b[1])
+    for x, y in zip(a[0], b[0], strict=True):
+        torch.testing.assert_close(x[:, 1:], y[:, 1:])
+    torch.testing.assert_close(a[0][0][:, :, 0, 0], b[0][0][:, :, 0, 0])
+    assert 0 < b[0][0][0, 0, 0, 1] < a[0][0][0, 0, 0, 1]
+
+
+def test_bad_class_negative_normalization_rejected():
+    with pytest.raises(ValueError, match="normalization"):
+        FCOSLoss(3, class_negative_normalization="invalid")
+
+
 def batch():
     head = FCOSHead(8, 3, in_levels=[0, 1], channels=8, num_convs=1, strides=[8, 16])
     cls = [
@@ -42,6 +112,55 @@ def test_partial_focal_unknown_channels_padding_and_regression_gradients():
     assert (reg[0].grad[:, :, 0, :] == 0).all()
     assert (ctr[0].grad[:, :, 0, :] == 0).all()
     assert (cls[1].grad == 0).all()  # small box out of second level's range
+
+
+def test_class_negative_only_affects_reviewed_channel_and_protects_positive_all_levels():
+    head, cls, reg, ctr, boxes, labels, negative = batch()
+    negative.zero_()
+    per_class = torch.zeros(1, 3, 32, 32, dtype=torch.uint8)
+    per_class[:, 0, :8, 8:16] = 1
+    per_class[:, 0, 8:16, 8:16] = 1  # explicit wrong-class negative on another positive
+    per_class[:, 1, 8:24, 8:24] = 1  # contradictory positive is protected at every level
+    per_class[:, 2, 24:] = 255  # padding is not a negative
+    FCOSLoss(3)(
+        head,
+        cls,
+        reg,
+        ctr,
+        boxes,
+        labels,
+        negative_mask=negative,
+        class_negative_mask=per_class,
+    )[0].backward()
+    g = cls[0].grad[0]
+    assert g[0, 0, 1] > 0
+    assert (g[1:, 0, 1] == 0).all()
+    assert g[1, 1, 1] < 0
+    assert g[0, 1, 1] > 0 and g[2, 1, 1] == 0
+    assert (g[:, 3, :] == 0).all()
+    assert (cls[1].grad[:, 1:] == 0).all()
+    assert cls[1].grad[0, 0, 0, 0] > 0
+    assert (reg[0].grad[:, :, 0, :] == 0).all()
+    assert (ctr[0].grad[:, :, 0, :] == 0).all()
+
+
+@pytest.mark.parametrize(
+    "bad", [torch.zeros(1, 32, 32), torch.zeros(1, 2, 32, 32), torch.full((1, 3, 32, 32), 2)]
+)
+def test_invalid_class_negatives_rejected(bad):
+    head, cls, reg, ctr, boxes, labels, negative = batch()
+    with pytest.raises(ValueError, match="class_negative_mask"):
+        FCOSLoss(3)(
+            head, cls, reg, ctr, boxes, labels, negative_mask=negative, class_negative_mask=bad
+        )
+
+
+def test_class_negative_cannot_turn_exhaustive_training_into_partial():
+    head, cls, reg, ctr, boxes, labels, _ = batch()
+    with pytest.raises(ValueError, match="requires partial"):
+        FCOSLoss(3)(
+            head, cls, reg, ctr, boxes, labels, class_negative_mask=torch.zeros(1, 3, 32, 32)
+        )
 
 
 def test_box_never_becomes_negative_on_an_unassigned_level():

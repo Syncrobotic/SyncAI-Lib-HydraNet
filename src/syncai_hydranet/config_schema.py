@@ -66,6 +66,7 @@ NECK = {
 }
 
 MODEL = {
+    "detection_only_training": Spec((bool,)),
     "backbone": Spec((dict,), required=True),
     "neck": Spec((dict,), required=True),
     "heads": Spec((dict,), required=True),
@@ -161,6 +162,7 @@ LOSS_BY_TYPE = {
         "cls_weight": Spec(NUMBER),
         "reg_weight": Spec(NUMBER),
         "centerness_weight": Spec(NUMBER),
+        "class_negative_normalization": Spec((str,), choices=("sum", "positive_budget")),
     },
     "pose_p3": {},
     "depth_fpn": {
@@ -199,6 +201,7 @@ AUGMENT = {
 }
 
 DATASET = {
+    "validation_only": Spec((bool,)),
     "name": Spec((str,), required=True),
     "type": Spec(
         (str,),
@@ -685,6 +688,8 @@ def _check_datasets(rep: _Report, dcfg: dict, head_names: set[str]) -> None:
         _check_section(rep, ds, DATASET, path)
         if not isinstance(ds, dict):
             continue
+        if ds.get("validation_only") and not ds.get("split_val"):
+            rep.errors.append(f"{path}: validation_only requires split_val")
         name = ds.get("name")
         if name in seen:
             rep.errors.append(f"{path}.name: {name!r} is used by an earlier dataset")

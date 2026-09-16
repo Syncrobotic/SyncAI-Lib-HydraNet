@@ -1971,3 +1971,37 @@ Next: freeze shared features and normalization for detection warm-up, add AI-rev
 source-train instances and class-specific confusers, then use a predeclared acceptance
 rule requiring both detection improvement and preserved scene agreement. Do not extend
 the same run or use source test / Tao-Hsin test for iteration.
+
+### 10.26 GCS source-train intake and reviewed expansion — 2026-09-16
+
+GCS access restored. Added bounded, generation-pinned intake for `gs://studioa` from
+existing train cameras only: 18 clips / 453,678,490 bytes, nine Kaohsiung/Taichung cameras,
+two dates/time slots. Recorded generations, MD5, SHA-256 and extraction offsets. This
+bucket's timestamp format differs from studioa-recording; old UTC assumptions are not
+reused. Camera views were compared with legacy images. Initial systemd PATH failure
+was diagnosed from logs and resumed with the ffprobe path; pinned worker unchanged.
+
+36 extracted frames -> 16 visually selected frames after redundancy screening.
+SAM3 produced 504 tentative positives and 553 unresolved candidates; assistant inspected
+183 individual masks in context and accepted 98 observations. One phone proposal was
+corrected to a physical tablet. Depictions, device parts, mats, headphones, remotes,
+grouped packages and contaminated masks were deferred. Repeated observations are not
+claimed as distinct physical objects; unselected proposals do not create negatives.
+
+Instances v3 now has 27 train frames / nine cameras / 129 positives; source val remains
+six frames / 31 positives. Semantic extension contains 137 frames, Tao-Hsin fold
+62 train / 33 val / 26 test, with 16 source-test frames still excluded. All 121 prior
+semantic mask files and all 17 prior instance images/targets/negative masks are
+byte-identical; every prior split role is unchanged. No test inference occurred.
+
+59 related tests passed. GPU smoke covered all 27 train frames in 14 updates with finite
+loss/gradients; all 2,366,580 checked unknown logits had zero gradient. 297 frozen inputs
+verified, all three completed services exited 0, no checkpoint written. Tool commits:
+`c7ebd13`, `460213d`, `bafe929`. Unrelated `:memory:.ses` remains untouched.
+
+[Counts, visual gallery, methods and remaining gaps](STUDIOA_GCS_EXPANSION.md),
+[tracked report](reviews/studioa_gcs_expansion_20260916.json).
+Cardboard boxes remain at three train observations; class-specific hard negatives and
+stronger validation remain pending. Next: detector warm-up with shared scene features
+and normalization frozen, then predeclared source-val acceptance checks. Data expansion
+is complete for this batch, not evidence of a successful model upgrade.

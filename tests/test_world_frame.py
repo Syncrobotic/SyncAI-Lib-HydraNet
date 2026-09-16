@@ -504,3 +504,14 @@ def test_a_canvas_region_without_a_source_size_is_refused():
     track, region = _canvas_track((0.5, 3.0))
     with pytest.raises(ValueError, match="without source_size_px"):
         world_frame([track], _half_res_camera_file(), 0, name="person", canvas_region=region)
+
+
+def test_a_track_box_is_drawn_by_the_panel_over_source_ratio_not_a_constant():
+    """`demo_video` drew boxes with `/ 2.0`: right for 1920x1080, 2/3 off on 1280x720 and
+    2x on 3840x2160. The ratio is per axis and per frame pair."""
+    from syncai_hydranet.analytics.world import panel_box
+
+    box = (640.0, 360.0, 700.0, 500.0)
+    assert panel_box(box, (1920, 1080), (960, 540)) == (320.0, 180.0, 350.0, 250.0)
+    assert panel_box(box, (1280, 720), (960, 540)) == (480.0, 270.0, 525.0, 375.0)
+    assert panel_box(box, (3840, 2160), (960, 540)) == (160.0, 90.0, 175.0, 125.0)

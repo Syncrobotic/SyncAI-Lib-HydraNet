@@ -62,25 +62,27 @@ def freeze(root, out, cameras):
     shutil.copytree(
         root / "src", snapshot / "src", ignore=shutil.ignore_patterns("__pycache__", "*.pyc")
     )
-    tool = Path("tools/commissioning/scene_mesh.py")
-    (snapshot / tool).parent.mkdir(parents=True)
-    shutil.copy2(root / tool, snapshot / tool)
-    shutil.copy2(Path(__file__), snapshot / "tools/commissioning/stage0_baseline.py")
-    for name in ("pyproject.toml", "uv.lock"):
-        shutil.copy2(root / name, snapshot / name)
+    runner = Path("tools/commissioning/stage0_baseline.py")
+    (snapshot / runner).parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(Path(__file__), snapshot / runner)
     inputs = {camera: capture_inputs(root, camera) for camera in cameras}
+    # Everything capture_inputs identifies travels with the snapshot -- the inputs and
+    # the code alike -- so the two identity records can only differ when a file changed
+    # under the copy, never because this list and that one drifted apart.
     for record in inputs.values():
-        for name, digest in record["inputs"].items():
-            if digest is None:
-                continue
-            relative = Path(name)
-            if relative.is_absolute() or ".." in relative.parts:
-                raise ValueError(f"snapshot requires checkout-relative input: {name}")
-            target = snapshot / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(root / relative, target)
-            if sha256(target) != digest:
-                raise RuntimeError(f"input changed while copying: {name}")
+        for section in ("inputs", "code"):
+            for name, digest in record[section].items():
+                if digest is None:
+                    continue
+                relative = Path(name)
+                if relative.is_absolute() or ".." in relative.parts:
+                    raise ValueError(f"snapshot requires checkout-relative input: {name}")
+                target = snapshot / relative
+                if not target.exists():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(root / relative, target)
+                if sha256(target) != digest:
+                    raise RuntimeError(f"input changed while copying: {name}")
     for camera in cameras:
         if capture_inputs(snapshot, camera) != inputs[camera]:
             raise RuntimeError(f"snapshot is incomplete or source changed: {camera}")

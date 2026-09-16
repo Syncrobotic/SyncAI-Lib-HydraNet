@@ -44,7 +44,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
+from syncai_hydranet.paths import repo_root
+
+REPO = repo_root(Path(__file__).resolve().parents[2])
 
 #: The run every tool ships from. A timestamped directory rather than a stable name on
 #: purpose: the name says when the weights were trained, and promoting a new run is an

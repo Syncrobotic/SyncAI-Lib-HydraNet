@@ -153,6 +153,7 @@ class DetectionHead:
             # and trains unchanged.
             class_mask=targets.get("det_class_mask"),
             negative_mask=targets.get("det_negative_mask"),
+            class_negative_mask=targets.get("det_class_negative_mask"),
         )
 
     def supervised_by(self, _targets: dict) -> bool:

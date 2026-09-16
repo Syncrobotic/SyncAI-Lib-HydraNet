@@ -79,13 +79,48 @@ PLATES = Path("datasets/studioa_static")
 # plate handling
 
 
-def pick_daytime_slot(cam_dir: Path) -> str:
-    """Brightest plate among the daytime slots (slot keys are UTC; store-local is +8)."""
+#: The offset every site carried until 2026-09-11, when a US-Central factory's plates
+#: passed the daytime gate by coincidence (its 10 UTC slot read as 18 local under +8).
+#: A site states its own offset in `cameras.json`; this is only what an old file means.
+DEFAULT_UTC_OFFSET_HOURS = 8
+
+
+def utc_offset_hours(cameras_json: dict) -> int:
+    """The site's `utc_offset_hours` from a `cameras.json` payload, +8 when it says nothing."""
+    return int(cameras_json.get("utc_offset_hours", DEFAULT_UTC_OFFSET_HOURS))
+
+
+#: A shop's lit hours. A factory on night shifts is lit at 05:00 local (FTI, 2026-09-16:
+#: its only capture fell there and the gate refused it), so a site states its own window.
+DEFAULT_DAYTIME_HOURS_LOCAL = (8, 18)
+
+
+def daytime_hours_local(cameras_json: dict) -> tuple[int, int]:
+    """The site's `daytime_hours_local` `[start, end]` from `cameras.json`, 08-18 when absent.
+
+    Inclusive local hours; `start > end` is a window across midnight (`[20, 6]`)."""
+    start, end = cameras_json.get("daytime_hours_local", DEFAULT_DAYTIME_HOURS_LOCAL)
+    return int(start), int(end)
+
+
+def in_daytime(hour_local: int, daytime: tuple[int, int] = DEFAULT_DAYTIME_HOURS_LOCAL) -> bool:
+    start, end = daytime
+    if start <= end:
+        return start <= hour_local <= end
+    return hour_local >= start or hour_local <= end
+
+
+def pick_daytime_slot(
+    cam_dir: Path,
+    utc_offset: int = DEFAULT_UTC_OFFSET_HOURS,
+    daytime: tuple[int, int] = DEFAULT_DAYTIME_HOURS_LOCAL,
+) -> str:
+    """Brightest plate among the daytime slots (slot keys are UTC; local = UTC + offset)."""
     best, best_luma = None, -1.0
     for p in sorted(cam_dir.glob("plate_*.png")):
         slot = p.stem.split("_", 1)[1]
-        hour_local = (int(slot[9:11]) + 8) % 24
-        if not (8 <= hour_local <= 18):
+        hour_local = (int(slot[9:11]) + utc_offset) % 24
+        if not in_daytime(hour_local, daytime):
             continue
         luma = float(np.asarray(Image.open(p).convert("L"), dtype=float).mean())
         if luma > best_luma:

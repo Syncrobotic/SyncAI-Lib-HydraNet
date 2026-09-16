@@ -622,3 +622,48 @@ def test_a_depth_frame_with_nothing_in_it_yields_no_candidates():
     assert floor_candidates(empty, cam, inlier_m=0.03) == []
     plane, residual, rows = choose_floor([])
     assert plane is None and residual is None and rows == []
+
+
+def _plate(dir_, slot, luma):
+    from PIL import Image
+
+    Image.new("L", (4, 4), luma).save(dir_ / f"plate_{slot}.png")
+
+
+def test_the_daytime_gate_uses_the_sites_offset_not_a_constant(tmp_path):
+    """A US-Central site (UTC-5) recorded at 15:00 UTC is 10:00 local -- daytime -- and the
+    same plates read under +8 pick another slot. The old constant refused the 15 UTC slot
+    (23 local) and passed a 10 UTC slot by luck (18 local)."""
+    from syncai_bev3d.plate_calibration import pick_daytime_slot
+
+    _plate(tmp_path, "20260910-150000", 200)
+    _plate(tmp_path, "20260910-030000", 250)  # 22:00 local at -5: brighter, but night
+    assert pick_daytime_slot(tmp_path, utc_offset=-5) == "20260910-150000"
+    assert pick_daytime_slot(tmp_path, utc_offset=8) == "20260910-030000"
+
+
+def test_a_cameras_json_without_an_offset_still_means_the_original_site():
+    from syncai_bev3d.plate_calibration import DEFAULT_UTC_OFFSET_HOURS, utc_offset_hours
+
+    assert utc_offset_hours({"cameras": {}}) == DEFAULT_UTC_OFFSET_HOURS == 8
+    assert utc_offset_hours({"utc_offset_hours": -5, "cameras": {}}) == -5
+
+
+def test_a_night_shift_site_states_its_own_lit_hours(tmp_path):
+    """FTI's only capture is 05:22 local (UTC-6, slot 11 UTC): lit, and refused by a shop's
+    08-18 window. The site's cameras.json widens the window; a window across midnight
+    is stated as [start, end] with start > end."""
+    from syncai_bev3d.plate_calibration import (
+        DEFAULT_DAYTIME_HOURS_LOCAL,
+        daytime_hours_local,
+        in_daytime,
+        pick_daytime_slot,
+    )
+
+    _plate(tmp_path, "20260910-112151", 149)
+    with pytest.raises(SystemExit, match="no daytime plate"):
+        pick_daytime_slot(tmp_path, utc_offset=-6)
+    assert pick_daytime_slot(tmp_path, utc_offset=-6, daytime=(4, 23)) == "20260910-112151"
+    assert daytime_hours_local({"cameras": {}}) == DEFAULT_DAYTIME_HOURS_LOCAL == (8, 18)
+    assert daytime_hours_local({"daytime_hours_local": [4, 23], "cameras": {}}) == (4, 23)
+    assert in_daytime(23, (20, 6)) and in_daytime(2, (20, 6)) and not in_daytime(12, (20, 6))

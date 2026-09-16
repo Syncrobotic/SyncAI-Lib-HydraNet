@@ -81,7 +81,12 @@ def _build_datasets(dcfg, input_size):
     aug = dcfg.get("augment")
     train_sets, val_sets, names, ratios, val_names = [], [], [], [], []
     for ds in dcfg["datasets"]:
-        train_sets.append(build_dataset(ds, input_size, "train", letterbox=lb, augment=aug))
+        if not ds.get("validation_only", False):
+            train_sets.append(build_dataset(ds, input_size, "train", letterbox=lb, augment=aug))
+            names.append(ds["name"])
+            ratios.append(float(ds.get("sample_ratio", 1.0)))
+        elif not ds.get("split_val"):
+            raise ValueError("validation_only requires split_val")
         # A dataset may contribute training signal without joining checkpoint selection:
         # omit `split_val` and it is trained on but never validated on.
         #
@@ -96,8 +101,8 @@ def _build_datasets(dcfg, input_size):
             # Validation never augments, so it takes no augment argument.
             val_sets.append(build_dataset(ds, input_size, "val", letterbox=lb))
             val_names.append(ds["name"])
-        names.append(ds["name"])
-        ratios.append(float(ds.get("sample_ratio", 1.0)))
+    if not train_sets:
+        raise ValueError("at least one training dataset is required")
     if not val_sets:
         raise ValueError(
             "no dataset declares split_val, so nothing can select a checkpoint; "
@@ -447,6 +452,7 @@ class Trainer:
         to the data behind it.
         """
         n_params = sum(p.numel() for p in self.model.parameters())
+        train_sizes = {name: len(ds) for name, ds in zip(names, train_sets, strict=True)}
         meta = write_run_meta(
             self.out_dir,
             cfg,
@@ -456,16 +462,17 @@ class Trainer:
             parameters=n_params,
             datasets=[
                 {
-                    "name": n,
-                    "train_size": len(t),
+                    "name": ds["name"],
+                    "train_size": train_sizes.get(ds["name"], 0),
+                    "validation_only": bool(ds.get("validation_only", False)),
                     # None, not 0: "not validated on" and "validated on nothing" are
                     # different facts and the run meta should not blur them.
-                    "val_size": val_size.get(n),
+                    "val_size": val_size.get(ds["name"]),
                     # Datasets live outside git; without this, "which data produced
                     # this checkpoint" has no answer six months later.
                     **fingerprint_dataset(ds),
                 }
-                for n, t, ds in zip(names, train_sets, dcfg["datasets"], strict=True)
+                for ds in dcfg["datasets"]
             ],
         )
         _log_code_version(meta["git"], self.out_dir, self.logger)
