@@ -1,0 +1,95 @@
+{
+  "schema": 1,
+  "purpose": "familiar-store development regression only",
+  "freeze": {
+    "base_commit": "dbfc3a5a6c654120ab9cb87c0374063bd1a8208c",
+    "source_boundary": "uncommitted implementation frozen before regression; unrelated :memory:.ses excluded",
+    "sources": {
+      "src/syncai_bev3d/structural_observations.py": "7fead475d108b10e7541035fb543aa7cea34081822bcdc34d3942483d24ffb20",
+      "tools/commissioning/structural_observe.py": "fedd5514ccf721ea9826cd8df302e50561cb819134fcf699203200a386df9f2b"
+    },
+    "config": {
+      "max_scan_frames": 24,
+      "max_frames": 6,
+      "max_candidates": 48,
+      "max_hough_seeds": 180,
+      "min_span_fraction": 0.07,
+      "min_persistence": 0.5
+    },
+    "purpose": "familiar-store development regression, not blind new-store acceptance",
+    "inputs": {
+      "Kaohsiung-cam04": "datasets/retail_objects_batch02/images/train/Kaohsiung-cam04__archive_20260816-025809_20260816-030312",
+      "Taichung-cam10": "datasets/retail_objects_columns_clean/images/train/Taichung-cam10",
+      "Tao-Hsin-cam03": "datasets/retail_objects_columns/images/train/Tao-Hsin-cam03"
+    }
+  },
+  "results": {
+    "Kaohsiung-cam04": {
+      "elapsed_seconds": 4.782926294952631,
+      "report_sha256": "2d020748c52751109fe11eacf5873d4d06ee3de825c20c0a68e3ef66f598855c",
+      "input_frames": 6,
+      "scanned_frames": 6,
+      "selected_frames": 6,
+      "observations": 247,
+      "persistent_tracks": 21,
+      "ambiguous_tracks": 11,
+      "transient_tracks": 47,
+      "status": "partial",
+      "calibration_ready": false,
+      "image_size_px": [
+        1920,
+        1080
+      ]
+    },
+    "Taichung-cam10": {
+      "elapsed_seconds": 5.218460489064455,
+      "report_sha256": "7c9932c02d177ad05cb5e12633da3ee79149f65f6ae81f2460607fefdba09ed0",
+      "input_frames": 12,
+      "scanned_frames": 12,
+      "selected_frames": 6,
+      "observations": 287,
+      "persistent_tracks": 31,
+      "ambiguous_tracks": 9,
+      "transient_tracks": 36,
+      "status": "partial",
+      "calibration_ready": false,
+      "image_size_px": [
+        1920,
+        1080
+      ]
+    },
+    "Tao-Hsin-cam03": {
+      "elapsed_seconds": 4.842865796759725,
+      "report_sha256": "088f5e14e95061ffdaed9828db6b782650023ab25df97b10e798f1020f4f6da3",
+      "input_frames": 12,
+      "scanned_frames": 12,
+      "selected_frames": 6,
+      "observations": 286,
+      "persistent_tracks": 34,
+      "ambiguous_tracks": 10,
+      "transient_tracks": 35,
+      "status": "partial",
+      "calibration_ready": false,
+      "image_size_px": [
+        1920,
+        1080
+      ]
+    }
+  },
+  "calibration_ready": false,
+  "deployment_ready": false,
+  "scale_status": "unknown",
+  "report_directory": "runs/studioa_autonomous_observations_20260917_v2",
+  "review": "18 raw-frame overlays reviewed in three six-frame contact sheets; weak floor edges missing, axes and physical line identity unresolved",
+  "validation": {
+    "focused_tests_passed": 18,
+    "full_tests_passed": 4233,
+    "full_tests_skipped": 12,
+    "skip_reason": "CUDA unavailable",
+    "full_test_seconds": 141.99,
+    "full_log_sha256": "19f2292d454a559ca9af5a38c99e0cdc4d8e18eb223fb9ad9c4198a5579753de",
+    "ruff_check": "passed (repository)",
+    "ruff_format": "passed (repository)",
+    "ty_check": "passed (new Python files)"
+  }
+}
