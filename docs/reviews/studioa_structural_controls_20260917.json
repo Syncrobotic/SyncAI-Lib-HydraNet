@@ -1,0 +1,351 @@
+{
+  "schema": 1,
+  "camera": "Kaohsiung-cam04",
+  "image_size_px": [
+    960,
+    540
+  ],
+  "pixel_space": "raw",
+  "reviewer": "AI visual review",
+  "evidence": "AI-selected visible vertical structural edges and six floor grout lines; orthogonal floor and verticality assumptions, not measured metric controls; entire physical lines held out before joint fit",
+  "source_identity": {
+    "datasets/studioa_static/Kaohsiung-cam04/plate_20260816-025809.png": "947a2f880652e5ec825177ba69cdc769a10512c3da077f2ee6fa3bc0e36506a2",
+    "runs/commission01/Kaohsiung-cam04/masks/column.png": "719a4fc3f21c4b2079a509ca36560843fe01433d5a3afcf26854b5dc90ede69f",
+    "runs/commission01/Kaohsiung-cam04/masks/display_shelf.png": "724decfca6f3675e9f4c099e7e4f450a3816f3e4ce42a6541fa62fe484be1f30",
+    "runs/commission01/Kaohsiung-cam04/masks/display_table.png": "60b384c7fd0b927622224ea3c2d311f0d118809e4dcf49397df9a2242ca3eee1",
+    "runs/commission01/Kaohsiung-cam04/masks/door.png": "e590a05c71de08ac066c35b30d5bf21c7fe1ab704235d1493253286099e91a85",
+    "runs/commission01/Kaohsiung-cam04/masks/floor.png": "649c1cbc2236c773d4560839d6e9937e0c9db57fa6918bdd8319c105fd1ab073",
+    "runs/commission01/Kaohsiung-cam04/masks/floor_fill.png": "5343549c0300a784178dd4464f14c0efd81696eec1c86827b0f71f2a4d4a88d7",
+    "runs/commission01/Kaohsiung-cam04/masks/glass.png": null,
+    "runs/commission01/Kaohsiung-cam04/masks/glass_door.png": null,
+    "runs/commission01/Kaohsiung-cam04/masks/instances.npz": "58fa634b6ea7b3a470c485786942d52dd54b26dfa6bd378e14b4260d6c3497f7",
+    "runs/commission01/Kaohsiung-cam04/masks/objects.png": "a10f67d0a49a2e23aeabe1b9c7a20d2541bab4715d3c5f8470f91f0046e714d3",
+    "runs/commission01/Kaohsiung-cam04/masks/walkable.png": "649c1cbc2236c773d4560839d6e9937e0c9db57fa6918bdd8319c105fd1ab073",
+    "runs/commission01/Kaohsiung-cam04/masks/wall.png": "37cadbab1e883ae41753602502b5794e07f1f8d98171268141c95fbd00a89330",
+    "runs/commission01/Kaohsiung-cam04/masks/window.png": null,
+    "runs/commission01/Kaohsiung-cam04.camera.json": "85b6d84432b30f0021d652627c01a93a2aa2f027eb4a81cbd616e938ce39830a"
+  },
+  "annotation_source": {
+    "path": "datasets/studioa_static/Kaohsiung-cam04/plate_20260816-025809.png",
+    "sha256": "947a2f880652e5ec825177ba69cdc769a10512c3da077f2ee6fa3bc0e36506a2",
+    "original_size_px": [
+      960,
+      540
+    ],
+    "scale_to_camera": [
+      1,
+      1
+    ]
+  },
+  "lines": [
+    {
+      "id": "door_left",
+      "validation": false,
+      "points_px": [
+        [
+          43.0,
+          175.0
+        ],
+        [
+          68.0,
+          224.0
+        ],
+        [
+          95.0,
+          272.0
+        ],
+        [
+          123.0,
+          320.0
+        ],
+        [
+          149.0,
+          364.0
+        ]
+      ],
+      "selection": "AI visual edge seeds; strongest local horizontal image gradient within 4 px; no camera fitting",
+      "axis": "vertical"
+    },
+    {
+      "id": "pillar_left",
+      "validation": false,
+      "points_px": [
+        [
+          605.0,
+          40.0
+        ],
+        [
+          623.0,
+          80.0
+        ],
+        [
+          629.0,
+          120.0
+        ],
+        [
+          649.0,
+          158.0
+        ]
+      ],
+      "selection": "AI visual edge seeds; strongest local horizontal image gradient within 4 px; no camera fitting",
+      "axis": "vertical"
+    },
+    {
+      "id": "shelf_right",
+      "validation": false,
+      "points_px": [
+        [
+          567.0,
+          22.0
+        ],
+        [
+          578.0,
+          49.0
+        ],
+        [
+          584.0,
+          76.0
+        ],
+        [
+          591.0,
+          103.0
+        ]
+      ],
+      "selection": "AI visual edge seeds; strongest local horizontal image gradient within 4 px; no camera fitting",
+      "axis": "vertical"
+    },
+    {
+      "id": "door_right",
+      "validation": true,
+      "points_px": [
+        [
+          132.0,
+          119.0
+        ],
+        [
+          153.0,
+          162.0
+        ],
+        [
+          176.0,
+          205.0
+        ],
+        [
+          201.0,
+          249.0
+        ]
+      ],
+      "selection": "AI visual edge seeds; strongest local horizontal image gradient within 4 px; no camera fitting",
+      "axis": "vertical"
+    },
+    {
+      "id": "pillar_right",
+      "validation": true,
+      "points_px": [
+        [
+          713.0,
+          50.0
+        ],
+        [
+          718.0,
+          85.0
+        ],
+        [
+          725.0,
+          120.0
+        ],
+        [
+          731.0,
+          153.0
+        ]
+      ],
+      "selection": "AI visual edge seeds; strongest local horizontal image gradient within 4 px; no camera fitting",
+      "axis": "vertical"
+    },
+    {
+      "id": "shelf_divider",
+      "validation": true,
+      "points_px": [
+        [
+          447.0,
+          69.0
+        ],
+        [
+          456.0,
+          102.0
+        ],
+        [
+          466.0,
+          136.0
+        ],
+        [
+          479.0,
+          170.0
+        ]
+      ],
+      "selection": "AI visual edge seeds; strongest local horizontal image gradient within 4 px; no camera fitting",
+      "axis": "vertical"
+    },
+    {
+      "id": "floor_u_1",
+      "axis": "floor_u",
+      "validation": false,
+      "points_px": [
+        [
+          849.0257804114922,
+          180.2168038602192
+        ],
+        [
+          836.1948439177015,
+          198.15663922795616
+        ],
+        [
+          823.7793756708063,
+          215.62655691182465
+        ],
+        [
+          810.1690635062095,
+          232.939835367737
+        ]
+      ],
+      "selection": "AI visible grout seeds; local raw-image intensity minimum within 3 px normal; no camera fitting"
+    },
+    {
+      "id": "floor_u_2",
+      "axis": "floor_u",
+      "validation": false,
+      "points_px": [
+        [
+          915.4254005673383,
+          205.46005267579113
+        ],
+        [
+          902.9272502363909,
+          230.35835528157963
+        ],
+        [
+          887.5709000945564,
+          257.74334211263186
+        ],
+        [
+          869.9272502363909,
+          285.35835528157963
+        ],
+        [
+          854.0,
+          314.0
+        ]
+      ],
+      "selection": "AI visible grout seeds; local raw-image intensity minimum within 3 px normal; no camera fitting"
+    },
+    {
+      "id": "floor_u_3",
+      "axis": "floor_u",
+      "validation": true,
+      "points_px": [
+        [
+          947.3354541501466,
+          329.65232369444755
+        ],
+        [
+          929.1139388668621,
+          370.5364315925967
+        ],
+        [
+          910.7784847167155,
+          408.8841078981492
+        ],
+        [
+          891.1075764164224,
+          444.5794605092541
+        ],
+        [
+          869.8860611331379,
+          481.4635684074033
+        ]
+      ],
+      "selection": "AI visible grout seeds; local raw-image intensity minimum within 3 px normal; no camera fitting"
+    },
+    {
+      "id": "floor_v_1",
+      "axis": "floor_v",
+      "validation": false,
+      "points_px": [
+        [
+          823.0,
+          224.0
+        ],
+        [
+          845.0,
+          230.0
+        ],
+        [
+          868.0,
+          236.0
+        ],
+        [
+          890.2728241002748,
+          242.03793606745222
+        ]
+      ],
+      "selection": "AI visible grout seeds; local raw-image intensity minimum within 3 px normal; no camera fitting"
+    },
+    {
+      "id": "floor_v_2",
+      "axis": "floor_v",
+      "validation": false,
+      "points_px": [
+        [
+          802.862043656699,
+          283.12652114433655
+        ],
+        [
+          832.6465327425243,
+          292.8448908582524
+        ],
+        [
+          862.5746957711327,
+          302.0843474295577
+        ],
+        [
+          892.2155109141747,
+          312.2816302860841
+        ],
+        [
+          922.0,
+          322.0
+        ]
+      ],
+      "selection": "AI visible grout seeds; local raw-image intensity minimum within 3 px normal; no camera fitting"
+    },
+    {
+      "id": "floor_v_3",
+      "axis": "floor_v",
+      "validation": true,
+      "points_px": [
+        [
+          835.3646918982167,
+          379.0688717492337
+        ],
+        [
+          865.3646918982167,
+          391.0688717492337
+        ],
+        [
+          893.9059243053497,
+          406.7933847522988
+        ],
+        [
+          925.7293837964336,
+          414.1377434984675
+        ],
+        [
+          955.3646918982167,
+          426.0688717492337
+        ]
+      ],
+      "selection": "AI visible grout seeds; local raw-image intensity minimum within 3 px normal; no camera fitting"
+    }
+  ],
+  "initial_floor_axis_deg": 30
+}

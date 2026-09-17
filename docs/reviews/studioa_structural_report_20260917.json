@@ -1,0 +1,270 @@
+{
+  "schema": 1,
+  "camera": "Kaohsiung-cam04",
+  "line_checks_passed": false,
+  "deployment_ready": false,
+  "independent_metric_accuracy": false,
+  "reasons": [
+    "held-out structural lines exceed the raw-pixel limit",
+    "fitting structural lines exceed the raw-pixel limit"
+  ],
+  "validation_limit_px": 4.0,
+  "floor_axis_deg": 29.97388019954586,
+  "condition": 17.410135985250516,
+  "line_scores": [
+    {
+      "id": "door_left",
+      "axis": "vertical",
+      "validation": false,
+      "before_raw_px": [
+        45.849199382993284,
+        21.771136775658075,
+        1.0636909064697189,
+        24.07819410234036,
+        45.65603605430386
+      ],
+      "after_raw_px": [
+        0.3912752903335321,
+        0.04548375350772802,
+        0.7420154492025102,
+        0.5868750508865013,
+        0.882356649868866
+      ],
+      "before_max_raw_px": 45.849199382993284,
+      "after_max_raw_px": 0.882356649868866
+    },
+    {
+      "id": "pillar_left",
+      "axis": "vertical",
+      "validation": false,
+      "before_raw_px": [
+        29.92751752321102,
+        6.366609605047298,
+        5.568744324236767,
+        31.259997616166775
+      ],
+      "after_raw_px": [
+        2.483032949326004,
+        2.141039829429349,
+        4.023181532015695,
+        4.410423774300718
+      ],
+      "before_max_raw_px": 31.259997616166775,
+      "after_max_raw_px": 4.410423774300718
+    },
+    {
+      "id": "shelf_right",
+      "axis": "vertical",
+      "validation": false,
+      "before_raw_px": [
+        14.817673788902054,
+        2.616451717487954,
+        4.680826763055591,
+        13.06781236384659
+      ],
+      "after_raw_px": [
+        1.0263828201362855,
+        2.3673437729035522,
+        0.7619071140450712,
+        2.7060318906504586
+      ],
+      "before_max_raw_px": 14.817673788902054,
+      "after_max_raw_px": 2.7060318906504586
+    },
+    {
+      "id": "door_right",
+      "axis": "vertical",
+      "validation": true,
+      "before_raw_px": [
+        19.097044174809895,
+        5.676395641673504,
+        6.784191937442866,
+        19.019209752564432
+      ],
+      "after_raw_px": [
+        1.744582213972515,
+        0.9724341839811445,
+        0.5621779160208706,
+        2.3260181214398767
+      ],
+      "before_max_raw_px": 19.097044174809895,
+      "after_max_raw_px": 2.3260181214398767
+    },
+    {
+      "id": "pillar_right",
+      "axis": "vertical",
+      "validation": true,
+      "before_raw_px": [
+        24.93655645178267,
+        9.079516972732323,
+        8.908617466829364,
+        25.513528534351668
+      ],
+      "after_raw_px": [
+        4.442111063222845,
+        0.15203636302569107,
+        1.5610378937354443,
+        3.164180371718419
+      ],
+      "before_max_raw_px": 25.513528534351668,
+      "after_max_raw_px": 4.442111063222845
+    },
+    {
+      "id": "shelf_divider",
+      "axis": "vertical",
+      "validation": true,
+      "before_raw_px": [
+        5.156512600281593,
+        2.5927414165670477,
+        0.7821435162741193,
+        7.122867127058677
+      ],
+      "after_raw_px": [
+        4.596134653680804,
+        0.700460247517389,
+        2.543886533274349,
+        2.8992516400098767
+      ],
+      "before_max_raw_px": 7.122867127058677,
+      "after_max_raw_px": 4.596134653680804
+    },
+    {
+      "id": "floor_u_1",
+      "axis": "floor_u",
+      "validation": false,
+      "before_raw_px": [
+        0.0026883571364821487,
+        0.04075781343549217,
+        0.29749816958459724,
+        0.344388688237694
+      ],
+      "after_raw_px": [
+        0.17146057399682488,
+        0.05985592431956099,
+        0.22208996523410637,
+        0.4646099272879039
+      ],
+      "before_max_raw_px": 0.344388688237694,
+      "after_max_raw_px": 0.4646099272879039
+    },
+    {
+      "id": "floor_u_2",
+      "axis": "floor_u",
+      "validation": false,
+      "before_raw_px": [
+        0.7313877759972057,
+        1.1109776666879616,
+        0.5309104143000732,
+        1.4695248950217097,
+        0.9727623422319737
+      ],
+      "after_raw_px": [
+        0.5018272518388601,
+        0.3266020071773754,
+        0.3793945548470829,
+        0.817754600988059,
+        0.6292386675782912
+      ],
+      "before_max_raw_px": 1.4695248950217097,
+      "after_max_raw_px": 0.817754600988059
+    },
+    {
+      "id": "floor_u_3",
+      "axis": "floor_u",
+      "validation": true,
+      "before_raw_px": [
+        2.813680753238288,
+        1.7906621446363982,
+        0.752866665457351,
+        1.6119675695984315,
+        3.842005715249113
+      ],
+      "after_raw_px": [
+        1.9350538939722486,
+        0.7853681627223522,
+        0.5519337906159815,
+        0.7479480576314628,
+        1.4882811045857032
+      ],
+      "before_max_raw_px": 3.842005715249113,
+      "after_max_raw_px": 1.9350538939722486
+    },
+    {
+      "id": "floor_v_1",
+      "axis": "floor_v",
+      "validation": false,
+      "before_raw_px": [
+        7.723169981513247,
+        2.9026952466789364,
+        2.5262256533649867,
+        7.72572989554213
+      ],
+      "after_raw_px": [
+        0.5153402957318496,
+        0.36398510843194676,
+        0.1929870290857415,
+        0.6463852262101337
+      ],
+      "before_max_raw_px": 7.72572989554213,
+      "after_max_raw_px": 0.6463852262101337
+    },
+    {
+      "id": "floor_v_2",
+      "axis": "floor_v",
+      "validation": false,
+      "before_raw_px": [
+        14.2920669732974,
+        7.55111737136285,
+        0.11273058020499117,
+        6.569172847422364,
+        13.946467942306876
+      ],
+      "after_raw_px": [
+        0.44812703951271443,
+        0.03166276772511436,
+        0.26295961563946346,
+        0.3577288174073386,
+        0.3306301120890155
+      ],
+      "before_max_raw_px": 14.2920669732974,
+      "after_max_raw_px": 0.44812703951271443
+    },
+    {
+      "id": "floor_v_3",
+      "axis": "floor_v",
+      "validation": true,
+      "before_raw_px": [
+        14.338799111349632,
+        7.314032820656748,
+        4.01445240058173,
+        8.202898842407714,
+        15.56600180018899
+      ],
+      "after_raw_px": [
+        2.98734178794092,
+        1.7069983792899894,
+        3.547552420907031,
+        0.21733637600781391,
+        1.0494442100034975
+      ],
+      "before_max_raw_px": 15.56600180018899,
+      "after_max_raw_px": 3.547552420907031
+    }
+  ],
+  "parameters": [
+    6.7741747658439415,
+    0.5539052076724327,
+    -0.3933380486094401,
+    0.5231428990804102,
+    -0.3066892894472958
+  ],
+  "height_m_unchanged": 2.17,
+  "zones_removed": 7,
+  "requires_depth_rebuild": true,
+  "scope": "Conditional on fixed principal point, square pixels, radial lens and orthogonal structure; height remains unmeasured. Re-derive and review zones.",
+  "controls_sha256": "2695867bad464d08a1338718bc74ef5cc1a3cd46eedc005d5866417084c2e4c3",
+  "floor_check": {
+    "above_horizon_fraction": 0.0,
+    "scope": "observed floor coverage only, not metric validation"
+  }
+}

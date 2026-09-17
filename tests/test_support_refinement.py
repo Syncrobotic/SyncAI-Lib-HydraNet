@@ -4,14 +4,21 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from PIL import Image, ImageDraw
+from scipy.ndimage import distance_transform_edt
 
 from syncai_bev3d import support_refinement as sr
 from syncai_bev3d.meshes import Placement, place, round_table
 from syncai_bev3d.object_instances import ObjectInstance, save_instances
 from syncai_bev3d.scene_mesh import counter
-from syncai_hydranet.geometry.camera_json import CameraFile
-from syncai_hydranet.geometry.ground import Camera, GroundPlane
+from syncai_hydranet.geometry.camera_json import CameraFile, Lens
+from syncai_hydranet.geometry.ground import (
+    Camera,
+    GroundPlane,
+    pixel_to_ground,
+    undistort_points,
+)
 
 
 def example():
@@ -176,3 +183,45 @@ def test_geometry_body_is_matched_by_pixels_after_student_ids_change(tmp_path):
     assert report[0]["accepted"], report
     assert report[0]["after_top_iou"] > 0.9 and report[0]["after_body_iou"] > 0.9
     assert result[0][0] is not initial
+
+
+@pytest.mark.parametrize("shape", [(540, 960), (180, 320)])
+def test_distorted_support_projection_matches_inverse_camera_rays(shape):
+    """Independent pixel-to-plane reference catches straight raw-edge shortcuts."""
+    from syncai_bev3d.scene_audit import raw_silhouette
+
+    cf = CameraFile(
+        camera_id="wide",
+        image_size_px=(960, 540),
+        camera=Camera(380, 380, 480, 270),
+        plane=GroundPlane(2.8, 0.6, -0.2),
+        lens=Lens(-0.45, (480, 270), np.hypot(960, 540) / 2),
+    )
+    mesh = place(counter(3.5, 2.5, 0.8), Placement(-0.25, 2.75, 0))
+    rows, cols = np.indices(shape)
+    raw = np.c_[cols.ravel(), rows.ravel()] * (np.array(cf.image_size_px) / shape[::-1])
+    ideal = undistort_points(raw, cf.lens.k1, cf.lens.centre_px, cf.lens.radius_px)
+    x, z = pixel_to_ground(ideal[:, 0], ideal[:, 1], cf.camera, replace(cf.plane, height=2.0))
+    reference = ((x >= -2) & (x <= 1.5) & (z >= 1.5) & (z <= 4)).reshape(shape)
+    projected = sr.raster(mesh, cf, shape, top=True)
+    # Polygon rasterisation covers boundary pixels; inverse rays sample their centres.
+    # Integer filling plus sampled curved edges may differ by two boundary pixels.
+    # Never permit errors deeper in the interior, even at low raster resolution.
+    assert distance_transform_edt(~reference)[projected & ~reference].max(initial=0) <= 2
+    assert distance_transform_edt(reference)[reference & ~projected].max(initial=0) <= 2
+    vertices, faces = mesh
+    top_faces = faces[np.isclose(vertices[faces, 1], 0.8).all(1)]
+    assert np.array_equal(projected, raw_silhouette(vertices, top_faces, cf, shape=shape))
+
+
+def test_support_crossing_near_plane_keeps_its_visible_triangles():
+    cf = CameraFile(
+        camera_id="near",
+        image_size_px=(100, 100),
+        camera=Camera(50, 50, 50, 50),
+        plane=GroundPlane(2, 0, 0),
+    )
+    vertices = np.array([[-0.02, 1.98, -0.2], [0.5, 1.5, 2], [-0.5, 1.5, 2]])
+    mask = sr.raster((vertices, np.array([[0, 1, 2]])), cf, (100, 100))
+    assert mask.any()
+    assert not sr.raster((vertices, np.empty((0, 3), int)), cf, (100, 100)).any()

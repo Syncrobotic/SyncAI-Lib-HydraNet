@@ -91,6 +91,63 @@ def _project(points, cf, shape):
     return px * (np.array(shape[::-1]) / cf.image_size_px)
 
 
+def raw_silhouette(vertices, faces, cf, *, shape=None):
+    """Project mesh triangles into raw pixels, shared by fitting and final GLB audit.
+
+    ``shape`` is (height, width); it changes only raster resolution, never the camera.
+    Sample curved lens edges and clip to the near plane. Union geometry coverage has
+    no scene occlusion discount or convex-hull completion; it is not a visible mask.
+    """
+    if shape is None:
+        shape = cf.image_size_px[::-1]
+    im = Image.new("1", tuple(shape[::-1]))
+    draw = ImageDraw.Draw(im)
+    vertices = np.asarray(vertices, float)
+    faces = np.asarray(faces, int).reshape(-1, 3)
+    if not np.isfinite(vertices).all():
+        raise ValueError("non-finite projected mesh")
+    if not len(faces):
+        return np.asarray(im, bool)
+    level = vertices.copy()
+    level[:, 1] = cf.plane.height - level[:, 1]
+    depth = (level @ cf.plane.rotation.T)[:, 2]
+    near = 0.051
+    fractions = np.linspace(0, 1, 25, endpoint=False)
+
+    def sampled_edges(polygons):
+        return (
+            polygons[..., None, :]
+            + (np.roll(polygons, -1, axis=-2) - polygons)[..., None, :] * fractions[:, None]
+        )
+
+    if (depth[faces] >= near).all():
+        # The optimiser visits this path thousands of times. Batch the projection,
+        # retaining exactly the same edge samples and triangle union as the audit.
+        rim = sampled_edges(vertices[faces])
+        px = _project(rim.reshape(-1, 3), cf, shape)
+        if px is None or not np.isfinite(px).all():
+            raise ValueError("mesh cannot be projected through the raw lens")
+        for polygon in px.reshape(len(faces), -1, 2):
+            draw.polygon([tuple(p) for p in polygon], fill=1)
+    else:
+        for face in faces:
+            polygon = []
+            for a, b in zip(face, np.roll(face, -1), strict=True):
+                if depth[a] >= near:
+                    polygon.append(vertices[a])
+                if (depth[a] >= near) != (depth[b] >= near):
+                    t = (near - depth[a]) / (depth[b] - depth[a])
+                    polygon.append(vertices[a] + t * (vertices[b] - vertices[a]))
+            if len(polygon) < 3:
+                continue
+            rim = sampled_edges(np.asarray(polygon))
+            px = _project(rim.reshape(-1, 3), cf, shape)
+            if px is None or not np.isfinite(px).all():
+                raise ValueError("mesh cannot be projected through the raw lens")
+            draw.polygon([tuple(p) for p in px], fill=1)
+    return np.asarray(im, bool)
+
+
 def fit_surface(
     mask,
     ev,

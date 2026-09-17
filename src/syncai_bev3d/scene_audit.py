@@ -13,10 +13,10 @@ from scipy import ndimage
 from syncai_bev3d.floor_review import floor_height_consistency, visible_floor_mask
 from syncai_bev3d.material_review import material_overlap
 from syncai_bev3d.render_provenance import sha256
-from syncai_bev3d.surfaces import _project
+from syncai_bev3d.surfaces import _project, raw_silhouette
 from syncai_hydranet.geometry.camera_json import CameraFile
 
-SCORING_VERSION = "raw-glb-silhouette-v1"
+SCORING_VERSION = "raw-glb-silhouette-v2"
 MATERIALS = ("glass_door", "window", "glass", "door", "wall")
 
 
@@ -72,45 +72,6 @@ def capture_inputs(root: Path, camera: str, *, opening_controls: Path | None = N
             for name in ("numpy", "scipy", "pillow", "trimesh")
         },
     }
-
-
-def raw_silhouette(vertices, faces, cf):
-    """Union projected triangles; clip near plane and sample curved division-lens edges.
-
-    This is full-frame geometric coverage with no occlusion discount, depth sorting,
-    alpha blending or convex-hull completion. It is not the fitter's admission score.
-    """
-    w, h = cf.image_size_px
-    im = Image.new("1", (w, h))
-    draw = ImageDraw.Draw(im)
-    vertices = np.asarray(vertices, float)
-    if not np.isfinite(vertices).all():
-        raise ValueError("non-finite exported mesh")
-    level = vertices.copy()
-    level[:, 1] = cf.plane.height - level[:, 1]
-    depth = (level @ cf.plane.rotation.T)[:, 2]
-    near = 0.051
-    for face in faces:
-        polygon = []
-        for a, b in zip(face, np.roll(face, -1), strict=True):
-            if depth[a] >= near:
-                polygon.append(vertices[a])
-            if (depth[a] >= near) != (depth[b] >= near):
-                t = (near - depth[a]) / (depth[b] - depth[a])
-                polygon.append(vertices[a] + t * (vertices[b] - vertices[a]))
-        if len(polygon) < 3:
-            continue
-        rim = np.concatenate(
-            [
-                np.linspace(a, b, 25, endpoint=False)
-                for a, b in zip(polygon, np.roll(polygon, -1, axis=0), strict=True)
-            ]
-        )
-        px = _project(rim, cf, (h, w))
-        if px is None or not np.isfinite(px).all():
-            raise ValueError("exported mesh cannot be projected through the raw lens")
-        draw.polygon([tuple(p) for p in px], fill=1)
-    return np.asarray(im, bool)
 
 
 def mask_metrics(prediction, reference):

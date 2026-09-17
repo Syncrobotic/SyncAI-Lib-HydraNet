@@ -14,7 +14,7 @@ from scipy.spatial import ConvexHull, QhullError
 from syncai_bev3d.meshes import Placement, place
 from syncai_bev3d.object_instances import load_instances
 from syncai_bev3d.object_placement import Support, fit_instance, footprint, overlap
-from syncai_bev3d.surfaces import _project
+from syncai_bev3d.surfaces import raw_silhouette
 
 
 def _mask_at(mask, shape):
@@ -38,18 +38,8 @@ def _hull(mask):
 def raster(mesh, cf, shape, *, top=False):
     vertices, faces = mesh
     if top:
-        vertices = vertices[np.isclose(vertices[:, 1], vertices[:, 1].max())]
-    px = _project(vertices, cf, shape)
-    image = Image.new("1", shape[::-1])
-    if px is None or not np.isfinite(px).all():
-        return np.asarray(image, bool)
-    draw = ImageDraw.Draw(image)
-    if top:
-        draw.polygon(list(map(tuple, px[ConvexHull(px).vertices])), fill=1)
-    else:
-        for face in faces:
-            draw.polygon(list(map(tuple, px[face])), fill=1)
-    return np.asarray(image, bool)
+        faces = faces[np.isclose(vertices[faces, 1], vertices[:, 1].max()).all(1)]
+    return raw_silhouette(vertices, faces, cf, shape=shape)
 
 
 def iou(a, b):
@@ -89,6 +79,8 @@ def refine_support(mesh, heading, top_mask, body_mask, cf, factory, *, maxiter=1
         "before_top_iou": before_top,
         "before_body_iou": before_body,
         "dimension_source": "joint visible tabletop/body fit; inherited camera scale",
+        "projection": "raw sampled lens edges; shared with final GLB audit",
+        "fit_shape_hw": list(shape),
     }
     if before_top >= 0.82:
         return mesh, dict(report, reason="tabletop already aligns; preserve existing geometry")

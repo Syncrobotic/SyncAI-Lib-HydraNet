@@ -1,0 +1,97 @@
+{
+  "status": "projection_contract_fixed_camera_basis_rejected",
+  "camera": "Kaohsiung-cam04",
+  "code_scoring_version": "raw-glb-silhouette-v2",
+  "calibration_applied": false,
+  "new_scene_generated": false,
+  "fit_audit_comparisons": [
+    {
+      "camera": "Kaohsiung-cam04",
+      "node": "display_table_4",
+      "fit_audit_different_pixels": 0,
+      "old_final_audit_different_pixels": 0,
+      "full_resolution_top_iou": 0.8627188715953308,
+      "glb_sha256": "5b2c2631e592a33adb6df6c0daf055ea97ddf5d448a397008556ef02d6286e04"
+    },
+    {
+      "camera": "Taichung-cam01",
+      "node": "display_table_1",
+      "fit_audit_different_pixels": 0,
+      "old_final_audit_different_pixels": 0,
+      "full_resolution_top_iou": 0.5300422784765714,
+      "glb_sha256": "c26feae3e17b3b663b873d8f3cc1abb5d2d67080fd5ef7c5a394cd5df7e797fa"
+    },
+    {
+      "camera": "Taichung-cam01",
+      "node": "display_table_2",
+      "fit_audit_different_pixels": 0,
+      "old_final_audit_different_pixels": 0,
+      "full_resolution_top_iou": 0.78852875754687,
+      "glb_sha256": "c26feae3e17b3b663b873d8f3cc1abb5d2d67080fd5ef7c5a394cd5df7e797fa"
+    },
+    {
+      "camera": "Taichung-cam01",
+      "node": "display_table_6",
+      "fit_audit_different_pixels": 0,
+      "old_final_audit_different_pixels": 0,
+      "full_resolution_top_iou": 0.30244530244530243,
+      "glb_sha256": "c26feae3e17b3b663b873d8f3cc1abb5d2d67080fd5ef7c5a394cd5df7e797fa"
+    },
+    {
+      "camera": "Taichung-cam01",
+      "node": "display_table_9",
+      "fit_audit_different_pixels": 0,
+      "old_final_audit_different_pixels": 0,
+      "full_resolution_top_iou": 0.7509546033092914,
+      "glb_sha256": "c26feae3e17b3b663b873d8f3cc1abb5d2d67080fd5ef7c5a394cd5df7e797fa"
+    },
+    {
+      "camera": "Taichung-cam01",
+      "node": "display_table_10",
+      "fit_audit_different_pixels": 0,
+      "old_final_audit_different_pixels": 0,
+      "full_resolution_top_iou": 0.777283950617284,
+      "glb_sha256": "c26feae3e17b3b663b873d8f3cc1abb5d2d67080fd5ef7c5a394cd5df7e797fa"
+    },
+    {
+      "camera": "Taichung-cam10",
+      "node": "display_table_2",
+      "fit_audit_different_pixels": 0,
+      "old_final_audit_different_pixels": 0,
+      "full_resolution_top_iou": 0.8132616282396018,
+      "glb_sha256": "b6e9f0b3d40d3954635ea752d7a75a3c709866c432f0231e5f2bdc30b5565424"
+    },
+    {
+      "camera": "Taichung-cam10",
+      "node": "display_table_8",
+      "fit_audit_different_pixels": 0,
+      "old_final_audit_different_pixels": 0,
+      "full_resolution_top_iou": 0.4066036756307756,
+      "glb_sha256": "b6e9f0b3d40d3954635ea752d7a75a3c709866c432f0231e5f2bdc30b5565424"
+    }
+  ],
+  "baseline_heldout_max_px": 25.513528534351668,
+  "candidate_heldout_max_px": 4.596134653680804,
+  "candidate_fitting_max_px": 4.410423774300718,
+  "limit_px": 4.0,
+  "candidate_line_checks_passed": false,
+  "candidate_floor_check": {
+    "above_horizon_fraction": 0.0,
+    "scope": "observed floor coverage only, not metric validation"
+  },
+  "interpretation": "AI image observations; frozen whole-line holdout; conditional structural calibration, not surveyed truth. No fixture refit until projection basis is accepted.",
+  "remaining": [
+    "refine observation accuracy on independent higher-resolution evidence without tuning these holdout lines",
+    "validate intrinsics and distortion using multiple regions and more independent lines",
+    "establish height/scale evidence and rebuild depth/zones before scene fitting",
+    "visibility-aware body fitting and independent per-fixture acceptance"
+  ],
+  "tests": {
+    "passed": 4217,
+    "skipped": 12,
+    "skip_reason": "CUDA unavailable",
+    "elapsed_seconds": 143.65,
+    "ruff": "passed",
+    "ty": "passed"
+  }
+}
