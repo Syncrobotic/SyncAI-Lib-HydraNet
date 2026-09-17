@@ -1,0 +1,106 @@
+{
+  "status": "generated_review_required",
+  "run": "runs/studioa_object_world_20260917_v2",
+  "model": "focus_seed43",
+  "checkpoint_sha256": "936991fb8d556cad2464645d742dd6dcf324e53d53e63cd7933ed9ab003a1af3",
+  "views": [
+    {
+      "camera": "Kaohsiung-cam04",
+      "mesh_nodes": {
+        "disc": 1,
+        "phone": 2,
+        "laptop": 1,
+        "door": 1,
+        "display_shelf": 2,
+        "display_table": 2,
+        "column": 2,
+        "floor": 1
+      },
+      "fixture_acceptance": {
+        "gate_d_status": "not_evaluated",
+        "reason": "material coverage and device fitting scores do not measure per-fixture Gate D IoU"
+      }
+    },
+    {
+      "camera": "Taichung-cam01",
+      "mesh_nodes": {
+        "disc": 1,
+        "chair": 1,
+        "laptop": 1,
+        "display_shelf": 2,
+        "display_table": 10,
+        "floor": 1
+      },
+      "fixture_acceptance": {
+        "gate_d_status": "not_evaluated",
+        "reason": "material coverage and device fitting scores do not measure per-fixture Gate D IoU"
+      }
+    },
+    {
+      "camera": "Taichung-cam10",
+      "mesh_nodes": {
+        "disc": 1,
+        "chair": 1,
+        "laptop": 4,
+        "display_table": 5,
+        "display_shelf": 3,
+        "floor": 1
+      },
+      "fixture_acceptance": {
+        "gate_d_status": "not_evaluated",
+        "reason": "material coverage and device fitting scores do not measure per-fixture Gate D IoU"
+      }
+    },
+    {
+      "camera": "Taichung-cam11",
+      "mesh_nodes": {
+        "disc": 1,
+        "tablet": 1,
+        "display_shelf": 4,
+        "display_table": 4,
+        "column": 1,
+        "floor": 1
+      },
+      "fixture_acceptance": {
+        "gate_d_status": "not_evaluated",
+        "reason": "material coverage and device fitting scores do not measure per-fixture Gate D IoU"
+      }
+    },
+    {
+      "camera": "Tao-Hsin-cam03",
+      "mesh_nodes": {
+        "disc": 1,
+        "display_shelf": 4,
+        "display_table": 5,
+        "floor": 1
+      },
+      "fixture_acceptance": {
+        "gate_d_status": "not_evaluated",
+        "reason": "material coverage and device fitting scores do not measure per-fixture Gate D IoU"
+      }
+    }
+  ],
+  "verification": "checkpoint binding, PNG decoding, 28-frame GIFs, finite GLB meshes, per-output hashes verified",
+  "full_cpu_regression": {
+    "passed": 4209,
+    "cuda_skipped": 12
+  },
+  "subsequent_targeted_tests": {
+    "passed": 43
+  },
+  "browser_verification": "headless Firefox cannot create WebGL context; static fallback screenshot visually checked; embedded GLB content test passed",
+  "limitations": [
+    "semantic model misses some objects; no claim of full category coverage",
+    "separate camera-coordinate scenes; no cross-store fusion",
+    "fixture Gate D not evaluated; source masks are not independent ground truth"
+  ],
+  "unsupported_asset_classes": [
+    "ceiling",
+    "cardboard_box",
+    "speaker",
+    "poster",
+    "fire_equipment",
+    "person"
+  ],
+  "delivery_sha256": "e6f95e49b010f69d8d18ffc5f288de1aa9a444779d5e38c8ef5a04c7c50a943d"
+}

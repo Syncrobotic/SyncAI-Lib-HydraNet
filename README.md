@@ -203,7 +203,7 @@ uv run python tools/commissioning/zones_confirm.py <camera> --render --apply
 uv run python tools/commissioning/fp_polygons.py <camera>
 # 0-8  look at what was built
 uv run python tools/commissioning/scene_overlay.py <camera>     # do the metres agree with the pixels
-uv run python tools/commissioning/scene_mesh.py <camera>        # solid 3D, GLB/OBJ
+uv run python tools/commissioning/scene_mesh.py <camera>        # solid 3D, GLB/OBJ/offline HTML
 ```
 
 Produces `runs/commission01/<camera>.camera.json` (pose, lens, walkable polygon, zones,
@@ -213,7 +213,9 @@ line in `REVIEW.md`.
 Stage0 now preserves individual laptop, monitor, chair, stool, tablet and phone masks.
 For an already commissioned camera, refresh just these objects with
 `uv run python tools/commissioning/objects_pass.py <camera>` (add `--device cpu` if needed),
-then rerun `tools/commissioning/scene_mesh.py <camera>`. The normal extras pass includes
+then rerun `tools/commissioning/scene_mesh.py <camera>`. For a trained StudioA scene head, use the same CLI with
+`--model-run <completed-run> --out <new-review-directory>`; see the
+[object-world delivery and input provenance](docs/STUDIOA_OBJECT_WORLD_20260917.md). The normal extras pass includes
 this step. Scene building reads `masks/object_instances.npz` and rejects masks from a
 different source plate. It fits each asset's continuous rotation and bounded dimensions
 against the raw-lens silhouette on a reconstructed tabletop, shelf or the floor;

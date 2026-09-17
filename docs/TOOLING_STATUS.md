@@ -56,3 +56,10 @@ mesh 需要相機產物；`test_package_boundaries.py` 驗證正式 serving 模�
 [逐檔查核證據](reviews/studioa_tool_audit_20260916.json) ·
 [目前 StudioA 訓練結果](STUDIOA_PARTIAL_DETECTION.md) ·
 [Stage0–4 契約](STUDIOA_STAGE0_4.md)
+
+## 2026-09-17 場景出圖更正
+
+物件式世界沿用 `scene_mesh.py`，新增 `--model-run` 接入已完成的新模型。
+昨晚新增的 `studioa_model_preview.py` 與 `cli/studioa_preview.py` 已移除；
+夜間訓練工具只負責 checkpoint，不再宣稱產出 3D 世界。
+詳見 [本次更正](STUDIOA_OBJECT_WORLD_20260917.md)。

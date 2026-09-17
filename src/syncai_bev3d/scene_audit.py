@@ -49,6 +49,7 @@ def capture_inputs(root: Path, camera: str, *, opening_controls: Path | None = N
     code = set((root / "src/syncai_bev3d").rglob("*.py"))
     code.update((root / "src/syncai_hydranet/geometry").rglob("*.py"))
     code.add(root / "tools/commissioning/scene_mesh.py")
+    code.add(root / "src/syncai_hydranet/cli/scene_evidence.py")
     code.add(root / "tools/commissioning/rebuild_geometry.py")
     code.update(root / name for name in ("pyproject.toml", "uv.lock"))
 

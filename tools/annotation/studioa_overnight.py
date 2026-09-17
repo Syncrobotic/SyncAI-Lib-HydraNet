@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Freeze a finite overnight training matrix and publish source-bound 3D previews."""
+"""Freeze a finite overnight training matrix and publish model checkpoints."""
 
 from __future__ import annotations
 
@@ -59,15 +59,9 @@ def choose_model(completed):
     return max(completed, key=lambda row: (row["miou"], row["name"]))
 
 
-def render_budget(deadline, now):
-    return max(1, min(600, deadline - now))
-
-
 def prepare(out, source, weights, deadline):
     if (out / "plan.json").exists():
         raise ValueError("overnight plan already exists")
-    if not (out / "cameras/manifest.json").exists():
-        raise ValueError("freeze source-bound camera inputs before preparing")
     worker = runpy.run_path(str(ROOT / "tools/annotation/studioa_train.py"))
     jobs = [{"name": "bootstrap", "seed": 42, "crop": True, "updates": 495}]
     jobs += [
@@ -94,18 +88,11 @@ def prepare(out, source, weights, deadline):
     runner = out / "runner"
     runner.mkdir()
     shutil.copyfile(__file__, runner / "studioa_overnight.py")
-    shutil.copyfile(
-        ROOT / "tools/commissioning/studioa_model_preview.py",
-        runner / "studioa_model_preview.py",
-    )
-    camera_manifest = read(out / "cameras/manifest.json")
     plan = {
-        "schema": "studioa.overnight.v1",
+        "schema": "studioa.overnight.v2",
         "deadline": deadline,
-        "training_stop": datetime.fromisoformat(deadline).timestamp() - 3600,
+        "training_stop": datetime.fromisoformat(deadline).timestamp() - 300,
         "jobs": jobs,
-        "cameras": [row["camera"] for row in camera_manifest["cameras"]],
-        "camera_manifest_sha256": digest(out / "cameras/manifest.json"),
         "runner_files": {p.name: digest(p) for p in runner.iterdir()},
         "git_commit": read(out / "jobs/bootstrap/job.json")["git_commit"],
         "selection": (
@@ -121,107 +108,40 @@ def prepare(out, source, weights, deadline):
     )
 
 
-def verified_render(directory, expected_model):
-    path = directory / "provenance.json"
-    if not path.exists():
-        return False
-    data = read(path)
-    return data["checkpoint_sha256"] == expected_model and all(
-        (directory / name).is_file() and digest(directory / name) == sha
-        for name, sha in data["outputs"].items()
-    )
-
-
-def publish(out, plan, selected, deadline):
-    name = selected["name"]
-    run = out / "jobs" / name
-    destination = out / "deliveries" / name
+def publish(out, _plan, selected, deadline):
+    """Publish training artifacts only; object worlds use the scene_mesh CLI."""
+    run = out / "jobs" / selected["name"]
+    destination = out / "deliveries" / selected["name"]
     destination.mkdir(parents=True, exist_ok=True)
-    expected = digest(run / "model/best.pt")
-    previews = []
-    errors = []
-    for camera in plan["cameras"]:
-        target = destination / camera
-        if not verified_render(target, expected):
-            for device in ("cuda", "cpu"):
-                if target.exists():
-                    target.rename(target.with_name(f"{camera}.incomplete.{time.time_ns()}"))
-                try:
-                    child(
-                        [
-                            sys.executable,
-                            str(out / "runner/studioa_model_preview.py"),
-                            "--run",
-                            str(run),
-                            "--camera-root",
-                            str(out / "cameras"),
-                            "--camera",
-                            camera,
-                            "--out",
-                            str(target),
-                            "--device",
-                            device,
-                        ],
-                        destination / f"{camera}.{device}.log",
-                        render_budget(deadline, time.time()),
-                    )
-                    if not verified_render(target, expected):
-                        raise ValueError("render output provenance failed")
-                    break
-                except Exception as error:
-                    errors.append({"camera": camera, "device": device, "error": str(error)})
-        if verified_render(target, expected):
-            previews.append(camera)
-    if len(previews) < 3:
-        raise RuntimeError(f"fewer than three completed 3D previews: {errors}")
     shutil.copyfile(run / "model/best.pt", destination / "model.pt")
     shutil.copyfile(run / "config.json", destination / "config.json")
     delivery = {
         "selected": selected,
-        "checkpoint_sha256": expected,
+        "checkpoint_sha256": digest(run / "model/best.pt"),
         "model": str((destination / "model.pt").relative_to(out)),
         "preview_root": str(destination.relative_to(out)),
-        "cameras": previews,
-        "render_errors": errors,
+        "cameras": [],
+        "render_errors": [],
+        "scene_status": "not_built; use tools/commissioning/scene_mesh.py --model-run",
         "completed_at": datetime.now(UTC).isoformat(),
         "before_deadline": time.time() <= deadline,
         "test_evaluated": False,
         "automatic_deployment": False,
-        "geometry": (
-            "new semantics on existing source-bound depth; visible surfaces; "
-            "absolute scale unverified"
-        ),
     }
     write_json(destination / "delivery.json", delivery)
     write_json(out / "delivery.json", delivery)
-    gallery(out, delivery, "模型與 3D 圖已完成;夜間批次狀態見 status.json")
+    gallery(out, delivery, "模型訓練完成;物件式 3D 場景需另行建置")
     return delivery
 
 
 def gallery(out, delivery, status):
-    base = delivery["preview_root"]
-    images = "".join(
-        f"<section><h2>{html.escape(camera)}</h2>"
-        f'<a href="{base}/{camera}/world.png"><img src="{base}/{camera}/world.png"></a>'
-        f'<p><a href="{base}/{camera}/semantic_scene.glb">語意 3D GLB</a> · '
-        f'<a href="{base}/{camera}/textured_scene.glb">原圖紋理 3D GLB</a> · '
-        f'<a href="{base}/{camera}/provenance.json">來源紀錄</a></p></section>'
-        for camera in delivery["cameras"]
-    )
     page = f'''<!doctype html><html lang="zh-Hant"><meta charset="utf-8">
-<title>StudioA 夜間訓練交付</title>
-<style>body{{max-width:1500px;margin:40px auto;padding:0 24px;background:#101827;
-color:#e2e8f0;font:17px/1.6 sans-serif}}a{{color:#7dd3fc}}img{{width:100%}}
-section{{margin:40px 0}}</style>
-<h1>StudioA 新模型與五視角 3D 場景</h1><p>{html.escape(status)}</p>
+<title>StudioA 模型訓練</title><h1>StudioA 模型訓練</h1>
+<p>{html.escape(status)}</p>
 <p>模型: {html.escape(delivery["selected"]["name"])};
-共用 AI 驗證標籤 mIoU: {delivery["selected"]["miou"] * 100:.2f}% (不是獨立準確率)。</p>
-<p><a href="{delivery["model"]}">下載新模型</a> ·
-<a href="{base}/config.json">模型設定</a> · <a href="summary.json">訓練比較</a> ·
-<a href="status.json">工作狀態</a></p>
-<p>每張圖包括 CCTV 原圖、新模型分類、紋理 3D 與語意 3D。
-3D 使用既有校正與單眼深度,呈現可見表面;不是已驗收的整店尺度模型,也未補造遮擋背面。</p>
-{images}</html>'''
+AI val mIoU: {delivery["selected"]["miou"] * 100:.2f}% (非獨立準確率)</p>
+<a href="{delivery["model"]}">下載模型</a>
+<p>物件式場景使用既有 scene_mesh.py --model-run 建置與驗證。</p></html>'''
     atomic_text(out / "index.html", page)
 
 
@@ -233,12 +153,6 @@ def run(out):
     for name, sha in plan["runner_files"].items():
         if digest(out / "runner" / name) != sha:
             raise ValueError("frozen runner changed")
-    if digest(out / "cameras/manifest.json") != plan["camera_manifest_sha256"]:
-        raise ValueError("camera manifest changed")
-    for row in read(out / "cameras/manifest.json")["cameras"]:
-        for name, sha in row["files"].items():
-            if digest(out / "cameras" / name) != sha:
-                raise ValueError("frozen render input changed")
     worker = runpy.run_path(
         str(out / "jobs/bootstrap/snapshot/tools/annotation/studioa_train.py")
     )
@@ -248,7 +162,9 @@ def run(out):
         name = job["name"]
         directory = out / "jobs" / name
         if time.time() >= plan["training_stop"] and not (directory / "report.json").exists():
-            errors.append({"job": name, "error": "training cutoff reached; rendering reserved"})
+            errors.append(
+                {"job": name, "error": "training cutoff reached; final publication reserved"}
+            )
             continue
         state = {
             "status": "training",
@@ -335,7 +251,7 @@ def run(out):
     try:
         delivery = publish(out, plan, selected, deadline)
     except Exception as error:
-        errors.append({"job": "final_render", "error": str(error)})
+        errors.append({"job": "final_publish", "error": str(error)})
         if not (out / "delivery.json").exists():
             raise
         delivery = read(out / "delivery.json")
@@ -354,7 +270,7 @@ def run(out):
     gallery(
         out,
         delivery,
-        "夜間批次完成" if not errors else "已有模型與場景交付;部分工作有錯誤,詳見工作狀態",
+        "夜間批次完成" if not errors else "已有模型交付;部分工作有錯誤,詳見工作狀態",
     )
 
 
@@ -372,6 +288,10 @@ def main():
             parser.error("prepare requires source, weights and deadline")
         prepare(out, args.source, args.weights, args.deadline)
     else:
+        if read(out / "plan.json").get("schema") != "studioa.overnight.v2":
+            parser.error(
+                "legacy surface-preview jobs are retired; preserve their results as history"
+            )
         frozen = out / "runner/studioa_overnight.py"
         if Path(__file__).resolve() != frozen:
             os.execve(

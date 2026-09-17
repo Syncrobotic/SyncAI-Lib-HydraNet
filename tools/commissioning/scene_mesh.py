@@ -10,6 +10,7 @@ what a script is for: argument parsing, the export formats, and the orbit gif.
 """
 
 import argparse
+import html
 import json
 import shutil
 import tempfile
@@ -59,6 +60,41 @@ def export_glb(camera, items, *, out=None):
     return path
 
 
+def export_html(glb, out):
+    """Use trimesh's bundled offline viewer for the same exported object scene."""
+    import trimesh
+    from trimesh.viewer.notebook import scene_to_html
+
+    scene = trimesh.load_scene(glb)
+    centre = scene.bounds.mean(0)
+    span = max(float(np.linalg.norm(np.ptp(scene.bounds, axis=0))), 2.0)
+    eye = centre + np.array([0.7, 0.7, -0.7]) * span
+    forward = (eye - centre) / np.linalg.norm(eye - centre)
+    right = np.cross([0, 1, 0], forward)
+    right /= np.linalg.norm(right)
+    transform = np.eye(4)
+    transform[:3, :3] = np.column_stack([right, np.cross(forward, right), forward])
+    transform[:3, 3] = eye
+    scene.camera_transform = transform
+    page = scene_to_html(scene)
+    fallback = (
+        '<main style="max-width:1200px;margin:24px auto;font:18px sans-serif">'
+        "<p>此瀏覽器無法啟用互動 3D。可查看下方場景圖或下載 GLB 模型。</p>"
+        f'<p><a href="{html.escape(glb.name, quote=True)}">下載 GLB 模型</a></p>'
+        '<img style="width:100%" '
+        f'src="{html.escape(glb.with_suffix(".png").name, quote=True)}" '
+        'alt="物件式 3D 場景"></main>'
+    )
+    handler = (
+        '<script>window.addEventListener("error", function () {'
+        f"document.body.innerHTML = {json.dumps(fallback)};"
+        "});</script>"
+    )
+    page = page.replace("<head>", "<head>" + handler, 1)
+    out.write_text(page)
+    return out
+
+
 def export_obj(camera, items, *, out=None):
     solids = [m for m, k, a, _ in items if a == 255]
     walls = [m for m, k, a, _ in items if a == 105]
@@ -82,12 +118,33 @@ def main():
         type=Path,
         help="directory of CAMERA.json source-bound controls; requires --out",
     )
+    ap.add_argument(
+        "--model-run", type=Path, help="completed StudioA scene training run; requires --out"
+    )
+    ap.add_argument("--device", choices=["cpu", "cuda"], default="cpu")
     args = ap.parse_args()
+    if args.model_run is not None and (
+        args.out is None or args.ragged or args.opening_controls
+    ):
+        ap.error(
+            "--model-run requires --out and the regular scene path without opening controls"
+        )
     if args.opening_controls is not None and (args.out is None or args.ragged):
         ap.error("--opening-controls requires --out and the regular scene path")
     root = args.root.resolve()
     if args.out is not None:
         args.out.mkdir(parents=True, exist_ok=False)
+    source_root = root
+    if args.model_run is not None:
+        from syncai_hydranet.cli.scene_evidence import prepare_model_evidence
+
+        root = args.out.resolve() / "inputs"
+        for camera in args.cameras:
+            if Path(camera).name != camera or camera in {".", ".."}:
+                ap.error("camera must be a single camera identifier")
+            prepare_model_evidence(
+                args.model_run, source_root, camera, root, device=args.device
+            )
     # **The regular path is the default, and the flag now opts OUT of it.** Every real
     # consumer -- `demo_video`, `heads_video`, `scene_overlay` -- has called
     # `build_scene_regular` for some time; `main()` was the last caller of the ragged one,
@@ -138,6 +195,7 @@ def main():
         render(camera, items, heights, out, shapes=built[3] if len(built) > 3 else ())
         obj = export_obj(camera, items, out=staging / "scene.obj")
         glb = export_glb(camera, items, out=staging / "scene.glb")
+        export_html(glb, staging / "scene.html")
         if not ragged:
             report_path = staging / "scene.objects.json"
             report_path.write_text(json.dumps(object_report, indent=2) + "\n")
@@ -154,6 +212,11 @@ def main():
             staging,
             regular=not ragged,
         )
+        if args.model_run is not None:
+            audit["reference_scope"] = (
+                "student semantic masks, not independent truth; "
+                "floor extent inherits commissioned walkable footprint"
+            )
         (staging / "scene.surfaces.json").write_text(
             json.dumps(audit, indent=2, allow_nan=False) + "\n"
         )
@@ -177,6 +240,16 @@ def main():
                 f"{camera}: inputs or code changed during build; "
                 f"unpublished candidate at {staging}"
             )
+        if args.model_run is not None:
+            evidence = root / f"runs/commission01/{camera}/masks"
+            shutil.copy2(evidence / "model_evidence.json", staging / "model_evidence.json")
+            shutil.copy2(
+                evidence / "prediction.overlay.png", staging / "prediction.overlay.png"
+            )
+            from syncai_hydranet.geometry.camera_json import CameraFile
+
+            source_camera = CameraFile.load(root / f"runs/commission01/{camera}.camera.json")
+            shutil.copy2(root / str(source_camera.plate_file), staging / "source.png")
         manifest = {
             "schema": 1,
             "camera": camera,
