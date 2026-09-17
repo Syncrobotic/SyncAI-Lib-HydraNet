@@ -212,3 +212,125 @@ def test_register_refuses_a_backend_it_does_not_have(tmp_path):
     """Only MapAnything registers here. A silently ignored `--backend` would let a reader
     file a VGGT registration that MapAnything actually produced."""
     assert mae.main(["register", "--out", str(tmp_path), "--backend", "vggt"]) == 2
+
+
+def _raw_manifest(tmp_path):
+    import hashlib
+    import json
+
+    from PIL import Image
+
+    frames = {}
+    for i, store in enumerate(("shop", "shop", "elsewhere")):
+        path = tmp_path / f"frame-{i}.png"
+        Image.new("RGB", (64, 48), (i * 40, 80, 120)).save(path)
+        frames[f"frame-{i}"] = {
+            "path": path.name,
+            "camera_id": f"camera-{i}",
+            "store_id": store,
+            "image_size_px": [64, 48],
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }
+    manifest = {
+        "frames": frames,
+        "groups": {
+            "same": {"frames": ["frame-0", "frame-1"], "is_control": False},
+            "different": {"frames": ["frame-0", "frame-2"], "is_control": True},
+        },
+    }
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest))
+    return path, manifest
+
+
+def test_explicit_raw_inputs_do_not_read_commissioned_data(tmp_path, monkeypatch):
+    import numpy as np
+    from PIL import Image
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("commissioned data is not an image-only input")
+
+    monkeypatch.setattr(mae, "commissioned", forbidden)
+    monkeypatch.setattr(mae, "undistorted_plates", forbidden)
+    manifest, _ = _raw_manifest(tmp_path)
+    plates, groups, provenance = mae.explicit_frames(manifest, tmp_path / "prepared", 0)
+    assert set(groups) == {"same", "different"}
+    assert provenance["commissioned_inputs_used"] is False
+    assert provenance["pixel_space"] == "raw"
+    assert provenance["lens_verified"] is False
+    for key, p in plates.items():
+        np.testing.assert_array_equal(Image.open(p), Image.open(tmp_path / f"{key}.png"))
+
+
+@pytest.mark.parametrize(
+    "failure", ["hash", "size", "repeated_camera", "store", "missing_control"]
+)
+def test_explicit_manifest_rejects_corrupted_or_misrepresented_evidence(tmp_path, failure):
+    import json
+
+    path, manifest = _raw_manifest(tmp_path)
+    if failure == "hash":
+        manifest["frames"]["frame-0"]["sha256"] = "0" * 64
+    elif failure == "size":
+        manifest["frames"]["frame-0"]["image_size_px"] = [48, 64]
+    elif failure == "repeated_camera":
+        manifest["frames"]["frame-1"]["camera_id"] = "camera-0"
+    elif failure == "store":
+        manifest["frames"]["frame-2"]["store_id"] = "shop"
+    else:
+        del manifest["groups"]["different"]
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError):
+        mae.explicit_frames(path, tmp_path / "prepared", 0)
+    assert not (tmp_path / "prepared").exists()
+
+
+def test_model_pixel_transform_accounts_for_resize_rounding_and_crop():
+    import numpy as np
+
+    # The pinned loader resizes 1920x1080 to 522x294, then cuts two columns each side.
+    a = mae.model_pixel_transform((1920, 1080), (518, 294))
+    np.testing.assert_allclose(a @ [-0.5, -0.5, 1], [-2.5, -0.5, 1])
+    np.testing.assert_allclose(a @ [1919.5, 1079.5, 1], [519.5, 293.5, 1])
+    np.testing.assert_allclose(a @ [959.5, 539.5, 1], [258.5, 146.5, 1])
+    np.testing.assert_array_equal(mae.model_pixel_transform((518, 294), (518, 294)), np.eye(3))
+
+
+def test_explicit_entry_does_not_promote_confidence_to_geometry(tmp_path, monkeypatch):
+    import json
+
+    manifest, _ = _raw_manifest(tmp_path)
+    monkeypatch.setattr(
+        mae,
+        "run_register",
+        lambda *_a, **_kw: [
+            _reading("same", [4, 4]),
+            _reading("control", [1, 1], control=True),
+        ],
+    )
+    monkeypatch.setattr(mae, "undistorted_plates", lambda *_: pytest.fail("commissioned read"))
+    out = tmp_path / "out"
+    assert (
+        mae.main(
+            [
+                "register",
+                "--out",
+                str(out),
+                "--frames-manifest",
+                str(manifest),
+                "--lens-k1",
+                "0",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads((out / "register.json").read_text())
+    assert payload["verdict"]["confidence_separated"] is True
+    assert payload["verdict"]["geometry_verified"] is False
+    assert payload["verdict"]["deployment_ready"] is False
+    assert "pair_distances_m" not in payload["groups"][0]
+
+
+@pytest.mark.parametrize("args", [["--lens-k1", "0"], ["--frames-manifest", "missing.json"]])
+def test_explicit_inputs_require_an_explicit_lens_choice(tmp_path, args):
+    assert mae.main(["register", "--out", str(tmp_path), *args]) == 2

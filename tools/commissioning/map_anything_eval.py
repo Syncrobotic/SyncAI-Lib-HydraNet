@@ -57,8 +57,10 @@ inventing one: `separation` is reported, and the caller decides.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -191,8 +193,8 @@ def commissioned() -> dict[str, dict]:
 def _load_model():
     """Imported here, not at module scope, so the analysis above is testable without it.
 
-    MapAnything is not a dependency of this repository and installing it is a decision
-    nobody has taken. Note for whoever does: the README's `pip install -e ".[all]"` does
+    MapAnything is an optional dependency, run in a separate research environment.
+    The README's `pip install -e ".[all]"` does
     not resolve -- `mapanything` requires `rerun-sdk <0.25` and the extra pulls
     `vggt-omega`, which conflicts with it -- while the plain `pip install -e .` loads the
     Apache weights and runs inference, fetching its DINOv2 backbone from torch hub.
@@ -203,6 +205,111 @@ def _load_model():
 
     dev = str(pick_device())
     return MapAnything.from_pretrained(MODEL_ID, revision=MODEL_REVISION).to(dev).eval(), dev
+
+
+def explicit_frames(manifest_path: Path, dest: Path, k1: float):
+    """Read hash-pinned raw frames, never commissioned plates or camera parameters.
+
+    Store identities are supplied provenance, not inferred from filenames. Negative
+    groups must contain distinct stores. This validates experimental inputs, not overlap.
+    """
+    import numpy as np
+    from PIL import Image
+
+    from syncai_bev3d.plate_calibration import undistort_image
+
+    if not math.isfinite(k1) or not -0.5 <= k1 <= 0:
+        raise ValueError("explicit lens hypothesis must be finite and in [-0.5, 0]")
+    raw = manifest_path.read_bytes()
+    manifest = json.loads(raw)
+    frames, groups = manifest["frames"], manifest["groups"]
+    if not frames or not groups:
+        raise ValueError("frames and groups must be nonempty")
+    safe_id = re.compile(r"^[A-Za-z0-9_-]+$")
+    decoded, sources = {}, {}
+    for ident, frame in frames.items():
+        if not safe_id.fullmatch(ident):
+            raise ValueError(f"unsafe frame id: {ident!r}")
+        if not frame["camera_id"] or not frame["store_id"]:
+            raise ValueError("camera_id and store_id are required")
+        src = (manifest_path.parent / frame["path"]).resolve()
+        content = src.read_bytes()
+        digest = hashlib.sha256(content).hexdigest()
+        if digest != frame["sha256"]:
+            raise ValueError(f"source hash mismatch: {ident}")
+        # Decode the same bytes that were hashed; a path replacement cannot race this.
+        import io
+
+        with Image.open(io.BytesIO(content)) as im:
+            if im.getexif().get(274, 1) != 1:
+                raise ValueError(f"nontrivial EXIF orientation: {ident}")
+            if list(im.size) != frame["image_size_px"]:
+                raise ValueError(f"source dimensions mismatch: {ident}")
+            decoded[ident] = np.asarray(im.convert("RGB"))
+        sources[ident] = {**frame, "path": str(src)}
+    parsed_groups = {}
+    for label, group in groups.items():
+        ids = group["frames"]
+        if len(ids) < 2 or len(set(ids)) != len(ids):
+            raise ValueError(f"group needs distinct frames from at least two cameras: {label}")
+        selected = [sources[i] for i in ids]
+        if len({f["camera_id"] for f in selected}) != len(ids):
+            raise ValueError(f"repeated camera in group: {label}")
+        if len({f["sha256"] for f in selected}) != len(ids):
+            raise ValueError(f"repeated image in group: {label}")
+        control = group["is_control"]
+        if not isinstance(control, bool):
+            raise ValueError("is_control must be boolean")
+        stores = {f["store_id"] for f in selected}
+        if (control and len(stores) != len(ids)) or (not control and len(stores) != 1):
+            raise ValueError(f"store provenance contradicts group: {label}")
+        parsed_groups[label] = (tuple(ids), control)
+    if {v[1] for v in parsed_groups.values()} != {True, False}:
+        raise ValueError("explicit experiment needs same-store and cross-store groups")
+    dest.mkdir(parents=True, exist_ok=False)
+    plates = {}
+    for ident, rgb in decoded.items():
+        p = dest / f"{ident}.png"
+        Image.fromarray(undistort_image(rgb, k1)).save(p)
+        plates[ident] = p
+    provenance = {
+        "manifest_sha256": hashlib.sha256(raw).hexdigest(),
+        "frames": sources,
+        "groups": manifest["groups"],
+        "lens_k1_hypothesis": k1,
+        "lens_verified": False,
+        "pixel_space": "raw" if k1 == 0 else "division_undistorted_hypothesis",
+        "commissioned_inputs_used": False,
+        "prepared_sha256": {
+            k: hashlib.sha256(p.read_bytes()).hexdigest() for k, p in plates.items()
+        },
+    }
+    return plates, parsed_groups, provenance
+
+
+def model_pixel_transform(input_wh: tuple[int, int], output_wh: tuple[int, int]):
+    """Pixel-centre affine for the pinned MapAnything resize then centre-crop loader.
+
+    The pinned loader floors the resized dimensions, then crops with integer offsets.
+    Keep the actual x/y scales; a single nominal scale loses subpixel provenance.
+    """
+    import numpy as np
+
+    iw, ih = input_wh
+    ow, oh = output_wh
+    if min(iw, ih, ow, oh) <= 0 or ow > iw or oh > ih:
+        raise ValueError("model transform requires positive downsampled dimensions")
+    scale = max(ow / iw, oh / ih) + 1e-8
+    rw, rh = (iw, ih) if scale >= 1 else (int(iw * scale), int(ih * scale))
+    sx, sy = rw / iw, rh / ih
+    return np.array(
+        [
+            [sx, 0, (sx - 1) / 2 - (rw - ow) // 2],
+            [0, sy, (sy - 1) / 2 - (rh - oh) // 2],
+            [0, 0, 1],
+        ],
+        dtype=float,
+    )
 
 
 def undistorted_plates(dest: Path) -> dict[str, Path]:
@@ -350,17 +457,20 @@ def run_intrinsics(
     return readings
 
 
-def run_register(plates: dict[str, Path], groups: dict[str, tuple]) -> list[GroupReading]:
+def run_register(
+    plates: dict[str, Path], groups: dict[str, tuple], *, prediction_dir: Path | None = None
+) -> list[GroupReading]:
     """One reading per group. The control is a group like any other, on purpose."""
     import itertools
 
     import numpy as np
     import torch
     from mapanything.utils.image import load_images
+    from PIL import Image
 
     model, _dev = _load_model()
     out = []
-    for label, (cams, is_control) in groups.items():
+    for group_index, (label, (cams, is_control)) in enumerate(groups.items()):
         paths = [str(plates[c]) for c in cams if c in plates]
         if len(paths) != len(cams):
             print(f"  {label}: skipped, a plate is missing")
@@ -375,6 +485,30 @@ def run_register(plates: dict[str, Path], groups: dict[str, tuple]) -> list[Grou
                 apply_mask=True,
             )
         preds = pred if isinstance(pred, list) else [pred]
+        if len(preds) != len(cams):
+            raise ValueError("model returned a different number of views")
+        if prediction_dir is not None:
+            target = prediction_dir / f"group-{group_index:02d}"
+            target.mkdir(parents=True, exist_ok=False)
+            info = {"label": label, "frames": list(cams), "is_control": is_control, "views": []}
+            for i, (v, view, path) in enumerate(zip(preds, views, paths, strict=True)):
+                arrays = {
+                    k: v[k][0].detach().float().cpu().numpy()
+                    for k in ("camera_poses", "intrinsics", "depth_z", "pts3d", "conf", "mask")
+                    if k in v
+                }
+                wh = (int(view["img"].shape[-1]), int(view["img"].shape[-2]))
+                with Image.open(path) as im:
+                    original_wh = im.size
+                arrays["prepared_to_model"] = model_pixel_transform(original_wh, wh)
+                np.savez_compressed(target / f"view-{i}.npz", **arrays)
+                info["views"].append(
+                    {"frame": cams[i], "prepared_wh": original_wh, "model_wh": wh}
+                )
+            info["pose_convention"] = (
+                "OpenCV camera-to-world; model scale is not surveyed metres"
+            )
+            (target / "group.json").write_text(json.dumps(info, indent=2) + "\n")
         centres, confs = [], []
         for v in preds:
             pose = np.asarray(v["camera_poses"][0].float().cpu())
@@ -405,6 +539,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("mode", choices=("intrinsics", "register"))
     ap.add_argument("--out", required=True, help="run directory for the readings")
     ap.add_argument(
+        "--frames-manifest", type=Path, help="register only: hash-pinned raw frames and groups"
+    )
+    ap.add_argument(
+        "--lens-k1",
+        type=float,
+        help="explicit manifest only: 0 for raw, or a division hypothesis",
+    )
+    ap.add_argument(
         "--backend",
         default="mapanything",
         choices=BACKENDS,
@@ -415,6 +557,11 @@ def main(argv: list[str] | None = None) -> int:
         help="full commit id of the checkpoint; required for --backend da3 / vggt",
     )
     a = ap.parse_args(argv)
+    if (a.frames_manifest is not None and a.mode != "register") or (
+        (a.frames_manifest is None) != (a.lens_k1 is None)
+    ):
+        print("::error::--frames-manifest and --lens-k1 are paired, register-only arguments")
+        return 2
     if a.mode == "register" and a.backend != "mapanything":
         print("::error::register runs on MapAnything only; --backend applies to intrinsics")
         return 2
@@ -427,11 +574,17 @@ def main(argv: list[str] | None = None) -> int:
 
     out_dir = Path(a.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    print(
-        "note: this compares two estimates. Every commissioned height is fitted from the "
-        "1.70 m person prior, and vfov is a fleet assumption on 22 of 23 cameras."
-    )
-    plates = undistorted_plates(out_dir / "undistorted")
+    groups = DEFAULT_GROUPS
+    provenance = None
+    if a.frames_manifest is not None:
+        plates, groups, provenance = explicit_frames(
+            a.frames_manifest, out_dir / "prepared", a.lens_k1
+        )
+        (out_dir / "inputs.json").write_text(json.dumps(provenance, indent=2) + "\n")
+        print("note: explicit image-only experiment; lens and metric scale remain unverified")
+    else:
+        print("note: commissioned inputs use a person-height prior and fleet lens assumptions")
+        plates = undistorted_plates(out_dir / "undistorted")
     if not plates:
         print("::error::no commissioned plates found; nothing to measure")
         return 1
@@ -450,9 +603,14 @@ def main(argv: list[str] | None = None) -> int:
             )
         return 0
 
-    readings = run_register(plates, DEFAULT_GROUPS)
+    readings = run_register(
+        plates,
+        groups,
+        prediction_dir=out_dir / "predictions" if provenance is not None else None,
+    )
     verdict = registration_verdict(readings)
     payload = {
+        "model": {"id": MODEL_ID, "revision": MODEL_REVISION},
         "groups": [
             {
                 "label": r.label,
@@ -471,7 +629,27 @@ def main(argv: list[str] | None = None) -> int:
             "separation": round(verdict.separation, 3),
         },
     }
+    if provenance is not None:
+        # Confidence separation is a diagnostic, never a geometry/deployment verdict.
+        payload["verdict"] = {
+            "confidence_separated": verdict.usable,
+            "reason": verdict.reason,
+            "control_max": verdict.control_max,
+            "overlapping_min": verdict.overlapping_min,
+            "separation": verdict.separation,
+            "geometry_verified": False,
+            "metric_scale_verified": False,
+            "deployment_ready": False,
+        }
+        for group in payload["groups"]:
+            group["pair_distances_model_units"] = group.pop("pair_distances_m")
     (out_dir / "register.json").write_text(json.dumps(payload, indent=2) + "\n")
+    if provenance is not None:
+        print(
+            f"experiment complete; confidence separation={verdict.separation:.3f}; "
+            "geometry unverified"
+        )
+        return 0
     print(f"\nverdict: {'USABLE' if verdict.usable else 'NOT USABLE'} -- {verdict.reason}")
     return 0 if verdict.usable else 1
 
