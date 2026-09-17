@@ -1,0 +1,641 @@
+{
+  "status": "rejected_visual_geometry",
+  "reviewed_at": "2026-09-17T09:34:25.758009+08:00",
+  "source_run": "runs/studioa_object_world_20260917_v2",
+  "scope": "all five source images, overview scene PNGs and final exported GLB structural wireframe reprojections; not every orbit frame or independently surveyed dimensions",
+  "previous_review_incomplete": true,
+  "geometry_repaired": false,
+  "confirmed_integration_defects": [
+    "Kaohsiung store-axis estimate changes 55.2139197 to 39.0275132 degrees when new semantic masks replace commissioning evidence; baseline is not ground truth",
+    "source instances.npz and support_tops.npz exist but are omitted from candidate inputs; candidate support report is empty",
+    "final per-fixture Gate D is not_evaluated for all five cameras; successful export and fitting IoU did not enforce final geometry acceptance"
+  ],
+  "source_commissioning_inputs_unchanged": true,
+  "views": [
+    {
+      "camera": "Kaohsiung-cam04",
+      "verdict": "reject",
+      "findings": [
+        "中間長櫃的檯面邊線、朝向與高度投影不符；模型尺寸約 1.79 × 0.84 × 0.77 m，這不是實測尺寸。",
+        "後方展示架整體輪廓偏移；上緣局部柱子預測被延伸成獨立大柱。"
+      ],
+      "final_glb_sha256": "5159315a995e3f6bf680fe5e86af80870109bf956df80a40119230d0b85f7710",
+      "overlay_sha256": "c61763232558624c46693f9bcd81b312abed929e4b3df900460efedd68f8c4b9",
+      "measurements": {
+        "camera": "Kaohsiung-cam04",
+        "meshes": [
+          {
+            "node": "display_shelf_6",
+            "long_side_m": 0.45000016943064325,
+            "short_side_m": 0.31699014229177624,
+            "height_m": 0.949999988079071,
+            "long_axis_degrees_mod180": 129.02752709353607,
+            "centre_m": [
+              2.329246466810053,
+              0.46477272429249505,
+              2.50592178106308
+            ]
+          },
+          {
+            "node": "display_shelf_5",
+            "long_side_m": 3.549895650647777,
+            "short_side_m": 0.45000007682368404,
+            "height_m": 0.949999988079071,
+            "long_axis_degrees_mod180": 129.02751334054727,
+            "centre_m": [
+              -0.21637596731836145,
+              0.46477272429249505,
+              4.201087458567186
+            ]
+          },
+          {
+            "node": "display_table_4",
+            "long_side_m": 1.7938268098068573,
+            "short_side_m": 0.8415015271599083,
+            "height_m": 0.765849769115448,
+            "long_axis_degrees_mod180": 129.02751284096948,
+            "centre_m": [
+              0.03836132027208805,
+              0.5493873208761215,
+              0.7713799979537725
+            ]
+          },
+          {
+            "node": "display_table_3",
+            "long_side_m": 1.171668981724813,
+            "short_side_m": 1.1716686459793626,
+            "height_m": 0.7384951114654541,
+            "long_axis_degrees_mod180": 50.27753585721976,
+            "centre_m": [
+              4.507549807429314,
+              0.5338713526725769,
+              2.6685269648830094
+            ]
+          },
+          {
+            "node": "column_2",
+            "long_side_m": 0.7999999158219396,
+            "short_side_m": 0.7999998807385964,
+            "height_m": 2.4000000953674316,
+            "long_axis_degrees_mod180": 129.02751179630746,
+            "centre_m": [
+              5.123332738876343,
+              1.2000000476837158,
+              4.467945754528046
+            ]
+          },
+          {
+            "node": "column_1",
+            "long_side_m": 0.8000000659525656,
+            "short_side_m": 0.8000000659525655,
+            "height_m": 1.600000023841858,
+            "long_axis_degrees_mod180": 129.02751430896666,
+            "centre_m": [
+              1.9801566898822784,
+              0.800000011920929,
+              3.039273500442505
+            ]
+          }
+        ],
+        "fixture_gate": {
+          "gate_d_status": "not_evaluated",
+          "reason": "material coverage and device fitting scores do not measure per-fixture Gate D IoU"
+        },
+        "commissioned_axis_degrees": 55.21391970541108,
+        "candidate_axis_degrees": 39.02751319773443
+      }
+    },
+    {
+      "camera": "Taichung-cam01",
+      "verdict": "reject",
+      "findings": [
+        "中間長桌被擴張到右側走道，部分櫃體與桌面位置不符。",
+        "上方牆面出現沒有對應家具的桌櫃模型，右側展示架輪廓也錯位。"
+      ],
+      "final_glb_sha256": "2544eec09438c14cf2bc73958e3812bd3cdb4d218c123f2b98dba99c5ed57cc3",
+      "overlay_sha256": "563a1695ef738c36e08971085d18bbaef67b8af7c34c0da99c6861ee7a32b7b0",
+      "measurements": {
+        "camera": "Taichung-cam01",
+        "meshes": [
+          {
+            "node": "display_shelf_12",
+            "long_side_m": 0.6454562980039427,
+            "short_side_m": 0.4500001719603244,
+            "height_m": 1.7999999523162842,
+            "long_axis_degrees_mod180": 93.5840511088887,
+            "centre_m": [
+              2.2601335048675537,
+              0.9233823479974971,
+              2.38776274989633
+            ]
+          },
+          {
+            "node": "display_shelf_11",
+            "long_side_m": 3.8753323982639225,
+            "short_side_m": 0.45000004553209494,
+            "height_m": 2.1542277336120605,
+            "long_axis_degrees_mod180": 3.584048781147432,
+            "centre_m": [
+              3.8052537990243813,
+              1.0885825964965319,
+              1.6254843018556897
+            ]
+          },
+          {
+            "node": "display_table_10",
+            "long_side_m": 1.119758557376497,
+            "short_side_m": 0.899999868016109,
+            "height_m": 1.0671799182891846,
+            "long_axis_degrees_mod180": 93.58405525202431,
+            "centre_m": [
+              -6.898269176483154,
+              0.7753849625587463,
+              5.048330128192902
+            ]
+          },
+          {
+            "node": "display_table_9",
+            "long_side_m": 1.5805940964118421,
+            "short_side_m": 1.3511323379361633,
+            "height_m": 1.0079529285430908,
+            "long_axis_degrees_mod180": 93.58404685467464,
+            "centre_m": [
+              -3.708822548389435,
+              0.7309646904468536,
+              2.7508231550455093
+            ]
+          },
+          {
+            "node": "display_table_8",
+            "long_side_m": 5.1702246007788,
+            "short_side_m": 0.8999998978244648,
+            "height_m": 1.149999976158142,
+            "long_axis_degrees_mod180": 93.58404918883498,
+            "centre_m": [
+              6.55001974105835,
+              0.8375000059604645,
+              8.72300112247467
+            ]
+          },
+          {
+            "node": "display_table_7",
+            "long_side_m": 3.349744198526838,
+            "short_side_m": 0.61361734137372,
+            "height_m": 1.149999976158142,
+            "long_axis_degrees_mod180": 3.584043643242552,
+            "centre_m": [
+              8.641704022884369,
+              0.8375000059604645,
+              9.319340348243713
+            ]
+          },
+          {
+            "node": "display_table_6",
+            "long_side_m": 1.210475429012206,
+            "short_side_m": 1.0073556183159718,
+            "height_m": 1.149999976158142,
+            "long_axis_degrees_mod180": 93.58404682235549,
+            "centre_m": [
+              -1.9894114285707474,
+              0.8375000059604645,
+              7.017654061317444
+            ]
+          },
+          {
+            "node": "display_table_5",
+            "long_side_m": 2.038256043004804,
+            "short_side_m": 0.899999838207763,
+            "height_m": 1.0821772813796997,
+            "long_axis_degrees_mod180": 93.58404338123509,
+            "centre_m": [
+              -6.4610655307769775,
+              0.7866329848766327,
+              9.727709770202637
+            ]
+          },
+          {
+            "node": "display_table_4",
+            "long_side_m": 0.5171813426812546,
+            "short_side_m": 0.5134257846986934,
+            "height_m": 1.0226868391036987,
+            "long_axis_degrees_mod180": 3.584055102026149,
+            "centre_m": [
+              1.1047414541244507,
+              0.7420151233673096,
+              4.260453879833221
+            ]
+          },
+          {
+            "node": "display_table_3",
+            "long_side_m": 0.45412479885393653,
+            "short_side_m": 0.41919587502465716,
+            "height_m": 1.0226868391036987,
+            "long_axis_degrees_mod180": 93.58404630003054,
+            "centre_m": [
+              0.5316283665597439,
+              0.7420151233673096,
+              4.252716541290283
+            ]
+          },
+          {
+            "node": "display_table_2",
+            "long_side_m": 1.3813724229802182,
+            "short_side_m": 1.306538107180173,
+            "height_m": 1.0374207496643066,
+            "long_axis_degrees_mod180": 3.584050038135217,
+            "centre_m": [
+              -3.0983893275260925,
+              0.7530655562877655,
+              5.571988582611084
+            ]
+          },
+          {
+            "node": "display_table_1",
+            "long_side_m": 2.794471407841902,
+            "short_side_m": 1.711083494107731,
+            "height_m": 0.9974396228790283,
+            "long_axis_degrees_mod180": 93.58404827679014,
+            "centre_m": [
+              0.09634016454219818,
+              0.7230797111988068,
+              2.3955627232789993
+            ]
+          }
+        ],
+        "fixture_gate": {
+          "gate_d_status": "not_evaluated",
+          "reason": "material coverage and device fitting scores do not measure per-fixture Gate D IoU"
+        }
+      }
+    },
+    {
+      "camera": "Taichung-cam10",
+      "verdict": "reject",
+      "findings": [
+        "前方筆電桌的位置相對較接近，但模型底部、檯面邊線仍不吻合。",
+        "中後段櫃體偏移且比例失真；左側出現額外小桌。"
+      ],
+      "final_glb_sha256": "b6e9f0b3d40d3954635ea752d7a75a3c709866c432f0231e5f2bdc30b5565424",
+      "overlay_sha256": "8fb363aa82b618264a5dad4442fb7d771ca04971c5acda2c62f0aff0dad56fd0",
+      "measurements": {
+        "camera": "Taichung-cam10",
+        "meshes": [
+          {
+            "node": "display_table_8",
+            "long_side_m": 4.607971261259642,
+            "short_side_m": 1.0043351767474744,
+            "height_m": 0.8686426281929016,
+            "long_axis_degrees_mod180": 81.5441359165902,
+            "centre_m": [
+              -1.1746385544538498,
+              0.6264819651842117,
+              5.493635356426239
+            ]
+          },
+          {
+            "node": "display_shelf_7",
+            "long_side_m": 2.2391457993079937,
+            "short_side_m": 0.45000017237792633,
+            "height_m": 0.949999988079071,
+            "long_axis_degrees_mod180": 81.54414732179825,
+            "centre_m": [
+              -4.764865051616322,
+              0.46477272429249505,
+              2.5415712622078983
+            ]
+          },
+          {
+            "node": "display_shelf_6",
+            "long_side_m": 1.043249797284127,
+            "short_side_m": 0.4499999716099312,
+            "height_m": 0.949999988079071,
+            "long_axis_degrees_mod180": 81.54414166005706,
+            "centre_m": [
+              2.991536936976693,
+              0.46477272429249505,
+              5.31792262467471
+            ]
+          },
+          {
+            "node": "display_shelf_5",
+            "long_side_m": 4.546556877194844,
+            "short_side_m": 0.4500001373190683,
+            "height_m": 1.6975458860397339,
+            "long_axis_degrees_mod180": 81.54413392076239,
+            "centre_m": [
+              2.87074427207311,
+              0.7987576474746069,
+              2.453541154911121
+            ]
+          },
+          {
+            "node": "display_table_4",
+            "long_side_m": 0.5782296818837103,
+            "short_side_m": 0.2079109325229247,
+            "height_m": 0.550000011920929,
+            "long_axis_degrees_mod180": 81.54413771614283,
+            "centre_m": [
+              -4.4318013191223145,
+              0.38750000298023224,
+              2.909332424402237
+            ]
+          },
+          {
+            "node": "display_table_3",
+            "long_side_m": 1.2621290217856105,
+            "short_side_m": 0.8999999432198331,
+            "height_m": 0.6257002353668213,
+            "long_axis_degrees_mod180": 81.54414422588388,
+            "centre_m": [
+              -6.306188881397247,
+              0.4442751705646515,
+              7.345672905445099
+            ]
+          },
+          {
+            "node": "display_table_2",
+            "long_side_m": 2.125181532582946,
+            "short_side_m": 0.8657189612517724,
+            "height_m": 0.866037905216217,
+            "long_axis_degrees_mod180": 171.54413342882023,
+            "centre_m": [
+              -1.2185563622042537,
+              0.6245284229516983,
+              1.6929235607385635
+            ]
+          },
+          {
+            "node": "display_table_1",
+            "long_side_m": 1.300347993570174,
+            "short_side_m": 0.9000000906117045,
+            "height_m": 1.1112371683120728,
+            "long_axis_degrees_mod180": 81.54413458350315,
+            "centre_m": [
+              0.019164517521858215,
+              0.8084279000759125,
+              10.186097621917725
+            ]
+          }
+        ],
+        "fixture_gate": {
+          "gate_d_status": "not_evaluated",
+          "reason": "material coverage and device fitting scores do not measure per-fixture Gate D IoU"
+        }
+      }
+    },
+    {
+      "camera": "Taichung-cam11",
+      "verdict": "reject",
+      "findings": [
+        "中央柱附近的檯面重建跨過柱體與空白區域。",
+        "後方及右側展示架的方向、長度和頂底邊界不吻合。"
+      ],
+      "final_glb_sha256": "6b0eed939fbe2243a740d533bb4bc9a3d2b316fbde0dfc4d38ed58384e5df5c8",
+      "overlay_sha256": "4f8d4262396d54f4b1a1ad011b98e6022309d7b2ebf06de6b97c936f6e64d34b",
+      "measurements": {
+        "camera": "Taichung-cam11",
+        "meshes": [
+          {
+            "node": "display_shelf_9",
+            "long_side_m": 0.8880061920662241,
+            "short_side_m": 0.45000012405540213,
+            "height_m": 1.139972448348999,
+            "long_axis_degrees_mod180": 95.59545484881274,
+            "centre_m": [
+              -4.63923073731936,
+              0.5974947019265249,
+              6.326052913298974
+            ]
+          },
+          {
+            "node": "display_shelf_8",
+            "long_side_m": 2.1738146592595875,
+            "short_side_m": 0.4500001530419713,
+            "height_m": 1.7699999809265137,
+            "long_axis_degrees_mod180": 5.5954432933715665,
+            "centre_m": [
+              -4.871196511913748,
+              0.9138509867822423,
+              3.438376272425932
+            ]
+          },
+          {
+            "node": "display_shelf_7",
+            "long_side_m": 1.6664111252650973,
+            "short_side_m": 0.4500001356787733,
+            "height_m": 1.6345133781433105,
+            "long_axis_degrees_mod180": 5.595442674980944,
+            "centre_m": [
+              1.195486015578111,
+              0.7882522294918696,
+              5.10809505780538
+            ]
+          },
+          {
+            "node": "display_shelf_6",
+            "long_side_m": 6.802089998259625,
+            "short_side_m": 0.45000012405541234,
+            "height_m": 1.600000023841858,
+            "long_axis_degrees_mod180": 95.59544967044187,
+            "centre_m": [
+              3.963019820054372,
+              0.7825000037749609,
+              7.668683171272278
+            ]
+          },
+          {
+            "node": "display_table_5",
+            "long_side_m": 0.41012704775767594,
+            "short_side_m": 0.3380029972604551,
+            "height_m": 0.7761310338973999,
+            "long_axis_degrees_mod180": 5.595448989624582,
+            "centre_m": [
+              1.6671776920557022,
+              0.5570982694625854,
+              0.5990647114813328
+            ]
+          },
+          {
+            "node": "display_table_4",
+            "long_side_m": 0.9411760993749367,
+            "short_side_m": 0.42697245416677965,
+            "height_m": 0.7563795447349548,
+            "long_axis_degrees_mod180": 95.59544742620842,
+            "centre_m": [
+              -0.3980656750500202,
+              0.5422846525907516,
+              2.756903886795044
+            ]
+          },
+          {
+            "node": "display_table_3",
+            "long_side_m": 2.7628728413585497,
+            "short_side_m": 0.9000000340750015,
+            "height_m": 0.8974055051803589,
+            "long_axis_degrees_mod180": 95.59544582862671,
+            "centre_m": [
+              -1.3728009536862373,
+              0.6480541229248047,
+              3.511210024356842
+            ]
+          },
+          {
+            "node": "display_table_2",
+            "long_side_m": 0.985804247505454,
+            "short_side_m": 0.8421389441657731,
+            "height_m": 1.0186799764633179,
+            "long_axis_degrees_mod180": 5.595447307772135,
+            "centre_m": [
+              -0.7135838195681572,
+              0.7390099763870239,
+              0.7923838794231415
+            ]
+          },
+          {
+            "node": "column_1",
+            "long_side_m": 0.800000167034008,
+            "short_side_m": 0.799999994883763,
+            "height_m": 1.8991060256958008,
+            "long_axis_degrees_mod180": 95.5954379646864,
+            "centre_m": [
+              -3.3378289937973022,
+              0.9495530128479004,
+              1.1739056408405304
+            ]
+          }
+        ],
+        "fixture_gate": {
+          "gate_d_status": "not_evaluated",
+          "reason": "material coverage and device fitting scores do not measure per-fixture Gate D IoU"
+        }
+      }
+    },
+    {
+      "camera": "Tao-Hsin-cam03",
+      "verdict": "reject",
+      "findings": [
+        "入口玻璃門位置被建成展示架，屬於明確類別與幾何錯誤。",
+        "中央展示桌過寬，右側兩個不同櫃體被跨空間連成一個模型。"
+      ],
+      "final_glb_sha256": "190e6d898ef1e83ed14cb341f3a6f836e03a7ac6bcb1c06044c4171478d47658",
+      "overlay_sha256": "d6f01e3dd7fe4da030e2332e62a00edbe19d78c3de572d98cd2f8f577521afd8",
+      "measurements": {
+        "camera": "Tao-Hsin-cam03",
+        "meshes": [
+          {
+            "node": "display_shelf_9",
+            "long_side_m": 0.4500000517939331,
+            "short_side_m": 0.36371487491435184,
+            "height_m": 0.949999988079071,
+            "long_axis_degrees_mod180": 95.5704814939802,
+            "centre_m": [
+              0.5584601942788471,
+              0.46477272429249505,
+              1.1871942512013696
+            ]
+          },
+          {
+            "node": "display_shelf_8",
+            "long_side_m": 1.033763410143317,
+            "short_side_m": 0.4500001335427122,
+            "height_m": 1.815528392791748,
+            "long_axis_degrees_mod180": 95.57048101489943,
+            "centre_m": [
+              -5.237975772689371,
+              0.9256659421850654,
+              7.075717848889968
+            ]
+          },
+          {
+            "node": "display_shelf_7",
+            "long_side_m": 0.45000012775688036,
+            "short_side_m": 0.24100153530940477,
+            "height_m": 0.949999988079071,
+            "long_axis_degrees_mod180": 95.57048211321198,
+            "centre_m": [
+              -0.17053839581256564,
+              0.46477272429249505,
+              2.864897305315191
+            ]
+          },
+          {
+            "node": "display_shelf_6",
+            "long_side_m": 3.023772379564907,
+            "short_side_m": 0.4500001277568808,
+            "height_m": 1.8367524147033691,
+            "long_axis_degrees_mod180": 5.570482405469932,
+            "centre_m": [
+              -2.098084947642158,
+              0.9287871218779508,
+              4.6826870511559875
+            ]
+          },
+          {
+            "node": "display_table_5",
+            "long_side_m": 1.57785994466232,
+            "short_side_m": 1.2491481124282533,
+            "height_m": 0.8268882036209106,
+            "long_axis_degrees_mod180": 5.570480731127025,
+            "centre_m": [
+              -0.7815971047384664,
+              0.5951661467552185,
+              1.1187201589345932
+            ]
+          },
+          {
+            "node": "display_table_4",
+            "long_side_m": 2.478278483114925,
+            "short_side_m": 0.9000000211140193,
+            "height_m": 0.8093400597572327,
+            "long_axis_degrees_mod180": 95.57048389825212,
+            "centre_m": [
+              -3.5774531066417694,
+              0.58200503885746,
+              1.5937641970813274
+            ]
+          },
+          {
+            "node": "display_table_3",
+            "long_side_m": 3.1219090181941014,
+            "short_side_m": 0.9000000297927642,
+            "height_m": 0.7539467215538025,
+            "long_axis_degrees_mod180": 5.570479926552679,
+            "centre_m": [
+              1.9914767667651176,
+              0.5404600352048874,
+              2.326595827937126
+            ]
+          },
+          {
+            "node": "display_table_2",
+            "long_side_m": 1.3376089448159068,
+            "short_side_m": 0.9000002670854155,
+            "height_m": 0.8500000238418579,
+            "long_axis_degrees_mod180": 95.57047731412169,
+            "centre_m": [
+              -10.212066292762756,
+              0.612500011920929,
+              7.6175776720047
+            ]
+          },
+          {
+            "node": "display_table_1",
+            "long_side_m": 1.6304241958418153,
+            "short_side_m": 0.9000002670854279,
+            "height_m": 0.8093400597572327,
+            "long_axis_degrees_mod180": 95.57048671977019,
+            "centre_m": [
+              -10.903498768806458,
+              0.58200503885746,
+              10.955601215362549
+            ]
+          }
+        ],
+        "fixture_gate": {
+          "gate_d_status": "not_evaluated",
+          "reason": "material coverage and device fitting scores do not measure per-fixture Gate D IoU"
+        }
+      }
+    }
+  ]
+}
