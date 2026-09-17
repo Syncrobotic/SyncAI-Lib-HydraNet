@@ -1,0 +1,268 @@
+{
+  "schema": 1,
+  "camera": "Kaohsiung-cam04",
+  "image_size_px": [
+    960,
+    540
+  ],
+  "pixel_space": "raw",
+  "initial_floor_axis_deg": 30,
+  "reviewer": "AI high-resolution visual review",
+  "evidence": "visible physical upright edges and orthogonal floor grout, observed at native 1920x1080; whole-line split frozen before fitting; exploratory refinement, not a fresh blind test",
+  "source_identity": {
+    "datasets/studioa_static/Kaohsiung-cam04/plate_20260816-025809.png": "947a2f880652e5ec825177ba69cdc769a10512c3da077f2ee6fa3bc0e36506a2",
+    "runs/commission01/Kaohsiung-cam04/masks/column.png": "719a4fc3f21c4b2079a509ca36560843fe01433d5a3afcf26854b5dc90ede69f",
+    "runs/commission01/Kaohsiung-cam04/masks/display_shelf.png": "724decfca6f3675e9f4c099e7e4f450a3816f3e4ce42a6541fa62fe484be1f30",
+    "runs/commission01/Kaohsiung-cam04/masks/display_table.png": "60b384c7fd0b927622224ea3c2d311f0d118809e4dcf49397df9a2242ca3eee1",
+    "runs/commission01/Kaohsiung-cam04/masks/door.png": "e590a05c71de08ac066c35b30d5bf21c7fe1ab704235d1493253286099e91a85",
+    "runs/commission01/Kaohsiung-cam04/masks/floor.png": "649c1cbc2236c773d4560839d6e9937e0c9db57fa6918bdd8319c105fd1ab073",
+    "runs/commission01/Kaohsiung-cam04/masks/floor_fill.png": "5343549c0300a784178dd4464f14c0efd81696eec1c86827b0f71f2a4d4a88d7",
+    "runs/commission01/Kaohsiung-cam04/masks/glass.png": null,
+    "runs/commission01/Kaohsiung-cam04/masks/glass_door.png": null,
+    "runs/commission01/Kaohsiung-cam04/masks/instances.npz": "58fa634b6ea7b3a470c485786942d52dd54b26dfa6bd378e14b4260d6c3497f7",
+    "runs/commission01/Kaohsiung-cam04/masks/objects.png": "a10f67d0a49a2e23aeabe1b9c7a20d2541bab4715d3c5f8470f91f0046e714d3",
+    "runs/commission01/Kaohsiung-cam04/masks/walkable.png": "649c1cbc2236c773d4560839d6e9937e0c9db57fa6918bdd8319c105fd1ab073",
+    "runs/commission01/Kaohsiung-cam04/masks/wall.png": "37cadbab1e883ae41753602502b5794e07f1f8d98171268141c95fbd00a89330",
+    "runs/commission01/Kaohsiung-cam04/masks/window.png": null,
+    "runs/commission01/Kaohsiung-cam04.camera.json": "85b6d84432b30f0021d652627c01a93a2aa2f027eb4a81cbd616e938ce39830a"
+  },
+  "annotation_source": {
+    "path": "datasets/retail_objects_batch02/images/train/Kaohsiung-cam04__archive_20260816-025809_20260816-030312/0000.jpg",
+    "sha256": "38590a8adaf377f58b9d53fd972713be46a1207b3a594e2c68db9faa4b15189a",
+    "original_size_px": [
+      1920,
+      1080
+    ],
+    "scale_to_camera": [
+      0.5,
+      0.5
+    ]
+  },
+  "lines": [
+    {
+      "id": "pillar_right",
+      "physical_line_id": "pillar_right",
+      "axis": "vertical",
+      "validation": true,
+      "points_px": [
+        [
+          713.1219512195122,
+          59.97256097560975
+        ],
+        [
+          717.3777301436353,
+          80.02598234447751
+        ],
+        [
+          721.3771409766332,
+          100.02303606688128
+        ],
+        [
+          725.3684344022947,
+          119.93013730325485
+        ],
+        [
+          729.0,
+          140.0
+        ],
+        [
+          732.1225725844614,
+          154.97548548310772
+        ]
+      ],
+      "points_native_px": [
+        [
+          1426.2439024390244,
+          119.9451219512195
+        ],
+        [
+          1434.7554602872706,
+          160.05196468895502
+        ],
+        [
+          1442.7542819532664,
+          200.04607213376255
+        ],
+        [
+          1450.7368688045894,
+          239.8602746065097
+        ],
+        [
+          1458.0,
+          280.0
+        ],
+        [
+          1464.2451451689228,
+          309.95097096621544
+        ]
+      ],
+      "selection": "repeat raw-image localisation in +/-3 native px; no camera parameters or residuals used"
+    },
+    {
+      "id": "shelf_lower_seam",
+      "physical_line_id": "shelf_lower_seam",
+      "axis": "vertical",
+      "validation": true,
+      "points_px": [
+        [
+          459.47249303672015,
+          115.33644471805842
+        ],
+        [
+          464.5566730392646,
+          128.113907927961
+        ],
+        [
+          469.5566730392646,
+          141.113907927961
+        ],
+        [
+          474.5263055011599,
+          153.94231145149925
+        ],
+        [
+          479.49525128289645,
+          166.86372285834193
+        ],
+        [
+          483.45143025941195,
+          177.78503320980383
+        ]
+      ],
+      "points_native_px": [
+        [
+          918.9449860734403,
+          230.67288943611683
+        ],
+        [
+          929.1133460785292,
+          256.227815855922
+        ],
+        [
+          939.1133460785292,
+          282.227815855922
+        ],
+        [
+          949.0526110023198,
+          307.8846229029985
+        ],
+        [
+          958.9905025657929,
+          333.72744571668386
+        ],
+        [
+          966.9028605188239,
+          355.57006641960766
+        ]
+      ],
+      "selection": "repeat raw-image localisation in +/-3 native px; no camera parameters or residuals used"
+    },
+    {
+      "id": "floor_u_3",
+      "physical_line_id": "floor_u_3",
+      "axis": "floor_u",
+      "validation": true,
+      "points_px": [
+        [
+          945.9426516470305,
+          335.21692534378917
+        ],
+        [
+          927.0494584085948,
+          375.78317685913623
+        ],
+        [
+          907.4475835929924,
+          415.20768041093044
+        ],
+        [
+          887.0375075060462,
+          453.318921120254
+        ],
+        [
+          864.4589925914554,
+          491.0881821227593
+        ]
+      ],
+      "points_native_px": [
+        [
+          1891.885303294061,
+          670.4338506875783
+        ],
+        [
+          1854.0989168171895,
+          751.5663537182725
+        ],
+        [
+          1814.8951671859847,
+          830.4153608218609
+        ],
+        [
+          1774.0750150120923,
+          906.637842240508
+        ],
+        [
+          1728.9179851829108,
+          982.1763642455186
+        ]
+      ],
+      "selection": "repeat raw-image localisation in +/-3 native px; no camera parameters or residuals used"
+    },
+    {
+      "id": "floor_v_far",
+      "physical_line_id": "floor_v_far",
+      "axis": "floor_v",
+      "validation": true,
+      "points_px": [
+        [
+          865.1272466496398,
+          182.01646273136868
+        ],
+        [
+          884.1272466496398,
+          187.01646273136868
+        ],
+        [
+          903.2544932992796,
+          191.53292546273735
+        ],
+        [
+          940.8727533503602,
+          202.98353726863132
+        ]
+      ],
+      "points_native_px": [
+        [
+          1730.2544932992796,
+          364.03292546273735
+        ],
+        [
+          1768.2544932992796,
+          374.03292546273735
+        ],
+        [
+          1806.5089865985592,
+          383.0658509254747
+        ],
+        [
+          1881.7455067007204,
+          405.96707453726265
+        ]
+      ],
+      "selection": "repeat raw-image localisation in +/-3 native px; no camera parameters or residuals used"
+    }
+  ],
+  "selection_policy": {
+    "mode": "score_only_frozen_candidate",
+    "excluded_line": "door_right: door open and customer occlusion; excluded by image inspection before scoring",
+    "physical_line_scope": "repeated held-out structures from a separate time frame, not a new camera viewpoint",
+    "boundary_rule": "exclude search extrema at window boundary before scoring",
+    "unavailable_lines": [
+      {
+        "line": "floor_v_3",
+        "reason": "insufficient unambiguous repeated points or span",
+        "retained": 2
+      }
+    ]
+  }
+}

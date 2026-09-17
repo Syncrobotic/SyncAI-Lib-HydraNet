@@ -1,0 +1,73 @@
+{
+  "mode": "fixed candidate score only; no refitting",
+  "controls_sha256": "60a4d38d84f58311fa86b1061cb8cbf3fbf24e274eca87e89abb50321c449e47",
+  "camera_candidate_sha256": "2e33e88a5d982ed516fc002461fa160fab5030a0ae41494d7a69de6b81d7e18a",
+  "available_lines": [
+    {
+      "id": "pillar_right",
+      "count": 6,
+      "max_raw_px": 1.3192346690720018,
+      "errors_raw_px": [
+        1.3192346690720018,
+        0.6296723298738413,
+        0.025646166489460994,
+        0.40105869260421084,
+        0.8941120214649225,
+        0.6808547387690852
+      ]
+    },
+    {
+      "id": "shelf_lower_seam",
+      "count": 6,
+      "max_raw_px": 0.2763736209496189,
+      "errors_raw_px": [
+        0.0801025801553603,
+        0.13779496848623837,
+        0.05425779830094328,
+        0.02330063809063515,
+        0.02373146781080027,
+        0.2763736209496189
+      ]
+    },
+    {
+      "id": "floor_u_3",
+      "count": 5,
+      "max_raw_px": 0.7196823220954347,
+      "errors_raw_px": [
+        0.7196823220954347,
+        0.17447470238872415,
+        0.360214687533734,
+        0.09541993133299044,
+        0.11343540431629959
+      ]
+    },
+    {
+      "id": "floor_v_far",
+      "count": 4,
+      "max_raw_px": 2.034695848394158,
+      "errors_raw_px": [
+        1.3330258906339207,
+        0.530407935543134,
+        0.3679362802906791,
+        2.034695848394158
+      ]
+    }
+  ],
+  "excluded": {
+    "mode": "score_only_frozen_candidate",
+    "excluded_line": "door_right: door open and customer occlusion; excluded by image inspection before scoring",
+    "physical_line_scope": "repeated held-out structures from a separate time frame, not a new camera viewpoint",
+    "boundary_rule": "exclude search extrema at window boundary before scoring",
+    "unavailable_lines": [
+      {
+        "line": "floor_v_3",
+        "reason": "insufficient unambiguous repeated points or span",
+        "retained": 2
+      }
+    ]
+  },
+  "max_raw_px": 2.034695848394158,
+  "limit_raw_px": 4.0,
+  "available_lines_passed": true,
+  "independent_metric_accuracy": false
+}

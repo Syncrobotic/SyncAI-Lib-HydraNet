@@ -1,0 +1,808 @@
+{
+  "schema": 1,
+  "camera": "Kaohsiung-cam04",
+  "image_size_px": [
+    960,
+    540
+  ],
+  "pixel_space": "raw",
+  "initial_floor_axis_deg": 30,
+  "reviewer": "AI high-resolution visual review",
+  "evidence": "visible physical upright edges and orthogonal floor grout, observed at native 1920x1080; whole-line split frozen before fitting; exploratory refinement, not a fresh blind test",
+  "source_identity": {
+    "datasets/studioa_static/Kaohsiung-cam04/plate_20260816-025809.png": "947a2f880652e5ec825177ba69cdc769a10512c3da077f2ee6fa3bc0e36506a2",
+    "runs/commission01/Kaohsiung-cam04/masks/column.png": "719a4fc3f21c4b2079a509ca36560843fe01433d5a3afcf26854b5dc90ede69f",
+    "runs/commission01/Kaohsiung-cam04/masks/display_shelf.png": "724decfca6f3675e9f4c099e7e4f450a3816f3e4ce42a6541fa62fe484be1f30",
+    "runs/commission01/Kaohsiung-cam04/masks/display_table.png": "60b384c7fd0b927622224ea3c2d311f0d118809e4dcf49397df9a2242ca3eee1",
+    "runs/commission01/Kaohsiung-cam04/masks/door.png": "e590a05c71de08ac066c35b30d5bf21c7fe1ab704235d1493253286099e91a85",
+    "runs/commission01/Kaohsiung-cam04/masks/floor.png": "649c1cbc2236c773d4560839d6e9937e0c9db57fa6918bdd8319c105fd1ab073",
+    "runs/commission01/Kaohsiung-cam04/masks/floor_fill.png": "5343549c0300a784178dd4464f14c0efd81696eec1c86827b0f71f2a4d4a88d7",
+    "runs/commission01/Kaohsiung-cam04/masks/glass.png": null,
+    "runs/commission01/Kaohsiung-cam04/masks/glass_door.png": null,
+    "runs/commission01/Kaohsiung-cam04/masks/instances.npz": "58fa634b6ea7b3a470c485786942d52dd54b26dfa6bd378e14b4260d6c3497f7",
+    "runs/commission01/Kaohsiung-cam04/masks/objects.png": "a10f67d0a49a2e23aeabe1b9c7a20d2541bab4715d3c5f8470f91f0046e714d3",
+    "runs/commission01/Kaohsiung-cam04/masks/walkable.png": "649c1cbc2236c773d4560839d6e9937e0c9db57fa6918bdd8319c105fd1ab073",
+    "runs/commission01/Kaohsiung-cam04/masks/wall.png": "37cadbab1e883ae41753602502b5794e07f1f8d98171268141c95fbd00a89330",
+    "runs/commission01/Kaohsiung-cam04/masks/window.png": null,
+    "runs/commission01/Kaohsiung-cam04.camera.json": "85b6d84432b30f0021d652627c01a93a2aa2f027eb4a81cbd616e938ce39830a"
+  },
+  "annotation_source": {
+    "path": "datasets/retail_objects_batch02/images/train/Kaohsiung-cam04__archive_20260816-025809_20260816-030312/0003.jpg",
+    "sha256": "a7339928d2e72363cefb35a8f6e25d8b1784ceaf747f87b815293dfdc53257bb",
+    "original_size_px": [
+      1920,
+      1080
+    ],
+    "scale_to_camera": [
+      0.5,
+      0.5
+    ]
+  },
+  "lines": [
+    {
+      "id": "door_left",
+      "physical_line_id": "door_left",
+      "axis": "vertical",
+      "validation": false,
+      "points_px": [
+        [
+          47.66857953136985,
+          193.17545789515714
+        ],
+        [
+          68.63362845117285,
+          236.51601291415443
+        ],
+        [
+          95.30236471318669,
+          276.75579159246473
+        ],
+        [
+          119.3588594367429,
+          318.9877886491714
+        ],
+        [
+          143.71344904394851,
+          360.36984814393384
+        ]
+      ],
+      "points_native_px": [
+        [
+          95.3371590627397,
+          386.3509157903143
+        ],
+        [
+          137.2672569023457,
+          473.03202582830886
+        ],
+        [
+          190.60472942637338,
+          553.5115831849295
+        ],
+        [
+          238.7177188734858,
+          637.9755772983428
+        ],
+        [
+          287.42689808789703,
+          720.7396962878677
+        ]
+      ],
+      "selection": "AI native-image seed ROI; edge normal localisation; no calibration information"
+    },
+    {
+      "id": "wall_corner",
+      "physical_line_id": "wall_corner",
+      "axis": "vertical",
+      "validation": false,
+      "points_px": [
+        [
+          339.38530554683626,
+          35.04970092970429
+        ],
+        [
+          352.3849586351927,
+          65.0488925800431
+        ],
+        [
+          365.1150413648073,
+          94.9511074199569
+        ],
+        [
+          378.11469445316374,
+          124.95029907029571
+        ],
+        [
+          391.11463375703164,
+          154.9501592360732
+        ],
+        [
+          403.1145674222962,
+          182.45000694299802
+        ]
+      ],
+      "points_native_px": [
+        [
+          678.7706110936725,
+          70.09940185940857
+        ],
+        [
+          704.7699172703853,
+          130.0977851600862
+        ],
+        [
+          730.2300827296147,
+          189.9022148399138
+        ],
+        [
+          756.2293889063275,
+          249.90059814059143
+        ],
+        [
+          782.2292675140633,
+          309.9003184721464
+        ],
+        [
+          806.2291348445924,
+          364.90001388599603
+        ]
+      ],
+      "selection": "AI native-image seed ROI; edge normal localisation; no calibration information"
+    },
+    {
+      "id": "shelf_main_upright",
+      "physical_line_id": "shelf_main_upright",
+      "axis": "vertical",
+      "validation": false,
+      "points_px": [
+        [
+          484.6708203932499,
+          49.66458980337503
+        ],
+        [
+          494.1150413648073,
+          69.9511074199569
+        ],
+        [
+          501.11798229454575,
+          89.95870619690899
+        ],
+        [
+          508.11798229454575,
+          109.95870619690899
+        ],
+        [
+          515.1179822945458,
+          129.958706196909
+        ],
+        [
+          521.8820177054542,
+          150.041293803091
+        ]
+      ],
+      "points_native_px": [
+        [
+          969.3416407864999,
+          99.32917960675006
+        ],
+        [
+          988.2300827296147,
+          139.9022148399138
+        ],
+        [
+          1002.2359645890915,
+          179.91741239381798
+        ],
+        [
+          1016.2359645890915,
+          219.91741239381798
+        ],
+        [
+          1030.2359645890915,
+          259.917412393818
+        ],
+        [
+          1043.7640354109085,
+          300.082587606182
+        ]
+      ],
+      "selection": "AI native-image seed ROI; edge normal localisation; no calibration information"
+    },
+    {
+      "id": "door_right",
+      "physical_line_id": "door_right",
+      "axis": "vertical",
+      "validation": true,
+      "points_px": [
+        [
+          135.0519473246609,
+          127.7067779837739
+        ],
+        [
+          151.5,
+          160.0
+        ],
+        [
+          168.74248202277514,
+          192.43794008058313
+        ],
+        [
+          186.9952541982787,
+          224.89344281977202
+        ],
+        [
+          205.46485854448372,
+          257.224264781834
+        ],
+        [
+          224.97189060905973,
+          289.2358791601042
+        ],
+        [
+          244.68537580810607,
+          321.10578661693535
+        ]
+      ],
+      "points_native_px": [
+        [
+          270.1038946493218,
+          255.4135559675478
+        ],
+        [
+          303.0,
+          320.0
+        ],
+        [
+          337.48496404555027,
+          384.87588016116626
+        ],
+        [
+          373.9905083965574,
+          449.78688563954404
+        ],
+        [
+          410.92971708896744,
+          514.448529563668
+        ],
+        [
+          449.94378121811945,
+          578.4717583202084
+        ],
+        [
+          489.37075161621215,
+          642.2115732338707
+        ]
+      ],
+      "selection": "AI native-image seed ROI; dark normal localisation; no calibration information"
+    },
+    {
+      "id": "pillar_right",
+      "physical_line_id": "pillar_right",
+      "axis": "vertical",
+      "validation": true,
+      "points_px": [
+        [
+          713.1219512195122,
+          59.97256097560975
+        ],
+        [
+          717.3777301436353,
+          80.02598234447751
+        ],
+        [
+          721.3771409766332,
+          100.02303606688128
+        ],
+        [
+          725.1228590233668,
+          119.97696393311872
+        ],
+        [
+          729.0,
+          140.0
+        ],
+        [
+          732.1225725844614,
+          154.97548548310772
+        ]
+      ],
+      "points_native_px": [
+        [
+          1426.2439024390244,
+          119.9451219512195
+        ],
+        [
+          1434.7554602872706,
+          160.05196468895502
+        ],
+        [
+          1442.7542819532664,
+          200.04607213376255
+        ],
+        [
+          1450.2457180467336,
+          239.95392786623745
+        ],
+        [
+          1458.0,
+          280.0
+        ],
+        [
+          1464.2451451689228,
+          309.95097096621544
+        ]
+      ],
+      "selection": "AI native-image seed ROI; edge normal localisation; no calibration information"
+    },
+    {
+      "id": "shelf_lower_seam",
+      "physical_line_id": "shelf_lower_seam",
+      "axis": "vertical",
+      "validation": true,
+      "points_px": [
+        [
+          459.47249303672015,
+          115.33644471805842
+        ],
+        [
+          464.5566730392646,
+          128.113907927961
+        ],
+        [
+          469.5566730392646,
+          141.113907927961
+        ],
+        [
+          474.5263055011599,
+          153.94231145149925
+        ],
+        [
+          479.49525128289645,
+          166.86372285834193
+        ],
+        [
+          483.45143025941195,
+          177.78503320980383
+        ]
+      ],
+      "points_native_px": [
+        [
+          918.9449860734403,
+          230.67288943611683
+        ],
+        [
+          929.1133460785292,
+          256.227815855922
+        ],
+        [
+          939.1133460785292,
+          282.227815855922
+        ],
+        [
+          949.0526110023198,
+          307.8846229029985
+        ],
+        [
+          958.9905025657929,
+          333.72744571668386
+        ],
+        [
+          966.9028605188239,
+          355.57006641960766
+        ]
+      ],
+      "selection": "AI native-image seed ROI; dark normal localisation; no calibration information"
+    },
+    {
+      "id": "floor_u_1",
+      "physical_line_id": "floor_u_1",
+      "axis": "floor_u",
+      "validation": false,
+      "points_px": [
+        [
+          853.3067862298827,
+          178.96588547426117
+        ],
+        [
+          843.0979119292668,
+          189.2028044694581
+        ],
+        [
+          834.4973899115836,
+          200.62850558682263
+        ],
+        [
+          825.9968401016541,
+          212.12925060121884
+        ]
+      ],
+      "points_native_px": [
+        [
+          1706.6135724597655,
+          357.93177094852234
+        ],
+        [
+          1686.1958238585337,
+          378.4056089389162
+        ],
+        [
+          1668.9947798231672,
+          401.25701117364525
+        ],
+        [
+          1651.9936802033083,
+          424.2585012024377
+        ]
+      ],
+      "selection": "AI native-image seed ROI; dark normal localisation; no calibration information"
+    },
+    {
+      "id": "floor_u_2",
+      "physical_line_id": "floor_u_2",
+      "axis": "floor_u",
+      "validation": false,
+      "points_px": [
+        [
+          914.5038009663922,
+          208.5736005522241
+        ],
+        [
+          903.3720441085167,
+          230.06973949058093
+        ],
+        [
+          892.0332955050391,
+          251.42458065776137
+        ],
+        [
+          879.2560179966481,
+          272.53943971221076
+        ],
+        [
+          867.0,
+          294.0
+        ],
+        [
+          853.787433713328,
+          314.8684113463459
+        ]
+      ],
+      "points_native_px": [
+        [
+          1829.0076019327844,
+          417.1472011044482
+        ],
+        [
+          1806.7440882170333,
+          460.13947898116186
+        ],
+        [
+          1784.0665910100781,
+          502.84916131552274
+        ],
+        [
+          1758.5120359932962,
+          545.0788794244215
+        ],
+        [
+          1734.0,
+          588.0
+        ],
+        [
+          1707.574867426656,
+          629.7368226926918
+        ]
+      ],
+      "selection": "AI native-image seed ROI; dark normal localisation; no calibration information"
+    },
+    {
+      "id": "floor_u_3",
+      "physical_line_id": "floor_u_3",
+      "axis": "floor_u",
+      "validation": true,
+      "points_px": [
+        [
+          946.8394967479209,
+          335.6592700792715
+        ],
+        [
+          927.0494584085948,
+          375.78317685913623
+        ],
+        [
+          907.5586649688456,
+          415.26500342496973
+        ],
+        [
+          887.0375075060462,
+          453.318921120254
+        ],
+        [
+          864.4589925914554,
+          491.0881821227593
+        ]
+      ],
+      "points_native_px": [
+        [
+          1893.6789934958417,
+          671.318540158543
+        ],
+        [
+          1854.0989168171895,
+          751.5663537182725
+        ],
+        [
+          1815.1173299376912,
+          830.5300068499395
+        ],
+        [
+          1774.0750150120923,
+          906.637842240508
+        ],
+        [
+          1728.9179851829108,
+          982.1763642455186
+        ]
+      ],
+      "selection": "AI native-image seed ROI; dark normal localisation; no calibration information"
+    },
+    {
+      "id": "floor_v_1",
+      "physical_line_id": "floor_v_1",
+      "axis": "floor_v",
+      "validation": false,
+      "points_px": [
+        [
+          819.0,
+          224.0
+        ],
+        [
+          836.2558925603163,
+          227.53329477213848
+        ],
+        [
+          853.1599328501977,
+          232.39580923258654
+        ],
+        [
+          870.1279462801581,
+          237.01664738606925
+        ],
+        [
+          887.1279462801581,
+          241.51664738606925
+        ]
+      ],
+      "points_native_px": [
+        [
+          1638.0,
+          448.0
+        ],
+        [
+          1672.5117851206326,
+          455.06658954427695
+        ],
+        [
+          1706.3198657003954,
+          464.7916184651731
+        ],
+        [
+          1740.2558925603162,
+          474.0332947721385
+        ],
+        [
+          1774.2558925603162,
+          483.0332947721385
+        ]
+      ],
+      "selection": "AI native-image seed ROI; dark normal localisation; no calibration information"
+    },
+    {
+      "id": "floor_v_2",
+      "physical_line_id": "floor_v_2",
+      "axis": "floor_v",
+      "validation": false,
+      "points_px": [
+        [
+          801.6249324287797,
+          282.96896960646586
+        ],
+        [
+          827.477889504361,
+          291.44685911082684
+        ],
+        [
+          853.604893942825,
+          299.0936675741273
+        ],
+        [
+          879.3495812133458,
+          308.4306927591774
+        ],
+        [
+          905.3047757271038,
+          317.04757585280066
+        ],
+        [
+          929.2982749931359,
+          324.545520021965
+        ]
+      ],
+      "points_native_px": [
+        [
+          1603.2498648575595,
+          565.9379392129317
+        ],
+        [
+          1654.955779008722,
+          582.8937182216537
+        ],
+        [
+          1707.20978788565,
+          598.1873351482546
+        ],
+        [
+          1758.6991624266916,
+          616.8613855183548
+        ],
+        [
+          1810.6095514542076,
+          634.0951517056013
+        ],
+        [
+          1858.5965499862718,
+          649.09104004393
+        ]
+      ],
+      "selection": "AI native-image seed ROI; dark normal localisation; no calibration information"
+    },
+    {
+      "id": "floor_v_3",
+      "physical_line_id": "floor_v_3",
+      "axis": "floor_v",
+      "validation": true,
+      "points_px": [
+        [
+          834.6821996742902,
+          379.03437861014714
+        ],
+        [
+          878.9513027685329,
+          401.4577818137495
+        ],
+        [
+          902.7256513842664,
+          408.4788909068747
+        ],
+        [
+          925.1335024428231,
+          418.99216042389656
+        ],
+        [
+          949.909949267153,
+          423.452351872831
+        ]
+      ],
+      "points_native_px": [
+        [
+          1669.3643993485805,
+          758.0687572202943
+        ],
+        [
+          1757.9026055370657,
+          802.915563627499
+        ],
+        [
+          1805.4513027685327,
+          816.9577818137494
+        ],
+        [
+          1850.2670048856462,
+          837.9843208477931
+        ],
+        [
+          1899.819898534306,
+          846.904703745662
+        ]
+      ],
+      "selection": "AI native-image seed ROI; dark normal localisation; no calibration information"
+    },
+    {
+      "id": "floor_v_far",
+      "physical_line_id": "floor_v_far",
+      "axis": "floor_v",
+      "validation": true,
+      "points_px": [
+        [
+          865.1272466496398,
+          182.01646273136868
+        ],
+        [
+          884.1272466496398,
+          187.01646273136868
+        ],
+        [
+          903.2544932992796,
+          191.53292546273735
+        ],
+        [
+          940.8727533503602,
+          202.98353726863132
+        ]
+      ],
+      "points_native_px": [
+        [
+          1730.2544932992796,
+          364.03292546273735
+        ],
+        [
+          1768.2544932992796,
+          374.03292546273735
+        ],
+        [
+          1806.5089865985592,
+          383.0658509254747
+        ],
+        [
+          1881.7455067007204,
+          405.96707453726265
+        ]
+      ],
+      "selection": "AI native-image seed ROI; dark normal localisation; no calibration information"
+    }
+  ],
+  "selection_policy": {
+    "camera_fit_seen": false,
+    "point_rule": "exclude local extrema on search-window boundary before calibration; manually inspect all retained lines on native source",
+    "excluded_line": "previous pillar_left is a weak diffuse face boundary/shading, not a reliably observable hard edge",
+    "previous_holdouts": "door_right, pillar_right, shelf lower seam, floor_u_3, floor_v_3 remain held out; floor_v_far added as heldout",
+    "comparison_scope": "new observations on high-resolution source; previously disclosed physical lines are not a fresh blind test",
+    "excluded_points": [
+      {
+        "line": "floor_u_1",
+        "seed": [
+          1642.0,
+          440.0
+        ],
+        "selected_native_px": [
+          1648.4512399668456,
+          444.73090930902015
+        ],
+        "offset_native_px": -8.0,
+        "search_radius_native_px": 8,
+        "search_boundary_hit": true,
+        "reason": "local image peak reaches search boundary; ambiguous localisation"
+      },
+      {
+        "line": "floor_v_3",
+        "seed": [
+          1715.0,
+          777.0
+        ],
+        "selected_native_px": [
+          1711.7204058627754,
+          785.3811850173518
+        ],
+        "offset_native_px": 9.0,
+        "search_radius_native_px": 9,
+        "search_boundary_hit": true,
+        "reason": "local image peak reaches search boundary; ambiguous localisation"
+      },
+      {
+        "line": "floor_v_far",
+        "seed": [
+          1844.0,
+          395.0
+        ],
+        "selected_native_px": [
+          1846.2904396935169,
+          386.2963291646362
+        ],
+        "offset_native_px": -9.0,
+        "search_radius_native_px": 9,
+        "search_boundary_hit": true,
+        "reason": "local image peak reaches search boundary; ambiguous localisation"
+      }
+    ]
+  }
+}

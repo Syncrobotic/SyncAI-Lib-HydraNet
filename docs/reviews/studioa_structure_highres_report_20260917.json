@@ -1,0 +1,339 @@
+{
+  "schema": 1,
+  "camera": "Kaohsiung-cam04",
+  "line_checks_passed": true,
+  "deployment_ready": false,
+  "independent_metric_accuracy": false,
+  "reasons": [],
+  "validation_limit_px": 4.0,
+  "floor_axis_deg": 23.992889559001707,
+  "condition": 21.191759697790232,
+  "line_scores": [
+    {
+      "id": "door_left",
+      "axis": "vertical",
+      "validation": false,
+      "before_raw_px": [
+        40.44377901202574,
+        17.90648551187838,
+        0.6382442679083412,
+        20.363247255828558,
+        41.068588866684664
+      ],
+      "after_raw_px": [
+        0.07670284284969385,
+        1.2914753396435008,
+        2.2594760353340564,
+        0.8024124428908462,
+        1.685707756736142
+      ],
+      "before_max_raw_px": 41.068588866684664,
+      "after_max_raw_px": 2.2594760353340564
+    },
+    {
+      "id": "wall_corner",
+      "axis": "vertical",
+      "validation": false,
+      "before_raw_px": [
+        3.8261086500221926,
+        2.126164387450447,
+        0.713471731782639,
+        0.848574167221609,
+        2.3414722690751737,
+        3.726977735306679
+      ],
+      "after_raw_px": [
+        0.40223090780012216,
+        0.05683373112464987,
+        0.020385891733526295,
+        0.1276300231647692,
+        0.17665105582464471,
+        0.21099050661644148
+      ],
+      "before_max_raw_px": 3.8261086500221926,
+      "after_max_raw_px": 0.40223090780012216
+    },
+    {
+      "id": "shelf_main_upright",
+      "axis": "vertical",
+      "validation": false,
+      "before_raw_px": [
+        14.338817008167915,
+        6.989779244253793,
+        2.015950581203019,
+        2.980819729905848,
+        8.002673520742631,
+        12.806819489798402
+      ],
+      "after_raw_px": [
+        0.6512733346988735,
+        0.9532808120727491,
+        0.47187779227118176,
+        0.08401079837808657,
+        0.2102350027512562,
+        0.6608357884038203
+      ],
+      "before_max_raw_px": 14.338817008167915,
+      "after_max_raw_px": 0.9532808120727491
+    },
+    {
+      "id": "door_right",
+      "axis": "vertical",
+      "validation": true,
+      "before_raw_px": [
+        29.56947224223137,
+        19.205786478666006,
+        9.014229655642323,
+        0.7772283228151897,
+        10.641689741157341,
+        19.86748935696327,
+        29.16808337906288
+      ],
+      "after_raw_px": [
+        3.223046076417217,
+        1.9720800330822708,
+        0.8164305127145179,
+        0.46288099117051007,
+        1.210668666007294,
+        2.232528364166942,
+        2.7112695676643845
+      ],
+      "before_max_raw_px": 29.56947224223137,
+      "after_max_raw_px": 3.223046076417217
+    },
+    {
+      "id": "pillar_right",
+      "axis": "vertical",
+      "validation": true,
+      "before_raw_px": [
+        25.50466170321196,
+        14.969065451679278,
+        4.618124991923372,
+        5.554937226981622,
+        15.950482350686304,
+        23.98389802240227
+      ],
+      "after_raw_px": [
+        1.3618345555576825,
+        0.6718320484658855,
+        0.0160369304811262,
+        0.6098313565033603,
+        0.8534955926474428,
+        0.6406788227845527
+      ],
+      "before_max_raw_px": 25.50466170321196,
+      "after_max_raw_px": 1.3618345555576825
+    },
+    {
+      "id": "shelf_lower_seam",
+      "axis": "vertical",
+      "validation": true,
+      "before_raw_px": [
+        6.438038478356744,
+        3.733314071475648,
+        1.1475866859546886,
+        1.442828667903042,
+        4.019681566091751,
+        5.960910697624293
+      ],
+      "after_raw_px": [
+        0.0801025801553603,
+        0.13779496848623837,
+        0.05425779830094328,
+        0.02330063809063515,
+        0.02373146781080027,
+        0.2763736209496189
+      ],
+      "before_max_raw_px": 6.438038478356744,
+      "after_max_raw_px": 0.2763736209496189
+    },
+    {
+      "id": "floor_u_1",
+      "axis": "floor_u",
+      "validation": false,
+      "before_raw_px": [
+        1.9650252731224909,
+        0.4164620745696716,
+        0.7299569700973435,
+        0.8500308000352689
+      ],
+      "after_raw_px": [
+        1.1734530972773136,
+        0.7064920164173144,
+        0.4774512041530987,
+        0.014335344800442292
+      ],
+      "before_max_raw_px": 1.9650252731224909,
+      "after_max_raw_px": 1.1734530972773136
+    },
+    {
+      "id": "floor_u_2",
+      "axis": "floor_u",
+      "validation": false,
+      "before_raw_px": [
+        0.7134603442699782,
+        0.7237883513741584,
+        0.7573269315387516,
+        0.3116626966371523,
+        0.47363443047400217,
+        1.4760974744634459
+      ],
+      "after_raw_px": [
+        0.2394071494620533,
+        0.0754944162039315,
+        0.28137884332924273,
+        0.2826892062126176,
+        0.23848990503992107,
+        0.09569395576269128
+      ],
+      "before_max_raw_px": 1.4760974744634459,
+      "after_max_raw_px": 0.2826892062126176
+    },
+    {
+      "id": "floor_u_3",
+      "axis": "floor_u",
+      "validation": true,
+      "before_raw_px": [
+        4.302243799020153,
+        1.6655000490322298,
+        0.18124187319760884,
+        1.7422195483422624,
+        4.535809746488223
+      ],
+      "after_raw_px": [
+        1.5149149310382484,
+        0.3925571838996323,
+        0.46738275400651474,
+        0.34042383560985257,
+        0.3704697927604908
+      ],
+      "before_max_raw_px": 4.535809746488223,
+      "after_max_raw_px": 1.5149149310382484
+    },
+    {
+      "id": "floor_v_1",
+      "axis": "floor_v",
+      "validation": false,
+      "before_raw_px": [
+        8.430571441081666,
+        3.620855662641645,
+        0.0708726023050926,
+        3.805094699331185,
+        7.884444619188373
+      ],
+      "after_raw_px": [
+        0.32500059872098175,
+        0.4849556763637682,
+        0.010158908870580753,
+        0.12447680243235129,
+        0.04393554129317509
+      ],
+      "before_max_raw_px": 8.430571441081666,
+      "after_max_raw_px": 0.4849556763637682
+    },
+    {
+      "id": "floor_v_2",
+      "axis": "floor_v",
+      "validation": false,
+      "before_raw_px": [
+        15.428585869947346,
+        9.648077522442373,
+        2.8523653960259883,
+        2.4588906147621175,
+        8.658131257963827,
+        14.929200963321842
+      ],
+      "after_raw_px": [
+        0.1108503424822074,
+        0.19686233778267448,
+        0.5142361667998083,
+        0.3557865730262468,
+        0.33062022737483265,
+        0.2644102728478299
+      ],
+      "before_max_raw_px": 15.428585869947346,
+      "after_max_raw_px": 0.5142361667998083
+    },
+    {
+      "id": "floor_v_3",
+      "axis": "floor_v",
+      "validation": true,
+      "before_raw_px": [
+        14.091440355101296,
+        7.528412633394276,
+        0.2783056804885791,
+        4.534592629010194,
+        15.196087601694737
+      ],
+      "after_raw_px": [
+        1.4437879300441268,
+        2.8687416138039845,
+        0.4659406335521991,
+        1.7733585525024262,
+        3.4580537502344852
+      ],
+      "before_max_raw_px": 15.196087601694737,
+      "after_max_raw_px": 3.4580537502344852
+    },
+    {
+      "id": "floor_v_far",
+      "axis": "floor_v",
+      "validation": true,
+      "before_raw_px": [
+        6.304180855921246,
+        2.813838973041919,
+        1.2905187195460217,
+        7.412542954096893
+      ],
+      "after_raw_px": [
+        1.3330258906339207,
+        0.530407935543134,
+        0.3679362802906791,
+        2.034695848394158
+      ],
+      "before_max_raw_px": 7.412542954096893,
+      "after_max_raw_px": 2.034695848394158
+    }
+  ],
+  "parameters": [
+    6.40811428038493,
+    0.4802178670486325,
+    -0.39185785903693093,
+    0.41875491987195007,
+    -0.4011629236474133
+  ],
+  "height_m_unchanged": 2.17,
+  "zones_removed": 7,
+  "requires_depth_rebuild": true,
+  "scope": "Conditional on fixed principal point, square pixels, radial lens and orthogonal structure; height remains unmeasured. Re-derive and review zones.",
+  "controls_sha256": "af3348ed60b2cb25470d111c933a1395a8eaf1918b7f2d0d7d1935cbead96a60",
+  "source_identity": {
+    "datasets/studioa_static/Kaohsiung-cam04/plate_20260816-025809.png": "947a2f880652e5ec825177ba69cdc769a10512c3da077f2ee6fa3bc0e36506a2",
+    "runs/commission01/Kaohsiung-cam04/masks/column.png": "719a4fc3f21c4b2079a509ca36560843fe01433d5a3afcf26854b5dc90ede69f",
+    "runs/commission01/Kaohsiung-cam04/masks/display_shelf.png": "724decfca6f3675e9f4c099e7e4f450a3816f3e4ce42a6541fa62fe484be1f30",
+    "runs/commission01/Kaohsiung-cam04/masks/display_table.png": "60b384c7fd0b927622224ea3c2d311f0d118809e4dcf49397df9a2242ca3eee1",
+    "runs/commission01/Kaohsiung-cam04/masks/door.png": "e590a05c71de08ac066c35b30d5bf21c7fe1ab704235d1493253286099e91a85",
+    "runs/commission01/Kaohsiung-cam04/masks/floor.png": "649c1cbc2236c773d4560839d6e9937e0c9db57fa6918bdd8319c105fd1ab073",
+    "runs/commission01/Kaohsiung-cam04/masks/floor_fill.png": "5343549c0300a784178dd4464f14c0efd81696eec1c86827b0f71f2a4d4a88d7",
+    "runs/commission01/Kaohsiung-cam04/masks/glass.png": null,
+    "runs/commission01/Kaohsiung-cam04/masks/glass_door.png": null,
+    "runs/commission01/Kaohsiung-cam04/masks/instances.npz": "58fa634b6ea7b3a470c485786942d52dd54b26dfa6bd378e14b4260d6c3497f7",
+    "runs/commission01/Kaohsiung-cam04/masks/objects.png": "a10f67d0a49a2e23aeabe1b9c7a20d2541bab4715d3c5f8470f91f0046e714d3",
+    "runs/commission01/Kaohsiung-cam04/masks/walkable.png": "649c1cbc2236c773d4560839d6e9937e0c9db57fa6918bdd8319c105fd1ab073",
+    "runs/commission01/Kaohsiung-cam04/masks/wall.png": "37cadbab1e883ae41753602502b5794e07f1f8d98171268141c95fbd00a89330",
+    "runs/commission01/Kaohsiung-cam04/masks/window.png": null,
+    "runs/commission01/Kaohsiung-cam04.camera.json": "85b6d84432b30f0021d652627c01a93a2aa2f027eb4a81cbd616e938ce39830a"
+  },
+  "annotation_source": {
+    "path": "datasets/retail_objects_batch02/images/train/Kaohsiung-cam04__archive_20260816-025809_20260816-030312/0003.jpg",
+    "sha256": "a7339928d2e72363cefb35a8f6e25d8b1784ceaf747f87b815293dfdc53257bb",
+    "original_size_px": [
+      1920,
+      1080
+    ],
+    "scale_to_camera": [
+      0.5,
+      0.5
+    ]
+  }
+}

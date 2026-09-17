@@ -1,0 +1,157 @@
+{
+  "status": "high_resolution_structure_observations_completed",
+  "line_checks_passed": true,
+  "deployment_ready": false,
+  "metric_scale_verified": false,
+  "camera_applied": false,
+  "pixel_units": "960x540 raw camera pixels; multiply by 2 for native 1920x1080 pixels",
+  "observation_freeze": {
+    "controls_sha256": "af3348ed60b2cb25470d111c933a1395a8eaf1918b7f2d0d7d1935cbead96a60",
+    "source_sha256": "a7339928d2e72363cefb35a8f6e25d8b1784ceaf747f87b815293dfdc53257bb",
+    "native_resolution": [
+      1920,
+      1080
+    ],
+    "camera_resolution": [
+      960,
+      540
+    ],
+    "fit_lines": 7,
+    "heldout_lines": 6,
+    "retained_points": 71,
+    "excluded_points": 3,
+    "frozen_before_camera_fit": true
+  },
+  "fitting_max_px": 2.2594760353340564,
+  "heldout_max_px": 3.4580537502344852,
+  "threshold_px": 4,
+  "comparison_on_same_new_observations": [
+    {
+      "id": "door_left",
+      "validation": false,
+      "commissioned_max_px": 41.068588866684664,
+      "previous_candidate_max_px": 2.0012644622602047,
+      "highres_candidate_max_px": 2.2594760353340564
+    },
+    {
+      "id": "wall_corner",
+      "validation": false,
+      "commissioned_max_px": 3.8261086500221926,
+      "previous_candidate_max_px": 0.33429185996850413,
+      "highres_candidate_max_px": 0.40223090780012216
+    },
+    {
+      "id": "shelf_main_upright",
+      "validation": false,
+      "commissioned_max_px": 14.338817008167915,
+      "previous_candidate_max_px": 1.1341868776075061,
+      "highres_candidate_max_px": 0.9532808120727491
+    },
+    {
+      "id": "door_right",
+      "validation": true,
+      "commissioned_max_px": 29.56947224223137,
+      "previous_candidate_max_px": 4.040256973599798,
+      "highres_candidate_max_px": 3.223046076417217
+    },
+    {
+      "id": "pillar_right",
+      "validation": true,
+      "commissioned_max_px": 25.50466170321196,
+      "previous_candidate_max_px": 2.529387879732348,
+      "highres_candidate_max_px": 1.3618345555576825
+    },
+    {
+      "id": "shelf_lower_seam",
+      "validation": true,
+      "commissioned_max_px": 6.438038478356744,
+      "previous_candidate_max_px": 0.4148722326471396,
+      "highres_candidate_max_px": 0.2763736209496189
+    },
+    {
+      "id": "floor_u_1",
+      "validation": false,
+      "commissioned_max_px": 1.9650252731224909,
+      "previous_candidate_max_px": 2.0971355325917997,
+      "highres_candidate_max_px": 1.1734530972773136
+    },
+    {
+      "id": "floor_u_2",
+      "validation": false,
+      "commissioned_max_px": 1.4760974744634459,
+      "previous_candidate_max_px": 0.5435156547232106,
+      "highres_candidate_max_px": 0.2826892062126176
+    },
+    {
+      "id": "floor_u_3",
+      "validation": true,
+      "commissioned_max_px": 4.535809746488223,
+      "previous_candidate_max_px": 1.0918604252311117,
+      "highres_candidate_max_px": 1.5149149310382484
+    },
+    {
+      "id": "floor_v_1",
+      "validation": false,
+      "commissioned_max_px": 8.430571441081666,
+      "previous_candidate_max_px": 1.1357984846422744,
+      "highres_candidate_max_px": 0.4849556763637682
+    },
+    {
+      "id": "floor_v_2",
+      "validation": false,
+      "commissioned_max_px": 15.428585869947346,
+      "previous_candidate_max_px": 0.6520303086841853,
+      "highres_candidate_max_px": 0.5142361667998083
+    },
+    {
+      "id": "floor_v_3",
+      "validation": true,
+      "commissioned_max_px": 15.196087601694737,
+      "previous_candidate_max_px": 4.391193231551602,
+      "highres_candidate_max_px": 3.4580537502344852
+    },
+    {
+      "id": "floor_v_far",
+      "validation": true,
+      "commissioned_max_px": 7.412542954096893,
+      "previous_candidate_max_px": 0.5407016260835344,
+      "highres_candidate_max_px": 2.034695848394158
+    }
+  ],
+  "repeat_available_lines": 4,
+  "repeat_points": 21,
+  "repeat_max_px": 2.034695848394158,
+  "repeat_omissions": {
+    "mode": "score_only_frozen_candidate",
+    "excluded_line": "door_right: door open and customer occlusion; excluded by image inspection before scoring",
+    "physical_line_scope": "repeated held-out structures from a separate time frame, not a new camera viewpoint",
+    "boundary_rule": "exclude search extrema at window boundary before scoring",
+    "unavailable_lines": [
+      {
+        "line": "floor_v_3",
+        "reason": "insufficient unambiguous repeated points or span",
+        "retained": 2
+      }
+    ]
+  },
+  "floor_above_horizon_fraction": 0.0,
+  "parameters": {
+    "fx": 606.7484441604291,
+    "pitch_deg": 27.51445702866113,
+    "roll_deg": -22.45180149184849,
+    "k1": -0.4011629236474133,
+    "height_m": 2.17
+  },
+  "limitations": [
+    "AI line observations, not physical survey",
+    "orthogonal structure, centred principal point, square pixels, radial lens assumed",
+    "previously reviewed physical holdout lines are not a fresh blind test",
+    "second frame checks repeatability, not another viewpoint or triangulation",
+    "height inherited; new camera requires separate depth rebuild, zone review, fixture fitting and final GLB audit"
+  ],
+  "source_bindings_verified": true,
+  "tests": {
+    "structural_controls_passed": 9,
+    "production_code_changed": false
+  }
+}
