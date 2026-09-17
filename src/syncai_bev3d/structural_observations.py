@@ -32,6 +32,8 @@ class ObservationConfig:
     max_hough_seeds: int = 180
     min_span_fraction: float = 0.07
     min_persistence: float = 0.5
+    min_gradient: float = 0.015
+    edge_quantile: float = 0.90
 
     def __post_init__(self):
         for value in (
@@ -46,6 +48,8 @@ class ObservationConfig:
             raise ValueError("max_frames exceeds scan budget")
         if not 0 < self.min_span_fraction < 1 or not 0 < self.min_persistence <= 1:
             raise ValueError("span and persistence fractions must be in (0, 1]")
+        if not 0 < self.min_gradient < 1 or not 0 < self.edge_quantile < 1:
+            raise ValueError("gradient and quantile must be in (0, 1)")
 
 
 def _read(path: Path):
@@ -61,7 +65,7 @@ def _gray(rgb):
     return np.asarray(rgb, dtype=float) @ np.array([0.299, 0.587, 0.114]) / 255
 
 
-def _edges(rgb):
+def _edges(rgb, config, support_mask):
     gray = _gray(rgb)
     smooth = ndimage.gaussian_filter(gray, 1.0)
     gy, gx = np.gradient(smooth)
@@ -71,8 +75,14 @@ def _edges(rgb):
     dy = gy / np.maximum(magnitude, 1e-12)
     ahead = ndimage.map_coordinates(magnitude, [y + dy, x + dx], order=1)
     behind = ndimage.map_coordinates(magnitude, [y - dy, x - dx], order=1)
-    threshold = max(0.015, float(np.quantile(magnitude, 0.90)))
+    support = np.ones(gray.shape, dtype=bool) if support_mask is None else support_mask
+    if not support.any():
+        return np.empty((0, 2), dtype=int), np.empty(0), np.empty(0)
+    threshold = max(
+        config.min_gradient, float(np.quantile(magnitude[support], config.edge_quantile))
+    )
     mask = (magnitude > threshold) & (magnitude >= ahead) & (magnitude > behind)
+    mask &= support
     mask[:4] = mask[-4:] = False
     mask[:, :4] = mask[:, -4:] = False
     yy, xx = np.nonzero(mask)
@@ -100,15 +110,21 @@ def _similar(a, b, tolerance):
     return bool(np.max(np.abs(da - db)) <= tolerance)
 
 
-def extract_edges(rgb: np.ndarray, config: ObservationConfig = ObservationConfig()):
+def extract_edges(
+    rgb: np.ndarray, config: ObservationConfig = ObservationConfig(), *, support_mask=None
+):
     """Return bounded raw-pixel proposals with unresolved world-axis labels."""
     if rgb.ndim != 3 or rgb.shape[2] != 3 or min(rgb.shape[:2]) < 32:
         raise ValueError("expected an RGB image of at least 32 x 32")
     if rgb.dtype != np.uint8:
         raise ValueError("expected uint8 RGB pixels")
+    if support_mask is not None and (
+        support_mask.shape != rgb.shape[:2] or support_mask.dtype != bool
+    ):
+        raise ValueError("support mask must be boolean at native image size")
     height, width = rgb.shape[:2]
     diagonal = float(np.hypot(width, height))
-    points, strength, angles = _edges(rgb)
+    points, strength, angles = _edges(rgb, config, support_mask)
     if len(points) < 40:
         return [], {"edge_pixels": len(points), "reason": "insufficient_contrast"}
     # Orientation-constrained Hough voting. Subsampling is spatially deterministic.

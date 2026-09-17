@@ -18,17 +18,32 @@ def main(argv=None):
         "frames", type=Path, help="one fixed camera; image filenames in time order"
     )
     parser.add_argument("--out", type=Path, required=True, help="new proposal JSON file")
+    parser.add_argument(
+        "--structure",
+        action="store_true",
+        help="add pinned surface teacher and conditional direction checks",
+    )
+    parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     args = parser.parse_args(argv)
     if args.out.exists():
         parser.error("output exists; use a new proposal path")
     report = observe_directory(args.frames, args.camera)
+    if args.structure:
+        from syncai_bev3d.structural_directions import add_direction_checks
+        from syncai_bev3d.structural_surfaces import SurfaceTeacher, enrich_surfaces
+
+        evidence_dir = args.out.with_suffix(".evidence")
+        if evidence_dir.exists():
+            parser.error("surface evidence exists; use a new proposal path")
+        report = enrich_surfaces(report, SurfaceTeacher(args.device), evidence_dir)
+        report = add_direction_checks(report, evidence_dir / "groups.freeze.json")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("x") as handle:
         json.dump(report, handle, indent=2, allow_nan=False)
         handle.write("\n")
     print(json.dumps(report["summary"]))
     print(
-        "Proposals only: world axes and physical identity unresolved; calibration_ready=false."
+        "Conditional proposals only; see direction checks and reasons; calibration_ready=false."
     )
     return 0
 

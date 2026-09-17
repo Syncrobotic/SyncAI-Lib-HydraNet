@@ -1,0 +1,188 @@
+{
+  "schema": 1,
+  "purpose": "familiar-store development regression, not blind acceptance",
+  "freeze": {
+    "base_commit": "14950590478fd1994fbcfd0435d06eb2c7ef2a00",
+    "source_boundary": "final grouping implementation frozen before replay of automatically generated surface evidence",
+    "files": {
+      "src/syncai_bev3d/structural_observations.py": "e21a2cb03d9b8c93f3142b5defafa522def147916cb6d18e273ce2c1a64d406e",
+      "src/syncai_bev3d/structural_surfaces.py": "2b40c50c1778fab4249c4498a7ec7edaccccbf15166ebd27f9c1b16b0806eb20",
+      "src/syncai_bev3d/structural_directions.py": "dc81486526aab1c19bcd89c7b3fe3f8e73598ebf7c9786056c4433e53b5de4f3",
+      "src/syncai_bev3d/structural_controls.py": "70729b57ededd4f7d3dc85b24224302de32f1dc0646d4116e7b0a3da4a40280b",
+      "src/syncai_bev3d/teachers/sam3.py": "fea953fd1c11372ddff32ba38e87cdcbbefbbaf28fc58a696c2decaabdf39196",
+      "src/syncai_hydranet/geometry/ground.py": "1b090013e58d2d50bde29e55be1d43240a47785f615e85210f07da2e9520aafa",
+      "tools/commissioning/structural_observe.py": "b5423b34190d3b11d5519dc47c8c678ee8aa6009c4509fa9d4e692b56bc21253"
+    },
+    "inputs": {
+      "Kaohsiung-cam04": "datasets/retail_objects_batch02/images/train/Kaohsiung-cam04__archive_20260816-025809_20260816-030312",
+      "Taichung-cam10": "datasets/retail_objects_columns_clean/images/train/Taichung-cam10",
+      "Tao-Hsin-cam03": "datasets/retail_objects_columns/images/train/Tao-Hsin-cam03"
+    },
+    "purpose": "development regression only, not unseen-store blind acceptance",
+    "parent_run": "runs/studioa_structure_autonomy_20260917_v1",
+    "parent_status_sha256": "c36abcc27e12bf7c441d73dbefd096a493179ada6cb513acf449ea7bd2ae600f",
+    "surface_reports": {
+      "Kaohsiung-cam04": "0c7bdbc66d02c8143c62af419c09972d0415558887edf01b53f7c662ed74d70d",
+      "Taichung-cam10": "a4fad4585743b91ccdab7e5b37a542837a4f2d88b20a7fa5523b5fbe7ab74fc4",
+      "Tao-Hsin-cam03": "d76a4269c8569faa97198bf8244bc2c0272b6ff0b6fd8fc1f17c0cce1f636986"
+    }
+  },
+  "results": {
+    "Kaohsiung-cam04": {
+      "input_frames": 6,
+      "scanned_frames": 6,
+      "selected_frames": 6,
+      "observations": 357,
+      "persistent_tracks": 25,
+      "ambiguous_tracks": 18,
+      "transient_tracks": 108,
+      "rejected_observations": 16,
+      "line_groups": 30,
+      "fitting_floor_groups": 5,
+      "resolved_ambiguous_tracks": 8,
+      "excluded_tracks": 9,
+      "status": "insufficient_evidence",
+      "direction_status": "insufficient_evidence",
+      "direction_checks_passed": false,
+      "direction_reasons": [
+        "each direction needs fitting lines and an independent held-out line"
+      ],
+      "weak_floor_candidates": 148,
+      "grouping_and_direction_seconds": 0.3298872131854296,
+      "report_sha256": "9fc9df44d50e4a0c379efed95baea46907cb39004322be5fa16d640967689316",
+      "axis_partition_counts": {
+        "vertical": {
+          "fitting": 8,
+          "held_out": 1
+        },
+        "floor_u": {
+          "fitting": 5,
+          "held_out": 3
+        },
+        "floor_v": {
+          "fitting": 11,
+          "held_out": 0
+        }
+      }
+    },
+    "Taichung-cam10": {
+      "input_frames": 12,
+      "scanned_frames": 12,
+      "selected_frames": 6,
+      "observations": 462,
+      "persistent_tracks": 37,
+      "ambiguous_tracks": 24,
+      "transient_tracks": 53,
+      "rejected_observations": 14,
+      "line_groups": 39,
+      "fitting_floor_groups": 8,
+      "resolved_ambiguous_tracks": 9,
+      "excluded_tracks": 18,
+      "status": "insufficient_evidence",
+      "direction_status": "insufficient_evidence",
+      "direction_checks_passed": false,
+      "direction_reasons": [
+        "each direction needs fitting lines and an independent held-out line"
+      ],
+      "weak_floor_candidates": 276,
+      "grouping_and_direction_seconds": 0.5310848639346659,
+      "report_sha256": "e823546befe97bd54ec4993ac09a2f3102dc73af735c38ff609c06f613b46792",
+      "axis_partition_counts": {
+        "vertical": {
+          "fitting": 12,
+          "held_out": 2
+        },
+        "floor_u": {
+          "fitting": 10,
+          "held_out": 0
+        },
+        "floor_v": {
+          "fitting": 9,
+          "held_out": 6
+        }
+      }
+    },
+    "Tao-Hsin-cam03": {
+      "input_frames": 12,
+      "scanned_frames": 12,
+      "selected_frames": 6,
+      "observations": 298,
+      "persistent_tracks": 30,
+      "ambiguous_tracks": 10,
+      "transient_tracks": 76,
+      "rejected_observations": 74,
+      "line_groups": 30,
+      "fitting_floor_groups": 2,
+      "resolved_ambiguous_tracks": 8,
+      "excluded_tracks": 2,
+      "status": "insufficient_evidence",
+      "direction_status": "insufficient_evidence",
+      "direction_checks_passed": false,
+      "direction_reasons": [
+        "fewer_than_four_fitting_floor_groups"
+      ],
+      "weak_floor_candidates": 90,
+      "grouping_and_direction_seconds": 0.3587965629994869,
+      "report_sha256": "dcec527aeaf613c4f04e872b26a06e6e9f12f5b17091c41d91f3854aa9f3e737",
+      "axis_partition_counts": {
+        "vertical": {
+          "fitting": 0,
+          "held_out": 0
+        },
+        "floor_u": {
+          "fitting": 0,
+          "held_out": 0
+        },
+        "floor_v": {
+          "fitting": 0,
+          "held_out": 0
+        }
+      }
+    }
+  },
+  "direction_checks_passed_cameras": 0,
+  "total_cameras": 3,
+  "deployment_ready": false,
+  "metric_scale_verified": false,
+  "visual_review": {
+    "frames": 18,
+    "method": "three six-frame contact sheets",
+    "findings": [
+      "more weak tile seams in Kaohsiung and Taichung",
+      "Tao-Hsin texture candidates are not confirmed structural seams",
+      "predicted masks are not geometry truth"
+    ]
+  },
+  "validation": {
+    "full_tests_passed": 4257,
+    "full_tests_skipped": 12,
+    "skip_reason": "CUDA unavailable",
+    "seconds": 149.85,
+    "log_sha256": "491ad051366e722fc3f419747499cc5f7fe114fe2bfb532d027127eef8764b62",
+    "ruff_check": "passed (repository)",
+    "ruff_format": "passed (repository)",
+    "ty_check": "passed (new and modified Python files)"
+  },
+  "compatibility_recheck": {
+    "change": "explicit axis=0 for argmin on a one-dimensional residual vector; pinned NumPy stub compatibility",
+    "before_implementation_sha256": "dc81486526aab1c19bcd89c7b3fe3f8e73598ebf7c9786056c4433e53b5de4f3",
+    "after_implementation_sha256": "9a7a21909494c79e0cee3d3a6c1cb7f01f3cc33b3414932bf926cbfd5723f904",
+    "results": {
+      "Kaohsiung-cam04": {
+        "groups_and_direction_values_identical": true,
+        "status": "insufficient_evidence"
+      },
+      "Taichung-cam10": {
+        "groups_and_direction_values_identical": true,
+        "status": "insufficient_evidence"
+      },
+      "Tao-Hsin-cam03": {
+        "groups_and_direction_values_identical": true,
+        "status": "insufficient_evidence"
+      }
+    },
+    "focused_tests_passed": 29,
+    "locked_src_type_diagnostics": 8,
+    "locked_src_type_baseline": 8
+  }
+}
