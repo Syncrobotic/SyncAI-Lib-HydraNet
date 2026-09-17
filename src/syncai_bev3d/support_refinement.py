@@ -144,6 +144,8 @@ def refine_scene_supports(camera, ev, root: Path, items, heading, factory, *, re
         return items
     source = root / ev.cf.plate_file if ev.cf.plate_file else None
     tops, _metadata = load_instances(path, source=source)
+    body_path = path.with_name("support_bodies.npz")
+    bodies = load_instances(body_path, source=source)[0] if body_path.exists() else []
     object_path = path.with_name("object_instances.npz")
     devices = load_instances(object_path, source=source)[0] if object_path.exists() else []
     output = list(items)
@@ -172,10 +174,31 @@ def refine_scene_supports(camera, ev, root: Path, items, heading, factory, *, re
         if not valid.any():
             continue
         oid = int(ids[valid][np.argmax(counts[valid])])
-        candidate, audit = refine_support(
-            mesh, heading, observation.mask, ev.objects == oid, ev.cf, factory
+        body = ev.objects == oid
+        body_source = {"kind": "candidate instance", "object_id": oid}
+        matches = []
+        for j, proposal in enumerate(bodies):
+            proposal_mask = _mask_at(proposal.mask, ev.objects.shape)
+            agreement = iou(body, proposal_mask)
+            top_coverage = float((target & proposal_mask).sum() / max(1, target.sum()))
+            if agreement >= 0.5 and top_coverage >= 0.5:
+                matches.append((agreement, j, proposal_mask, top_coverage))
+        if matches:
+            agreement, j, body, top_coverage = max(matches, key=lambda row: row[0])
+            body_source = {
+                "kind": "source-bound commissioning geometry proposal",
+                "observation_index": j,
+                "candidate_overlap_iou": agreement,
+                "top_coverage": top_coverage,
+            }
+        candidate, audit = refine_support(mesh, heading, observation.mask, body, ev.cf, factory)
+        audit["body_reference"] = body_source
+        audit.update(
+            mesh_index=index,
+            object_id=oid,
+            detector_score=observation.score,
+            top_observation_index=top_index,
         )
-        audit.update(mesh_index=index, object_id=oid, detector_score=observation.score)
         if audit["accepted"]:
             old_polygon = footprint(audit["before_parameters"])
             new_polygon = footprint(audit["after_parameters"])

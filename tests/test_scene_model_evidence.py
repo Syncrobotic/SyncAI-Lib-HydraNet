@@ -88,3 +88,30 @@ def test_offline_world_viewer_contains_the_exported_objects(tmp_path):
     assert "display_table_0" in recovered.graph.nodes_geometry
     np.testing.assert_allclose(recovered.bounds, scene.bounds)
     assert np.isfinite(recovered.camera_transform).all()
+
+
+def test_support_geometry_is_bound_to_the_source_image(tmp_path):
+    from PIL import Image
+
+    from syncai_bev3d.object_instances import ObjectInstance, save_instances
+    from syncai_hydranet.cli.scene_evidence import copy_support_tops
+
+    plate = tmp_path / "plate.png"
+    Image.new("RGB", (32, 24), "white").save(plate)
+    source, target = tmp_path / "original.npz", tmp_path / "candidate.npz"
+    mask = np.zeros((24, 32), bool)
+    mask[8:18, 6:26] = True
+    save_instances(
+        source,
+        [ObjectInstance("table_top", mask, 0.95, "table top")],
+        shape=mask.shape,
+        source=plate,
+        categories=["table_top"],
+    )
+    result = copy_support_tops(source, target, plate)
+    assert result["status"] == "retained" and result["observations"] == 1
+    assert source.read_bytes() == target.read_bytes()
+    Image.new("RGB", (32, 24), "black").save(plate)
+    with pytest.raises(ValueError, match="different plate"):
+        copy_support_tops(source, tmp_path / "foreign.npz", plate)
+    assert not (tmp_path / "foreign.npz").exists()

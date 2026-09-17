@@ -172,3 +172,39 @@ def test_triangle_gaps_are_not_filled_by_a_convex_hull(tmp_path):
     mask = raw_silhouette(np.concatenate([left, right]), [[0, 1, 2], [3, 4, 5]], cf)
     assert mask.any()
     assert not mask[:, 32].any()
+
+
+def test_support_audit_scores_final_vertices_not_the_fitter_claim(tmp_path):
+    from syncai_bev3d.meshes import Placement, place
+    from syncai_bev3d.object_instances import ObjectInstance, save_instances
+    from syncai_bev3d.scene_audit import audit_fixture_geometry
+    from syncai_bev3d.scene_mesh import counter
+
+    cf, folder = fixture(tmp_path)
+    mesh = place(counter(1.2, 0.8, 0.8), Placement(0, 4, 0))
+    vertices, faces = mesh
+    top_faces = faces[np.isclose(vertices[faces, 1], 0.8).all(1)]
+    # Frozen reference is unchanged when the exported geometry is displaced.
+    reference = raw_silhouette(vertices, top_faces, cf)
+    source = tmp_path / "plate.png"
+    Image.new("RGB", cf.image_size_px).save(source)
+    save_instances(
+        folder / "support_tops.npz",
+        [ObjectInstance("table_top", reference, 0.99, "frozen top")],
+        shape=reference.shape,
+        source=source,
+        categories=["table_top"],
+    )
+    report = [
+        {"mesh_index": 0, "top_observation_index": 0, "accepted": True, "after_top_iou": 1.0}
+    ]
+    baseline = audit_fixture_geometry(
+        tmp_path, "sample", cf, {"display_table_0": mesh}, report, tmp_path
+    )
+    displaced = (vertices + np.array([3, 0, 0]), faces)
+    wrong = audit_fixture_geometry(
+        tmp_path, "sample", cf, {"display_table_0": displaced}, report, tmp_path
+    )
+    a = baseline["support_checks"][0]["final_glb_top_hull"]["iou"]
+    b = wrong["support_checks"][0]["final_glb_top_hull"]["iou"]
+    assert a > 0.9 and b < 0.1

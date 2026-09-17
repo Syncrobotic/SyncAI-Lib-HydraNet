@@ -15,7 +15,7 @@ from PIL import Image
 from scipy import ndimage
 
 from syncai_bev3d.geometry_review import load_geometry_cache
-from syncai_bev3d.object_instances import ObjectInstance, save_instances
+from syncai_bev3d.object_instances import ObjectInstance, load_instances, save_instances
 from syncai_bev3d.scene_audit import capture_inputs
 from syncai_hydranet.data.studioa_review import digest, write_json
 from syncai_hydranet.data.studioa_supervision import CLASSES
@@ -79,6 +79,26 @@ def structural_instances(labels, confidence, proposals, *, threshold=0.5, min_pi
     return objects
 
 
+def copy_support_tops(source: Path, target: Path, plate: Path):
+    """Retain image-bound geometry observations, not old semantic/object IDs.
+
+    refine_scene_supports associates these pixel masks with the NEW instances by
+    overlap. Copying instances.npz instead would incorrectly retain old cluster IDs.
+    """
+    if not source.is_file():
+        return {"status": "missing", "source": str(source)}
+    tops, metadata = load_instances(source, source=plate)
+    shutil.copy2(source, target)
+    return {
+        "status": "retained",
+        "source": str(source),
+        "sha256": digest(source),
+        "plate_sha256": metadata["source_sha256"],
+        "observations": len(tops),
+        "association": "pixel overlap against candidate instances; no retained object IDs",
+    }
+
+
 def prepare_model_evidence(run: Path, root: Path, camera: str, target: Path, *, device="cpu"):
     """Freeze candidate inputs and run the student; leave commissioned inputs intact."""
     import torch
@@ -115,8 +135,8 @@ def prepare_model_evidence(run: Path, root: Path, camera: str, target: Path, *, 
     before = capture_inputs(root, camera)
     folder = target / f"runs/commission01/{camera}/masks"
     folder.mkdir(parents=True, exist_ok=False)
-    # Copy only source-bound camera/depth/plate/calibration. Do not smuggle teacher
-    # merchandise, support refinements or opening masks into a student candidate.
+    # Freeze camera/depth/plate/calibration. Source-bound tabletop observations are
+    # retained separately as geometry evidence, never as student semantic predictions.
     for relative in [
         cf_path.relative_to(root),
         plate.relative_to(root),
@@ -169,6 +189,23 @@ def prepare_model_evidence(run: Path, root: Path, camera: str, target: Path, *, 
             proposals = np.asarray(im.resize((width, height), Image.Resampling.NEAREST)).astype(
                 np.int32
             )
+    # Geometry proposals are classless and source-bound. Keep full body contours for
+    # support fitting; student confidence holes must not redefine a cabinet's outline.
+    save_instances(
+        folder / "support_bodies.npz",
+        [
+            ObjectInstance(
+                "fixture_body",
+                proposals == oid,
+                1.0,
+                "commissioning geometry proposal; not student semantic evidence",
+            )
+            for oid in np.unique(proposals[proposals > 0])
+        ],
+        shape=proposals.shape,
+        source=target / plate.relative_to(root),
+        categories=["fixture_body"],
+    )
     objects = structural_instances(
         labels, confidence, proposals, min_pixels=max(40, int(width * height * 0.0002))
     )
@@ -207,6 +244,11 @@ def prepare_model_evidence(run: Path, root: Path, camera: str, target: Path, *, 
         source=target / plate.relative_to(root),
         categories=["laptop", "tablet", "phone", "chair"],
     )
+    support_evidence = copy_support_tops(
+        root / f"runs/commission01/{camera}/masks/support_tops.npz",
+        folder / "support_tops.npz",
+        plate,
+    )
     if capture_inputs(root, camera) != before:
         raise ValueError("commissioned evidence changed while preparing candidate")
     provenance = {
@@ -231,6 +273,11 @@ def prepare_model_evidence(run: Path, root: Path, camera: str, target: Path, *, 
         "absolute_metric_accuracy_verified": False,
         "floor_extent_source": (
             "retained commissioned walkable footprint; not student prediction"
+        ),
+        "support_top_evidence": support_evidence,
+        "support_body_evidence": (
+            "source-bound commissioning instance contours; classless geometry proposals; "
+            "matched spatially to new student instances"
         ),
         "adapter_sha256": digest(Path(__file__)),
         "classes": CLASSES,

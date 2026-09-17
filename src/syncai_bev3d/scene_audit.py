@@ -40,6 +40,7 @@ def capture_inputs(root: Path, camera: str, *, opening_controls: Path | None = N
         for name in (
             "object_instances.npz",
             "support_tops.npz",
+            "support_bodies.npz",
             "object_facing.json",
             "floor_fill.png",
         )
@@ -124,6 +125,86 @@ def mask_metrics(prediction, reference):
         "iou": intersection / union if union else None,
         "precision": intersection / predicted if predicted else None,
         "recall": intersection / target if target else None,
+    }
+
+
+def audit_fixture_geometry(root, camera, cf, nodes, support_rows, out):
+    """Project the final GLB, including fixture edges previously absent from the audit.
+
+    Top scores use the source-bound fitting observation, not independent truth.
+    The image remains required even when no support observation matched a fixture.
+    """
+    import trimesh
+
+    from syncai_bev3d.object_instances import load_instances
+    from syncai_bev3d.support_refinement import _hull
+
+    source = root / cf.plate_file if cf.plate_file else None
+    overlay = (
+        Image.open(source).convert("RGB").resize(cf.image_size_px)
+        if source is not None and source.is_file()
+        else None
+    )
+    draw = ImageDraw.Draw(overlay) if overlay is not None else None
+    fixture_nodes = []
+    for name, (vertices, faces) in nodes.items():
+        kind = name.rsplit("_", 1)[0]
+        if kind not in {"display_table", "display_shelf", "column"}:
+            continue
+        fixture_nodes.append(name)
+        if draw is not None:
+            colour = {
+                "display_table": (255, 50, 50),
+                "display_shelf": (0, 220, 255),
+                "column": (255, 220, 0),
+            }[kind]
+            mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+            edges = mesh.face_adjacency_edges[mesh.face_adjacency_angles > np.radians(20)]
+            for a, b in edges:
+                points = _project(
+                    np.linspace(vertices[a], vertices[b], 25), cf, cf.image_size_px[::-1]
+                )
+                if points is not None and np.isfinite(points).all():
+                    draw.line(list(map(tuple, points)), fill=colour, width=1)
+    if overlay is not None:
+        overlay.save(out / "scene.fixtures.overlay.png")
+    top_path = root / f"runs/commission01/{camera}/masks/support_tops.npz"
+    tops = load_instances(top_path, source=source)[0] if top_path.is_file() else []
+    checks = []
+    for report in support_rows:
+        if "top_observation_index" not in report:
+            continue
+        name = f"display_table_{report['mesh_index']}"
+        if name not in nodes:
+            raise ValueError(f"support refers to missing final GLB node {name}")
+        vertices, faces = nodes[name]
+        top_faces = faces[np.isclose(vertices[faces, 1], vertices[:, 1].max()).all(1)]
+        predicted = raw_silhouette(vertices, top_faces, cf)
+        observed = np.asarray(
+            Image.fromarray(tops[report["top_observation_index"]].mask).resize(
+                cf.image_size_px, Image.Resampling.NEAREST
+            ),
+            bool,
+        )
+        hull = _hull(observed)
+        checks.append(
+            {
+                "mesh_node": name,
+                "top_observation_index": report["top_observation_index"],
+                "refinement_accepted": report["accepted"],
+                "final_glb_top_hull": mask_metrics(predicted, hull),
+                "final_glb_visible_top": mask_metrics(predicted, observed),
+            }
+        )
+        Image.fromarray(predicted.astype(np.uint8) * 255).save(
+            out / f"scene.{name}.top.projection.png"
+        )
+    return {
+        "stage": "final_glb_projected",
+        "mesh_nodes": fixture_nodes,
+        "support_checks": checks,
+        "reference_scope": "source-bound tabletop fit observations; not independent truth",
+        "independent_metric_accuracy_verified": False,
     }
 
 
@@ -359,6 +440,7 @@ def audit_export(
                 "Gate D IoU"
             ),
         },
+        "fixture_geometry": audit_fixture_geometry(root, camera, cf, nodes, support_rows, out),
         "glb_sha256": sha256(glb),
         "mesh_nodes": sorted(nodes),
     }

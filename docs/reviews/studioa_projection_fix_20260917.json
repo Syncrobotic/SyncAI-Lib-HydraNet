@@ -1,0 +1,133 @@
+{
+  "status": "focused_counter_projection_improved",
+  "scope": "Kaohsiung-cam04 display_table_4; whole scenes remain unaccepted",
+  "baseline": "runs/studioa_object_world_20260917_v2",
+  "output": "runs/studioa_projection_fix_20260917_v2",
+  "comparisons": [
+    {
+      "camera": "Kaohsiung-cam04",
+      "supports": [
+        {
+          "mesh_node": "display_table_4",
+          "refinement_accepted": true,
+          "reason": "visible top and body jointly refined",
+          "before_final_glb_top_iou": 0.4313922679714545,
+          "before_parameters": [
+            0.03836131672819065,
+            0.7713799942546247,
+            -0.6811586041660065,
+            0.8415015352418733,
+            1.793826816755465,
+            0.765849769115448
+          ],
+          "after_final_glb_top_iou": 0.8627188715953308,
+          "after_parameters": [
+            0.10609410274987263,
+            0.9734828886271604,
+            -0.87370509294327,
+            0.6898988895081494,
+            2.3581631889718224,
+            0.765849769115448
+          ]
+        }
+      ],
+      "glb_sha256": "5b2c2631e592a33adb6df6c0daf055ea97ddf5d448a397008556ef02d6286e04"
+    },
+    {
+      "camera": "Taichung-cam01",
+      "supports": [
+        {
+          "mesh_node": "display_table_1",
+          "refinement_accepted": false,
+          "reason": "insufficient joint improvement",
+          "before_final_glb_top_iou": 0.5300422784765714,
+          "after_final_glb_top_iou": 0.5300422784765714
+        },
+        {
+          "mesh_node": "display_table_2",
+          "refinement_accepted": true,
+          "reason": "visible top and body jointly refined",
+          "before_final_glb_top_iou": 0.3498248686514886,
+          "after_final_glb_top_iou": 0.78852875754687
+        },
+        {
+          "mesh_node": "display_table_6",
+          "refinement_accepted": false,
+          "reason": "insufficient joint improvement",
+          "before_final_glb_top_iou": 0.30244530244530243,
+          "after_final_glb_top_iou": 0.30244530244530243
+        },
+        {
+          "mesh_node": "display_table_9",
+          "refinement_accepted": false,
+          "reason": "insufficient joint improvement",
+          "before_final_glb_top_iou": 0.7509546033092914,
+          "after_final_glb_top_iou": 0.7509546033092914
+        },
+        {
+          "mesh_node": "display_table_10",
+          "refinement_accepted": true,
+          "reason": "visible top and body jointly refined",
+          "before_final_glb_top_iou": 0.26245290916701547,
+          "after_final_glb_top_iou": 0.777283950617284
+        }
+      ],
+      "glb_sha256": "c26feae3e17b3b663b873d8f3cc1abb5d2d67080fd5ef7c5a394cd5df7e797fa"
+    },
+    {
+      "camera": "Taichung-cam10",
+      "supports": [
+        {
+          "mesh_node": "display_table_2",
+          "refinement_accepted": false,
+          "reason": "tabletop already aligns; preserve existing geometry",
+          "before_final_glb_top_iou": 0.8132616282396018,
+          "after_final_glb_top_iou": 0.8132616282396018
+        },
+        {
+          "mesh_node": "display_table_8",
+          "refinement_accepted": false,
+          "reason": "insufficient joint improvement",
+          "before_final_glb_top_iou": 0.4066036756307756,
+          "after_final_glb_top_iou": 0.4066036756307756
+        }
+      ],
+      "glb_sha256": "b6e9f0b3d40d3954635ea752d7a75a3c709866c432f0231e5f2bdc30b5565424"
+    }
+  ],
+  "top_reference": "same source-bound AI tabletop convex hull, not independent accuracy",
+  "camera_scale": "unchanged; inherited, not independently surveyed",
+  "body_tradeoff": {
+    "before_iou": 0.6140267175572519,
+    "after_iou": 0.5299333186780978,
+    "interpretation": "visible-top fit prioritized within unchanged body/collision/device gates; body fit not fully solved"
+  },
+  "unresolved": [
+    "other Kaohsiung fixture poses and phantom column",
+    "Taichung-cam01 main counter still rejected",
+    "Taichung-cam10 long counter still rejected",
+    "Taichung-cam11 and Tao-Hsin-cam03 lack support-top observations; not rebuilt this pass",
+    "no whole-store acceptance or independent dimensions"
+  ],
+  "validation": {
+    "pytest_passed": 4214,
+    "pytest_skipped": 12,
+    "skip_reason": "CUDA unavailable",
+    "ruff": "passed",
+    "ty": "passed"
+  },
+  "visual_review": {
+    "reviewed": [
+      "Kaohsiung-cam04/scene.fixtures.overlay.png",
+      "Kaohsiung-cam04/scene.png",
+      "Taichung-cam01/scene.fixtures.overlay.png",
+      "Taichung-cam01/scene.png",
+      "Taichung-cam10/scene.fixtures.overlay.png",
+      "Taichung-cam10/scene.png",
+      "Kaohsiung-cam04.before.png",
+      "Kaohsiung-cam04.after.png"
+    ],
+    "status": "focused improvement; whole scenes remain unaccepted",
+    "residuals": "Kaohsiung right end and body mismatch; other fixtures and Taichung main counters unresolved"
+  }
+}

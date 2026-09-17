@@ -146,3 +146,33 @@ def test_candidate_that_loses_existing_device_is_rejected(tmp_path, monkeypatch)
     )
     assert result[0][0] is initial
     assert not report[0]["accepted"] and "device" in report[0]["reason"]
+
+
+def test_geometry_body_is_matched_by_pixels_after_student_ids_change(tmp_path):
+    ev, initial, truth, _top, dest, source = fixture_case(tmp_path)
+    full_body = observed(truth, ev.cf)
+    student_body = full_body.copy()
+    student_body[:, 390:415] = False  # confidence hole, not a hole in the cabinet
+    ev.objects = student_body.astype(int) * 47  # a newly assigned student ID
+    save_instances(
+        dest / "support_bodies.npz",
+        [ObjectInstance("fixture_body", full_body, 1.0, "source geometry")],
+        shape=full_body.shape,
+        source=source,
+        categories=["fixture_body"],
+    )
+    report = []
+    result = sr.refine_scene_supports(
+        "support",
+        ev,
+        tmp_path,
+        [(initial, "display_table", 255, True)],
+        0.5,
+        counter,
+        report=report,
+    )
+    assert report[0]["object_id"] == 47
+    assert report[0]["body_reference"]["kind"] == "source-bound commissioning geometry proposal"
+    assert report[0]["accepted"], report
+    assert report[0]["after_top_iou"] > 0.9 and report[0]["after_body_iou"] > 0.9
+    assert result[0][0] is not initial
