@@ -46,6 +46,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -431,7 +432,7 @@ def decide_structure(cl_masks, cl_votes, b03_maps, geo, lx, lz):
     while the same wall is intact on the 02:58 plate (0.0% dirty). One clean view is
     enough to prove what an immovable object is.
     """
-    decisions = []
+    decisions: list[dict[str, Any]] = []
     for k, m in enumerate(cl_masks):
         best = {"wall": 0.0, "column": 0.0, "table": 0.0, "shelf": 0.0}
         for concept, prompt, score in cl_votes[k]:

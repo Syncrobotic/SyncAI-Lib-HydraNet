@@ -54,7 +54,7 @@ TARGET="${1:-src/}"
 # by annotating.
 case "$TARGET" in
   scripts/|scripts) DEFAULT_BASELINE=14 ;;
-  tools/|tools)     DEFAULT_BASELINE=70 ;;
+  tools/|tools)     DEFAULT_BASELINE=67 ;;
   *)                DEFAULT_BASELINE=8 ;;
 esac
 BASELINE="${TY_BASELINE:-$DEFAULT_BASELINE}"
