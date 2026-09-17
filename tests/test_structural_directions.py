@@ -85,6 +85,74 @@ def test_bad_held_out_points_cannot_select_lens_or_change_fitted_camera():
     assert first["relative_camera_candidate"] == second["relative_camera_candidate"]
     assert not second["direction_checks_passed"]
     assert any("held-out" in reason for reason in second["reasons"])
+    row = next(g for g in second["groups"] if g["id"] == groups["groups"][0]["id"])
+    assert row["axis_support"]["status"] == "unsupported"
+    assert row["axis_support"]["resolved_axis"] is None
+
+
+@pytest.mark.parametrize("only_vertical_holdout", [True, False])
+def test_line_through_two_vanishing_points_cannot_claim_a_unique_direction(
+    only_vertical_holdout,
+):
+    groups = synthetic_groups()
+    original = infer_directions(groups)
+    rotation = GroundPlane(1, 0.5, -0.15).rotation
+    vps = []
+    for direction in ([0, 1, 0], [-math.sin(0.45), 0, math.cos(0.45)]):
+        ray = rotation @ direction
+        vps.append(np.array([720 * ray[0] + 480 * ray[2], 720 * ray[1] + 270 * ray[2], ray[2]]))
+    line = np.cross(*vps)
+    line /= np.linalg.norm(line[:2])
+    centre = np.array([480.0, 270.0])
+    centre -= (line[:2] @ centre + line[2]) * line[:2]
+    tangent = np.array([-line[1], line[0]])
+    ideal = centre + np.linspace(-60, 60, 12)[:, None] * tangent
+    raw = distort_points(ideal, -0.3, (480, 270), math.hypot(480, 270))
+    assert (raw >= 0).all() and (raw < [960, 540]).all()
+    # Leave this ambiguous line as the only nominal vertical holdout. Other
+    # clear held-out families and all fitting observations remain unchanged.
+    if only_vertical_holdout:
+        groups["groups"] = [
+            row
+            for row in groups["groups"]
+            if not (row["validation"] and row["id"].startswith("axis-0-"))
+        ]
+    groups["groups"].append(
+        {
+            "id": "two-directions",
+            "points_px": raw.tolist(),
+            "validation": True,
+            "state": "geometric_candidate",
+            "floor_hint": False,
+        }
+    )
+    result = infer_directions(seal(groups))
+    assert result["train_hypothesis"] == original["train_hypothesis"]
+    assert result["relative_camera_candidate"] == original["relative_camera_candidate"]
+    assert result["line_checks"]["line_checks_passed"]
+    assert result["direction_checks_passed"] is not only_vertical_holdout
+    if only_vertical_holdout:
+        assert (
+            "each direction needs uniquely supported fitting and held-out lines"
+            in result["reasons"]
+        )
+        assert result["direction_coverage"]["vertical"]["held_out"] == 0
+    else:
+        assert result["direction_coverage"]["vertical"]["held_out"] == 3
+    assert not result["world_direction_assignments_complete"]
+    row = next(g for g in result["groups"] if g["id"] == "two-directions")
+    assert row["axis_support"]["status"] == "ambiguous"
+    assert row["axis_support"]["resolved_axis"] is None
+
+
+def test_fitting_floor_conflict_is_checked_before_hypothesis_selection():
+    groups = synthetic_groups()
+    groups["groups"][1]["floor_hint"] = True  # Known synthetic vertical, in fitting side.
+    result = infer_directions(seal(groups))
+    assert result["semantic_hypotheses_rejected"] > 0
+    assert not result["direction_checks_passed"]
+    floor_ids = {g["id"] for g in groups["groups"] if g["floor_hint"] and not g["validation"]}
+    assert not any(g["axis"] == "vertical" and g["id"] in floor_ids for g in result["groups"])
 
 
 def test_no_floor_evidence_cannot_be_renamed_into_world_directions():

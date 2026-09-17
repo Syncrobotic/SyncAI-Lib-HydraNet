@@ -256,6 +256,28 @@ def _floor_vps(points, floor, radius, limit):
     return candidates[:12]
 
 
+def _axis_support(errors, floor_hint, limit):
+    """Distinguish nearest-axis guesses from uniquely supported directions."""
+    compatible = [AXES[i] for i, error in enumerate(errors) if error <= limit]
+    if not compatible:
+        status = "unsupported"
+    elif len(compatible) > 1:
+        status = "ambiguous"
+    elif floor_hint and compatible == ["vertical"]:
+        status = "semantic_conflict"
+    else:
+        status = "supported"
+    return {
+        "status": status,
+        "compatible_axes": compatible,
+        "resolved_axis": compatible[0] if status == "supported" else None,
+        "errors_px": {
+            axis: float(error) if math.isfinite(error) else None
+            for axis, error in zip(AXES, errors, strict=True)
+        },
+    }
+
+
 def infer_directions(frozen: dict):
     """Select lens/axes on fitting groups ONLY, then test every held-out group.
 
@@ -277,6 +299,9 @@ def infer_directions(frozen: dict):
         "groups_sha256": digest,
         "status": "insufficient_evidence",
         "direction_checks_passed": False,
+        "world_direction_assignments_complete": False,
+        "axis_label_policy": "axis_is_nominal; use_axis_support_for_unique_direction",
+        "semantic_hypotheses_rejected": 0,
         "deployment_ready": False,
         "scale_status": "unknown",
         "groups": [],
@@ -329,8 +354,21 @@ def infer_directions(frozen: dict):
             errors = np.stack([_vp_errors(points, vp, radius) for vp in vps], axis=1)
             assignments = errors.argmin(axis=1)
             minima = errors.min(axis=1)
+            # A predicted floor direction cannot support the vertical family.
+            # Apply this train-only constraint before choosing a hypothesis,
+            # rather than selecting a contradictory winner and rejecting later.
+            if np.any(floor & (assignments == 0)):
+                result["semantic_hypotheses_rejected"] += 1
+                continue
+            unique = np.sum(errors <= limit, axis=1) == 1
             if any(
-                np.sum((assignments == axis) & (minima <= limit)) < (3 if axis == 0 else 2)
+                np.sum(
+                    (assignments == axis)
+                    & unique
+                    & (minima <= limit)
+                    & (~floor if axis == 0 else floor)
+                )
+                < (3 if axis == 0 else 2)
                 for axis in range(3)
             ):
                 continue
@@ -374,6 +412,8 @@ def infer_directions(frozen: dict):
                 "axis": axis,
                 "validation": row["validation"],
                 "hypothesis_error_px": float(errors.min()),
+                "axis_support": _axis_support(errors, row["floor_hint"], limit),
+                "axis_support_basis": "hypothesis_ideal_line_px",
             }
         )
         # No held-out line is removed for having a large error or a wrong semantic hint.
@@ -409,11 +449,44 @@ def infer_directions(frozen: dict):
     checks["baseline_scope"] = "train_only_direction_seed; not a commissioned camera"
     result["line_checks"] = checks
     result["semantic_axis_conflicts"] = semantic_conflicts
-    result["direction_checks_passed"] = checks["line_checks_passed"] and not semantic_conflicts
+    scores = {row["id"]: row for row in checks["line_scores"]}
+    source_rows = {row["id"]: row for row in rows}
+    coverage = {axis: {"fitting": 0, "held_out": 0} for axis in AXES}
+    for row in result["groups"]:
+        source = source_rows[row["id"]]
+        errors_by_axis = scores[row["id"]]["direction_diagnostic"]["axis_max_raw_px"]
+        errors = [
+            errors_by_axis[axis] if errors_by_axis[axis] is not None else math.inf
+            for axis in AXES
+        ]
+        row["axis_support"] = _axis_support(errors, source["floor_hint"], limit)
+        row["axis_support_basis"] = "refined_raw_curve_px"
+        resolved = row["axis_support"]["resolved_axis"]
+        if resolved == row["axis"] and (
+            row["validation"] or resolved == "vertical" or source["floor_hint"]
+        ):
+            coverage[resolved]["held_out" if row["validation"] else "fitting"] += 1
+    result["direction_coverage"] = coverage
+    coverage_passed = all(
+        counts["fitting"] >= (3 if axis == "vertical" else 2) and counts["held_out"] >= 1
+        for axis, counts in coverage.items()
+    )
+    result["world_direction_assignments_complete"] = all(
+        row["axis_support"]["status"] == "supported" for row in result["groups"]
+    )
+    result["direction_checks_passed"] = (
+        checks["line_checks_passed"] and not semantic_conflicts and coverage_passed
+    )
     result["status"] = (
         "conditional_candidate" if result["direction_checks_passed"] else "rejected"
     )
-    result["reasons"] = checks["reasons"] + (
-        ["floor_semantics_conflict_with_vertical_axis"] if semantic_conflicts else []
+    result["reasons"] = (
+        checks["reasons"]
+        + (["floor_semantics_conflict_with_vertical_axis"] if semantic_conflicts else [])
+        + (
+            ["each direction needs uniquely supported fitting and held-out lines"]
+            if not coverage_passed
+            else []
+        )
     )
     return result

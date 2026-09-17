@@ -1,0 +1,476 @@
+{
+  "elapsed_seconds": 5.182436943054199,
+  "manifest": {
+    "base_commit": "8fd26992326ecc9683fbe75a9d1ee18f9b5bc8a2",
+    "source_boundary": "working-tree direction support correction frozen before development replay",
+    "sources": {
+      "src/syncai_bev3d/structural_controls.py": "55d54a8a82b5349448952edcb458655180bbf599caa70b1e8f1b3ac9e0fcb830",
+      "src/syncai_bev3d/structural_directions.py": "4ec834e9f25b03c4eae9c9e8b5d192e2e02fd005d8aabb1e304599abbbf5655d"
+    },
+    "cases": {
+      "Kaohsiung-cam04": {
+        "ledger": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_structural_retry_20260917_v1/Kaohsiung-cam04/ledger.final.json",
+        "sha256": "417e9365bc0ebcedffc246636b127501c44bcaa94ca3d03a746b8b393dabf1da"
+      },
+      "Taichung-cam10": {
+        "ledger": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_structural_retry_20260917_v1/Taichung-cam10/ledger.final.json",
+        "sha256": "9123960d02cbeacef7f3dd72a9e35af5fd5e5df6131b33dab0d81c1f19761ce3"
+      },
+      "Tao-Hsin-cam03": {
+        "ledger": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_structural_retry_20260917_v1/Tao-Hsin-cam03/ledger.final.json",
+        "sha256": "076aa4d06f3c7fa9fd69b36095b3b98953661105011a29fa2fef1c7b89f5e7bf"
+      }
+    }
+  },
+  "freeze_sha256": "89a705b422d9ed837630921edcb8475a945f8fe9a1b5f84198c642d3cdb39234",
+  "cases": {
+    "Kaohsiung-cam04": {
+      "status": "rejected",
+      "reasons": [
+        "held-out structural lines exceed the raw-pixel limit",
+        "fitting structural lines exceed the raw-pixel limit"
+      ],
+      "direction_checks_passed": false,
+      "world_direction_assignments_complete": false,
+      "semantic_hypotheses_rejected": 30,
+      "direction_coverage": {
+        "vertical": {
+          "fitting": 9,
+          "held_out": 2
+        },
+        "floor_u": {
+          "fitting": 2,
+          "held_out": 2
+        },
+        "floor_v": {
+          "fitting": 2,
+          "held_out": 1
+        }
+      },
+      "axis_support_counts": {
+        "supported": 29,
+        "unsupported": 9
+      },
+      "unresolved_groups": [
+        {
+          "id": "line-da9b8b51b110",
+          "axis": "floor_u",
+          "validation": false,
+          "hypothesis_error_px": 17.555342204524273,
+          "axis_support": {
+            "status": "unsupported",
+            "compatible_axes": [],
+            "resolved_axis": null,
+            "errors_px": {
+              "vertical": 15.073623737149763,
+              "floor_u": 14.75331650129573,
+              "floor_v": 256.3832254961344
+            }
+          },
+          "axis_support_basis": "refined_raw_curve_px"
+        },
+        {
+          "id": "line-2d41469fde3c",
+          "axis": "floor_v",
+          "validation": false,
+          "hypothesis_error_px": 20.588445585822594,
+          "axis_support": {
+            "status": "unsupported",
+            "compatible_axes": [],
+            "resolved_axis": null,
+            "errors_px": {
+              "vertical": 113.13149730720643,
+              "floor_u": 46.94082836941749,
+              "floor_v": 9.469053279108534
+            }
+          },
+          "axis_support_basis": "refined_raw_curve_px"
+        },
+        {
+          "id": "line-aa6eeb5a1c7a",
+          "axis": "floor_u",
+          "validation": true,
+          "hypothesis_error_px": 22.618655990248413,
+          "axis_support": {
+            "status": "unsupported",
+            "compatible_axes": [],
+            "resolved_axis": null,
+            "errors_px": {
+              "vertical": 85.13730335680934,
+              "floor_u": 16.872718791311875,
+              "floor_v": 75.93876913227994
+            }
+          },
+          "axis_support_basis": "refined_raw_curve_px"
+        },
+        {
+          "id": "line-0bc803a0b706",
+          "axis": "floor_u",
+          "validation": true,
+          "hypothesis_error_px": 48.356574644130795,
+          "axis_support": {
+            "status": "unsupported",
+            "compatible_axes": [],
+            "resolved_axis": null,
+            "errors_px": {
+              "vertical": 95.48244178496307,
+              "floor_u": 43.30705296958833,
+              "floor_v": 44.8152702021787
+            }
+          },
+          "axis_support_basis": "refined_raw_curve_px"
+        },
+        {
+          "id": "line-9bb925ae54dd",
+          "axis": "floor_u",
+          "validation": false,
+          "hypothesis_error_px": 6.227732234020675,
+          "axis_support": {
+            "status": "unsupported",
+            "compatible_axes": [],
+            "resolved_axis": null,
+            "errors_px": {
+              "vertical": 96.5215824144523,
+              "floor_u": 9.347827892898179,
+              "floor_v": 99.38899219505089
+            }
+          },
+          "axis_support_basis": "refined_raw_curve_px"
+        },
+        {
+          "id": "line-bbd2bc0b98bb",
+          "axis": "floor_u",
+          "validation": false,
+          "hypothesis_error_px": 5.836222434567009,
+          "axis_support": {
+            "status": "unsupported",
+            "compatible_axes": [],
+            "resolved_axis": null,
+            "errors_px": {
+              "vertical": 8.997192877800861,
+              "floor_u": 8.611420404133446,
+              "floor_v": 346.9260529768898
+            }
+          },
+          "axis_support_basis": "refined_raw_curve_px"
+        },
+        {
+          "id": "line-f83d019a97c5",
+          "axis": "floor_u",
+          "validation": false,
+          "hypothesis_error_px": 13.982596276487829,
+          "axis_support": {
+            "status": "unsupported",
+            "compatible_axes": [],
+            "resolved_axis": null,
+            "errors_px": {
+              "vertical": 11.284313552004779,
+              "floor_u": 11.413690547768027,
+              "floor_v": 201.98604861804066
+            }
+          },
+          "axis_support_basis": "refined_raw_curve_px"
+        },
+        {
+          "id": "line-0f2b50ca6a1c",
+          "axis": "floor_v",
+          "validation": true,
+          "hypothesis_error_px": 56.48378680205156,
+          "axis_support": {
+            "status": "unsupported",
+            "compatible_axes": [],
+            "resolved_axis": null,
+            "errors_px": {
+              "vertical": 114.7240825768652,
+              "floor_u": 54.78909902470202,
+              "floor_v": 49.31884211653146
+            }
+          },
+          "axis_support_basis": "refined_raw_curve_px"
+        },
+        {
+          "id": "line-eb5e6412a0ea",
+          "axis": "floor_v",
+          "validation": false,
+          "hypothesis_error_px": 46.002677884856595,
+          "axis_support": {
+            "status": "unsupported",
+            "compatible_axes": [],
+            "resolved_axis": null,
+            "errors_px": {
+              "vertical": 85.48356498997877,
+              "floor_u": 50.65354723671845,
+              "floor_v": 37.9446064401828
+            }
+          },
+          "axis_support_basis": "refined_raw_curve_px"
+        }
+      ],
+      "report_sha256": "a3a5761c503c6e0aa79fb44cbc7455861c9369b80ea382856c24c67886d2bd5b",
+      "validation_limit_px": 8.0,
+      "fitting": {
+        "count": 30,
+        "over_limit": 7,
+        "worst_max_raw_px": 37.9446064401828
+      },
+      "held_out": {
+        "count": 8,
+        "over_limit": 3,
+        "worst_max_raw_px": 49.31884211653146
+      }
+    },
+    "Taichung-cam10": {
+      "status": "rejected",
+      "reasons": [
+        "held-out structural lines exceed the raw-pixel limit",
+        "fitting structural lines exceed the raw-pixel limit",
+        "each direction needs uniquely supported fitting and held-out lines"
+      ],
+      "direction_checks_passed": false,
+      "world_direction_assignments_complete": false,
+      "semantic_hypotheses_rejected": 37,
+      "direction_coverage": {
+        "vertical": {
+          "fitting": 12,
+          "held_out": 3
+        },
+        "floor_u": {
+          "fitting": 8,
+          "held_out": 0
+        },
+        "floor_v": {
+          "fitting": 8,
+          "held_out": 7
+        }
+      },
+      "axis_support_counts": {
+        "supported": 51,
+        "ambiguous": 2,
+        "unsupported": 5
+      },
+      "unresolved_groups": [
+        {
+          "id": "line-d50e112ef2f8",
+          "axis": "vertical",
+          "validation": false,
+          "hypothesis_error_px": 1.9593879804268266,
+          "axis_support": {
+            "status": "ambiguous",
+            "compatible_axes": [
+              "vertical",
+              "floor_v"
+            ],
+            "resolved_axis": null,
+            "errors_px": {
+              "vertical": 2.1892409184285326,
+              "floor_u": 168.999204350998,
+              "floor_v": 3.8501580938662268
+            }
+          },
+          "axis_support_basis": "refined_raw_curve_px"
+        },
+        {
+          "id": "line-73784772762a",
+          "axis": "floor_v",
+          "validation": false,
+          "hypothesis_error_px": 13.353376336862333,
+          "axis_support": {
+            "status": "unsupported",
+            "compatible_axes": [],
+            "resolved_axis": null,
+            "errors_px": {
+              "vertical": 64.08552049443011,
+              "floor_u": 81.49892496054792,
+              "floor_v": 9.325114026945924
+            }
+          },
+          "axis_support_basis": "refined_raw_curve_px"
+        },
+        {
+          "id": "line-4bc6270c80df",
+          "axis": "vertical",
+          "validation": false,
+          "hypothesis_error_px": 4.626874447993102,
+          "axis_support": {
+            "status": "ambiguous",
+            "compatible_axes": [
+              "vertical",
+              "floor_v"
+            ],
+            "resolved_axis": null,
+            "errors_px": {
+              "vertical": 4.645811118255263,
+              "floor_u": 85.99969361018546,
+              "floor_v": 7.513029857197239
+            }
+          },
+          "axis_support_basis": "refined_raw_curve_px"
+        },
+        {
+          "id": "line-673c17af06fe",
+          "axis": "vertical",
+          "validation": false,
+          "hypothesis_error_px": 8.404469205038636,
+          "axis_support": {
+            "status": "unsupported",
+            "compatible_axes": [],
+            "resolved_axis": null,
+            "errors_px": {
+              "vertical": 9.021289239739067,
+              "floor_u": 189.18172325639273,
+              "floor_v": 134.08859950365246
+            }
+          },
+          "axis_support_basis": "refined_raw_curve_px"
+        },
+        {
+          "id": "line-98562cff5dc2",
+          "axis": "floor_u",
+          "validation": false,
+          "hypothesis_error_px": 22.9804152375919,
+          "axis_support": {
+            "status": "unsupported",
+            "compatible_axes": [],
+            "resolved_axis": null,
+            "errors_px": {
+              "vertical": 184.25429010116585,
+              "floor_u": 11.772759245077932,
+              "floor_v": 231.47091022762788
+            }
+          },
+          "axis_support_basis": "refined_raw_curve_px"
+        },
+        {
+          "id": "line-48ff8909174a",
+          "axis": "vertical",
+          "validation": false,
+          "hypothesis_error_px": 27.856815572435632,
+          "axis_support": {
+            "status": "unsupported",
+            "compatible_axes": [],
+            "resolved_axis": null,
+            "errors_px": {
+              "vertical": 22.98483448646798,
+              "floor_u": 91.75418950206648,
+              "floor_v": 46.9870978405765
+            }
+          },
+          "axis_support_basis": "refined_raw_curve_px"
+        },
+        {
+          "id": "line-f34d03b11975",
+          "axis": "floor_u",
+          "validation": true,
+          "hypothesis_error_px": 10.085329015092132,
+          "axis_support": {
+            "status": "unsupported",
+            "compatible_axes": [],
+            "resolved_axis": null,
+            "errors_px": {
+              "vertical": 210.44803185875523,
+              "floor_u": 10.311749284627231,
+              "floor_v": 210.42210765117542
+            }
+          },
+          "axis_support_basis": "refined_raw_curve_px"
+        }
+      ],
+      "report_sha256": "e92d6c36006dbf537a8513e5b19c04c09b189ec3121500264896e98cf5129b82",
+      "validation_limit_px": 8.0,
+      "fitting": {
+        "count": 47,
+        "over_limit": 4,
+        "worst_max_raw_px": 22.98483448646798
+      },
+      "held_out": {
+        "count": 11,
+        "over_limit": 1,
+        "worst_max_raw_px": 10.311749284627231
+      }
+    },
+    "Tao-Hsin-cam03": {
+      "status": "insufficient_evidence",
+      "reasons": [
+        "fewer_than_four_fitting_floor_groups"
+      ],
+      "direction_checks_passed": false,
+      "world_direction_assignments_complete": false,
+      "semantic_hypotheses_rejected": 0,
+      "axis_support_counts": {},
+      "unresolved_groups": [],
+      "report_sha256": "7fd85ce9cf14321d856697d2d52793c79456fc484831f2e45ea1b6c9b590c53e"
+    }
+  },
+  "scope": "same development ledgers, no new observations or repartitioning; not blind new-store validation",
+  "calibration_ready": false,
+  "deployment_ready": false,
+  "summary_sha256": "f3d1aa333bde749be92ae9eebe46e5f86a0d7d35450a714cf9da58c60f180333",
+  "counterexample": {
+    "before_direction_checks_passed": true,
+    "before_line_checks_passed": true,
+    "after_direction_checks_passed": false,
+    "after_line_checks_passed": true,
+    "after_coverage": {
+      "vertical": {
+        "fitting": 8,
+        "held_out": 0
+      },
+      "floor_u": {
+        "fitting": 9,
+        "held_out": 3
+      },
+      "floor_v": {
+        "fitting": 8,
+        "held_out": 3
+      }
+    },
+    "ambiguous_line": {
+      "id": "two-directions",
+      "axis": "vertical",
+      "validation": true,
+      "hypothesis_error_px": 0.0002822682865511853,
+      "axis_support": {
+        "status": "ambiguous",
+        "compatible_axes": [
+          "vertical",
+          "floor_v"
+        ],
+        "resolved_axis": null,
+        "errors_px": {
+          "vertical": 4.034575057366313e-06,
+          "floor_u": 55.35223131622496,
+          "floor_v": 4.034575057366313e-06
+        }
+      },
+      "axis_support_basis": "refined_raw_curve_px"
+    },
+    "groups_sha256": "4973657175f137ec8ba7327d61e3d4452adeda764f8bb6137253d6a6674c7927",
+    "old_source_sha256": "9a7a21909494c79e0cee3d3a6c1cb7f01f3cc33b3414932bf926cbfd5723f904"
+  },
+  "regression_checks": {
+    "Kaohsiung-cam04": {
+      "train_hypothesis_unchanged": true,
+      "camera_candidate_unchanged": true
+    },
+    "Taichung-cam10": {
+      "train_hypothesis_unchanged": true,
+      "camera_candidate_unchanged": true
+    },
+    "Tao-Hsin-cam03": {
+      "train_hypothesis_unchanged": true,
+      "camera_candidate_unchanged": true
+    }
+  },
+  "validation": {
+    "pytest_passed": 4293,
+    "pytest_skipped": 12,
+    "skip_reason": "CUDA unavailable",
+    "pytest_seconds": 156.38,
+    "pytest_log_sha256": "20e6b9cbe338c26ab049b63c414ff3bdfbc0dbf92c090c600a73342c4b3718e8",
+    "focused_tests_passed": 42,
+    "src_type_diagnostics": 8,
+    "src_type_baseline": 8,
+    "ruff_check": "passed",
+    "ruff_format": "passed"
+  }
+}
