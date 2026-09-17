@@ -11,7 +11,11 @@ from PIL import Image
 
 from syncai_bev3d.opening_controls import source_identity
 from syncai_bev3d.render_provenance import sha256
-from syncai_bev3d.structural_controls import load_structural_controls, refine_structural_camera
+from syncai_bev3d.structural_controls import (
+    _direction_diagnostic,
+    load_structural_controls,
+    refine_structural_camera,
+)
 from syncai_hydranet.geometry.camera_json import CameraFile, Lens
 from syncai_hydranet.geometry.ground import Camera, GroundPlane, distort_points
 
@@ -87,6 +91,50 @@ def test_corrupt_holdout_cannot_change_fit_or_select_a_start():
     assert first == second
     assert not report["line_checks_passed"]
     assert any("held-out" in r for r in report["reasons"])
+
+
+def test_repeating_a_fitting_lines_samples_cannot_multiply_its_vote():
+    _, current, controls = example()
+    # A conflicting observation makes density-dependent weighting observable.
+    controls["lines"][0]["points_px"][2][0] += 8
+    _, original = refine_structural_camera(current, controls)
+    repeated = copy.deepcopy(controls)
+    repeated["lines"][0]["points_px"] = np.repeat(
+        repeated["lines"][0]["points_px"], 7, axis=0
+    ).tolist()
+    _, result = refine_structural_camera(current, repeated)
+    assert result["parameters"] == pytest.approx(original["parameters"], abs=1e-5)
+    assert result["line_checks_passed"] == original["line_checks_passed"]
+
+
+def test_diagnostic_distinguishes_wrong_axis_from_curve_mismatch_without_refitting():
+    truth, _, controls = example()
+    params = np.array([math.log(720), 0.5, -0.15, 0.45, -0.3])
+    before = params.copy()
+    raw = np.asarray(controls["lines"][0]["points_px"])
+    wrong_axis = _direction_diagnostic(raw, truth, params, "floor_u", 4)
+    assert wrong_axis["axis_max_raw_px"]["floor_u"] > 4
+    assert wrong_axis["axes_within_limit"] == ["vertical"]
+    assert wrong_axis["tls_curve_max_raw_px"] < 0.01
+    raw[2, 0] += 40
+    bent = _direction_diagnostic(raw, truth, params, "vertical", 4)
+    assert bent["tls_curve_max_raw_px"] > 4
+    assert not bent["axes_within_limit"]
+    np.testing.assert_array_equal(params, before)
+
+
+def test_unscoreable_alternative_axis_is_reported_without_breaking_diagnostics():
+    truth, _, _ = example()
+    params = np.array([math.log(720), 0.5, -0.15, 0.45, 0])
+    vertical = truth.plane.rotation @ [0, 1, 0]
+    vp = 720 * vertical[:2] / vertical[2] + [480, 270]
+    # A floor-direction line centred exactly on the vertical VP: its alternative
+    # vertical line is undefined, but the assigned floor direction is scoreable.
+    raw = vp + np.array([[-30, 0], [0, 0], [30, 0]])
+    result = _direction_diagnostic(raw, truth, params, "floor_u", 4)
+    assert result["axis_max_raw_px"]["vertical"] is None
+    assert "vertical" in result["unavailable_axes"]
+    assert result["axis_max_raw_px"]["floor_u"] is not None
 
 
 @pytest.mark.parametrize("problem", ["axis", "holdout", "size", "nan", "duplicate", "short"])

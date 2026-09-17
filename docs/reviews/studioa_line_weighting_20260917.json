@@ -1,0 +1,378 @@
+{
+  "elapsed_seconds": 5.445430755615234,
+  "cases": {
+    "Kaohsiung-cam04": {
+      "status": "rejected",
+      "reasons": [
+        "held-out structural lines exceed the raw-pixel limit",
+        "fitting structural lines exceed the raw-pixel limit"
+      ],
+      "direction_checks_passed": false,
+      "limit_px": 8.0,
+      "fitting": {
+        "count": 30,
+        "over_limit": 7,
+        "worst_max_raw_px": 37.9446064401828
+      },
+      "held_out": {
+        "count": 8,
+        "over_limit": 3,
+        "worst_max_raw_px": 49.31884211653146
+      },
+      "diagnostic_counts": {
+        "tls_curve_over_limit": 1,
+        "no_axis_within_limit": 9,
+        "assigned_axis_over_limit_but_alternative_within_limit": 1,
+        "multiple_axes_within_limit": 0
+      },
+      "failed_lines": [
+        {
+          "id": "line-da9b8b51b110",
+          "axis": "floor_u",
+          "validation": false,
+          "after_max_raw_px": 14.75331650129573,
+          "direction_diagnostic": {
+            "axis_max_raw_px": {
+              "vertical": 15.073623737149763,
+              "floor_u": 14.75331650129573,
+              "floor_v": 256.3832254961344
+            },
+            "axes_within_limit": [],
+            "unavailable_axes": {},
+            "tls_curve_max_raw_px": 8.563872684809606,
+            "scope": "fixed_fitted_camera; diagnostic_only; does_not_select_or_remove_lines"
+          }
+        },
+        {
+          "id": "line-2d41469fde3c",
+          "axis": "floor_v",
+          "validation": false,
+          "after_max_raw_px": 9.469053279108534,
+          "direction_diagnostic": {
+            "axis_max_raw_px": {
+              "vertical": 113.13149730720643,
+              "floor_u": 46.94082836941749,
+              "floor_v": 9.469053279108534
+            },
+            "axes_within_limit": [],
+            "unavailable_axes": {},
+            "tls_curve_max_raw_px": 4.158762315898982,
+            "scope": "fixed_fitted_camera; diagnostic_only; does_not_select_or_remove_lines"
+          }
+        },
+        {
+          "id": "line-aa6eeb5a1c7a",
+          "axis": "floor_u",
+          "validation": true,
+          "after_max_raw_px": 16.872718791311875,
+          "direction_diagnostic": {
+            "axis_max_raw_px": {
+              "vertical": 85.13730335680934,
+              "floor_u": 16.872718791311875,
+              "floor_v": 75.93876913227994
+            },
+            "axes_within_limit": [],
+            "unavailable_axes": {},
+            "tls_curve_max_raw_px": 2.03548913211381,
+            "scope": "fixed_fitted_camera; diagnostic_only; does_not_select_or_remove_lines"
+          }
+        },
+        {
+          "id": "line-0bc803a0b706",
+          "axis": "floor_u",
+          "validation": true,
+          "after_max_raw_px": 43.30705296958833,
+          "direction_diagnostic": {
+            "axis_max_raw_px": {
+              "vertical": 95.48244178496307,
+              "floor_u": 43.30705296958833,
+              "floor_v": 44.8152702021787
+            },
+            "axes_within_limit": [],
+            "unavailable_axes": {},
+            "tls_curve_max_raw_px": 3.6530836117327707,
+            "scope": "fixed_fitted_camera; diagnostic_only; does_not_select_or_remove_lines"
+          }
+        },
+        {
+          "id": "line-9bb925ae54dd",
+          "axis": "floor_u",
+          "validation": false,
+          "after_max_raw_px": 9.347827892898179,
+          "direction_diagnostic": {
+            "axis_max_raw_px": {
+              "vertical": 96.5215824144523,
+              "floor_u": 9.347827892898179,
+              "floor_v": 99.38899219505089
+            },
+            "axes_within_limit": [],
+            "unavailable_axes": {},
+            "tls_curve_max_raw_px": 3.2664269306790286,
+            "scope": "fixed_fitted_camera; diagnostic_only; does_not_select_or_remove_lines"
+          }
+        },
+        {
+          "id": "line-bbd2bc0b98bb",
+          "axis": "floor_u",
+          "validation": false,
+          "after_max_raw_px": 8.611420404133446,
+          "direction_diagnostic": {
+            "axis_max_raw_px": {
+              "vertical": 8.997192877800861,
+              "floor_u": 8.611420404133446,
+              "floor_v": 346.9260529768898
+            },
+            "axes_within_limit": [],
+            "unavailable_axes": {},
+            "tls_curve_max_raw_px": 6.79235938936844,
+            "scope": "fixed_fitted_camera; diagnostic_only; does_not_select_or_remove_lines"
+          }
+        },
+        {
+          "id": "line-f83d019a97c5",
+          "axis": "floor_u",
+          "validation": false,
+          "after_max_raw_px": 11.413690547768027,
+          "direction_diagnostic": {
+            "axis_max_raw_px": {
+              "vertical": 11.284313552004779,
+              "floor_u": 11.413690547768027,
+              "floor_v": 201.98604861804066
+            },
+            "axes_within_limit": [],
+            "unavailable_axes": {},
+            "tls_curve_max_raw_px": 6.095645153878555,
+            "scope": "fixed_fitted_camera; diagnostic_only; does_not_select_or_remove_lines"
+          }
+        },
+        {
+          "id": "line-0f2b50ca6a1c",
+          "axis": "floor_v",
+          "validation": true,
+          "after_max_raw_px": 49.31884211653146,
+          "direction_diagnostic": {
+            "axis_max_raw_px": {
+              "vertical": 114.7240825768652,
+              "floor_u": 54.78909902470202,
+              "floor_v": 49.31884211653146
+            },
+            "axes_within_limit": [],
+            "unavailable_axes": {},
+            "tls_curve_max_raw_px": 1.9936069979254998,
+            "scope": "fixed_fitted_camera; diagnostic_only; does_not_select_or_remove_lines"
+          }
+        },
+        {
+          "id": "line-7d8091775041",
+          "axis": "floor_u",
+          "validation": false,
+          "after_max_raw_px": 8.016829890934439,
+          "direction_diagnostic": {
+            "axis_max_raw_px": {
+              "vertical": 6.61755691631247,
+              "floor_u": 8.016829890934439,
+              "floor_v": 318.8322006376219
+            },
+            "axes_within_limit": [
+              "vertical"
+            ],
+            "unavailable_axes": {},
+            "tls_curve_max_raw_px": 6.863581358573724,
+            "scope": "fixed_fitted_camera; diagnostic_only; does_not_select_or_remove_lines"
+          }
+        },
+        {
+          "id": "line-eb5e6412a0ea",
+          "axis": "floor_v",
+          "validation": false,
+          "after_max_raw_px": 37.9446064401828,
+          "direction_diagnostic": {
+            "axis_max_raw_px": {
+              "vertical": 85.48356498997877,
+              "floor_u": 50.65354723671845,
+              "floor_v": 37.9446064401828
+            },
+            "axes_within_limit": [],
+            "unavailable_axes": {},
+            "tls_curve_max_raw_px": 2.4219729259085594,
+            "scope": "fixed_fitted_camera; diagnostic_only; does_not_select_or_remove_lines"
+          }
+        }
+      ]
+    },
+    "Taichung-cam10": {
+      "status": "rejected",
+      "reasons": [
+        "held-out structural lines exceed the raw-pixel limit",
+        "fitting structural lines exceed the raw-pixel limit"
+      ],
+      "direction_checks_passed": false,
+      "limit_px": 8.0,
+      "fitting": {
+        "count": 47,
+        "over_limit": 4,
+        "worst_max_raw_px": 22.98483448646798
+      },
+      "held_out": {
+        "count": 11,
+        "over_limit": 1,
+        "worst_max_raw_px": 10.311749284627231
+      },
+      "diagnostic_counts": {
+        "tls_curve_over_limit": 0,
+        "no_axis_within_limit": 5,
+        "assigned_axis_over_limit_but_alternative_within_limit": 0,
+        "multiple_axes_within_limit": 2
+      },
+      "failed_lines": [
+        {
+          "id": "line-73784772762a",
+          "axis": "floor_v",
+          "validation": false,
+          "after_max_raw_px": 9.325114026945924,
+          "direction_diagnostic": {
+            "axis_max_raw_px": {
+              "vertical": 64.08552049443011,
+              "floor_u": 81.49892496054792,
+              "floor_v": 9.325114026945924
+            },
+            "axes_within_limit": [],
+            "unavailable_axes": {},
+            "tls_curve_max_raw_px": 5.358803659610108,
+            "scope": "fixed_fitted_camera; diagnostic_only; does_not_select_or_remove_lines"
+          }
+        },
+        {
+          "id": "line-673c17af06fe",
+          "axis": "vertical",
+          "validation": false,
+          "after_max_raw_px": 9.021289239739067,
+          "direction_diagnostic": {
+            "axis_max_raw_px": {
+              "vertical": 9.021289239739067,
+              "floor_u": 189.18172325639273,
+              "floor_v": 134.08859950365246
+            },
+            "axes_within_limit": [],
+            "unavailable_axes": {},
+            "tls_curve_max_raw_px": 2.6275177616898002,
+            "scope": "fixed_fitted_camera; diagnostic_only; does_not_select_or_remove_lines"
+          }
+        },
+        {
+          "id": "line-98562cff5dc2",
+          "axis": "floor_u",
+          "validation": false,
+          "after_max_raw_px": 11.772759245077932,
+          "direction_diagnostic": {
+            "axis_max_raw_px": {
+              "vertical": 184.25429010116585,
+              "floor_u": 11.772759245077932,
+              "floor_v": 231.47091022762788
+            },
+            "axes_within_limit": [],
+            "unavailable_axes": {},
+            "tls_curve_max_raw_px": 3.4791538007073126,
+            "scope": "fixed_fitted_camera; diagnostic_only; does_not_select_or_remove_lines"
+          }
+        },
+        {
+          "id": "line-48ff8909174a",
+          "axis": "vertical",
+          "validation": false,
+          "after_max_raw_px": 22.98483448646798,
+          "direction_diagnostic": {
+            "axis_max_raw_px": {
+              "vertical": 22.98483448646798,
+              "floor_u": 91.75418950206648,
+              "floor_v": 46.9870978405765
+            },
+            "axes_within_limit": [],
+            "unavailable_axes": {},
+            "tls_curve_max_raw_px": 2.9866174977365683,
+            "scope": "fixed_fitted_camera; diagnostic_only; does_not_select_or_remove_lines"
+          }
+        },
+        {
+          "id": "line-f34d03b11975",
+          "axis": "floor_u",
+          "validation": true,
+          "after_max_raw_px": 10.311749284627231,
+          "direction_diagnostic": {
+            "axis_max_raw_px": {
+              "vertical": 210.44803185875523,
+              "floor_u": 10.311749284627231,
+              "floor_v": 210.42210765117542
+            },
+            "axes_within_limit": [],
+            "unavailable_axes": {},
+            "tls_curve_max_raw_px": 5.8879476072432615,
+            "scope": "fixed_fitted_camera; diagnostic_only; does_not_select_or_remove_lines"
+          }
+        }
+      ]
+    },
+    "Tao-Hsin-cam03": {
+      "status": "insufficient_evidence",
+      "reasons": [
+        "fewer_than_four_fitting_floor_groups"
+      ],
+      "direction_checks_passed": false
+    }
+  },
+  "freeze_sha256": "048d1d4c85ea2e616508de0e7b1e97ce389cd63b97590679a99339ca7eaae856",
+  "calibration_ready": false,
+  "deployment_ready": false,
+  "scope": "same frozen development ledgers, not new holdout acceptance; no observations or partitions modified",
+  "manifest": {
+    "base_commit": "18def37f2ccdd72ec0790b46e5d7c0ac9c2170fc",
+    "source_boundary": "working-tree correction frozen before replay; development regression only",
+    "sources": {
+      "src/syncai_bev3d/structural_controls.py": "55d54a8a82b5349448952edcb458655180bbf599caa70b1e8f1b3ac9e0fcb830",
+      "src/syncai_bev3d/structural_directions.py": "9a7a21909494c79e0cee3d3a6c1cb7f01f3cc33b3414932bf926cbfd5723f904"
+    },
+    "cases": {
+      "Kaohsiung-cam04": {
+        "ledger": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_structural_retry_20260917_v1/Kaohsiung-cam04/ledger.final.json",
+        "sha256": "417e9365bc0ebcedffc246636b127501c44bcaa94ca3d03a746b8b393dabf1da"
+      },
+      "Taichung-cam10": {
+        "ledger": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_structural_retry_20260917_v1/Taichung-cam10/ledger.final.json",
+        "sha256": "9123960d02cbeacef7f3dd72a9e35af5fd5e5df6131b33dab0d81c1f19761ce3"
+      },
+      "Tao-Hsin-cam03": {
+        "ledger": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_structural_retry_20260917_v1/Tao-Hsin-cam03/ledger.final.json",
+        "sha256": "076aa4d06f3c7fa9fd69b36095b3b98953661105011a29fa2fef1c7b89f5e7bf"
+      }
+    }
+  },
+  "summary_sha256": "6f7bb7e52db6680d2e22a74ab23d7aa2d40d6423c40ce5f1b57ca79e8c1e67f6",
+  "report_files": {
+    "Kaohsiung-cam04": {
+      "path": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_line_weighting_20260917_v1/Kaohsiung-cam04.json",
+      "sha256": "8e5bd82b73055f53d6c4cbdaa22ab0043b2f384dbd9cadcabfff78ec93b3de8d"
+    },
+    "Taichung-cam10": {
+      "path": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_line_weighting_20260917_v1/Taichung-cam10.json",
+      "sha256": "d0d3995c6921db62a4a6dfe0268626c5e5af7e18caa5cb8ecec066c7f69e0d4f"
+    },
+    "Tao-Hsin-cam03": {
+      "path": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_line_weighting_20260917_v1/Tao-Hsin-cam03.json",
+      "sha256": "b6af40d53ad402f88f0ee12ed2bd5b0fe7f3206085497293d5e8ca75fa6c1a88"
+    }
+  },
+  "regression_invariant": "duplicating all samples of one fitting line seven times must not change fitted parameters beyond 1e-5",
+  "gate_policy": "same 8 raw pixel threshold; diagnostics cannot change fit, assignments, partitions or acceptance",
+  "validation": {
+    "pytest_passed": 4290,
+    "pytest_skipped": 12,
+    "skip_reason": "CUDA unavailable",
+    "pytest_seconds": 151.35,
+    "pytest_log_sha256": "38227d9af8f404476af2979df3a3c178c188ac7849a0550b85b508500bafe6e7",
+    "focused_tests_passed": 39,
+    "src_type_diagnostics": 8,
+    "src_type_baseline": 8,
+    "ruff_check": "passed",
+    "ruff_format": "passed"
+  }
+}

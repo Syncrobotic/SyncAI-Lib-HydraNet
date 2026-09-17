@@ -78,6 +78,11 @@ def _fit_residual(raw, cf, params, axis):
 
 def _score(raw, cf, params, axis):
     ideal, line = _line(raw, cf, params, axis)
+    return _curve_score(raw, ideal, line, cf, params[4])
+
+
+def _curve_score(raw, ideal, line, cf, k1):
+    """Score a fixed ideal line in native pixels; never optimise camera parameters."""
     origin = -line[2] * line[:2]
     tangent = np.array([-line[1], line[0]])
     errors = []
@@ -86,14 +91,45 @@ def _score(raw, cf, params, axis):
 
         def squared_distance(offset, point=point):
             ideal_point = (origin + offset * tangent)[None]
-            predicted = distort_points(
-                ideal_point, params[4], cf.lens.centre_px, cf.lens.radius_px
-            )[0]
+            predicted = distort_points(ideal_point, k1, cf.lens.centre_px, cf.lens.radius_px)[0]
             return float(np.sum((predicted - point) ** 2))
 
         nearest = minimize_scalar(squared_distance, bounds=(t - 50, t + 50), method="bounded")
         errors.append(math.sqrt(nearest.fun))
     return errors
+
+
+def _direction_diagnostic(raw, cf, params, assigned_axis, limit):
+    """Post-fit explanation only; no line is removed, reassigned or refitted."""
+    ideal, _ = _line(raw, cf, params, assigned_axis)
+    centre = ideal.mean(axis=0)
+    _, _, vt = np.linalg.svd(ideal - centre, full_matrices=False)
+    normal = vt[-1]
+    free_line = np.r_[normal, -centre @ normal]
+    errors = {}
+    unavailable = {}
+    for axis in AXES:
+        try:
+            error = max(_score(raw, cf, params, axis))
+            errors[axis] = error if math.isfinite(error) else None
+            if errors[axis] is None:
+                unavailable[axis] = "non-finite curve distance"
+        except ValueError as exc:
+            # An alternative VP may coincide with the line centre. Optional
+            # explanation must not make an otherwise scoreable fit fail.
+            errors[axis] = None
+            unavailable[axis] = str(exc)
+    return {
+        "axis_max_raw_px": errors,
+        "axes_within_limit": [
+            axis for axis in AXES if errors[axis] is not None and errors[axis] <= limit
+        ],
+        "unavailable_axes": unavailable,
+        # TLS minimises ideal squared error, not the exact maximum raw error.
+        # This is a diagnostic, not a certified lower bound or a new gate.
+        "tls_curve_max_raw_px": max(_curve_score(raw, ideal, free_line, cf, params[4])),
+        "scope": "fixed_fitted_camera; diagnostic_only; does_not_select_or_remove_lines",
+    }
 
 
 def refine_structural_camera(cf, controls, *, validation_limit_px=4.0):
@@ -142,6 +178,16 @@ def refine_structural_camera(cf, controls, *, validation_limit_px=4.0):
                 "each direction needs fitting lines and an independent held-out line"
             )
     train = [r for r in rows if not r["validation"]]
+    weights = np.concatenate(
+        [np.full(len(r["points_px"]), 1 / len(r["points_px"])) for r in train]
+    )
+
+    def equal_line_loss(z):
+        # Average robust point costs within each line, then sum over lines.
+        # Weight the loss and its derivatives, not the residual: scaling the
+        # residual would also change the physical 2 px robust transition.
+        root = np.sqrt(1 + z)
+        return np.array([2 * (root - 1), 1 / root, -0.5 / root**3]) * weights
 
     def residual(params):
         return np.concatenate(
@@ -160,7 +206,7 @@ def refine_structural_camera(cf, controls, *, validation_limit_px=4.0):
         initial = [math.log(focal), 0.45, -0.1, yaw, -0.2]
         fits.append(
             least_squares(
-                residual, initial, bounds=bounds, loss="soft_l1", f_scale=2, max_nfev=500
+                residual, initial, bounds=bounds, loss=equal_line_loss, f_scale=2, max_nfev=500
             )
         )
     fit = min(fits, key=lambda f: f.cost)  # Held-out lines never select the solution.
@@ -174,7 +220,11 @@ def refine_structural_camera(cf, controls, *, validation_limit_px=4.0):
         return residual(probe)
 
     old[3] = least_squares(
-        baseline_residual, [yaw], bounds=(-math.pi / 2, math.pi / 2), loss="soft_l1", f_scale=2
+        baseline_residual,
+        [yaw],
+        bounds=(-math.pi / 2, math.pi / 2),
+        loss=equal_line_loss,
+        f_scale=2,
     ).x[0]
     scores = []
     for row in rows:
@@ -190,6 +240,9 @@ def refine_structural_camera(cf, controls, *, validation_limit_px=4.0):
                 "after_raw_px": after,
                 "before_max_raw_px": max(before),
                 "after_max_raw_px": max(after),
+                "direction_diagnostic": _direction_diagnostic(
+                    raw, cf, params, row["axis"], validation_limit_px
+                ),
             }
         )
     singular = np.linalg.svd(
@@ -227,6 +280,7 @@ def refine_structural_camera(cf, controls, *, validation_limit_px=4.0):
         "floor_axis_deg": math.degrees(params[3]),
         "condition": condition,
         "line_scores": scores,
+        "fit_weighting": "sum_of_per_line_mean_soft_l1; f_scale=2_raw_px",
         "parameters": params.tolist(),
         "height_m_unchanged": cf.plane.height,
         "zones_removed": len(cf.zones),
