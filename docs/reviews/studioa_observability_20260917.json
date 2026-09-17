@@ -1,0 +1,305 @@
+{
+  "date": "2026-09-17",
+  "base_commit": "d15927cc90c198d9886e00ea56fc2b8a76e28349",
+  "scope": "development observability audit; not calibration, reconstruction or unseen-store acceptance",
+  "run_directory": "runs/studioa_observability_20260917_v1",
+  "artifacts_sha256": {
+    "worker.py": "36700e3eff4d3e79b7856af876aed75169035e5045e579e70949cdf85c524ed7",
+    "plan.freeze.json": "7e3f3db14cd1f42a4c01c2b99144798968dea527370a3a3e585149318402dce8",
+    "inventory.json": "8da1f2a72b7b7e256553d348f9e36335ef428fac2792cd5c971783f0336b5748",
+    "frames.json": "8dd4ee0b9b0095b18157feaf8c191f3af4469cd4a532ddb71edafac91c7dd2a4",
+    "temporal.json": "c369a3db629617070bc5e0ce7c553ee019bfebc1de8d663e0e16d269b373a1af",
+    "pairs.json": "849a225f12274ee1a8b94a24fa5d4f119ae5dcca4bc8d810e4103ac0b4dbfef7",
+    "summary.json": "4c4cbf56e61544649374c045405996954819885cd354cbbe909a3254957284d0",
+    "status.json": "8a1186aa988bf6ea763901e22cb0d643d17d5584de23ac3fe1b55e12ea815f63",
+    "gcs-root.txt": "0158b70316da861cb8a112de6b6124d8a13532db4223064b7260421c4ce1c301",
+    "gcs-prefixes.txt": "956eff359f435aaba92e4489173ef1ba4452842bdf301b3e4ed16a8dc22d540a",
+    "gcs-months.txt": "ecd7ca03d5efa81d0b420377e22223af6b5084c68296d64cb9ff829952efd0ff",
+    "gcs-days.txt": "14e45990d63fcb74ae6ccd2994e58a8396330f712556976733600c832a53e6bb",
+    "gcs-taichung-20260916.txt": "6cf336ade3379c9dbeadf19edfd64061645667760e723e87e29fed7536553996",
+    "gcs-object-descriptions.json": "746a0db8c1c3c6477c93a01b5797a366b8a2001d85150076db0a7e34663f56c2",
+    "service-journal.txt": "c7b2c72a3549711d341fd0ceece55390cf115b7aeef85e6c4e2fac70292b2db2"
+  },
+  "status": "completed",
+  "elapsed_seconds": 28.567403316497803,
+  "local_inventory": {
+    "stores": 3,
+    "cameras": 48,
+    "clips": 192,
+    "bytes": 3408001632,
+    "ffprobe_errors": 0,
+    "full_video_decode_verified": false,
+    "historical_roles": {
+      "back_of_house": 19,
+      "selling_floor": 23,
+      "dead": 6
+    },
+    "clip_resolutions": {
+      "1920x1080": 164,
+      "704x480": 26,
+      "352x240": 2
+    },
+    "decoded_frames": 46,
+    "decoded_resolutions": {
+      "704x480": 1,
+      "1920x1080": 44,
+      "352x240": 1
+    }
+  },
+  "gcs": {
+    "project": "syncrobotic-aisw",
+    "bucket": "gs://studioa",
+    "camera_prefixes": 96,
+    "store_name_prefixes": {
+      "kaohsiung": 16,
+      "shimen": 16,
+      "taichung": 16,
+      "taimao": 16,
+      "tauju": 16,
+      "yulungchen": 16
+    },
+    "physical_store_mapping_verified": false,
+    "media_downloaded": false,
+    "sampled_objects": [
+      {
+        "uri": "gs://studioa/taichung-4/2026/09/16/taichung-4_20260916_143004.mp4",
+        "generation": "1789540869674699",
+        "bytes": 19462380,
+        "custom_metadata": null
+      },
+      {
+        "uri": "gs://studioa/taichung-5/2026/09/16/taichung-5_20260916_143004.mp4",
+        "generation": "1789540839362392",
+        "bytes": 27563478,
+        "custom_metadata": null
+      },
+      {
+        "uri": "gs://studioa/taichung-6/2026/09/16/taichung-6_20260916_143004.mp4",
+        "generation": "1789540858029811",
+        "bytes": 21558484,
+        "custom_metadata": null
+      }
+    ],
+    "sampled_total_bytes": 68584342,
+    "clock_and_timezone_verified": false
+  },
+  "screening": {
+    "policy": {
+      "width": 960,
+      "sift_features": 3000,
+      "ratio": 0.75,
+      "temporal_distance_px": 3.0,
+      "ransac_px": 3.0,
+      "minimum_f_inliers": 12,
+      "minimum_hull_fraction": 0.02,
+      "minimum_grid_cells": 4,
+      "excluded_top_bottom_fraction": 0.1,
+      "scope": "screening_only; raw_distorted_images; failure_is_not_proof_of_no_overlap"
+    },
+    "plan_sha256": "7e3f3db14cd1f42a4c01c2b99144798968dea527370a3a3e585149318402dce8",
+    "cameras_screened": 23,
+    "pairs_screened": 253,
+    "cross_store_controls": 170,
+    "repeat_candidates": [],
+    "negative_control_repeat_candidates": 0,
+    "calibration_ready": false,
+    "deployment_ready": false,
+    "metric_scale_verified": false,
+    "limits": [
+      "historical camera roles only",
+      "camera clocks not independently synchronized",
+      "raw lens distortion not calibrated",
+      "stable repeated products or reflections may match incorrectly",
+      "no parallax or triangulation certification",
+      "unmatched pairs remain unknown, not proven disjoint"
+    ]
+  },
+  "same_store_pairs": 83,
+  "diagnostic_pairs": [
+    {
+      "a": "Kaohsiung-cam08",
+      "b": "Kaohsiung-cam11",
+      "cross_store_control": false,
+      "repeat_candidate": false,
+      "slots": [
+        {
+          "mutual_matches": 23,
+          "f_inliers": 18,
+          "h_inliers": 11,
+          "candidate": false,
+          "coverage_a": {
+            "hull_fraction": 0.03778130815747217,
+            "grid_cells": 3
+          },
+          "coverage_b": {
+            "hull_fraction": 0.1345204478207415,
+            "grid_cells": 6
+          }
+        },
+        {
+          "mutual_matches": 21,
+          "f_inliers": 15,
+          "h_inliers": 9,
+          "candidate": false,
+          "coverage_a": {
+            "hull_fraction": 0.0295334413701567,
+            "grid_cells": 3
+          },
+          "coverage_b": {
+            "hull_fraction": 0.10684129750977117,
+            "grid_cells": 5
+          }
+        }
+      ]
+    },
+    {
+      "a": "Taichung-cam04",
+      "b": "Taichung-cam05",
+      "cross_store_control": false,
+      "repeat_candidate": false,
+      "slots": [
+        {
+          "mutual_matches": 3,
+          "f_inliers": 0,
+          "h_inliers": 0,
+          "candidate": false
+        },
+        {
+          "mutual_matches": 5,
+          "f_inliers": 0,
+          "h_inliers": 0,
+          "candidate": false
+        }
+      ]
+    },
+    {
+      "a": "Taichung-cam04",
+      "b": "Taichung-cam06",
+      "cross_store_control": false,
+      "repeat_candidate": false,
+      "slots": [
+        {
+          "mutual_matches": 3,
+          "f_inliers": 0,
+          "h_inliers": 0,
+          "candidate": false
+        },
+        {
+          "mutual_matches": 1,
+          "f_inliers": 0,
+          "h_inliers": 0,
+          "candidate": false
+        }
+      ]
+    },
+    {
+      "a": "Taichung-cam05",
+      "b": "Taichung-cam06",
+      "cross_store_control": false,
+      "repeat_candidate": false,
+      "slots": [
+        {
+          "mutual_matches": 5,
+          "f_inliers": 0,
+          "h_inliers": 0,
+          "candidate": false
+        },
+        {
+          "mutual_matches": 3,
+          "f_inliers": 0,
+          "h_inliers": 0,
+          "candidate": false
+        }
+      ]
+    },
+    {
+      "a": "Taichung-cam07",
+      "b": "Taichung-cam11",
+      "cross_store_control": false,
+      "repeat_candidate": false,
+      "slots": [
+        {
+          "mutual_matches": 22,
+          "f_inliers": 20,
+          "h_inliers": 20,
+          "candidate": false,
+          "coverage_a": {
+            "hull_fraction": 0.006565559010814243,
+            "grid_cells": 2
+          },
+          "coverage_b": {
+            "hull_fraction": 0.01312945869991965,
+            "grid_cells": 2
+          }
+        },
+        {
+          "mutual_matches": 22,
+          "f_inliers": 19,
+          "h_inliers": 19,
+          "candidate": false,
+          "coverage_a": {
+            "hull_fraction": 0.012791740696778634,
+            "grid_cells": 2
+          },
+          "coverage_b": {
+            "hull_fraction": 0.023830884043586312,
+            "grid_cells": 2
+          }
+        }
+      ]
+    }
+  ],
+  "nominal_windows": {
+    "Kaohsiung": {
+      "0": {
+        "nominal_utc": "2026-08-16T03:02:21.500000",
+        "shared_interval_seconds": 33.0,
+        "clock_synchronization_verified": false
+      },
+      "1": {
+        "nominal_utc": "2026-08-16T06:32:30",
+        "shared_interval_seconds": 6.0,
+        "clock_synchronization_verified": false
+      }
+    },
+    "Taichung": {
+      "0": {
+        "nominal_utc": "2026-08-16T03:03:45",
+        "shared_interval_seconds": 168.0,
+        "clock_synchronization_verified": false
+      },
+      "1": {
+        "nominal_utc": "2026-08-16T06:32:29",
+        "shared_interval_seconds": 6.0,
+        "clock_synchronization_verified": false
+      }
+    },
+    "Tao-Hsin": {
+      "0": {
+        "nominal_utc": "2026-08-16T03:00:57.500000",
+        "shared_interval_seconds": 197.0,
+        "clock_synchronization_verified": false
+      },
+      "1": {
+        "nominal_utc": "2026-08-16T06:33:27.500000",
+        "shared_interval_seconds": 197.0,
+        "clock_synchronization_verified": false
+      }
+    }
+  },
+  "next_development_group": [
+    "Taichung-cam04",
+    "Taichung-cam05",
+    "Taichung-cam06"
+  ],
+  "group_basis": "pre-existing map_anything_eval DEFAULT_GROUPS plus offline visual review; not an automatically certified overlap graph",
+  "independent_metric_scale_evidence_found": false,
+  "notes": [
+    "44 of 46 decoded frames are 1920x1080; Kaohsiung-cam03 has 704x480 and 352x240 in the selected windows",
+    "No qualified pair does not imply no physical overlap",
+    "Cross-store negatives alone cannot validate a screen that rejects all development positives",
+    "Historical map-anything registration results were not rerun",
+    "Existing model snapshot directory is present; mapanything is absent from the main .venv; weight completeness and GPU execution not verified",
+    "Source MP4 hashes and decoded frame hashes are retained in the run manifest; run artifacts are local and ignored by git"
+  ]
+}
