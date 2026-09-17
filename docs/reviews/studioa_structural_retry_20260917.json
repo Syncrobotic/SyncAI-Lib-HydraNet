@@ -1,0 +1,524 @@
+{
+  "schema": "structural-retry-development-review-v1",
+  "evaluation_scope": "familiar-store development regression, not blind new-store acceptance",
+  "run_directory": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_structural_retry_20260917_v1",
+  "base_commit": "34c891e14ed9f5f1991071aefc1239a55b6af04c",
+  "source_boundary": "frozen source snapshot includes uncommitted retry implementation; source observations and old partitions inherited unchanged",
+  "runtime_source_matches_checkout": true,
+  "runtime_files_sha256": {
+    "src/syncai_bev3d/structural_retry.py": "a498b9b9a5320f59c620ce65eea249a8ee945fff172d9655d1e653d5812e0e42",
+    "tools/commissioning/structural_observe.py": "a6f76b40de5345ed4d0da7dbb154b2471bf8d3f30ec22730f711fa456b440b2a",
+    "src/syncai_bev3d/structural_directions.py": "9a7a21909494c79e0cee3d3a6c1cb7f01f3cc33b3414932bf926cbfd5723f904",
+    "src/syncai_bev3d/structural_surfaces.py": "2b40c50c1778fab4249c4498a7ec7edaccccbf15166ebd27f9c1b16b0806eb20",
+    "src/syncai_bev3d/structural_observations.py": "e21a2cb03d9b8c93f3142b5defafa522def147916cb6d18e273ce2c1a64d406e"
+  },
+  "freeze_sha256": "11aff115f0d141ec07a840d7b50a9e3d0d87603b0b630c2bcdbba5edc7709c4b",
+  "batch_sha256": "a868b9a9da0c5fe850b81bd667a69de9078b68d42082b314da072d72895a93be",
+  "status_sha256": "54e3f817a98bb666f456a697e06b5eb42e4695c34b72c7246556cc0d614a5f97",
+  "elapsed_seconds": 295.4855422973633,
+  "service": {
+    "unit": "hydranet-structural-retry-20260917-v1",
+    "runtime_max_seconds": 1200,
+    "journal_sha256": "ad74fb2c91db9171109d880fb02b2e84b0adfde83c5735f29b76c13dde72cf6a"
+  },
+  "policy": {
+    "max_attempts": 3,
+    "frames_per_window": 3
+  },
+  "direction_checks_passed": 0,
+  "calibration_ready": false,
+  "deployment_ready": false,
+  "scale_status": "unknown",
+  "cases": {
+    "Kaohsiung-cam04": {
+      "status": "rejected",
+      "stop_reason": "terminal_direction_decision",
+      "reasons": [
+        "held-out structural lines exceed the raw-pixel limit",
+        "fitting structural lines exceed the raw-pixel limit"
+      ],
+      "source": {
+        "source_root": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_clips/Kaohsiung-cam04",
+        "seed_surfaces": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_structure_autonomy_20260917_v1/Kaohsiung-cam04.surfaces.json",
+        "seed_groups": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_structure_autonomy_20260917_v2/compatibility/Kaohsiung-cam04.groups.freeze.json",
+        "surfaces_sha256": "0c7bdbc66d02c8143c62af419c09972d0415558887edf01b53f7c662ed74d70d",
+        "groups_sha256": "d4a3301e94d69717c0a20cb5b73fa6161b882a242c90f0e7ac733a72e5aad87d",
+        "window_plan": {
+          "windows": [
+            {
+              "id": "window-ea28a16615529a11",
+              "path": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_clips/Kaohsiung-cam04/archive_20260816-063027_20260816-063527.mp4",
+              "sha256": "ea28a16615529a11fee6da17eb30a43b73e57f62ca6c20d89ed6ac0a38c849fb",
+              "archive_interval": "archive_20260816-063027_20260816-063527"
+            },
+            {
+              "id": "window-b2356fef37f715ff",
+              "path": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_clips/Kaohsiung-cam04/archive_20260816-112757_20260816-113301.mp4",
+              "sha256": "b2356fef37f715ff28d1c9c0a01387fdca85c6d9ef5e90f4687e9cffeb7cfa69",
+              "archive_interval": "archive_20260816-112757_20260816-113301"
+            }
+          ],
+          "omitted": [
+            {
+              "path": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_clips/Kaohsiung-cam04/archive_20260816-025809_20260816-030312.mp4",
+              "reason": "seed_archive"
+            },
+            {
+              "path": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_clips/Kaohsiung-cam04/archive_20260816-160053_20260816-160557.mp4",
+              "reason": "attempt_budget"
+            }
+          ],
+          "order": "filename_ascending",
+          "seed_archive_interval_known": true
+        }
+      },
+      "seed_groups_preserved_exactly": 30,
+      "final_groups": 40,
+      "final_geometric_candidates": 38,
+      "status_sha256": "4903a889d5acc65829042184c2e0ea864328101178c70b3f171d2d0934c2e1d4",
+      "final_ledger_sha256": "417e9365bc0ebcedffc246636b127501c44bcaa94ca3d03a746b8b393dabf1da",
+      "attempts": [
+        {
+          "window": "inherited-seed",
+          "status": "insufficient_evidence",
+          "reasons": [
+            "each direction needs fitting lines and an independent held-out line"
+          ],
+          "merge": {
+            "new_groups": 30,
+            "repeat_groups": 0,
+            "conflicts": []
+          },
+          "ledger_sha256": "4f8b16d2292a7304a6a58f91f2780cec068ebc61190dccb2da555742b6b19c02",
+          "direction_checks_passed": false
+        },
+        {
+          "window": "window-ea28a16615529a11",
+          "status": "rejected",
+          "reasons": [
+            "held-out structural lines exceed the raw-pixel limit",
+            "fitting structural lines exceed the raw-pixel limit"
+          ],
+          "merge": {
+            "new_groups": 10,
+            "repeat_groups": 14,
+            "conflicts": []
+          },
+          "ledger_sha256": "d64a6151b0ffb016b1d340f998c6a2201ea7648b58a80364acc466fd693e334d",
+          "unique_frames": 3,
+          "source_metadata": {
+            "programs": [],
+            "stream_groups": [],
+            "streams": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "sample_aspect_ratio": "1:1",
+                "tags": {}
+              }
+            ],
+            "format": {
+              "duration": "300.130800"
+            }
+          },
+          "direction_checks_passed": false,
+          "validation_limit_px": 8.0,
+          "fitting": {
+            "count": 30,
+            "exceeding_limit": 7,
+            "worst_max_raw_px": 38.03272080912505,
+            "line_max_raw_px": {
+              "line-0d4e2b03eb75": 1.6391007201713998,
+              "line-c633569b77c7": 5.8940823181310344,
+              "line-7674cbae0650": 1.4029582266815563,
+              "line-13f06939d977": 2.706487283102465,
+              "line-da9b8b51b110": 14.708090498604507,
+              "line-995289afcbc3": 4.248183403500445,
+              "line-94a31527ecd0": 0.9234653873404939,
+              "line-6c99fe2b7eff": 6.304613310757875,
+              "line-afcc9377eaf9": 0.6348290754729722,
+              "line-04d9bc5823ab": 2.0079758448175746,
+              "line-a733559ef936": 2.9524967369463,
+              "line-dab4a53867ae": 0.48199470396341554,
+              "line-d047af856e68": 3.486641290424983,
+              "line-73784772762a": 1.948777390258964,
+              "line-4bc6270c80df": 6.8399285193920525,
+              "line-a63cf20b58f5": 1.619326279856792,
+              "line-2d41469fde3c": 9.253921675451764,
+              "line-3b8796547126": 3.770519723456797,
+              "line-19ac625b0816": 3.316915086069339,
+              "line-3ab1dea40a23": 7.436055623796819,
+              "line-7a826ba319a1": 3.2219735811568957,
+              "line-a73d2eb23ec5": 2.2636907086827107,
+              "line-5df85e6933ad": 3.9209958974992167,
+              "line-9bb925ae54dd": 9.622018308863701,
+              "line-bbd2bc0b98bb": 8.33223936296126,
+              "line-f83d019a97c5": 11.414057959674157,
+              "line-c1792e21e359": 4.464483205686175,
+              "line-7d8091775041": 8.090591400895148,
+              "line-81f123f22e8d": 2.0204568368779148,
+              "line-eb5e6412a0ea": 38.03272080912505
+            }
+          },
+          "held_out": {
+            "count": 8,
+            "exceeding_limit": 3,
+            "worst_max_raw_px": 49.323649556835846,
+            "line_max_raw_px": {
+              "line-3cd8e05a9f94": 4.258118519326479,
+              "line-aa6eeb5a1c7a": 16.256969112902723,
+              "line-0bc803a0b706": 42.754676730954685,
+              "line-b2a781879343": 3.395829300337955,
+              "line-45d4161a2496": 3.476444353492228,
+              "line-0f2b50ca6a1c": 49.323649556835846,
+              "line-1be8673225bf": 6.5216062359265745,
+              "line-2e8d43fa15ea": 5.108325182412823
+            }
+          }
+        }
+      ]
+    },
+    "Taichung-cam10": {
+      "status": "rejected",
+      "stop_reason": "terminal_direction_decision",
+      "reasons": [
+        "held-out structural lines exceed the raw-pixel limit",
+        "fitting structural lines exceed the raw-pixel limit"
+      ],
+      "source": {
+        "source_root": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_clips/Taichung-cam10",
+        "seed_surfaces": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_structure_autonomy_20260917_v1/Taichung-cam10.surfaces.json",
+        "seed_groups": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_structure_autonomy_20260917_v2/compatibility/Taichung-cam10.groups.freeze.json",
+        "surfaces_sha256": "a4fad4585743b91ccdab7e5b37a542837a4f2d88b20a7fa5523b5fbe7ab74fc4",
+        "groups_sha256": "93272634fb2ee65793cc3fcdf4e6d4a3cad95851ac64ef5584acc9d6244b5ae0",
+        "window_plan": {
+          "windows": [
+            {
+              "id": "window-8cfb6363556907a9",
+              "path": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_clips/Taichung-cam10/archive_20260816-030028_20260816-030532.mp4",
+              "sha256": "8cfb6363556907a9c9e3f8ac4abe00667a5565c51ac60c3cd50d864cdf767166",
+              "archive_interval": "archive_20260816-030028_20260816-030532"
+            },
+            {
+              "id": "window-95a5bc1c5899b48b",
+              "path": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_clips/Taichung-cam10/archive_20260816-062758_20260816-063303.mp4",
+              "sha256": "95a5bc1c5899b48ba0eeef2c74098370592bc56e12abcbe31bf27ac34c744125",
+              "archive_interval": "archive_20260816-062758_20260816-063303"
+            }
+          ],
+          "omitted": [
+            {
+              "path": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_clips/Taichung-cam10/archive_20260816-112916_20260816-113416.mp4",
+              "reason": "attempt_budget"
+            },
+            {
+              "path": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_clips/Taichung-cam10/archive_20260816-155821_20260816-160325.mp4",
+              "reason": "attempt_budget"
+            }
+          ],
+          "order": "filename_ascending",
+          "seed_archive_interval_known": false
+        }
+      },
+      "seed_groups_preserved_exactly": 39,
+      "final_groups": 58,
+      "final_geometric_candidates": 58,
+      "status_sha256": "c8ab3970fc1f8dd2e69ab0f22f52f8c5c2fa9c31a9e6ea9176d7e450924b7144",
+      "final_ledger_sha256": "9123960d02cbeacef7f3dd72a9e35af5fd5e5df6131b33dab0d81c1f19761ce3",
+      "attempts": [
+        {
+          "window": "inherited-seed",
+          "status": "insufficient_evidence",
+          "reasons": [
+            "each direction needs fitting lines and an independent held-out line"
+          ],
+          "merge": {
+            "new_groups": 39,
+            "repeat_groups": 0,
+            "conflicts": []
+          },
+          "ledger_sha256": "8a9cb4e4b585acc71d7c213e310474981b0bd2485d25115a39599bbc05cc1de7",
+          "direction_checks_passed": false
+        },
+        {
+          "window": "window-8cfb6363556907a9",
+          "status": "insufficient_evidence",
+          "reasons": [
+            "each direction needs fitting lines and an independent held-out line"
+          ],
+          "merge": {
+            "new_groups": 12,
+            "repeat_groups": 34,
+            "conflicts": []
+          },
+          "ledger_sha256": "f570c54df6cc9f7dfc0b369b31590d375fbcd672962666a4f262925985458184",
+          "unique_frames": 3,
+          "source_metadata": {
+            "programs": [],
+            "stream_groups": [],
+            "streams": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "sample_aspect_ratio": "1:1",
+                "tags": {}
+              }
+            ],
+            "format": {
+              "duration": "303.997700"
+            }
+          },
+          "direction_checks_passed": false
+        },
+        {
+          "window": "window-95a5bc1c5899b48b",
+          "status": "rejected",
+          "reasons": [
+            "held-out structural lines exceed the raw-pixel limit",
+            "fitting structural lines exceed the raw-pixel limit"
+          ],
+          "merge": {
+            "new_groups": 7,
+            "repeat_groups": 29,
+            "conflicts": []
+          },
+          "ledger_sha256": "bca2a0978174544714fa6279acf52f1db5c653f41e698bead4df3f4a0e083b0f",
+          "unique_frames": 3,
+          "source_metadata": {
+            "programs": [],
+            "stream_groups": [],
+            "streams": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "sample_aspect_ratio": "1:1",
+                "tags": {}
+              }
+            ],
+            "format": {
+              "duration": "304.096800"
+            }
+          },
+          "direction_checks_passed": false,
+          "validation_limit_px": 8.0,
+          "fitting": {
+            "count": 47,
+            "exceeding_limit": 5,
+            "worst_max_raw_px": 22.863634033036877,
+            "line_max_raw_px": {
+              "line-4dc1769a316f": 2.3111208915570707,
+              "line-e37e02e09ff9": 2.0890810692438095,
+              "line-c633569b77c7": 4.98160462105,
+              "line-60d06c920765": 2.064384142908765,
+              "line-da9b8b51b110": 3.062266040830732,
+              "line-995289afcbc3": 3.773373527492581,
+              "line-d50e112ef2f8": 1.8714233687028428,
+              "line-cdc7ff479a5f": 1.9992023583613294,
+              "line-a733559ef936": 0.3454890825044377,
+              "line-dab4a53867ae": 3.09215553294767,
+              "line-c8071cdc3381": 7.2847833289754265,
+              "line-d047af856e68": 0.83549851794406,
+              "line-73784772762a": 9.026724719017931,
+              "line-4bc6270c80df": 4.470331595561327,
+              "line-d4ced5073c79": 3.2352499149037603,
+              "line-a63cf20b58f5": 4.788875843574978,
+              "line-673c17af06fe": 9.786962903962594,
+              "line-74a07976531d": 3.2127042063311633,
+              "line-3b8796547126": 2.2047416554829384,
+              "line-19ac625b0816": 7.334892223422088,
+              "line-137ee3a12d7f": 8.788585498991736,
+              "line-170f483eed28": 3.557769904105329,
+              "line-3ab1dea40a23": 5.015423443213691,
+              "line-98562cff5dc2": 13.834604951679628,
+              "line-0714bb7f0c0a": 5.928760413817614,
+              "line-696366e80584": 7.855718157140942,
+              "line-0db41d26102d": 4.374588574098725,
+              "line-5df85e6933ad": 4.770212272068687,
+              "line-a22e2ab1af2a": 2.3404644547107454,
+              "line-4166f6414cc9": 5.378668125477127,
+              "line-d9a6f2de81c7": 1.0432404595709543,
+              "line-413c76e3d9bf": 3.7726893620652335,
+              "line-96f85171fab3": 4.827826771157303,
+              "line-bf62c9dc20fd": 6.351892638502021,
+              "line-bfdf05dafad9": 1.6916780493135746,
+              "line-f0e15e99de43": 1.1916162391309042,
+              "line-e85d2536d07d": 4.171801371437187,
+              "line-0ddbc27804ff": 2.751426004501589,
+              "line-aedfed125cf3": 1.6815360688153165,
+              "line-0fda7933923d": 2.543926130992375,
+              "line-48ff8909174a": 22.863634033036877,
+              "line-d908519141b8": 3.669286296460944,
+              "line-e3cb8189d8c8": 5.6774976619960995,
+              "line-cd86a2e038e5": 6.233408215800727,
+              "line-de21f3f57a43": 5.326025590217022,
+              "line-c192cc4e948a": 7.918568021293542,
+              "line-ccf974264f90": 7.692728871907261
+            }
+          },
+          "held_out": {
+            "count": 11,
+            "exceeding_limit": 1,
+            "worst_max_raw_px": 10.308054412133972,
+            "line_max_raw_px": {
+              "line-766e41d44301": 1.0000327825280546,
+              "line-a32c44fa24dd": 3.5494740137299816,
+              "line-d52867eee04f": 4.182737463120748,
+              "line-3cd8e05a9f94": 4.740276184584126,
+              "line-9d68867fdb51": 2.3078624304943762,
+              "line-e7a59caa24a1": 5.489372462676656,
+              "line-bc949169fe4d": 2.9820392438990115,
+              "line-aeffe13512a8": 6.190489907167159,
+              "line-e3409e2ba33f": 4.234377394096615,
+              "line-f34d03b11975": 10.308054412133972,
+              "line-e00d3ae3536d": 7.608299028891286
+            }
+          }
+        }
+      ]
+    },
+    "Tao-Hsin-cam03": {
+      "status": "insufficient_evidence",
+      "stop_reason": "attempt_budget_exhausted",
+      "reasons": [
+        "attempt_budget_exhausted",
+        "fewer_than_four_fitting_floor_groups"
+      ],
+      "source": {
+        "source_root": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_clips/Tao-Hsin-cam03",
+        "seed_surfaces": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_structure_autonomy_20260917_v1/Tao-Hsin-cam03.surfaces.json",
+        "seed_groups": "/home/paul/SyncAI-Lib-HydraNet/runs/studioa_structure_autonomy_20260917_v2/compatibility/Tao-Hsin-cam03.groups.freeze.json",
+        "surfaces_sha256": "d76a4269c8569faa97198bf8244bc2c0272b6ff0b6fd8fc1f17c0cce1f636986",
+        "groups_sha256": "ef9224c61d4cd7ed161d388feb9c417331deedb8a0bd355b26bcd64096c8bb76",
+        "window_plan": {
+          "windows": [
+            {
+              "id": "window-d1ac0f3a1465886b",
+              "path": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_clips/Tao-Hsin-cam03/archive_20260816-025853_20260816-030356.mp4",
+              "sha256": "d1ac0f3a1465886bf9410946193a1cb3b4eab9f2d3d5f9aa38a3a837ebea6961",
+              "archive_interval": "archive_20260816-025853_20260816-030356"
+            },
+            {
+              "id": "window-3a4b44be746430d4",
+              "path": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_clips/Tao-Hsin-cam03/archive_20260816-063115_20260816-063619.mp4",
+              "sha256": "3a4b44be746430d4ba78599de346051e828bcf1e0a8a2bdeccda2438365f9e8a",
+              "archive_interval": "archive_20260816-063115_20260816-063619"
+            }
+          ],
+          "omitted": [
+            {
+              "path": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_clips/Tao-Hsin-cam03/archive_20260816-112949_20260816-113452.mp4",
+              "reason": "attempt_budget"
+            },
+            {
+              "path": "/home/paul/SyncAI-Lib-HydraNet/datasets/studioa_clips/Tao-Hsin-cam03/archive_20260816-155749_20260816-160252.mp4",
+              "reason": "attempt_budget"
+            }
+          ],
+          "order": "filename_ascending",
+          "seed_archive_interval_known": false
+        }
+      },
+      "seed_groups_preserved_exactly": 30,
+      "final_groups": 41,
+      "final_geometric_candidates": 38,
+      "status_sha256": "c899ac812cd9773692f126733ec7e2743b497099dd190b85d8a93d7a5df19657",
+      "final_ledger_sha256": "076aa4d06f3c7fa9fd69b36095b3b98953661105011a29fa2fef1c7b89f5e7bf",
+      "attempts": [
+        {
+          "window": "inherited-seed",
+          "status": "insufficient_evidence",
+          "reasons": [
+            "fewer_than_four_fitting_floor_groups"
+          ],
+          "merge": {
+            "new_groups": 30,
+            "repeat_groups": 0,
+            "conflicts": []
+          },
+          "ledger_sha256": "97294d9a4b1d101734a11d3dacdd524ef82fb9ca6e620de26a69e988af820957",
+          "direction_checks_passed": false
+        },
+        {
+          "window": "window-d1ac0f3a1465886b",
+          "status": "insufficient_evidence",
+          "reasons": [
+            "fewer_than_four_fitting_floor_groups"
+          ],
+          "merge": {
+            "new_groups": 5,
+            "repeat_groups": 23,
+            "conflicts": []
+          },
+          "ledger_sha256": "514e23fd39e05ea7648390084fbeb65465e9e3c11ea5b9a82148aeb44429fcd7",
+          "unique_frames": 3,
+          "source_metadata": {
+            "programs": [],
+            "stream_groups": [],
+            "streams": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "sample_aspect_ratio": "1:1",
+                "tags": {}
+              }
+            ],
+            "format": {
+              "duration": "303.764633"
+            }
+          },
+          "direction_checks_passed": false
+        },
+        {
+          "window": "window-3a4b44be746430d4",
+          "status": "insufficient_evidence",
+          "reasons": [
+            "fewer_than_four_fitting_floor_groups"
+          ],
+          "merge": {
+            "new_groups": 6,
+            "repeat_groups": 21,
+            "conflicts": []
+          },
+          "ledger_sha256": "06acff8ba5c25e8c23c9e5ab5dd21032c30720adceb63b4f51174cc1848142bb",
+          "unique_frames": 3,
+          "source_metadata": {
+            "programs": [],
+            "stream_groups": [],
+            "streams": [
+              {
+                "width": 1920,
+                "height": 1080,
+                "sample_aspect_ratio": "1:1",
+                "tags": {}
+              }
+            ],
+            "format": {
+              "duration": "303.762667"
+            }
+          },
+          "direction_checks_passed": false
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "familiar development cameras, not blind new-store acceptance",
+    "Taichung and Tao-Hsin seed archive intervals unknown; time overlap not excluded",
+    "geometric grouping remains candidate physical identity, not ground truth",
+    "fixed camera pose, division lens and Manhattan assumptions remain unverified",
+    "raw-pixel line errors are not independently measured metric accuracy",
+    "source SHA and grouping audits are computational checks, not a visual scene review"
+  ],
+  "validation": {
+    "pytest": {
+      "passed": 4287,
+      "skipped": 12,
+      "elapsed_seconds": 151.67,
+      "skip_reason": "CUDA unavailable",
+      "log_sha256": "cea75eca5de59049d7876f399d3733c0617991102cf31b005d9240b5aef94527"
+    },
+    "retry_tests_passed": 19,
+    "ruff_check": "passed",
+    "ruff_format_check": "passed"
+  }
+}

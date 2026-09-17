@@ -15,18 +15,68 @@ def main(argv=None):
         "camera", help="provenance label only; never selects camera-specific rules"
     )
     parser.add_argument(
-        "frames", type=Path, help="one fixed camera; image filenames in time order"
+        "frames",
+        type=Path,
+        help="one fixed camera: raw frames, or a video directory with --retry",
     )
     parser.add_argument("--out", type=Path, required=True, help="new proposal JSON file")
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--structure",
         action="store_true",
         help="add pinned surface teacher and conditional direction checks",
     )
+    mode.add_argument(
+        "--retry",
+        action="store_true",
+        help="bounded acquisition from a single-camera video directory",
+    )
+    parser.add_argument(
+        "--max-attempts", type=int, default=3, help="includes the optional inherited seed"
+    )
+    parser.add_argument("--frames-per-window", type=int, default=3)
+    parser.add_argument("--seed-surfaces", type=Path)
+    parser.add_argument("--seed-groups", type=Path)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     args = parser.parse_args(argv)
     if args.out.exists():
         parser.error("output exists; use a new proposal path")
+    if (args.seed_surfaces is not None or args.seed_groups is not None) and not args.retry:
+        parser.error("seed arguments require --retry")
+    if args.retry:
+        from syncai_bev3d.structural_retry import RetryPolicy, run_retry
+
+        try:
+            policy = RetryPolicy(args.max_attempts, args.frames_per_window)
+        except ValueError as exc:
+            parser.error(str(exc))
+        if (args.seed_surfaces is None) != (args.seed_groups is None):
+            parser.error("seed surfaces and frozen groups must be supplied together")
+        folder = args.out.with_suffix(".retry")
+        if folder.exists():
+            parser.error("retry evidence exists; use a new output path")
+        report = run_retry(
+            args.camera,
+            args.frames,
+            folder,
+            policy=policy,
+            seed_surfaces=args.seed_surfaces,
+            seed_groups=args.seed_groups,
+            device=args.device,
+        )
+        with args.out.open("x") as handle:
+            json.dump(report, handle, indent=2, allow_nan=False)
+            handle.write("\n")
+        print(
+            json.dumps(
+                {
+                    "status": report["status"],
+                    "attempts": len(report["attempts"]),
+                    "reasons": report["reasons"],
+                }
+            )
+        )
+        return int(report["status"] == "failed")
     report = observe_directory(args.frames, args.camera)
     if args.structure:
         from syncai_bev3d.structural_directions import add_direction_checks
