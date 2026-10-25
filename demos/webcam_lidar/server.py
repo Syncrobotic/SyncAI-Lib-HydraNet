@@ -175,6 +175,7 @@ class SyntheticDepth:
 @dataclass
 class CloudParams:
     alpha: float = 0.3
+    ema_reset: float = 0.05
     edge_thresh: float = 0.05
     edge_dilate: int = 1
     voxel: float = 0.04
@@ -191,6 +192,7 @@ class CloudBuilder:
         self.p = p
         self.depth: torch.Tensor | None = None
         self.k: torch.Tensor | None = None
+        self.reset_frac = 0.0
         self._grid: tuple[torch.Tensor, torch.Tensor] | None = None
 
     # -- temporal ---------------------------------------------------------------------
@@ -198,7 +200,15 @@ class CloudBuilder:
         """EMA with weight `alpha` on the new frame.
 
         A pixel invalid now is invalid in the output: holding the old value would leave
-        a ghost of whatever just moved away. The intrinsics are smoothed too, because
+        a ghost of whatever just moved away. For the same reason a pixel whose depth
+        jumps by more than `ema_reset` (relative) takes the new value outright: blending
+        it would walk the old surface through mid-air over several frames, a trail of
+        flying points that is smooth in space and so invisible to the edge filter. 10 %
+        is too loose: the tail of a smeared edge moves 4.5 m -> 5 m, exactly 10 %, and
+        leaves a ghost 20-30 cm off the wall. Noise under 5 % is still averaged.
+        `reset_frac` reports how much of the frame restarted; if it is high on a static
+        scene, the model's frame-to-frame scale is jittering and the EMA is doing
+        nothing. The intrinsics are smoothed too, because
         MoGe re-estimates the focal length every frame and a jittering focal length
         makes the whole cloud breathe even when every depth is perfectly stable.
         """
@@ -210,7 +220,9 @@ class CloudBuilder:
             assert self.k is not None
             prev = self.depth
             blended = a * depth + (1 - a) * prev
-            self.depth = torch.where(torch.isnan(prev), depth, blended)
+            jump = (depth - prev).abs() > self.p.ema_reset * depth
+            self.depth = torch.where(torch.isnan(prev) | jump, depth, blended)
+            self.reset_frac = jump.float().mean().item()
             self.k = a * k + (1 - a) * self.k
         return self.depth, self.k
 
@@ -380,6 +392,7 @@ async def run(args: argparse.Namespace) -> None:
     builder = CloudBuilder(
         CloudParams(
             alpha=args.alpha,
+            ema_reset=args.ema_reset,
             edge_thresh=args.edge_thresh,
             edge_dilate=args.edge_dilate,
             voxel=args.voxel,
@@ -438,7 +451,7 @@ async def run(args: argparse.Namespace) -> None:
                 timer.add(**ms)
                 timer.tick(
                     f"{pts.shape[0]:6d} pts  {len(payload) / 1024:6.0f} KiB  "
-                    f"{len(clients)} client(s)"
+                    f"ema-reset {builder.reset_frac:5.1%}  {len(clients)} client(s)"
                 )
                 await asyncio.sleep(max(0.0, period - (time.perf_counter() - t_start)))
         finally:
@@ -465,6 +478,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--fps", type=float, default=10.0, help="target output rate (cap)")
     ap.add_argument("--alpha", type=float, default=0.3, help="EMA weight of the new frame")
+    ap.add_argument(
+        "--ema-reset",
+        type=float,
+        default=0.05,
+        help="relative depth jump above which EMA restarts from the new frame (inf: never)",
+    )
     ap.add_argument(
         "--edge-thresh",
         type=float,

@@ -1,0 +1,396 @@
+<title>Webcam LiDAR 合成場景</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+TC:wght@400;500&display=swap">
+<style>
+  /* Layout: full-bleed point-cloud canvas; controls float top-left, readouts top-right,
+     scene note bottom-left. Deliberately single dark look: a Lidar viewer on black. */
+  :root {
+    --bg: #000;
+    --panel: rgba(10, 13, 18, .78);
+    --line: #263040;
+    --fg: #d6dde6;
+    --muted: #7d8a99;
+    --accent: #8cc4ff;
+    --good: #6fdc9a;
+    --bad: #ff8a7a;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    --sans: "IBM Plex Sans TC", system-ui, "PingFang TC", "Noto Sans TC", sans-serif;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--fg); font: 13px/1.45 var(--sans); overflow: hidden; }
+  canvas { display: block; }
+
+  .panel {
+    position: fixed; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 6px; backdrop-filter: blur(4px); padding: 10px 12px;
+  }
+  #controls {
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: max(12px, env(safe-area-inset-left, 0px));
+    display: grid; gap: 8px; max-width: min(360px, calc(100vw - 24px));
+  }
+  #controls h1 { margin: 0; font-size: 14px; font-weight: 500; text-wrap: balance; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .row > .label {
+    width: 4.5em; color: var(--muted); font-size: 11px; letter-spacing: .06em;
+  }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .seg button {
+    font: 12px var(--sans); color: var(--muted); background: transparent; border: 0;
+    padding: 4px 9px; cursor: pointer;
+  }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { color: var(--bg); background: var(--accent); }
+  .seg button:hover:not([aria-pressed="true"]) { color: var(--fg); }
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  #hud {
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    right: max(12px, env(safe-area-inset-right, 0px));
+    font: 12px/1.6 var(--mono); font-variant-numeric: tabular-nums;
+    display: grid; grid-template-columns: auto auto; column-gap: 14px; pointer-events: none;
+  }
+  #hud dt { color: var(--muted); }
+  #hud dd { margin: 0; text-align: right; }
+  #hud .ok { color: var(--good); }
+  #hud .warn { color: var(--bad); }
+
+  #note {
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    left: max(12px, env(safe-area-inset-left, 0px));
+    max-width: min(560px, calc(100vw - 24px)); color: var(--muted); font-size: 12px;
+  }
+  #note b { color: var(--fg); font-weight: 500; }
+
+  @media (max-width: 560px) {
+    #hud { top: auto; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+    #note { display: none; }
+  }
+</style>
+
+<div id="controls" class="panel">
+  <h1>Webcam LiDAR 合成場景</h1>
+  <div class="row"><span class="label">模式</span>
+    <span class="seg" data-key="mode">
+      <button id="m-voxel" data-v="voxel" aria-pressed="true">Voxel 4 cm</button>
+      <button id="m-scan" data-v="scan" aria-pressed="false">32 線</button>
+    </span></div>
+  <div class="row"><span class="label">邊緣門檻</span>
+    <span class="seg" data-key="thresh">
+      <button id="t-off" data-v="off" aria-pressed="false">關</button>
+      <button id="t-015" data-v="0.15" aria-pressed="false">0.15</button>
+      <button id="t-005" data-v="0.05" aria-pressed="true">0.05</button>
+    </span></div>
+  <div class="row"><span class="label">時間平滑</span>
+    <span class="seg" data-key="ema">
+      <button id="e-plain" data-v="plain" aria-pressed="false">純 EMA</button>
+      <button id="e-reset" data-v="reset" aria-pressed="true">EMA＋跳變重置</button>
+    </span></div>
+  <div class="row"><span class="label">顏色</span>
+    <span class="seg" data-key="color">
+      <button id="c-h" data-v="height" aria-pressed="true">高度</button>
+      <button id="c-r" data-v="range" aria-pressed="false">距離</button>
+    </span></div>
+  <div class="row"><span class="label">方塊</span>
+    <span class="seg" data-key="anim">
+      <button id="a-on" data-v="on" aria-pressed="true">移動</button>
+      <button id="a-off" data-v="off" aria-pressed="false">靜止</button>
+    </span></div>
+</div>
+
+<dl id="hud" class="panel">
+  <dt>資料</dt><dd id="h-data">–</dd>
+  <dt>渲染</dt><dd id="h-render">–</dd>
+  <dt>點數</dt><dd id="h-pts">–</dd>
+  <dt>後處理</dt><dd id="h-post">–</dd>
+  <dt>飛點</dt><dd id="h-fly">–</dd>
+</dl>
+
+<p id="note" class="panel">
+  <b>這是合成場景，不是 webcam 結果。</b>
+  瀏覽器內重做 <code>server.py</code> 的後處理：盒形房間加一個方塊，1% 深度雜訊，5×5 模糊模擬網路在遮擋邊緣的拖影，
+  之後 EMA α=0.3（深度跳變超過 5% 時直接用新值）→ Sobel 相對梯度去邊緣 → 反投影 → voxel 或 32 線取樣。「飛點」= 離任何真實表面超過 15 cm 的點。
+  拖曳旋轉、滾輪縮放，C 切換顏色。
+</p>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+'use strict';
+
+// ---- state ----------------------------------------------------------------------------
+const S = { mode: 'voxel', thresh: '0.05', ema: 'reset', color: 'height', anim: 'on' };
+
+// ---- synthetic depth, mirroring server.py's SyntheticDepth ----------------------------
+const W = 518, H = 291, NPX = W * H;
+const K = { fx: 0.95, fy: 0.95 * 518 / 291, cx: 0.5, cy: 0.5 };
+const STATIC_BOX_X = 0.2;
+const rayX = new Float32Array(NPX), rayY = new Float32Array(NPX);
+for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+  rayX[r * W + c] = ((c + 0.5) / W - K.cx) / K.fx;
+  rayY[r * W + c] = ((r + 0.5) / H - K.cy) / K.fy;
+}
+// Gaussian noise table; each frame reads it from a random offset.
+const NOISE_LEN = 1 << 19, noise = new Float32Array(NOISE_LEN);
+for (let i = 0; i < NOISE_LEN; i += 2) {
+  const u = Math.random() || 1e-9, v = Math.random(), m = Math.sqrt(-2 * Math.log(u));
+  noise[i] = m * Math.cos(2 * Math.PI * v); noise[i + 1] = m * Math.sin(2 * Math.PI * v);
+}
+const raw = new Float32Array(NPX), tmp = new Float32Array(NPX), depth = new Float32Array(NPX);
+let boxX = STATIC_BOX_X;
+
+function synth(tSec) {
+  boxX = S.anim === 'on' ? 0.6 * Math.sin(0.5 * tSec) : STATIC_BOX_X;
+  const off = (Math.random() * NOISE_LEN) | 0;
+  for (let i = 0; i < NPX; i++) {
+    const dx = rayX[i], dy = rayY[i];
+    let z = 5, t;
+    if (dx < 0) { t = -2 / dx; if (t < z) z = t; }
+    if (dx > 0) { t = 2.5 / dx; if (t < z) z = t; }
+    if (dy > 0) { t = 1.2 / dy; if (t < z) z = t; }
+    if (dy < 0) { t = -1.5 / dy; if (t < z) z = t; }
+    if (z > 2.5 && Math.abs(dx * 2.5 - boxX) < 0.4 && Math.abs(dy * 2.5 - 0.8) < 0.4) z = 2.5;
+    raw[i] = z * (1 + 0.01 * noise[(off + i) & (NOISE_LEN - 1)]);
+  }
+  // 5x5 box blur, count_include_pad=False, done separably: the smear a network leaves.
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+    let s = 0, n = 0;
+    for (let k = Math.max(0, c - 2); k <= Math.min(W - 1, c + 2); k++) { s += raw[r * W + k]; n++; }
+    tmp[r * W + c] = s / n;
+  }
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+    let s = 0, n = 0;
+    for (let k = Math.max(0, r - 2); k <= Math.min(H - 1, r + 2); k++) { s += tmp[k * W + c]; n++; }
+    raw[r * W + c] = s / n;
+  }
+}
+
+// ---- post-processing, mirroring server.py's CloudBuilder ------------------------------
+const ALPHA = 0.3, EMA_RESET = 0.05, VOXEL = 0.04, MAX_DEPTH = 10;
+let hasEma = false;
+function ema() {
+  if (!hasEma) { depth.set(raw); hasEma = true; return; }
+  // Blend only where the new frame agrees with the average. Where it jumps by more than
+  // 5 %, something moved: take the new value, or the old surface would fade out through
+  // mid-air over several frames, a trail of flying points no spatial filter can see.
+  const reset = S.ema === 'reset';
+  for (let i = 0; i < NPX; i++) {
+    const d = raw[i];
+    depth[i] = reset && Math.abs(d - depth[i]) > EMA_RESET * d ? d : ALPHA * d + (1 - ALPHA) * depth[i];
+  }
+}
+
+const edgeA = new Uint8Array(NPX), edge = new Uint8Array(NPX);
+function edges() {
+  const th = S.thresh === 'off' ? Infinity : +S.thresh;
+  const at = (r, c) => depth[Math.min(H - 1, Math.max(0, r)) * W + Math.min(W - 1, Math.max(0, c))];
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+    const a = at(r - 1, c - 1), b = at(r - 1, c), d = at(r - 1, c + 1);
+    const e = at(r, c - 1), f = at(r, c + 1);
+    const g = at(r + 1, c - 1), h = at(r + 1, c), k = at(r + 1, c + 1);
+    const gx = (d + 2 * f + k) - (a + 2 * e + g);
+    const gy = (g + 2 * h + k) - (a + 2 * b + d);
+    edgeA[r * W + c] = Math.sqrt(gx * gx + gy * gy) / (8 * Math.max(depth[r * W + c], 1e-6)) > th ? 1 : 0;
+  }
+  if (th === Infinity) { edge.set(edgeA); return; }
+  // 1 px dilation (3x3 max), separable.
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+    const i = r * W + c;
+    edge[i] = edgeA[i] | (c > 0 ? edgeA[i - 1] : 0) | (c < W - 1 ? edgeA[i + 1] : 0);
+  }
+  edgeA.set(edge);
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+    const i = r * W + c;
+    edge[i] = edgeA[i] | (r > 0 ? edgeA[i - W] : 0) | (r < H - 1 ? edgeA[i + W] : 0);
+  }
+}
+
+const out = new Float32Array(NPX * 3);
+const vsum = new Float64Array(NPX * 3), vcnt = new Uint32Array(NPX);
+const vmap = new Map();
+function voxel() {
+  vmap.clear();
+  let m = 0;
+  for (let i = 0; i < NPX; i++) {
+    if (edge[i]) continue;
+    const z = depth[i];
+    if (!(z > 0 && z < MAX_DEPTH)) continue;
+    const x = rayX[i] * z, y = -rayY[i] * z, zz = -z;  // OpenCV -> Y up, -Z forward
+    const key = ((Math.floor(x / VOXEL) + 1024) * 2048 + (Math.floor(y / VOXEL) + 1024)) * 2048
+              + (Math.floor(zz / VOXEL) + 1024);
+    let j = vmap.get(key);
+    if (j === undefined) { j = m++; vmap.set(key, j); vsum[3 * j] = vsum[3 * j + 1] = vsum[3 * j + 2] = 0; vcnt[j] = 0; }
+    vsum[3 * j] += x; vsum[3 * j + 1] += y; vsum[3 * j + 2] += zz; vcnt[j]++;
+  }
+  for (let j = 0; j < m; j++) {
+    out[3 * j] = vsum[3 * j] / vcnt[j];
+    out[3 * j + 1] = vsum[3 * j + 1] / vcnt[j];
+    out[3 * j + 2] = vsum[3 * j + 2] / vcnt[j];
+  }
+  return m;
+}
+
+// Virtual 32-line Lidar: -25..+15 deg in 32 lines, 0.25 deg azimuth.
+const RAYS = [];
+for (let l = 0; l < 32; l++) {
+  const el = (-25 + 40 * l / 31) * Math.PI / 180;
+  for (let a = -90 + 0.125; a < 90; a += 0.25) {
+    const az = a * Math.PI / 180;
+    const dx = Math.cos(el) * Math.sin(az), dy = -Math.sin(el), dz = Math.cos(el) * Math.cos(az);
+    RAYS.push(dx, dy, dz);
+  }
+}
+function scanlines() {
+  let m = 0;
+  for (let q = 0; q < RAYS.length; q += 3) {
+    const dx = RAYS[q], dy = RAYS[q + 1], dz = RAYS[q + 2];
+    const u = K.fx * dx / dz + K.cx, v = K.fy * dy / dz + K.cy;
+    if (!(u >= 0 && u <= 1 && v >= 0 && v <= 1)) continue;
+    // Bilinear with border clamping (grid_sample, align_corners=False, padding "border").
+    const px = Math.min(W - 1, Math.max(0, u * W - 0.5)), py = Math.min(H - 1, Math.max(0, v * H - 0.5));
+    const x0 = Math.floor(px), y0 = Math.floor(py);
+    const x1 = Math.min(W - 1, x0 + 1), y1 = Math.min(H - 1, y0 + 1);
+    const fx = px - x0, fy = py - y0;
+    const w00 = (1 - fx) * (1 - fy), w01 = fx * (1 - fy), w10 = (1 - fx) * fy, w11 = fx * fy;
+    const i00 = y0 * W + x0, i01 = y0 * W + x1, i10 = y1 * W + x0, i11 = y1 * W + x1;
+    const bad = w00 * edge[i00] + w01 * edge[i01] + w10 * edge[i10] + w11 * edge[i11];
+    if (bad > 0) continue;
+    const z = w00 * depth[i00] + w01 * depth[i01] + w10 * depth[i10] + w11 * depth[i11];
+    if (!(z > 0 && z < MAX_DEPTH)) continue;
+    const t = z / dz;
+    out[3 * m] = dx * t; out[3 * m + 1] = -dy * t; out[3 * m + 2] = -dz * t;
+    m++;
+  }
+  return m;
+}
+
+// Distance to the nearest true surface, for the flying-point count.
+function flying(n) {
+  let bad = 0;
+  for (let i = 0; i < n; i++) {
+    const x = out[3 * i], y = -out[3 * i + 1], z = -out[3 * i + 2];
+    let d = Math.min(Math.abs(x + 2), Math.abs(x - 2.5), Math.abs(y - 1.2), Math.abs(y + 1.5), Math.abs(z - 5));
+    if (Math.abs(x - boxX) < 0.4 && Math.abs(y - 0.8) < 0.4) d = Math.min(d, Math.abs(z - 2.5));
+    if (d > 0.15) bad++;
+  }
+  return bad;
+}
+
+// ---- rendering (same shader as viewer.html) -------------------------------------------
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x000000);
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.05, 200);
+camera.position.set(1.4, 1.8, 2.6);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.set(0, -0.2, -3);
+controls.enableDamping = true;
+controls.dampingFactor = 0.1;
+controls.update();
+
+const material = new THREE.ShaderMaterial({
+  uniforms: {
+    uMode: { value: 0 }, uYMin: { value: -1.2 }, uYMax: { value: 1.5 },
+    uDMax: { value: 6 }, uSize: { value: 2 * renderer.getPixelRatio() },
+  },
+  vertexShader: `
+    uniform float uMode, uYMin, uYMax, uDMax, uSize;
+    varying vec3 vColor;
+    vec3 turbo(float x) {
+      const vec4 kR = vec4(0.13572138, 4.61539260, -42.66032258, 132.13108234);
+      const vec4 kG = vec4(0.09140261, 2.19418839, 4.84296658, -14.18503333);
+      const vec4 kB = vec4(0.10667330, 12.64194608, -60.58204836, 110.36276771);
+      const vec2 kR2 = vec2(-152.94239396, 59.28637943);
+      const vec2 kG2 = vec2(4.27729857, 2.82956604);
+      const vec2 kB2 = vec2(-89.90310912, 27.34824973);
+      x = clamp(x, 0.0, 1.0);
+      vec4 v4 = vec4(1.0, x, x * x, x * x * x);
+      vec2 v2 = v4.zw * v4.z;
+      return vec3(dot(v4, kR) + dot(v2, kR2), dot(v4, kG) + dot(v2, kG2), dot(v4, kB) + dot(v2, kB2));
+    }
+    void main() {
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = uSize;
+      if (uMode < 0.5) {
+        float t = clamp((position.y - uYMin) / max(uYMax - uYMin, 1e-3), 0.0, 1.0);
+        vColor = turbo(0.1 + 0.9 * t);
+      } else {
+        vColor = vec3(1.0 - 0.85 * clamp(length(position) / max(uDMax, 1e-3), 0.0, 1.0));
+      }
+    }`,
+  fragmentShader: `varying vec3 vColor; void main() { gl_FragColor = vec4(vColor, 1.0); }`,
+});
+
+const positions = new Float32Array(NPX * 3);
+const geometry = new THREE.BufferGeometry();
+const attr = new THREE.BufferAttribute(positions, 3);
+attr.setUsage(THREE.DynamicDrawUsage);
+geometry.setAttribute('position', attr);
+const points = new THREE.Points(geometry, material);
+points.frustumCulled = false;
+scene.add(points);
+
+// ---- loop -----------------------------------------------------------------------------
+const $ = id => document.getElementById(id);
+let nPts = 0, nFly = 0, postMs = 0, dataFrames = 0, renderFrames = 0, statT = performance.now();
+const t0 = performance.now();
+
+function step() {
+  synth((performance.now() - t0) / 1000);
+  const a = performance.now();
+  ema(); edges();
+  const n = S.mode === 'voxel' ? voxel() : scanlines();
+  postMs = 0.8 * postMs + 0.2 * (performance.now() - a);
+  positions.set(out.subarray(0, 3 * n));
+  attr.updateRange.offset = 0; attr.updateRange.count = 3 * n; attr.needsUpdate = true;
+  geometry.setDrawRange(0, n);
+  nPts = n; nFly = flying(n); dataFrames++;
+}
+step();
+setInterval(step, 100);  // the server's 10 FPS cap
+
+function render(now) {
+  requestAnimationFrame(render);
+  controls.update();
+  renderer.render(scene, camera);
+  renderFrames++;
+  if (now - statT >= 500) {
+    const dt = (now - statT) / 1000;
+    $('h-data').textContent = (dataFrames / dt).toFixed(1) + ' FPS';
+    $('h-render').textContent = (renderFrames / dt).toFixed(0) + ' FPS';
+    $('h-pts').textContent = nPts.toLocaleString();
+    $('h-post').textContent = postMs.toFixed(1) + ' ms';
+    $('h-fly').textContent = nFly.toLocaleString();
+    $('h-fly').className = nFly ? 'warn' : 'ok';
+    dataFrames = renderFrames = 0; statT = now;
+  }
+}
+requestAnimationFrame(render);
+
+// ---- UI -------------------------------------------------------------------------------
+function set(key, v) {
+  S[key] = v;
+  document.querySelectorAll(`.seg[data-key="${key}"] button`).forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+  if (key === 'color') material.uniforms.uMode.value = v === 'range' ? 1 : 0;
+}
+document.querySelectorAll('.seg').forEach(seg =>
+  seg.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (b) set(seg.dataset.key, b.dataset.v);
+  }));
+addEventListener('keydown', e => {
+  if (e.key === 'c' || e.key === 'C') set('color', S.color === 'height' ? 'range' : 'height');
+});
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>

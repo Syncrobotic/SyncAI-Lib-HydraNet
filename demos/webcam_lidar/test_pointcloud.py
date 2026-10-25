@@ -90,6 +90,36 @@ def test_ema_reduces_noise():
     assert wall_std(many) < 0.7 * wall_std(one)
 
 
+def flying_while_moving(params: CloudParams) -> int:
+    """Worst per-frame flying-point count while the cube slides left and right."""
+    global BOX_X
+    torch.manual_seed(0)
+    src = SyntheticDepth(DEV)
+    builder = CloudBuilder(params)
+    rgb = np.zeros((291, 518, 3), np.uint8)
+    worst = 0
+    try:
+        for f in range(60):
+            BOX_X = src.box_x = 0.6 * math.sin(0.05 * f)
+            pts = builder(*src(rgb)).numpy()
+            if f >= 10:
+                worst = max(worst, int((surface_distance(pts) > 0.15).sum()))
+    finally:
+        BOX_X = 0.2
+    return worst
+
+
+@pytest.mark.parametrize("scanlines", [False, True])
+def test_plain_ema_trails_a_moving_object(scanlines):
+    """Sanity: blending every pixel drags the cube's old surface through mid-air."""
+    assert flying_while_moving(CloudParams(ema_reset=math.inf, scanlines=scanlines)) > 100
+
+
+@pytest.mark.parametrize("scanlines", [False, True])
+def test_ema_reset_removes_the_trail(scanlines):
+    assert flying_while_moving(CloudParams(scanlines=scanlines)) <= 5
+
+
 def test_scanlines_are_rings_without_flying_points():
     p = CloudParams(scanlines=True)
     pts = build(p)
