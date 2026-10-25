@@ -24,10 +24,10 @@ uv run server.py --synthetic    # 不用 webcam/模型，解析場景，測 view
 | post | depth EMA(α=0.3) → Sobel 邊緣 → 反投影 → 去邊緣點 → 4 cm voxel 質心（或 scanlines） | GPU |
 | send | float16 平面 xyz 打包，`broadcast()` | CPU |
 
-Server 每秒印一次各段滾動平均：
+Server 每秒印一次各段滾動平均。下面是 `--synthetic` 在**無 GPU 的 CPU 容器**上的實測（infer 是解析場景，不是 MoGe）：
 
 ```
-cap 0.4ms | infer 31.2ms | post 2.1ms | send 0.3ms | 10.0 FPS | 21345 pts 125 KiB 1 client(s)
+cap 0.1ms | infer 13.4ms | post 55.5ms | send 0.6ms |  9.7 FPS |  19580 pts  115 KiB  1 client(s)
 ```
 
 `send` 是打包 + 進 socket 佇列的時間；實際線上時間看 viewer 右上角的 latency（同一台機器時鐘才準）。
