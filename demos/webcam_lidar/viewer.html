@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Webcam LiDAR</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  body { font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace; color: #cfd3d6; }
+  #hud {
+    position: fixed; top: 8px; right: 10px; padding: 6px 9px; text-align: right;
+    white-space: pre; background: rgba(0, 0, 0, .55); border: 1px solid #222;
+    pointer-events: none;
+  }
+  #ui { position: fixed; top: 8px; left: 10px; }
+  #ui button {
+    font: inherit; color: #cfd3d6; background: #111; border: 1px solid #333;
+    padding: 4px 9px; cursor: pointer;
+  }
+  #ui button:hover { border-color: #666; }
+</style>
+<!-- three r128 from cdnjs. cdnjs ships only the core build, not examples/, so
+     OrbitControls comes from the npm package of the same exact version. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+<div id="ui"><button id="mode" title="快捷鍵 C">顏色：高度</button></div>
+<div id="hud">connecting…</div>
+<script>
+'use strict';
+
+// ---- wire format (see server.py) ------------------------------------------------------
+const HEADER_BYTES = 24;
+const MAGIC = 0x3143504c;  // "LPC1" little-endian
+
+// float16 -> float32 lookup table: 256 KiB once, then decoding is one load per value.
+const HALF = (() => {
+  const t = new Float32Array(65536);
+  for (let h = 0; h < 65536; h++) {
+    const s = h & 0x8000 ? -1 : 1, e = (h >> 10) & 0x1f, m = h & 0x3ff;
+    t[h] = e === 0 ? s * m * 2 ** -24
+         : e === 31 ? (m ? NaN : s * Infinity)
+         : s * (1 + m / 1024) * 2 ** (e - 15);
+  }
+  return t;
+})();
+
+// ---- scene ----------------------------------------------------------------------------
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x000000);
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.05, 200);
+// The sensor sits at the origin looking down -Z; start behind and above it.
+camera.position.set(0, 1.6, 2.6);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0, -3);
+controls.enableDamping = true;
+controls.dampingFactor = 0.1;
+controls.update();
+
+const vertexShader = `
+  uniform float uMode;   // 0 = height (turbo), 1 = range (grey)
+  uniform float uYMin, uYMax, uDMax, uSize;
+  varying vec3 vColor;
+
+  // Polynomial fit of Google's Turbo colormap (Mikhailov, 2019).
+  vec3 turbo(float x) {
+    const vec4 kR = vec4(0.13572138, 4.61539260, -42.66032258, 132.13108234);
+    const vec4 kG = vec4(0.09140261, 2.19418839, 4.84296658, -14.18503333);
+    const vec4 kB = vec4(0.10667330, 12.64194608, -60.58204836, 110.36276771);
+    const vec2 kR2 = vec2(-152.94239396, 59.28637943);
+    const vec2 kG2 = vec2(4.27729857, 2.82956604);
+    const vec2 kB2 = vec2(-89.90310912, 27.34824973);
+    x = clamp(x, 0.0, 1.0);
+    vec4 v4 = vec4(1.0, x, x * x, x * x * x);
+    vec2 v2 = v4.zw * v4.z;
+    return vec3(dot(v4, kR) + dot(v2, kR2), dot(v4, kG) + dot(v2, kG2),
+                dot(v4, kB) + dot(v2, kB2));
+  }
+
+  void main() {
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = uSize;
+    if (uMode < 0.5) {
+      // Turbo's bottom tenth is near-black, which would hide the floor on a black
+      // background; start the ramp at its dark blue instead.
+      float t = clamp((position.y - uYMin) / max(uYMax - uYMin, 1e-3), 0.0, 1.0);
+      vColor = turbo(0.1 + 0.9 * t);
+    } else {
+      // Range from the sensor, not from the orbit camera: near bright, far dark.
+      float g = 1.0 - 0.85 * clamp(length(position) / max(uDMax, 1e-3), 0.0, 1.0);
+      vColor = vec3(g);
+    }
+  }`;
+const fragmentShader = `
+  varying vec3 vColor;
+  void main() { gl_FragColor = vec4(vColor, 1.0); }`;
+
+const material = new THREE.ShaderMaterial({
+  uniforms: {
+    uMode: { value: 0 }, uYMin: { value: -1.5 }, uYMax: { value: 1.5 },
+    uDMax: { value: 6 }, uSize: { value: 2 * renderer.getPixelRatio() },  // 2 CSS px
+  },
+  vertexShader, fragmentShader,
+});
+
+// One preallocated buffer, overwritten in full every frame and drawn up to N.
+// Allocating a fresh BufferAttribute per frame would leak its GL buffer in r128
+// (WebGLAttributes keys them weakly and only frees on geometry.dispose()).
+let capacity = 0, geometry = null, positions = null;
+const points = new THREE.Points(new THREE.BufferGeometry(), material);
+points.frustumCulled = false;  // the bounding sphere is never recomputed
+scene.add(points);
+
+function ensureCapacity(n) {
+  if (n <= capacity) return;
+  capacity = 1 << Math.ceil(Math.log2(Math.max(n, 1024)));
+  positions = new Float32Array(capacity * 3);
+  const g = new THREE.BufferGeometry();
+  const attr = new THREE.BufferAttribute(positions, 3);
+  attr.setUsage(THREE.DynamicDrawUsage);
+  g.setAttribute('position', attr);
+  if (geometry) geometry.dispose();
+  geometry = g;
+  points.geometry = g;
+}
+
+// Colour ranges follow the data, from a robust percentile of a sample, smoothed so the
+// palette does not flicker frame to frame.
+const SAMPLE = 4096;
+const scratch = new Float32Array(SAMPLE);
+function percentiles(n, f, lo, hi) {
+  const step = Math.max(1, Math.floor(n / SAMPLE));
+  let m = 0;
+  for (let i = 0; i < n && m < SAMPLE; i += step) scratch[m++] = f(i);
+  const s = scratch.subarray(0, m).sort();
+  return [s[Math.floor(lo * (m - 1))], s[Math.floor(hi * (m - 1))]];
+}
+function ease(u, v) { u.value += 0.2 * (v - u.value); }
+
+// ---- stats ----------------------------------------------------------------------------
+const hud = document.getElementById('hud');
+let nPoints = 0, modeName = '-', latency = 0, connected = false;
+let dataFrames = 0, renderFrames = 0, statT = performance.now();
+let dataFps = 0, renderFps = 0;
+
+function onFrame(buf) {
+  const dv = new DataView(buf);
+  if (buf.byteLength < HEADER_BYTES || dv.getUint32(0, true) !== MAGIC) return;
+  const n = dv.getUint32(8, true);
+  modeName = dv.getUint32(12, true) === 1 ? 'scanlines' : 'voxel';
+  latency = Date.now() - dv.getFloat64(16, true) * 1000;
+  const half = new Uint16Array(buf, HEADER_BYTES, 3 * n);
+
+  ensureCapacity(n);
+  // Planar f16 x[N] y[N] z[N]  ->  interleaved f32 xyz, replacing the previous frame.
+  for (let i = 0, j = 0; i < n; i++, j += 3) {
+    positions[j] = HALF[half[i]];
+    positions[j + 1] = HALF[half[n + i]];
+    positions[j + 2] = HALF[half[2 * n + i]];
+  }
+  const attr = geometry.attributes.position;
+  attr.updateRange.offset = 0;
+  attr.updateRange.count = n * 3;
+  attr.needsUpdate = true;
+  geometry.setDrawRange(0, n);
+  nPoints = n;
+
+  if (n > 16) {
+    const u = material.uniforms;
+    const [y0, y1] = percentiles(n, i => positions[3 * i + 1], 0.02, 0.98);
+    ease(u.uYMin, y0); ease(u.uYMax, y1);
+    const [, d1] = percentiles(n, i => Math.hypot(
+      positions[3 * i], positions[3 * i + 1], positions[3 * i + 2]), 0, 0.98);
+    ease(u.uDMax, d1);
+  }
+  dataFrames++;
+}
+
+// ---- socket ---------------------------------------------------------------------------
+const params = new URLSearchParams(location.search);
+const wsUrl = params.get('ws') || `ws://${location.hostname || 'localhost'}:8765`;
+function connect() {
+  const ws = new WebSocket(wsUrl);
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => { connected = true; };
+  ws.onmessage = e => onFrame(e.data);
+  ws.onclose = () => { connected = false; setTimeout(connect, 1000); };
+}
+connect();
+
+// ---- UI -------------------------------------------------------------------------------
+const modeBtn = document.getElementById('mode');
+function toggleMode() {
+  const u = material.uniforms.uMode;
+  u.value = 1 - u.value;
+  modeBtn.textContent = u.value ? '顏色：距離' : '顏色：高度';
+}
+modeBtn.onclick = toggleMode;
+addEventListener('keydown', e => { if (e.key === 'c' || e.key === 'C') toggleMode(); });
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+function render(now) {
+  requestAnimationFrame(render);
+  controls.update();
+  renderer.render(scene, camera);
+  renderFrames++;
+  if (now - statT >= 500) {
+    const dt = (now - statT) / 1000;
+    dataFps = dataFrames / dt; renderFps = renderFrames / dt;
+    dataFrames = renderFrames = 0; statT = now;
+    hud.textContent = connected
+      ? `data   ${dataFps.toFixed(1).padStart(5)} FPS\n` +
+        `render ${renderFps.toFixed(0).padStart(5)} FPS\n` +
+        `points ${nPoints.toLocaleString().padStart(7)}\n` +
+        `${modeName}  ${latency.toFixed(0)} ms`
+      : `disconnected\n${wsUrl}`;
+  }
+}
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+[project]
+name = "webcam-lidar"
+version = "0.1.0"
+description = "Webcam -> MoGe-2 depth -> live Lidar-style point cloud over WebSocket."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "torch>=2.4",
+    "numpy>=1.26",
+    "opencv-python>=4.9",
+    "websockets>=13.0",
+    # Not on PyPI; the README of microsoft/MoGe installs it the same way.
+    "moge @ git+https://github.com/microsoft/MoGe.git",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+# Standalone uv project: not part of the syncai-hydranet wheel. Ruff still reads the
+# repository root's [tool.ruff], so this directory is held to the same lint and format.
+[tool.uv]
+package = false
+
+# Own pytest root, so the repository's warning filters (which import torch.jit) and
+# testpaths do not apply here.
+[tool.pytest.ini_options]
+testpaths = ["."]
