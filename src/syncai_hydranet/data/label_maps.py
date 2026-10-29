@@ -24,7 +24,9 @@ from ..labels import IGNORE
 from . import label_maps_cocostuff as _cs
 from . import label_maps_indoor as _ind
 from . import label_maps_retail as _ret
+from . import label_maps_retail22 as _r22
 from . import label_maps_retail_objects as _obj
+from . import label_maps_retail_v3 as _rv3
 from . import label_maps_site30k as _s30
 
 
@@ -45,6 +47,27 @@ def terrain_to_traversability(terrain_mask, trav_map):
     return out
 
 
+# Traversability class names, index = id. Every policy table above is three-way.
+TRAV_CLASSES = ("blocked", "caution", "go")
+
+# The binary reading: the walkable head of the 2026-08 four-head model (`traversability`,
+# 2 classes), which the 2026-08-18 decision reduced from three -- `caution` was dropped
+# and distance moved to depth. `go` stays `go`; `caution` becomes `blocked`, because
+# stairs and wet floor were folded into blocked by that same decision; ignore stays
+# ignore. Derived from the three-way table rather than written out per scheme so that the
+# two readings of one taxonomy cannot disagree about which classes are floor.
+WALK_CLASSES = ("blocked", "go")
+WALK_BLOCKED, WALK_GO = 0, 1
+
+
+def walkable_from_trav(trav: dict) -> dict:
+    """Collapse a three-way terrain -> traversability table to terrain -> blocked/go."""
+    return {
+        t_id: IGNORE if v == IGNORE else (WALK_GO if v == 2 else WALK_BLOCKED)
+        for t_id, v in trav.items()
+    }
+
+
 # ---------------------------------------------------------------------------
 # Scheme registry
 #
@@ -62,15 +85,30 @@ class LabelScheme:
     mapping: dict  # (r,g,b) -> terrain, or source_id -> terrain
     trav: dict  # terrain -> traversability
     classes: tuple  # unified terrain names; index is the class id
+    # Traversability class names, index = id. Three (blocked / caution / go) for every
+    # scheme in the table below; two (blocked / go) for the `_walk` twins registered
+    # after it, which supervise the binary walkable head. Carried on the scheme because
+    # the evaluator, the config check and anything that colours a traversability map
+    # need to know which of the two they are looking at.
+    trav_classes: tuple = TRAV_CLASSES
 
     @property
     def num_classes(self) -> int:
         return len(self.classes)
 
+    @property
+    def num_trav_classes(self) -> int:
+        return len(self.trav_classes)
 
-def _scheme(name, fmt, mapping, trav, terrain_dict):
+
+def _scheme(name, fmt, mapping, trav, terrain_dict, trav_classes=TRAV_CLASSES):
     return LabelScheme(
-        name, fmt, mapping, trav, tuple(sorted(terrain_dict, key=terrain_dict.get))
+        name,
+        fmt,
+        mapping,
+        trav,
+        tuple(sorted(terrain_dict, key=terrain_dict.get)),
+        tuple(trav_classes),
     )
 
 
@@ -218,6 +256,23 @@ SCHEMES: dict[str, LabelScheme] = {
         _ind.INDOOR_TERRAIN_TO_TRAV,
         _ind.INDOOR_TERRAIN,
     ),
+    # The 22-class CVAT taxonomy. Colour-keyed because CVAT exports a palette PNG.
+    # The CVAT / studioa-segment eleven. NOT site30k_native, which is also eleven ids
+    # and means different things by five of them -- see label_maps_retail_v3.py.
+    "retail_v3_native": _scheme(
+        "retail_v3_native",
+        "id",
+        _rv3.RETAIL_V3_NATIVE_ID,
+        _rv3.RETAIL_V3_TO_TRAV,
+        _rv3.RETAIL_V3,
+    ),
+    "retail22": _scheme(
+        "retail22",
+        "color",
+        _r22.RETAIL22_COLOR_TO_ID,
+        _r22.RETAIL22_TO_TRAV,
+        _r22.RETAIL22,
+    ),
     "cocostuff_retail": _scheme(
         "cocostuff_retail",
         "id",
@@ -226,6 +281,26 @@ SCHEMES: dict[str, LabelScheme] = {
         _ret.RETAIL_TERRAIN,
     ),
 }
+
+# Binary-walkable twins of the retail schemes: the same annotation -> terrain path, with
+# the traversability table collapsed to blocked / go (`walkable_from_trav`). A config
+# whose `traversability` head has two classes selects these; `config_schema` refuses the
+# three-way originals on such a head, and these on a three-class head.
+for _base in (
+    "ade20k_retail_surfaces",
+    "retail_surfaces_native",
+    "retail_surfaces_from_objects",
+    "retail_v3_native",
+):
+    _src = SCHEMES[_base]
+    SCHEMES[f"{_base}_walk"] = LabelScheme(
+        f"{_base}_walk",
+        _src.fmt,
+        _src.mapping,
+        walkable_from_trav(_src.trav),
+        _src.classes,
+        WALK_CLASSES,
+    )
 
 
 def get_scheme(name: str) -> LabelScheme:

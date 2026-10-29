@@ -77,7 +77,18 @@ def _stage_out_channels(stage: nn.Module) -> int:
     return last
 
 
-def build_backbone(cfg) -> Backbone:
+def build_backbone(cfg) -> nn.Module:
+    name = cfg.get("name", "regnet_x_800mf")
+    if name.startswith("dinov3"):
+        # Ported from local-work-20260901: DINOv3 ViT + ViTDet-style simple feature
+        # pyramid, same [C2..C5] contract as `Backbone`. See backbone_dinov3.py.
+        from .backbone_dinov3 import DINOv3Backbone
+
+        return DINOv3Backbone(
+            name=name,
+            pretrained=cfg.get("pretrained", True),
+            frozen=cfg.get("frozen_stages", 0) > 0,
+        )
     return Backbone(
         name=cfg.get("name", "regnet_x_800mf"),
         pretrained=cfg.get("pretrained", True),

@@ -1,0 +1,98 @@
+# ---------------------------------------------------------------------------
+# 22-class terrain — PIPELINE SMOKE TEST, not a model.
+#
+# Five frames (4 train / 1 val) exported from CVAT task 32. It answers four
+# mechanical questions and nothing else:
+#
+#   1. does the colour-keyed retail22 scheme read the CVAT palette correctly
+#   2. does a 23-channel terrain head build and run
+#   3. does the loss move
+#   4. does mIoU come out with per-class numbers
+#
+# It answers NOTHING about accuracy. With one val frame most classes never
+# appear there, so their IoU is NaN -- expected, not a bug. And the masks are
+# SAM 3 pre-labels nobody has corrected; gold_v1 measured auto-vs-human
+# agreement at 0.89, so 11% of the pixels are wrong before training starts.
+#
+# Terrain only, on purpose. num_classes goes 6 -> 23, so the head's last layer
+# is rebuilt either way; a single head isolates whether a failure is the data,
+# the scheme, or the model. The real run trains all three heads together, as
+# pose02 does.
+# ---------------------------------------------------------------------------
+seed: 42
+model:
+  backbone:
+    name: regnet_x_800mf
+    pretrained: true
+    frozen_stages: 0
+  neck:
+    name: bifpn
+    out_channels: 96
+    num_repeats: 2
+    num_levels: 5
+  heads:
+    terrain:
+      type: semantic_fpn
+      # 23 = void + the 22 annotated classes. void is id 0 and is ignored by the
+      # loss, matching every other scheme here, but it still costs a channel so a
+      # stray 0 in a mask cannot read as `地板`.
+      num_classes: 23
+      in_levels: [0, 1, 2]
+      channels: 64
+      dropout: 0.1
+      # No class_weights. pose02 hand-tuned five of them; with 20 classes present
+      # across five frames any weight here would be fitted to this sample rather
+      # than to the taxonomy.
+      loss:
+        ce_weight: 1.0
+        dice_weight: 1.5
+        ignore_index: 255
+
+data:
+  # 640x1120 is pose02's size. Kept identical so this run's numbers sit on the
+  # same scale as the model it is meant to replace.
+  # Per-class metrics are logged by name, not index; without this every line
+  # reads '03 0.000' and nobody can tell which class is failing.
+  terrain_classes: [void, 地板, 牆壁, 天花板, 柱子, 玻璃, 玻璃門, 門, 樓梯, 展示櫃, 展示桌, 結帳櫃檯, 椅子, 盒裝物品, 紙箱, 筆電, 手機, 平板, 螢幕, 喇叭, 海報, 消防, 人]
+  input_size: [640, 1120]
+  workers: 4
+  augment:
+    scale_range: [0.75, 1.5]
+  datasets:
+    - name: retail22
+      type: seg_folder
+      root: datasets/retail22_smoke
+      split_train: train
+      split_val: val
+      label_map: retail22
+      sample_ratio: 1.0
+      supervises:
+        - terrain
+
+train:
+  # Four training images at batch 2 is two steps an epoch. 30 epochs is 60 steps
+  # -- enough to see the loss move, far too few to mean anything.
+  epochs: 30
+  batch_size: 2
+  optimizer: adamw
+  lr: 0.0004
+  backbone_lr_mult: 0.1
+  weight_decay: 0.05
+  warmup_iters: 10
+  scheduler: cosine
+  amp: true
+  amp_dtype: bfloat16
+  grad_clip: 10.0
+  ema: true
+  ema_decay: 0.99
+  log_interval: 5
+  val_interval: 3
+  primary_metric: terrain_mIoU
+  channels_last: true
+  early_stop_patience: 0
+
+export:
+  opset: 17
+
+experiment: retail22_smoke
+output_dir: runs/retail22_smoke

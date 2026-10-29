@@ -21,11 +21,11 @@ from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint, select_weights
 from ..utils.device import pick_device
 from ..utils.visualize import (
-    TRAV_COLORS,
     crop_box,
     overlay,
     preprocess,
     terrain_palette,
+    trav_colors_for,
 )
 from .scene import apply_vocab, detection_class_names
 
@@ -120,7 +120,7 @@ def main(argv: list[str] | None = None) -> None:
             overlay(
                 vis_img,
                 crop_box(result["traversability"][0].cpu().numpy(), region),
-                TRAV_COLORS,
+                trav_colors_for(model),
             )
             if "traversability" in result
             else None

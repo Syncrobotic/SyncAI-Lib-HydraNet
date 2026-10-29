@@ -40,8 +40,26 @@ class PoseKeypointsDataset(Dataset[dict[str, Any]]):
         letterbox: bool = False,
         augment: dict | None = None,
         head_name: str = "pose",
+        labels_joints: list[str] | None = None,
     ):
         self.root = Path(root)
+        # Which of the 17 joints this source can actually label. None means all of
+        # them, which is the teacher case: ViTPose emits every channel, and a joint it
+        # was unsure about is genuinely "not visible on this viewpoint", which the loss
+        # is right to treat as background. A converted source like CrowdPose is the
+        # other case -- it has no face joints at all, and rendering nothing for them
+        # would teach "no nose anywhere" on every one of its frames. See
+        # `label_maps_crowdpose` and `PoseHeatmapLoss.forward`.
+        self.channel_mask = None
+        if labels_joints is not None:
+            from .label_maps_crowdpose import COCO17
+
+            unknown = set(labels_joints) - set(COCO17)
+            if unknown:
+                raise ValueError(f"labels_joints has non-COCO17 names: {sorted(unknown)}")
+            self.channel_mask = torch.tensor(
+                [1.0 if n in set(labels_joints) else 0.0 for n in COCO17], dtype=torch.float32
+            )
         ann_file = self.root / "annotations" / f"keypoints_{split}.json"
         if not ann_file.is_file():
             raise FileNotFoundError(
@@ -90,12 +108,15 @@ class PoseKeypointsDataset(Dataset[dict[str, Any]]):
             labels=np.zeros(len(boxes), dtype=np.int64),
         )
         s = self.transform(s)
+        targets = {
+            self.head_name: torch.from_numpy(s["pose"]).float(),
+            "boxes": torch.from_numpy(np.asarray(s["boxes"], dtype=np.float32)),
+        }
+        if self.channel_mask is not None:
+            targets["pose_channel_mask"] = self.channel_mask
         return {
             "image": s["image"],
-            "targets": {
-                self.head_name: torch.from_numpy(s["pose"]).float(),
-                "boxes": torch.from_numpy(np.asarray(s["boxes"], dtype=np.float32)),
-            },
+            "targets": targets,
             "supervises": self.supervises,
             "image_id": img_id,
             "geom": s.get("geom", GEOM_IDENTITY),

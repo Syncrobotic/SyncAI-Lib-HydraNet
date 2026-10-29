@@ -385,6 +385,9 @@ def main() -> int:
                                 "track_id": int(tid),
                                 "score": round(float(sc), 3),
                                 "box_h": round(float(box[3] - box[1]), 1),
+                                # source-pixel xyxy, so a second pass can draw the event
+                                # on the person rather than only in a banner
+                                "box": [round(float(v), 1) for v in box],
                                 "torso_angle_deg": None
                                 if not np.isfinite(ang)
                                 else round(ang, 1),

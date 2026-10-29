@@ -1,0 +1,181 @@
+# ---------------------------------------------------------------------------
+# All three heads in one network, the way the design intends.
+#
+# This replaces two half-runs: `detpose_coco01` trained detection+pose with no
+# terrain head at all, and `terrain_v3_1ep` trained terrain alone. Two
+# checkpoints with the same backbone shape but separately-fitted weights cannot
+# be merged -- whichever backbone you keep, the other heads are reading features
+# they were never fitted against. One run is the only way to get one model.
+#
+# Terrain was left out of `detpose_coco01` because its 22-class taxonomy had
+# five annotated frames. That is no longer the blocker: `retail_v3_512` carries
+# 2,346 train / 793 val under the eleven-id retail_v3 scheme, which
+# `retail_v3_native` reads natively (label_maps_retail_v3.py -- and NOT
+# `site30k_native`, which is also eleven ids and disagrees on five of them).
+#
+# Three datasets, one head each, because no dataset here labels more than one
+# task: COCO has boxes and keypoints but no retail surfaces; retail_v3_512 has
+# surfaces but no boxes. Each step draws from one dataset and supervises only
+# the head that dataset can teach; `loss_balancing: uncertainty` is what keeps
+# the three from being scaled by hand.
+#
+# WHAT THE NUMBERS WILL AND WILL NOT MEAN:
+#   - detection/pose come from COCO: web photos, large frontal people. They do
+#     not predict in-store CCTV performance.
+#   - terrain comes from retail_v3_512, whose masks are MODEL PRE-LABELS. Its
+#     mIoU measures agreement with an earlier model, not accuracy.
+# ---------------------------------------------------------------------------
+seed: 42
+
+model:
+  backbone:
+    name: regnet_x_800mf
+    pretrained: true
+    frozen_stages: 0
+  neck:
+    name: bifpn
+    out_channels: 96
+    num_repeats: 2
+    num_levels: 5
+  heads:
+    terrain:
+      # One tower, two predictors -- head 2 of the four-head design
+      # (hydranet-old/docs/FOURHEAD_TODO.md: "10 類 mask ＋ 每像素公尺"), ported
+      # forward as SegDepthFPNHead. NOT semantic_fpn + depth_fpn side by side: those
+      # build two trunks that never see each other's gradients, where a surface's class
+      # and its distance are the same geometry read two ways.
+      type: seg_depth_fpn
+      # 11 ids as the masks carry them. void (0) is lifted to ignore_index by
+      # the label map but still owns channel 0, so a stray 0 cannot read as
+      # `floor`.
+      num_classes: 11
+      in_levels: [0, 1, 2]
+      channels: 64
+      dropout: 0.1
+      # 10 m ceiling: indoor. Clamped in log space before exp(), so raising it later
+      # does not invalidate a checkpoint -- it is not baked into the weights.
+      min_depth: 0.1
+      max_depth: 10.0
+      loss:
+        ce_weight: 1.0
+        dice_weight: 1.5
+        ignore_index: 255
+      depth_loss:
+        # SILog at lam 0.85, not 1.0: full scale invariance would score a model that
+        # gets every ratio right and every metre wrong as perfect, and absolute metres
+        # are what Stage 0 needs off this head.
+        lam: 0.85
+        alpha: 10.0
+        weight: 1.0
+    detection:
+      type: fcos
+      num_classes: 4
+      in_levels: [0, 1, 2, 3, 4]
+      channels: 96
+      num_convs: 4
+      strides: [8, 16, 32, 64, 128]
+      loss:
+        cls_weight: 1.0
+        reg_weight: 1.0
+        centerness_weight: 1.0
+      classes: [person, bag, boxed_stock, device]
+    pose:
+      type: pose_p3
+      num_classes: 17
+      channels: 96
+      num_convs: 3
+      sigma_cells: 1.5
+      teacher_min_conf: 0.3
+  loss_balancing: uncertainty
+  fixed_weights:
+    traversability: 1.0
+    terrain: 1.0
+    detection: 1.0
+    pose: 1.0
+
+data:
+  # pose02's size, kept so this run's numbers sit on the same scale as the
+  # model it is meant to replace. retail_v3_512's 640x512 masks letterbox into
+  # it rather than being stretched -- `letterbox: true` below is what stops the
+  # mask being resampled off its own pixels.
+  input_size: [640, 1120]
+  workers: 8
+  letterbox: true
+  augment:
+    scale_range: [0.75, 1.5]
+    flip_p: 0.5
+    brightness: 0.3
+    contrast: 0.3
+    saturation: 0.3
+  # Per-class terrain metrics log by name; without this every line reads
+  # '08 0.000' with no way to tell which class is failing.
+  terrain_classes: [void, floor, stairs, structure, glass, door, person,
+                    column, display_fixture, goods_table, goods_wall]
+  datasets:
+    - name: retail_v3
+      type: seg_folder
+      root: datasets/retail_v3_512
+      split_train: train
+      split_val: val
+      label_map: retail_v3_native
+      # uint16 metres x 256, the encoding scripts/sam3_prelabel_retail.py writes and
+      # hydranet-old/scripts/calibrate_depth_scale.py reads back. Verified on this
+      # delivery: p50 591 -> 2.31 m, max 1370 -> 5.35 m.
+      depth_scale: 256.0
+      # Depth is the other half of the `terrain` head, not a head of its own, so it is
+      # declared here rather than in `supervises`.
+      with_depth: true
+      sample_ratio: 1.0
+      supervises: [terrain]
+
+    - name: coco_det
+      type: coco
+      root: datasets/coco
+      split_train: train2017
+      split_val: val2017
+      classes: [person, backpack, handbag, suitcase]
+      det_vocab: retail_security
+      sample_ratio: 0.15
+      supervises: [detection]
+
+    - name: coco_pose
+      type: pose_keypoints
+      root: datasets/coco_pose
+      split_train: train2017
+      split_val: val2017
+      sample_ratio: 0.15
+      supervises: [pose]
+
+train:
+  # One epoch: this run's job is to show the three heads coexist, train and
+  # report together. The real run is this config with epochs raised.
+  epochs: 1
+  # 16, not detpose's 32: the dense terrain head at 640x1120 adds activation
+  # memory the det+pose run never carried.
+  batch_size: 16
+  optimizer: adamw
+  lr: 0.0004
+  backbone_lr_mult: 0.1
+  weight_decay: 0.05
+  warmup_iters: 100
+  scheduler: cosine
+  amp: true
+  amp_dtype: bfloat16
+  grad_clip: 10.0
+  ema: true
+  ema_decay: 0.9998
+  log_interval: 50
+  val_interval: 1
+  # terrain_mIoU, not detection_mAP: of the three it is the one whose dataset
+  # is in-domain, so it is the only one whose movement reflects this store.
+  primary_metric: terrain_mIoU
+  pose_val_max_persons: 4000
+  channels_last: true
+  early_stop_patience: 0
+  detection_val_interval: 1
+
+export:
+  opset: 17
+
+experiment: three_heads_depth_1ep
+output_dir: runs/three_heads_depth_1ep

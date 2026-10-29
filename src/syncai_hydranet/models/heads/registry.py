@@ -87,6 +87,62 @@ class SegmentationHead:
 
 
 @dataclass(frozen=True)
+class SegDepthHead:
+    """One tower, two answers: class logits and metric depth.
+
+    Head 2 of the four-head design. It is a separate adapter from `SegmentationHead`
+    because its module returns a *pair* -- every other seg head returns one tensor, and
+    making the caller unpack conditionally is how the det/pose special-casing this file
+    exists to remove got started.
+
+    The two losses are summed here rather than handed to the balancer separately. They
+    belong to one head: the balancer weighs heads against each other, and splitting this
+    one in two would let the uncertainty weighting quietly decide that a shared tower
+    should serve classification and ignore geometry, which is the opposite of why the
+    tower is shared. `depth_weight` is the lever for their ratio, in one place.
+    """
+
+    name: str
+    module: torch.nn.Module
+    loss_fn: torch.nn.Module          # segmentation
+    depth_loss_fn: torch.nn.Module    # SILog
+    depth_key: str = "depth"
+    depth_weight: float = 1.0
+
+    @property
+    def depth_out(self) -> str:
+        """Where the depth map lands in `out`. Flat, like the FCOS keys, because the
+        ONNX graph names its outputs from this and a consumer of an exported engine has
+        nothing else to index by."""
+        return f"{self.name}_depth"
+
+    def forward_into(self, out: dict, feats: list[torch.Tensor], size) -> None:
+        logits, depth = self.module(feats, size)
+        out[self.name] = logits          # [B, C, H, W]
+        out[self.depth_out] = depth      # [B, 1, H, W] metres
+
+    def loss(self, out: dict, targets: dict) -> tuple[torch.Tensor, dict]:
+        seg = self.loss_fn(out[self.name], targets[self.name])
+        if self.depth_key not in targets:
+            # Seg-only batch from a dataset with no depth. Supervise what is there
+            # rather than refusing: mixing a depth-less seg set with a depth-carrying one
+            # is a reason this head exists, and `supervises` is what declares it.
+            return seg, {}
+        dep = self.depth_loss_fn(out[self.depth_out], targets[self.depth_key])
+        return seg + self.depth_weight * dep, {
+            f"{self.name}_seg": float(seg.detach()),
+            f"{self.name}_depth": float(dep.detach()),
+        }
+
+    def supervised_by(self, targets: dict) -> bool:
+        return self.name in targets
+
+    def decode_into(self, result: dict, out: dict, **_kw) -> None:
+        result[self.name] = out[self.name].argmax(dim=1)        # [B, H, W] class ids
+        result[self.depth_out] = out[self.depth_out].squeeze(1)  # [B, H, W] metres
+
+
+@dataclass(frozen=True)
 class DepthHead:
     """A dense regression head: one metric-depth map in, the same map out.
 
@@ -193,7 +249,15 @@ class PoseHead:
         out[self.name] = self.module(feats)  # [B, K, H/8, W/8] logits
 
     def loss(self, out: dict, targets: dict) -> tuple[torch.Tensor, dict]:
-        return self.loss_fn(out[self.name], targets[self.name]), {}
+        # Absent unless the dataset declared which joints it can label, and absent
+        # means all of them -- see PoseHeatmapLoss.forward for why a dataset that
+        # never had a joint must not be read as one that saw it missing.
+        return (
+            self.loss_fn(
+                out[self.name], targets[self.name], targets.get("pose_channel_mask")
+            ),
+            {},
+        )
 
     def supervised_by(self, targets: dict) -> bool:
         return self.name in targets

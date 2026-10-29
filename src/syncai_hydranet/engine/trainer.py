@@ -49,7 +49,7 @@ from ..utils.seeding import (
     resolve_amp_dtype,
     seed_everything,
 )
-from ..utils.visualize import TRAV_COLORS, prediction_grid, terrain_palette
+from ..utils.visualize import prediction_grid, terrain_palette, trav_colors
 from .ema import ModelEMA
 from .evaluator import build_val_loaders, evaluate, select_metric
 from .optim import WarmupCosine, build_optimizer
@@ -716,7 +716,9 @@ class Trainer:
         classes = self.cfg["data"].get("terrain_classes")
         for head, (imgs, preds, gts) in (samples or {}).items():
             if head == "traversability":
-                palette = TRAV_COLORS
+                # Two-way or three-way, read off the head: see `trav_colors`.
+                seg = cast("SemanticFPNHead", self.model.seg_heads[head])
+                palette = trav_colors(seg.num_classes)
             else:
                 # n_classes is the fallback for a config that names no classes; a config
                 # that does name them gets the palette built for that taxonomy.
@@ -779,15 +781,67 @@ class Trainer:
 
     def load(self, path: str, resume: bool = False):
         ckpt = load_checkpoint(path)
-        self.model.load_state_dict(ckpt["model"])
-        if self.ema and ckpt.get("ema"):
-            self.ema.ema.load_state_dict(ckpt["ema"])
         if resume:
+            # Same model, same run: every tensor must be there.
+            self.model.load_state_dict(ckpt["model"])
+            if self.ema and ckpt.get("ema"):
+                self.ema.ema.load_state_dict(ckpt["ema"])
             self.report_config_drift(ckpt)
             self.load_train_state(ckpt)
+        else:
+            # `--load`: weights only, into a model that may carry heads the checkpoint
+            # never had -- pose02's three heads warm-starting a four-head config, where
+            # `seg_heads.traversability.*` and its balancer weight are new. Those keep
+            # their initial values and are named in the log; anything the checkpoint
+            # has that this model cannot place is refused, because that is a different
+            # model, not a bigger one.
+            self._load_weights(self.model, ckpt["model"], "model")
+            if self.ema and ckpt.get("ema"):
+                self._load_weights(self.ema.ema, ckpt["ema"], "ema")
         self.logger.info(
             f"loaded checkpoint: {path} (epoch {ckpt.get('epoch')}, resume={resume})"
         )
+
+    def _load_weights(self, module: nn.Module, state: dict, what: str) -> list[str]:
+        """Load ``state`` into ``module``, tolerating tensors the checkpoint lacks.
+
+        Returns the missing keys. Raises on keys the module lacks or on a shape that
+        differs, with the keys in the message: a renamed head or a changed class count
+        is a wrong checkpoint for this config, and `strict=False` would load around it
+        and train a head from scratch while the log said the weights were loaded.
+        """
+        own = module.state_dict()
+        unexpected = sorted(k for k in state if k not in own)
+        mismatched = sorted(
+            f"{k}: checkpoint {tuple(state[k].shape)} vs model {tuple(own[k].shape)}"
+            for k in state
+            if k in own and tuple(state[k].shape) != tuple(own[k].shape)
+        )
+        if unexpected or mismatched:
+            raise ValueError(
+                f"[{what}] checkpoint does not fit this config: "
+                f"{len(unexpected)} tensor(s) the model has no place for "
+                f"{unexpected[:8]}{'...' if len(unexpected) > 8 else ''}; "
+                f"{len(mismatched)} shape mismatch(es) {mismatched[:8]}"
+                f"{'...' if len(mismatched) > 8 else ''}"
+            )
+        missing = sorted(k for k in own if k not in state)
+        module.load_state_dict(state, strict=False)
+        if missing:
+            # Group by head, not by tensor: `seg_heads.traversability` says what is new
+            # where forty parameter names would not.
+            groups: dict[str, int] = {}
+            for k in missing:
+                depth = 3 if k.startswith("balancer.") else 2
+                groups[".".join(k.split(".")[:depth])] = (
+                    groups.get(".".join(k.split(".")[:depth]), 0) + 1
+                )
+            listing = ", ".join(f"{g} ({n} tensors)" for g, n in sorted(groups.items()))
+            self.logger.warning(
+                f"[{what}] {len(missing)} tensor(s) are not in the checkpoint and keep "
+                f"their initial weights: {listing}"
+            )
+        return missing
 
     def report_config_drift(self, ckpt: dict) -> list[tuple[str, object, object]]:
         """Log how this run's config differs from the one the checkpoint was trained on.

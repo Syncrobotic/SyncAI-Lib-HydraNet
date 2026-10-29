@@ -75,7 +75,9 @@ MODEL = {
 
 HEAD_COMMON = {
     "type": Spec(
-        (str,), required=True, choices=("semantic_fpn", "fcos", "depth_fpn", "pose_p3")
+        (str,),
+        required=True,
+        choices=("semantic_fpn", "seg_depth_fpn", "fcos", "depth_fpn", "pose_p3"),
     ),
     "num_classes": Spec((int,), required=True),
     "in_levels": Spec((list,)),
@@ -90,6 +92,21 @@ HEAD_COMMON = {
 HEAD_DEPTH_COMMON = {k: v for k, v in HEAD_COMMON.items() if k != "num_classes"}
 HEAD_BY_TYPE = {
     "semantic_fpn": {**HEAD_COMMON, "dropout": Spec(NUMBER)},
+    # One tower, two predictors: class logits AND metres. Keeps `num_classes` (unlike
+    # depth_fpn, which drops it) because the classifier half is a real segmentation head.
+    "seg_depth_fpn": {
+        **HEAD_COMMON,
+        "dropout": Spec(NUMBER),
+        "min_depth": Spec(NUMBER),
+        "max_depth": Spec(NUMBER),
+        # Which target key carries metres. Named rather than fixed because one head can
+        # be fed by several datasets and they need not agree on the word.
+        "depth_key": Spec((str,)),
+        # The SILog half, under its own key: `loss` is already the segmentation half's,
+        # and merging them would make `ignore_index` ambiguous between a class id and a
+        # no-return sentinel.
+        "depth_loss": Spec((dict,)),
+    },
     "depth_fpn": {
         **HEAD_DEPTH_COMMON,
         "dropout": Spec(NUMBER),
@@ -163,6 +180,12 @@ LOSS_BY_TYPE = {
         "centerness_weight": Spec(NUMBER),
     },
     "pose_p3": {},
+    "seg_depth_fpn": {
+        "ce_weight": Spec(NUMBER),
+        "dice_weight": Spec(NUMBER),
+        "ignore_index": Spec((int,)),
+        "class_weights": Spec((list,)),
+    },
     "depth_fpn": {
         # SILog's scale-invariance dial. 1.0 makes the loss blind to absolute scale, which
         # is exactly the failure measured in the public teacher (a flat 15% over-prediction
@@ -237,6 +260,13 @@ DATASET = {
     # from zero. Without it two detection sources both emit label 0 and one head is asked
     # to mean `person` and `boxed_stock` at once. See data/label_maps_retail_security.py.
     "det_vocab": Spec((str,)),
+    # Divisor turning a stored uint16 depth map into metres. 256 is what
+    # scripts/sam3_prelabel_retail.py writes; a delivery in millimetres differs by 3.9x
+    # and would otherwise fail silently -- every depth simply small.
+    "depth_scale": Spec(NUMBER),
+    # This delivery carries depth maps beside its masks, for a `seg_depth_fpn` head.
+    # Separate from `supervises` because depth is half of that head, not a head.
+    "with_depth": Spec((bool,)),
     # COCO only, evaluation: score mAP over these categories while leaving the head and
     # the label mapping alone. Separate from `classes` because they are different jobs:
     # narrowing what a head learns changes its output space, narrowing what is scored
@@ -896,6 +926,44 @@ def _check_ignore_index(rep: _Report, cfg: dict) -> None:
             )
 
 
+def _check_trav_width(rep: _Report, cfg: dict) -> None:
+    """The traversability head's width must match every scheme that supervises it.
+
+    Binary labels through a three-class head is the kind of mistake nothing downstream
+    reports: the third channel simply never wins, and mIoU quietly averages over a class
+    with no pixels, so every number stays plausible. Three-way labels through a two-class
+    head is louder -- id 2 is out of range for the loss -- but only once a `go` pixel
+    reaches it, which is one step into a run rather than before it. Two schemes of
+    different widths on one head is the same problem twice over, and is caught here too.
+    """
+    head = cfg.get("model", {}).get("heads", {}).get("traversability")
+    if not isinstance(head, dict) or not isinstance(head.get("num_classes"), int):
+        return
+    n = head["num_classes"]
+    seen: dict[str, list[str]] = {}  # label_map -> dataset names supervising through it
+    for ds in (cfg.get("data") or {}).get("datasets") or []:
+        if not isinstance(ds, dict) or "traversability" not in (ds.get("supervises") or []):
+            continue
+        name = ds.get("label_map")
+        if name in SCHEMES:
+            seen.setdefault(name, []).append(str(ds.get("name")))
+
+    for scheme_name, ds_names in sorted(seen.items()):
+        classes = SCHEMES[scheme_name].trav_classes
+        if len(classes) != n:
+            rep.errors.append(
+                f"model.heads.traversability.num_classes is {n}, but dataset(s) "
+                f"{', '.join(ds_names)} use label_map {scheme_name!r}, whose "
+                f"traversability has {len(classes)}: {', '.join(classes)}"
+            )
+    widths = {len(SCHEMES[name].trav_classes) for name in seen}
+    if len(widths) > 1:
+        rep.errors.append(
+            f"datasets supervise traversability through label_maps of different widths "
+            f"({sorted(widths)}): {', '.join(sorted(seen))}. One head cannot mean both"
+        )
+
+
 def check_config(cfg: dict) -> list[str]:
     """Validate a config. Returns non-fatal warnings; raises ConfigError otherwise."""
     rep = _Report()
@@ -927,6 +995,7 @@ def check_config(cfg: dict) -> list[str]:
             _check_size(rep, cfg["export"]["input_size"], "export.input_size")
 
     _check_class_counts(rep, cfg)
+    _check_trav_width(rep, cfg)
     _check_detection_subset(rep, cfg)
     _check_detection_vocab(rep, cfg)
     _check_detection_val_interval(rep, cfg)

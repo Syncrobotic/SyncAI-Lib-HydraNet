@@ -132,6 +132,13 @@ class ExportWrapper(nn.Module):
         # `ort_value_name_idx_map.MaxIdx() > -1 was false`, which names neither the head
         # nor the config.
         self.depth_names = list(getattr(model, "depth_heads", {}).keys())
+        # A `seg_depth_fpn` head's depth branch is NOT in `depth_heads` -- the joint head
+        # is registered in `seg_heads` so its state_dict keys stay `seg_heads.<name>.*`,
+        # and its metres leave `forward` under `<name>_depth`. A list built from
+        # `depth_heads` alone drops it exactly the way this class's two comments above
+        # describe pose and depth being dropped before, and with the same symptom: an
+        # engine that silently contains no depth, from a checkpoint that has one.
+        self.seg_depth_names = list(getattr(model, "_seg_depth", {}).keys())
         self.embed_preprocessing = embed_preprocessing
         self.argmax_seg = argmax_seg
         if uint8_input and not embed_preprocessing:
@@ -191,6 +198,16 @@ class ExportWrapper(nn.Module):
         return [f"{n}_metres" for n in self.depth_names]
 
     @property
+    def seg_depth_output_names(self) -> list[str]:
+        """One binding per joint head's depth branch, named for its units.
+
+        `<name>_metres`, matching `depth_output_names` rather than the graph's internal
+        `<name>_depth`, because the host reads metres and the unit is the thing worth
+        putting in the contract.
+        """
+        return [f"{n}_metres" for n in self.seg_depth_names]
+
+    @property
     def seg_output_names(self) -> list[str]:
         """Binding names for the segmentation heads.
 
@@ -230,6 +247,11 @@ class ExportWrapper(nn.Module):
         # between them would renumber every existing export to buy nothing. Nothing
         # shipped pairs depth with another head, so this ordering costs no clarity.
         flat += [out[n] for n in self.depth_names]
+        # A joint head's metres go last, after the standalone depth heads, for the same
+        # reason: appending never renumbers a binding an existing host already indexes.
+        # (The sentence above about nothing pairing depth with another head stopped being
+        # true when `seg_depth_fpn` landed -- the ordering argument it gave still holds.)
+        flat += [out[f"{n}_depth"] for n in self.seg_depth_names]
         return tuple(flat)
 
 
@@ -429,6 +451,13 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--checkpoint", default=None)
     ap.add_argument("--output", default="hydranet.onnx")
     ap.add_argument("--batch", type=int, default=1)
+    ap.add_argument(
+        "--dynamic-batch",
+        action="store_true",
+        help="mark dim 0 of the input and every output as dynamic, so one engine serves "
+        "any batch size. Without it the batch is baked in at --batch and a 60-camera "
+        "host runs 60 separate forward passes.",
+    )
     ap.add_argument("--weights", choices=["ema", "model"], default="ema")
     ap.add_argument(
         "--allow-untrained-heads",
@@ -610,7 +639,21 @@ def main(argv: list[str] | None = None) -> None:
         out_names += det_output_names(n_lv, len(kept_names) if kept_names else None)
     out_names += wrapper.pose_output_names
     out_names += wrapper.depth_output_names
+    # Same order as `ExportWrapper.forward` appends them. These two lists are the one
+    # place the binding contract is written down, and a mismatch between them does not
+    # raise -- it renames outputs onto each other's tensors.
+    out_names += wrapper.seg_depth_output_names
 
+    # Dim 0 only. Height and width stay fixed on purpose: every spatial size in this
+    # graph is derived from them by a constant stride, and making them dynamic forces
+    # TensorRT to pick kernels for a range instead of a size -- measurably slower at the
+    # one resolution that is actually served. Batch is the axis a multi-camera host
+    # varies; resolution is not.
+    dyn = (
+        {n: {0: "batch"} for n in [wrapper.input_name, *out_names]}
+        if args.dynamic_batch
+        else None
+    )
     torch.onnx.export(
         wrapper,
         dummy,
@@ -620,9 +663,18 @@ def main(argv: list[str] | None = None) -> None:
         opset_version=int(ecfg.get("opset", 17)),
         do_constant_folding=True,
         dynamo=False,
+        dynamic_axes=dyn,
     )
     print(f"exported {args.output}")
     print("output nodes:", out_names)
+    if args.dynamic_batch:
+        print(
+            "batch axis is dynamic; build the engine with an optimisation profile, e.g.\n"
+            f"  trtexec --onnx={args.output} --saveEngine=hydranet.engine --fp16 \\\n"
+            f"    --minShapes={wrapper.input_name}:1x3x{h}x{w} \\\n"
+            f"    --optShapes={wrapper.input_name}:8x3x{h}x{w} \\\n"
+            f"    --maxShapes={wrapper.input_name}:16x3x{h}x{w}"
+        )
 
     if args.argmax_seg:
         # `h` is the image height four lines up. Reusing it as the loop variable worked --

@@ -15,9 +15,53 @@ services:
     # it means an IAP tunnel to loopback, so binding to 0.0.0.0 buys nothing and would
     # expose CVAT to anything else on the VPC the day a route or a peering appears.
     # Site footage is customer premises; that day should find the port already closed.
+    #
+    # 2026-09-07: opened to one interface, on request, because a colleague on the same
+    # LAN has to annotate and has no SSH account here -- loopback is not reachable for
+    # them at all, same subnet or not. bond0 (10.2.160.12) is the default-route NIC and
+    # the only one opened; eno1 (10.2.1.x) and bond1 (10.2.3.x) stay closed, so the
+    # paragraph above still holds for two of the three networks this host sits on.
+    #
+    # What is now exposed, unmitigated, to 10.2.160.0/24: CVAT over HTTP with no TLS, so
+    # credentials cross the LAN in clear text; and site footage of identifiable staff and
+    # customers, readable by anyone holding an account. Restore the commented line when
+    # the colleague is done -- it is a one-line change and it should be made.
     ports: !override
-      - "127.0.0.1:8080:8080"
+      - "10.2.160.12:8080:8080"
+      # - "127.0.0.1:8080:8080"   # the safe default; restore this
 
   cvat_server:
     # A job that dies with the annotator's tunnel is work done twice.
     restart: always
+    environment:
+      # 2026-09-21: md0p1 holds / and /data together and sits at 91%, so the health page
+      # reports unhealthy on every load. Raised on request to stop the warning; this hides
+      # the symptom and not the cause -- the partition still has ~166 GB left, and CVAT
+      # writes extracted frames and chunks there when a task is created, so a task will
+      # start failing outright well before anything says so again. Put this back to 90
+      # once space is reclaimed (docker image prune -a frees ~44 GB today).
+      # 2026-10-29: raised again to 100. The health check measures the container's
+      # root filesystem (md0p1, where docker lives), not the data directory; CVAT's
+      # data, extracted frames and chunks now all live on /models (see `volumes` at
+      # the end), so "creating a task fills md0p1" above no longer applies. md0p1 is
+      # still at 99%; put this back to 90 once space is reclaimed.
+      CVAT_HEALTH_DISK_USAGE_MAX: 100
+
+# 2026-10-29: md0p1 (/ and /data) reached 99%. The health check looks at the disk
+# holding /home/django/data and returns 500 above CVAT_HEALTH_DISK_USAGE_MAX, which
+# the web UI shows only as "Cannot connect to the server". The four data volumes are
+# now bound to /models (md1p1, 21T), so CVAT's data and its health check no longer
+# depend on /data. A full copy of the old volumes: /models/cvat_volumes_backup_20261029/.
+volumes:
+  cvat_db:
+    driver: local
+    driver_opts: { type: none, o: bind, device: /models/cvat_volumes/cvat_db }
+  cvat_data:
+    driver: local
+    driver_opts: { type: none, o: bind, device: /models/cvat_volumes/cvat_data }
+  cvat_keys:
+    driver: local
+    driver_opts: { type: none, o: bind, device: /models/cvat_volumes/cvat_keys }
+  cvat_logs:
+    driver: local
+    driver_opts: { type: none, o: bind, device: /models/cvat_volumes/cvat_logs }

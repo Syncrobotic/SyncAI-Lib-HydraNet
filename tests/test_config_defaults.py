@@ -29,6 +29,20 @@ LR_PER_SAMPLE = 1.25e-5
 # A config is allowed off the line if it says why here. Fine-tuning is the real case:
 # it wants a rate well below the from-scratch schedule regardless of batch size.
 DECLARED_DEVIATIONS = {
+    "hydranet_retail_walk01.yaml": (
+        "warm-starts from runs/hydranet_retail_pose02/best.pt: the trunk and three of its "
+        "four heads are already trained, so it takes half the from-scratch rate at batch 32"
+    ),
+    # 2026-10-05 one-epoch probes: pose02's 4e-4 kept at a smaller batch so their first
+    # epoch's losses sit on pose02's scale, which is what they were run to compare.
+    # Not shipped recipes; the real runs they stand in for are expected on the line.
+    "hydranet_three_heads.yaml": "one-epoch probe at pose02's rate, batch 16 for memory",
+    "hydranet_three_heads_depth.yaml": "one-epoch probe at pose02's rate, batch 16 for memory",
+    "hydranet_terrain_v3_1ep.yaml": "one-epoch probe at pose02's rate, batch 8",
+    "hydranet_retail22_smoke.yaml": "five-frame smoke at batch 2; the rate was never tuned",
+    # Stage 0 depth sweep (DINOv3 + depth head, HM3D renders), not the serving model.
+    "hydranet_hm3d_cctv_v2_b_lr4e4.yaml": "the sweep's double-rate arm, by design",
+    "hydranet_hm3d_cctv_v2_d_long.yaml": "the sweep's long arm at half rate, by design",
     "hydranet_retail_cctv.yaml": (
         "fine-tunes from hydranet_retail_base/best.pt at 3.1e-6 per sample, a quarter "
         "of the from-scratch rate; runs/hydranet_retail_cctv used exactly this"

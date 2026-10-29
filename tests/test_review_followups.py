@@ -186,12 +186,15 @@ def test_two_detection_datasets_are_scored_separately(monkeypatch):
     overwriting the first -- so every box was scored against the wrong annotations and
     the resulting mAP was wrong without any error."""
     metrics, datasets = _evaluate_with(monkeypatch, ["coco", "site"])
-    assert set(metrics) == {
+    # A subset, not equality: the per-dataset block also carries mAP75, AR and the F1
+    # approximation since 2026-10, and this test is about the two sets being scored
+    # apart, not about which columns the scorer emits.
+    assert {
         "detection_mAP/coco",
         "detection_mAP50/coco",
         "detection_mAP/site",
         "detection_mAP50/site",
-    }
+    } <= set(metrics)
     # Each dataset's own ground truth received its own detections.
     for name, ds in datasets.items():
         assert ds.coco.loaded, f"{name} was never scored"

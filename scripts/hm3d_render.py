@@ -440,9 +440,13 @@ def main() -> int:
     ap.add_argument("--preset", choices=sorted(PRESETS), default="cctv")
     ap.add_argument("--n", type=int, default=4, help="frames to render")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--size", type=int, nargs=2, metavar=("H", "W"), default=None,
+                    help="override the preset render size, e.g. 432 768 for a 16:9 canvas")
     args = ap.parse_args()
 
     base = PRESETS[args.preset]
+    if args.size is not None:
+        base = base._replace(size=(int(args.size[0]), int(args.size[1])))
     args.out.mkdir(parents=True, exist_ok=True)
     if args.scenes:
         scenes = sorted(d for d in args.scenes.iterdir() if d.is_dir() and "-" in d.name)

@@ -1,0 +1,199 @@
+# walk01 -- pose02's three heads plus the binary walkable head of the 2026-08 four-head
+# model, as a fourth head on the same trunk.
+#
+# Identical to hydranet_retail_pose02.yaml in trunk, terrain, detection and pose. The
+# deltas are exactly three:
+#   * `traversability`: semantic_fpn, 2 classes (blocked / go), the r6 head's recipe
+#     (channels 64, P3-P5, CE + 1.5 dice). Its labels are never drawn: every seg
+#     dataset derives them from its terrain mask through the scheme's table, which is
+#     why the seg datasets below use the `_walk` schemes (label_maps.py) -- the same
+#     terrain mapping as pose02, with floor -> go and everything else -> blocked.
+#   * `retail_v3` (datasets/retail_v3_512, 2,346 CCTV frames of four stores) supervises
+#     ONLY traversability. Its masks carry the eleven-id retail_v3 taxonomy, which the
+#     six-class terrain head cannot read, but floor-or-not survives the trip intact.
+#   * `primary_metric` is `traversability_mIoU`: the head this run exists to add. Pose,
+#     terrain and detection stay in metrics.jsonl; watch that they hold.
+#
+# Warm start: `hydranet-train --config configs/hydranet_retail_walk01.yaml
+#              --load runs/hydranet_retail_pose02/best.pt`
+# `--load` tolerates the two things pose02 never had (`seg_heads.traversability.*` and
+# `balancer.log_vars.traversability`) and names them in the log; everything else must
+# fit exactly. lr is half of pose02's because the trunk is not starting from ImageNet.
+#
+# DATA THIS BOX DOES NOT HAVE (2026-10-29): retail_objects_batch02, retail_objects_batch03
+# and site30k_v1 were on the machine that trained pose02. Until they are pulled, this
+# config cannot start here -- hydranet_retail_walk01_smoke.yaml is the same model on the
+# datasets that are present.
+seed: 42
+
+model:
+  backbone:
+    name: regnet_x_800mf
+    pretrained: true
+    frozen_stages: 0
+  neck:
+    name: bifpn
+    out_channels: 96
+    num_repeats: 2
+    num_levels: 5
+  heads:
+    traversability:
+      type: semantic_fpn
+      num_classes: 2
+      in_levels: [0, 1, 2]
+      channels: 64
+      dropout: 0.1
+      loss:
+        ce_weight: 1.0
+        dice_weight: 1.5
+        ignore_index: 255
+    terrain:
+      type: semantic_fpn
+      num_classes: 6
+      in_levels: [0, 1, 2]
+      channels: 64
+      dropout: 0.1
+      loss:
+        ce_weight: 1.0
+        dice_weight: 1.5
+        ignore_index: 255
+        class_weights: [0.0, 0.54, 0.66, 1.6, 0.46, 1.73]
+    detection:
+      type: fcos
+      num_classes: 4
+      in_levels: [0, 1, 2, 3, 4]
+      channels: 96
+      num_convs: 4
+      strides: [8, 16, 32, 64, 128]
+      loss:
+        cls_weight: 1.0
+        reg_weight: 1.0
+        centerness_weight: 1.0
+      classes: [person, bag, boxed_stock, device]
+    pose:
+      type: pose_p3
+      num_classes: 17
+      channels: 96
+      num_convs: 3
+      sigma_cells: 1.5
+      teacher_min_conf: 0.3
+  loss_balancing: uncertainty
+  fixed_weights:
+    traversability: 1.0
+    terrain: 1.0
+    detection: 1.0
+    pose: 1.0
+
+data:
+  input_size: [640, 1120]
+  workers: 8
+  augment:
+    scale_range: [0.75, 1.5]
+    flip_p: 0.5
+    brightness: 0.3
+    contrast: 0.3
+    saturation: 0.3
+  letterbox: true
+  terrain_classes: [void, floor, wall, column, fixture, person]
+  datasets:
+    - name: ade20k
+      type: seg_folder
+      root: datasets/ADE20K
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: ade20k_retail_surfaces_walk
+      sample_ratio: 0.15
+      supervises: [terrain, traversability]
+    - name: site_seg
+      type: seg_folder
+      root: datasets/retail_objects_batch02
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: retail_surfaces_from_objects_walk
+      sample_ratio: 2.0
+      supervises: [terrain, traversability]
+    - name: site_seg03
+      type: seg_folder
+      root: datasets/retail_objects_batch03
+      split_train: train
+      split_val: val
+      split_test: test
+      label_map: retail_surfaces_from_objects_walk
+      sample_ratio: 2.0
+      supervises: [terrain, traversability]
+    - name: retail_v3
+      type: seg_folder
+      root: datasets/retail_v3_512
+      # Train only. Its val split shares 19 cameras with its train split (it was cut by
+      # frame, not by camera), and main 0.5.0's trainer refuses that as a leak. A
+      # camera-disjoint 512 build from datasets/retail_v3/_camera_split.json would give
+      # this head a site val again; until then its val number comes from ADE20K.
+      split_train: train
+      label_map: retail_v3_native_walk
+      sample_ratio: 1.0
+      supervises: [traversability]
+    - name: site_boxes
+      type: coco
+      root: datasets/retail_objects_batch02
+      split_train: train
+      split_val: val
+      split_test: test
+      det_vocab: retail_security
+      sample_ratio: 3.0
+      supervises: [detection]
+    - name: site_boxes03
+      type: coco
+      root: datasets/retail_objects_batch03
+      split_train: train
+      split_val: val
+      split_test: test
+      det_vocab: retail_security
+      sample_ratio: 1.0
+      supervises: [detection]
+    - name: site_pose
+      type: pose_keypoints
+      root: datasets/site30k_v1
+      split_train: train
+      split_val: val
+      split_test: test
+      sample_ratio: 0.3
+      supervises: [pose]
+    - name: coco_person
+      type: coco
+      root: datasets/coco
+      split_train: train2017
+      split_val: val2017
+      classes: [person, backpack, handbag, suitcase]
+      det_vocab: retail_security
+      sample_ratio: 0.05
+      supervises: [detection]
+
+train:
+  epochs: 40
+  batch_size: 32
+  optimizer: adamw
+  lr: 0.0002
+  backbone_lr_mult: 0.1
+  weight_decay: 0.05
+  warmup_iters: 500
+  scheduler: cosine
+  amp: true
+  amp_dtype: bfloat16
+  grad_clip: 10.0
+  ema: true
+  ema_decay: 0.9998
+  log_interval: 50
+  val_interval: 1
+  primary_metric: traversability_mIoU
+  pose_val_max_persons: 4000
+  channels_last: true
+  early_stop_patience: 0
+  detection_val_interval: 5
+
+export:
+  opset: 17
+
+experiment: hydranet_retail_walk01
+output_dir: runs/hydranet_retail_walk01

@@ -64,8 +64,14 @@ class SegFolderDataset(Dataset[dict[str, Any]]):
 
         root/images/<split>/**/*.png
         root/annotations/<split>/**/*.png
+        root/depth/<split>/**/*.png        (optional; only read when a head asks)
 
-    Produces masks for both the terrain and traversability heads from one annotation.
+    Produces masks for both the terrain and traversability heads from one annotation,
+    and metric depth when `depth` is in `supervises`.
+
+    Depth rides in `maps`, not `masks`: `transforms.ToTensor` casts everything in `masks`
+    to int64, which would quantise 2.73 m to 2 and delete the near field as the 0.0
+    no-return sentinel. The float path exists for this.
     """
 
     def __init__(
@@ -79,6 +85,8 @@ class SegFolderDataset(Dataset[dict[str, Any]]):
         label_map: str | None = None,
         letterbox: bool = False,
         augment: dict | None = None,
+        with_depth: bool = False,
+        depth_scale: float = 256.0,
     ):
         self.root = Path(root)
         img_dir = self.root / "images" / split
@@ -100,6 +108,21 @@ class SegFolderDataset(Dataset[dict[str, Any]]):
             input_size, train, letterbox=letterbox, augment=augment
         )
         self.supervises = list(supervises)
+        # Divisor turning the stored uint16 into metres. 256 is what
+        # `scripts/sam3_prelabel_retail.py` writes and what
+        # `hydranet-old/scripts/calibrate_depth_scale.py` reads back; it is a parameter
+        # rather than a constant because a delivery encoded in millimetres would differ
+        # by 3.9x and otherwise fail silently -- every depth would simply be small.
+        self.depth_scale = float(depth_scale)
+        # An explicit flag, NOT `"depth" in supervises`: depth is half of a
+        # `seg_depth_fpn` head, not a head of its own, so naming it in `supervises`
+        # would make the config declare a head that does not exist.
+        self.with_depth = bool(with_depth)
+        self.depth_dir = self.root / "depth" / split
+        if self.with_depth and not self.depth_dir.is_dir():
+            raise FileNotFoundError(
+                f"{self.depth_dir} does not exist, but this dataset sets with_depth"
+            )
         self._color_lut = None
         self._id_lut = None
 
@@ -163,8 +186,20 @@ class SegFolderDataset(Dataset[dict[str, Any]]):
             trav_map = self.scheme.trav if self.scheme else None
             masks["traversability"] = label_maps.terrain_to_traversability(terrain, trav_map)
         s = Sample(image=Image.open(img_path).convert("RGB"), masks=masks)
+        if self.with_depth:
+            d_path = self.depth_dir / (ann_path.stem + ann_path.suffix)
+            if not d_path.exists():
+                # Loud: a silently missing depth map becomes an all-zero target, which
+                # every depth loss reads as "no valid pixels" and skips. The run then
+                # trains seg only while reporting a depth head.
+                raise FileNotFoundError(f"no depth map for {ann_path.name} at {d_path}")
+            s["maps"] = {
+                "depth": np.asarray(Image.open(d_path), dtype=np.float32) / self.depth_scale
+            }
         s = self.transform(s)
-        return {"image": s["image"], "targets": dict(s["masks"]), "supervises": self.supervises}
+        targets = dict(s["masks"])
+        targets.update(s.get("maps", {}))
+        return {"image": s["image"], "targets": targets, "supervises": self.supervises}
 
 
 class CocoDetDataset(Dataset[dict[str, Any]]):
@@ -410,6 +445,8 @@ def build_dataset(
             label_map=dcfg.get("label_map"),
             letterbox=letterbox,
             augment=augment,
+            with_depth=bool(dcfg.get("with_depth", False)),
+            depth_scale=dcfg.get("depth_scale", 256.0),
         )
     if dcfg["type"] == "coco":
         return CocoDetDataset(

@@ -94,6 +94,17 @@ DET_ALIASES = {
     "suitcase": "bag",
     "boxed_stock": "boxed_stock",
     "device": "device",
+    # COCO already labels the merchandise these stores sell, and `device` was defined as
+    # "demo units, handsets, laptops" -- `cell phone` and `laptop` are that class verbatim.
+    # Until 2026-09-23 none of them were mapped, so detpose_coco01 trained the channel on
+    # 0 of 308 detection steps while 22,326 boxes sat unused in the same annotation file.
+    "cell phone": "device",     # 6,434 boxes
+    "laptop": "device",         # 4,970
+    "tv": "device",             # 5,805 -- the display screens on a demo table
+    "keyboard": "device",       # 2,855 -- accessories on the same table
+    "mouse": "device",          # 2,262
+    # `remote` is deliberately absent: a TV remote looks like a handset but never appears
+    # in these stores, so it would teach the channel a shape it will never be asked for.
 }
 
 # Named so they are not silently dropped from the roadmap, and kept out of the head so

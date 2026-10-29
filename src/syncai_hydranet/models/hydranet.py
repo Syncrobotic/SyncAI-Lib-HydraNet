@@ -21,8 +21,15 @@ from .backbone import build_backbone
 from .heads.depth import SILogLoss, build_depth_head
 from .heads.detection import SCORE_THR_VIEW, FCOSHead, build_det_head
 from .heads.pose import build_pose_head, build_pose_loss
-from .heads.registry import DepthHead, DetectionHead, Head, PoseHead, SegmentationHead
-from .heads.segmentation import build_seg_head
+from .heads.registry import (
+    DepthHead,
+    DetectionHead,
+    Head,
+    PoseHead,
+    SegDepthHead,
+    SegmentationHead,
+)
+from .heads.segmentation import build_seg_depth_head, build_seg_head
 from .heads.text_classifier import TextEmbeddingClassifier, load_matrix_file
 from .losses import FCOSLoss, FixedWeighting, SegLoss, UncertaintyWeighting
 from .neck import build_neck
@@ -70,6 +77,10 @@ class HydraNet(nn.Module):
         self.det_head: FCOSHead | None = None
         self.det_loss: FCOSLoss | None = None
         self.det_head_name: str | None = None
+        # Which entries of `seg_heads` are joint seg+depth heads, and how their depth
+        # branch is configured. A plain dict, not a Module: these are settings, and a
+        # ModuleDict here would add a level to every checkpoint key.
+        self._seg_depth: dict[str, dict] = {}
         head_names = []
         for name, hcfg in mcfg["heads"].items():
             head_names.append(name)
@@ -94,6 +105,31 @@ class HydraNet(nn.Module):
                     reg_weight=lcfg.get("reg_weight", 1.0),
                     centerness_weight=lcfg.get("centerness_weight", 1.0),
                 )
+            elif hcfg["type"] == "seg_depth_fpn":
+                # Registered in `seg_heads` on purpose: the state_dict keys stay
+                # `seg_heads.<name>.*`, so a checkpoint from the semantic-only head still
+                # loads its trunk here and only `depth_predictor` comes up missing.
+                self.seg_heads[name] = build_seg_depth_head(hcfg, ch)
+                lcfg = hcfg.get("loss", {})
+                self.seg_losses[name] = SegLoss(
+                    hcfg["num_classes"],
+                    ce_weight=lcfg.get("ce_weight", 1.0),
+                    dice_weight=lcfg.get("dice_weight", 1.0),
+                    ignore_index=lcfg.get("ignore_index", IGNORE),
+                    class_weights=lcfg.get("class_weights"),
+                )
+                dcfg = hcfg.get("depth_loss", {})
+                self.depth_losses[name] = SILogLoss(
+                    lam=dcfg.get("lam", 0.85),
+                    alpha=dcfg.get("alpha", 10.0),
+                    # From the head, not the loss: a ceiling that disagreed between the
+                    # two would train for depths the loss then masks away as invalid.
+                    max_depth=hcfg.get("max_depth", 10.0),
+                )
+                self._seg_depth[name] = {
+                    "depth_key": hcfg.get("depth_key", "depth"),
+                    "depth_weight": float(dcfg.get("weight", 1.0)),
+                }
             elif hcfg["type"] == "depth_fpn":
                 self.depth_heads[name] = build_depth_head(hcfg, ch)
                 lcfg = hcfg.get("loss", {})
@@ -137,12 +173,26 @@ class HydraNet(nn.Module):
         and not cosmetic.
         """
         heads: list[Head] = [
-            SegmentationHead(name, self.seg_heads[name], self.seg_losses[name])
+            SegDepthHead(
+                name,
+                self.seg_heads[name],
+                self.seg_losses[name],
+                self.depth_losses[name],
+                depth_key=self._seg_depth[name]["depth_key"],
+                depth_weight=self._seg_depth[name]["depth_weight"],
+            )
+            if name in self._seg_depth
+            else SegmentationHead(name, self.seg_heads[name], self.seg_losses[name])
             for name in self.seg_heads
         ]
+        # Standalone depth heads only. A joint head's SILog loss also lives in
+        # `depth_losses`, under the SAME name as its seg head, and is already carried by
+        # the adapter above -- emitting it again here would be one head counted twice by
+        # the balancer.
         heads += [
             DepthHead(name, self.depth_heads[name], self.depth_losses[name])
             for name in self.depth_heads
+            if name not in self._seg_depth
         ]
         det = self._detection()
         if det is not None:

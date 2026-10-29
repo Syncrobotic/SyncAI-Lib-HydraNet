@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
+from ..data.label_maps import TRAV_CLASSES, WALK_CLASSES
 from ..data.multitask import collate
 from ..data.transforms import invert_geom
 from ..labels import IGNORE
@@ -68,6 +69,54 @@ class ConfusionMatrix:
             return float("nan"), iou
         return float(np.nanmean(iou)), iou
 
+    def prf(self) -> tuple[float, np.ndarray, np.ndarray, np.ndarray]:
+        """Pixel accuracy, and per-class precision / recall / F1 from the same matrix.
+
+        All four fall out of the confusion matrix that ``miou`` already builds, so they
+        cost one more pass over an ``n x n`` array rather than a second pass over the
+        pixels. ``mat[t][p]`` counts ground truth ``t`` predicted as ``p``, so the
+        diagonal is TP, a row sum is that class's support (TP + FN) and a column sum is
+        what the model predicted for it (TP + FP).
+
+        Why report these next to IoU rather than instead of it. IoU is a single number
+        that penalises a miss and a false alarm together; precision and recall separate
+        the two, which is the distinction that decides what to fix. A class at IoU 0.20
+        is useless either way, but at precision 0.9 / recall 0.2 the model is too shy
+        and wants more examples, while at precision 0.2 / recall 0.9 it is painting the
+        class over everything and wants harder negatives. For segmentation F1 is the
+        Dice coefficient, which is also what `dice_weight` in the loss optimises.
+
+        There is no mAP here and there cannot be: average precision ranks detections by
+        confidence, and a semantic mask has no per-instance score to rank. mAP belongs
+        to the detection head.
+
+        A class with neither support nor prediction is NaN in all three, for the same
+        reason it is NaN in ``miou``, and the means drop it.
+        """
+        if self.mat is None:
+            nan = np.full(self.n, np.nan)
+            return float("nan"), nan, nan.copy(), nan.copy()
+        mat = self.mat.reshape(self.n, self.n).cpu().numpy().astype(np.float64)
+        tp = np.diag(mat)
+        support = mat.sum(1)  # TP + FN
+        predicted = mat.sum(0)  # TP + FP
+        total = mat.sum()
+        acc = float(tp.sum() / total) if total > 0 else float("nan")
+        with np.errstate(invalid="ignore", divide="ignore"):
+            precision = np.where(predicted > 0, tp / np.maximum(predicted, 1), np.nan)
+            recall = np.where(support > 0, tp / np.maximum(support, 1), np.nan)
+            denom = precision + recall
+            # F1 is 0, not undefined, when a class is present and the model gets none of
+            # it right: P and R are both a real 0 there. Only the genuinely absent class
+            # below is NaN. Writing this as `denom > 0` alone made every failing class
+            # read as "not measured", which is the opposite of what it is.
+            f1 = np.where(denom > 0, 2 * precision * recall / np.maximum(denom, 1e-12), 0.0)
+        # A class the model never predicts and that never appears is absent, not perfect:
+        # keep it NaN rather than letting 0/0 become a defensible-looking 0.0.
+        absent = (support == 0) & (predicted == 0)
+        precision[absent] = recall[absent] = f1[absent] = np.nan
+        return acc, precision, recall, f1
+
     def predicted(self) -> np.ndarray:
         """Predicted pixels per class: the column sums, against `support`'s row sums.
 
@@ -99,6 +148,20 @@ class ConfusionMatrix:
         if self.mat is None:
             return np.zeros(self.n, dtype=np.int64)
         return self.mat.reshape(self.n, self.n).cpu().numpy().sum(1)
+
+
+def _trav_names(cfg) -> tuple[str, ...]:
+    """What the traversability head's channels mean.
+
+    Three-way unless the config built the binary walkable head (two classes), whose
+    channel 1 is `go`, not `caution` -- read off the head rather than assumed, so a
+    metrics.jsonl never labels the walkable class with the name of one the head lacks.
+    """
+    try:
+        n = cfg["model"]["heads"]["traversability"]["num_classes"]
+    except (KeyError, TypeError, IndexError):
+        return TRAV_CLASSES
+    return WALK_CLASSES if n == 2 else TRAV_CLASSES
 
 
 def head_disagreement(trav_pred, terrain_pred, trav_map: dict, valid) -> tuple[int, int]:
@@ -172,7 +235,7 @@ def _seg_metrics_per_dataset(seg_cms_by_ds, cfg, logger) -> dict:
         primary_metric: IoU/terrain/05_product/site_sam3
     """
     heads = {head for head, _ in seg_cms_by_ds}
-    trav_names = ("blocked", "caution", "go")
+    trav_names = _trav_names(cfg)
     terrain_names = tuple(cfg["data"].get("terrain_classes", []))
     metrics: dict[str, float] = {}
     for head in sorted(heads):
@@ -306,7 +369,7 @@ def _seg_metrics(seg_cms, cfg, logger) -> dict:
     only converge badly, it also produces an IoU that looks exactly like a well-evidenced
     one in the log and in metrics.jsonl.
     """
-    trav_names = ("blocked", "caution", "go")
+    trav_names = _trav_names(cfg)
     terrain_names = tuple(cfg["data"].get("terrain_classes", []))
     metrics: dict[str, float] = {}
     for head, cm in seg_cms.items():
@@ -340,9 +403,33 @@ def _seg_metrics(seg_cms, cfg, logger) -> dict:
             # class 0 is `blocked`, which is a real class and must still be checked.
             if share < THIN_SUPPORT and cname != "void":
                 thin.append(f"{cname} {iou:.3f} on {100 * share:.2f}%")
+        acc, prec, rec, f1 = cm.prf()
+
+        def _m(a: np.ndarray) -> float:
+            return float(np.nanmean(a)) if np.isfinite(a).any() else float("nan")
+
+        # Macro means, matching mIoU: every present class counts once regardless of how
+        # many pixels it owns. A micro mean would be `acc` and is reported beside them.
+        metrics[f"{head}_acc"] = acc
+        metrics[f"{head}_precision"] = _m(prec)
+        metrics[f"{head}_recall"] = _m(rec)
+        metrics[f"{head}_F1"] = _m(f1)
+        for i, (pv, rv, fv) in enumerate(zip(prec, rec, f1, strict=True)):
+            cname = names[i] if i < len(names) else str(i)
+            metrics[f"P/{head}/{i:02d}_{cname}"] = float(pv)
+            metrics[f"R/{head}/{i:02d}_{cname}"] = float(rv)
+            metrics[f"F1/{head}/{i:02d}_{cname}"] = float(fv)
         logger.info(
-            f"[val] {head} mIoU = {miou:.4f} | per-class IoU = "
+            f"[val] {head} mIoU = {miou:.4f} | acc = {acc:.4f} | "
+            f"P = {_m(prec):.4f} | R = {_m(rec):.4f} | F1 = {_m(f1):.4f}"
+        )
+        logger.info(
+            f"[val] {head} per-class IoU = "
             + " ".join(f"{x:.3f}" if np.isfinite(x) else "-" for x in per_class)
+        )
+        logger.info(
+            f"[val] {head} per-class F1  = "
+            + " ".join(f"{x:.3f}" if np.isfinite(x) else "-" for x in f1)
         )
         if thin:
             logger.warning(
@@ -392,10 +479,24 @@ def _det_metrics(det_results, coco_gts: dict[str, Any], det_cat_ids, logger) -> 
         # unqualified key, which is what train.primary_metric and every existing
         # metrics.jsonl refer to. A second one gets its own suffixed keys rather than
         # quietly redefining that number.
-        metrics[f"detection_mAP{suffix}"] = float(ev.stats[0])
-        metrics[f"detection_mAP50{suffix}"] = float(ev.stats[1])
+        # COCOeval.stats is 12 numbers and only the first two were being kept. stats[8]
+        # is AR@100 -- the recall the AP curve was integrated against -- and without it
+        # a falling mAP cannot be read as "missing objects" or "placing them badly".
+        m_ap, m_ap50, m_ap75, m_ar = (float(ev.stats[i]) for i in (0, 1, 2, 8))
+        metrics[f"detection_mAP{suffix}"] = m_ap
+        metrics[f"detection_mAP50{suffix}"] = m_ap50
+        metrics[f"detection_mAP75{suffix}"] = m_ap75
+        metrics[f"detection_AR{suffix}"] = m_ar
+        # Not a COCO metric. AP is already an average over recall, so the harmonic mean
+        # of AP@50 and AR@100 double-counts recall and is only a single number to watch
+        # a run by -- never a number to report. Named F1_approx so it cannot be mistaken
+        # for the segmentation F1, which is an exact Dice.
+        denom = m_ap50 + m_ar
+        m_f1 = (2 * m_ap50 * m_ar / denom) if denom > 0 else 0.0
+        metrics[f"detection_F1_approx{suffix}"] = m_f1
         logger.info(
-            f"[val] {ds_name} detection mAP = {ev.stats[0]:.4f}, mAP@50 = {ev.stats[1]:.4f}"
+            f"[val] {ds_name} detection mAP = {m_ap:.4f} | mAP@50 = {m_ap50:.4f} | "
+            f"mAP@75 = {m_ap75:.4f} | AR@100 = {m_ar:.4f} | F1~ = {m_f1:.4f}"
         )
     return metrics
 

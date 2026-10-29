@@ -16,7 +16,8 @@ from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD, PAD_COLOR, PAD_LABEL
 
 
 class Sample(dict):
-    """Keys: image (PIL), masks: dict[str, HxW array], boxes: [N,4], labels: [N],
+    """Keys: image (PIL), masks: dict[str, HxW array], maps: dict[str, HxW float32],
+    boxes: [N,4], labels: [N],
     geom: the accumulated original-image -> network-input mapping (see below)."""
 
 
@@ -87,6 +88,18 @@ def _resize(sample: Sample, size: tuple[int, int]) -> Sample:
     ow, oh = img.size
     _geom_scale(sample, w / ow, h / oh)
     sample["image"] = img.resize((w, h), Image.Resampling.BILINEAR)
+    if "maps" in sample:
+        # BILINEAR, unlike the masks below: these are continuous quantities, and
+        # nearest-neighbour on metres leaves a staircase along every depth edge. The
+        # no-return sentinel (0.0) does blend at edges, which is why the loss tests
+        # `target > 0` rather than `target != 0`.
+        sample["maps"] = {
+            k: np.array(
+                Image.fromarray(m, mode="F").resize((w, h), Image.Resampling.BILINEAR),
+                dtype=np.float32,
+            )
+            for k, m in sample["maps"].items()
+        }
     if "masks" in sample:
         sample["masks"] = {
             k: np.array(Image.fromarray(m).resize((w, h), Image.Resampling.NEAREST))
@@ -114,10 +127,16 @@ def _paste(sample: Sample, size: tuple[int, int], x0: int, y0: int) -> Sample:
     canvas = Image.new("RGB", (w, h), PAD_COLOR)
     canvas.paste(img, (x0, y0))
     sample["image"] = canvas
-    if "masks" in sample:
+    for _key, _pad in (("maps", 0.0), ("masks", PAD_LABEL)):
+        if _key not in sample:
+            continue
         out = {}
-        for k, m in sample["masks"].items():
-            c = np.full((h, w), PAD_LABEL, dtype=m.dtype)
+        for k, m in sample[_key].items():
+            # 0.0 for a float map, not PAD_LABEL: 0 is the no-return sentinel every
+            # depth loss already excludes, so letterbox bars are ignored by the same
+            # test that ignores a sensor's missing returns. PAD_LABEL (255) would be a
+            # 255-metre wall around every frame.
+            c = np.full((h, w), _pad, dtype=m.dtype)
             sx0, sy0 = max(-x0, 0), max(-y0, 0)
             dx0, dy0 = max(x0, 0), max(y0, 0)
             cw = min(m.shape[1] - sx0, w - dx0)
@@ -125,7 +144,7 @@ def _paste(sample: Sample, size: tuple[int, int], x0: int, y0: int) -> Sample:
             if cw > 0 and ch > 0:
                 c[dy0 : dy0 + ch, dx0 : dx0 + cw] = m[sy0 : sy0 + ch, sx0 : sx0 + cw]
             out[k] = c
-        sample["masks"] = out
+        sample[_key] = out
     if "boxes" in sample and len(sample["boxes"]):
         b = sample["boxes"].copy()
         b[:, [0, 2]] += x0
@@ -175,8 +194,9 @@ class RandomHorizontalFlip:
         w = s["image"].size[0]
         s["geom"] = None  # a mirror is not an (sx, sy, px, py) mapping; train-only anyway
         s["image"] = s["image"].transpose(Image.Transpose.FLIP_LEFT_RIGHT)
-        if "masks" in s:
-            s["masks"] = {k: np.ascontiguousarray(m[:, ::-1]) for k, m in s["masks"].items()}
+        for _key in ("masks", "maps"):
+            if _key in s:
+                s[_key] = {k: np.ascontiguousarray(m[:, ::-1]) for k, m in s[_key].items()}
         if "boxes" in s and len(s["boxes"]):
             b = s["boxes"].copy()
             b[:, [0, 2]] = w - b[:, [2, 0]]
@@ -213,8 +233,9 @@ class RandomScaleCrop:
         x0 = random.randint(0, sw - w)
         _geom_shift(s, -x0, -y0)
         s["image"] = s["image"].crop((x0, y0, x0 + w, y0 + h))
-        if "masks" in s:
-            s["masks"] = {k: m[y0 : y0 + h, x0 : x0 + w] for k, m in s["masks"].items()}
+        for _key in ("masks", "maps"):
+            if _key in s:
+                s[_key] = {k: m[y0 : y0 + h, x0 : x0 + w] for k, m in s[_key].items()}
         if "boxes" in s and len(s["boxes"]):
             b = s["boxes"].copy()
             b[:, [0, 2]] -= x0
@@ -311,6 +332,17 @@ class ToTensor:
             # path, which is what it has.
             s["masks"] = {
                 k: torch.from_numpy(m.astype(np.int64)) for k, m in s["masks"].items()
+            }
+        if "maps" in s:
+            # The float path the comment above says a continuous target wants. It stays
+            # a separate dict rather than widening `masks` for exactly the reason given:
+            # every other stage treats `masks` as class ids, so a float riding in there
+            # would be resampled nearest and cast to int. These are already resampled
+            # bilinearly and padded with 0.0, and they are NOT normalised -- metres are
+            # the unit the loss and the head's exp() both work in.
+            s["maps"] = {
+                k: torch.from_numpy(np.ascontiguousarray(m, dtype=np.float32))
+                for k, m in s["maps"].items()
             }
         if "boxes" in s:
             s["boxes"] = torch.from_numpy(np.asarray(s["boxes"], dtype=np.float32)).reshape(

@@ -31,12 +31,12 @@ from ..models.hydranet import build_model
 from ..utils.checkpoint import load_checkpoint, select_weights
 from ..utils.device import pick_device
 from ..utils.visualize import (
-    TRAV_COLORS,
     crop_box,
     depth_colors,
     overlay,
     preprocess,
     terrain_palette,
+    trav_colors_for,
 )
 from .scene import apply_vocab, detection_class_names
 
@@ -132,7 +132,11 @@ def render_frame(
     # See infer_image: traversability is optional, because it is a lookup on terrain
     # and the object-segmentation configs drop the head entirely.
     vis_trav = (
-        overlay(content, crop_box(res["traversability"][0].cpu().numpy(), region), TRAV_COLORS)
+        overlay(
+            content,
+            crop_box(res["traversability"][0].cpu().numpy(), region),
+            trav_colors_for(model),
+        )
         if "traversability" in res
         else None
     )

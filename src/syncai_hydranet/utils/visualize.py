@@ -14,6 +14,7 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image
 
+from ..data.label_maps_retail22 import GLASS_DOOR as RETAIL22_GLASS_DOOR
 from ..labels import IGNORE
 from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD, PAD_COLOR
 
@@ -21,6 +22,59 @@ from ..preprocessing import IMAGENET_MEAN, IMAGENET_STD, PAD_COLOR
 # deployments, so it needs no selection.
 TRAV_COLORS = np.array([[220, 40, 40], [250, 200, 40], [40, 200, 80]], dtype=np.uint8)
 
+# The binary walkable head (WALK_CLASSES in data/label_maps.py): blocked / go. `go` keeps
+# its green, and nothing is ever painted the caution yellow of a class the head lacks.
+WALK_COLORS = TRAV_COLORS[[0, 2]]
+
+
+def trav_colors(num_classes: int) -> np.ndarray:
+    """The traversability palette for a head of this width: two-way or three-way."""
+    if num_classes == 2:
+        return WALK_COLORS
+    if num_classes == 3:
+        return TRAV_COLORS
+    raise ValueError(f"a traversability head has 2 or 3 classes, not {num_classes}")
+
+
+def trav_colors_for(model) -> np.ndarray:
+    """The palette for the traversability head ``model`` carries.
+
+    Three-way when the model has no such head: the CLIs then derive traversability from
+    terrain through the scheme's three-way table, and that is what gets drawn.
+    """
+    heads = getattr(model, "seg_heads", None)
+    if heads is None or "traversability" not in heads:
+        return TRAV_COLORS
+    return trav_colors(int(heads["traversability"].num_classes))
+
+
+# Terrain colours are per taxonomy, because the taxonomies are not the same list of
+# things. There used to be a single TERRAIN_COLORS holding the off-road one, and every
+# indoor and retail run was rendered with it: `wall` came out sky blue, `glass` came out
+# water blue, `person` came out the orange belonging to `stairs_log`. Nothing failed --
+# an index is an index -- so a val_pred grid looked plausible while naming the wrong
+# things, in the one place meant to catch a model calling a floor a wall.
+#
+# Index order matches ``data.terrain_classes`` in the matching config.
+
+# configs/hydranet_regnet800mf.yaml
+TERRAIN_COLORS_OFFROAD = np.array(
+    [
+        [0, 0, 0],  # void
+        [139, 90, 43],  # dirt
+        [60, 180, 75],  # grass
+        [0, 100, 0],  # tree_bush
+        [128, 128, 128],  # pavement_concrete
+        [210, 180, 140],  # gravel_mulch
+        [178, 34, 34],  # building_wall
+        [135, 206, 235],  # sky
+        [30, 100, 220],  # water
+        [255, 215, 0],  # vehicle_object
+        [112, 128, 144],  # rock
+        [255, 140, 0],  # stairs_log
+    ],
+    dtype=np.uint8,
+)
 
 # configs/hydranet_indoor.yaml. Taken from scripts/live_view_orin.py, which had been
 # carrying the only indoor palette in the repo -- under a comment claiming it matched
@@ -110,7 +164,44 @@ TERRAIN_COLORS_RETAIL_SURFACES = np.array(
 # the surfaces one. Moving these two lines past each other paints every surfaces run in
 # the object palette, which is off by one from `person` onwards -- a wrong colour, which
 # `overlay` exists to say is indistinguishable from a wrong prediction.
+
+# The 22-class CVAT taxonomy, colours taken verbatim from that project's labelmap.txt.
+# Reusing CVAT's own colours means a prediction overlay and the annotation tool show the
+# same class in the same colour, so the two can be compared by eye without a legend.
+TERRAIN_COLORS_RETAIL22 = np.array(
+    [
+        [0, 0, 0],  #  0 void
+        [104, 196, 108],  #  1 floor
+        [88, 172, 234],  #  2 wall
+        [199, 215, 233],  #  3 ceiling
+        [103, 204, 119],  #  4 column
+        [50, 214, 224],  #  5 glass
+        [140, 242, 78],  #  6 glass door
+        [78, 242, 160],  #  7 door
+        [161, 136, 127],  #  8 stairs
+        [245, 124, 65],  #  9 display case
+        [40, 190, 155],  # 10 display table
+        [242, 201, 78],  # 11 checkout counter
+        [78, 181, 242],  # 12 chair
+        [255, 189, 65],  # 13 boxed goods
+        [242, 167, 78],  # 14 cardboard box
+        [78, 126, 242],  # 15 laptop
+        [174, 242, 78],  # 16 phone
+        [248, 92, 122],  # 17 tablet
+        [255, 110, 60],  # 18 monitor
+        [119, 78, 242],  # 19 speaker
+        [195, 102, 241],  # 20 poster
+        [242, 78, 133],  # 21 fire equipment
+        [236, 64, 122],  # 22 person
+    ],
+    dtype=np.uint8,
+)
+
 _TERRAIN_PALETTES = (
+    # retail22's glass-door class, in the taxonomy's own CVAT spelling and imported from
+    # it rather than retyped here. No other taxonomy has the class, so it cannot match
+    # an English-keyed palette by accident.
+    (RETAIL22_GLASS_DOOR, TERRAIN_COLORS_RETAIL22),
     ("product", TERRAIN_COLORS_RETAIL_OBJECTS),
     ("fixture", TERRAIN_COLORS_RETAIL_SURFACES),
     ("display_fixture", TERRAIN_COLORS_RETAIL),

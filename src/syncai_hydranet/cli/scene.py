@@ -90,6 +90,8 @@ from ..utils.visualize import (
     overlay,
     preprocess,
     terrain_palette,
+    trav_colors,
+    trav_colors_for,
 )
 
 PANEL_BG = (14, 18, 24)
@@ -172,6 +174,19 @@ def blur_people(base: Image.Image, model, device, x, region, det_names) -> int:
     return n
 
 
+def _trav_palette(model, trav_map: dict | None) -> np.ndarray:
+    """Two-way or three-way, whichever the frame's traversability is drawn in.
+
+    From the head when the model has one; otherwise from the table the frame is derived
+    through, whose highest class id says how wide it is (`go` is 2 three-way, 1 binary).
+    """
+    if "traversability" in getattr(model, "seg_heads", {}):
+        return trav_colors_for(model)
+    if trav_map:
+        return trav_colors(1 + max(v for v in trav_map.values() if v != IGNORE))
+    return TRAV_COLORS
+
+
 def compose(
     frame: Image.Image,
     model,
@@ -214,7 +229,8 @@ def compose(
         )
     if stabiliser is not None:
         trav = stabiliser(np.asarray(base), trav)
-    view = overlay(base, trav, TRAV_COLORS)
+    trav_palette = _trav_palette(model, trav_map)
+    view = overlay(base, trav, trav_palette)
     terrain = None
     if "terrain" in out:
         terrain = crop_box(out["terrain"][0].cpu().numpy(), region)
@@ -271,7 +287,7 @@ def compose(
         grid,
         payload["objects"],
         (pw, col_h),
-        trav_colors=TRAV_COLORS,
+        trav_colors=trav_palette,
         terrain_colors=palette,
         bg=PANEL_BG,
         class_names=terrain_classes,
@@ -578,7 +594,10 @@ def render_video(in_path: Path, renderer: Renderer, args) -> int:
     print(f"{in_path.name}: {src_w}x{src_h} @ {src_fps:.1f} fps -> {args.fps} fps")
 
     stabiliser = (
-        FixedCameraStabiliser(window=args.stabilise, num_classes=len(TRAV_COLORS))
+        FixedCameraStabiliser(
+            window=args.stabilise,
+            num_classes=len(_trav_palette(renderer.model, renderer.compose_kw.get("trav_map"))),
+        )
         if args.stabilise > 1
         else None
     )

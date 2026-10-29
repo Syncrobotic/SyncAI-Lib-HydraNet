@@ -1,0 +1,97 @@
+# ---------------------------------------------------------------------------
+# Terrain head only, one epoch, on retail_v3_512. A WIRING RUN, not a model.
+#
+# Why it exists: runs/detpose_coco01 -- the checkpoint everyone calls "the
+# latest HydraNet" -- holds `det_head` and `pose_heads` and NO `seg_heads` at
+# all. The terrain head was never built there, so nothing can ask it for an
+# output. This run builds it, trains it once through, and writes a checkpoint
+# the head can be loaded from and queried.
+#
+# One epoch over 2,346 frames at batch 8 is ~293 steps: enough for the loss to
+# move and for every metric to be computed once, nowhere near enough to mean
+# anything. Read the result as "the head exists and emits maps", never as a
+# score. Two separate reasons not to read the mIoU as accuracy:
+#   - one epoch
+#   - retail_v3_512's masks are MODEL PRE-LABELS, so agreement with them
+#     measures agreement with an earlier model (the caveat
+#     SyncAI-Data-Core/datasets/studioa-segment-teacher/dataset.yaml spells out)
+#
+# Not retail22_smoke: four training frames, which is exactly why
+# hydranet_detpose_coco01 left terrain out in the first place.
+# ---------------------------------------------------------------------------
+seed: 42
+
+model:
+  backbone:
+    name: regnet_x_800mf
+    pretrained: true
+    frozen_stages: 0
+  neck:
+    name: bifpn
+    out_channels: 96
+    num_repeats: 2
+    num_levels: 5
+  heads:
+    terrain:
+      type: semantic_fpn
+      # 11 ids as the masks carry them. void (0) is lifted to ignore_index by
+      # the label map, but it still owns channel 0 so a stray 0 cannot read as
+      # `floor`.
+      num_classes: 11
+      in_levels: [0, 1, 2]
+      channels: 64
+      dropout: 0.1
+      loss:
+        ce_weight: 1.0
+        dice_weight: 1.5
+        ignore_index: 255
+
+data:
+  # Named, not numbered: per-class metrics log by name, and without this every
+  # line reads '08 0.000' with no way to tell which class is failing.
+  terrain_classes: [void, floor, stairs, structure, glass, door, person,
+                    column, display_fixture, goods_table, goods_wall]
+  # The masks' own 640x512. Resampling would cost label edges for nothing on a
+  # run whose only job is to prove the head builds.
+  input_size: [512, 640]
+  workers: 8
+  augment:
+    scale_range: [0.75, 1.5]
+  datasets:
+    - name: retail_v3
+      type: seg_folder
+      root: datasets/retail_v3_512
+      split_train: train
+      split_val: val
+      label_map: retail_v3_native
+      sample_ratio: 1.0
+      supervises:
+        - terrain
+
+train:
+  epochs: 1
+  batch_size: 8
+  optimizer: adamw
+  lr: 0.0004
+  backbone_lr_mult: 0.1
+  weight_decay: 0.05
+  warmup_iters: 50
+  scheduler: cosine
+  amp: true
+  amp_dtype: bfloat16
+  grad_clip: 10.0
+  ema: true
+  ema_decay: 0.99
+  log_interval: 25
+  # One epoch, so validation can only run at the end. val_interval 1 is what
+  # puts a metric line in the log at all.
+  val_interval: 1
+  primary_metric: terrain_mIoU
+  channels_last: true
+  early_stop_patience: 0
+
+export:
+  opset: 17
+
+experiment: terrain_v3_1ep
+output_dir: runs/terrain_v3_1ep

@@ -103,7 +103,26 @@ class PoseHeatmapLoss(nn.Module):
                     target[i, k] = torch.maximum(target[i, k], g)
         return target
 
-    def forward(self, logits: torch.Tensor, kps: list[torch.Tensor]) -> torch.Tensor:
+    def forward(
+        self,
+        logits: torch.Tensor,
+        kps: list[torch.Tensor],
+        channel_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """``channel_mask`` is [B, K] or [K]: which joints this batch's dataset can label.
+
+        None means "all of them", which is the single-source case and every run before
+        CrowdPose. It exists because *not rendering a Gaussian is background
+        supervision* -- fine for a teacher that was unsure about an occluded joint on
+        this viewpoint, and wrong for a dataset that never had the joint at all.
+        CrowdPose labels 12 body joints and no face: without a mask its 10,000 images
+        each teach "there is no nose anywhere", against `site_pose` teaching the
+        opposite, and the five face channels are what breaks.
+
+        Masked channels leave the denominator too, not just the numerator -- a plain
+        `.mean()` over a zeroed channel reports a smaller loss for the same error and
+        would silently rescale the head's contribution to the multi-task balance.
+        """
         target = self.render(kps, logits.shape, logits.device)
         pred = torch.sigmoid(logits)
         # focal-style modulation on a dense MSE: the Gaussian peak pixels are rare, so a
@@ -111,7 +130,16 @@ class PoseHeatmapLoss(nn.Module):
         weight = torch.where(
             target > 0.1, 1.0 + self.alpha * target, torch.full_like(target, 0.1)
         )
-        return (weight * (pred - target) ** 2).mean() * 100.0
+        sq = weight * (pred - target) ** 2
+        if channel_mask is None:
+            return sq.mean() * 100.0
+        # [B, K] -> [B, K, 1, 1]; a [K] mask broadcasts as it is. Cast rather than
+        # assume: under autocast the logits are bf16/fp16 and the mask arrives from the
+        # collate as float32.
+        m = channel_mask.to(sq.dtype)
+        m = m[:, :, None, None] if m.dim() == 2 else m[None, :, None, None]
+        denom = m.expand_as(sq).sum().clamp(min=1.0)
+        return (sq * m).sum() / denom * 100.0
 
 
 @torch.no_grad()
