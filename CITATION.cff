@@ -26,5 +26,8 @@ keywords:
   - retail analytics
   - loss prevention
   - video surveillance
+  - video analytics
+  - people counting
+  - people tracking
 license: Apache-2.0
 version: 0.1.0 # x-release-please-version
